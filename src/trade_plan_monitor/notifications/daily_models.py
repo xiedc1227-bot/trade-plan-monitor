@@ -23,11 +23,13 @@ class DailyAlertPayload(DailyValue):
     activation_revision: int = Field(strict=True, ge=1)
     symbol: str
     name: str
-    signal_type: Literal["BUY", "SELL", "RISK_EXIT"]
-    severity: Literal["ACTION", "RISK"]
+    signal_type: Literal["BUY", "SELL", "RISK_EXIT", "REMINDER"]
+    severity: Literal["ACTION", "RISK", "INFO"]
     trading_date: date
     evaluated_at: ShanghaiDatetime
     cause_id: str
+    rule_id: str | None = None
+    alert_kind: Literal["RISK_ALERT"] | None = None
     confirmed_trade_date: date | None
     execution_date: date | None
     quantity: WholeQty | None
@@ -35,7 +37,7 @@ class DailyAlertPayload(DailyValue):
     risk_scope: dict | None
     evidence: tuple[dict, ...] = Field(max_length=50)
     next_step: Literal[
-        "CONFIRM_SIMULATED_TRADE", "REVIEW_RISK_EXIT"
+        "CONFIRM_SIMULATED_TRADE", "REVIEW_RISK_EXIT", "REVIEW_ALERT"
     ]
 
     @model_validator(mode="after")
@@ -49,10 +51,17 @@ class DailyAlertPayload(DailyValue):
             self.risk_scope,
             self.confirmed_trade_date,
         )
-        if self.dedup_key != expected or self.severity != (
-            "RISK" if self.signal_type == "RISK_EXIT" else "ACTION"
-        ):
+        expected_severity = ("RISK" if self.signal_type in {"RISK_EXIT", "REMINDER"}
+            else "ACTION")
+        if self.dedup_key != expected or self.severity != expected_severity:
             raise ValueError("daily alert identity/severity is invalid")
+        if self.signal_type == "REMINDER" and (
+            self.quantity is not None or self.simulated_qty != 0
+            or self.risk_scope is not None or self.execution_date is not None
+            or self.confirmed_trade_date is None or self.next_step != "REVIEW_ALERT"
+            or self.rule_id is None or self.alert_kind != "RISK_ALERT"
+        ):
+            raise ValueError("reminder cannot carry simulation authority")
         return self
 
 
@@ -88,10 +97,17 @@ def daily_alert_key(
         identity.update(
             quantity=quantity, risk_scope=risk_scope, confirmed_trade_date=str(confirmed_trade_date)
         )
+    elif side == "REMINDER":
+        identity["confirmed_trade_date"] = str(confirmed_trade_date)
     return daily_hash("daily-simulation-alert-v1", identity)
 
 
 def render_daily_alert(payload):
+    if payload.signal_type == "REMINDER":
+        return (
+            f"{payload.name} {payload.symbol} 风险提醒：规则 {payload.rule_id} "
+            f"于 {payload.confirmed_trade_date} 确认。请查看证据；此提醒不改变模拟仓位。"
+        )
     if payload.signal_type == "RISK_EXIT":
         scope = payload.risk_scope or {}
         detail = (

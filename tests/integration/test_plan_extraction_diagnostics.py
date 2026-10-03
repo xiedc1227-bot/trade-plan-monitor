@@ -4,31 +4,31 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime
 from hashlib import sha256
 from importlib import resources
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from tests.integration.test_explicit_plan_review_api import (
-    _EXTRACTION_ID,
-    _NOW,
-    _confirmation_resolutions,
-    _draft_payload,
-    _record_extraction,
+from tests.integration.test_current_plan_api import post, review_payload
+from tests.integration.test_explicit_plan_review_api import record_current
+from tests.integration.test_source_treatment_review_api import (
+    literal_draft,
+    literal_mapping,
+    register,
+    save,
 )
-from tests.integration.test_explicit_plan_review_api import (
-    _SOURCE as EXPLICIT_SOURCE,
-)
-from tests.unit.test_ai_plan_extraction_v4 import _SOURCE, _valid_output
+from tests.unit.test_current_plan_extraction_security import SOURCE as _SOURCE
+from tests.unit.test_current_plan_extraction_security import current_output as _valid_output
 
-from trade_plan_monitor.ai.models import ExplicitPlanDraft
-from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json
 from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
 from trade_plan_monitor.web.app import create_app, create_production_app
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
+_NOW = datetime(2026, 9, 12, 16, tzinfo=ZoneInfo("Asia/Shanghai"))
 SECRET = "SECRET-Bearer-key-source-response-and-path"
 
 
@@ -198,7 +198,8 @@ def test_simulated_production_composition_selects_the_database_sidecar(
     (distribution / "index.html").write_text("<!doctype html>", encoding="utf-8")
     (distribution / "assets/app.js").write_text("export {};", encoding="utf-8")
     (distribution / "monitor-contract.json").write_text(
-        '{"monitorContractVersion":1}', encoding="utf-8",
+        '{"monitorContractVersion":1}',
+        encoding="utf-8",
     )
     monkeypatch.setattr(resources, "files", lambda _package: tmp_path)
     config = tmp_path / "config.yaml"
@@ -246,7 +247,8 @@ def test_simulated_production_composition_selects_the_database_sidecar(
         "trade_plan_monitor.backtest.composition.create_backtest_composition_factory",
         lambda **_kwargs: _Backtest,
     )
-    with create_production_app(monitor_contract_version=1,
+    with create_production_app(
+        monitor_contract_version=1,
         config_path=config,
         database_path=database,
         runtime_factory=_Runtime,
@@ -305,47 +307,20 @@ def test_simulated_diagnostic_io_failure_preserves_active_plan_and_extraction_ou
             diagnostic_path=database.with_suffix(".ai-extraction-diagnostics.jsonl"),
         ),
     )
-    draft = ExplicitPlanDraft.model_validate_json(json.dumps(_draft_payload()))
+    draft = literal_draft(complete=True)
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
-        _record_extraction(plans, draft)
-        saved = client.post(
-            "/api/v1/plan-drafts",
-            headers={"Idempotency-Key": "SIMULATED-existing-draft"},
-            json={
-                "extractionId": str(_EXTRACTION_ID),
-                "planJson": dump_explicit_plan_draft_json(draft),
-                "sourceText": EXPLICIT_SOURCE,
-                "expectedRevision": 0,
-            },
-        )
-        assert saved.status_code == 200, saved.text
-        detail = saved.json()
-        reviewed = client.post(
-            "/api/v1/plan-review-confirmations",
-            headers={"Idempotency-Key": "SIMULATED-existing-review"},
-            json={
-                "planVersionId": detail["id"],
-                "contentHash": detail["contentHash"],
-                "sourceHash": detail["sourceHash"],
-                "reviewEvidenceHash": detail["reviewEvidenceHash"],
-                "expectedRevision": 0,
-                "resolutions": _confirmation_resolutions(detail),
-            },
-        )
-        assert reviewed.status_code == 200, reviewed.text
-        approved = reviewed.json()
+        record_current(plans, draft)
+        mapping = literal_mapping(draft)
+        register(client, draft, mapping)
+        detail = save(client, draft, mapping)
+        approved = post(client, "plan-review-confirmations", review_payload(detail))
         assert approved["canActivate"] is True
-        activation = client.post(
-            "/api/v1/plan-activations",
-            headers={"Idempotency-Key": "SIMULATED-existing-activation"},
-            json={
-                "planVersionId": detail["id"],
-                "reviewId": approved["reviewId"],
-                "contentHash": detail["contentHash"],
-                "expectedRevision": 0,
-            },
+        activation = post(
+            client,
+            "plan-activations",
+            review_payload(detail, reviewId=approved["reviewId"], reviewRevision=1),
         )
-        assert activation.status_code == 200, activation.text
+        assert activation["active"]
         before = client.get("/api/v1/plan-activation-states/003043.SZ").json()
         provider_id = client.get("/api/v1/ai-runtime").json()["providerId"]
         invalid = _submit(client, provider_id, _SOURCE, "SIMULATED-io-invalid")

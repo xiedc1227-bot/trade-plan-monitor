@@ -286,7 +286,7 @@ function matchesQuery(item: PublicAlertView, request: AlertListRequest): boolean
   const acknowledged = item.acknowledgedAt !== null && item.acknowledgedAt !== undefined;
   return (
     (request.symbol === null || item.symbol === request.symbol) &&
-    (request.signalType === null || item.signalType === request.signalType) &&
+    matchesAlertSignalFilter(item, request.signalType) &&
     (request.acknowledged === null || acknowledged === request.acknowledged) &&
     (request.startAt === null ||
       shanghaiDateTimeKey(item.createdAt) >= shanghaiDateTimeKey(request.startAt)) &&
@@ -297,6 +297,15 @@ function matchesQuery(item: PublicAlertView, request: AlertListRequest): boolean
 
 function isAlert(value: unknown): value is PublicAlertView {
   return isLegacyAlert(value) || isExplicitAlert(value) || isCurrentDailyAlert(value) || isObsoleteDailyAlert(value);
+}
+
+export function matchesAlertSignalFilter(
+  item: PublicAlertView,
+  signalType: PublicAlertSignalType | null,
+): boolean {
+  return signalType === null || item.signalType === signalType ||
+    (signalType === "RISK_ALERT" && isDailySimulationAlert(item) &&
+      item.signalType === "REMINDER" && item.alertKind === "RISK_ALERT");
 }
 
 function isPublicSignal(value: PublicAlertSignalType): boolean {
@@ -322,14 +331,18 @@ function isDailyRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function validDailyIdentity(value: Record<string, unknown>): boolean {
+function validDailyIdentity(value: Record<string, unknown>, allowReminder = false): boolean {
   return hasKeys(value, dailyIdentityKeys.filter(key => key !== "acknowledgedAt")) &&
     isUuid(value.eventId) && isPositiveInteger(value.sequence) && isSha256(value.dedupKey) &&
     isBoundedText(value.planId, 128) && isPositiveInteger(value.planVersion) && isSha256(value.planHash) &&
     isShareSymbol(value.symbol) && isBoundedText(value.name, 100) && isBoundedText(value.messageText, 16_384) &&
     isCalendarDate(value.tradingDate) && isShanghaiDateTime(value.evaluatedAt) && isShanghaiDateTime(value.createdAt) &&
-    (value.signalType === "BUY" || value.signalType === "SELL" || value.signalType === "RISK_EXIT") &&
+    (value.signalType === "BUY" || value.signalType === "SELL" || value.signalType === "RISK_EXIT" ||
+      (allowReminder && value.signalType === "REMINDER")) &&
     (value.acknowledgedAt === undefined || value.acknowledgedAt === null || isShanghaiDateTime(value.acknowledgedAt)) &&
+    shanghaiDateTimeKey(value.createdAt as string) >= shanghaiDateTimeKey(value.evaluatedAt as string) &&
+    (value.acknowledgedAt === undefined || value.acknowledgedAt === null ||
+      shanghaiDateTimeKey(value.acknowledgedAt as string) >= shanghaiDateTimeKey(value.createdAt as string)) &&
     value.revision === (value.acknowledgedAt === undefined || value.acknowledgedAt === null ? 0 : 1);
 }
 
@@ -346,9 +359,9 @@ function isObsoleteDailyAlert(value: unknown): value is ObsoleteDailyAlertView {
 }
 
 function isCurrentDailyAlert(value: unknown): value is DailyAlertCenterView {
-  const fields = ["activationRevision", "causeId", "confirmedTradeDate", "evidence", "executionDate", "nextStep", "planVersionId",
-    "quantity", "reviewId", "riskScope", "severity", "simulatedQty"];
-  if (!isDailyRecord(value) || !validDailyIdentity(value) || !hasOnlyKeys(value, [...dailyIdentityKeys, ...fields]) || !hasKeys(value, fields) ||
+  const fields = ["activationRevision", "alertKind", "causeId", "confirmedTradeDate", "evidence", "executionDate", "nextStep", "planVersionId",
+    "quantity", "reviewId", "riskScope", "ruleId", "severity", "simulatedQty"];
+  if (!isDailyRecord(value) || !validDailyIdentity(value, true) || !hasOnlyKeys(value, [...dailyIdentityKeys, ...fields]) || !hasKeys(value, fields) ||
     value.payloadSchemaVersion !== "daily-simulation-alert-v1" || typeof value.currentActionable !== "boolean" ||
     !isIntegerBetween(value.activationRevision, 1, MAX_SAFE_REVISION) || !isBoundedText(value.causeId, 128) ||
     !isBoundedText(value.planVersionId, 128) || !isBoundedText(value.reviewId, 128) ||
@@ -357,6 +370,11 @@ function isCurrentDailyAlert(value: unknown): value is DailyAlertCenterView {
     !(value.quantity === null || isWholeQuantity(value.quantity)) || !isWholeQuantity(value.simulatedQty) ||
     !(value.riskScope === null || isDailyRecord(value.riskScope)) ||
     !Array.isArray(value.evidence) || value.evidence.length > 50 || !value.evidence.every(isDailyRecord)) return false;
+  if (value.signalType === "REMINDER") return value.severity === "RISK" && value.nextStep === "REVIEW_ALERT" &&
+    value.alertKind === "RISK_ALERT" && isBoundedText(value.ruleId, 128) &&
+    isCalendarDate(value.confirmedTradeDate) && value.executionDate === null &&
+    value.quantity === null && value.simulatedQty === 0 && value.riskScope === null;
+  if (value.ruleId !== null || value.alertKind !== null) return false;
   if (value.signalType === "RISK_EXIT") return value.severity === "RISK" && value.nextStep === "REVIEW_RISK_EXIT";
   return value.severity === "ACTION" && value.nextStep === "CONFIRM_SIMULATED_TRADE" && isBoardLot(value.quantity) &&
     (value.simulatedQty === 0 || value.simulatedQty === value.quantity) && (!value.currentActionable || value.simulatedQty === 0);

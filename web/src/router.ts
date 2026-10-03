@@ -7,8 +7,6 @@ const PlanWorkbenchRoute = () => import("./views/PlanDraftingView.vue");
 const SystemRoute = () => import("./views/SystemRouteView.vue");
 
 export const routes: RouteRecordRaw[] = [
-  { path: "/daily-plans/:versionId?", name: "daily-plans", props: true,
-    component: () => import("./views/DailyPlansView.vue"), meta: { title: "日线交易计划 · Trade Plan Monitor" } },
   {
     path: "/",
     name: "dashboard",

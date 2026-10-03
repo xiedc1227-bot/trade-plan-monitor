@@ -321,14 +321,6 @@ test("marks a mapped Schema v2 plan with zero index leaves as unused", async ({ 
   await expect.poll(() => indexRanges.length).toBe(1);
 });
 
-test("scrolls to manual trade registration after asynchronous detail loading", async ({ page }) => {
-  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
-  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges));
-
-  await page.goto(`${baseUrl}/stocks/${symbol}#trade-registration`);
-  await expect(page.locator("#trade-registration")).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
-});
 
 test("keeps the separated detail sections responsive and accessible", async ({ page }) => {
   const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
@@ -415,132 +407,7 @@ test("keeps history range inputs visible and operable at 320px with 200 percent 
   await expect(endInput).toBeFocused();
 });
 
-test("submits position commands for backend-only T+1 and maximum-policy decisions", async ({ page }) => {
-  const ranges: Array<{ endAt: string | null; startAt: string | null }> = [];
-  const positionRequests: PositionRequests = { closures: [], creates: [], reads: [] };
-  await page.route("**/api/v1/**", async (route) => fulfillApi(route, ranges, positionRequests));
 
-  await page.goto(`${baseUrl}/stocks/${symbol}`);
-  await expect(page.getByRole("heading", { level: 2, name: "人工持仓批次" })).toBeVisible();
-  await expect.poll(() => positionRequests.reads.length).toBe(1);
-  expect(positionRequests.reads[0]).toEqual({
-    asOfTradeDate: "2026-08-24",
-    limit: "100",
-    offset: "0",
-    symbol,
-  });
-  await expect(page.getByTestId(`reduce-${sameDayLot.lotId}`)).toBeEnabled();
-
-  await page.locator('input[name="createCostFen"]').fill("6500");
-  await page.getByRole("button", { name: "复核建仓" }).click();
-  await expect(page.getByTestId("position-confirmation")).toBeVisible();
-  await page.getByTestId("confirm-position").click();
-
-  await expect.poll(() => positionRequests.creates.length).toBe(1);
-  expect(positionRequests.creates[0]).toEqual({
-    acquiredTradeDate: "2026-08-24",
-    bucket: "CORE",
-    costFen: 6_500,
-    expectedRevision: 0,
-    quantity: 100,
-    relatedAlertId: null,
-    symbol,
-  });
-  await expect(page.getByRole("region", { name: "独立库存登记与成交减记" })).toContainText("未知");
-  await expect(page.getByRole("region", { name: "人工事件风险确认" }).getByRole("alert"))
-    .toHaveText("当前没有可确认的启用计划");
-  await expect(page.getByRole("region", { name: "人工持仓批次" }).getByRole("alert"))
-    .toHaveText(
-    "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
-  );
-
-  await page.getByTestId(`reduce-${sameDayLot.lotId}`).click();
-  await page.getByRole("button", { name: "复核减仓" }).click();
-  await expect(page.getByTestId("position-confirmation")).toBeVisible();
-  await page.getByTestId("confirm-position").click();
-
-  await expect.poll(() => positionRequests.closures.length).toBe(1);
-  expect(positionRequests.closures[0]).toEqual({
-    expectedRevision: 0,
-    lotId: sameDayLot.lotId,
-    quantity: 100,
-    tradeDate: "2026-08-24",
-  });
-  await expect.poll(() => positionRequests.reads.length).toBe(3);
-  await expect(page.getByRole("region", { name: "人工持仓批次" }).getByRole("alert"))
-    .toHaveText(
-    "后端拒绝了持仓操作，请核对最新批次和计划规则后重试",
-  );
-  await expect(page.locator("body")).not.toContainText("backend policy detail");
-  await expect(page.getByText("T+1 / 当前日期不可卖")).toBeVisible();
-});
-
-test("confirms plan-scoped manual event risk through the normal symbol page", async ({ page }) => {
-  const manualRiskCommands: unknown[] = [];
-  const planVersionId = "4c623c8c-ca26-4cd8-8cb2-08cd5e61be93";
-  await page.route("**/api/v1/**", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname === "/api/v1/manual-event-risk") {
-      await route.fulfill({
-        body: JSON.stringify({
-          confirmedAt: null,
-          expiresOn: null,
-          planVersionId,
-          reason: "MISSING_CONFIRMATION",
-          revision: 0,
-          status: "UNKNOWN",
-          symbol,
-        }),
-        contentType: "application/json",
-      });
-      return;
-    }
-    if (url.pathname === "/api/v1/manual-event-risk-confirmations") {
-      manualRiskCommands.push({
-        body: readJsonBody(route),
-        idempotencyKey: await route.request().headerValue("Idempotency-Key"),
-      });
-      await route.fulfill({
-        body: JSON.stringify({
-          confirmedAt: observedAt,
-          expiresOn: "2026-08-24",
-          planVersionId,
-          reason: null,
-          revision: 1,
-          status: "RISK_PRESENT",
-          symbol,
-        }),
-        contentType: "application/json",
-      });
-      return;
-    }
-    await fulfillApi(route, []);
-  });
-
-  await page.goto(`${baseUrl}/stocks/${symbol}`);
-  await expect(page.getByRole("heading", { level: 2, name: "人工事件风险确认" })).toBeVisible();
-  await expect(page.getByRole("alert").filter({ hasText: "缺少人工事件风险确认" })).toBeVisible();
-
-  await page.locator('select[name="manualRiskStatus"]').selectOption("RISK_PRESENT");
-  await page.locator('input[name="manualRiskExpiresOn"]').fill("2026-08-24");
-  await page.getByRole("button", { name: "复核确认" }).click();
-  await expect(page.getByTestId("manual-risk-confirmation")).toBeVisible();
-  await page.getByTestId("confirm-manual-risk").click();
-
-  await expect.poll(() => manualRiskCommands.length).toBe(1);
-  expect(manualRiskCommands).toEqual([
-    {
-      body: {
-        expectedRevision: 0,
-        expiresOn: "2026-08-24",
-        status: "RISK_PRESENT",
-        symbol,
-      },
-      idempotencyKey: expect.stringMatching(/^manual-risk-[0-9a-f-]{36}$/),
-    },
-  ]);
-  await expect(page.getByRole("status").filter({ hasText: "已确认存在事件风险" })).toBeVisible();
-});
 
 async function fulfillApi(
   route: Route,

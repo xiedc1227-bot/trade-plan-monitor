@@ -1,10 +1,11 @@
 """Production daily transaction participant and current send-time authority."""
 
+import json
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from uuid import uuid4
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from trade_plan_monitor.decision.daily_conditions import evaluate_daily_condition
 from trade_plan_monitor.decision.daily_lifecycle import (
@@ -14,6 +15,12 @@ from trade_plan_monitor.decision.daily_lifecycle import (
     next_session,
 )
 from trade_plan_monitor.decision.daily_risk import advance_daily_risks, risk_execution
+from trade_plan_monitor.decision.unified_conditions import (
+    evaluate_unified_condition,
+    requires_daily,
+    requires_minutes,
+)
+from trade_plan_monitor.decision.unified_lifecycle import check_execution, confirm_signal
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyEnabledRule,
     DailyResetPolicy,
@@ -21,12 +28,24 @@ from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
 )
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+from trade_plan_monitor.domain.unified_plan_models import (
+    UnifiedResetPolicy,
+    UnifiedRule,
+    UnifiedTradePlan,
+    condition_leaves,
+)
+from trade_plan_monitor.market_data.aggregation import (
+    FiveMinuteBar,
+    aggregate_five_minute_bar,
+    expected_five_minute_ends,
+)
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
-from trade_plan_monitor.market_data.models import ShanghaiDatetime
+from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime, TradingDay
 from trade_plan_monitor.notifications.daily_models import DailyAlertPayload, daily_alert_key
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_repository import DailyRepository, daily_hash
 from trade_plan_monitor.state.models import ActivePlan, PlanVersion
+from trade_plan_monitor.state.repositories import MarketHistoryRepository
 
 
 class DailyRuntimeInputs(DailyValue):
@@ -40,6 +59,45 @@ class DailyRuntimeInputs(DailyValue):
     suspended_dates: tuple[date, ...] = Field(max_length=3033)
     quote: DailyExecutionQuote | None
     data_blockers: tuple[str, ...] = Field(max_length=20)
+    minute_prefix: tuple[MinuteBar, ...] = Field(default=(), max_length=240)
+    five_minute_bars: tuple[FiveMinuteBar, ...] = Field(default=(), max_length=1000)
+    trading_calendar: tuple[TradingDay, ...] = Field(default=(), max_length=3033)
+    minute_target: ShanghaiDatetime | None = None
+    runtime_generation: str | None = None
+
+    @model_validator(mode="after")
+    def exact_minute_evidence(self):
+        if self.minute_target is None:
+            if self.minute_prefix or self.five_minute_bars:
+                raise ValueError("minute evidence requires its exact completed target")
+            return self
+        if self.minute_target > self.evaluated_at:
+            raise ValueError("minute target follows evaluation")
+        if self.five_minute_bars:
+            expected = expected_five_minute_ends(self.minute_target)
+            ends = tuple(m.bar_end for m in self.minute_prefix)
+            if (ends != tuple(sorted(set(ends))) or not set(expected).issubset(ends)
+                or any(m.bar_end > self.minute_target or m.received_at > self.evaluated_at
+                    for m in self.minute_prefix)):
+                raise ValueError("minute conditions require their complete available source bucket")
+            symbols = {m.symbol for m in self.minute_prefix}
+            if len(symbols) != 1 or any(b.symbol not in symbols for b in self.five_minute_bars):
+                raise ValueError("minute evidence symbol mismatch")
+            ends = tuple(b.bar_end for b in self.five_minute_bars)
+            if ends != tuple(sorted(set(ends))) or ends[-1] != self.minute_target:
+                raise ValueError("minute history must end at the exact ordered target")
+            expected_bucket = expected_five_minute_ends(self.minute_target)
+            selected = tuple(m for m in self.minute_prefix if m.bar_end in expected_bucket)
+            if (
+                aggregate_five_minute_bar(selected, bucket_end=self.minute_target, is_open=True)
+                != self.five_minute_bars[-1]
+            ):
+                raise ValueError("minute close must agree with exact normalized source minutes")
+        return self
+
+
+class DailyActivationChangedError(ValueError):
+    """A reviewed activation changed between source acquisition and commit."""
 
 
 class DailyRuntimeCycleResult(DailyValue):
@@ -50,6 +108,7 @@ class DailyRuntimeCycleResult(DailyValue):
     duplicate: bool
     snapshot: dict
     event_ids: tuple[str, ...]
+    evaluation_id: str | None = None
 
 
 def _eligible(plan, day):
@@ -61,6 +120,63 @@ def _eligible(plan, day):
     return activation.start_date <= day <= activation.end_date
 
 
+def _alert_only(plan):
+    return (isinstance(plan, UnifiedTradePlan) and bool(plan.alert_rules)
+            and not plan.ordinary_rules and not plan.risk_branches)
+
+
+def _alert_inventory(symbol):
+    return {"symbol": symbol, "revision": 0, "known": False,
+            "total_qty": None, "core_qty": None, "tactical_qty": None,
+            "sellable_core": None, "sellable_tactical": None}
+
+
+def minute_source_current(session, snapshot, now, *, required_history=None):
+    """Keep every consumed five-minute bar tied to its persisted source minutes."""
+    raw_target = snapshot.get("minute_target")
+    if raw_target is None:
+        return required_history is None
+    try:
+        target = datetime.fromisoformat(raw_target)
+        expected = expected_five_minute_ends(target)
+        recorded = tuple(MinuteBar.model_validate_json(json.dumps(value))
+            for value in snapshot.get("minute_prefix", ()))
+        if tuple(bar.bar_end for bar in recorded) != expected:
+            return False
+        bars = tuple(FiveMinuteBar.model_validate_json(json.dumps(value))
+            for value in snapshot.get("five_minute_bars", ()))
+        if required_history is not None:
+            if len(bars) < required_history + 1:
+                return False
+            bars = bars[-(required_history + 1):]
+        if not bars or bars[-1].bar_end != target or len(bars) > 501:
+            return False
+        history = MarketHistoryRepository(session)
+        persisted = history.list_minutes(snapshot["symbol"],
+            start=expected_five_minute_ends(bars[0].bar_end)[0], end=target)
+        by_end = {bar.bar_end: bar for bar in persisted if bar.received_at <= now}
+        if tuple(by_end.get(end) for end in expected) != recorded:
+            return False
+        prior = history.list_five_minute(snapshot["symbol"],
+            start=bars[0].bar_end, end=target - timedelta(minutes=1),
+            formula_version="ta-v1") if len(bars) > 1 else ()
+        stored = {bar.bar_end: bar for bar in prior}
+        for bar in bars:
+            source = tuple(by_end.get(end) for end in expected_five_minute_ends(bar.bar_end))
+            if any(item is None for item in source):
+                return False
+            aggregate = aggregate_five_minute_bar(source, bucket_end=bar.bar_end, is_open=True)
+            if aggregate is None or aggregate != bar:
+                return False
+            if (bar.bar_end != target
+                and (stored.get(bar.bar_end) is None or
+                    stored[bar.bar_end].model_dump(mode="json") != bar.model_dump(mode="json"))):
+                return False
+        return True
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 class DailyRuntimeEvaluationService:
     def __init__(
         self,
@@ -68,12 +184,14 @@ class DailyRuntimeEvaluationService:
         *,
         prepare_inputs: Callable | None = None,
         committed_event_publisher=None,
+        committed_result_observer=None,
         clock=None,
         commit_admission=None,
     ):
         self._work = unit_of_work_factory
         self._prepare = prepare_inputs
         self._publish = committed_event_publisher
+        self._observe = committed_result_observer
         self._clock = clock
         self._admission = commit_admission
         self._current_inputs = {}
@@ -93,19 +211,54 @@ class DailyRuntimeEvaluationService:
             raise ValueError("daily content is not currently reviewed")
         return active, binding
 
-    async def run_target(self, *, plan, evaluated_at, official_trade_date=None, minutes=()):
+    async def run_target(
+        self,
+        *,
+        plan,
+        evaluated_at,
+        official_trade_date=None,
+        minutes=(),
+        expected_activation_revision=None,
+    ):
         if self._prepare is None:
             raise RuntimeError("daily provider adapter is not composed")
         with self._work() as work:
+            if expected_activation_revision is not None:
+                current = work.plans.get_active(plan.symbol)
+                if current is None or current.revision != expected_activation_revision:
+                    return None
             active, binding = self._binding(work, plan)
             revision = active.revision
-            unsupported = DailyAccounting(work.daily).legacy_reason(plan.symbol)
+            if (
+                expected_activation_revision is not None
+                and revision != expected_activation_revision
+            ):
+                return None
+            unsupported = (None if _alert_only(plan)
+                else DailyAccounting(work.daily).legacy_reason(plan.symbol))
         if unsupported:
-            return self.run_inputs(plan=plan, inputs=DailyRuntimeInputs(evaluated_at=evaluated_at,
-                official_trade_date=None, series=None, session_dates=(), suspended_dates=(),
-                quote=None, data_blockers=(unsupported,)), expected_activation_revision=revision)
+            try:
+                return self.run_inputs(
+                    plan=plan,
+                    inputs=DailyRuntimeInputs(
+                        evaluated_at=evaluated_at,
+                        official_trade_date=None,
+                        series=None,
+                        session_dates=(),
+                        suspended_dates=(),
+                        quote=None,
+                        data_blockers=(unsupported,),
+                    ),
+                    expected_activation_revision=revision,
+                )
+            except DailyActivationChangedError:
+                return None
         inputs = await self._prepare(plan, evaluated_at, official_trade_date, minutes)
-        result = self.run_inputs(plan=plan, inputs=inputs, expected_activation_revision=revision)
+        try:
+            result = self.run_inputs(plan=plan, inputs=inputs,
+                expected_activation_revision=revision)
+        except DailyActivationChangedError:
+            return None
         if self._publish is not None:
             for event_id in result.event_ids:
                 with self._work() as work:
@@ -138,7 +291,7 @@ class DailyRuntimeEvaluationService:
             if not isinstance(plan, DailyTradePlan):
                 return None
             now = self._clock()
-            if DailyAccounting(work.daily).legacy_reason(plan.symbol):
+            if not _alert_only(plan) and DailyAccounting(work.daily).legacy_reason(plan.symbol):
                 return None
             head = work.daily.get("evaluation-head-" + plan.symbol)
             data = {} if head is None else head["payload"]
@@ -149,12 +302,17 @@ class DailyRuntimeEvaluationService:
             )
             calendars = work.daily.session.scalars(
                 select(TradingCalendar)
-                .where(TradingCalendar.exchange == plan.market, TradingCalendar.is_open.is_(True),
+                .where(
+                    TradingCalendar.exchange == plan.market,
+                    TradingCalendar.is_open.is_(True),
                     TradingCalendar.cal_date >= now.date() - timedelta(days=3000),
-                    TradingCalendar.cal_date <= now.date() + timedelta(days=32))
+                    TradingCalendar.cal_date <= now.date() + timedelta(days=32),
+                )
                 .order_by(TradingCalendar.cal_date)
             ).all()
             sessions = tuple(c.cal_date for c in calendars)
+            trading_calendar = tuple(TradingDay(exchange=c.exchange, cal_date=c.cal_date,
+                is_open=c.is_open, previous_trade_date=c.previous_trade_date) for c in calendars)
             facts = tuple(
                 r["payload"]
                 for r in work.daily.list(symbol=plan.symbol, kind="FACT")
@@ -190,6 +348,19 @@ class DailyRuntimeEvaluationService:
             suspended_dates=suspended,
             quote=quote,
             data_blockers=() if quote is not None else ("CURRENT_TRADABILITY_OR_QUOTE_MISSING",),
+            minute_target=None
+            if data.get("minute_target") is None
+            else datetime.fromisoformat(data["minute_target"]),
+            minute_prefix=tuple(
+                MinuteBar.model_validate_json(json.dumps(m))
+                for m in data.get("minute_prefix", ())
+            ),
+            five_minute_bars=tuple(
+                FiveMinuteBar.model_validate_json(json.dumps(b))
+                for b in data.get("five_minute_bars", ())
+            ),
+            trading_calendar=trading_calendar,
+            runtime_generation=data.get("runtime_generation"),
         )
         result = self.run_inputs(
             plan=plan, inputs=inputs, expected_activation_revision=active.revision
@@ -225,26 +396,35 @@ class DailyRuntimeEvaluationService:
         official = inputs.official_trade_date
         with self._work() as work:
             work.daily.lock_symbol(plan.symbol)
+            if expected_activation_revision is not None:
+                current = work.plans.get_active(plan.symbol)
+                if current is None or current.revision != expected_activation_revision:
+                    raise DailyActivationChangedError(
+                        "daily activation changed during acquisition")
             active, binding = self._binding(work, plan)
             if (
                 expected_activation_revision is not None
                 and active.revision != expected_activation_revision
             ):
-                raise ValueError("daily activation changed during acquisition")
+                raise DailyActivationChangedError("daily activation changed during acquisition")
             ordinary_eligible = _eligible(plan, now.date())
             historical_risks = (
                 work.daily.list(symbol=plan.symbol, kind="RISK")
-                if not DailyAccounting(work.daily).legacy_reason(plan.symbol)
+                if not _alert_only(plan)
+                and not DailyAccounting(work.daily).legacy_reason(plan.symbol)
                 else ()
             )
-            maintain_risk = any(r["payload"]["status"] in {"PENDING", "CONFIRMED", "FULFILLED"}
-                or r["payload"].get("reassessment_id") for r in historical_risks)
+            maintain_risk = any(
+                r["payload"]["status"] in {"PENDING", "CONFIRMED", "FULFILLED"}
+                or r["payload"].get("reassessment_id")
+                for r in historical_risks
+            )
             if (not ordinary_eligible and not maintain_risk) or (
                 self._admission is not None and not self._admission()
             ):
                 raise ValueError("daily runtime commit admission is closed")
             accounting = DailyAccounting(work.daily)
-            if accounting.legacy_reason(plan.symbol):
+            if not _alert_only(plan) and accounting.legacy_reason(plan.symbol):
                 return DailyRuntimeCycleResult(
                     symbol=plan.symbol,
                     plan_hash=plan_sha256(plan),
@@ -258,7 +438,8 @@ class DailyRuntimeEvaluationService:
                     },
                     event_ids=(),
                 )
-            inventory = accounting.snapshot(plan.symbol, now.date())
+            inventory = (_alert_inventory(plan.symbol) if _alert_only(plan)
+                else accounting.snapshot(plan.symbol, now.date()))
             fact_rows = work.daily.list(symbol=plan.symbol, kind="FACT")
             facts = tuple(
                 {**row["payload"], "id": row["id"]}
@@ -269,7 +450,8 @@ class DailyRuntimeEvaluationService:
                 and datetime.fromisoformat(row["payload"]["available_at"]) <= now
             )
             eligible_ids = {f["id"] for f in facts}
-            risk_rows = work.daily.list(symbol=plan.symbol, kind="RISK")
+            risk_rows = (() if _alert_only(plan)
+                else work.daily.list(symbol=plan.symbol, kind="RISK"))
             target = {
                 "plan_hash": plan_sha256(plan),
                 "activation_revision": active.revision,
@@ -281,6 +463,10 @@ class DailyRuntimeEvaluationService:
                 "facts": [(r["id"], r["revision"]) for r in fact_rows if r["id"] in eligible_ids],
                 "risk_revisions": [(r["id"], r["revision"]) for r in risk_rows],
                 "basis": None if series is None else series.basis_id,
+                "minute_target": None
+                if inputs.minute_target is None
+                else inputs.minute_target.isoformat(),
+                "minute_prefix": [m.model_dump(mode="json") for m in inputs.minute_prefix],
                 "daily_evidence": None
                 if series is None
                 else daily_hash("daily-series-v1", series.model_dump(mode="json")),
@@ -310,6 +496,20 @@ class DailyRuntimeEvaluationService:
             )
             risks = previous_risks
             for completed in completed_series or (None,):
+                severe = next((b for b in plan.risk_branches
+                    if b.kind == "SEVERE_TECHNICAL"), None)
+                severe_minute_target = (inputs.minute_target
+                    if completed is not None and inputs.minute_target is not None
+                    and inputs.minute_target.date() == completed.bars[-1].trade_date
+                    else None)
+                severe_evidence = (evaluate_unified_condition(severe.condition, completed,
+                    facts=facts, bars=inputs.five_minute_bars
+                        if severe_minute_target is not None else (),
+                    target=severe_minute_target,
+                    trading_calendar=inputs.trading_calendar,
+                    macd_min_observations=(500 if plan.monitoring is None
+                        else plan.monitoring.macd_min_observations))
+                    if isinstance(plan, UnifiedTradePlan) and severe is not None else None)
                 risks = advance_daily_risks(
                     plan,
                     previous=risks,
@@ -321,6 +521,7 @@ class DailyRuntimeEvaluationService:
                     facts=facts,
                     effective_start_date=effective_start,
                     allow_new_causes=ordinary_eligible,
+                    severe_evidence=severe_evidence,
                 )
             fulfilled = []
             for risk in risks:
@@ -368,10 +569,25 @@ class DailyRuntimeEvaluationService:
             risk_blocked = any(
                 r["status"] in {"PENDING", "OBSERVATION", "CONFIRMED"} for r in risks
             )
-            risk_known = series is not None
+            risk_known = series is not None or not plan.risk_branches
+            if isinstance(plan, UnifiedTradePlan) and plan.risk_branches:
+                severe = next((b for b in plan.risk_branches
+                    if b.kind == "SEVERE_TECHNICAL"), None)
+                if severe is not None:
+                    risk_minute_target = (inputs.minute_target
+                        if series is not None and inputs.minute_target is not None
+                        and inputs.minute_target.date() == series.bars[-1].trade_date
+                        else None)
+                    risk_known = risk_known and evaluate_unified_condition(severe.condition,
+                        series, facts=facts,
+                        bars=inputs.five_minute_bars if risk_minute_target is not None else (),
+                        target=risk_minute_target, trading_calendar=inputs.trading_calendar,
+                        macd_min_observations=(500 if plan.monitoring is None
+                            else plan.monitoring.macd_min_observations)).outcome != "MISSING_INPUT"
             # Plan IDs are display identities, never authority to reuse a consumed
             # stock/rule occurrence. Replacement needs independently verified evidence.
-            signal_rows = work.daily.current_signals(symbol=plan.symbol)
+            signal_rows = (() if _alert_only(plan)
+                else work.daily.current_signals(symbol=plan.symbol))
             for row in signal_rows:
                 signal = row["payload"]
                 if signal["execution_date"] is None:
@@ -398,11 +614,14 @@ class DailyRuntimeEvaluationService:
                     (
                         r
                         for r in plan.ordinary_rules
-                        if isinstance(r, DailyEnabledRule) and r.side == signal["side"]
+                        if isinstance(r, (DailyEnabledRule, UnifiedRule))
+                        and r.side == signal["side"]
                     ),
                     None,
                 )
-                if rule is not None and isinstance(rule.independent_signal, DailyResetPolicy):
+                if rule is not None and isinstance(
+                    rule.independent_signal, (DailyResetPolicy, UnifiedResetPolicy)
+                ):
                     for completed in completed_series:
                         if any(
                             r["status"] in {"CONFIRMED", "FULFILLED"}
@@ -414,11 +633,17 @@ class DailyRuntimeEvaluationService:
                         reset_day = str(completed.bars[-1].trade_date)
                         if (
                             signal["confirmed_trade_date"] < reset_day
-                            and evaluate_daily_condition(
+                            and (
+                                evaluate_unified_condition
+                                if isinstance(plan, UnifiedTradePlan)
+                                else evaluate_daily_condition
+                            )(
                                 rule.independent_signal.reset_condition,
                                 completed,
                                 facts=facts,
-                                macd_min_observations=plan.monitoring.macd_min_observations,
+                                macd_min_observations=500
+                                if plan.monitoring is None
+                                else plan.monitoring.macd_min_observations,
                             ).outcome
                             == "SATISFIED"
                         ):
@@ -432,21 +657,44 @@ class DailyRuntimeEvaluationService:
                         payload=signal,
                         expected_revision=row["revision"],
                     )
-            signal_rows = work.daily.current_signals(symbol=plan.symbol)
+            signal_rows = (() if _alert_only(plan)
+                else work.daily.current_signals(symbol=plan.symbol))
             previous = tuple(r["payload"] for r in signal_rows)
-            if completed_series and not risk_blocked and ordinary_eligible:
+            if not risk_blocked and ordinary_eligible:
                 for rule in plan.ordinary_rules:
-                    if not isinstance(rule, DailyEnabledRule):
+                    if isinstance(plan, UnifiedTradePlan):
+                        daily_rule = rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+                        confirmations = completed_series if daily_rule else (series,)
+                    elif isinstance(rule, DailyEnabledRule):
+                        daily_rule, confirmations = True, completed_series
+                    else:
                         continue
-                    for completed in completed_series:
+                    for completed in confirmations:
+                        confirmation_day = (
+                            completed.bars[-1].trade_date
+                            if daily_rule and completed is not None
+                            else now.date()
+                        )
                         if any(
                             r["status"] in {"CONFIRMED", "FULFILLED"}
-                            and r.get("confirmed_trade_date", "")
-                            >= str(completed.bars[-1].trade_date)
+                            and r.get("confirmed_trade_date", "") >= str(confirmation_day)
                             for r in risks
                         ):
                             continue
-                        signal = confirm_daily_signal(
+                        extra = (
+                            {}
+                            if not isinstance(plan, UnifiedTradePlan)
+                            else {
+                                "bars": inputs.five_minute_bars,
+                                "target": inputs.minute_target,
+                                "trading_calendar": inputs.trading_calendar,
+                            }
+                        )
+                        signal = (
+                            confirm_signal
+                            if isinstance(plan, UnifiedTradePlan)
+                            else confirm_daily_signal
+                        )(
                             plan,
                             rule,
                             series=completed,
@@ -455,6 +703,7 @@ class DailyRuntimeEvaluationService:
                             session_dates=inputs.session_dates,
                             plan_version_id=active.plan_version_id,
                             review_id=binding["review_id"],
+                            **extra,
                         )
                         if signal is not None and work.daily.get(signal["signal_id"]) is None:
                             work.daily.save(
@@ -466,7 +715,8 @@ class DailyRuntimeEvaluationService:
                                 expected_revision=0,
                             )
                             previous = (*previous, expire_daily_signal(signal, now))
-            signal_rows = work.daily.current_signals(symbol=plan.symbol)
+            signal_rows = (() if _alert_only(plan)
+                else work.daily.current_signals(symbol=plan.symbol))
             market_clock = now.time().replace(tzinfo=None)
             in_session = now.date() in inputs.session_dates and (
                 time(9, 30) <= market_clock < time(11, 30) or time(13) <= market_clock < time(15)
@@ -492,7 +742,7 @@ class DailyRuntimeEvaluationService:
                         {
                             **signal,
                             "executable_qty": 0,
-                                "blockers": ["SUCCESSOR_EQUIVALENCE_REVIEW_REQUIRED"],
+                            "blockers": ["SUCCESSOR_EQUIVALENCE_REVIEW_REQUIRED"],
                             "revision": row["revision"],
                         }
                     )
@@ -503,9 +753,15 @@ class DailyRuntimeEvaluationService:
                 ):
                     signal = {**signal, "state": "INVALIDATED"}
                 if not ordinary_eligible and signal["state"] != "SIMULATED":
-                    signal = {**signal, "state": "INVALIDATED", "executable_qty": 0,
-                        "blockers": ["PLAN_ACTIVATION_WINDOW_ENDED"]}
-                checked = check_daily_execution(
+                    signal = {
+                        **signal,
+                        "state": "INVALIDATED",
+                        "executable_qty": 0,
+                        "blockers": ["PLAN_ACTIVATION_WINDOW_ENDED"],
+                    }
+                checked = (
+                    check_execution if isinstance(plan, UnifiedTradePlan) else check_daily_execution
+                )(
                     plan,
                     signal,
                     inventory=inventory,
@@ -533,6 +789,55 @@ class DailyRuntimeEvaluationService:
             risk_action = risk_execution(
                 saved_risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable
             )
+            alerts = []
+            if isinstance(plan, UnifiedTradePlan):
+                latest_official = next((day for day in reversed(inputs.session_dates)
+                    if datetime.combine(day, time(15), now.tzinfo) <= now), None)
+                for rule in plan.alert_rules:
+                    daily = rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+                    alert_series = completed_series[-1] if completed_series else None
+                    minute_target = inputs.minute_target
+                    day = (None if alert_series is None else alert_series.bars[-1].trade_date)
+                    if not daily:
+                        day = None if minute_target is None else minute_target.date()
+                    period_valid = (
+                        (alert_series is not None and day == latest_official and (
+                            not requires_minutes(rule.condition)
+                            or minute_target is not None and minute_target.date() == day))
+                        if daily else (
+                            minute_target is not None and bool(inputs.five_minute_bars)
+                            and (not requires_daily(rule.condition)
+                                or alert_series is not None
+                                and alert_series.bars[-1].trade_date == latest_official)
+                        )
+                    )
+                    evidence = (evaluate_unified_condition(rule.condition, alert_series,
+                        facts=facts, bars=inputs.five_minute_bars,
+                        target=minute_target if not daily or minute_target is not None
+                            and minute_target.date() == day else None,
+                        trading_calendar=inputs.trading_calendar,
+                        macd_min_observations=500 if plan.monitoring is None
+                            else plan.monitoring.macd_min_observations)
+                        if period_valid else None)
+                    outcome = "MISSING_INPUT" if evidence is None else evidence.outcome
+                    cause_id = (None if day is None else daily_hash(
+                        "condition-alert-occurrence-v1", {
+                            "plan_version_id": active.plan_version_id,
+                            "rule_id": rule.rule_id,
+                            "confirmation": (str(day) if daily
+                                else minute_target.isoformat()),
+                        }))
+                    alerts.append({
+                        "rule_id": rule.rule_id, "cause_id": cause_id,
+                        "alert_kind": rule.kind,
+                        "outcome": outcome,
+                        "confirmation_kind": rule.confirmation.kind,
+                        "confirmed_trade_date": None if day is None else str(day),
+                        "confirmed_at": None if day is None else (
+                            datetime.combine(day, time(15), now.tzinfo).isoformat()
+                            if daily else minute_target.isoformat()),
+                        "evidence": [] if evidence is None else [evidence.model_dump(mode="json")],
+                    })
             snapshot = {
                 "symbol": plan.symbol,
                 "plan_version_id": active.plan_version_id,
@@ -545,10 +850,18 @@ class DailyRuntimeEvaluationService:
                 "inventory": inventory,
                 "fact_revisions": [{"id": i, "revision": r} for i, r in target["facts"]],
                 "signals": signals,
+                "alerts": alerts,
                 "risks": saved_risks,
                 "risk_action": risk_action,
+                "risk_input_known": risk_known,
                 "data_blockers": list(inputs.data_blockers),
                 "daily_evidence": None if series is None else series.model_dump(mode="json"),
+                "runtime_generation": inputs.runtime_generation,
+                "minute_target": None
+                if inputs.minute_target is None
+                else inputs.minute_target.isoformat(),
+                "minute_prefix": [m.model_dump(mode="json") for m in inputs.minute_prefix],
+                "five_minute_bars": [b.model_dump(mode="json") for b in inputs.five_minute_bars],
                 "quote": None if quote is None else quote.model_dump(mode="json"),
                 "next_action": "REVIEW_RISK_EXIT"
                 if risk_action["status"] == "RISK_EXIT"
@@ -557,6 +870,13 @@ class DailyRuntimeEvaluationService:
                 else "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION",
             }
             events = []
+            for alert in alerts:
+                if alert["outcome"] == "SATISFIED" and alert["cause_id"] is not None:
+                    events.append(self._enqueue(work, plan, active, binding, now,
+                        cause_id=alert["cause_id"], side="REMINDER", quantity=None,
+                        simulated=0, confirmed=alert["confirmed_trade_date"],
+                        execution=None, scope=None, evidence=alert["evidence"],
+                        rule_id=alert["rule_id"], alert_kind=alert["alert_kind"]))
             for signal in signals:
                 if signal["executable_qty"]:
                     events.append(
@@ -615,9 +935,11 @@ class DailyRuntimeEvaluationService:
                 payload=snapshot,
                 expected_revision=0 if head is None else head["revision"],
             )
+            if self._admission is not None and not self._admission():
+                raise RuntimeError("daily runtime commit admission changed")
             work.commit()
         self._current_inputs[plan.symbol] = inputs
-        return DailyRuntimeCycleResult(
+        result = DailyRuntimeCycleResult(
             symbol=plan.symbol,
             plan_hash=plan_sha256(plan),
             activation_revision=active.revision,
@@ -625,7 +947,11 @@ class DailyRuntimeEvaluationService:
             duplicate=False,
             snapshot=snapshot,
             event_ids=tuple(event for event in events if event is not None),
+            evaluation_id=identity,
         )
+        if self._observe is not None:
+            self._observe(plan, result, inputs)
+        return result
 
     def _enqueue(
         self,
@@ -643,6 +969,8 @@ class DailyRuntimeEvaluationService:
         execution,
         scope,
         evidence,
+        rule_id=None,
+        alert_kind=None,
     ):
         key = daily_alert_key(
             cause_id, plan_sha256(plan), side, simulated, quantity, scope, confirmed
@@ -662,19 +990,20 @@ class DailyRuntimeEvaluationService:
                 symbol=plan.symbol,
                 name=plan.name,
                 signal_type=side,
-                severity="RISK" if side == "RISK_EXIT" else "ACTION",
+                severity="RISK" if side in {"RISK_EXIT", "REMINDER"} else "ACTION",
                 trading_date=now.date(),
                 evaluated_at=now,
                 cause_id=cause_id,
+                rule_id=rule_id,
+                alert_kind=alert_kind,
                 confirmed_trade_date=confirmed,
                 execution_date=execution,
                 quantity=quantity,
                 simulated_qty=simulated,
                 risk_scope=scope,
                 evidence=tuple(evidence),
-                next_step="REVIEW_RISK_EXIT"
-                if side == "RISK_EXIT"
-                else "CONFIRM_SIMULATED_TRADE",
+                next_step="REVIEW_RISK_EXIT" if side == "RISK_EXIT" else
+                    "REVIEW_ALERT" if side == "REMINDER" else "CONFIRM_SIMULATED_TRADE",
             )
         )
         return str(event.event_id)
@@ -692,8 +1021,12 @@ def daily_delivery_allowed(session, event, now):
     version = session.get(PlanVersion, active.plan_version_id)
     if version is None or version.plan_hash != event.plan_hash:
         return False
+    from trade_plan_monitor.domain.plan_codec import load_plan_json
+    plan = load_plan_json(version.payload_json)
+    if not isinstance(plan, UnifiedTradePlan):
+        return False
     repo = DailyRepository(session, clock=lambda: now, id_factory=lambda: str(uuid4()))
-    if DailyAccounting(repo).legacy_reason(event.symbol):
+    if event.signal_type != "REMINDER" and DailyAccounting(repo).legacy_reason(event.symbol):
         return False
     review = repo.get("review-" + event.plan_version_id)
     if (
@@ -702,6 +1035,58 @@ def daily_delivery_allowed(session, event, now):
         or review["payload"].get("review_id") != event.review_id
     ):
         return False
+    if event.signal_type == "REMINDER":
+        head = repo.get("evaluation-head-" + event.symbol)
+        if head is None or head["payload"].get("plan_version_id") != event.plan_version_id:
+            return False
+        rule = next((item for item in plan.alert_rules if item.rule_id == event.rule_id), None)
+        if rule is None:
+            return False
+        daily_required = requires_daily(rule.condition)
+        if daily_required:
+            if set(head["payload"].get("data_blockers", ())) & {
+                "OFFICIAL_DAILY_SESSION_UNVERIFIED",
+                "DAILY_QFQ_PROVIDER_UNAVAILABLE",
+                "CURRENT_QUOTE_BASIS_UNVERIFIED",
+                "PRICE_BASIS_UNVERIFIED",
+            }:
+                return False
+            evidence = head["payload"].get("daily_evidence")
+            if evidence is None:
+                return False
+            try:
+                series = DailySeries.model_validate(evidence)
+            except ValueError:
+                return False
+            if (series.cutoff > event.evaluated_at
+                or head["payload"].get("official_trade_date") != str(
+                    series.bars[-1].trade_date)
+                or rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE" and
+                    str(series.bars[-1].trade_date) != str(event.confirmed_trade_date)):
+                return False
+        minute_required = (rule.confirmation.kind == "COMPLETED_BAR_CLOSE"
+            or requires_minutes(rule.condition))
+        required_history = max((leaf.window_bars for leaf in condition_leaves(rule.condition)
+            if leaf.type == "MINUTE_VOLUME_TO_MEAN_GTE"), default=0)
+        accounting = DailyAccounting(repo)
+        inventory = (_alert_inventory(event.symbol) if _alert_only(plan)
+            else accounting.snapshot(event.symbol, now.date()))
+        if not accounting.evaluation_current(
+            head["payload"], plan_version_id=event.plan_version_id,
+            content_hash=review["payload"]["content_hash"], inventory=inventory,
+            now=now, require_daily_data=False,
+        ) or minute_required and not minute_source_current(
+            session, head["payload"], now, required_history=required_history):
+            return False
+        return (
+            any(alert.get("cause_id") == event.cause_id
+                and alert.get("rule_id") == event.rule_id
+                and alert.get("alert_kind") == event.alert_kind
+                and alert.get("outcome") == "SATISFIED"
+                and alert.get("confirmed_trade_date") == str(event.confirmed_trade_date)
+                for alert in head["payload"].get("alerts", ()))
+            and event.evaluated_at <= now < event.evaluated_at + timedelta(minutes=5)
+        )
     if event.signal_type == "RISK_EXIT":
         risk = repo.get(event.cause_id)
         if (
@@ -736,9 +1121,14 @@ def daily_delivery_allowed(session, event, now):
         )
         accounting = DailyAccounting(repo)
         inventory = accounting.snapshot(event.symbol, now.date())
-        if not accounting.evaluation_current(head["payload"], plan_version_id=event.plan_version_id,
-            content_hash=review["payload"]["content_hash"], inventory=inventory, now=now,
-            require_daily_data=False):
+        if not accounting.evaluation_current(
+            head["payload"],
+            plan_version_id=event.plan_version_id,
+            content_hash=review["payload"]["content_hash"],
+            inventory=inventory,
+            now=now,
+            require_daily_data=False,
+        ):
             return False
         risks = tuple(
             {**r["payload"], "revision": r["revision"]}
@@ -779,9 +1169,14 @@ def daily_delivery_allowed(session, event, now):
     head = repo.get("evaluation-head-" + event.symbol)
     if head is None or head["payload"]["plan_version_id"] != event.plan_version_id:
         return False
-    if not DailyAccounting(repo).evaluation_current(head["payload"],
-        plan_version_id=event.plan_version_id, content_hash=review["payload"]["content_hash"],
-        inventory=inventory, now=now, require_daily_data=True):
+    if not DailyAccounting(repo).evaluation_current(
+        head["payload"],
+        plan_version_id=event.plan_version_id,
+        content_hash=review["payload"]["content_hash"],
+        inventory=inventory,
+        now=now,
+        require_daily_data=True,
+    ):
         return False
     try:
         quote = DailyExecutionQuote.model_validate(
@@ -792,7 +1187,7 @@ def daily_delivery_allowed(session, event, now):
     from trade_plan_monitor.domain.plan_codec import load_plan_json
 
     plan = load_plan_json(version.payload_json)
-    checked = check_daily_execution(
+    checked = (check_execution if isinstance(plan, UnifiedTradePlan) else check_daily_execution)(
         plan,
         s,
         inventory=inventory,
@@ -800,7 +1195,8 @@ def daily_delivery_allowed(session, event, now):
         evaluated_at=now,
         tradable=quote.tradable and quote.special_state_verified and quote.liquidity_available,
         risk_blocked=False,
-        risk_known=head["payload"].get("daily_evidence") is not None,
+        risk_known=head["payload"].get("risk_input_known",
+            head["payload"].get("daily_evidence") is not None or not plan.risk_branches),
     )
     return checked[
         "executable_qty"

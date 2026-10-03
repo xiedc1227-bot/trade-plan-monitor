@@ -25,7 +25,13 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V4, build_plan_extraction_prompt
+from trade_plan_monitor.ai.prompts import (
+    PLAN_EXTRACTION_PROMPT_V4,
+    PLAN_EXTRACTION_PROMPT_VERSION,
+    build_plan_extraction_prompt,
+)
+
+CURRENT_LOCAL_PROMPT_BYTES = 75_000
 
 APPROVED_MODEL = "deepseek-v4-pro"
 AUTHORIZATION = "R14_3_AI_60_MARKET_IN_APP_15MIN"
@@ -246,8 +252,11 @@ class Budget:
 
 
 def approved_sources(
-    *, prompt_version: str = PLAN_EXTRACTION_PROMPT_V4
+    *, prompt_version: str = PLAN_EXTRACTION_PROMPT_VERSION
 ) -> dict[str, tuple[str, str]]:
+    """Build deterministic current local inputs, without renewing a sealed live grant."""
+    if prompt_version != PLAN_EXTRACTION_PROMPT_VERSION:
+        raise BudgetDenied
     literal = json.loads(
         (_ROOT / "tests/fixtures/ai/explicit-plan-literal-source-v3.json").read_text("utf-8")
     )["sourceText"]
@@ -306,9 +315,7 @@ def _session_budgets(
     return (
         Budget(
             total=ai_total,
-            per_key=(
-                {key: 1 for key in approved_sources()} if ai_caps is None else ai_caps
-            ),
+            per_key=({key: 1 for key in approved_sources()} if ai_caps is None else ai_caps),
             seconds=wall_seconds,
             on_denied=on_denied,
             on_snapshot=on_ai_snapshot,
@@ -335,17 +342,13 @@ class AIBudgetTransport(httpx.AsyncBaseTransport):
         budget: Budget,
         *,
         inner: httpx.AsyncBaseTransport | None = None,
-        prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+        prompt_version: str = PLAN_EXTRACTION_PROMPT_VERSION,
         max_output_tokens: int = 4096,
-        max_prompt_utf8_bytes: int = 19_000,
+        max_prompt_utf8_bytes: int = CURRENT_LOCAL_PROMPT_BYTES,
     ) -> None:
         self._budget = budget
         self._inner = inner or httpx.AsyncHTTPTransport(retries=0, trust_env=False)
-        sources = (
-            approved_sources()
-            if prompt_version == PLAN_EXTRACTION_PROMPT_V4
-            else approved_sources(prompt_version=prompt_version)
-        )
+        sources = approved_sources(prompt_version=prompt_version)
         self._prompt_ids = {
             sha256(prompt.encode("utf-8")).hexdigest(): case_id
             for case_id, (_, prompt) in sources.items()
@@ -539,9 +542,9 @@ def _bounded_ai_factory(
     *,
     database: Path | None = None,
     inner_transport: httpx.AsyncBaseTransport | None = None,
-    prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+    prompt_version: str = PLAN_EXTRACTION_PROMPT_VERSION,
     max_output_tokens: int = 4096,
-    max_prompt_utf8_bytes: int = 19_000,
+    max_prompt_utf8_bytes: int = CURRENT_LOCAL_PROMPT_BYTES,
     provider_timeout_seconds: int = 30,
     transport_timeout_seconds: int | None = None,
     read_timeout_seconds: int | None = None,
@@ -595,9 +598,7 @@ def _bounded_ai_factory(
             ),
             timeout=httpx.Timeout(
                 transport_timeout_seconds or provider_timeout_seconds,
-                read=read_timeout_seconds
-                or transport_timeout_seconds
-                or provider_timeout_seconds,
+                read=read_timeout_seconds or transport_timeout_seconds or provider_timeout_seconds,
             ),
             follow_redirects=False,
             trust_env=False,
@@ -640,7 +641,7 @@ def _create_guarded_app(
     static_directory: Path,
     ai_inner_transport: httpx.AsyncBaseTransport | None = None,
     bind_port: int = 18765,
-    prompt_version: str = PLAN_EXTRACTION_PROMPT_V4,
+    prompt_version: str = PLAN_EXTRACTION_PROMPT_VERSION,
     ai_output_tokens: int = 4096,
     on_reference_failure: Callable[[str], None] | None = None,
 ):
@@ -729,6 +730,32 @@ async def _serve(
     stop_on_market_failure_keys: frozenset[str] = frozenset(),
     stop_on_reference_failure: bool = False,
 ) -> int:
+    """Frozen live grants cannot authorize the current extraction workflow."""
+    raise BudgetDenied
+
+
+async def _serve_offline(
+    run_id: str,
+    *,
+    ai_inner_transport: httpx.MockTransport,
+    market_client_factory: Callable[[object], object],
+    session_root: Path | None = None,
+    market_caps: Mapping[str, int] = _MARKET_CAPS,
+    market_total: int = 60,
+    wall_seconds: int = 900,
+    proposal_id: str = "R14",
+    bind_port: int = 18765,
+    prompt_version: str = PLAN_EXTRACTION_PROMPT_VERSION,
+    ai_output_tokens: int = 4096,
+    ai_total: int = 3,
+    ai_caps: Mapping[str, int] | None = None,
+    stop_on_market_failure_keys: frozenset[str] = frozenset(),
+    stop_on_reference_failure: bool = False,
+) -> int:
+    """Exercise guarded lifecycle/audit with explicitly simulated suppliers only."""
+    if not isinstance(ai_inner_transport, httpx.MockTransport):
+        raise BudgetDenied
+    approved_sources(prompt_version=prompt_version)
     import uvicorn
 
     from trade_plan_monitor.config import load_application_config
@@ -823,7 +850,7 @@ async def _serve(
     )
     original_factory = production.create_tushare_client
 
-    production.create_tushare_client = _guarded_market_factory(original_factory, market_guard)
+    production.create_tushare_client = _guarded_market_factory(market_client_factory, market_guard)
     audit: dict[str, object] = {
         "proposalId": proposal_id,
         "runId": run_id,
@@ -849,6 +876,7 @@ async def _serve(
                 prompt_version=prompt_version,
                 ai_output_tokens=ai_output_tokens,
                 on_reference_failure=record_reference_failure,
+                ai_inner_transport=ai_inner_transport,
             )
             server = uvicorn.Server(
                 uvicorn.Config(
@@ -873,9 +901,7 @@ async def _serve(
                     await asyncio.sleep(1)
 
             print(
-                json.dumps(
-                    {"status": "STARTING_BROWSER", "url": f"http://127.0.0.1:{bind_port}"}
-                ),
+                json.dumps({"status": "STARTING_BROWSER", "url": f"http://127.0.0.1:{bind_port}"}),
                 flush=True,
             )
             task = asyncio.create_task(server.serve(sockets=[listener]))
@@ -910,9 +936,7 @@ async def _serve(
         return_code = 1
     else:
         return_code = (
-            1
-            if audit["status"] in {"STARTUP_FAILED", "REFERENCE_FAILED", "MARKET_FAILED"}
-            else 0
+            1 if audit["status"] in {"STARTUP_FAILED", "REFERENCE_FAILED", "MARKET_FAILED"} else 0
         )
     finally:
         cleanup_deadline = monotonic() + 20

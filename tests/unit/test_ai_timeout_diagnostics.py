@@ -38,10 +38,10 @@ def _config(*, timeout_seconds: int = 5) -> AIProviderConfig:
         secret_ref=SecretReference(key="ai/provider/r26-offline"),
         timeout_seconds=timeout_seconds,
         max_retries=0,
-        max_input_chars=19_000,
+        max_input_chars=75_000,
         max_output_tokens=128,
         temperature=0,
-        prompt_version="plan-extract-v5",
+        prompt_version="plan-extract-v8",
     )
 
 

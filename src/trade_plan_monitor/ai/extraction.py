@@ -20,16 +20,11 @@ from trade_plan_monitor.ai.models import (
     AIProviderConfig,
     AIUsageSnapshot,
     ExtractionDiagnostic,
-    PlanExtractionOutput,
-    PlanExtractionOutputV4,
     PlanExtractionResult,
     PlanExtractionStatus,
-    UnmappedText,
 )
+from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
 from trade_plan_monitor.ai.prompts import (
-    PLAN_EXTRACTION_PROMPT_V4,
-    PLAN_EXTRACTION_PROMPT_V5,
-    PLAN_EXTRACTION_PROMPT_V6,
     build_plan_extraction_prompt,
 )
 from trade_plan_monitor.ai.provider import (
@@ -38,20 +33,15 @@ from trade_plan_monitor.ai.provider import (
     PlanExtractionRequest,
     RawAIResponse,
 )
-from trade_plan_monitor.ai.review import MappingValidationError, build_server_review_snapshot
+from trade_plan_monitor.ai.review import MappingValidationError
 from trade_plan_monitor.domain.plan_validation import (
-    ALL_MARKET_EVIDENCE,
-    DraftReviewIssue,
-    ReviewIssueKind,
     ValidationIssue,
     ValidationSeverity,
-    validate_trade_plan,
 )
 
 MAX_EXTRACTION_OUTPUT_BYTES: Final = 1_048_576
 MAX_EXTRACTION_JSON_NODES: Final = 10_000
 MAX_EXTRACTION_JSON_DEPTH: Final = 64
-MIN_FIELD_EVIDENCE_CHARS: Final = 4
 
 
 class _UntrustedOutputError(ValueError):
@@ -71,6 +61,7 @@ async def extract_plan(
 ) -> PlanExtractionResult:
     """Extract one review-only draft without persistence or activation side effects."""
 
+    config = config.model_copy(update={"prompt_version": "plan-extract-v8"})
     prompt = build_plan_extraction_prompt(
         source_text,
         prompt_version=config.prompt_version,
@@ -240,12 +231,15 @@ async def extract_plan(
             reason="JSON_OTHER",
         )
 
-    from trade_plan_monitor.ai.daily_extraction import DailyExtractionOutput, DailyExtractionResult
+    from trade_plan_monitor.ai.plan_extraction import (
+        CurrentPlanExtractionOutput,
+        CurrentPlanExtractionResult,
+    )
 
-    if isinstance(output, DailyExtractionOutput):
+    if isinstance(output, CurrentPlanExtractionOutput):
         try:
             snapshot = output.review(source_text)
-        except TypeError, ValueError, RecursionError:
+        except (TypeError, ValueError, RecursionError) as error:
             return _failure_result(
                 request_id=request_id,
                 config=config,
@@ -253,12 +247,15 @@ async def extract_plan(
                 status=PlanExtractionStatus.INVALID_OUTPUT,
                 issue_code="AI_FIELD_EVIDENCE_INVALID",
                 issue_path="mapping",
-                issue_message="Daily source mapping is invalid.",
+                issue_message="Plan source mapping is invalid.",
                 raw=raw,
                 stage="mapping",
                 reason="MAPPING",
+                diagnostic_path=error.path
+                if isinstance(error, MappingValidationError)
+                else "mapping",
             )
-        return DailyExtractionResult(
+        return CurrentPlanExtractionResult(
             request_id=request_id,
             provider_id=raw.provider_id,
             model=config.model,
@@ -278,149 +275,12 @@ async def extract_plan(
             status=PlanExtractionStatus.SUCCEEDED,
         )
 
-    if isinstance(output, PlanExtractionOutputV4):
-        try:
-            mapping = output.to_mapping()
-            snapshot = build_server_review_snapshot(
-                source_text=source_text,
-                draft=output.draft,
-                mapping=mapping,
-            )
-        except (TypeError, UnicodeError, ValueError, RecursionError) as error:
-            return _failure_result(
-                request_id=request_id,
-                config=config,
-                source_text_sha256=source_text_sha256,
-                status=PlanExtractionStatus.INVALID_OUTPUT,
-                issue_code="AI_FIELD_EVIDENCE_INVALID",
-                issue_path="mapping",
-                issue_message="AI mapping did not match the submitted source and current draft.",
-                raw=raw,
-                stage="mapping",
-                reason="MAPPING",
-                diagnostic_path=(
-                    error.path
-                    if isinstance(error, MappingValidationError)
-                    else _safe_schema_path(error)
-                    if isinstance(error, ValidationError)
-                    else "mapping"
-                ),
-                schema_error_type=(
-                    _safe_schema_error_type(error) if isinstance(error, ValidationError) else None
-                ),
-            )
-        validation_issues = tuple(
-            _blocking_warning(issue.code, issue.path, issue.reason)
-            for issue in snapshot.required_issues
-        )
-        return PlanExtractionResult(
-            request_id=request_id,
-            provider_id=raw.provider_id,
-            model=config.model,
-            prompt_version=config.prompt_version,
-            source_text_sha256=source_text_sha256,
-            draft=output.draft,
-            mapping=mapping,
-            assumptions=output.assumptions,
-            warnings=output.warnings,
-            validation_issues=validation_issues,
-            usage=_usage_snapshot(raw),
-            diagnostic=_diagnostic(
-                stage="completed", reason="NONE", raw=raw, configured_model=config.model
-            ),
-            status=PlanExtractionStatus.SUCCEEDED,
-        )
-
-    evidence_issue = _validate_provenance(output, source_text)
-    if evidence_issue is not None:
-        return _failure_result(
-            request_id=request_id,
-            config=config,
-            source_text_sha256=source_text_sha256,
-            status=PlanExtractionStatus.INVALID_OUTPUT,
-            issue_code=evidence_issue.code,
-            issue_path=_safe_path(evidence_issue.path),
-            issue_message=evidence_issue.message,
-            raw=raw,
-            stage="evidence",
-            reason="FIELD_EVIDENCE",
-            diagnostic_path=_safe_path(evidence_issue.path),
-        )
-
-    unmapped_text = tuple(
-        UnmappedText(
-            path=issue.path,
-            excerpt=issue.excerpt,
-            reason=issue.reason,
-            material=True,
-            start=issue.start,
-            end=issue.end,
-        )
-        for issue in output.unmapped_text
-    )
-    review_issues = (
-        *(
-            DraftReviewIssue(
-                kind=ReviewIssueKind.ASSUMPTION,
-                path=issue.path,
-                material=issue.material,
-            )
-            for issue in output.assumptions
-        ),
-        *(
-            DraftReviewIssue(
-                kind=ReviewIssueKind.WARNING,
-                path=issue.path,
-                material=issue.material,
-            )
-            for issue in output.warnings
-        ),
-        *(
-            DraftReviewIssue(
-                kind=ReviewIssueKind.UNMAPPED_TEXT,
-                path=issue.path,
-                material=True,
-            )
-            for issue in unmapped_text
-        ),
-    )
-    validation = validate_trade_plan(
-        output.draft,
-        available_market_evidence=ALL_MARKET_EVIDENCE,
-        review_issues=review_issues,
-    )
-    return PlanExtractionResult(
-        request_id=request_id,
-        provider_id=raw.provider_id,
-        model=config.model,
-        prompt_version=config.prompt_version,
-        source_text_sha256=source_text_sha256,
-        draft=output.draft,
-        evidence=output.evidence,
-        assumptions=output.assumptions,
-        warnings=output.warnings,
-        unmapped_text=unmapped_text,
-        validation_issues=(
-            *validation.issues,
-            _blocking_warning(
-                "AI_EVIDENCE_REVIEW_REQUIRED",
-                "draft",
-                "Review AI field evidence before activation.",
-            ),
-        ),
-        usage=_usage_snapshot(raw),
-        diagnostic=_diagnostic(
-            stage="completed", reason="NONE", raw=raw, configured_model=config.model
-        ),
-        status=PlanExtractionStatus.SUCCEEDED,
-    )
-
 
 def _parse_untrusted_output(
     content: str,
     *,
     prompt_version: str,
-) -> PlanExtractionOutput | PlanExtractionOutputV4:
+) -> CurrentPlanExtractionOutput:
     if len(content.encode("utf-8")) > MAX_EXTRACTION_OUTPUT_BYTES:
         raise _UntrustedOutputError("JSON_BUDGET")
 
@@ -447,21 +307,9 @@ def _parse_untrusted_output(
         allow_nan=False,
         separators=(",", ":"),
     )
-    if prompt_version == "plan-extract-v7":
-        from trade_plan_monitor.ai.daily_extraction import DailyExtractionOutput
+    from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
 
-        return DailyExtractionOutput.model_validate_json(normalized)
-    model = (
-        PlanExtractionOutputV4
-        if prompt_version
-        in {
-            PLAN_EXTRACTION_PROMPT_V4,
-            PLAN_EXTRACTION_PROMPT_V5,
-            PLAN_EXTRACTION_PROMPT_V6,
-        }
-        else PlanExtractionOutput
-    )
-    return model.model_validate_json(normalized)
+    return CurrentPlanExtractionOutput.model_validate_json(normalized)
 
 
 def _enforce_json_budget(value: object) -> None:
@@ -478,81 +326,6 @@ def _enforce_json_budget(value: object) -> None:
             stack.extend((child, depth + 1) for child in item.values())
         elif isinstance(item, list):
             stack.extend((child, depth + 1) for child in item)
-
-
-def _validate_provenance(
-    output: PlanExtractionOutput,
-    source_text: str,
-) -> ValidationIssue | None:
-    required_paths = set(_leaf_paths(output.draft.model_dump(mode="json", exclude_none=True)))
-    supplied_paths = [item.path for item in output.evidence]
-    supplied_path_set = set(supplied_paths)
-
-    missing = sorted(required_paths - supplied_path_set)
-    if missing:
-        return _blocking_error(
-            "AI_FIELD_EVIDENCE_MISSING",
-            missing[0],
-            "Every draft field requires source evidence.",
-        )
-    if len(supplied_paths) != len(supplied_path_set) or supplied_path_set != required_paths:
-        return _blocking_error(
-            "AI_FIELD_EVIDENCE_INVALID",
-            "evidence",
-            "Field evidence must map exactly once to each draft field.",
-        )
-    for evidence in output.evidence:
-        if len(evidence.excerpt) < MIN_FIELD_EVIDENCE_CHARS or not _excerpt_matches_source(
-            source_text,
-            evidence.excerpt,
-            evidence.start,
-            evidence.end,
-        ):
-            return _blocking_error(
-                "AI_FIELD_EVIDENCE_INVALID",
-                evidence.path,
-                "Field evidence must point to the submitted source text.",
-            )
-    for unmapped in output.unmapped_text:
-        if not _excerpt_matches_source(
-            source_text,
-            unmapped.excerpt,
-            unmapped.start,
-            unmapped.end,
-        ):
-            return _blocking_error(
-                "AI_FIELD_EVIDENCE_INVALID",
-                unmapped.path,
-                "Unmapped text must point to the submitted source text.",
-            )
-    return None
-
-
-def _leaf_paths(value: object, path: str = "") -> tuple[str, ...]:
-    if isinstance(value, dict):
-        return tuple(
-            leaf_path
-            for key, child in value.items()
-            for leaf_path in _leaf_paths(child, f"{path}.{key}" if path else str(key))
-        )
-    if isinstance(value, list):
-        return tuple(
-            leaf_path
-            for index, child in enumerate(value)
-            for leaf_path in _leaf_paths(child, f"{path}[{index}]")
-        )
-    return (path,)
-
-
-def _excerpt_matches_source(
-    source_text: str,
-    excerpt: str,
-    start: int | None,
-    end: int | None,
-) -> bool:
-    if start is None or end is None:
-        return excerpt in source_text
-    return end <= len(source_text) and source_text[start:end] == excerpt
 
 
 def _usage_snapshot(raw: RawAIResponse) -> AIUsageSnapshot | None:
@@ -766,6 +539,5 @@ __all__ = [
     "MAX_EXTRACTION_JSON_DEPTH",
     "MAX_EXTRACTION_JSON_NODES",
     "MAX_EXTRACTION_OUTPUT_BYTES",
-    "MIN_FIELD_EVIDENCE_CHARS",
     "extract_plan",
 ]

@@ -1164,7 +1164,15 @@ def test_runner_v2_initial_lot_preserves_t1_equity_and_restart_bytes(tmp_path) -
     assert {signal.target_lot_id for signal in restarted.signals} == {expected_lot_id}
 
 
-def test_offline_runner_is_byte_stable_and_emits_only_daily_equity(tmp_path) -> None:
+def test_offline_runner_is_byte_stable_and_emits_only_daily_equity(tmp_path, monkeypatch) -> None:
+    import trade_plan_monitor.backtest.reporting as reporting
+
+    class FixedRetentionClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 9, 1, tzinfo=tz)
+
+    monkeypatch.setattr(reporting, "datetime", FixedRetentionClock)
     store = BacktestMarketStore(tmp_path / "market.sqlite3")
     dataset_hash = _seed_dataset(store)
     runner = OfflineBacktestRunner(store)

@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_index.identity import MAPPING_VERSION
 from trade_plan_monitor.market_index.turnover import (
     MARKET_TURNOVER_INDEX_CODES,
@@ -62,17 +63,23 @@ def build_dependency_scopes(dependencies):
         if type(item) is not DependencyReadAuthority:
             raise TypeError("Expected frozen dependency authority")
         target = (
-            None if item.target is None else views.IntradayTargetView(
-                kind="INTRADAY", target_end=item.target.bucket_end
-            ) if isinstance(item.target, IntradayEvaluationTarget)
+            None
+            if item.target is None
+            else views.IntradayTargetView(kind="INTRADAY", target_end=item.target.bucket_end)
+            if isinstance(item.target, IntradayEvaluationTarget)
             else views.OfficialCloseTargetView(
                 kind="OFFICIAL_CLOSE", trade_date=item.target.trade_date
             )
         )
         common = dict(
-            scope_key=item.scope_key, kind=item.kind, status=item.status,
-            reason_code=item.reason_code, required_target=target, data_cutoff=item.data_cutoff,
-            next_retry_at=item.next_retry_at, progress=views.ScopeProgressView(
+            scope_key=item.scope_key,
+            kind=item.kind,
+            status=item.status,
+            reason_code=item.reason_code,
+            required_target=target,
+            data_cutoff=item.data_cutoff,
+            next_retry_at=item.next_retry_at,
+            progress=views.ScopeProgressView(
                 required_count=item.required_count, completed_count=item.completed_count
             ),
         )
@@ -89,13 +96,23 @@ def build_dependency_scopes(dependencies):
 
 
 def _identity_rows(session):
-    return tuple(session.execute(select(
-        ActivePlan.symbol, ActivePlan.plan_version_id, ActivePlan.revision, PlanVersion.plan_hash,
-        ActivePlan.activated_at, PlanActivationState.plan_version_id,
-        PlanActivationState.revision, PlanActivationState.changed_at,
-    ).join(PlanVersion, ActivePlan.plan_version_id == PlanVersion.id)
-     .outerjoin(PlanActivationState, ActivePlan.symbol == PlanActivationState.symbol)
-     .order_by(ActivePlan.symbol)).all())
+    return tuple(
+        session.execute(
+            select(
+                ActivePlan.symbol,
+                ActivePlan.plan_version_id,
+                ActivePlan.revision,
+                PlanVersion.plan_hash,
+                ActivePlan.activated_at,
+                PlanActivationState.plan_version_id,
+                PlanActivationState.revision,
+                PlanActivationState.changed_at,
+            )
+            .join(PlanVersion, ActivePlan.plan_version_id == PlanVersion.id)
+            .outerjoin(PlanActivationState, ActivePlan.symbol == PlanActivationState.symbol)
+            .order_by(ActivePlan.symbol)
+        ).all()
+    )
 
 
 class RuntimeStatusReadService:
@@ -182,6 +199,51 @@ class RuntimeStatusReadService:
                     or evidence.activation_revision != pointer.revision
                 ):
                     raise ProjectionError("Plan authority crossed activation identity")
+                if type(plan) is not UnifiedTradePlan:
+                    family = (
+                        "EXPLICIT_RULES" if type(plan) is ExplicitTradePlan else "LEGACY_LOW_BUY"
+                    )
+                    scope = views.PlanScopeView(
+                        scope_key=f"plan:{plan.symbol}",
+                        kind="PLAN",
+                        symbol=plan.symbol,
+                        plan_family=family,
+                        plan_version_id=UUID(detail.id),
+                        plan_hash=detail.plan_hash,
+                        activation_revision=pointer.revision,
+                        status="BLOCKED",
+                        reason_code="LEGACY_PLANS_REQUIRE_REVIEW",
+                        required_target=None,
+                        data_cutoff=None,
+                        next_retry_at=None,
+                        progress=views.ScopeProgressView(required_count=None, completed_count=None),
+                        read_only=True,
+                    )
+                    scopes.append(scope)
+                    entries.append(
+                        views.UnavailablePlanEntryView(
+                            symbol=plan.symbol,
+                            name=plan.name,
+                            plan_family=family,
+                            plan_version_id=UUID(detail.id),
+                            plan_hash=detail.plan_hash,
+                            activation_revision=pointer.revision,
+                            observed_at=observed,
+                            scope=scope,
+                            availability="UNAVAILABLE",
+                            current_actionable=False,
+                            projection_state="BLOCKED",
+                            reason_code="LEGACY_PLANS_REQUIRE_REVIEW",
+                        )
+                    )
+                    continue
+                if isinstance(plan, UnifiedTradePlan):
+                    scope, entry = _condition_entry(
+                        session, authority, evidence, plan, detail, pointer, observed
+                    )
+                    scopes.append(scope)
+                    entries.append(entry)
+                    continue
                 explicit = type(plan) is ExplicitTradePlan
                 if explicit:
                     result = work.explicit_rules.latest(
@@ -637,6 +699,10 @@ def _counts(entries):
                 normal = health == "LIVE" and decision.signal_type.value not in {
                     item.value for item in ActionableSignalType
                 }
+            elif entry.plan_family == "CONDITION_PLAN":
+                risk = any(r.status != "CLEAR" for r in entry.plan_runtime.risks)
+                stale |= bool(entry.plan_runtime.data_blockers)
+                normal = not entry.current_actionable
             else:
                 stale |= any(
                     item.reason_code == "INTRADAY_EXPIRED" for item in entry.rule_eligibility
@@ -663,3 +729,131 @@ def _counts(entries):
         ).items():
             counts[name] += int(value)
     return DashboardCounts(**counts)
+
+
+def _condition_entry(session, authority, evidence, plan, detail, pointer, observed):
+    import json
+    from datetime import timedelta
+
+    from trade_plan_monitor.state.daily_accounting import DailyAccounting
+    from trade_plan_monitor.state.daily_repository import DailyRepository
+    from trade_plan_monitor.web.routers.daily_plans import DailyEvaluationApiView
+
+    repo = DailyRepository(session, clock=lambda: observed, id_factory=lambda: str(uuid4()))
+    head = repo.get("evaluation-head-" + plan.symbol)
+    snapshot = None if head is None else head["payload"]
+    reviewed = isinstance(plan, UnifiedTradePlan)
+    bound = (
+        reviewed
+        and snapshot is not None
+        and (
+            snapshot["plan_version_id"] == detail.id
+            and snapshot["plan_hash"] == detail.plan_hash
+            and snapshot["activation_revision"] == pointer.revision
+        )
+    )
+    from trade_plan_monitor.runtime.status_authority import (
+        condition_completion_matches,
+        condition_status_target,
+    )
+
+    proof = None if evidence is None else evidence.completion
+    desired = condition_status_target(session, plan=plan, now=observed, proof=proof)
+    current = (
+        bound
+        and proof is not None
+        and snapshot.get("runtime_generation") == str(authority.generation)
+        and proof.runtime_generation == authority.generation
+        and proof.configuration_revision == authority.configuration_revision
+        and proof.plan_version_id == detail.id
+        and proof.plan_hash == detail.plan_hash
+        and proof.activation_revision == pointer.revision
+        and proof.target == desired
+        and evidence.target == desired
+        and desired is not None
+        and authority.lifecycle == "RUNNING"
+        and authority.block_reason is None
+        and condition_completion_matches(session, proof=proof, snapshot=snapshot, now=observed)
+    )
+    alert_only = bool(plan.alert_rules) and not plan.ordinary_rules and not plan.risk_branches
+    inventory = (
+        {"symbol": plan.symbol, "revision": 0}
+        if alert_only
+        else DailyAccounting(repo).snapshot(plan.symbol, observed.date())
+    )
+    current = current and DailyAccounting(repo).evaluation_current(
+        snapshot,
+        plan_version_id=detail.id,
+        content_hash=detail.content_hash,
+        inventory=inventory,
+        now=observed,
+        require_daily_data=not alert_only,
+    )
+    if current and snapshot.get("minute_target"):
+        cutoff = __import__("datetime").datetime.fromisoformat(snapshot["minute_target"])
+        current = cutoff <= observed < cutoff + timedelta(seconds=90)
+    status = "READY" if current else "BLOCKED" if not reviewed else "WAITING"
+    reason = (
+        None
+        if current
+        else "LEGACY_PLANS_REQUIRE_REVIEW"
+        if not reviewed
+        else ("AWAITING_FIRST_EVALUATION" if not bound else "STATE_UNAVAILABLE")
+    )
+    target = (
+        None
+        if desired is None
+        else views.IntradayTargetView(kind="INTRADAY", target_end=desired.bucket_end)
+        if desired.kind == "INTRADAY"
+        else views.OfficialCloseTargetView(kind="OFFICIAL_CLOSE", trade_date=desired.trade_date)
+    )
+    scope = views.PlanScopeView(
+        scope_key="plan:" + plan.symbol,
+        kind="PLAN",
+        symbol=plan.symbol,
+        plan_family="CONDITION_PLAN",
+        plan_version_id=UUID(detail.id),
+        plan_hash=detail.plan_hash,
+        activation_revision=pointer.revision,
+        status=status,
+        reason_code=reason,
+        required_target=target,
+        data_cutoff=None,
+        next_retry_at=None,
+        progress=views.ScopeProgressView(required_count=1, completed_count=int(current)),
+        read_only=not current or target is None,
+    )
+    common = dict(
+        symbol=plan.symbol,
+        name=plan.name,
+        plan_family="CONDITION_PLAN",
+        plan_version_id=UUID(detail.id),
+        plan_hash=detail.plan_hash,
+        activation_revision=pointer.revision,
+        observed_at=observed,
+        scope=scope,
+    )
+    if not bound:
+        return scope, views.UnavailablePlanEntryView(
+            **common,
+            availability="UNAVAILABLE",
+            current_actionable=False,
+            projection_state=status,
+            reason_code=reason,
+        )
+    runtime = DailyEvaluationApiView.model_validate_json(json.dumps(snapshot))
+    actionable = (
+        current
+        and not scope.read_only
+        and (
+            any(s.executable_qty > 0 for s in runtime.signals)
+            or runtime.risk_action.status == "RISK_EXIT"
+            and ((runtime.risk_action.core_qty or 0) + (runtime.risk_action.tactical_qty or 0) > 0)
+        )
+    )
+    return scope, views.ConditionPlanEntryView(
+        **common,
+        availability="CURRENT" if current else "CACHED",
+        current_actionable=bool(actionable),
+        plan_runtime=runtime,
+    )

@@ -3,8 +3,9 @@
 import json
 from datetime import datetime
 from pathlib import Path
+from uuid import UUID
 
-from tests.unit.test_ai_plan_extraction_v4 import _extract, _valid_output
+from tests.unit.test_current_plan_extraction_security import current_output, extract
 
 from trade_plan_monitor.ai.models import AIUsageSnapshot
 from trade_plan_monitor.web.ai_service import _completed_extraction_view
@@ -14,9 +15,13 @@ FIXTURE = Path(__file__).parents[2] / "web/tests/fixtures/ai-partial-extraction.
 
 def production_partial_view():
     timestamp = datetime.fromisoformat("2026-09-14T10:00:00+08:00")
+    output = current_output()
+    output["draft"]["activation"] = None
+    output["draft"]["position"]["max_qty"] = None
     return _completed_extraction_view(
-        result=_extract(_valid_output()).model_copy(
+        result=extract(output).model_copy(
             update={
+                "request_id": UUID("51e37676-d62d-4bbc-873a-2b389f8d4611"),
                 "usage": AIUsageSnapshot(
                     prompt_tokens=100, completion_tokens=100, total_tokens=200
                 ),

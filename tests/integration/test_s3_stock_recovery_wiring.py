@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import pytest
 import requests
-from test_live_pipeline_acceptance import NOW, _sample_plan
+from test_live_pipeline_acceptance import NOW
 from test_permission_candidate_selection import _block, _seed_open_day
 from test_production_certification_gate import _composition
 from test_production_semantic_gate import _deadline, _pipeline
@@ -13,6 +13,7 @@ from test_runtime_lifecycle import _service
 from test_s3_frozen_startup_recovery import _bar, _running
 from test_s3_startup_outcome_association import _DeadlineClock
 from test_s3_stock_recovery_owner import _seed_many
+from tests.integration.current_activation_fixture import current_sample_plan as _sample_plan
 
 from trade_plan_monitor.runtime.reconciliation import RecoveryDisposition
 from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
@@ -45,7 +46,8 @@ def test_startup_acquires_at_most_one_of_ten_stock_scopes(tmp_path, monkeypatch)
 
 
 def test_startup_date_rollover_during_close_recovery_skips_other_day_before_fetch(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
@@ -71,7 +73,9 @@ def test_startup_date_rollover_during_close_recovery_skips_other_day_before_fetc
 
 @pytest.mark.parametrize("count", [0, 7])
 def test_startup_incomplete_completion_floor_survives_resync_and_repeated_startup(
-    tmp_path, monkeypatch, count,
+    tmp_path,
+    monkeypatch,
+    count,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
@@ -91,7 +95,8 @@ def test_startup_incomplete_completion_floor_survives_resync_and_repeated_startu
             assert snapshot.next_retry_at == completed_at + timedelta(seconds=30)
             with work() as transaction:
                 rows = transaction.history.list_minutes(
-                    _sample_plan().symbol, start=NOW.replace(hour=9, minute=31, second=0),
+                    _sample_plan().symbol,
+                    start=NOW.replace(hour=9, minute=31, second=0),
                     end=completed_at,
                 )
             assert len(rows) == count
@@ -109,8 +114,12 @@ def test_startup_incomplete_completion_floor_survives_resync_and_repeated_startu
 def test_index_only_market_still_runs_and_accidental_stock_unit_is_inert(tmp_path, monkeypatch):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=False, include_index=True,
-            stock_certification=False, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=False,
+            include_index=True,
+            stock_certification=False,
+            persisted_calendar=True,
         )
         try:
             assert (await composition.start()).status.value == "RUNNING"
@@ -122,9 +131,13 @@ def test_index_only_market_still_runs_and_accidental_stock_unit_is_inert(tmp_pat
             )
             before = tuple(sdk.calls)
             assert state.next_stock_recovery_at() is None
-            await state.run_deadline(MarketDeadline(
-                kind=DeadlineKind.STOCK_RECOVERY, trade_date=NOW.date(), due_at=NOW,
-            ))
+            await state.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.STOCK_RECOVERY,
+                    trade_date=NOW.date(),
+                    due_at=NOW,
+                )
+            )
             assert state.next_stock_recovery_at() is None
             assert tuple(sdk.calls) == before
         finally:
@@ -139,7 +152,8 @@ def test_stock_maintenance_scheduler_uses_cached_due_and_market_wins_tie():
     due = NOW.replace(minute=1, second=12)
     clock = ControlledClock(due)
     scheduler = MarketSessionScheduler(
-        clock=clock, is_open_on=lambda day: day == NOW.date(),
+        clock=clock,
+        is_open_on=lambda day: day == NOW.date(),
         next_stock_recovery_at=lambda: due,
     )
     first = scheduler.next_deadline()
@@ -151,7 +165,9 @@ def test_stock_maintenance_scheduler_uses_cached_due_and_market_wins_tie():
 
 @pytest.mark.parametrize("complete", [False, True])
 def test_preblocked_startup_missing_is_failure_but_complete_prefix_needs_no_fetch(
-    tmp_path, monkeypatch, complete,
+    tmp_path,
+    monkeypatch,
+    complete,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
@@ -159,9 +175,9 @@ def test_preblocked_startup_missing_is_failure_but_complete_prefix_needs_no_fetc
             if complete:
                 capture = pipeline._capture_recovery_scope(_sample_plan().symbol)
                 with work() as transaction:
-                    transaction.history.upsert_minutes(tuple(
-                        _bar(capture, end) for end in capture.required_ends
-                    ))
+                    transaction.history.upsert_minutes(
+                        tuple(_bar(capture, end) for end in capture.required_ends)
+                    )
                     transaction.commit()
             await _block(pipeline._controller, TushareOperation.CURRENT_DAY_MINUTES)
             if complete:
@@ -205,7 +221,8 @@ def test_provider_retry_repeated_startup_keeps_failure_category_and_floor(tmp_pa
 
 
 def test_sibling_success_cannot_erase_startup_failure_but_own_legal_partial_can(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         plans = _seed_many(tmp_path, 2)
@@ -231,7 +248,8 @@ def test_sibling_success_cannot_erase_startup_failure_but_own_legal_partial_can(
                 await pipeline.recover_startup(NOW.date())
             assert sibling.value.code is RequestControlErrorCode.TRANSIENT
             assert [kwargs["ts_code"] for _, kwargs in sdk.calls] == [
-                plans[0].symbol, plans[1].symbol,
+                plans[0].symbol,
+                plans[1].symbol,
             ]
             fail_first[0] = False
             pipeline._clock.current = first_snapshot.next_retry_at
@@ -247,7 +265,8 @@ def test_sibling_success_cannot_erase_startup_failure_but_own_legal_partial_can(
 
 
 def test_complete_prefix_does_not_clear_authoritative_block_for_a_growing_target(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
@@ -257,9 +276,9 @@ def test_complete_prefix_does_not_clear_authoritative_block_for_a_growing_target
                 await pipeline.recover_startup(NOW.date())
             capture = pipeline._capture_recovery_scope(_sample_plan().symbol)
             with work() as transaction:
-                transaction.history.upsert_minutes(tuple(
-                    _bar(capture, end) for end in capture.required_ends
-                ))
+                transaction.history.upsert_minutes(
+                    tuple(_bar(capture, end) for end in capture.required_ends)
+                )
                 transaction.commit()
             await pipeline.recover_startup(NOW.date())
             assert pipeline._controller.is_permission_blocked(TushareOperation.CURRENT_DAY_MINUTES)
@@ -273,15 +292,19 @@ def test_complete_prefix_does_not_clear_authoritative_block_for_a_growing_target
 
 @pytest.mark.parametrize("guard", ["capture", "response"])
 def test_startup_guard_invalidation_is_failure_without_provider_error_evidence(
-    tmp_path, monkeypatch, guard,
+    tmp_path,
+    monkeypatch,
+    guard,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, _work):
             _seed_open_day(tmp_path / "monitor.sqlite3", NOW.date())
             sdk.stock_symbols = (_sample_plan().symbol,)
             if guard == "capture":
+
                 def invalid(_symbol):
                     raise RecoveryAdmissionChangedError("local original capture expired")
+
                 monkeypatch.setattr(pipeline, "_capture_recovery_scope", invalid)
             else:
                 original = sdk._stock_minutes
@@ -307,13 +330,18 @@ def test_startup_guard_invalidation_is_failure_without_provider_error_evidence(
 @pytest.mark.parametrize("code", ["ERROR", "QUEUE_FULL", "CLOSED", "INVALID_RESPONSE"])
 @pytest.mark.parametrize("concurrent_complete", [False, True])
 def test_startup_retains_original_failure_policy_for_fatal_provider_results(
-    tmp_path, monkeypatch, code, concurrent_complete,
+    tmp_path,
+    monkeypatch,
+    code,
+    concurrent_complete,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
             _seed_open_day(tmp_path / "monitor.sqlite3", NOW.date())
             failure = RequestControlError(
-                RequestControlErrorCode(code), TushareOperation.CURRENT_DAY_MINUTES, attempts=0,
+                RequestControlErrorCode(code),
+                TushareOperation.CURRENT_DAY_MINUTES,
+                attempts=0,
             )
 
             async def fail(*_args, **_kwargs):
@@ -324,9 +352,9 @@ def test_startup_retains_original_failure_policy_for_fatal_provider_results(
 
                     def commit_complete():
                         with work() as transaction:
-                            transaction.history.upsert_minutes(tuple(
-                                _bar(capture, end) for end in capture.required_ends
-                            ))
+                            transaction.history.upsert_minutes(
+                                tuple(_bar(capture, end) for end in capture.required_ends)
+                            )
                             transaction.commit()
 
                     await asyncio.to_thread(commit_complete)
@@ -362,10 +390,14 @@ def test_market_completion_does_not_call_legacy_multi_symbol_gap_repair(tmp_path
 
             monkeypatch.setattr(pipeline.recovery, "repair_detected_gaps", observed)
             runtime._clock.current = NOW.replace(minute=5, second=12)
-            await state.run_deadline(MarketDeadline(
-                kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
-                due_at=runtime._clock.now(), bar_end=runtime._clock.now().replace(second=0),
-            ))
+            await state.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=NOW.date(),
+                    due_at=runtime._clock.now(),
+                    bar_end=runtime._clock.now().replace(second=0),
+                )
+            )
             assert not calls
             assert pipeline._stock_recovery_schedule.snapshot()
             assert pipeline.next_stock_recovery_at() is not None
@@ -375,7 +407,8 @@ def test_market_completion_does_not_call_legacy_multi_symbol_gap_repair(tmp_path
 
 @pytest.mark.parametrize("elapsed_minutes,expected_market", [(1, True), (3, False)])
 def test_stock_maintenance_preserves_market_cursor_and_original_elapsed_review(
-    elapsed_minutes, expected_market,
+    elapsed_minutes,
+    expected_market,
 ):
     async def scenario():
         clock = _DeadlineClock(NOW)
@@ -391,7 +424,8 @@ def test_stock_maintenance_preserves_market_cursor_and_original_elapsed_review(
                 return super().elapsed_market_deadlines(after=after, through=through)
 
         scheduler = RecordingScheduler(
-            clock=clock, is_open_on=lambda day: day == NOW.date(),
+            clock=clock,
+            is_open_on=lambda day: day == NOW.date(),
             next_stock_recovery_at=lambda: next_stock[0],
         )
 
@@ -416,7 +450,8 @@ def test_stock_maintenance_preserves_market_cursor_and_original_elapsed_review(
             assert reviews[0] == (market_cursor, NOW.replace(minute=elapsed_minutes, second=13))
             assert [item.kind for item in executed] == (
                 [DeadlineKind.STOCK_RECOVERY, DeadlineKind.REALTIME_MINUTE]
-                if expected_market else [DeadlineKind.STOCK_RECOVERY]
+                if expected_market
+                else [DeadlineKind.STOCK_RECOVERY]
             )
             if expected_market:
                 assert executed[1].bar_end == NOW.replace(minute=1, second=0)
@@ -443,16 +478,21 @@ def test_composition_stock_maintenance_never_dispatches_pending(tmp_path, monkey
                 return await original()
 
             monkeypatch.setattr(state._dispatcher, "dispatch_pending", observed)
-            await state.run_deadline(MarketDeadline(
-                kind=DeadlineKind.STOCK_RECOVERY, trade_date=NOW.date(), due_at=NOW,
-            ))
+            await state.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.STOCK_RECOVERY,
+                    trade_date=NOW.date(),
+                    due_at=NOW,
+                )
+            )
             assert pending_calls == []
 
     asyncio.run(scenario())
 
 
 def test_real_scheduled_sdk_overrun_consumes_one_fresh_original_market_duty(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         async with _running(tmp_path, monkeypatch, "empty") as run:
@@ -494,9 +534,11 @@ def test_real_scheduled_sdk_overrun_consumes_one_fresh_original_market_duty(
             )
             assert physical_entries == [NOW.replace(minute=1, second=12, microsecond=1)]
             target = NOW.replace(minute=2, second=0)
-            elapsed = [(deadline, observed) for deadline, observed in executed
-                       if deadline.kind is DeadlineKind.REALTIME_MINUTE
-                       and deadline.bar_end == target]
+            elapsed = [
+                (deadline, observed)
+                for deadline, observed in executed
+                if deadline.kind is DeadlineKind.REALTIME_MINUTE and deadline.bar_end == target
+            ]
             assert len(elapsed) == 1 and elapsed[0][1] == target + timedelta(seconds=13)
             assert (NOW.replace(minute=1, second=12), target + timedelta(seconds=13)) in reviews
             assert runtime._last_deadline_at == target + timedelta(seconds=12)

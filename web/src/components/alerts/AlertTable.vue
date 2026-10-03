@@ -156,6 +156,10 @@ function isExplicitAlert(item: PublicAlertView): item is Extract<PublicAlertView
   return "payloadSchemaVersion" in item && item.payloadSchemaVersion === "explicit-rule-alert-v1";
 }
 
+function isRiskReminder(item: PublicAlertView): boolean {
+  return isDailySimulationAlert(item) && item.signalType === "REMINDER" && item.alertKind === "RISK_ALERT";
+}
+
 function canRegisterTrade(item: PublicAlertView): boolean {
   if (isDailySimulationAlert(item) || isObsoleteDailyReminder(item)) return false;
   if (!item.currentActionable) return false;
@@ -242,7 +246,8 @@ function toLocalInput(value: string | null): string {
             <tr :data-alert-id="item.eventId">
               <td>
                 <strong>{{ item.name }} · {{ item.symbol }}</strong>
-                <span class="alert-history__signal">{{ item.signalType }} · {{ 'severity' in item ? item.severity : '历史诊断' }}</span>
+                <span class="alert-history__signal">{{ isRiskReminder(item) ? '风险提醒' : item.signalType }} · {{ 'severity' in item ? item.severity : '历史诊断' }}</span>
+                <span v-if="isRiskReminder(item)" class="alert-history__historical" data-risk-reminder>仅提醒；不产生交易，也不改变模拟仓位</span>
                 <span v-if="isObsoleteDailyReminder(item)" class="alert-history__historical">旧日线记录 · 不支持模拟</span>
                 <span v-if="!item.currentActionable" class="alert-history__historical">
                   历史提醒 · 当前不可操作
@@ -284,8 +289,8 @@ function toLocalInput(value: string | null): string {
                 <a
                   v-if="isDailySimulationAlert(item)"
                   data-daily-plan
-                  :href="`/daily-plans/${encodeURIComponent(item.planVersionId)}`"
-                >查看日线计划（模拟须核验当前状态）</a>
+                  :href="`/plans/${encodeURIComponent(item.planVersionId)}`"
+                >{{ isRiskReminder(item) ? '查看计划并审核风险提醒（不改变模拟仓位）' : '查看计划（模拟须核验当前状态）' }}</a>
                 <a
                   v-if="canRegisterTrade(item)"
                   data-trade-registration
@@ -299,11 +304,17 @@ function toLocalInput(value: string | null): string {
                   <p>旧日线提醒仅供历史诊断，不能发送或确认模拟交易。</p>
                   <p>{{ item.reason }}</p>
                 </section>
-                <section v-else-if="isDailySimulationAlert(item)" :aria-label="`${item.name}日线提醒证据`">
-                  <h3>日线模拟候选提醒</h3>
+                <section v-else-if="isDailySimulationAlert(item) && isRiskReminder(item)" :aria-label="`${item.name}风险提醒证据`">
+                  <h3>仅提醒的风险条件</h3>
+                  <p>规则 {{ item.ruleId }} · 确认交易日 {{ item.confirmedTradeDate }}。</p>
+                  <p>请审核来源证据；此提醒不产生交易，也不改变模拟仓位。</p>
+                  <pre class="alert-history__message">{{ JSON.stringify(item.evidence, null, 2) }}</pre>
+                </section>
+                <section v-else-if="isDailySimulationAlert(item)" :aria-label="`${item.name}计划提醒证据`">
+                  <h3>模拟候选提醒</h3>
                   <p>正式收盘确认：{{ item.confirmedTradeDate ?? '待核验' }}；执行交易日：{{ item.executionDate ?? '待核验' }}。</p>
                   <p>生成提醒时数量：{{ item.quantity ?? '待核验' }}股；当时已模拟：{{ item.simulatedQty }}股。</p>
-                  <p>查看当前日线状态并单独确认模拟交易；确认已查看不会改变模拟仓位。</p>
+                  <p>查看当前计划状态并单独确认模拟交易；确认已查看不会改变模拟仓位。</p>
                 </section>
                 <section v-else-if="isExplicitAlert(item)" :aria-label="`${item.name}提醒证据`">
                   <h3>当前规则证据</h3>

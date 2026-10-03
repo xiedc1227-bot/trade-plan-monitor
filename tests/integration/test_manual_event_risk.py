@@ -24,10 +24,6 @@ from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.manual_event_risk_service import (
     PersistentManualEventRiskOperationService,
 )
-from trade_plan_monitor.web.routers.manual_event_risk import (
-    ManualEventRiskConfirmationCommand,
-)
-from trade_plan_monitor.web.schemas import MutationContext
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _NOW = datetime(2026, 9, 12, 10, 5, tzinfo=_SHANGHAI)
@@ -130,7 +126,7 @@ def test_manual_event_risk_is_three_state_scoped_expiring_and_audited(tmp_path: 
         engine.dispose()
 
 
-def test_manual_event_risk_api_exposes_unknown_reason_and_confirmation_receipt() -> None:
+def test_historical_manual_event_risk_api_exposes_unknown_reason() -> None:
     """The ordinary local API is the only browser entrypoint for this state."""
 
     class _Service:
@@ -146,40 +142,11 @@ def test_manual_event_risk_api_exposes_unknown_reason_and_confirmation_receipt()
                 "revision": 0,
             }
 
-        async def confirm_manual_event_risk(self, *, command: object, context: object) -> object:
-            assert command.status.value == "CLEAR"
-            assert command.expires_on == date(2026, 9, 12)
-            assert command.expected_revision == 0
-            assert context.idempotency_key == "manual-risk-clear-1"
-            return {
-                "symbol": _SYMBOL,
-                "planVersionId": "4c623c8c-ca26-4cd8-8cb2-08cd5e61be93",
-                "status": "CLEAR",
-                "reason": None,
-                "expiresOn": date(2026, 9, 12),
-                "confirmedAt": _NOW,
-                "revision": 1,
-            }
-
     client = TestClient(create_app(manual_event_risk_service=_Service()))
     unknown = client.get("/api/v1/manual-event-risk", params={"symbol": _SYMBOL})
-    confirmed = client.post(
-        "/api/v1/manual-event-risk-confirmations",
-        headers={"Idempotency-Key": "manual-risk-clear-1"},
-        json={
-            "symbol": _SYMBOL,
-            "status": "CLEAR",
-            "expiresOn": "2026-09-12",
-            "expectedRevision": 0,
-        },
-    )
-
     assert unknown.status_code == 200
     assert unknown.json()["status"] == "UNKNOWN"
     assert unknown.json()["reason"] == "NO_ACTIVE_PLAN"
-    assert confirmed.status_code == 200
-    assert confirmed.json()["status"] == "CLEAR"
-    assert confirmed.json()["revision"] == 1
 
 
 def test_manual_event_risk_service_survives_restart_and_fails_closed_on_scope_drift(
@@ -215,16 +182,12 @@ def test_manual_event_risk_service_survives_restart_and_fails_closed_on_scope_dr
         assert unknown.status.value == "UNKNOWN"
         assert unknown.reason is not None and unknown.reason.value == "MISSING_CONFIRMATION"
 
-        command = ManualEventRiskConfirmationCommand(
-            symbol=plan.symbol,
-            status=ManualEventRiskStatus.CLEAR,
-            expires_on=_NOW.date(),
-            expected_revision=0,
-        )
-        context = MutationContext(idempotency_key="manual-risk-service-1", request_id="a" * 32)
-        confirmed = asyncio.run(
-            service.confirm_manual_event_risk(command=command, context=context)
-        )
+        # Seed immutable historical evidence through its repository, not a current Web mutation.
+        with work_factory() as work:
+            work.manual_event_risk.upsert(symbol=plan.symbol, plan_hash=plan_sha256(plan),
+                status=ManualEventRiskStatus.CLEAR, expires_on=_NOW.date(), expected_revision=0)
+            work.commit()
+        confirmed = asyncio.run(service.get_manual_event_risk(symbol=plan.symbol))
         assert confirmed.status.value == "CLEAR"
         assert confirmed.revision == 1
 
@@ -234,9 +197,7 @@ def test_manual_event_risk_service_survives_restart_and_fails_closed_on_scope_dr
         )
         restarted_view = asyncio.run(restarted.get_manual_event_risk(symbol=plan.symbol))
         assert restarted_view.status.value == "CLEAR"
-        assert asyncio.run(
-            restarted.confirm_manual_event_risk(command=command, context=context)
-        ) == confirmed
+        assert restarted_view == confirmed
 
         with work_factory() as work:
             work.manual_event_risk.upsert(

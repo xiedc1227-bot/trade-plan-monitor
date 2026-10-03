@@ -11,6 +11,7 @@ from pydantic import UUID4, BaseModel, Field, field_validator, model_serializer,
 from trade_plan_monitor.decision.models import ActionableSignalType, DataHealthStatus
 from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
 from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.web.routers.daily_plans import DailyEvaluationApiView
 from trade_plan_monitor.web.routers.dashboard import (
     AuthoritativeDecisionView,
     DashboardCounts,
@@ -90,7 +91,7 @@ RuntimeReason = Literal[
     "LEGACY_PLANS_REQUIRE_REVIEW",
     "SCOPED_DEPENDENCY_FAILURE",
 ]
-PlanFamily = Literal["LEGACY_LOW_BUY", "EXPLICIT_RULES"]
+PlanFamily = Literal["LEGACY_LOW_BUY", "EXPLICIT_RULES", "CONDITION_PLAN"]
 ScopeState = Literal["WAITING", "RECOVERING", "READY", "BLOCKED"]
 
 
@@ -158,7 +159,8 @@ class PlanScopeView(_ScopeView):
     @model_validator(mode="after")
     def validate_evaluation_readiness(self) -> Self:
         if self.plan_family == "EXPLICIT_RULES" and isinstance(
-            self.required_target, OfficialCloseTargetView,
+            self.required_target,
+            OfficialCloseTargetView,
         ):
             raise ValueError("explicit rules do not have an official-close target")
         if not self.read_only and (
@@ -461,7 +463,28 @@ class ExplicitPlanEntryView(_PlanEntryView):
         return self
 
 
-PlanEntryView = UnavailablePlanEntryView | LegacyPlanEntryView | ExplicitPlanEntryView
+class ConditionPlanEntryView(_PlanEntryView):
+    plan_family: Literal["CONDITION_PLAN"]
+    availability: Literal["CURRENT", "CACHED"]
+    plan_runtime: DailyEvaluationApiView
+
+    @model_validator(mode="after")
+    def binding(self):
+        if (
+            self.plan_runtime.symbol != self.symbol
+            or self.plan_runtime.plan_hash != self.plan_hash
+            or self.plan_runtime.plan_version_id != str(self.plan_version_id)
+            or self.plan_runtime.activation_revision != self.activation_revision
+        ):
+            raise ValueError("condition runtime must match the active plan")
+        if self.current_actionable and (self.availability != "CURRENT" or self.scope.read_only):
+            raise ValueError("cached condition runtime cannot authorize action")
+        return self
+
+
+PlanEntryView = (
+    UnavailablePlanEntryView | LegacyPlanEntryView | ExplicitPlanEntryView | ConditionPlanEntryView
+)
 
 
 def runtime_dashboard_counts(entries: tuple[PlanEntryView, ...]) -> DashboardCounts:
@@ -498,6 +521,10 @@ def runtime_dashboard_counts(entries: tuple[PlanEntryView, ...]) -> DashboardCou
                 decision.data_health.status is DataHealthStatus.LIVE
                 and decision.signal_type.value not in {item.value for item in ActionableSignalType}
             )
+        elif isinstance(entry, ConditionPlanEntryView):
+            risk = any(r.status != "CLEAR" for r in entry.plan_runtime.risks)
+            stale = bool(entry.plan_runtime.data_blockers)
+            normal_candidate = not entry.current_actionable
         else:
             risk = any(
                 rule.current_actionable and rule.action == "RISK_ALERT"

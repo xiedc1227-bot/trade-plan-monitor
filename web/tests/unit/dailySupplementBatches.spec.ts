@@ -3,9 +3,9 @@ import { defineComponent, h } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import type { DailyMapping, DailySupplement, PlanVersionView } from "../../src/api/generated";
 import { apiFetchKey } from "../../src/api/context";
-import { useDailyWorkbench } from "../../src/composables/useDailyWorkbench";
+import { usePlanWorkspace } from "../../src/composables/usePlanWorkspace";
 
-const candidate = { plan_id: "synthetic", version: 1, symbol: "601021.SH", levels: { risk_line_fen: 3818, other: 3970 } };
+const candidate = { schema_version: 5, execution_mode: "CONDITION_PLAN", execution_version: "condition-plan-v1", plan_id: "synthetic", version: 1, symbol: "601021.SH", levels: { risk_line_fen: 3818, other: 3970 } };
 const originalMapping: DailyMapping = {
   mapping_version: "daily-mapping-v1", candidate_content_hash: "a".repeat(64),
   clauses: [], bindings: [], supplements: [],
@@ -19,7 +19,7 @@ function harness() {
     const url = String(input);
     const body = JSON.parse(String(init?.body ?? "{}"));
     let result: object = {};
-    if (url.endsWith("daily-plan-review-previews")) {
+    if (url.endsWith("plan-review-previews")) {
       const raw = JSON.parse(body.candidateJson);
       const hash = (raw.levels.risk_line_fen === 3818 ? "a" : "b").repeat(64);
       const exact = hash === "a".repeat(64) ? registered : [];
@@ -28,7 +28,7 @@ function harness() {
           origin: "HUMAN_SUPPLEMENT", unit: "JSON", clause_ids: [], supplement_id: s.supplement_id })) };
       result = { candidateJson: body.candidateJson, supplementRevision: exact === registered ? revision : 0,
         review: { content_hash: hash, source_hash: "c".repeat(64), evidence_hash: "d".repeat(64), mapping, issues: [] } };
-    } else if (url.endsWith("daily-plan-review-supplements")) {
+    } else if (url.endsWith("plan-review-supplements")) {
       commands.push(body);
       if (body.expectedRevision !== revision) throw new Error("conflict");
       registered = body.supplements;
@@ -36,16 +36,19 @@ function harness() {
       result = { id: "registry", revision, recordedAt: "2026-09-18T16:00:00+08:00" };
     } else if (url.includes("plan-versions/")) {
       result = { id: "version", planId: candidate.plan_id, version: 1, planJson: JSON.stringify(candidate), sourceText: "Synthetic source",
-        dailyMapping: originalMapping, canActivate: false } as PlanVersionView;
+        dailyMapping: originalMapping, canActivate: false, status: "DRAFT" } as PlanVersionView;
     } else if (url.endsWith("/plan-drafts")) {
       const raw = JSON.parse(body.planJson);
       result = { id: "next-version", planId: raw.plan_id, version: raw.version,
-        planJson: body.planJson, dailyMapping: body.dailyMapping };
-    } else if (url.endsWith("daily-plan-editor-schema")) result = { candidateSchema: {} };
+        sourceText: body.sourceText, status: "DRAFT", canActivate: false, planJson: body.planJson, dailyMapping: body.dailyMapping };
+    } else if (url.endsWith("plan-editor-schema")) result = { candidateSchema: {}, operationSchemas: {} };
+    else if (url.endsWith("/ai-runtime")) result = { providerId: "synthetic", configured: true, enabled: true };
+    else if (url.includes("/plan-versions?")) result = { items: [], total: 0 };
+    else if (url.includes("/plan-activation-states/")) result = { active: false, revision: 0 };
     return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
   });
-  let work!: ReturnType<typeof useDailyWorkbench>;
-  const wrapper = mount(defineComponent({ setup() { work = useDailyWorkbench(); return () => h("div"); } }),
+  let work!: ReturnType<typeof usePlanWorkspace>;
+  const wrapper = mount(defineComponent({ setup() { work = usePlanWorkspace(); return () => h("div"); } }),
     { global: { provide: { [apiFetchKey as symbol]: fetcher } } });
   work.candidate.value = candidate;
   work.source.value = "Synthetic source";

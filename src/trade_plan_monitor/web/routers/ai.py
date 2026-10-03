@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Protocol, Self, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import AnyHttpUrl, Field, model_validator
 
 from trade_plan_monitor.ai.models import (
@@ -13,15 +13,11 @@ from trade_plan_monitor.ai.models import (
     AIProviderType,
     SecretReference,
 )
-from trade_plan_monitor.ai.secrets import SecretSource, SecretWrite
+from trade_plan_monitor.ai.secrets import SecretSource
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.schemas import (
     ApiValue,
-    MutationContext,
-    MutationContextDependency,
-    OperationKind,
-    OperationReceipt,
     validate_api_response,
 )
 
@@ -34,7 +30,6 @@ _MAX_EXPECTED_REVISION = 9_223_372_036_854_775_806
 
 OffsetQuery = Annotated[int, Query(ge=0, le=_MAX_ROWS)]
 LimitQuery = Annotated[int, Query(ge=1, le=_MAX_LIMIT)]
-ProviderIdPath = Annotated[UUID, Path()]
 NonNegativeRevision = Annotated[
     int,
     Field(strict=True, ge=0, le=_MAX_EXPECTED_REVISION),
@@ -215,20 +210,10 @@ class ConfiguredAIRuntimeView(ConfiguredAIProviderRuntimeView):
         return self
 
 
-class AIProviderConfigurationCommand(ApiValue):
-    config: AIProviderConfiguration
-    expected_revision: NonNegativeRevision
 
 
-class AIProviderSecretCommand(ApiValue):
-    provider_id: UUID = Field(strict=False)
-    secret: SecretWrite
-    expected_revision: NonNegativeRevision
 
 
-class AIProviderTestCommand(ApiValue):
-    provider_id: UUID = Field(strict=False)
-    expected_revision: NonNegativeRevision
 
 
 class AIOperationService(Protocol):
@@ -238,34 +223,9 @@ class AIOperationService(Protocol):
 
     async def get_configured_ai(self) -> ConfiguredAIRuntimeView: ...
 
-    async def create_ai_provider(
-        self,
-        *,
-        command: AIProviderConfigurationCommand,
-        context: MutationContext,
-    ) -> AIProviderView: ...
 
-    async def update_ai_provider(
-        self,
-        *,
-        provider_id: str,
-        command: AIProviderConfigurationCommand,
-        context: MutationContext,
-    ) -> AIProviderView | None: ...
 
-    async def replace_ai_provider_secret(
-        self,
-        *,
-        command: AIProviderSecretCommand,
-        context: MutationContext,
-    ) -> AIProviderView: ...
 
-    async def submit_ai_provider_test(
-        self,
-        *,
-        command: AIProviderTestCommand,
-        context: MutationContext,
-    ) -> OperationReceipt: ...
 
 
 def get_ai_operation_service(request: Request) -> AIOperationService:
@@ -308,101 +268,21 @@ async def list_ai_providers(
     return page
 
 
-@router.post("/ai-providers", response_model=AIProviderView)
-async def create_ai_provider(
-    command: AIProviderConfigurationCommand,
-    context: MutationContextDependency,
-    service: AIServiceDependency,
-) -> AIProviderView:
-    if command.expected_revision != 0:
-        raise ApiError(ApiErrorCode.CONFLICT)
-    result = validate_api_response(
-        await service.create_ai_provider(command=command, context=context),
-        AIProviderView,
-    )
-    _ensure_configuration_matches(result, command.config)
-    if result.revision != 0:
-        raise RuntimeError("AI provider create returned an invalid initial revision")
-    return result
 
 
-@router.patch("/ai-providers/{provider_id}", response_model=AIProviderView)
-async def update_ai_provider(
-    provider_id: ProviderIdPath,
-    command: AIProviderConfigurationCommand,
-    context: MutationContextDependency,
-    service: AIServiceDependency,
-) -> AIProviderView:
-    if command.config.provider_id != provider_id:
-        raise ApiError(ApiErrorCode.BAD_REQUEST)
-    value = await service.update_ai_provider(
-        provider_id=str(provider_id),
-        command=command,
-        context=context,
-    )
-    if value is None:
-        raise ApiError(ApiErrorCode.NOT_FOUND)
-    result = validate_api_response(value, AIProviderView)
-    _ensure_configuration_matches(result, command.config)
-    if result.revision != command.expected_revision + 1:
-        raise RuntimeError("AI provider update returned a stale revision")
-    return result
 
 
-@router.post("/ai-provider-secrets", response_model=AIProviderView)
-async def replace_ai_provider_secret(
-    command: AIProviderSecretCommand,
-    context: MutationContextDependency,
-    service: AIServiceDependency,
-) -> AIProviderView:
-    result = validate_api_response(
-        await service.replace_ai_provider_secret(command=command, context=context),
-        AIProviderView,
-    )
-    if result.config.provider_id != command.provider_id:
-        raise RuntimeError("secret service returned a mismatched provider")
-    if result.revision != command.expected_revision + 1:
-        raise RuntimeError("secret service returned a stale revision")
-    if not result.secret_status.configured or result.secret_status.source is not SecretSource.STORE:
-        raise RuntimeError("secret service did not confirm stored replacement")
-    return result
 
 
-@router.post(
-    "/ai-provider-tests",
-    response_model=OperationReceipt,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def submit_ai_provider_test(
-    command: AIProviderTestCommand,
-    context: MutationContextDependency,
-    service: AIServiceDependency,
-) -> OperationReceipt:
-    receipt = validate_api_response(
-        await service.submit_ai_provider_test(command=command, context=context),
-        OperationReceipt,
-    )
-    if receipt.kind is not OperationKind.AI_PROVIDER_TEST:
-        raise RuntimeError("AI provider service returned a mismatched operation kind")
-    return receipt
 
 
-def _ensure_configuration_matches(
-    result: AIProviderView,
-    requested: AIProviderConfiguration,
-) -> None:
-    if result.config.to_domain() != requested.to_domain():
-        raise RuntimeError("AI provider service returned a mismatched configuration")
 
 
 __all__ = [
     "AIOperationService",
-    "AIProviderConfigurationCommand",
     "ConfiguredAIProviderRuntimeView",
     "ConfiguredAIRuntimeView",
     "AIProviderPage",
-    "AIProviderSecretCommand",
-    "AIProviderTestCommand",
     "AIProviderView",
     "router",
 ]

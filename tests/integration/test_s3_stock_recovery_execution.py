@@ -8,12 +8,13 @@ import pytest
 import requests
 from sqlalchemy import delete
 from sqlalchemy.exc import OperationalError
-from test_live_pipeline_acceptance import NOW, _sample_plan
+from test_live_pipeline_acceptance import NOW
 from test_permission_candidate_selection import _seed_open_day
 from test_production_semantic_gate import _pipeline
 from test_recovery_activation_fences import replace_or_reactivate
 from test_s3_frozen_startup_recovery import _bar, _running
 from test_s3_stock_recovery_owner import _seed_many
+from tests.integration.current_activation_fixture import current_sample_plan as _sample_plan
 
 from trade_plan_monitor.runtime.reconciliation import RecoveryDisposition
 from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError

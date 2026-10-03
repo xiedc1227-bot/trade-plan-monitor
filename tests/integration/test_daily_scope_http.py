@@ -9,7 +9,8 @@ from tests.integration.test_daily_plan_chain import TUESDAY, ready_chain
 from tests.integration.test_daily_plan_chain import chain as chain_fixture
 from tests.unit.test_daily_review import reviewed_mapping
 
-from trade_plan_monitor.domain.daily_plan_validation import DailyPlanDraft, daily_draft_json
+from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.models import AlertEvent, PlanVersion
 
@@ -38,7 +39,7 @@ def test_fact_http_injection_has_no_fact_risk_or_outbox_mutation(chain, kind):
     }
     before = counts(chain)
     response = chain.client.post(
-        "/api/v1/daily-plan-facts", json=payload, headers={"Idempotency-Key": "excluded-" + kind}
+        "/api/v1/plan-facts", json=payload, headers={"Idempotency-Key": "excluded-" + kind}
     )
     assert response.status_code == 422
     assert counts(chain) == before
@@ -48,7 +49,7 @@ def test_relabelled_technical_fact_rejects_without_mutation(chain):
     ready_chain(chain)
     before = counts(chain)
     response = chain.client.post(
-        "/api/v1/daily-plan-facts",
+        "/api/v1/plan-facts",
         json={
             "planVersionId": chain.version["id"],
             "contentHash": chain.version["contentHash"],
@@ -65,10 +66,10 @@ def test_relabelled_technical_fact_rejects_without_mutation(chain):
 
 
 def test_no_mapping_preview_exposes_background_and_explicit_unknown_wording_route(chain):
-    draft = DailyPlanDraft.from_executable(chain.plan)
+    draft = UnifiedPlanDraft.from_executable(chain.plan)
     source = "Announcement verification is outside daily monitoring。公司订单持续改善。"
     preview = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(draft), "sourceText": source},
     )
     clauses = preview["review"]["mapping"]["clauses"]
@@ -78,7 +79,7 @@ def test_no_mapping_preview_exposes_background_and_explicit_unknown_wording_rout
     )
     selected = clauses[1]
     narrowed = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {
             "candidateJson": daily_draft_json(draft),
             "sourceText": source,
@@ -105,7 +106,7 @@ def test_background_complete_candidate_has_no_fundamental_review_blocker(chain):
     from trade_plan_monitor.ai.daily_review import build_daily_review, daily_source_clauses
 
     source = "Announcement verification is outside daily monitoring。"
-    draft = DailyPlanDraft.from_executable(chain.plan)
+    draft = UnifiedPlanDraft.from_executable(chain.plan)
     mapping = reviewed_mapping(draft, source).model_copy(
         update={"clauses": daily_source_clauses(source)}
     )
@@ -113,11 +114,14 @@ def test_background_complete_candidate_has_no_fundamental_review_blocker(chain):
 
 
 def test_obsolete_development_draft_preserves_raw_document_and_rejects_activation(chain):
+    from tests.unit.test_daily_plan import synthetic_plan_payload
+
     from trade_plan_monitor.domain.daily_hash import canonical
 
     with chain.plans._unit_of_work() as work:
         row = work.daily.session.get(PlanVersion, chain.version["id"])
-        raw = json.loads(row.payload_json)
+        raw = synthetic_plan_payload()
+        raw.update(plan_id=row.plan_id, version=row.version, symbol=row.symbol)
         raw["risk_branches"].append({"kind": "FUNDAMENTAL_INVALIDATION", "priority": 1})
         raw["execution_policy"]["risk_priority"] = "FUNDAMENTAL_THEN_SEVERE_THEN_ORDINARY"
         obsolete = canonical(raw)
@@ -148,6 +152,20 @@ def test_obsolete_development_draft_preserves_raw_document_and_rejects_activatio
     )
     assert rejected.status_code == 409
     assert counts(chain) == before
+
+
+def test_corrupt_current_document_is_not_reclassified_as_obsolete(chain):
+    with chain.plans._unit_of_work() as work:
+        row = work.daily.session.get(PlanVersion, chain.version["id"])
+        raw = json.loads(row.payload_json)
+        raw["risk_branches"].append({"kind": "FUNDAMENTAL_INVALIDATION", "priority": 1})
+        row.payload_json = json.dumps(raw)
+        row.status = "DRAFT"
+        work.commit()
+    from trade_plan_monitor.state.repositories import RepositoryError
+
+    with pytest.raises(RepositoryError, match="Stored daily review provenance is invalid"):
+        chain.client.get("/api/v1/plan-versions/" + chain.version["id"])
 
 
 def test_background_rebound_review_preserves_same_technical_runtime_result(tmp_path):
@@ -213,15 +231,15 @@ def test_background_rebound_review_preserves_same_technical_runtime_result(tmp_p
 
 def test_explicit_human_scope_selection_cannot_hide_technical_or_tradability_clause(chain):
     source = "收盘跌破风险线或者全日停牌时停止加仓。"
-    draft = DailyPlanDraft.from_executable(chain.plan)
+    draft = UnifiedPlanDraft.from_executable(chain.plan)
     preview = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(draft), "sourceText": source},
     )
     clause = preview["review"]["mapping"]["clauses"][0]
     before = counts(chain)
     chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {
             "candidateJson": daily_draft_json(draft),
             "sourceText": source,
@@ -243,16 +261,16 @@ def test_explicit_human_scope_selection_cannot_hide_technical_or_tradability_cla
 
 @pytest.mark.parametrize("source", ["股价低于39.45元时买入100股。", "收盘跌破38.18元时停止加仓。"])
 def test_public_preview_cannot_hide_common_technical_policy_as_scope_or_inventory(chain, source):
-    draft = DailyPlanDraft.from_executable(chain.plan)
+    draft = UnifiedPlanDraft.from_executable(chain.plan)
     baseline = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(draft), "sourceText": source},
     )
     assert any(i["code"] == "DAILY_SOURCE_CLAUSE_REQUIRED" for i in baseline["review"]["issues"])
     clause = baseline["review"]["mapping"]["clauses"][0]
     before = counts(chain)
     chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {
             "candidateJson": daily_draft_json(draft),
             "sourceText": source,
@@ -276,66 +294,42 @@ def test_public_preview_cannot_hide_common_technical_policy_as_scope_or_inventor
         reason="Synthetic concrete holdings assertion with explicit review and no trading policy",
     )
     chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(draft), "sourceText": source, "mapping": mapping},
         status=422,
     )
     assert counts(chain) == before
 
 
-@pytest.mark.parametrize("variant", ["SAME_FACT", "SAME_INDICATOR", "ANY_BYPASS"])
-def test_public_review_blocks_missing_independent_dimension_on_success_path(chain, variant):
-    draft = DailyPlanDraft.from_executable(chain.plan)
-    source = "Synthetic three independent technical dimensions explicitly reviewed."
+@pytest.mark.parametrize("missing", ["condition", "confirmation", "quantity"])
+def test_public_review_blocks_incomplete_current_rule_on_success_path(chain, missing):
+    draft = UnifiedPlanDraft.from_executable(chain.plan)
+    source = "Synthetic explicitly reviewed current rule."
     baseline = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(draft), "sourceText": source},
     )
     assert not any(i["code"] == "DAILY_PARAMETER_INVALID" for i in baseline["review"]["issues"])
     raw = draft.model_dump(mode="json")
-    fact = raw["ordinary_rules"][0]["technical"]
-    if variant == "SAME_INDICATOR":
-        fact = {
-            "type": "DAILY_INDICATOR_COMPARE",
-            "indicator": "RSI14",
-            "formula_version": "daily-ta-v2",
-            "parameters": {"period": 14},
-            "offset": 0,
-            "comparator": "GT",
-            "reference": {
-                "mode": "FIXED",
-                "value": "50",
-                "unit": "INDICATOR",
-                "as_of": "2026-09-18",
-                "source": "Synthetic reviewed RSI",
-            },
-        }
-    if variant == "ANY_BYPASS":
-        raw["ordinary_rules"][0]["price_structure"] = {
-            "type": "ANY",
-            "conditions": [raw["ordinary_rules"][0]["price_structure"], fact],
-        }
-    else:
-        for key in ("price_structure", "volume_or_candle", "technical"):
-            raw["ordinary_rules"][0][key] = fact
-    candidate = DailyPlanDraft.model_validate(raw)
+    raw["ordinary_rules"][0][missing] = None
+    candidate = UnifiedPlanDraft.model_validate(raw)
     preview = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(candidate), "sourceText": source},
     )
     assert any(
-        i["code"] == "DAILY_PARAMETER_INVALID" and i["path"].startswith("ordinary_rules.0")
+        i["code"] == "PLAN_PARAMETER_REQUIRED" and i["path"].startswith("ordinary_rules.0")
         for i in preview["review"]["issues"]
     )
     assert candidate.to_executable() is None
 
 
 def test_public_preview_rejects_impossible_macd_warmup_plus_offset(chain):
-    from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 
     raw = chain.plan.model_dump(mode="json")
     raw["monitoring"]["macd_min_observations"] = 500
-    raw["ordinary_rules"][0]["technical"] = {
+    raw["ordinary_rules"][0]["condition"]["conditions"][2] = {
         "type": "DAILY_INDICATOR_COMPARE",
         "indicator": "MACD_HIST",
         "formula_version": "daily-ta-v2",
@@ -350,21 +344,21 @@ def test_public_preview_rejects_impossible_macd_warmup_plus_offset(chain):
             "source": "Synthetic MACD threshold reviewed with 500 official observations",
         },
     }
-    baseline = DailyPlanDraft.from_executable(DailyTradePlan.model_validate(raw))
+    baseline = UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(raw))
     source = "Synthetic three independent technical dimensions explicitly reviewed."
     preview = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(baseline), "sourceText": source},
     )
     assert not any(i["code"] == "DAILY_PARAMETER_INVALID" for i in preview["review"]["issues"])
     raw = baseline.model_dump(mode="json")
-    raw["ordinary_rules"][0]["technical"]["offset"] = 1
-    candidate = DailyPlanDraft.model_validate(raw)
+    raw["ordinary_rules"][0]["condition"]["conditions"][2]["offset"] = 1
+    candidate = UnifiedPlanDraft.model_validate(raw)
     before = counts(chain)
     preview = chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {"candidateJson": daily_draft_json(candidate), "sourceText": source},
     )
-    assert any(i["code"] == "DAILY_PARAMETER_INVALID" for i in preview["review"]["issues"])
+    assert any(i["code"] == "PLAN_PARAMETER_INVALID" for i in preview["review"]["issues"])
     assert candidate.to_executable() is None
     assert counts(chain) == before

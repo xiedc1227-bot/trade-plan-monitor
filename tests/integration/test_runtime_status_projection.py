@@ -75,7 +75,8 @@ def test_real_257_alert_history_keeps_bounded_current_rule_provenance(tmp_path):
 
     payload = fixture._plan().model_dump(mode="python")
     payload["activation"] = {
-        "mode": "DATE_RANGE", "start_date": fixture.TARGET_DATE,
+        "mode": "DATE_RANGE",
+        "start_date": fixture.TARGET_DATE,
         "end_date": fixture.TARGET_DATE + timedelta(days=8),
     }
     payload["rules"][0].update(
@@ -100,10 +101,14 @@ def test_real_257_alert_history_keeps_bounded_current_rule_provenance(tmp_path):
         previous = day - timedelta(days=1)
         while previous.weekday() >= 5:
             previous -= timedelta(days=1)
-        calendar.append(TradingDay(
-            exchange=plan.market, cal_date=day, is_open=day.weekday() < 5,
-            previous_trade_date=previous,
-        ))
+        calendar.append(
+            TradingDay(
+                exchange=plan.market,
+                cal_date=day,
+                is_open=day.weekday() < 5,
+                previous_trade_date=previous,
+            )
+        )
     with work() as transaction:
         transaction.references.upsert_trading_days(tuple(calendar))
         transaction.commit()
@@ -111,7 +116,9 @@ def test_real_257_alert_history_keeps_bounded_current_rule_provenance(tmp_path):
     async def scenario():
         runtime = ExplicitRuntimeEvaluationService(work, recovery_delivery=True)
         targets = tuple(
-            target for day in days if day.weekday() < 5
+            target
+            for day in days
+            if day.weekday() < 5
             for target in expected_minute_ends(day, is_open=True)
             if target.minute % 5 == 0 and target >= fixture.TARGET
         )
@@ -119,13 +126,21 @@ def test_real_257_alert_history_keeps_bounded_current_rule_provenance(tmp_path):
             now[0] = target + timedelta(seconds=2)
             with work() as transaction:
                 transaction.history.upsert_five_minute(
-                    symbol=plan.symbol, bar_end=target, formula_version="ta-v1",
-                    open_fen=990, high_fen=990, low_fen=990, close_fen=990,
-                    volume_shares=300, amount_yuan=Decimal("0"),
+                    symbol=plan.symbol,
+                    bar_end=target,
+                    formula_version="ta-v1",
+                    open_fen=990,
+                    high_fen=990,
+                    low_fen=990,
+                    close_fen=990,
+                    volume_shares=300,
+                    amount_yuan=Decimal("0"),
                 )
                 transaction.commit()
             outcome = await runtime.run_intraday_and_publish(
-                plan=plan, target_bucket_end=target, evaluated_at=now[0],
+                plan=plan,
+                target_bucket_end=target,
+                evaluated_at=now[0],
             )
         result = outcome.evaluation_result
         writes = []
@@ -139,8 +154,13 @@ def test_real_257_alert_history_keeps_bounded_current_rule_provenance(tmp_path):
             with sessions() as session, session.begin():
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 257
                 values = explicit_rule_eligibility(
-                    session=session, plan=plan, result=result, generation=uuid4(),
-                    barrier=None, now=now[0], current=False,
+                    session=session,
+                    plan=plan,
+                    result=result,
+                    generation=uuid4(),
+                    barrier=None,
+                    now=now[0],
+                    current=False,
                 )
             assert values[0]["reason_code"] == "CACHED_RESULT"
             assert values[0]["source_alert"]["result_hash"] == result.result_hash
@@ -178,7 +198,8 @@ def test_old_explicit_risk_source_survives_new_suppressed_result_and_expired_sel
 
     consumed = []
     runtime = ExplicitRuntimeEvaluationService(
-        work, recovery_delivery=True,
+        work,
+        recovery_delivery=True,
         committed_result_observer=lambda _plan, _result, inputs: consumed.append(inputs),
     )
     first = asyncio.run(
@@ -208,21 +229,34 @@ def test_old_explicit_risk_source_survives_new_suppressed_result_and_expired_sel
     from trade_plan_monitor.runtime.status_authority import capture_completion_proof
 
     with sessions() as session, session.begin():
-        common = dict(session=session, plan=plan, result=second,
-                      runtime_generation=generation, configuration_revision="installed",
-                      now=clock[0])
+        common = dict(
+            session=session,
+            plan=plan,
+            result=second,
+            runtime_generation=generation,
+            configuration_revision="installed",
+            now=clock[0],
+        )
         assert capture_completion_proof(**common, consumed_inputs=consumed[-1]) is not None
         risk_id = next(
             item.rule_id for item in second.rule_results if item.action.type == "RISK_ALERT"
         )
-        altered = consumed[-1].model_copy(update={
-            "rule_states": tuple(
-                item.model_copy(update={"revision": 0, "has_emitted": False,
-                                        "last_emitted_bucket_end": None})
-                if item.rule_id == risk_id else item
-                for item in consumed[-1].rule_states
-            )
-        })
+        altered = consumed[-1].model_copy(
+            update={
+                "rule_states": tuple(
+                    item.model_copy(
+                        update={
+                            "revision": 0,
+                            "has_emitted": False,
+                            "last_emitted_bucket_end": None,
+                        }
+                    )
+                    if item.rule_id == risk_id
+                    else item
+                    for item in consumed[-1].rule_states
+                )
+            }
+        )
         assert capture_completion_proof(**common, consumed_inputs=altered) is None
     barrier = RecoveryBarrierEvidence(
         symbol=plan.symbol,
@@ -289,124 +323,48 @@ def test_owner_replacement_retries_once_and_unreadable_authority_is_not_absence(
     engine.dispose()
 
 
-def test_real_explicit_proof_is_invalidated_by_current_inventory_change(tmp_path):
-    from test_persistent_monitor_read_service import _setup
+def test_real_current_proof_is_invalidated_by_current_inventory_change(tmp_path, monkeypatch):
+    from trade_plan_monitor.state.daily_models import DailyRecord
 
-    from trade_plan_monitor.runtime.progress import ProgressSnapshot
-    from trade_plan_monitor.runtime.status_authority import (
-        PlanReadAuthority,
-        RuntimeReadAuthority,
-        capture_completion_proof,
-    )
-    from trade_plan_monitor.state.models import PositionInventoryConfirmation
-    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
-
-    engine, plan = _database(tmp_path, "complete-proof.db")
-    sessions = create_session_factory(engine)
-    result = asyncio.run(
-        ExplicitRuntimeEvaluationService(
-            lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW),
-            recovery_delivery=True,
-        ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW)
-    ).evaluation_result
-    generation = uuid4()
-    with sessions() as session, session.begin():
-        proof = capture_completion_proof(
-            session,
-            plan=plan,
-            result=result,
-            runtime_generation=generation,
-            configuration_revision="configuration-1",
-            now=NOW,
-        )
-    assert proof is not None
-    other, _, _, health = _setup(tmp_path)
-    other.dispose()
-    plan_authority = PlanReadAuthority(
-        symbol=plan.symbol,
-        plan_version_id=proof.plan_version_id,
-        plan_hash=result.plan_hash,
-        activation_revision=1,
-        plan_family="EXPLICIT_RULES",
-        target=proof.target,
-        completion=proof,
-        evaluation_due=True,
-    )
-    progress = ProgressSnapshot(
-        generation, NOW, "SCHEDULED", NOW, NOW + timedelta(seconds=10), NOW + timedelta(seconds=30)
-    )
-    authority = RuntimeReadAuthority(
-        token="owner",
-        lifecycle="RUNNING",
-        progress=progress,
-        health=health,
-        configuration_revision="configuration-1",
-        plans=(plan_authority,),
-    )
-    service = RuntimeStatusReadService(sessions, lambda: authority, clock=lambda: NOW)
-    row = asyncio.run(service.get_dashboard()).symbols[0]
-    assert row.availability == "CURRENT"
-    assert row.scope.status == "READY"
-    assert row.scope.read_only is False
-    assert row.current_actionable is True
-    with sessions.begin() as session:
-        session.delete(session.get(PositionInventoryConfirmation, plan.symbol))
-    invalidated = asyncio.run(service.get_dashboard()).symbols[0]
-    assert invalidated.availability == "CACHED"
-    assert invalidated.scope.read_only is True
-    assert invalidated.current_actionable is False
-    engine.dispose()
+    env = _current_status(tmp_path, monkeypatch)
+    try:
+        row = asyncio.run(env.reader.get_dashboard()).symbols[0]
+        assert row.availability == "CURRENT" and row.scope.status == "READY"
+        assert row.scope.read_only is False and row.current_actionable is True
+        with env.sessions.begin() as session:
+            session.delete(session.get(DailyRecord, "simulation-position-" + env.plan.symbol))
+        invalidated = asyncio.run(env.reader.get_dashboard()).symbols[0]
+        assert invalidated.availability == "CACHED" and invalidated.scope.read_only is True
+        assert invalidated.current_actionable is False
+    finally:
+        env.close()
 
 
 def test_real_offline_pipeline_publishes_status_proof_only_after_new_commit(tmp_path, monkeypatch):
-    import test_explicit_runtime_production as fixture
-
-    from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
-    from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
-
-    original = ProductionMonitorPipeline
-
-    def status_pipeline(**kwargs):
-        kwargs["enable_runtime_status"] = True
-        kwargs["recovery_session_factory"] = kwargs["unit_of_work_factory"]()._session_factory
-        return original(**kwargs)
-
-    monkeypatch.setattr(fixture, "ProductionMonitorPipeline", status_pipeline)
+    env = _current_status(tmp_path, monkeypatch)
 
     async def scenario():
-        engine, _, _, _, build, controller, pipeline, _ = fixture._pipeline_fixture(
-            tmp_path, monkeypatch, current_volume=300
-        )
         try:
-            await pipeline.refresh_references(TARGET.date())
-            deadline = MarketDeadline(
-                kind=DeadlineKind.REALTIME_MINUTE,
-                trade_date=TARGET.date(),
-                due_at=fixture.PIPELINE_NOW,
-                bar_end=TARGET,
-            )
-            await pipeline.run_deadline(deadline)
-            token, _, plans = pipeline.runtime_status_snapshot()
-            assert len(plans) == 1
-            assert plans[0].completion is not None
+            token, _, plans = env.pipeline.runtime_status_snapshot()
+            assert len(plans) == 1 and plans[0].completion is not None
             assert plans[0].completion.runtime_generation == token[0]
-            await pipeline.run_deadline(deadline)
-            assert pipeline.runtime_status_snapshot()[0] == token
-            another_controller, restarted, _ = build()
+            await env.pipeline.run_deadline(env.deadline)
+            assert env.pipeline.runtime_status_snapshot()[0] == token
+            controller, restarted, _ = env.build()
             try:
                 await restarted.refresh_references(TARGET.date())
-                await restarted.run_deadline(deadline)
+                await restarted.run_deadline(env.deadline)
                 assert restarted.runtime_status_snapshot()[2][0].completion is None
             finally:
-                await another_controller.aclose()
+                await controller.aclose()
         finally:
-            await controller.aclose()
-            engine.dispose()
+            env.engine.dispose()
+            await env.controller.aclose()
 
     asyncio.run(scenario())
 
 
-def test_real_legacy_pipeline_proof_does_not_depend_on_optional_index(tmp_path, monkeypatch):
+def test_real_current_pipeline_proof_does_not_depend_on_optional_index(tmp_path, monkeypatch):
     import test_live_pipeline_acceptance as fixture
     from test_persistent_monitor_read_service import _setup
 
@@ -428,22 +386,6 @@ def test_real_legacy_pipeline_proof_does_not_depend_on_optional_index(tmp_path, 
             kwargs["enable_runtime_status"] = True
             kwargs["recovery_session_factory"] = kwargs["unit_of_work_factory"]()._session_factory
             super().__init__(**kwargs)
-            from trade_plan_monitor.domain.plan_hash import plan_sha256
-            from trade_plan_monitor.state.repositories import ManualEventRiskStatus
-
-            with SqlAlchemyUnitOfWork(
-                kwargs["recovery_session_factory"],
-                clock=lambda: fixture.INDEX_CUTOFF - timedelta(seconds=1),
-            ) as work:
-                for plan in self.active_plans():
-                    work.manual_event_risk.upsert(
-                        symbol=plan.symbol,
-                        plan_hash=plan_sha256(plan),
-                        status=ManualEventRiskStatus.CLEAR,
-                        expires_on=fixture.INDEX_CUTOFF.date(),
-                        expected_revision=0,
-                    )
-                work.commit()
 
         def _observe_status_commit(self, plan, result, consumed_inputs):
             super()._observe_status_commit(plan, result, consumed_inputs)
@@ -451,11 +393,20 @@ def test_real_legacy_pipeline_proof_does_not_depend_on_optional_index(tmp_path, 
             token, configuration, plans = self.runtime_status_snapshot()
             now = self._clock.now()
             authority = RuntimeReadAuthority(
-                token=token, lifecycle="RUNNING", health=health,
-                configuration_revision=configuration, plans=plans,
+                token=token,
+                lifecycle="RUNNING",
+                health=health,
+                configuration_revision=configuration,
+                plans=plans,
                 dependencies=build_dependency_scopes(self.runtime_status_dependencies_snapshot()),
-                progress=ProgressSnapshot(self._runtime_generation, now, "SCHEDULED", now,
-                                          now + timedelta(seconds=10), now + timedelta(seconds=30)),
+                progress=ProgressSnapshot(
+                    self._runtime_generation,
+                    now,
+                    "SCHEDULED",
+                    now,
+                    now + timedelta(seconds=10),
+                    now + timedelta(seconds=30),
+                ),
             )
             writes = []
 
@@ -481,7 +432,7 @@ def test_real_legacy_pipeline_proof_does_not_depend_on_optional_index(tmp_path, 
     )
     assert len(proofs) == 2
     assert all(proof is not None for proof in proofs)
-    assert all(proof.plan_family == "LEGACY_LOW_BUY" for proof in proofs)
+    assert all(proof.plan_family == "CONDITION_PLAN" for proof in proofs)
     assert all(row.availability == "CURRENT" for row in projections)
     assert all(row.scope.status == "READY" for row in projections)
 
@@ -509,18 +460,32 @@ def test_missing_legacy_result_is_local_and_known_inactive_has_no_fake_identity(
     engine.dispose()
 
 
-def test_real_both_families_cached_legacy_and_waiting_explicit_coexist(tmp_path):
+def test_frozen_history_and_reviewed_current_waiting_plan_coexist(tmp_path):
     from test_explicit_runtime_production import _plan, _seed_active
     from test_persistent_monitor_read_service import _seed_claim, _seed_plan, _setup
+    from tests.integration.current_activation_fixture import current_sample_plan
+    from tests.integration.test_daily_plan_chain import Chain
 
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
     from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority
+    from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
     from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
 
-    engine, work, _, health = _setup(tmp_path)
+    engine, work, legacy_reader, health = _setup(tmp_path)
     _seed_plan(work, active=True)
     result = _seed_claim(work, complete=True)
-    explicit = _plan().model_copy(update={"symbol": "600000.SH", "market": "SSE"})
-    _seed_active(engine, explicit)
+    frozen = _plan().model_copy(update={"symbol": "600000.SH", "market": "SSE"})
+    _seed_active(engine, frozen)
+    chain = Chain(tmp_path)
+    raw = current_sample_plan().model_dump(mode="json")
+    raw.update(plan_id="current-waiting", symbol="300001.SZ")
+    chain.plan = UnifiedTradePlan.model_validate(raw)
+    chain.now = NOW - timedelta(minutes=30)
+    chain.plans = PersistentPlanWebLifecycle(
+        database_path=tmp_path / "monitor.db", clock=lambda: chain.now
+    )
+    with chain.client:
+        chain.activate()
     authority = RuntimeReadAuthority(
         token="absent", lifecycle="STOPPED", progress=None, health=health, owner_absent=True
     )
@@ -528,52 +493,54 @@ def test_real_both_families_cached_legacy_and_waiting_explicit_coexist(tmp_path)
         create_session_factory(engine), lambda: authority, clock=lambda: NOW
     )
     dashboard = asyncio.run(service.get_dashboard())
-    legacy, waiting = dashboard.symbols
-    assert legacy.availability == "CACHED"
-    assert legacy.decision.result_hash == result.result_hash
-    assert legacy.decision.evaluated_at == result.snapshot.evaluated_at
-    assert waiting.availability == "UNAVAILABLE"
-    assert waiting.plan_family == "EXPLICIT_RULES"
-    assert dashboard.counts.stale == 1
-    assert len(dashboard.runtime_status.scopes) == 2
-    details = asyncio.run(service.get_symbol(symbol=legacy.symbol))
-    assert details.legacy_details is not None
-    assert asyncio.run(service.get_explicit_plan_runtime(symbol=legacy.symbol)) is None
+    historical = [row for row in dashboard.symbols if row.plan_family != "CONDITION_PLAN"]
+    waiting = next(row for row in dashboard.symbols if row.plan_family == "CONDITION_PLAN")
+    assert len(historical) == 2
+    assert all(
+        row.availability == "UNAVAILABLE"
+        and row.reason_code == "LEGACY_PLANS_REQUIRE_REVIEW"
+        and not row.current_actionable
+        and row.scope.read_only
+        for row in historical
+    )
+    assert (
+        waiting.availability == "UNAVAILABLE" and waiting.reason_code == "AWAITING_FIRST_EVALUATION"
+    )
+    assert len(dashboard.runtime_status.scopes) == 3
+    # Frozen history remains readable through its retained history reader without current authority.
+    with work() as transaction:
+        retained = transaction.projections.get_decision_head(result.snapshot.symbol)
+        assert retained.result.result_hash == result.result_hash
+        assert retained.result.snapshot.evaluated_at == result.snapshot.evaluated_at
+    assert asyncio.run(legacy_reader.get_dashboard()).availability == "UNAVAILABLE"
     assert asyncio.run(service.get_symbol_health(symbol=waiting.symbol)).scope == waiting.scope
-    assert asyncio.run(service.list_symbols(offset=1, limit=1)).items == (waiting,)
     assert asyncio.run(service.get_health()).runtime_status == dashboard.runtime_status
     engine.dispose()
 
 
-def test_explicit_cached_projection_uses_original_runtime_and_preserves_result(tmp_path):
-    from test_persistent_monitor_read_service import _setup
+def test_current_cached_projection_preserves_committed_runtime_and_source(tmp_path, monkeypatch):
+    from dataclasses import replace
 
-    from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority
-    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
-
-    engine, plan = _database(tmp_path, "explicit-cached.db")
-    sessions = create_session_factory(engine)
-    outcome = asyncio.run(
-        ExplicitRuntimeEvaluationService(
-            lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW),
-            recovery_delivery=True,
-        ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW)
-    )
-    other, _, _, health = _setup(tmp_path)
-    other.dispose()
-    authority = RuntimeReadAuthority(
-        token="absent", lifecycle="STOPPED", progress=None, health=health, owner_absent=True
-    )
-    service = RuntimeStatusReadService(sessions, lambda: authority, clock=lambda: NOW)
-    dashboard = asyncio.run(service.get_dashboard())
-    row = dashboard.symbols[0]
-    assert row.availability == "CACHED"
-    assert row.result_hash == outcome.evaluation_result.result_hash
-    assert row.explicit_runtime.target_bucket_end == TARGET
-    assert row.rule_eligibility[0].source_alert.result_hash == row.result_hash
-    assert row.rule_eligibility[0].reason_code == "CACHED_RESULT"
-    assert row.actionable_rule_ids == ()
-    engine.dispose()
+    env = _current_status(tmp_path, monkeypatch)
+    try:
+        env.current[0] = replace(
+            env.current[0],
+            token="absent",
+            lifecycle="STOPPED",
+            progress=None,
+            plans=(),
+            owner_absent=True,
+        )
+        row = asyncio.run(env.reader.get_dashboard()).symbols[0]
+        assert row.availability == "CACHED" and row.plan_family == "CONDITION_PLAN"
+        assert row.plan_runtime.plan_hash == env.plan_hash
+        assert row.plan_runtime.minute_target == TARGET
+        assert row.plan_runtime.minute_prefix[-1].bar_end == TARGET
+        assert row.plan_runtime.signals[0].executable_qty == 100
+        assert row.current_actionable is False and row.scope.read_only is True
+        assert row.plan_runtime.review_id == env.result.snapshot["review_id"]
+    finally:
+        env.close()
 
 
 def test_completion_proof_rejects_different_consumed_inventory(tmp_path):
@@ -588,12 +555,18 @@ def test_completion_proof_rejects_different_consumed_inventory(tmp_path):
     )
     result = service.run_intraday(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW)
     inputs = captured[0]
-    changed = inputs.model_copy(update={
-        "inventory": inputs.inventory.model_copy(update={"total_qty": 200})
-    })
+    changed = inputs.model_copy(
+        update={"inventory": inputs.inventory.model_copy(update={"total_qty": 200})}
+    )
     with sessions() as session, session.begin():
-        common = dict(session=session, plan=plan, result=result.evaluation_result,
-                      runtime_generation=uuid4(), configuration_revision="installed", now=NOW)
+        common = dict(
+            session=session,
+            plan=plan,
+            result=result.evaluation_result,
+            runtime_generation=uuid4(),
+            configuration_revision="installed",
+            now=NOW,
+        )
         assert capture_completion_proof(**common, consumed_inputs=inputs) is not None
         assert capture_completion_proof(**common, consumed_inputs=changed) is None
         from types import SimpleNamespace
@@ -601,13 +574,18 @@ def test_completion_proof_rejects_different_consumed_inventory(tmp_path):
         from trade_plan_monitor.decision.explicit_rules import ExplicitRuleStateSnapshot
 
         prior_inputs = inputs.model_dump(mode="python", exclude={"rule_states"})
-        wrong_state = SimpleNamespace(**prior_inputs, rule_states=(
-            ExplicitRuleStateSnapshot(
-                rule_id=result.evaluation_result.rule_results[0].rule_id,
-                activation_revision=1, revision=1,
-                has_emitted=True, last_emitted_bucket_end=TARGET,
+        wrong_state = SimpleNamespace(
+            **prior_inputs,
+            rule_states=(
+                ExplicitRuleStateSnapshot(
+                    rule_id=result.evaluation_result.rule_results[0].rule_id,
+                    activation_revision=1,
+                    revision=1,
+                    has_emitted=True,
+                    last_emitted_bucket_end=TARGET,
+                ),
             ),
-        ))
+        )
         # A first emission consumed no prior emitted state. Its post-commit row
         # cannot be substituted as though the evaluator had consumed it.
         wrong_state.inventory = inputs.inventory
@@ -625,15 +603,25 @@ def test_future_delivery_receipt_is_storage_failure_even_for_cached_read(tmp_pat
 
     engine, plan = _database(tmp_path, "future-receipt.db")
     sessions = create_session_factory(engine)
-    outcome = asyncio.run(ExplicitRuntimeEvaluationService(
-        lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW), recovery_delivery=True,
-    ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW))
+    outcome = asyncio.run(
+        ExplicitRuntimeEvaluationService(
+            lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW),
+            recovery_delivery=True,
+        ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW)
+    )
     with sessions.begin() as session:
         receipt = session.get(AlertDeliveryEligibility, str(outcome.committed_events[0].event_id))
         receipt.updated_at = (NOW + timedelta(seconds=1)).isoformat()
     with sessions() as session, session.begin(), pytest.raises(ProjectionError):
-        explicit_rule_eligibility(session=session, plan=plan, result=outcome.evaluation_result,
-                                  generation=uuid4(), barrier=None, now=NOW, current=False)
+        explicit_rule_eligibility(
+            session=session,
+            plan=plan,
+            result=outcome.evaluation_result,
+            generation=uuid4(),
+            barrier=None,
+            now=NOW,
+            current=False,
+        )
     engine.dispose()
 
 
@@ -642,9 +630,12 @@ def test_expired_suppressed_receipt_preserves_intraday_expired_reason(tmp_path):
 
     engine, plan = _database(tmp_path, "suppressed-expiry.db")
     sessions = create_session_factory(engine)
-    outcome = asyncio.run(ExplicitRuntimeEvaluationService(
-        lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW), recovery_delivery=True,
-    ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW))
+    outcome = asyncio.run(
+        ExplicitRuntimeEvaluationService(
+            lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW),
+            recovery_delivery=True,
+        ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW)
+    )
     observed = TARGET + timedelta(seconds=90)
     with sessions.begin() as session:
         row = session.get(AlertDeliveryEligibility, str(outcome.committed_events[0].event_id))
@@ -653,117 +644,86 @@ def test_expired_suppressed_receipt_preserves_intraday_expired_reason(tmp_path):
         row.updated_at = observed.isoformat()
     with sessions() as session, session.begin():
         value = explicit_rule_eligibility(
-            session=session, plan=plan, result=outcome.evaluation_result,
-            generation=uuid4(), barrier=None, now=observed, current=True,
+            session=session,
+            plan=plan,
+            result=outcome.evaluation_result,
+            generation=uuid4(),
+            barrier=None,
+            now=observed,
+            current=True,
         )[0]
     assert value["reason_code"] == "INTRADAY_EXPIRED"
     assert value["current_actionable"] is False
     engine.dispose()
 
 
-def test_config_generation_and_block_reason_invalidate_proof_without_any_read_writes(tmp_path):
+def test_config_generation_and_block_reason_invalidate_proof_without_any_read_writes(
+    tmp_path, monkeypatch
+):
     from dataclasses import replace
 
-    from test_persistent_monitor_read_service import _setup
+    import pytest
 
-    from trade_plan_monitor.runtime.progress import ProgressSnapshot
-    from trade_plan_monitor.runtime.status_authority import (
-        PlanReadAuthority,
-        RuntimeReadAuthority,
-        capture_completion_proof,
-    )
-    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+    from trade_plan_monitor.state.models import PlanActivationState, TradingCalendar
+    from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+    from trade_plan_monitor.web.runtime_status_websocket import RuntimeStatusEventStream
 
-    engine, plan = _database(tmp_path, "authority-invalidation.db")
-    sessions = create_session_factory(engine)
-    result = ExplicitRuntimeEvaluationService(
-        lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW), recovery_delivery=True,
-    ).run_intraday(plan=plan, target_bucket_end=TARGET, evaluated_at=NOW).evaluation_result
-    generation = uuid4()
-    with sessions() as session, session.begin():
-        proof = capture_completion_proof(
-            session, plan=plan, result=result, runtime_generation=generation,
-            configuration_revision="installed", now=NOW,
-        )
-    assert proof is not None
-    other, _, _, health = _setup(tmp_path)
-    other.dispose()
-    owner = RuntimeReadAuthority(
-        token="owner", lifecycle="RUNNING", health=health,
-        progress=ProgressSnapshot(generation, NOW, "SCHEDULED", NOW,
-                                  NOW + timedelta(seconds=10), NOW + timedelta(seconds=30)),
-        configuration_revision="installed",
-        plans=(PlanReadAuthority(
-            symbol=plan.symbol, plan_version_id=proof.plan_version_id, plan_hash=result.plan_hash,
-            activation_revision=1, plan_family="EXPLICIT_RULES", target=proof.target,
-            completion=proof, evaluation_due=True,
-        ),),
-    )
-    current = [owner]
-    service = RuntimeStatusReadService(sessions, lambda: current[0], clock=lambda: NOW)
+    env = _current_status(tmp_path, monkeypatch)
+    owner = env.current[0]
     writes = []
 
     def record(_conn, _cursor, statement, _params, _context, _many):
         if statement.lstrip().split()[0].upper() in {"INSERT", "UPDATE", "DELETE"}:
             writes.append(statement)
 
-    event.listen(engine, "before_cursor_execute", record)
-    assert asyncio.run(service.get_dashboard()).symbols[0].availability == "CURRENT"
-    from trade_plan_monitor.web.runtime_status_websocket import RuntimeStatusEventStream
-
-    stream = RuntimeStatusEventStream(
-        unit_of_work_factory=lambda: SqlAlchemyUnitOfWork(sessions, clock=lambda: NOW),
-        read_service=service,
-    )
-    first = asyncio.run(stream._current_heartbeat_frame(7))
-    second = asyncio.run(stream._current_heartbeat_frame(7))
-    assert first == second
-    assert first["sequence"] == 7
-    assert first["runtimeStatus"]["lastProgressAt"] == NOW.isoformat(timespec="microseconds")
-    for changed in (
-        replace(owner, configuration_revision="replacement"),
-        replace(owner, progress=replace(owner.progress, runtime_generation=uuid4())),
-        replace(owner, block_reason="NEEDS_RESTART"),
-    ):
-        current[0] = changed
-        dashboard = asyncio.run(service.get_dashboard())
-        assert dashboard.symbols[0].availability == "CACHED"
-        assert dashboard.symbols[0].current_actionable is False
-        assert dashboard.symbols[0].scope.read_only is True
-        assert asyncio.run(service.get_health()).runtime_status == dashboard.runtime_status
-        assert asyncio.run(service.get_symbol(symbol=plan.symbol)).summary == dashboard.symbols[0]
-        assert asyncio.run(service.get_symbol_health(symbol=plan.symbol)).scope.read_only is True
-        assert asyncio.run(service.list_symbols(offset=0, limit=1)).items == dashboard.symbols
-        assert asyncio.run(service.get_explicit_plan_runtime(symbol=plan.symbol)).summary == (
-            dashboard.symbols[0]
+    event.listen(env.engine, "before_cursor_execute", record)
+    try:
+        assert asyncio.run(env.reader.get_dashboard()).symbols[0].availability == "CURRENT"
+        stream = RuntimeStatusEventStream(unit_of_work_factory=env.work, read_service=env.reader)
+        first = asyncio.run(stream._current_heartbeat_frame(7))
+        assert first == asyncio.run(stream._current_heartbeat_frame(7))
+        assert first["sequence"] == 7
+        assert first["runtimeStatus"]["lastProgressAt"] == env.now.isoformat(
+            timespec="microseconds"
         )
-    assert dashboard.runtime_status.mode == "BLOCKED"
-    assert dashboard.runtime_status.reason_code == "NEEDS_RESTART"
-    assert writes == []
-    current[0] = owner
-    from trade_plan_monitor.state.models import TradingCalendar
-
-    with sessions.begin() as session:
-        session.get(TradingCalendar, (plan.market, TARGET.date())).is_open = False
-    unavailable = asyncio.run(service.get_dashboard()).symbols[0]
-    assert unavailable.availability == "CACHED"
+        for changed in (
+            replace(owner, configuration_revision="replacement"),
+            replace(owner, progress=replace(owner.progress, runtime_generation=uuid4())),
+            replace(owner, block_reason="NEEDS_RESTART"),
+        ):
+            env.current[0] = changed
+            dashboard = asyncio.run(env.reader.get_dashboard())
+            row = dashboard.symbols[0]
+            assert (
+                row.availability == "CACHED" and not row.current_actionable and row.scope.read_only
+            )
+            assert asyncio.run(env.reader.get_health()).runtime_status == dashboard.runtime_status
+            assert asyncio.run(env.reader.get_symbol(symbol=env.plan.symbol)).summary == row
+            assert asyncio.run(env.reader.get_symbol_health(symbol=env.plan.symbol)).scope.read_only
+            assert (
+                asyncio.run(env.reader.list_symbols(offset=0, limit=1)).items == dashboard.symbols
+            )
+            assert asyncio.run(env.reader.get_explicit_plan_runtime(symbol=env.plan.symbol)) is None
+        assert dashboard.runtime_status.mode == "BLOCKED"
+        assert dashboard.runtime_status.reason_code == "NEEDS_RESTART"
+        assert writes == []
+    finally:
+        event.remove(env.engine, "before_cursor_execute", record)
+    env.current[0] = owner
+    with env.sessions.begin() as session:
+        session.get(TradingCalendar, (env.plan.market, TARGET.date())).is_open = False
+    unavailable = asyncio.run(env.reader.get_dashboard()).symbols[0]
+    assert unavailable.availability == "CACHED" and not unavailable.current_actionable
     assert unavailable.scope.status == "WAITING"
-    assert unavailable.current_actionable is False
-    with sessions.begin() as session:
-        session.get(TradingCalendar, (plan.market, TARGET.date())).is_open = True
-    assert asyncio.run(service.get_dashboard()).symbols[0].availability == "CURRENT"
-
-    from trade_plan_monitor.state.models import PlanActivationState
-    from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
-
-    with sessions.begin() as session:
-        session.get(PlanActivationState, plan.symbol).revision += 1
-    import pytest
-
+    with env.sessions.begin() as session:
+        session.get(TradingCalendar, (env.plan.market, TARGET.date())).is_open = True
+    assert asyncio.run(env.reader.get_dashboard()).symbols[0].availability == "CURRENT"
+    with env.sessions.begin() as session:
+        session.get(PlanActivationState, env.plan.symbol).revision += 1
     with pytest.raises(ApiError) as error:
-        asyncio.run(service.get_dashboard())
+        asyncio.run(env.reader.get_dashboard())
     assert error.value.code is ApiErrorCode.SERVICE_UNAVAILABLE
-    engine.dispose()
+    env.close()
 
 
 def test_unchanged_bar_and_event_reads_reuse_existing_committed_reader(tmp_path):
@@ -774,14 +734,17 @@ def test_unchanged_bar_and_event_reads_reuse_existing_committed_reader(tmp_path)
 
     engine, _, legacy, _ = _setup(tmp_path)
     sessions = create_session_factory(engine)
+
     def work():
         return SqlAlchemyUnitOfWork(sessions, clock=lambda: _NOW)
+
     _seed_plan(work, active=True)
     service = RuntimeStatusReadService(
         sessions, lambda: None, clock=lambda: _NOW, legacy_read_service=legacy
     )
-    kwargs = dict(symbol="003043.SZ", start_at=_NOW - timedelta(days=1), end_at=_NOW,
-                  offset=0, limit=20)
+    kwargs = dict(
+        symbol="003043.SZ", start_at=_NOW - timedelta(days=1), end_at=_NOW, offset=0, limit=20
+    )
     bars = asyncio.run(service.list_symbol_bars(**kwargs, interval=BarInterval.FIVE_MINUTES))
     assert bars is not None
     assert bars == (
@@ -791,3 +754,254 @@ def test_unchanged_bar_and_event_reads_reuse_existing_committed_reader(tmp_path)
         asyncio.run(legacy.list_symbol_events(**kwargs))
     )
     engine.dispose()
+
+
+def _current_status(tmp_path, monkeypatch, *, plan=None, configure_sdk=None):
+    from types import SimpleNamespace
+
+    from test_persistent_monitor_read_service import _setup
+    from tests.integration import current_pipeline_fixture as fixture
+
+    from trade_plan_monitor.domain.plan_hash import plan_sha256
+    from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
+    from trade_plan_monitor.runtime.progress import ProgressSnapshot
+    from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+    from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority
+    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+
+    def status_pipeline(**kwargs):
+        kwargs["enable_runtime_status"] = True
+        kwargs["recovery_session_factory"] = kwargs["unit_of_work_factory"]()._session_factory
+        return ProductionMonitorPipeline(**kwargs)
+
+    monkeypatch.setattr(fixture, "ProductionMonitorPipeline", status_pipeline)
+    engine, work, plan, sdk, build, controller, pipeline, _ = fixture.current_pipeline_fixture(
+        tmp_path, monkeypatch, current_volume=300, plan=plan
+    )
+    if configure_sdk is not None:
+        configure_sdk(sdk, pipeline._clock, plan)
+    deadline = MarketDeadline(
+        kind=DeadlineKind.REALTIME_MINUTE,
+        trade_date=TARGET.date(),
+        due_at=fixture.PIPELINE_NOW,
+        bar_end=TARGET,
+    )
+
+    async def run():
+        await pipeline.refresh_references(TARGET.date())
+        return (await pipeline.run_deadline(deadline))[0]
+
+    result = asyncio.run(run())
+    token, configuration, plans = pipeline.runtime_status_snapshot()
+    assert plans[0].completion is not None
+    other, _, _, health = _setup(tmp_path)
+    other.dispose()
+    now = pipeline._clock.now()
+    current = [
+        RuntimeReadAuthority(
+            token=token,
+            lifecycle="RUNNING",
+            health=health,
+            configuration_revision=configuration,
+            plans=plans,
+            progress=ProgressSnapshot(
+                pipeline._runtime_generation,
+                now,
+                "SCHEDULED",
+                now,
+                now + timedelta(seconds=10),
+                now + timedelta(seconds=30),
+            ),
+        )
+    ]
+    sessions = create_session_factory(engine)
+    reader = RuntimeStatusReadService(sessions, lambda: current[0], clock=lambda: now)
+
+    def close():
+        asyncio.run(controller.aclose())
+        engine.dispose()
+
+    return SimpleNamespace(
+        engine=engine,
+        work=work,
+        plan=plan,
+        plan_hash=plan_sha256(plan),
+        sessions=sessions,
+        sdk=sdk,
+        build=build,
+        controller=controller,
+        pipeline=pipeline,
+        deadline=deadline,
+        result=result,
+        reader=reader,
+        now=now,
+        current=current,
+        close=close,
+    )
+
+
+def test_current_status_invalidates_prior_raw_volume_without_reaggregating(tmp_path, monkeypatch):
+    env = _current_status(tmp_path, monkeypatch)
+    try:
+        current = asyncio.run(env.reader.get_dashboard()).symbols[0]
+        assert current.availability == "CURRENT" and current.current_actionable
+        prior = TARGET - timedelta(minutes=5)
+        with env.work() as work:
+            stored = work.history.list_five_minute(
+                env.plan.symbol, start=prior, end=prior, formula_version="ta-v1"
+            )
+            source = work.history.list_minutes(
+                env.plan.symbol, start=prior - timedelta(minutes=4), end=prior
+            )
+            assert len(source) == 5 and len(stored) == 1
+            work.history.upsert_minutes(
+                (
+                    source[0].model_copy(
+                        update={
+                            "volume_shares": source[0].volume_shares + 1,
+                            "received_at": env.now,
+                        }
+                    ),
+                )
+            )
+            work.commit()
+        with env.work() as work:
+            assert (
+                work.history.list_five_minute(
+                    env.plan.symbol, start=prior, end=prior, formula_version="ta-v1"
+                )
+                == stored
+            )
+        stale = asyncio.run(env.reader.get_dashboard()).symbols[0]
+        assert stale.availability == "CACHED" and stale.scope.read_only
+        assert not stale.current_actionable
+    finally:
+        env.close()
+
+
+def test_current_status_scope_floors_1m_observation_to_required_5m_target(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from trade_plan_monitor.runtime.status_authority import condition_status_target
+
+    env = _current_status(tmp_path, monkeypatch)
+    try:
+        observation = TARGET + timedelta(minutes=1, seconds=2)
+        with env.sessions() as session, session.begin():
+            assert (
+                condition_status_target(session, plan=env.plan, now=observation).bucket_end
+                == TARGET
+            )
+        env.pipeline._clock.current = observation
+        owner = env.current[0]
+        env.reader._clock = lambda: observation
+        env.current[0] = replace(
+            owner,
+            progress=replace(
+                owner.progress,
+                observed_at=observation,
+                last_progress_at=observation,
+                next_wake_at=observation + timedelta(seconds=10),
+                progress_due_at=observation + timedelta(seconds=30),
+            ),
+        )
+        assert (
+            asyncio.run(env.reader.get_dashboard()).symbols[0].scope.required_target.target_end
+            == TARGET
+        )
+    finally:
+        env.close()
+
+
+def test_reviewed_fact_only_confirmation_owns_completed_five_minute_target(tmp_path, monkeypatch):
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+    from trade_plan_monitor.runtime.status_authority import condition_status_target
+
+    env = _current_status(tmp_path, monkeypatch)
+    try:
+        raw = env.plan.model_dump(mode="json")
+        raw["ordinary_rules"] = [raw["ordinary_rules"][0]]
+        raw["ordinary_rules"][0]["condition"] = {
+            "type": "REVIEWED_FACT",
+            "fact_kind": "TECHNICAL",
+            "evidence_requirement": "Synthetic technical review",
+            "validity_scope": "TRADE_DATE",
+        }
+        raw["alert_rules"] = []
+        plan = UnifiedTradePlan.model_validate(raw)
+        with env.sessions() as session, session.begin():
+            assert (
+                condition_status_target(
+                    session, plan=plan, now=TARGET + timedelta(minutes=1)
+                ).bucket_end
+                == TARGET
+            )
+    finally:
+        env.close()
+
+
+def test_daily_confirmation_with_minute_reset_owns_current_intraday_target(tmp_path, monkeypatch):
+    from tests.integration.current_pipeline_fixture import current_three_rule_plan
+    from tests.integration.test_s3_missed_close_kill_restart import CurrentCloseSDK
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+    from trade_plan_monitor.runtime.production import _unified_minute_required
+
+    raw = current_three_rule_plan().model_dump(mode="json")
+    raw["ordinary_rules"] = [unified_payload()["ordinary_rules"][0]]
+    raw["ordinary_rules"][0].update(
+        zone=None,
+        condition={
+            "type": "DAILY_PRICE_COMPARE",
+            "field": "close",
+            "offset": 0,
+            "comparator": "LT",
+            "reference": {
+                "mode": "FIXED",
+                "value": "6200",
+                "unit": "FEN",
+                "as_of": "2026-09-11",
+                "source": "Synthetic reviewed daily threshold",
+            },
+        },
+        independent_signal={
+            "mode": "LATER_CLOSE_RESET_THEN_CONFIRM",
+            "reset_condition": {
+                "type": "MINUTE_CLOSE_BELOW",
+                "timeframe_minutes": 5,
+                "price_fen": 1000,
+            },
+        },
+    )
+    raw["alert_rules"] = []
+    raw["monitoring"] = unified_payload()["monitoring"]
+    plan = UnifiedTradePlan.model_validate(raw)
+    assert plan.ordinary_rules[0].confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+    assert _unified_minute_required(plan)
+    daily_sources = []
+
+    def configure_sdk(sdk, clock, current):
+        source = CurrentCloseSDK(
+            clock, (current.symbol,), official_closes={TARGET.date() - timedelta(days=3): "55.00"}
+        )
+        sdk.daily = source.daily
+        sdk.adj_factor = source.adj_factor
+        daily_sources.append(source)
+
+    env = _current_status(tmp_path, monkeypatch, plan=plan, configure_sdk=configure_sdk)
+    try:
+        assert not env.result.snapshot["data_blockers"]
+        assert env.result.snapshot["minute_target"] == TARGET.isoformat()
+        assert len(env.result.snapshot["minute_prefix"]) == 5
+        assert env.result.snapshot["daily_evidence"] is not None
+        assert "rt_min" in env.sdk.calls or "rt_min_daily" in env.sdk.calls
+        assert {call[0] for call in daily_sources[0].calls} >= {"daily", "adj_factor"}
+        row = asyncio.run(env.reader.get_dashboard()).symbols[0]
+        assert row.availability == "CURRENT" and row.scope.status == "READY"
+        assert not row.scope.read_only
+        assert row.scope.required_target.kind == "INTRADAY"
+        assert row.scope.required_target.target_end == TARGET
+        assert env.pipeline.runtime_status_snapshot()[2][0].completion.target.bucket_end == TARGET
+    finally:
+        env.close()

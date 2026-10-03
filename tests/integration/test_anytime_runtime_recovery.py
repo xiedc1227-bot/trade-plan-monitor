@@ -170,8 +170,7 @@ def _normal_entry_child(root, observed_at, connection):
                 headers = {"X-Monitor-Contract-Version": "2"}
                 responses = {
                     path: client.get(path, headers=headers)
-                    for path in ("/api/v1/health", "/api/v1/dashboard",
-                                 f"/api/v1/explicit-plan-runtime/{SYMBOL}")
+                    for path in ("/api/v1/health", "/api/v1/dashboard")
                 }
                 for response in responses.values():
                     assert response.status_code == 200, response.text
@@ -179,20 +178,24 @@ def _normal_entry_child(root, observed_at, connection):
                     assert response.headers["Cache-Control"] == "no-store"
                 health = responses["/api/v1/health"].json()
                 dashboard = responses["/api/v1/dashboard"].json()
-                detail = responses[f"/api/v1/explicit-plan-runtime/{SYMBOL}"].json()
+                retired = client.get(f"/api/v1/explicit-plan-runtime/{SYMBOL}", headers=headers)
+                assert retired.status_code == 404, retired.text
                 assert health["monitorContractVersion"] == dashboard["monitorContractVersion"] == 2
                 generation = health["runtimeGeneration"]
                 assert generation and generation == dashboard["runtimeGeneration"]
                 assert health["runtimeStatus"]["lifecycle"] == "RUNNING"
                 assert health["runtimeStatus"]["coordinator"]["state"] == "SCHEDULED"
-                assert dashboard["symbols"][0]["availability"] == "CACHED"
-                assert not dashboard["symbols"][0]["currentActionable"]
-                assert detail["summary"]["planHash"] == dashboard["symbols"][0]["planHash"]
-                eligibility = detail["summary"]["ruleEligibility"][0]
-                assert not eligibility["currentActionable"]
-                assert eligibility["sourceAlert"]["dataCutoff"] == SOURCE.isoformat(
-                    timespec="microseconds",
+                entry = dashboard["symbols"][0]
+                assert entry["availability"] == "UNAVAILABLE"
+                assert not entry["currentActionable"]
+                assert entry["reasonCode"] == "LEGACY_PLANS_REQUIRE_REVIEW"
+                assert entry["scope"]["status"] == "BLOCKED"
+                # The old business commit remains inspectable without renewed authority.
+                historical = client.get(
+                    f"/api/v1/plan-versions/{entry['planVersionId']}", headers=headers
                 )
+                assert historical.status_code == 200, historical.text
+                assert historical.json()["planHash"] == entry["planHash"]
                 with client.websocket_connect(
                     f"/ws/v1/monitor?after={dashboard['sequence']}&monitorContractVersion=2",
                     headers={"Origin": "http://127.0.0.1:8765"},
@@ -292,8 +295,8 @@ def test_normal_entry_missing_credentials_retains_honest_blocked_source(tmp_path
     assert result["mode"] == "BLOCKED"
     # No pipeline owns a current plan target when credentials are missing.
     # The aggregate exposes the blocker; its source-only plan remains waiting.
-    assert result["scope"]["status"] == "WAITING"
-    assert result["scope"]["reasonCode"] == "AWAITING_FIRST_EVALUATION"
+    assert result["scope"]["status"] == "BLOCKED"
+    assert result["scope"]["reasonCode"] == "LEGACY_PLANS_REQUIRE_REVIEW"
     assert result["scope"]["readOnly"]
     assert result["calls"] == ()
     assert _source_rows(tmp_path / "monitor.sqlite3") == before

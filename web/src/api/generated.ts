@@ -19,27 +19,11 @@ export type AIProviderConfiguration = {
   timeoutSeconds?: number;
 };
 
-export type AIProviderConfigurationCommand = {
-  config: components["schemas"]["AIProviderConfiguration"];
-  expectedRevision: number;
-};
-
 export type AIProviderPage = {
   items?: Array<components["schemas"]["AIProviderView"]>;
   limit: number;
   offset: number;
   total: number;
-};
-
-export type AIProviderSecretCommand = {
-  expectedRevision: number;
-  providerId: string;
-  secret: components["schemas"]["SecretWrite"];
-};
-
-export type AIProviderTestCommand = {
-  expectedRevision: number;
-  providerId: string;
 };
 
 export type AIProviderType = "OPENAI_COMPATIBLE";
@@ -827,6 +811,7 @@ export type ConnectionStatus = "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
 export type DailyAlertCenterView = {
   acknowledgedAt?: (string) | (null);
   activationRevision: number;
+  alertKind?: ("RISK_ALERT") | (null);
   causeId: string;
   confirmedTradeDate: (string) | (null);
   createdAt: string;
@@ -840,7 +825,7 @@ export type DailyAlertCenterView = {
   executionDate: (string) | (null);
   messageText: string;
   name: string;
-  nextStep: "CONFIRM_SIMULATED_TRADE" | "REVIEW_RISK_EXIT";
+  nextStep: "CONFIRM_SIMULATED_TRADE" | "REVIEW_RISK_EXIT" | "REVIEW_ALERT";
   payloadSchemaVersion?: "daily-simulation-alert-v1";
   planHash: string;
   planId: string;
@@ -852,9 +837,10 @@ export type DailyAlertCenterView = {
   riskScope: ({
     [key: string]: unknown;
   }) | (null);
+  ruleId?: (string) | (null);
   sequence: number;
-  severity: "ACTION" | "RISK";
-  signalType: "BUY" | "SELL" | "RISK_EXIT";
+  severity: "ACTION" | "RISK" | "INFO";
+  signalType: "BUY" | "SELL" | "RISK_EXIT" | "REMINDER";
   simulatedQty: number;
   symbol: string;
   tradingDate: string;
@@ -918,17 +904,21 @@ export type DailyEditorSchemaView = {
   operationSchemas: {
     [key: string]: unknown;
   };
-  schemaVersion?: 4;
+  schemaVersion?: 5;
 };
 
 export type DailyEvaluationApiView = {
   activationRevision: number;
+  alerts?: Array<components["schemas"]["DailyRuleReminderState"]>;
   contentHash: string;
   dailyEvidence: (components["schemas"]["DailySeries"]) | (null);
   dataBlockers: Array<string>;
   evaluatedAt: string;
   factRevisions: Array<components["schemas"]["DailyFactRevision"]>;
+  fiveMinuteBars?: Array<components["schemas"]["FiveMinuteBar"]>;
   inventory: components["schemas"]["DailyInventoryApiView"];
+  minutePrefix?: Array<components["schemas"]["MinuteBar"]>;
+  minuteTarget?: (string) | (null);
   nextAction: "REVIEW_RISK_EXIT" | "CONFIRM_SIMULATED_TRADE" | "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION";
   officialTradeDate: (string) | (null);
   planHash: string;
@@ -936,7 +926,9 @@ export type DailyEvaluationApiView = {
   quote: (components["schemas"]["DailyExecutionQuote"]) | (null);
   reviewId: string;
   riskAction: components["schemas"]["DailyRiskActionApiView"];
+  riskInputKnown?: (boolean) | (null);
   risks: Array<components["schemas"]["DailyRiskApiView"]>;
+  runtimeGeneration?: (string) | (null);
   signals: Array<components["schemas"]["DailySignalApiView"]>;
   symbol: string;
 };
@@ -960,6 +952,7 @@ export type DailyFactCommand = {
   kind: "PRICE_STRUCTURE" | "VOLUME_OR_CANDLE" | "TECHNICAL" | "TRADE_VIABILITY" | "SIGNAL_INVALIDATION" | "INDEPENDENT_EVENT" | "SEVERE_STRUCTURE" | "SEVERE_DETERIORATION" | "TRADABILITY" | "FULL_SESSION_SUSPENSION";
   officialEvidence?: (components["schemas"]["DailyOfficialEvidence"]) | (null);
   planVersionId: string;
+  satisfied?: boolean;
   signalId?: (string) | (null);
   tradeDate: string;
 };
@@ -1129,6 +1122,7 @@ export type DailyRiskApiView = {
   suspensionConfirmationPolicy?: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
   targetCoreQty: number;
   targetTacticalQty: number;
+  technicalEvidence?: Array<components["schemas"]["UnifiedConditionEvidence"]>;
   verifiedAt?: (string) | (null);
 };
 
@@ -1137,12 +1131,25 @@ export type DailyRiskReassessmentCommand = {
   expectedRevision: number;
   involvesCore: boolean;
   planVersionId: string;
-  removalEvidence: components["schemas"]["DailyOfficialEvidence"];
+  removalEvidence: string;
   riskId: string;
   scopeEvidence: string;
   symbol: string;
   targetCoreQty: number;
   targetTacticalQty: number;
+};
+
+export type DailyRuleReminderState = {
+  alert_kind: "RISK_ALERT";
+  cause_id: (string) | (null);
+  confirmation_kind: "OFFICIAL_DAILY_CLOSE" | "COMPLETED_BAR_CLOSE";
+  confirmed_at: (string) | (null);
+  confirmed_trade_date: (string) | (null);
+  evidence: Array<{
+      [key: string]: unknown;
+    }>;
+  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  rule_id: string;
 };
 
 export type DailySeries = {
@@ -1161,11 +1168,14 @@ export type DailySignalApiView = {
   basisId: string;
   blockers: Array<string>;
   bucket: "TACTICAL";
+  confirmationKind?: "OFFICIAL_DAILY_CLOSE" | "COMPLETED_BAR_CLOSE";
+  confirmedAt?: (string) | (null);
   confirmedTradeDate: string;
-  evidence: Array<components["schemas"]["DailyConditionEvidence"]>;
+  evidence: Array<(components["schemas"]["DailyConditionEvidence"]) | (components["schemas"]["UnifiedConditionEvidence"])>;
   evidenceFingerprint: string;
   executableQty: number;
   executionDate: (string) | (null);
+  executionWindow?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
   lineage: string;
   planVersionId: string;
   plannedQty: number;
@@ -1436,35 +1446,13 @@ export type ExplicitConditionEvidenceView = {
 };
 
 export type ExplicitPlanCapabilityView = {
-  executionMode?: "EXPLICIT_RULES";
-  executionVersion?: "explicit-rules-v1";
+  executionMode?: "CONDITION_PLAN";
+  executionVersion?: "condition-plan-v1";
   isolatedTrustedReviewOnly?: false;
   pendingRequirements?: Array<string>;
   publicActivationAvailable?: true;
-  schemaVersion?: 3;
+  schemaVersion?: 5;
   supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
-};
-
-export type ExplicitPlanRuntimeView = {
-  activationRevision: number;
-  evaluatedAt: (string) | (null);
-  planHash: string;
-  planVersionId: string;
-  ruleOutcomes: Array<components["schemas"]["ExplicitRuleOutcomeView"]>;
-  status: "AWAITING_EVALUATION" | "CURRENT";
-  symbol: string;
-  targetBucketEnd: (string) | (null);
-};
-
-export type ExplicitRuleOutcomeView = {
-  action: "BUY" | "SELL" | "RISK_ALERT";
-  blockers?: Array<string>;
-  conditionCode: string;
-  conditionEvidence?: (components["schemas"]["ExplicitConditionEvidenceView"]) | (null);
-  missingInputs?: Array<string>;
-  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
-  ruleId: string;
-  suppressionReason: ("ONCE_ALREADY_EMITTED" | "TARGET_ALREADY_EMITTED") | (null);
 };
 
 export type ExtractionIssue = {
@@ -1489,6 +1477,18 @@ export type FieldEvidence = {
   excerpt: string;
   path: string;
   start?: (number) | (null);
+};
+
+export type FiveMinuteBar = {
+  amount_yuan: string;
+  bar_end: string;
+  close_fen: number;
+  formula_version?: "ta-v1";
+  high_fen: number;
+  low_fen: number;
+  open_fen: number;
+  symbol: string;
+  volume_shares: number;
 };
 
 export type FixedDailyReference = {
@@ -1570,15 +1570,6 @@ export type LegacyPlanPreviewResponse = {
   plans?: Array<components["schemas"]["LegacyPlanItemView"]>;
 };
 
-export type ManualEventRiskConfirmationCommand = {
-  expectedRevision: number;
-  expiresOn: string;
-  status: components["schemas"]["ManualEventRiskStatus"];
-  symbol: string;
-};
-
-export type ManualEventRiskStatus = "CLEAR" | "RISK_PRESENT";
-
 export type ManualEventRiskUnknownReason = "NO_ACTIVE_PLAN" | "MISSING_CONFIRMATION" | "PLAN_CHANGED" | "EXPIRED";
 
 export type ManualEventRiskView = {
@@ -1656,6 +1647,41 @@ export type MarketTurnoverSummaryView = {
   estimateMethod: "LINEAR_COMPLETED_FIVE_MINUTE_BUCKETS";
   estimatedFullDayAmount: string;
   previousAmount: string;
+};
+
+export type MinuteBar = {
+  amount_yuan: string;
+  bar_end: string;
+  close_fen: number;
+  high_fen: number;
+  low_fen: number;
+  open_fen: number;
+  received_at: string;
+  symbol: string;
+  volume_shares: number;
+};
+
+export type MinuteCloseBelow = {
+  price_fen: number;
+  timeframe_minutes: 5;
+  type: "MINUTE_CLOSE_BELOW";
+};
+
+export type MinuteCloseInRange = {
+  high_fen: number;
+  include_high: boolean;
+  include_low: boolean;
+  low_fen: number;
+  timeframe_minutes: 5;
+  type: "MINUTE_CLOSE_IN_RANGE";
+};
+
+export type MinuteVolumeToMeanGte = {
+  history_scope: "CONTIGUOUS_TRADING_BARS";
+  minimum_ratio: string;
+  timeframe_minutes: 5;
+  type: "MINUTE_VOLUME_TO_MEAN_GTE";
+  window_bars: number;
 };
 
 export type MissingInputCode = "COMPLETE_MINUTE_BAR" | "PREVIOUS_MINUTE_BAR" | "COMPLETE_5M_BAR" | "PREVIOUS_5M_BAR" | "COMPLETE_5M_BAR_WINDOW" | "ROLLING_VOLUME_WINDOW" | "SESSION_BARS" | "DAILY_INDICATORS" | "PROVISIONAL_DAILY_BAR" | "FIVE_MINUTE_INDICATORS" | "INDICATOR_VALUE" | "OFFICIAL_DAILY_CLOSE" | "TRADING_CALENDAR" | "DAILY_LIMIT" | "MANUAL_EVENT_RISK" | "INDEX_SNAPSHOT" | "INDEX_IDENTITY" | "INDEX_CUTOFF" | "INDEX_HEALTH" | "INDEX_FACT" | "INDEX_HISTORY" | "INDEX_FORMULA";
@@ -1739,7 +1765,6 @@ export type PlanExtractionCommand = {
   expectedRevision: number;
   providerId: string;
   sourceText: string;
-  targetContract?: "CONFIGURED" | "DAILY_CLOSE_PLAN";
 };
 
 export type PlanExtractionOperationStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "INVALID_OUTPUT" | "PROVIDER_ERROR" | "CANCELLED";
@@ -1822,7 +1847,7 @@ export type PlanVersionSummary = {
   canActivate: boolean;
   createdAt: string;
   id: string;
-  obsoleteReason?: ("DAILY_DRAFT_OBSOLETE") | (null);
+  obsoleteReason?: ("DAILY_DRAFT_OBSOLETE" | "LEGACY_PLANS_REQUIRE_REVIEW") | (null);
   planHash: string;
   planId: string;
   revision: number;
@@ -1840,7 +1865,7 @@ export type PlanVersionView = {
   executionReadiness?: ("NOT_EVALUATED") | (null);
   id: string;
   mapping?: (components["schemas"]["PlanMappingView"]) | (null);
-  obsoleteReason?: ("DAILY_DRAFT_OBSOLETE") | (null);
+  obsoleteReason?: ("DAILY_DRAFT_OBSOLETE" | "LEGACY_PLANS_REQUIRE_REVIEW") | (null);
   planHash: string;
   planId: string;
   planJson: string;
@@ -1860,35 +1885,6 @@ export type PlanVersionView = {
   version: number;
 };
 
-export type PositionInventoryClosureCommand = {
-  expectedRevision: number;
-  quantity: number;
-  sourceId: string;
-  sourceType: "LOT" | "OPENING_BALANCE";
-  tradeDate: string;
-};
-
-export type PositionInventoryClosureView = {
-  afterRemainingQuantity: number;
-  appliedQuantity: number;
-  beforeRemainingQuantity: number;
-  revision: number;
-  sourceId: string;
-  sourceType: "LOT" | "OPENING_BALANCE";
-  symbol: string;
-  tradeDate: string;
-};
-
-export type PositionInventoryConfirmationCommand = {
-  asOfTradeDate: string;
-  completeRegistration: true;
-  expectedRevision: number;
-  includedLotIds?: Array<string>;
-  sellableQuantity: number;
-  symbol: string;
-  totalQuantity: number;
-};
-
 export type PositionInventoryView = {
   asOfTradeDate: string;
   confirmationId?: (string) | (null);
@@ -1902,31 +1898,6 @@ export type PositionInventoryView = {
   status: "KNOWN" | "UNKNOWN";
   symbol: string;
   totalQuantity: (number) | (null);
-};
-
-export type PositionLotClosureCommand = {
-  expectedRevision: number;
-  lotId: string;
-  quantity: number;
-  tradeDate: string;
-};
-
-export type PositionLotClosureView = {
-  afterRemainingQuantity: number;
-  appliedQuantity: number;
-  beforeRemainingQuantity: number;
-  lot: components["schemas"]["trade_plan_monitor__web__routers__positions__PositionLotView"];
-  tradeDate: string;
-};
-
-export type PositionLotCreateCommand = {
-  acquiredTradeDate: string;
-  bucket: "CORE" | "TACTICAL";
-  costFen: number;
-  expectedRevision: number;
-  quantity: number;
-  relatedAlertId?: (string) | (null);
-  symbol: string;
 };
 
 export type PositionLotPage = {
@@ -2071,10 +2042,6 @@ export type SecretStatusView = {
   source: components["schemas"]["SecretSource"];
 };
 
-export type SecretWrite = {
-  value: string;
-};
-
 export type SignalType = "WAIT" | "LOW_ZONE_WATCH" | "BLOCKED_DATA" | "BLOCKED_RISK" | "BUY_CORE_READY" | "BUY_TACTICAL_READY" | "PRESSURE_REDUCE_READY" | "RISK_BREACH" | "RISK_RECOVERED" | "RISK_EXIT_READY" | "RISK_EXIT_PENDING_SETTLEMENT";
 
 export type SmaIndicatorFactView = {
@@ -2213,6 +2180,28 @@ export type SymbolSummaryView = {
 
 export type UnfilledReason = "NON_EXECUTABLE_SIGNAL" | "SUSPENDED" | "MISSING_NEXT_MINUTE" | "NO_NEXT_MINUTE" | "LIMIT_UP_LOCKED" | "LIMIT_DOWN_LOCKED" | "INSUFFICIENT_CASH" | "MAX_POSITION_REACHED" | "TARGET_POSITION_REACHED" | "TARGET_LOT_NOT_FOUND" | "T_PLUS_ONE";
 
+export type UnifiedAll = {
+  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])>;
+  type: "ALL";
+};
+
+export type UnifiedAny = {
+  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])>;
+  type: "ANY";
+};
+
+export type UnifiedConditionEvidence = {
+  bar_ids?: Array<string>;
+  basis_id?: (string) | (null);
+  children?: Array<components["schemas"]["UnifiedConditionEvidence"]>;
+  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+  fact_ids?: Array<string>;
+  operands?: Array<string>;
+  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  reason?: (string) | (null);
+  session_dates?: Array<unknown>;
+};
+
 export type UnmappedText = {
   end?: (number) | (null);
   excerpt: string;
@@ -2268,10 +2257,7 @@ export type trade_plan_monitor__web__routers__symbols__PositionLotView = {
 export interface components {
   schemas: {
     AIProviderConfiguration: AIProviderConfiguration;
-    AIProviderConfigurationCommand: AIProviderConfigurationCommand;
     AIProviderPage: AIProviderPage;
-    AIProviderSecretCommand: AIProviderSecretCommand;
-    AIProviderTestCommand: AIProviderTestCommand;
     AIProviderType: AIProviderType;
     AIProviderView: AIProviderView;
     AIUsageView: AIUsageView;
@@ -2389,6 +2375,7 @@ export interface components {
     DailyRiskActionApiView: DailyRiskActionApiView;
     DailyRiskApiView: DailyRiskApiView;
     DailyRiskReassessmentCommand: DailyRiskReassessmentCommand;
+    DailyRuleReminderState: DailyRuleReminderState;
     DailySeries: DailySeries;
     DailySignalApiView: DailySignalApiView;
     DailySimulationCommand: DailySimulationCommand;
@@ -2426,11 +2413,10 @@ export interface components {
     ExplicitAlertView: ExplicitAlertView;
     ExplicitConditionEvidenceView: ExplicitConditionEvidenceView;
     ExplicitPlanCapabilityView: ExplicitPlanCapabilityView;
-    ExplicitPlanRuntimeView: ExplicitPlanRuntimeView;
-    ExplicitRuleOutcomeView: ExplicitRuleOutcomeView;
     ExtractionIssue: ExtractionIssue;
     FieldBindingView: FieldBindingView;
     FieldEvidence: FieldEvidence;
+    FiveMinuteBar: FiveMinuteBar;
     FixedDailyReference: FixedDailyReference;
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
@@ -2441,8 +2427,6 @@ export interface components {
     LegacyPlanInvalidateResult: LegacyPlanInvalidateResult;
     LegacyPlanItemView: LegacyPlanItemView;
     LegacyPlanPreviewResponse: LegacyPlanPreviewResponse;
-    ManualEventRiskConfirmationCommand: ManualEventRiskConfirmationCommand;
-    ManualEventRiskStatus: ManualEventRiskStatus;
     ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
     ManualEventRiskView: ManualEventRiskView;
     ManualEventRiskViewStatus: ManualEventRiskViewStatus;
@@ -2456,6 +2440,10 @@ export interface components {
     MarketIndexSnapshotView: MarketIndexSnapshotView;
     MarketIndexSourceKind: MarketIndexSourceKind;
     MarketTurnoverSummaryView: MarketTurnoverSummaryView;
+    MinuteBar: MinuteBar;
+    MinuteCloseBelow: MinuteCloseBelow;
+    MinuteCloseInRange: MinuteCloseInRange;
+    MinuteVolumeToMeanGte: MinuteVolumeToMeanGte;
     MissingInputCode: MissingInputCode;
     NextStepCode: NextStepCode;
     NextStepView: NextStepView;
@@ -2479,13 +2467,7 @@ export interface components {
     PlanVersionStatus: PlanVersionStatus;
     PlanVersionSummary: PlanVersionSummary;
     PlanVersionView: PlanVersionView;
-    PositionInventoryClosureCommand: PositionInventoryClosureCommand;
-    PositionInventoryClosureView: PositionInventoryClosureView;
-    PositionInventoryConfirmationCommand: PositionInventoryConfirmationCommand;
     PositionInventoryView: PositionInventoryView;
-    PositionLotClosureCommand: PositionLotClosureCommand;
-    PositionLotClosureView: PositionLotClosureView;
-    PositionLotCreateCommand: PositionLotCreateCommand;
     PositionLotPage: PositionLotPage;
     PositionOpeningBalanceView: PositionOpeningBalanceView;
     PositionPrefillAction: PositionPrefillAction;
@@ -2509,7 +2491,6 @@ export interface components {
     SecretReferenceView: SecretReferenceView;
     SecretSource: SecretSource;
     SecretStatusView: SecretStatusView;
-    SecretWrite: SecretWrite;
     SignalType: SignalType;
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
@@ -2528,6 +2509,9 @@ export interface components {
     SymbolReferenceMarketView: SymbolReferenceMarketView;
     SymbolSummaryView: SymbolSummaryView;
     UnfilledReason: UnfilledReason;
+    UnifiedAll: UnifiedAll;
+    UnifiedAny: UnifiedAny;
+    UnifiedConditionEvidence: UnifiedConditionEvidence;
     UnmappedText: UnmappedText;
     UserSupplementView: UserSupplementView;
     ValidationIssue: ValidationIssue;
@@ -2538,164 +2522,6 @@ export interface components {
 }
 
 export interface paths {
-  "/api/v1/ai-provider-secrets": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["AIProviderSecretCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["AIProviderView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/ai-provider-tests": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["AIProviderTestCommand"];
-        };
-      };
-      responses: {
-        "202": {
-          content: {
-            "application/json": components["schemas"]["OperationReceipt"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
   "/api/v1/ai-providers": {
     get: {
       parameters: {
@@ -2712,164 +2538,6 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["AIProviderPage"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["AIProviderConfigurationCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["AIProviderView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/ai-providers/{provider_id}": {
-    patch: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path: {
-          provider_id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["AIProviderConfigurationCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["AIProviderView"];
           };
         };
         "400": {
@@ -4496,704 +4164,6 @@ export interface paths {
       };
     };
   };
-  "/api/v1/daily-plan-editor-schema": {
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyEditorSchemaView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-plan-facts": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["DailyFactCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyMutationReceipt"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-plan-review-previews": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["DailyReviewPreviewCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyReviewPreview"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-plan-review-supplements": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["DailySupplementCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyMutationReceipt"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-plan-runtime/{symbol}": {
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          symbol: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyStateView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-position-confirmations": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["DailyPositionCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyMutationReceipt"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-position-inventory": {
-    get: {
-      parameters: {
-        query: {
-          asOfTradeDate: string;
-          symbol: string;
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyInventoryResource"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-risk-reassessments": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["DailyRiskReassessmentCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailyMutationReceipt"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/daily-simulated-trades": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["DailySimulationCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["DailySimulationReceipt"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
   "/api/v1/dashboard": {
     get: {
       parameters: {
@@ -5286,81 +4256,6 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["DiagnosticEvaluationView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/explicit-plan-runtime/{symbol}": {
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          symbol: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["ExplicitPlanRuntimeView"];
           };
         };
         "400": {
@@ -5580,85 +4475,6 @@ export interface paths {
         cookie?: never;
       };
       requestBody?: never;
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["ManualEventRiskView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/manual-event-risk-confirmations": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["ManualEventRiskConfirmationCommand"];
-        };
-      };
       responses: {
         "200": {
           content: {
@@ -6189,6 +5005,79 @@ export interface paths {
       };
     };
   };
+  "/api/v1/plan-editor-schema": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyEditorSchemaView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
   "/api/v1/plan-extractions": {
     post: {
       parameters: {
@@ -6283,6 +5172,85 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PlanExtractionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-facts": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyFactCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
           };
         };
         "400": {
@@ -6441,6 +5409,318 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PlanReviewConfirmationView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-review-previews": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyReviewPreviewCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyReviewPreview"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-review-supplements": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailySupplementCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-risk-reassessments": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyRiskReassessmentCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-runtime/{symbol}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          symbol: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyStateView"];
           };
         };
         "400": {
@@ -6731,243 +6011,6 @@ export interface paths {
       };
     };
   };
-  "/api/v1/position-inventory-closures": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["PositionInventoryClosureCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["PositionInventoryClosureView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/position-inventory-confirmations": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["PositionInventoryConfirmationCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["PositionInventoryView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/position-lot-closures": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["PositionLotClosureCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["PositionLotClosureView"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
   "/api/v1/position-lots": {
     get: {
       parameters: {
@@ -7045,6 +6088,8 @@ export interface paths {
         };
       };
     };
+  };
+  "/api/v1/simulated-trades": {
     post: {
       parameters: {
         query?: never;
@@ -7056,13 +6101,168 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": components["schemas"]["PositionLotCreateCommand"];
+          "application/json": components["schemas"]["DailySimulationCommand"];
         };
       };
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["trade_plan_monitor__web__routers__positions__PositionLotView"];
+            "application/json": components["schemas"]["DailySimulationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/simulation-position-confirmations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["DailyPositionCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyMutationReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/simulation-position-inventory": {
+    get: {
+      parameters: {
+        query: {
+          asOfTradeDate: string;
+          symbol: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["DailyInventoryResource"];
           };
         };
         "400": {

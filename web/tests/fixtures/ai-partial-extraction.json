@@ -2,29 +2,57 @@
   "id": "51e37676-d62d-4bbc-873a-2b389f8d4611",
   "providerId": "c738345b-8265-497c-9a8e-6da9154e233c",
   "status": "SUCCEEDED",
-  "dailyMapping": null,
   "submittedAt": "2026-09-14T10:00:00+08:00",
   "startedAt": "2026-09-14T10:00:00+08:00",
   "completedAt": "2026-09-14T10:00:00+08:00",
-  "sourceTextSha256": "46df0f39ee38e2f26b432ace4682614d7c0553c77807da8f21b2ca14ddc93446",
+  "sourceTextSha256": "79dba45a4839c7927b188f3fe4178e03376c5051f2e5625e7805b0ad5ce66331",
   "model": "offline-v4",
-  "promptVersion": "plan-extract-v4",
-  "draftPlanJson": "{\"activation\":null,\"conflict_policy\":null,\"execution_mode\":\"EXPLICIT_RULES\",\"execution_version\":\"explicit-rules-v1\",\"market\":\"SZSE\",\"metadata\":{\"reference_price_fen\":null,\"report_at\":null},\"monitoring\":{\"indicator_formula_version\":\"ta-v1\",\"timeframe_minutes\":5},\"name\":\"SYNTHETIC V4\",\"plan_id\":\"synthetic-v4\",\"position\":{\"inventory_scope\":\"ALL_REGISTERED\",\"lot_size\":100,\"max_qty\":null},\"rules\":[{\"action\":{\"quantity\":100,\"type\":\"BUY\"},\"condition\":{\"conditions\":[{\"high_fen\":1000,\"include_high\":null,\"include_low\":null,\"low_fen\":980,\"type\":\"COMPLETED_CLOSE_IN_RANGE\"},{\"history_scope\":null,\"minimum_ratio\":null,\"type\":\"VOLUME_TO_MEAN_GTE\",\"window_bars\":null}],\"type\":\"ALL\"},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"repeat_policy\":null,\"rule_id\":\"buy-100\",\"safety_conditions\":null}],\"schema_version\":3,\"symbol\":\"003043.SZ\",\"version\":1}",
-  "mapping": {
-    "mappingVersion": "plan-mapping-v1",
-    "sourceClauses": [
+  "promptVersion": "plan-extract-v8",
+  "draftPlanJson": "{\"activation\":null,\"alert_rules\":[],\"execution_mode\":\"CONDITION_PLAN\",\"execution_policy\":{\"ordinary_conflict\":\"BLOCK_BOTH\",\"risk_priority\":\"SEVERE_THEN_ORDINARY\",\"same_signal\":\"ONE_PLANNED_QUANTITY\"},\"execution_version\":\"condition-plan-v1\",\"levels\":{\"low_buy\":{\"high_fen\":3990,\"include_high\":true,\"include_low\":true,\"low_fen\":3945},\"pressure\":{\"high_fen\":4220,\"include_high\":true,\"include_low\":true,\"low_fen\":4180},\"risk_comparison\":\"LT\",\"risk_line_fen\":3818},\"market\":\"SSE\",\"metadata\":{\"reference_price_fen\":null,\"report_at\":null},\"monitoring\":{\"comparability_requirement\":\"CURRENT_QUOTE_BASIS\",\"indicator_formula_version\":\"daily-ta-v2\",\"macd_min_observations\":60,\"price_basis\":\"QFQ\",\"source_requirement\":\"ONE_VERIFIED_PROVIDER\"},\"name\":\"Synthetic reviewed plan\",\"ordinary_rules\":[{\"bucket\":\"TACTICAL\",\"condition\":{\"conditions\":[{\"evidence_requirement\":\"Synthetic reviewer checks complete official evidence\",\"fact_kind\":\"PRICE_STRUCTURE\",\"type\":\"REVIEWED_FACT\",\"validity_scope\":\"TRADE_DATE\"},{\"evidence_requirement\":\"Synthetic reviewer checks complete official evidence\",\"fact_kind\":\"VOLUME_OR_CANDLE\",\"type\":\"REVIEWED_FACT\",\"validity_scope\":\"TRADE_DATE\"},{\"evidence_requirement\":\"Synthetic reviewer checks complete official evidence\",\"fact_kind\":\"TECHNICAL\",\"type\":\"REVIEWED_FACT\",\"validity_scope\":\"TRADE_DATE\"}],\"type\":\"ALL\"},\"confirmation\":{\"kind\":\"OFFICIAL_DAILY_CLOSE\"},\"execution_window\":\"NEXT_EXCHANGE_SESSION_ONLY\",\"independent_signal\":{\"evidence_requirement\":\"New structure linked to prior signal\",\"mode\":\"REVIEWED_INDEPENDENT_EVENT\"},\"invalidation\":\"RISK_OR_REVIEWED_INVALIDATION\",\"quantity\":100,\"rule_id\":\"low-buy\",\"side\":\"BUY\",\"status\":\"ENABLED\",\"validity\":{\"end_date\":\"2026-12-31\",\"mode\":\"DATE_RANGE\",\"start_date\":\"2026-09-01\"},\"zone\":\"LOW_BUY\"}],\"plan_id\":\"synthetic-daily\",\"position\":{\"allocation_evidence\":\"Synthetic human proposal\",\"allocation_provenance\":\"PROPOSED\",\"core_target_qty\":100,\"max_qty\":null,\"tactical_target_qty\":0},\"risk_branches\":[{\"condition\":null,\"evidence_mode\":\"TWO_OFFICIAL_CLOSES\",\"involves_core\":true,\"kind\":\"ORDINARY_TECHNICAL\",\"priority\":3,\"scope_evidence\":\"Synthetic reviewed holding structure invalidation\",\"suspension_confirmation_policy\":\"RESUME_FIRST_CLOSE\",\"target_core_qty\":0,\"target_tactical_qty\":0},{\"condition\":{\"conditions\":[{\"evidence_requirement\":\"Review technical evidence for SEVERE_STRUCTURE\",\"fact_kind\":\"SEVERE_STRUCTURE\",\"type\":\"REVIEWED_FACT\",\"validity_scope\":\"TRADE_DATE\"},{\"evidence_requirement\":\"Review technical evidence for SEVERE_DETERIORATION\",\"fact_kind\":\"SEVERE_DETERIORATION\",\"type\":\"REVIEWED_FACT\",\"validity_scope\":\"TRADE_DATE\"}],\"type\":\"ALL\"},\"evidence_mode\":\"STRUCTURE_AND_DETERIORATION\",\"involves_core\":true,\"kind\":\"SEVERE_TECHNICAL\",\"priority\":2,\"scope_evidence\":\"Synthetic reviewed holding structure invalidation\",\"suspension_confirmation_policy\":null,\"target_core_qty\":0,\"target_tactical_qty\":0}],\"schema_version\":5,\"symbol\":\"601021.SH\",\"trading_rules\":{\"settlement\":\"NEXT_EXCHANGE_SESSION\",\"special_state_restrictions\":\"BLOCK_UNVERIFIED\",\"tick_size_fen\":1},\"version\":1}",
+  "mapping": null,
+  "dailyMapping": {
+    "mapping_version": "daily-mapping-v1",
+    "candidate_content_hash": "06c766c9bdc5a0c67957e92406a45a1c22d3da243fdf0ffd1893c8f97fff124a",
+    "clauses": [
       {
-        "clauseId": "clause-c27c2b6896eeb123",
+        "clause_id": "clause-fc6f7f64a0fc6526",
         "start": 0,
-        "end": 37,
-        "excerpt": "003043.SZ五分钟收盘在9.80至10.00元且放量时买入100股。",
+        "end": 80,
+        "excerpt": "Synthetic reviewed source with technical choices still awaiting explicit review.",
         "disposition": "UNRESOLVED",
-        "paths": []
+        "paths": [],
+        "reason": "Bind exact source policy before activation.",
+        "exclusions": [],
+        "remainders": []
       }
     ],
-    "fieldBindings": [],
-    "userSupplements": [],
-    "sourceProcessing": null
+    "bindings": [
+      {
+        "path": "trading_rules.settlement",
+        "value": "NEXT_EXCHANGE_SESSION",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.tick_size_fen",
+        "value": 1,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.special_state_restrictions",
+        "value": "BLOCK_UNVERIFIED",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      }
+    ],
+    "supplements": []
   },
   "evidence": [],
   "assumptions": [],
@@ -32,241 +60,591 @@
   "unmappedText": [],
   "validationIssues": [
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "code": "PLAN_PARAMETER_REQUIRED",
       "path": "activation",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Supply the reviewed parameter and its source or human evidence.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
-      "path": "conflict_policy",
-      "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "execution_mode",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "execution_version",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "market",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "monitoring.indicator_formula_version",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "monitoring.timeframe_minutes",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "name",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "plan_id",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "position.inventory_scope",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "position.lot_size",
-      "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
+      "code": "PLAN_PARAMETER_REQUIRED",
       "path": "position.max_qty",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Supply the reviewed parameter and its source or human evidence.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].action.quantity",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "alert_rules",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].action.type",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "execution_mode",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_STRUCTURE",
-      "path": "rules[0].condition",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "execution_policy.ordinary_conflict",
       "severity": "WARNING",
-      "message": "The current ALL/ANY parent-child structure has no origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].condition.conditions[0].high_fen",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "execution_policy.risk_priority",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
-      "path": "rules[0].condition.conditions[0].include_high",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "execution_policy.same_signal",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
-      "path": "rules[0].condition.conditions[0].include_low",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "execution_version",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].condition.conditions[0].low_fen",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.low_buy.high_fen",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].condition.conditions[0].type",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.low_buy.include_high",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
-      "path": "rules[0].condition.conditions[1].history_scope",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.low_buy.include_low",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
-      "path": "rules[0].condition.conditions[1].minimum_ratio",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.low_buy.low_fen",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].condition.conditions[1].type",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.pressure.high_fen",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
-      "path": "rules[0].condition.conditions[1].window_bars",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.pressure.include_high",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].condition.type",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.pressure.include_low",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].confirmation.kind",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.pressure.low_fen",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].confirmation.timeframe_minutes",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.risk_comparison",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_EXECUTION_POLICY",
-      "path": "rules[0].repeat_policy",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "levels.risk_line_fen",
       "severity": "WARNING",
-      "message": "A required executable value or policy remains unresolved.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "rules[0].rule_id",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "market",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "monitoring.comparability_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "monitoring.indicator_formula_version",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "monitoring.macd_min_observations",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "monitoring.price_basis",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "monitoring.source_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].bucket",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[0].evidence_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[0].fact_kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[0].type",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[0].validity_scope",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[1].evidence_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[1].fact_kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[1].type",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[1].validity_scope",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[2].evidence_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[2].fact_kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[2].type",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.conditions[2].validity_scope",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].condition.type",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].confirmation.kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].execution_window",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].independent_signal.evidence_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].independent_signal.mode",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].invalidation",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].quantity",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].rule_id",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].side",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].status",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].validity.end_date",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].validity.mode",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].validity.start_date",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "ordinary_rules[0].zone",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "position.allocation_evidence",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "position.allocation_provenance",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "position.core_target_qty",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "position.tactical_target_qty",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].evidence_mode",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].involves_core",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].priority",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].scope_evidence",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].suspension_confirmation_policy",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].target_core_qty",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[0].target_tactical_qty",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[0].evidence_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[0].fact_kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[0].type",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[0].validity_scope",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[1].evidence_requirement",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[1].fact_kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[1].type",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.conditions[1].validity_scope",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].condition.type",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].evidence_mode",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].involves_core",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].kind",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].priority",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].scope_evidence",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].target_core_qty",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
+      "path": "risk_branches[1].target_tactical_qty",
+      "severity": "WARNING",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
+      "activationBlocking": true
+    },
+    {
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
       "path": "schema_version",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNRESOLVED_SEMANTICS",
-      "path": "source",
-      "severity": "WARNING",
-      "message": "The phrase 放量 has no deterministic supported definition.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNRESOLVED_SEMANTICS",
-      "path": "source",
-      "severity": "WARNING",
-      "message": "The material source clause is not represented by supported current content.",
-      "activationBlocking": true
-    },
-    {
-      "code": "UNMAPPED_PLAN_FIELD",
+      "code": "DAILY_SOURCE_BINDING_REQUIRED",
       "path": "symbol",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind this exact policy value to source or a scoped human supplement.",
       "activationBlocking": true
     },
     {
-      "code": "UNMAPPED_PLAN_FIELD",
-      "path": "version",
+      "code": "DAILY_SOURCE_CLAUSE_REQUIRED",
+      "path": "source.clause-fc6f7f64a0fc6526",
       "severity": "WARNING",
-      "message": "The current non-null plan field has no validated origin binding.",
+      "message": "Bind exact source policy before activation.",
       "activationBlocking": true
     }
   ],

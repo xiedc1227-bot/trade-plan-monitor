@@ -6,7 +6,7 @@ import type {
   PlanExtractionCommand,
   PlanExtractionView,
 } from "../../src/api/generated";
-import PlanWorkbench from "../../src/components/plans/PlanWorkbench.vue";
+import PlanWorkbench from "../../src/components/plans/PlanSourceExtraction.vue";
 
 const firstProvider: ConfiguredAIRuntimeView = {
   baseUrl: "https://ai.example.test/v1",

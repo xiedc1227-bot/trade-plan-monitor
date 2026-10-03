@@ -13,7 +13,8 @@ from trade_plan_monitor.runtime.scheduler import DeadlineKind
 
 
 def test_scheduled_stock_recovery_stop_revokes_then_drains_before_database_disposal(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         async with _running(tmp_path, monkeypatch, "partial") as run:
@@ -60,10 +61,15 @@ def test_scheduled_stock_recovery_stop_revokes_then_drains_before_database_dispo
             def observe_disposal(_engine):
                 # This callback runs at actual Engine disposal, after the real
                 # cleanup path, not at a mocked close_database boundary.
-                disposals.append((
-                    release.is_set(), controller.active_count, controller.waiting_count,
-                    len(pipeline._active_recovery_attempts), owner.done(),
-                ))
+                disposals.append(
+                    (
+                        release.is_set(),
+                        controller.active_count,
+                        controller.waiting_count,
+                        len(pipeline._active_recovery_attempts),
+                        owner.done(),
+                    )
+                )
                 boundaries.append("database-disposed")
 
             monkeypatch.setattr(runtime, "_run_deadline", observe_deadline)
@@ -72,19 +78,23 @@ def test_scheduled_stock_recovery_stop_revokes_then_drains_before_database_dispo
             run.sdk.phase = "scheduled-shutdown"
             run.sdk.history_available = True
             try:
-                drive = asyncio.create_task(run.clock.drive(
-                    NOW.replace(minute=2, second=12),
-                    stop_when=entered.is_set, failed=run.runner_failed,
-                ))
+                drive = asyncio.create_task(
+                    run.clock.drive(
+                        NOW.replace(minute=2, second=12),
+                        stop_when=entered.is_set,
+                        failed=run.runner_failed,
+                    )
+                )
                 async with asyncio.timeout(8):
                     while not entered.is_set():
                         assert not drive.done(), ("scheduler did not enter recovery", run.sdk.trace)
                         await asyncio.sleep(0.005)
-                (owner, deadline), = active_deadlines.items()
+                ((owner, deadline),) = active_deadlines.items()
                 assert deadline.kind is DeadlineKind.STOCK_RECOVERY
                 assert owner in runtime._work_tasks and not owner.done()
-                scope, = (
-                    item for item in pipeline._stock_recovery_schedule.snapshot()
+                (scope,) = (
+                    item
+                    for item in pipeline._stock_recovery_schedule.snapshot()
                     if item.requirement.scope_key == f"stock-prefix:{SYMBOL}"
                 )
                 assert scope.in_progress

@@ -445,7 +445,21 @@ class _ProductionBacktestService:
                 snapshot = validate_api_response(value, PlanVersionView)
             except ValidationError:
                 raise RuntimeError("plan snapshot reader returned an invalid version") from None
-            if snapshot.id != command.plan_version_id or not snapshot.can_activate:
+            # Isolated historical backtests inspect frozen plans independently
+            # of current activation authority. Other unresolved review blockers
+            # still prevent accepting a snapshot for a new run.
+            historical_review_only = (
+                snapshot.obsolete_reason == "LEGACY_PLANS_REQUIRE_REVIEW"
+                and all(
+                    not issue.activation_blocking or issue.code == "LEGACY_PLANS_REQUIRE_REVIEW"
+                    for issue in snapshot.validation_issues
+                )
+                and not any(not issue.resolved for issue in snapshot.review_issues)
+                and not snapshot.unresolved_review_issues
+            )
+            if snapshot.id != command.plan_version_id or (
+                not snapshot.can_activate and not historical_review_only
+            ):
                 raise ApiError(ApiErrorCode.CONFLICT)
             plan = load_plan_json(snapshot.plan_json)
             try:

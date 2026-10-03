@@ -41,6 +41,8 @@ for (const { status, diagnosticStatus, queryFailure } of [
         body = { baseUrl: "https://api.deepseek.com/", configured: true, enabled: true,
           displayName: "DeepSeek", maxInputChars: 50_000, maxOutputTokens: 4096,
           model: "deepseek-v4-pro", providerId, revision: 0 };
+      } else if (url.pathname === "/api/v1/plan-editor-schema") {
+        body = { candidateSchema: { type: "object", properties: {} }, operationSchemas: {} };
       } else if (url.pathname === "/api/v1/plan-versions") {
         body = { items: [], limit: 100, offset: 0, total: 0 };
       } else if (url.pathname === "/api/v1/dashboard") {

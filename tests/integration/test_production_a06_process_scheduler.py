@@ -1,40 +1,32 @@
-"""Offline A06 mixed-family continuation through real processes and the scheduler."""
+"""Current-plan symbol isolation through real scheduled processes and restart."""
 
 import asyncio
+import json
 from datetime import timedelta
 from multiprocessing import get_context
 from pathlib import Path
 
 import pytest
-import test_explicit_runtime_production as explicit_fixture
 from sqlalchemy import func, select
 from test_live_pipeline_acceptance import (
     NOW,
     ControlledClock,
     OfflineSDK,
     VirtualPace,
-    _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
+from tests.integration.current_activation_fixture import current_sample_plan, seed_current
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
 from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.scheduler import DeadlineKind
+from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
-from trade_plan_monitor.state.models import (
-    AlertEvent,
-    EvaluationResult,
-    ExplicitEvaluationLedger,
-    MarketIndexSnapshot,
-    RuntimeLiveness,
-    SymbolDecisionHead,
-)
+from trade_plan_monitor.state.models import AlertEvent, MarketIndexSnapshot, RuntimeLiveness
 
-LEGACY_SYMBOL = "003043.SZ"
-EXPLICIT_SYMBOL = "300001.SZ"
+FIRST_SYMBOL = "003043.SZ"
+SECOND_SYMBOL = "300001.SZ"
 FIRST_CLOCK = NOW.replace(minute=0, second=0) - timedelta(seconds=30)
 SECOND_CLOCK = NOW.replace(minute=5, second=0) - timedelta(seconds=30)
 FIRST_TARGET = NOW.replace(second=0).isoformat()
@@ -52,7 +44,7 @@ def _run_scheduled_monitor(root: str, observed_at, failed_symbol: str | None, ou
         async def sleep_until(self, deadline):
             self.sleep_calls.append(deadline)
             if deadline <= target_due:
-                assert len(self.sleep_calls) <= 8, "scheduler exceeded its original target bound"
+                assert len(self.sleep_calls) <= 8, "scheduler exceeded its target bound"
                 self.current = max(self.current, deadline)
                 await asyncio.sleep(0)
                 return
@@ -67,7 +59,7 @@ def _run_scheduled_monitor(root: str, observed_at, failed_symbol: str | None, ou
                 frame.loc[frame["ts_code"] == failed_symbol, "close"] = "malformed"
             return frame
 
-    sdk = FakeSDK(clock, (LEGACY_SYMBOL, EXPLICIT_SYMBOL))
+    sdk = FakeSDK(clock, (FIRST_SYMBOL, SECOND_SYMBOL))
     delivered = []
 
     class FakeChannel:
@@ -120,8 +112,10 @@ def _run_scheduled_monitor(root: str, observed_at, failed_symbol: str | None, ou
             health = await composition.start()
             assert health.status is RuntimeServiceStatus.RUNNING
             runner = composition._runner_task
-            startup_calls = [(name, kwargs) for name, kwargs in sdk.calls if name == "rt_min_daily"]
-            assert len(startup_calls) == 1 and startup_calls[0][1]["ts_code"] == LEGACY_SYMBOL
+            startup_calls = [(name, kwargs) for name, kwargs in sdk.calls
+                             if name == "rt_min_daily"]
+            assert len(startup_calls) == 1
+            assert startup_calls[0][1]["ts_code"] == FIRST_SYMBOL
 
             async def scheduler_reached_next_sleep():
                 while not (
@@ -135,7 +129,8 @@ def _run_scheduled_monitor(root: str, observed_at, failed_symbol: str | None, ou
             await asyncio.wait_for(scheduler_reached_next_sleep(), timeout=15)
             assert target_due in clock.sleep_calls
             market, = [item for item in executed if item.kind is DeadlineKind.REALTIME_MINUTE]
-            assert market.due_at == target_due and market.bar_end == target_due.replace(second=0)
+            assert market.due_at == target_due
+            assert market.bar_end == target_due.replace(second=0)
             assert any(item.kind is DeadlineKind.STOCK_RECOVERY for item in executed)
             assert composition._runtime is runtime and composition._runner_task is runner
             assert runtime.runtime_generation == generation
@@ -167,26 +162,29 @@ def _spawn_scheduled_monitor(root: Path, observed_at, *, failed_symbol: str | No
     return outcomes.get(timeout=5)
 
 
-@pytest.mark.parametrize("failed_symbol", (LEGACY_SYMBOL, EXPLICIT_SYMBOL))
-def test_malformed_family_row_recovers_in_new_process_via_scheduler(
-    tmp_path, monkeypatch, failed_symbol,
+def _evaluations(session, symbol, target):
+    return tuple(json.loads(row.payload_json) for row in session.scalars(
+        select(DailyRecord).where(
+            DailyRecord.symbol == symbol,
+            DailyRecord.kind == "EVALUATION",
+            DailyRecord.id != "evaluation-head-" + symbol,
+        )
+    ) if json.loads(row.payload_json).get("minute_target") == target)
+
+
+@pytest.mark.parametrize("failed_symbol", (FIRST_SYMBOL, SECOND_SYMBOL))
+def test_malformed_symbol_recovers_in_new_process_via_scheduler(
+    tmp_path, failed_symbol,
 ):
     database = tmp_path / "monitor.sqlite3"
     seed_clock = ControlledClock(NOW.replace(hour=9, minute=0))
-    legacy_plan = _sample_plan()
-    _activate_plans(database, seed_clock, (legacy_plan,))
-    payload = explicit_fixture._plan(active_date=NOW.date()).model_dump(
-        mode="python", round_trip=True,
+    plans = tuple(
+        seed_current(tmp_path, plan=current_sample_plan().model_copy(update={
+            "symbol": symbol, "plan_id": f"offline-a06-{symbol}"}), clock=seed_clock)
+        for symbol in (FIRST_SYMBOL, SECOND_SYMBOL)
     )
-    payload.update(
-        plan_id="offline-a06-scheduled-explicit", symbol=EXPLICIT_SYMBOL,
-        name="OFFLINE A06 SCHEDULED EXPLICIT",
-    )
-    explicit_plan = ExplicitTradePlan.model_validate(payload)
-    monkeypatch.setattr(explicit_fixture, "PREPARED_AT", NOW - timedelta(minutes=30))
     engine = create_sqlite_engine(database)
     try:
-        explicit_fixture._seed_active(engine, explicit_plan)
         with create_session_factory(engine).begin() as session:
             session.add(RuntimeLiveness(
                 id=1, schema_version=1, revision=0,
@@ -194,9 +192,7 @@ def test_malformed_family_row_recovers_in_new_process_via_scheduler(
             ))
     finally:
         engine.dispose()
-    _write_configuration_and_evidence(
-        tmp_path, observed_at=FIRST_CLOCK, include_index=True,
-    )
+    _write_configuration_and_evidence(tmp_path, observed_at=FIRST_CLOCK, include_index=True)
 
     first_sleeps, first_calls, first_delivered = _spawn_scheduled_monitor(
         tmp_path, FIRST_CLOCK, failed_symbol=failed_symbol,
@@ -204,46 +200,23 @@ def test_malformed_family_row_recovers_in_new_process_via_scheduler(
     assert NOW.replace(second=12) in first_sleeps
     assert "rt_min" in first_calls
     assert first_delivered == ()
+    first_snapshots = {}
     engine = create_sqlite_engine(database)
     try:
         with create_session_factory(engine)() as session:
-            legacy_first = session.scalar(
-                select(func.count()).select_from(EvaluationResult).where(
-                    EvaluationResult.symbol == LEGACY_SYMBOL,
-                    EvaluationResult.plan_hash == plan_sha256(legacy_plan),
-                    EvaluationResult.evaluation_kind == "INTRADAY",
-                    EvaluationResult.target_value == FIRST_TARGET,
-                )
-            )
-            explicit_first = session.scalar(
-                select(func.count()).select_from(ExplicitEvaluationLedger).where(
-                    ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
-                    ExplicitEvaluationLedger.plan_hash == plan_sha256(explicit_plan),
-                    ExplicitEvaluationLedger.activation_revision == 1,
-                    ExplicitEvaluationLedger.target_value == FIRST_TARGET,
-                )
-            )
-            assert (legacy_first, explicit_first) == (
-                (0, 1) if failed_symbol == LEGACY_SYMBOL else (1, 0)
-            )
-            assert session.scalar(
-                select(func.count()).select_from(EvaluationResult).where(
-                    EvaluationResult.symbol == LEGACY_SYMBOL,
-                    EvaluationResult.target_value == FIRST_TARGET,
-                )
-            ) == legacy_first
-            assert session.scalar(
-                select(func.count()).select_from(ExplicitEvaluationLedger).where(
-                    ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
-                    ExplicitEvaluationLedger.target_value == FIRST_TARGET,
-                )
-            ) == explicit_first
-            if failed_symbol == EXPLICIT_SYMBOL:
-                head = session.get(SymbolDecisionHead, LEGACY_SYMBOL)
-                assert head is not None
-                assert head.plan_hash == plan_sha256(legacy_plan)
-                assert head.activation_revision == 1
-                assert head.target_value == FIRST_TARGET
+            for plan in plans:
+                snapshots = _evaluations(session, plan.symbol, FIRST_TARGET)
+                assert len(snapshots) == 1
+                snapshot = snapshots[0]
+                first_snapshots[plan.symbol] = snapshot
+                assert snapshot["plan_hash"] == plan_sha256(plan)
+                if plan.symbol == failed_symbol:
+                    assert snapshot["signals"] == []
+                    assert snapshot["minute_prefix"] == []
+                    assert "CURRENT_DAY_MINUTE_PREFIX_MISSING" in snapshot["data_blockers"]
+                else:
+                    assert snapshot["data_blockers"] == []
+                    assert len(snapshot["minute_prefix"]) == 5
             assert session.scalar(
                 select(func.count(func.distinct(MarketIndexSnapshot.index_code)))
             ) == 5
@@ -261,57 +234,15 @@ def test_malformed_family_row_recovers_in_new_process_via_scheduler(
     engine = create_sqlite_engine(database)
     try:
         with create_session_factory(engine)() as session:
-            assert session.scalar(
-                select(func.count()).select_from(EvaluationResult).where(
-                    EvaluationResult.symbol == LEGACY_SYMBOL,
-                    EvaluationResult.plan_hash == plan_sha256(legacy_plan),
-                    EvaluationResult.evaluation_kind == "INTRADAY",
-                    EvaluationResult.target_value == SECOND_TARGET,
-                )
-            ) == 1
-            assert session.scalar(
-                select(func.count()).select_from(EvaluationResult).where(
-                    EvaluationResult.symbol == LEGACY_SYMBOL,
-                    EvaluationResult.target_value == SECOND_TARGET,
-                )
-            ) == 1
-            head = session.get(SymbolDecisionHead, LEGACY_SYMBOL)
-            assert head is not None
-            assert head.plan_hash == plan_sha256(legacy_plan)
-            assert head.activation_revision == 1
-            assert head.target_value == SECOND_TARGET
-            assert session.scalar(
-                select(func.count()).select_from(ExplicitEvaluationLedger).where(
-                    ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
-                    ExplicitEvaluationLedger.plan_hash == plan_sha256(explicit_plan),
-                    ExplicitEvaluationLedger.activation_revision == 1,
-                    ExplicitEvaluationLedger.target_value == SECOND_TARGET,
-                )
-            ) == 1
-            assert session.scalar(
-                select(func.count()).select_from(ExplicitEvaluationLedger).where(
-                    ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
-                    ExplicitEvaluationLedger.target_value == SECOND_TARGET,
-                )
-            ) == 1
-            if failed_symbol == EXPLICIT_SYMBOL:
-                assert session.scalar(
-                    select(func.count()).select_from(EvaluationResult).where(
-                        EvaluationResult.symbol == LEGACY_SYMBOL,
-                        EvaluationResult.plan_hash == plan_sha256(legacy_plan),
-                        EvaluationResult.evaluation_kind == "INTRADAY",
-                        EvaluationResult.target_value == FIRST_TARGET,
-                    )
-                ) == 1
-            else:
-                assert session.scalar(
-                    select(func.count()).select_from(ExplicitEvaluationLedger).where(
-                        ExplicitEvaluationLedger.symbol == EXPLICIT_SYMBOL,
-                        ExplicitEvaluationLedger.plan_hash == plan_sha256(explicit_plan),
-                        ExplicitEvaluationLedger.activation_revision == 1,
-                        ExplicitEvaluationLedger.target_value == FIRST_TARGET,
-                    )
-                ) == 1
+            for plan in plans:
+                assert _evaluations(session, plan.symbol, FIRST_TARGET) == (
+                    first_snapshots[plan.symbol],)
+                second = _evaluations(session, plan.symbol, SECOND_TARGET)
+                assert len(second) == 1
+                assert second[0]["plan_hash"] == plan_sha256(plan)
+                assert second[0]["minute_target"] == SECOND_TARGET
+                assert second[0]["data_blockers"] == []
+                assert len(second[0]["minute_prefix"]) == 5
             assert session.scalar(select(func.count()).select_from(AlertEvent)) == first_alerts
     finally:
         engine.dispose()

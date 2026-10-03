@@ -17,10 +17,13 @@ from test_live_pipeline_acceptance import (
     OfflineSDK,
     VirtualPace,
     _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
+from test_live_pipeline_acceptance import (
+    _sample_plan as _historical_sample_plan,
+)
 from test_notification_delivery import _payload
+from tests.integration.current_activation_fixture import current_sample_plan, seed_current
 
 from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.market_data.models import ProviderCapabilityStatus
@@ -36,7 +39,6 @@ from trade_plan_monitor.runtime.provider_contract import (
     import_index_semantic_contract,
     import_stock_semantic_contract,
 )
-from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
@@ -45,15 +47,15 @@ from trade_plan_monitor.runtime.request_control import (
 )
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.runtime.service import RuntimeEvaluationService
+from trade_plan_monitor.state.daily_models import DailyRecord
+from trade_plan_monitor.state.daily_repository import DailyRepository
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import (
     AlertEvent,
-    EvaluationResult,
     MarketIndexSnapshot,
     RuntimeLiveness,
     TradingCalendar,
 )
-from trade_plan_monitor.state.projections import ProjectionRepository
 from trade_plan_monitor.state.runtime_recovery import (
     ProviderRecoveryRepository,
     RecoveryCheckpoint,
@@ -65,30 +67,69 @@ from trade_plan_monitor.web.monitor_composition import (
 )
 
 
+def _minute_count(session):
+    # The startup recovery may persist a daily snapshot. Count the immutable
+    # minute decisions, excluding their mutable symbol head.
+    return session.scalar(
+        select(func.count())
+        .select_from(DailyRecord)
+        .where(
+            DailyRecord.kind == "EVALUATION",
+            ~DailyRecord.id.like("evaluation-head-%"),
+            func.json_extract(DailyRecord.payload_json, "$.minute_target").is_not(None),
+        )
+    )
+
+
+def _current_ledger(session):
+    return tuple(
+        (row.id, row.revision, row.payload_json)
+        for row in session.scalars(select(DailyRecord).order_by(DailyRecord.id))
+    )
+
+
 def _composition(
-    tmp_path, monkeypatch, *, invalidate_during_request=None, fail_realtime_once=False,
-    rate_limit_realtime_once=False, active_plan=True, include_index=False,
-    stock_certification=True, persisted_calendar=False,
+    tmp_path,
+    monkeypatch,
+    *,
+    invalidate_during_request=None,
+    fail_realtime_once=False,
+    rate_limit_realtime_once=False,
+    active_plan=True,
+    include_index=False,
+    stock_certification=True,
+    persisted_calendar=False,
+    plan=None,
 ):
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
     database = tmp_path / "monitor.sqlite3"
     clock = ControlledClock(NOW.replace(hour=9, minute=0))
-    plan = _sample_plan()
-    _activate_plans(database, clock, (plan,) if active_plan else ())
+    plan = plan or current_sample_plan()
+    _activate_plans(database, clock, ())
+    if active_plan:
+        seed_current(tmp_path, plan=plan, clock=clock)
     seeded_engine = create_sqlite_engine(database)
     try:
         with create_session_factory(seeded_engine).begin() as session:
-            session.add(RuntimeLiveness(
-                id=1, schema_version=1, revision=0,
-                last_alive_at=clock.now().isoformat(),
-            ))
+            session.add(
+                RuntimeLiveness(
+                    id=1,
+                    schema_version=1,
+                    revision=0,
+                    last_alive_at=clock.now().isoformat(),
+                )
+            )
             if persisted_calendar:
-                session.add(TradingCalendar(
-                    exchange="SSE", cal_date=NOW.date(), is_open=True,
-                    previous_trade_date=NOW.date() - timedelta(days=1),
-                ))
+                session.add(
+                    TradingCalendar(
+                        exchange="SSE",
+                        cal_date=NOW.date(),
+                        is_open=True,
+                        previous_trade_date=NOW.date() - timedelta(days=1),
+                    )
+                )
     finally:
         seeded_engine.dispose()
     clock.current = NOW
@@ -139,7 +180,9 @@ def _composition(
     def controller_factory(*, clock, require_repository_binding=False):
         pace = VirtualPace()
         return create_live_tushare_request_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
             require_repository_binding=require_repository_binding,
         )
 
@@ -157,12 +200,18 @@ def _composition(
 
 @pytest.mark.parametrize("active_plan", (False, True))
 def test_production_index_runs_without_stock_semantics_or_certification(
-    tmp_path, monkeypatch, active_plan,
+    tmp_path,
+    monkeypatch,
+    active_plan,
 ):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=active_plan, include_index=True,
-            stock_certification=False, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=active_plan,
+            include_index=True,
+            stock_certification=False,
+            persisted_calendar=True,
         )
         try:
             startup = await composition.start()
@@ -175,7 +224,9 @@ def test_production_index_runs_without_stock_semantics_or_certification(
             assert state._liveness_revision == owner_revision + 1
             deadline = MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
-                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+                trade_date=NOW.date(),
+                due_at=NOW,
+                bar_end=NOW.replace(second=0),
             )
             await state.run_deadline(deadline)
             assert any(name in {"idx_mins", "rt_idx_min_daily"} for name, _ in sdk.calls)
@@ -185,10 +236,11 @@ def test_production_index_runs_without_stock_semantics_or_certification(
             )
             with state._session_factory() as session:
                 assert session.scalar(select(func.count()).select_from(MarketIndexSnapshot)) > 0
-                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert _minute_count(session) == 0
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
             stock = next(
-                item for item in state.health_details().providers
+                item
+                for item in state.health_details().providers
                 if item.capability == "realtime_minutes"
             )
             assert stock.status is ProviderCapabilityStatus.ERROR
@@ -201,12 +253,17 @@ def test_production_index_runs_without_stock_semantics_or_certification(
 
 
 def test_production_index_only_cold_start_waits_for_trusted_calendar(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=False, include_index=True,
-            stock_certification=False, persisted_calendar=False,
+            tmp_path,
+            monkeypatch,
+            active_plan=False,
+            include_index=True,
+            stock_certification=False,
+            persisted_calendar=False,
         )
         try:
             startup = await composition.start()
@@ -230,8 +287,12 @@ def test_production_index_only_cold_start_waits_for_trusted_calendar(
 def test_index_only_deadline_never_delivers_old_stock_alert(tmp_path, monkeypatch):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=True, include_index=True,
-            stock_certification=False, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=True,
+            include_index=True,
+            stock_certification=False,
+            persisted_calendar=True,
         )
         delivered = []
 
@@ -242,7 +303,9 @@ def test_index_only_deadline_never_delivers_old_stock_alert(tmp_path, monkeypatc
             async def deliver(self, event):
                 delivered.append(event.event_id)
                 return ChannelDeliveryResult(
-                    channel=self.channel, delivered=True, retryable=False,
+                    channel=self.channel,
+                    delivered=True,
+                    retryable=False,
                 )
 
         try:
@@ -253,10 +316,14 @@ def test_index_only_deadline_never_delivers_old_stock_alert(tmp_path, monkeypatc
                 work.commit()
             state._dispatcher._channels = (Channel(),)
             monkeypatch.setattr(CurrentDeliveryAdmission, "__call__", lambda *_: True)
-            await state.run_deadline(MarketDeadline(
-                kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
-                due_at=NOW, bar_end=NOW.replace(second=0),
-            ))
+            await state.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=NOW.date(),
+                    due_at=NOW,
+                    bar_end=NOW.replace(second=0),
+                )
+            )
             assert any(name in {"idx_mins", "rt_idx_min_daily"} for name, _ in sdk.calls)
             assert delivered == []
             await state._dispatcher.dispatch_pending()
@@ -270,29 +337,44 @@ def test_index_only_deadline_never_delivers_old_stock_alert(tmp_path, monkeypatc
 def test_late_stock_semantic_latches_index_only_process(tmp_path, monkeypatch):
     async def scenario():
         composition, sdk, certification = _composition(
-            tmp_path, monkeypatch, active_plan=False, include_index=True,
-            stock_certification=False, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=False,
+            include_index=True,
+            stock_certification=False,
+            persisted_calendar=True,
         )
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._probe_capabilities.__self__
             _write_configuration_and_evidence(
-                tmp_path, observed_at=NOW, include_index=True,
+                tmp_path,
+                observed_at=NOW,
+                include_index=True,
             )
             endpoint = str(load_application_config(tmp_path / "config/app.yaml").tushare.api_url)
-            assert import_stock_semantic_contract(
-                certification, certification.parent / "stock-semantic.json",
-                now=NOW, endpoint_url=endpoint,
-                installed_sdk_version=lambda: "1.4.29",
-            ) is not None
+            assert (
+                import_stock_semantic_contract(
+                    certification,
+                    certification.parent / "stock-semantic.json",
+                    now=NOW,
+                    endpoint_url=endpoint,
+                    installed_sdk_version=lambda: "1.4.29",
+                )
+                is not None
+            )
             before = tuple(sdk.calls)
             assert state.configuration_restart_required()
             assert state._process_baseline.revoked.is_set()
             with pytest.raises(RuntimeError, match="safe restart required"):
-                await state.run_deadline(MarketDeadline(
-                    kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
-                    due_at=NOW, bar_end=NOW.replace(second=0),
-                ))
+                await state.run_deadline(
+                    MarketDeadline(
+                        kind=DeadlineKind.REALTIME_MINUTE,
+                        trade_date=NOW.date(),
+                        due_at=NOW,
+                        bar_end=NOW.replace(second=0),
+                    )
+                )
             (certification.parent / "stock-semantic.json").unlink()
             assert state.configuration_restart_required()
             assert tuple(sdk.calls) == before
@@ -305,8 +387,12 @@ def test_late_stock_semantic_latches_index_only_process(tmp_path, monkeypatch):
 def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=True, include_index=True,
-            stock_certification=False, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=True,
+            include_index=True,
+            stock_certification=False,
+            persisted_calendar=True,
         )
         failed_calls = []
 
@@ -320,10 +406,14 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._probe_capabilities.__self__
-            await state.run_deadline(MarketDeadline(
-                kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
-                due_at=NOW, bar_end=NOW.replace(second=0),
-            ))
+            await state.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=NOW.date(),
+                    due_at=NOW,
+                    bar_end=NOW.replace(second=0),
+                )
+            )
             with state.unit_of_work_factory() as work:
                 records = work.projections.list_market_index_recoveries()
             assert len(records) == 5
@@ -346,10 +436,13 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
             assert state.next_index_recovery_at() == expected_due
             sdk.clock.current = expected_due
             before = len(sdk.calls)
-            await state.run_deadline(MarketDeadline(
-                kind=DeadlineKind.INDEX_RECOVERY, trade_date=NOW.date(),
-                due_at=expected_due,
-            ))
+            await state.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.INDEX_RECOVERY,
+                    trade_date=NOW.date(),
+                    due_at=expected_due,
+                )
+            )
             assert state.next_index_recovery_at() != expected_due
             assert len(sdk.calls) > before
             assert all(
@@ -357,7 +450,7 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
                 for name, _ in sdk.calls[before:]
             )
             with state._session_factory() as session:
-                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert _minute_count(session) == 0
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
         finally:
             await replacement.stop()
@@ -366,12 +459,17 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
 
 
 def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=False, include_index=True,
-            stock_certification=False, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=False,
+            include_index=True,
+            stock_certification=False,
+            persisted_calendar=True,
         )
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
@@ -383,9 +481,11 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
                 TushareOperation.REALTIME_MINUTES,
                 TushareOperation.TRADING_CALENDAR,
             ):
+
                 def denied(operation=operation):
                     raise TushareProviderError(
-                        TushareErrorCode.BLOCKED_PERMISSION, operation.value,
+                        TushareErrorCode.BLOCKED_PERMISSION,
+                        operation.value,
                     )
 
                 with pytest.raises(RequestControlError):
@@ -394,8 +494,7 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
             providers = state.health_details().providers
             assert len(providers) == 5
             assert all(
-                item.status is ProviderCapabilityStatus.BLOCKED_PERMISSION
-                for item in providers
+                item.status is ProviderCapabilityStatus.BLOCKED_PERMISSION for item in providers
             )
             assert all(item.next_retry_at is not None for item in providers)
             assert all(item.error_code == "STOCK_SEMANTICS_UNAVAILABLE" for item in providers)
@@ -419,7 +518,9 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
             async def deliver(self, event):
                 delivered.append(event.event_id)
                 return ChannelDeliveryResult(
-                    channel=self.channel, delivered=True, retryable=False,
+                    channel=self.channel,
+                    delivered=True,
+                    retryable=False,
                 )
 
         try:
@@ -427,8 +528,7 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
             state = replacement._runtime._probe_capabilities.__self__
             providers = state.health_details().providers
             assert all(
-                item.status is ProviderCapabilityStatus.BLOCKED_PERMISSION
-                for item in providers
+                item.status is ProviderCapabilityStatus.BLOCKED_PERMISSION for item in providers
             )
             assert all(item.next_retry_at is not None for item in providers)
             assert all(item.error_code == "STOCK_SEMANTICS_UNAVAILABLE" for item in providers)
@@ -437,10 +537,14 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
                 work.commit()
             state._dispatcher._channels = (Channel(),)
             monkeypatch.setattr(CurrentDeliveryAdmission, "__call__", lambda *_: True)
-            await state.run_deadline(MarketDeadline(
-                kind=DeadlineKind.REALTIME_MINUTE, trade_date=NOW.date(),
-                due_at=NOW, bar_end=NOW.replace(second=0),
-            ))
+            await state.run_deadline(
+                MarketDeadline(
+                    kind=DeadlineKind.REALTIME_MINUTE,
+                    trade_date=NOW.date(),
+                    due_at=NOW,
+                    bar_end=NOW.replace(second=0),
+                )
+            )
             await state._dispatcher.dispatch_pending()
             assert delivered == []
             assert not any(
@@ -453,9 +557,7 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize(
-    "invalidated_by", ("remove_semantic", "corrupt_semantic", "change_config")
-)
+@pytest.mark.parametrize("invalidated_by", ("remove_semantic", "corrupt_semantic", "change_config"))
 def test_startup_stops_physical_stock_calls_when_semantics_become_invalid(
     tmp_path, monkeypatch, invalidated_by
 ):
@@ -485,16 +587,13 @@ def test_repeated_capability_probe_discards_the_previous_ready_pipeline(tmp_path
             state.probe_capabilities()
             assert state._pipeline is original_pipeline
             calls = tuple(sdk.calls)
-            (certification.parent / "stock-semantic.json").write_text(
-                "{}", encoding="utf-8"
-            )
+            (certification.parent / "stock-semantic.json").write_text("{}", encoding="utf-8")
             assert (
                 state.probe_capabilities().realtime_minutes is ProviderCapabilityStatus.UNVERIFIED
             )
             assert state._pipeline is None
             assert (
-                state.probe_capabilities().realtime_minutes
-                is ProviderCapabilityStatus.UNVERIFIED
+                state.probe_capabilities().realtime_minutes is ProviderCapabilityStatus.UNVERIFIED
             )
             assert state._pipeline is None
             assert tuple(sdk.calls) == calls
@@ -517,21 +616,25 @@ def test_cold_reference_cache_does_not_repeat_a_committed_deadline(tmp_path, mon
                 bar_end=NOW.replace(second=0),
             )
             results = await state.run_deadline(deadline)
-            assert len(results) == 1 and results[0].status.value == "COMMITTED"
+            assert len(results) == 1 and not results[0].duplicate
+            assert results[0].snapshot["minute_target"] == deadline.bar_end.isoformat()
+            assert results[0].snapshot["activation_revision"] == 1
             calls = tuple(sdk.calls)
             with state._session_factory() as session:
                 before = (
-                    session.scalar(select(func.count()).select_from(EvaluationResult)),
+                    _minute_count(session),
                     session.scalar(select(func.count()).select_from(AlertEvent)),
                 )
             state._pipeline._reference_key = None
-            assert await state.run_deadline(deadline) == ()
+            duplicate = await state.run_deadline(deadline)
+            assert len(duplicate) == 1 and duplicate[0].duplicate
+            assert duplicate[0].snapshot == results[0].snapshot
             assert sum(name == "rt_min" for name, _ in sdk.calls) == sum(
                 name == "rt_min" for name, _ in calls
             )
             with state._session_factory() as session:
                 assert before == (
-                    session.scalar(select(func.count()).select_from(EvaluationResult)),
+                    _minute_count(session),
                     session.scalar(select(func.count()).select_from(AlertEvent)),
                 )
         finally:
@@ -559,11 +662,14 @@ def _release_actual_scheduler_until(monkeypatch, clock, through):
 
 
 def test_production_composition_resumes_after_one_runtime_transport_failure(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, fail_realtime_once=True,
+            tmp_path,
+            monkeypatch,
+            fail_realtime_once=True,
         )
         runtime = composition._runtime
         controller = runtime._request_controller
@@ -595,7 +701,9 @@ def test_production_composition_resumes_after_one_runtime_transport_failure(
 def test_next_minute_cannot_bypass_realtime_transport_backoff(tmp_path, monkeypatch):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, fail_realtime_once=True,
+            tmp_path,
+            monkeypatch,
+            fail_realtime_once=True,
         )
         runtime = composition._runtime
         controller = runtime._request_controller
@@ -622,11 +730,14 @@ def test_next_minute_cannot_bypass_realtime_transport_backoff(tmp_path, monkeypa
 
 
 def test_production_429_cooldown_restores_before_provider_work_after_restart(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, rate_limit_realtime_once=True,
+            tmp_path,
+            monkeypatch,
+            rate_limit_realtime_once=True,
         )
         first = composition._runtime
         clock = first._run_deadline.__self__._clock
@@ -669,7 +780,8 @@ def test_production_429_cooldown_restores_before_provider_work_after_restart(
 
 
 def test_configuration_edit_between_validation_and_binding_blocks_provider_work(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -698,7 +810,8 @@ def test_configuration_edit_between_validation_and_binding_blocks_provider_work(
 
 
 def test_corrupt_production_checkpoint_blocks_start_and_releases_owner(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -708,13 +821,9 @@ def test_corrupt_production_checkpoint_blocks_start_and_releases_owner(
             create_session_factory(engine),
             provider_identity=_provider_recovery_identity("https://example.test"),
         )
-        repository.save((
-            RecoveryCheckpoint("cooldown", "shared", NOW + timedelta(minutes=5), 0),
-        ))
+        repository.save((RecoveryCheckpoint("cooldown", "shared", NOW + timedelta(minutes=5), 0),))
         with engine.begin() as connection:
-            connection.execute(text(
-                "UPDATE provider_recovery_checkpoint SET retry_at = 'corrupt'"
-            ))
+            connection.execute(text("UPDATE provider_recovery_checkpoint SET retry_at = 'corrupt'"))
         engine.dispose()
 
         with pytest.raises(RecoveryCheckpointError):
@@ -729,7 +838,8 @@ def test_corrupt_production_checkpoint_blocks_start_and_releases_owner(
         ).save(())
         repair_engine.dispose()
         replacement = create_monitor_composition(
-            config_path=tmp_path / "config/app.yaml", database_path=database,
+            config_path=tmp_path / "config/app.yaml",
+            database_path=database,
         )
         try:
             assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
@@ -741,7 +851,8 @@ def test_corrupt_production_checkpoint_blocks_start_and_releases_owner(
 
 
 def test_calendar_permission_probe_uses_persisted_anchor_without_business_writes(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -752,12 +863,15 @@ def test_calendar_permission_probe_uses_persisted_anchor_without_business_writes
         pipeline = state._pipeline
         assert pipeline is not None
         try:
+
             def denied():
                 raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
 
             with pytest.raises(RequestControlError):
                 await control.execute(
-                    TushareOperation.TRADING_CALENDAR, denied, work_key="calendar:fault",
+                    TushareOperation.TRADING_CALENDAR,
+                    denied,
+                    work_key="calendar:fault",
                 )
             state._clock.current += timedelta(seconds=300)
             with create_session_factory(state._engine)() as session:
@@ -780,7 +894,8 @@ def test_calendar_permission_probe_uses_persisted_anchor_without_business_writes
 
 
 def test_calendar_permission_without_anchor_never_probes_and_remains_blocked(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -791,12 +906,15 @@ def test_calendar_permission_without_anchor_never_probes_and_remains_blocked(
         pipeline = state._pipeline
         assert pipeline is not None
         try:
+
             def denied():
                 raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
 
             with pytest.raises(RequestControlError):
                 await control.execute(
-                    TushareOperation.TRADING_CALENDAR, denied, work_key="calendar:fault",
+                    TushareOperation.TRADING_CALENDAR,
+                    denied,
+                    work_key="calendar:fault",
                 )
             state._clock.current += timedelta(seconds=300)
             with state._engine.begin() as connection:
@@ -807,7 +925,9 @@ def test_calendar_permission_without_anchor_never_probes_and_remains_blocked(
             assert control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
             with pytest.raises(RequestControlError) as caught:
                 await pipeline._request(
-                    TushareOperation.TRADING_CALENDAR, lambda: None, "calendar:retry",
+                    TushareOperation.TRADING_CALENDAR,
+                    lambda: None,
+                    "calendar:retry",
                 )
             assert caught.value.code is RequestControlErrorCode.BLOCKED_PERMISSION
         finally:
@@ -816,11 +936,11 @@ def test_calendar_permission_without_anchor_never_probes_and_remains_blocked(
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize(
-    "outcome", ("empty", "rate_limit", "config_change", "generation_change")
-)
+@pytest.mark.parametrize("outcome", ("empty", "rate_limit", "config_change", "generation_change"))
 def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
-    tmp_path, monkeypatch, outcome,
+    tmp_path,
+    monkeypatch,
+    outcome,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -831,21 +951,29 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
         pipeline = state._pipeline
         assert pipeline is not None
         try:
+
             def denied():
                 raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
 
             with pytest.raises(RequestControlError):
                 await control.execute(
-                    TushareOperation.TRADING_CALENDAR, denied, work_key="calendar:fault",
+                    TushareOperation.TRADING_CALENDAR,
+                    denied,
+                    work_key="calendar:fault",
                 )
             state._clock.current += timedelta(seconds=300)
             original_calendar = sdk._calendar
 
             def probe_response(kwargs):
                 if outcome == "empty":
-                    return pd.DataFrame(columns=(
-                        "exchange", "cal_date", "is_open", "pretrade_date",
-                    ))
+                    return pd.DataFrame(
+                        columns=(
+                            "exchange",
+                            "cal_date",
+                            "is_open",
+                            "pretrade_date",
+                        )
+                    )
                 if outcome == "rate_limit":
                     raise TushareProviderError(TushareErrorCode.RATE_LIMITED, "trade_cal")
                 result = original_calendar(kwargs)
@@ -873,15 +1001,26 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
                     failures.append(error)
                     raise
 
-            monkeypatch.setattr(type(control), "recheck_permission",
-                                lambda _self, *args, **kwargs: capture_failure(*args, **kwargs))
-            tables = ("trading_calendar", "minute_bar", "latest_quote", "market_index_snapshot",
-                      "evaluation_ledger", "alert_event", "delivery_attempt")
+            monkeypatch.setattr(
+                type(control),
+                "recheck_permission",
+                lambda _self, *args, **kwargs: capture_failure(*args, **kwargs),
+            )
+            tables = (
+                "trading_calendar",
+                "minute_bar",
+                "latest_quote",
+                "market_index_snapshot",
+                "evaluation_ledger",
+                "alert_event",
+                "delivery_attempt",
+            )
 
             def business_rows():
                 with state._session_factory() as session:
-                    return tuple(tuple(session.execute(text(f"SELECT * FROM {table}")))
-                                 for table in tables)
+                    return tuple(
+                        tuple(session.execute(text(f"SELECT * FROM {table}"))) for table in tables
+                    )
 
             before = business_rows()
             assert await pipeline._maybe_recheck_calendar_permission() is (
@@ -889,7 +1028,8 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
             )
             assert len(failures) == 1
             assert failures[0].code is (
-                RequestControlErrorCode.RATE_LIMITED if outcome == "rate_limit"
+                RequestControlErrorCode.RATE_LIMITED
+                if outcome == "rate_limit"
                 else RequestControlErrorCode.INVALID_RESPONSE
             )
             assert len(sdk.calls) == calls + 1
@@ -907,7 +1047,8 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
 
 
 def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -921,7 +1062,8 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
             state = runtime._probe_capabilities.__self__
             calendar = next(
-                item for item in state.health_details().providers
+                item
+                for item in state.health_details().providers
                 if item.capability == "trading_calendar"
             )
             assert calendar.status is ProviderCapabilityStatus.BLOCKED_PERMISSION
@@ -932,7 +1074,8 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
             assert len(sdk.calls) == physical_calls
             assert runtime.health().status is RuntimeServiceStatus.DEGRADED
             refreshed = next(
-                item for item in state.health_details().providers
+                item
+                for item in state.health_details().providers
                 if item.capability == "trading_calendar"
             )
             assert refreshed.next_retry_at == state._clock.now()
@@ -943,11 +1086,14 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
 
 
 def test_reference_result_cannot_commit_after_configuration_changes_mid_request(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, invalidate_during_request="change_config",
+            tmp_path,
+            monkeypatch,
+            invalidate_during_request="change_config",
         )
         with pytest.raises(RuntimeError):
             await composition.start()
@@ -964,7 +1110,8 @@ def test_reference_result_cannot_commit_after_configuration_changes_mid_request(
 
 
 def test_web_only_configuration_edit_preserves_current_provider_pipeline(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -990,7 +1137,8 @@ def test_web_only_configuration_edit_preserves_current_provider_pipeline(
 
 
 def test_running_token_drift_latches_restart_without_new_provider_or_alert_work(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -1028,7 +1176,8 @@ def test_running_token_drift_latches_restart_without_new_provider_or_alert_work(
 
 
 def test_invalid_new_configuration_fails_before_provider_and_can_be_fixed_for_new_start(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -1050,19 +1199,24 @@ def test_invalid_new_configuration_fails_before_provider_and_can_be_fixed_for_ne
     asyncio.run(scenario())
 
 
-def test_legacy_decision_rolls_back_when_token_changes_after_result_staging(
-    tmp_path, monkeypatch,
+def test_current_decision_rolls_back_when_token_changes_after_result_staging(
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, _, _ = _composition(tmp_path, monkeypatch)
         config = tmp_path / "config/app.yaml"
-        original_persist = ProjectionRepository.add_evaluation_result
+        original_persist = DailyRepository.save
         changed = False
 
         def drift_after_result(self, *args, **kwargs):
             nonlocal changed
             value = original_persist(self, *args, **kwargs)
-            if not changed:
+            if (
+                kwargs["kind"] == "EVALUATION"
+                and kwargs["payload"]["minute_target"] is not None
+                and not changed
+            ):
                 changed = True
                 config.write_text(
                     config.read_text(encoding="utf-8").replace(
@@ -1072,10 +1226,12 @@ def test_legacy_decision_rolls_back_when_token_changes_after_result_staging(
                 )
             return value
 
-        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", drift_after_result)
+        monkeypatch.setattr(DailyRepository, "save", drift_after_result)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._run_deadline.__self__
+            with state._session_factory() as session:
+                before = _current_ledger(session)
             deadline = MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
                 trade_date=NOW.date(),
@@ -1086,7 +1242,8 @@ def test_legacy_decision_rolls_back_when_token_changes_after_result_staging(
                 await state.run_deadline(deadline)
             assert changed
             with state._session_factory() as session:
-                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert _minute_count(session) == 0
+                assert _current_ledger(session) == before
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
         finally:
             await composition.stop()
@@ -1095,13 +1252,20 @@ def test_legacy_decision_rolls_back_when_token_changes_after_result_staging(
 
 
 @pytest.mark.parametrize(
-    "mutation", (
-        "unchanged", "token", "invalid_yaml", "stock_semantic",
-        "new_index_semantic", "candidate_start_semantic",
-    )
+    "mutation",
+    (
+        "unchanged",
+        "token",
+        "invalid_yaml",
+        "stock_semantic",
+        "new_index_semantic",
+        "candidate_start_semantic",
+    ),
 )
 def test_supervisor_replacement_cannot_adopt_configuration_changed_inside_factory(
-    tmp_path, monkeypatch, mutation,
+    tmp_path,
+    monkeypatch,
+    mutation,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -1114,16 +1278,17 @@ def test_supervisor_replacement_cannot_adopt_configuration_changed_inside_factor
         factory_errors = []
 
         def install_index_semantic():
-            _write_configuration_and_evidence(
-                tmp_path, observed_at=NOW, include_index=True
-            )
+            _write_configuration_and_evidence(tmp_path, observed_at=NOW, include_index=True)
             directory = tmp_path / "data/live-certification"
-            assert import_index_semantic_contract(
-                directory / "tushare-board-index-live.json",
-                directory / "index-semantic.json",
-                now=NOW,
-                endpoint_url=str(load_application_config(config).tushare.api_url),
-            ) is not None
+            assert (
+                import_index_semantic_contract(
+                    directory / "tushare-board-index-live.json",
+                    directory / "index-semantic.json",
+                    now=NOW,
+                    endpoint_url=str(load_application_config(config).tushare.api_url),
+                )
+                is not None
+            )
 
         async def fail_after_start():
             await release_failure.wait()
@@ -1169,8 +1334,7 @@ def test_supervisor_replacement_cannot_adopt_configuration_changed_inside_factor
             release_failure.set()
             for _ in range(200):
                 if replacements and (
-                    composition._runtime is replacements[0]
-                    or composition._runner_task.done()
+                    composition._runtime is replacements[0] or composition._runner_task.done()
                 ):
                     break
                 await asyncio.sleep(0.01)
@@ -1192,26 +1356,30 @@ def test_supervisor_replacement_cannot_adopt_configuration_changed_inside_factor
     asyncio.run(scenario())
 
 
-def test_worker_thread_latch_before_legacy_commit_rejects_staged_decision(
-    tmp_path, monkeypatch,
+def test_worker_thread_latch_before_current_commit_rejects_staged_decision(
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
         config = tmp_path / "config/app.yaml"
-        original_persist = ProjectionRepository.add_evaluation_result
+        original_persist = DailyRepository.save
         staged = False
         worker_latched = False
 
         def stage_result(self, *args, **kwargs):
             nonlocal staged
             value = original_persist(self, *args, **kwargs)
-            staged = True
+            if kwargs["kind"] == "EVALUATION" and kwargs["payload"]["minute_target"] is not None:
+                staged = True
             return value
 
-        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", stage_result)
+        monkeypatch.setattr(DailyRepository, "save", stage_result)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._probe_capabilities.__self__
+            with state._session_factory() as session:
+                before = _current_ledger(session)
             pipeline = state._pipeline
             assert pipeline is not None
             original_generation_current = pipeline._generation_current
@@ -1219,13 +1387,12 @@ def test_worker_thread_latch_before_legacy_commit_rejects_staged_decision(
             def interleave_worker_revocation():
                 nonlocal worker_latched
                 if staged and not worker_latched:
+
                     def worker():
                         nonlocal worker_latched
                         original = config.read_text(encoding="utf-8")
                         config.write_text(
-                            original.replace(
-                                "offline-test-token", "offline-new-token"
-                            ),
+                            original.replace("offline-test-token", "offline-new-token"),
                             encoding="utf-8",
                         )
                         worker_latched = not state.configuration_is_current()
@@ -1241,7 +1408,9 @@ def test_worker_thread_latch_before_legacy_commit_rejects_staged_decision(
             pipeline._generation_current = interleave_worker_revocation
             deadline = MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
-                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+                trade_date=NOW.date(),
+                due_at=NOW,
+                bar_end=NOW.replace(second=0),
             )
             with pytest.raises(RuntimeError):
                 await state.run_deadline(deadline)
@@ -1257,7 +1426,8 @@ def test_worker_thread_latch_before_legacy_commit_rejects_staged_decision(
             assert tuple(sdk.calls) == calls
             assert composition.health().block_reason == "NEEDS_RESTART"
             with state._session_factory() as session:
-                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert _minute_count(session) == 0
+                assert _current_ledger(session) == before
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
         finally:
             await composition.stop()
@@ -1266,22 +1436,24 @@ def test_worker_thread_latch_before_legacy_commit_rejects_staged_decision(
 
 
 def test_revocation_after_final_permit_finishes_one_inflight_decision(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, _, _ = _composition(tmp_path, monkeypatch)
         config = tmp_path / "config/app.yaml"
-        original_persist = ProjectionRepository.add_evaluation_result
+        original_persist = DailyRepository.save
         staged = False
         revoked_after_permit = False
 
         def stage_result(self, *args, **kwargs):
             nonlocal staged
             value = original_persist(self, *args, **kwargs)
-            staged = True
+            if kwargs["kind"] == "EVALUATION" and kwargs["payload"]["minute_target"] is not None:
+                staged = True
             return value
 
-        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", stage_result)
+        monkeypatch.setattr(DailyRepository, "save", stage_result)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._probe_capabilities.__self__
@@ -1293,6 +1465,7 @@ def test_revocation_after_final_permit_finishes_one_inflight_decision(
                 nonlocal revoked_after_permit
                 allowed = original_admission()
                 if staged and allowed and not revoked_after_permit:
+
                     def worker():
                         original = config.read_text(encoding="utf-8")
                         config.write_text(
@@ -1312,16 +1485,18 @@ def test_revocation_after_final_permit_finishes_one_inflight_decision(
                 return allowed
 
             pipeline._decision_commit_current = admit_then_revoke
-            pipeline.evaluations._commit_admission = admit_then_revoke
+            pipeline.daily_evaluations._admission = admit_then_revoke
             deadline = MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
-                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+                trade_date=NOW.date(),
+                due_at=NOW,
+                bar_end=NOW.replace(second=0),
             )
-            with pytest.raises(RecoveryAdmissionChangedError):
+            with pytest.raises(RuntimeError, match="runtime index commit admission revoked"):
                 await state.run_deadline(deadline)
             assert revoked_after_permit
             with state._session_factory() as session:
-                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 1
+                assert _minute_count(session) == 1
             assert composition.health().block_reason == "NEEDS_RESTART"
             assert not pipeline._decision_commit_current()
         finally:
@@ -1331,34 +1506,44 @@ def test_revocation_after_final_permit_finishes_one_inflight_decision(
 
 
 def test_stop_before_final_decision_permit_rolls_back_staged_result(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, _, _ = _composition(tmp_path, monkeypatch)
-        original_persist = ProjectionRepository.add_evaluation_result
+        original_persist = DailyRepository.save
         stop_started = False
 
         def stop_after_staging(self, *args, **kwargs):
             nonlocal stop_started
             value = original_persist(self, *args, **kwargs)
-            if not stop_started:
+            if (
+                kwargs["kind"] == "EVALUATION"
+                and kwargs["payload"]["minute_target"] is not None
+                and not stop_started
+            ):
                 stop_started = True
                 composition._runtime.begin_shutdown()
             return value
 
-        monkeypatch.setattr(ProjectionRepository, "add_evaluation_result", stop_after_staging)
+        monkeypatch.setattr(DailyRepository, "save", stop_after_staging)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._probe_capabilities.__self__
+            with state._session_factory() as session:
+                before = _current_ledger(session)
             deadline = MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
-                trade_date=NOW.date(), due_at=NOW, bar_end=NOW.replace(second=0),
+                trade_date=NOW.date(),
+                due_at=NOW,
+                bar_end=NOW.replace(second=0),
             )
-            with pytest.raises(RuntimeError, match="commit admission revoked"):
+            with pytest.raises(RuntimeError, match="commit admission changed"):
                 await state.run_deadline(deadline)
             assert stop_started
             with state._session_factory() as session:
-                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert _minute_count(session) == 0
+                assert _current_ledger(session) == before
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
         finally:
             await composition.stop()
@@ -1367,7 +1552,8 @@ def test_stop_before_final_decision_permit_rolls_back_staged_result(
 
 
 def test_stop_revokes_unpublished_candidate_during_replacement_start(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
@@ -1428,7 +1614,9 @@ def test_stop_revokes_unpublished_candidate_during_replacement_start(
 
 @pytest.mark.parametrize("recover_drain", (False, True))
 def test_failed_candidate_drain_remains_owned_for_stop_retry(
-    tmp_path, monkeypatch, recover_drain,
+    tmp_path,
+    monkeypatch,
+    recover_drain,
 ):
     async def scenario():
         composition, _, _ = _composition(tmp_path, monkeypatch)
@@ -1509,7 +1697,8 @@ def test_failed_candidate_drain_remains_owned_for_stop_retry(
 
 
 def test_delivery_revoked_during_final_db_admission_never_enters_channel(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         composition, _, _ = _composition(tmp_path, monkeypatch)
@@ -1529,7 +1718,9 @@ def test_delivery_revoked_during_final_db_admission_never_enters_channel(
                 async def deliver(self, event):
                     entered.append((event.event_id, state._process_baseline.revoked.is_set()))
                     return ChannelDeliveryResult(
-                        channel=self.channel, delivered=True, retryable=False,
+                        channel=self.channel,
+                        delivered=True,
+                        retryable=False,
                     )
 
             state._dispatcher._channels = (Channel(),)
@@ -1539,6 +1730,7 @@ def test_delivery_revoked_during_final_db_admission_never_enters_channel(
                 nonlocal admission_calls
                 admission_calls += 1
                 if admission_calls == 2:
+
                     def worker():
                         original = config.read_text(encoding="utf-8")
                         config.write_text(
@@ -1575,9 +1767,7 @@ def test_completed_close_pending_clear_without_health_event_still_requires_commi
         class Work:
             evaluations = SimpleNamespace(has_claim=lambda **_kwargs: True)
             projections = SimpleNamespace(
-                get_pending_official_close=lambda **_kwargs: (
-                    object() if pending_present else None
-                )
+                get_pending_official_close=lambda **_kwargs: object() if pending_present else None
             )
 
             def __enter__(self):
@@ -1601,11 +1791,15 @@ def test_completed_close_pending_clear_without_health_event_still_requires_commi
             pass
 
         service._publish_committed_events = publish
+
         def call():
             return service._official_close_completed(
-                plan=_sample_plan(), trade_date=NOW.date(),
-                evaluated_at=NOW, activation_revision=1,
+                plan=_historical_sample_plan(),
+                trade_date=NOW.date(),
+                evaluated_at=NOW,
+                activation_revision=1,
             )
+
         if pending_present:
             with pytest.raises(RuntimeError, match="commit admission revoked"):
                 await call()

@@ -12,11 +12,11 @@ from test_live_pipeline_acceptance import (
     VirtualPace,
     _write_configuration_and_evidence,
 )
-from tests.unit.test_daily_plan import synthetic_plan_payload
+from tests.unit.test_unified_plan_domain import unified_payload
 
 import trade_plan_monitor.runtime.production as production
 import trade_plan_monitor.web.monitor_composition as monitor_composition
-from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.runtime.request_control import create_live_tushare_request_controller
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.models import TradingCalendar
@@ -57,7 +57,7 @@ class ProductionDailyChain:
         )
         self.database = tmp_path / "daily-production.sqlite3"
         self.compose()
-        self.plan = DailyTradePlan.model_validate(synthetic_plan_payload())
+        self.plan = UnifiedTradePlan.model_validate(unified_payload())
 
     def compose(self):
         self.plans = PersistentPlanWebLifecycle(database_path=self.database, clock=self.clock.now)
@@ -79,7 +79,7 @@ class ProductionDailyChain:
         self.clock.current = value
 
     def current(self):
-        response = self.client.get("/api/v1/daily-plan-runtime/" + SYMBOL)
+        response = self.client.get("/api/v1/plan-runtime/" + SYMBOL)
         assert response.status_code == 200, response.text
         view = response.json()
         assert view["status"] == "CURRENT"
@@ -88,7 +88,7 @@ class ProductionDailyChain:
         assert datetime.fromisoformat(view["snapshot"]["evaluatedAt"]) == self.now
         return view["snapshot"]
 
-    def fact(self, kind, *, official=False):
+    def fact(self, kind, *, official=False, satisfied=True):
         return self.post(
             "daily-plan-facts",
             {
@@ -96,6 +96,7 @@ class ProductionDailyChain:
                 "contentHash": self.version["contentHash"],
                 "factId": "production-" + kind,
                 "kind": kind,
+                "satisfied": satisfied,
                 "tradeDate": str(self.now.date() if official else FRIDAY),
                 "evidence": "Synthetic independently verified production regression evidence",
                 "expectedRevision": 0,
@@ -153,6 +154,10 @@ def test_fact_position_and_simulation_refresh_current_snapshot_through_productio
         chain.now += timedelta(seconds=1)
         receipt = chain.fact(kind)
         chain.assert_persisted(receipt, "FACT")
+        current = chain.current()
+    for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION"):
+        chain.now += timedelta(seconds=1)
+        chain.assert_persisted(chain.fact(kind, satisfied=False), "FACT")
         current = chain.current()
     assert len(current["signals"]) == 1
     assert current["signals"][0]["executionDate"] == str(TUESDAY)

@@ -1,4 +1,4 @@
-"""The six opt-in runtime-status reads, sharing the existing URL boundary."""
+"""The five opt-in runtime-status reads, sharing the existing URL boundary."""
 
 from fastapi import APIRouter
 
@@ -7,7 +7,6 @@ from trade_plan_monitor.web.routers.dashboard import ReadServiceDependency, vali
 from trade_plan_monitor.web.routers.symbols import LimitQuery, OffsetQuery, SymbolPath
 from trade_plan_monitor.web.runtime_status_models import (
     RuntimeDashboardResponse,
-    RuntimeExplicitDetailResponse,
     RuntimeHealthV2Response,
     RuntimeInactiveSymbolResponse,
     RuntimeSymbolCollectionResponse,
@@ -76,22 +75,4 @@ async def get_symbol_health(
     response = validate_read_response(value, RuntimeSymbolHealthResponse)
     if response.scope.symbol != symbol:
         raise ValueError("service health scope does not match the request")
-    return response
-
-
-@router.get(
-    "/explicit-plan-runtime/{symbol}",
-    response_model=RuntimeExplicitDetailResponse | RuntimeInactiveSymbolResponse,
-)
-async def get_explicit_plan_runtime(
-    symbol: SymbolPath,
-    service: ReadServiceDependency,
-) -> RuntimeExplicitDetailResponse | RuntimeInactiveSymbolResponse:
-    response = _detail(await service.get_explicit_plan_runtime(symbol=symbol), symbol)
-    if isinstance(response, RuntimeSymbolDetailResponse):
-        if response.summary.plan_family != "EXPLICIT_RULES":
-            raise ApiError(ApiErrorCode.NOT_FOUND)
-        return validate_read_response(
-            response.model_dump(mode="python", by_alias=True), RuntimeExplicitDetailResponse,
-        )
     return response

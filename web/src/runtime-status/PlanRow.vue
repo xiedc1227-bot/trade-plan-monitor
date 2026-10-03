@@ -23,7 +23,7 @@ function actionable(ruleId?: string): boolean {
   <article class="runtime-panel" :data-symbol="row.symbol" :data-availability="row.availability">
     <header class="runtime-heading">
       <h2><RouterLink :to="`/stocks/${row.symbol}`">{{ row.name }} · {{ row.symbol }}</RouterLink></h2>
-      <span>{{ row.planFamily === 'EXPLICIT_RULES' ? '明确规则' : '旧低吸计划' }} · {{ row.availability }}</span>
+      <span>{{ row.planFamily === 'CONDITION_PLAN' ? '条件计划' : row.planFamily === 'EXPLICIT_RULES' ? '明确规则历史' : '旧低吸计划历史' }} · {{ row.availability }}</span>
     </header>
     <p>启用修订 {{ row.activationRevision }} · {{ row.scope.status }} · {{ reasonLabel(row.scope.reasonCode) }}</p>
     <p v-if="row.availability === 'UNAVAILABLE'" role="status">暂无判断 · {{ reasonLabel(row.reasonCode) }}</p>
@@ -49,6 +49,14 @@ function actionable(ruleId?: string): boolean {
           </template>
         </li>
       </ul>
+    </template>
+    <template v-else-if="row.planFamily === 'CONDITION_PLAN'">
+      <p>评估时间：{{ displayTime(row.planRuntime.evaluatedAt) }}</p>
+      <p v-if="row.availability === 'CACHED'">历史缓存，等待当前权威输入。</p>
+      <p :data-actionable="actionable()">{{ actionable() ? '当前提醒有效' : '当前提醒无效' }}</p>
+      <ul><li v-for="signal in row.planRuntime.signals" :key="signal.signalId">{{ signal.side === 'BUY' ? '买入' : '卖出' }} · {{ signal.state }} · 计划{{ signal.plannedQty }}股 · 已模拟{{ signal.simulatedQty }}股</li></ul>
+      <ul v-if="row.planRuntime.dataBlockers.length"><li v-for="blocker in row.planRuntime.dataBlockers" :key="blocker">{{ blocker }}</li></ul>
+      <RouterLink :to="`/plans/${row.planVersionId}`">核对条件证据与模拟交易</RouterLink>
     </template>
     <template v-else>
       <p>行情截止：{{ displayTime(row.decision.marketDataAt) }}；评估时间：{{ displayTime(row.decision.evaluatedAt) }}</p>

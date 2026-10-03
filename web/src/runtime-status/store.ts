@@ -36,7 +36,10 @@ export const useRuntimeMonitorStore = defineStore("runtime-monitor-v2", () => {
       if (row.availability !== "CURRENT") continue;
       const entries = row.planFamily === "LEGACY_LOW_BUY"
         ? [{ key: presentationKey(row), actionable: row.currentActionable, until: row.actionableUntil }]
-        : row.ruleEligibility.map((rule) => ({ key: presentationKey(row, rule.ruleId), actionable: rule.currentActionable, until: rule.actionableUntil }));
+        : row.planFamily === "CONDITION_PLAN" ? [
+          ...row.planRuntime.signals.filter(signal => signal.executableQty > 0).map(signal => ({ key: presentationKey(row, signal.signalId), actionable: row.currentActionable, until: signal.executionDate ? `${signal.executionDate}T15:00:00+08:00` : null })),
+          { key: presentationKey(row), actionable: row.currentActionable, until: null },
+        ] : row.ruleEligibility.map((rule) => ({ key: presentationKey(row, rule.ruleId), actionable: rule.currentActionable, until: rule.actionableUntil }));
       for (const entry of entries) {
         if (!entry.actionable) continue;
         const deadline = monotonicDeadline(entry.until, value.observedAt, sentAt, receivedAt);
@@ -80,7 +83,7 @@ export const useRuntimeMonitorStore = defineStore("runtime-monitor-v2", () => {
     if (row.planFamily === "EXPLICIT_RULES" && ruleId === undefined) return row.ruleEligibility.some((rule) => isActionable(row, rule.ruleId, now));
     const key = presentationKey(row, ruleId);
     if (invalidations.value.has(key) || (deadlines.value[key] !== undefined && now >= deadlines.value[key]!)) return false;
-    return row.planFamily === "LEGACY_LOW_BUY" ? row.currentActionable : row.ruleEligibility.some((rule) => rule.ruleId === ruleId && rule.currentActionable);
+    return row.planFamily === "LEGACY_LOW_BUY" || row.planFamily === "CONDITION_PLAN" ? row.currentActionable : row.ruleEligibility.some((rule) => rule.ruleId === ruleId && rule.currentActionable);
   }
 
   function setTransport(value: TransportState): void { transport.value = value; }

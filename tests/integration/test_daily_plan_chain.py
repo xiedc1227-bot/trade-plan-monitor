@@ -7,11 +7,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.unit.test_daily_plan import synthetic_plan_payload
 from tests.unit.test_daily_review import reviewed_mapping
+from tests.unit.test_unified_plan_domain import unified_payload
 
-from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
-from trade_plan_monitor.domain.daily_plan_validation import DailyPlanDraft, daily_draft_json
+from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 from trade_plan_monitor.market_data.daily_data import (
     CertifiedDailyBar,
     DailyExecutionQuote,
@@ -72,9 +73,15 @@ class Chain:
         self.runtime = DailyRuntimeEvaluationService(
             self.plans._unit_of_work, clock=lambda: self.now
         )
-        self.plan = DailyTradePlan.model_validate(synthetic_plan_payload())
+        self.plan = UnifiedTradePlan.model_validate(unified_payload())
 
     def post(self, path, data, *, key=None, status=200):
+        path = {
+            "daily-plan-review-supplements": "plan-review-supplements",
+            "daily-position-confirmations": "simulation-position-confirmations",
+            "daily-plan-facts": "plan-facts",
+            "daily-simulated-trades": "simulated-trades",
+        }.get(path, path)
         response = self.client.post(
             "/api/v1/" + path, json=data, headers={"Idempotency-Key": key or uuid4().hex}
         )
@@ -94,7 +101,7 @@ class Chain:
         self.plan = self.plan.model_copy(
             update={"version": version, **({"plan_id": plan_id} if plan_id else {})}
         )
-        draft = DailyPlanDraft.from_executable(self.plan)
+        draft = UnifiedPlanDraft.from_executable(self.plan)
         mapping = reviewed_mapping(draft, source)
         from trade_plan_monitor.ai.daily_review import daily_source_clauses
 
@@ -217,7 +224,7 @@ class Chain:
             "coreQty": core, "tacticalQty": tactical, "expectedRevision": 0})
 
     def simulate(self, signal, quantity=None, *, key=None, status=200):
-        inventory = self.client.get("/api/v1/daily-position-inventory",
+        inventory = self.client.get("/api/v1/simulation-position-inventory",
             params={"symbol": SYMBOL, "asOfTradeDate": str(self.now.date())}).json()["snapshot"]
         return self.post("daily-simulated-trades", {"planVersionId": self.version["id"],
             "causeId": signal.get("signal_id", signal.get("cause_id")),
@@ -240,6 +247,17 @@ class Chain:
                     "expectedRevision": 0,
                 },
             )
+        for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION"):
+            self.post("daily-plan-facts", {
+                "planVersionId": self.version["id"],
+                "contentHash": self.version["contentHash"],
+                "factId": "reviewed-clear-" + kind,
+                "kind": kind,
+                "tradeDate": str(FRIDAY),
+                "satisfied": False,
+                "evidence": "Synthetic review found this severe predicate absent",
+                "expectedRevision": 0,
+            })
 
 
 @pytest.fixture
@@ -278,7 +296,7 @@ def test_daily_public_review_confirmation_next_session_and_expiry(chain):
     ready = chain.evaluate(series=series, price=3970)
     assert ready.snapshot["signals"][0]["executable_qty"] == 100
     assert len(ready.event_ids) == 1
-    view = chain.client.get("/api/v1/daily-plan-runtime/" + SYMBOL)
+    view = chain.client.get("/api/v1/plan-runtime/" + SYMBOL)
     assert view.status_code == 200, view.text
     assert view.json()["snapshot"]["signals"][0]["state"] == "READY"
     with chain.plans._unit_of_work() as work:
@@ -365,7 +383,7 @@ def test_official_tradability_fact_immediately_reevaluates_without_fundamental_g
             "officialEvidence": official_proof(chain),
         },
     )
-    view = chain.client.get("/api/v1/daily-plan-runtime/" + SYMBOL).json()["snapshot"]
+    view = chain.client.get("/api/v1/plan-runtime/" + SYMBOL).json()["snapshot"]
     assert view["riskAction"]["status"] == "NONE"
     assert view["signals"][0]["executableQty"] == 100
     assert not any(
@@ -449,6 +467,7 @@ def test_real_sdk_normalizer_production_adapter_and_official_scheduler(chain):
         _clock=SimpleNamespace(now=lambda: chain.now),
         _controller=Controller(),
         _daily_basis_cache={},
+        _runtime_generation=uuid4(),
         is_open_on=lambda day: True,
     )
     state.provider = TushareMarketDataProvider(
@@ -515,3 +534,53 @@ def test_activation_change_and_admission_failure_roll_back_all_daily_state(chain
         closed.run_inputs(plan=chain.plan, inputs=inputs)
     with chain.plans._unit_of_work() as work:
         assert work.daily.session.scalar(select(func.count()).select_from(DailyRecord)) == before
+
+
+def test_late_runtime_admission_failure_rolls_back_staged_signal_and_complete_database(
+    chain, monkeypatch,
+):
+    import sqlite3
+
+    from trade_plan_monitor.state.daily_repository import DailyRepository
+
+    ready_chain(chain)
+    database = chain.plans._database_path
+
+    def dump():
+        with sqlite3.connect(database) as connection:
+            return tuple(connection.iterdump())
+
+    before = dump()
+    staged = []
+    original = DailyRepository.save
+
+    def record_staging(self, *args, **kwargs):
+        row = original(self, *args, **kwargs)
+        staged.append((row["id"], row["kind"], row["revision"]))
+        return row
+
+    monkeypatch.setattr(DailyRepository, "save", record_staging)
+    checks = []
+
+    def admission():
+        checks.append(len(staged))
+        return len(checks) == 1
+
+    chain.now += timedelta(seconds=5)
+    guarded = DailyRuntimeEvaluationService(chain.plans._unit_of_work,
+        commit_admission=admission)
+    inputs = DailyRuntimeInputs(evaluated_at=chain.now, official_trade_date=FRIDAY,
+        series=chain.series(), session_dates=(FRIDAY, TUESDAY, WEDNESDAY),
+        suspended_dates=(), quote=DailyExecutionQuote(symbol=SYMBOL, price_fen=4500,
+            quote_at=chain.now, available_at=chain.now, evaluated_at=chain.now,
+            tradable=True, special_state_verified=True, liquidity_available=True),
+        data_blockers=())
+    with pytest.raises(RuntimeError, match="commit admission changed"):
+        guarded.run_inputs(plan=chain.plan, inputs=inputs)
+    assert len(checks) == 2 and checks[0] == 0 and checks[1] > 0
+    assert {kind for _, kind, _ in staged} >= {"SIGNAL", "EVALUATION"}
+    assert dump() == before
+    guarded._admission = lambda: True
+    retried = guarded.run_inputs(plan=chain.plan, inputs=inputs)
+    assert not retried.duplicate
+    assert retried.snapshot["signals"][0]["executable_qty"] == 0

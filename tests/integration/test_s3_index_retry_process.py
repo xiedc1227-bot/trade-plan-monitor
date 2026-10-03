@@ -1,4 +1,8 @@
-"""S3-05 index retry survives a clean OS restart and real scheduler wake."""
+"""S3-05 shared index retry survives OS restart independently of current stock rules.
+
+The original schema2 index predicate is retained only as frozen read-only input;
+current schema5 stock conditions do not gain an invented index dependency.
+"""
 
 import asyncio
 import json
@@ -11,7 +15,6 @@ from multiprocessing import get_context
 from pathlib import Path
 
 import pytest
-import test_explicit_runtime_production as explicit_fixture
 from test_live_pipeline_acceptance import (
     NOW,
     ControlledClock,
@@ -21,17 +24,20 @@ from test_live_pipeline_acceptance import (
     _plan,
     _write_configuration_and_evidence,
 )
+from tests.integration.current_activation_fixture import current_sample_plan, seed_current
+from tests.integration.test_daily_plan_chain import Chain
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_data.models import TradingDay
 from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
+from trade_plan_monitor.runtime.daily_service import DailyRuntimeEvaluationService
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.scheduler import DeadlineKind
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import RuntimeLiveness
-from trade_plan_monitor.state.repositories import ManualEventRiskStatus
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
 CUTOFF = NOW.replace(second=0)
 FIRST_START = CUTOFF - timedelta(seconds=30)
@@ -40,8 +46,13 @@ NEXT_CUTOFF = CUTOFF + timedelta(minutes=5)
 DEPENDENT = "003043.SZ"
 INDEPENDENT = "300001.SZ"
 BUSINESS_TABLES = (
-    "evaluation_ledger", "evaluation_result", "explicit_evaluation_ledger",
-    "alert_event", "delivery_attempt", "symbol_decision_head",
+    "evaluation_ledger",
+    "evaluation_result",
+    "explicit_evaluation_ledger",
+    "alert_event",
+    "delivery_attempt",
+    "symbol_decision_head",
+    "daily_plan_record",
 )
 
 
@@ -60,50 +71,89 @@ class _SteppedClock(ControlledClock):
         self.current = max(self.current, deadline)
 
 
-def _seed(root, monkeypatch):
+def _seed(root, monkeypatch, *, requires_index=True):
     dependent = _plan(
-        plan_id="s3-required-index", symbol=DEPENDENT, market="SZSE",
-        condition={"type": "INDEX_CLOSE_GTE_MA", "index_role": "BOARD_REFERENCE", "period": 2},
+        plan_id="s3-required-index",
+        symbol=DEPENDENT,
+        market="SZSE",
+        condition=(
+            {"type": "INDEX_CLOSE_GTE_MA", "index_role": "BOARD_REFERENCE", "period": 2}
+            if requires_index
+            else {"type": "NON_DECREASING_CLOSE"}
+        ),
     )
     database = root / "monitor.sqlite3"
     clock = ControlledClock(NOW.replace(hour=9, minute=0, second=0))
     _activate_plans(database, clock, (dependent,))
-    payload = explicit_fixture._plan(active_date=NOW.date()).model_dump(
-        mode="python", round_trip=True,
-    )
+    payload = current_sample_plan().model_dump(mode="json")
     payload.update(plan_id="s3-independent", symbol=INDEPENDENT, name="S3 independent")
-    payload["rules"][0]["condition"] = {
-        "type": "COMPLETED_CLOSE_IN_RANGE", "low_fen": 6000, "high_fen": 6500,
-        "include_low": True, "include_high": True,
-    }
-    independent = ExplicitTradePlan.model_validate(payload)
-    monkeypatch.setattr(explicit_fixture, "PREPARED_AT", NOW - timedelta(minutes=30))
+    payload["ordinary_rules"][0]["condition"]["price_fen"] = 6500
+    independent = UnifiedTradePlan.model_validate(payload)
+    seed_current(root, plan=independent, clock=clock)
     engine = create_sqlite_engine(database)
     sessions = create_session_factory(engine)
     try:
-        explicit_fixture._seed_active(engine, independent)
         with SqlAlchemyUnitOfWork(sessions, clock=clock.now) as work:
-            work.references.upsert_trading_days(tuple(
-                TradingDay(exchange=exchange, cal_date=NOW.date(), is_open=True,
-                           previous_trade_date=NOW.date() - timedelta(days=1))
-                for exchange in ("SSE", "SZSE")
-            ))
-            work.manual_event_risk.upsert(
-                symbol=DEPENDENT, plan_hash=plan_sha256(dependent),
-                status=ManualEventRiskStatus.CLEAR, expires_on=NOW.date(), expected_revision=0,
-            )
-            work.positions.confirm_inventory(
-                symbol=INDEPENDENT, as_of_trade_date=NOW.date(), total_quantity=100,
-                sellable_quantity=100, included_lot_ids=(), complete_registration=True,
-                expected_revision=0,
+            work.references.upsert_trading_days(
+                tuple(
+                    TradingDay(
+                        exchange=exchange,
+                        cal_date=NOW.date(),
+                        is_open=True,
+                        previous_trade_date=NOW.date() - timedelta(days=1),
+                    )
+                    for exchange in ("SSE", "SZSE")
+                )
             )
             work.commit()
         with sessions.begin() as session:
-            session.add(RuntimeLiveness(
-                id=1, schema_version=1, revision=0, last_alive_at=clock.now().isoformat(),
-            ))
+            session.add(
+                RuntimeLiveness(
+                    id=1,
+                    schema_version=1,
+                    revision=0,
+                    last_alive_at=clock.now().isoformat(),
+                )
+            )
     finally:
         engine.dispose()
+    chain = Chain(root)
+    chain.now = clock.now()
+    chain.plan = independent
+    chain.plans = PersistentPlanWebLifecycle(database_path=database, clock=lambda: chain.now)
+    chain.runtime = DailyRuntimeEvaluationService(
+        chain.plans._unit_of_work, clock=lambda: chain.now
+    )
+    with chain.client:
+        chain.post(
+            "simulation-position-confirmations",
+            {"symbol": INDEPENDENT, "coreQty": 0, "tacticalQty": 100, "expectedRevision": 0},
+        )
+        active = chain.client.get("/api/v1/plan-versions", params={"symbol": INDEPENDENT}).json()[
+            "items"
+        ][0]
+        active = chain.client.get("/api/v1/plan-versions/" + active["id"]).json()
+        stamp = chain.now.isoformat()
+        chain.post(
+            "plan-facts",
+            {
+                "planVersionId": active["id"],
+                "contentHash": active["contentHash"],
+                "factId": "independent-tradability",
+                "kind": "TRADABILITY",
+                "tradeDate": str(NOW.date()),
+                "evidence": "Synthetic verified tradability evidence",
+                "officialEvidence": {
+                    "issuer": "Synthetic exchange fixture",
+                    "documentTitle": "Verified current tradability",
+                    "documentUrl": "https://example.test/tradability",
+                    "publishedAt": stamp,
+                    "verifiedAt": stamp,
+                    "applicableAssertion": "Verified tradability fixture",
+                },
+                "expectedRevision": 0,
+            },
+        )
     _write_configuration_and_evidence(root, observed_at=FIRST_START, include_index=True)
     return dependent, independent
 
@@ -112,16 +162,29 @@ def _read_state(root):
     database = (root / "monitor.sqlite3").resolve()
     with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as connection:
         connection.row_factory = sqlite3.Row
-        return {name: tuple(dict(row) for row in connection.execute(
-            f"SELECT * FROM {name} ORDER BY rowid",
-        )) for name in (*BUSINESS_TABLES, "market_index_snapshot",
-                        "market_index_snapshot_head", "market_index_recovery_state")}
+        return {
+            name: tuple(
+                dict(row)
+                for row in connection.execute(
+                    f"SELECT * FROM {name} ORDER BY rowid",
+                )
+            )
+            for name in (
+                *BUSINESS_TABLES,
+                "market_index_snapshot",
+                "market_index_snapshot_head",
+                "market_index_recovery_state",
+            )
+        }
 
 
 def test_seed_has_real_mixed_activation_and_no_prebuilt_retry(tmp_path, monkeypatch):
     dependent, independent = _seed(tmp_path, monkeypatch)
-    assert dependent.schema_version == 2 and independent.schema_version == 3
-    assert all(not rows for rows in _read_state(tmp_path).values())
+    assert dependent.schema_version == 2 and independent.schema_version == 5
+    assert dependent.entry.condition.type == "INDEX_CLOSE_GTE_MA"
+    state = _read_state(tmp_path)
+    assert all(not rows for name, rows in state.items() if name != "daily_plan_record")
+    assert not [row for row in state["daily_plan_record"] if row["kind"] in {"SIGNAL", "RISK"}]
 
 
 def _composition_child(root, phase, required_code, reports):
@@ -163,7 +226,9 @@ def _composition_child(root, phase, required_code, reports):
     def controller_factory(*, clock, require_repository_binding=False):
         pace = VirtualPace()
         return real_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
             require_repository_binding=require_repository_binding,
         )
 
@@ -173,7 +238,8 @@ def _composition_child(root, phase, required_code, reports):
 
     async def scenario():
         composition = monitor_composition.create_monitor_composition(
-            config_path=base / "config/app.yaml", database_path=base / "monitor.sqlite3",
+            config_path=base / "config/app.yaml",
+            database_path=base / "monitor.sqlite3",
         )
         # Replace only transport; keep enforce_current_plan and CurrentDeliveryAdmission.
         composition._runtime._dispatcher._channels = (FakeChannel(),)
@@ -182,8 +248,10 @@ def _composition_child(root, phase, required_code, reports):
         def capture():
             state = composition._runtime._probe_capabilities.__self__
             return {
-                "state": _read_state(base), "calls": tuple(sdk.calls),
-                "delivered": tuple(delivered), "now": clock.now().isoformat(),
+                "state": _read_state(base),
+                "calls": tuple(sdk.calls),
+                "delivered": tuple(delivered),
+                "now": clock.now().isoformat(),
                 "status": composition.health().status.value,
                 "generation": str(composition._runtime.runtime_generation),
                 "retry_at": state.next_index_recovery_at(),
@@ -202,8 +270,13 @@ def _composition_child(root, phase, required_code, reports):
             before = capture()
             result = await original_run(deadline)
             after = capture()
-            completed.append((deadline, str(runtime.runtime_generation),
-                              runtime._schedule_owner is composition._runner_task))
+            completed.append(
+                (
+                    deadline,
+                    str(runtime.runtime_generation),
+                    runtime._schedule_owner is composition._runner_task,
+                )
+            )
             if deadline.kind is DeadlineKind.INDEX_RECOVERY:
                 index_intervals.append((deadline, before, after))
             elif deadline.kind is DeadlineKind.STOCK_RECOVERY:
@@ -223,8 +296,8 @@ def _composition_child(root, phase, required_code, reports):
                 pending[1].set()
                 pending = await next_sleep()
                 if phase == "failure" and any(
-                    deadline.kind is DeadlineKind.REALTIME_MINUTE
-                    and deadline.bar_end == CUTOFF for deadline, _, _ in completed
+                    deadline.kind is DeadlineKind.REALTIME_MINUTE and deadline.bar_end == CUTOFF
+                    for deadline, _, _ in completed
                 ):
                     stages["first_market"] = capture()
                     break
@@ -236,9 +309,11 @@ def _composition_child(root, phase, required_code, reports):
             if phase == "restart":
                 # Let normal minute wakes run up to the next five-minute decision cutoff.
                 for _ in range(32):
-                    if any(deadline.kind is DeadlineKind.REALTIME_MINUTE
-                           and deadline.bar_end == NEXT_CUTOFF
-                           for deadline, _, _ in completed):
+                    if any(
+                        deadline.kind is DeadlineKind.REALTIME_MINUTE
+                        and deadline.bar_end == NEXT_CUTOFF
+                        for deadline, _, _ in completed
+                    ):
                         break
                     assert pending[0] <= NEXT_CUTOFF + timedelta(seconds=12)
                     pending[1].set()
@@ -269,7 +344,8 @@ def _run_process(root, phase, required_code):
     context = get_context("spawn")
     receive, send = context.Pipe(duplex=False)
     process = context.Process(
-        target=_composition_child, args=(str(root), phase, required_code, send),
+        target=_composition_child,
+        args=(str(root), phase, required_code, send),
     )
     process.start()
     send.close()
@@ -292,32 +368,25 @@ def _run_process(root, phase, required_code):
 
 
 def _index_head(state, code, cutoff):
-    heads = [row for row in state["market_index_snapshot_head"]
-             if row["index_code"] == code and row["decision_cutoff"] == cutoff.isoformat()]
-    head, = heads
-    row, = [item for item in state["market_index_snapshot"]
-            if item["snapshot_hash"] == head["snapshot_hash"]]
+    heads = [
+        row
+        for row in state["market_index_snapshot_head"]
+        if row["index_code"] == code and row["decision_cutoff"] == cutoff.isoformat()
+    ]
+    (head,) = heads
+    (row,) = [
+        item
+        for item in state["market_index_snapshot"]
+        if item["snapshot_hash"] == head["snapshot_hash"]
+    ]
     return json.loads(row["snapshot_json"]), head
 
 
-def _legacy_result(state, cutoff, plan):
-    row, = [item for item in state["evaluation_result"]
-            if item["symbol"] == DEPENDENT and item["target_value"] == cutoff.isoformat()]
-    assert row["plan_hash"] == plan_sha256(plan)
-    return json.loads(row["result_json"])
-
-
-def _index_evidence(conditions):
-    for item in conditions:
-        if item.get("index_evidence") is not None:
-            yield item["index_evidence"]
-        yield from _index_evidence(item.get("children", ()))
-
-
 def _assert_index_only(before, after, required_code):
-    calls = after["calls"][len(before["calls"]):]
-    assert calls and all(name in {"idx_mins", "rt_idx_min_daily", "index_daily"}
-                         for name, _ in calls), "stock SDK entered index-only retry"
+    calls = after["calls"][len(before["calls"]) :]
+    assert calls and all(
+        name in {"idx_mins", "rt_idx_min_daily", "index_daily"} for name, _ in calls
+    ), "stock SDK entered index-only retry"
     assert all(kwargs["ts_code"] == required_code for _, kwargs in calls)
     assert after["delivered"] == before["delivered"] == (), "index-only retry sent an alert"
     for table in BUSINESS_TABLES:
@@ -327,11 +396,26 @@ def _assert_index_only(before, after, required_code):
 def _assert_unique_targets(state):
     for table in ("evaluation_ledger", "evaluation_result", "explicit_evaluation_ledger"):
         identity = ("plan_hash", "symbol", "target_value") + (
-            ("activation_revision", "execution_version") if table == "explicit_evaluation_ledger"
+            ("activation_revision", "execution_version")
+            if table == "explicit_evaluation_ledger"
             else ("evaluation_kind", "formula_version")
         )
         keys = [tuple(row[key] for key in identity) for row in state[table]]
         assert len(keys) == len(set(keys)), table
+    current_keys = []
+    for row in state["daily_plan_record"]:
+        if row["kind"] == "EVALUATION" and not row["id"].startswith("evaluation-head-"):
+            payload = json.loads(row["payload_json"])
+            current_keys.append(
+                (
+                    payload["plan_hash"],
+                    payload["activation_revision"],
+                    payload["minute_target"],
+                    json.dumps(payload["fact_revisions"], sort_keys=True),
+                    payload["inventory"]["revision"],
+                )
+            )
+    assert len(current_keys) == len(set(current_keys))
 
 
 def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_path, monkeypatch):
@@ -339,25 +423,36 @@ def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_p
     required_code = dependent.reference_market.index_code.value
     first = _run_process(tmp_path, "failure", required_code)
     failed = first["first_market"]
-    first_market, = [deadline for deadline, _, _ in first["completed"]
-                     if deadline.kind is DeadlineKind.REALTIME_MINUTE]
+    (first_market,) = [
+        deadline
+        for deadline, _, _ in first["completed"]
+        if deadline.kind is DeadlineKind.REALTIME_MINUTE
+    ]
     assert first_market.bar_end == CUTOFF
     assert first_market.due_at == CUTOFF + timedelta(seconds=12)
     assert failed["now"] == first_market.due_at.isoformat()
-    assert all(generation == first["startup"]["generation"] and same_owner
-               for _, generation, same_owner in first["completed"])
+    assert all(
+        generation == first["startup"]["generation"] and same_owner
+        for _, generation, same_owner in first["completed"]
+    )
     assert failed["status"] == "RUNNING"
     assert failed["generation"] == first["startup"]["generation"]
     assert [event["symbol"] for event in failed["delivered"]] == [INDEPENDENT]
-    result = _legacy_result(failed["state"], CUTOFF, dependent)
-    assert result["snapshot"]["signal_type"] == "BLOCKED_DATA"
-    assert result["snapshot"]["reference_market"]["health"] == "BLOCKED"
-    assert result["signal_intent"] is None
-    evidence, = _index_evidence(result["snapshot"]["condition_evidence"])
-    assert evidence["outcome"] == "MISSING_INPUT"
-    explicit, = failed["state"]["explicit_evaluation_ledger"]
-    assert explicit["symbol"] == INDEPENDENT and explicit["plan_hash"] == plan_sha256(independent)
-    assert explicit["activation_revision"] == 1 and explicit["target_value"] == CUTOFF.isoformat()
+    assert failed["state"]["evaluation_result"] == failed["state"]["evaluation_ledger"] == ()
+    assert failed["state"]["explicit_evaluation_ledger"] == ()
+    (current,) = [
+        row
+        for row in failed["state"]["daily_plan_record"]
+        if row["kind"] == "EVALUATION"
+        and not row["id"].startswith("evaluation-head-")
+        and json.loads(row["payload_json"])["minute_target"] == CUTOFF.isoformat()
+    ]
+    current_payload = json.loads(current["payload_json"])
+    assert current_payload["symbol"] == INDEPENDENT
+    assert current_payload["plan_hash"] == plan_sha256(independent)
+    assert current_payload["activation_revision"] == 1
+    (signal,) = current_payload["signals"]
+    assert signal["side"] == "BUY" and signal["executable_qty"] == 100
     assert len(failed["state"]["alert_event"]) == len(failed["state"]["delivery_attempt"]) == 1
     assert failed["state"]["delivery_attempt"][0]["status"] == "DELIVERED"
     assert failed["state"]["delivery_attempt"][0]["attempt"] == 1
@@ -370,16 +465,21 @@ def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_p
         if head["index_code"] != required_code:
             snapshot, _ = _index_head(failed["state"], head["index_code"], CUTOFF)
             assert snapshot["health"] == "LIVE"
-    retry, = failed["state"]["market_index_recovery_state"]
+    (retry,) = failed["state"]["market_index_recovery_state"]
     assert retry["index_code"] == required_code and retry["decision_cutoff"] == CUTOFF.isoformat()
     assert retry["attempts"] == 0 and retry["due_at"] == failed["retry_at"].isoformat()
     assert _read_state(tmp_path) == failed["state"], "clean stop changed business/retry evidence"
 
     second = _run_process(tmp_path, "restart", required_code)
     assert first["pid"] != second["pid"]
-    startup, recovered, market = (second[key] for key in (
-        "startup", "index_recovered", "next_market",
-    ))
+    startup, recovered, market = (
+        second[key]
+        for key in (
+            "startup",
+            "index_recovered",
+            "next_market",
+        )
+    )
     assert startup["generation"] != failed["generation"]
     assert startup["retry_at"] == failed["retry_at"]
     assert startup["state"]["market_index_recovery_state"] == (retry,)
@@ -393,13 +493,19 @@ def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_p
     for table in BUSINESS_TABLES:
         assert recovered["state"][table] == startup["state"][table], table
     assert recovered["delivered"] == startup["delivered"] == ()
-    assert all(generation == startup["generation"] and same_owner
-               for _, generation, same_owner in second["completed"])
-    assert sum(deadline.kind is DeadlineKind.REALTIME_MINUTE
-               and deadline.bar_end == NEXT_CUTOFF
-               for deadline, _, _ in second["completed"]) == 1
+    assert all(
+        generation == startup["generation"] and same_owner
+        for _, generation, same_owner in second["completed"]
+    )
+    assert (
+        sum(
+            deadline.kind is DeadlineKind.REALTIME_MINUTE and deadline.bar_end == NEXT_CUTOFF
+            for deadline, _, _ in second["completed"]
+        )
+        == 1
+    )
     # Negative oracle controls mutate copied observations, never product state or policy.
-    for violation in ("stock", "evaluation_result", "alert_event", "send"):
+    for violation in ("stock", "daily_plan_record", "alert_event", "send"):
         changed = deepcopy(retry_after)
         if violation == "stock":
             changed["calls"] += (("rt_min", {"ts_code": DEPENDENT}),)
@@ -417,21 +523,31 @@ def test_required_index_retry_survives_clean_process_restart_via_scheduler(tmp_p
     assert market["status"] == "RUNNING"
     assert market["generation"] == recovered["generation"] == startup["generation"]
     assert market["now"] == (NEXT_CUTOFF + timedelta(seconds=12)).isoformat()
-    result = _legacy_result(market["state"], NEXT_CUTOFF, dependent)
-    assert result["snapshot"]["reference_market"]["health"] == "LIVE"
-    assert result["snapshot"]["signal_type"] != "BLOCKED_DATA"
-    assert any(name == "rt_min" for name, _ in market["calls"][len(recovered["calls"]):])
+    assert market["state"]["evaluation_result"] == market["state"]["evaluation_ledger"] == ()
+    assert market["state"]["explicit_evaluation_ledger"] == ()
+    (latest,) = [
+        json.loads(row["payload_json"])
+        for row in market["state"]["daily_plan_record"]
+        if row["id"] == "evaluation-head-" + INDEPENDENT
+    ]
+    assert latest["minute_target"] == NEXT_CUTOFF.isoformat()
+    assert latest["plan_hash"] == plan_sha256(independent)
+    assert any(name == "rt_min" for name, _ in market["calls"][len(recovered["calls"]) :])
     assert all(event["symbol"] != INDEPENDENT for event in market["delivered"])
     for table in ("alert_event", "delivery_attempt"):
         for original in failed["state"][table]:
             assert original in market["state"][table], table
-    assert [row for row in market["state"]["alert_event"]
-            if json.loads(row["payload_json"])["symbol"] == INDEPENDENT] == list(
+    assert [
+        row
+        for row in market["state"]["alert_event"]
+        if json.loads(row["payload_json"])["symbol"] == INDEPENDENT
+    ] == list(
         failed["state"]["alert_event"],
     )
     original_event_id = failed["state"]["alert_event"][0]["id"]
     assert failed["delivered"][0]["event_id"] == original_event_id
-    assert [row for row in market["state"]["delivery_attempt"]
-            if row["event_id"] == original_event_id] == list(failed["state"]["delivery_attempt"])
-    assert explicit in market["state"]["explicit_evaluation_ledger"]
+    assert [
+        row for row in market["state"]["delivery_attempt"] if row["event_id"] == original_event_id
+    ] == list(failed["state"]["delivery_attempt"])
+    assert current in market["state"]["daily_plan_record"]
     _assert_unique_targets(market["state"])

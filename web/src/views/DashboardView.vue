@@ -13,7 +13,6 @@ import type {
 } from "../api/generated";
 import WatchlistTable from "../components/dashboard/WatchlistTable.vue";
 import WatchlistToolbar from "../components/dashboard/WatchlistToolbar.vue";
-import ExplicitRuntimeDashboardPanel from "../components/dashboard/ExplicitRuntimeDashboardPanel.vue";
 import MarketIndexDataStrip from "../components/market-index/MarketIndexDataStrip.vue";
 import {
   emptyDashboardMarketIndexTrends,
@@ -215,7 +214,6 @@ function compareText(left: string, right: string): number {
       @retry-index="emit('retryMarketIndex', $event)"
     />
 
-    <ExplicitRuntimeDashboardPanel />
 
     <p v-if="error" class="dashboard-view__error" role="alert">{{ error }}</p>
     <p v-if="loading" class="dashboard-view__loading" role="status" aria-live="polite">

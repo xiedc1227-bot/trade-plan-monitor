@@ -12,6 +12,7 @@ import httpx
 import pytest
 from scripts.bounded_live_acceptance import (
     APPROVED_MODEL,
+    CURRENT_LOCAL_PROMPT_BYTES,
     AIBudgetTransport,
     Budget,
     BudgetDenied,
@@ -243,11 +244,27 @@ def test_ai_guard_rejects_unapproved_temperature_before_transport(temperature) -
 def test_approved_sources_are_the_three_fixed_repository_inputs() -> None:
     sources = approved_sources()
     assert set(sources) == {"LITERAL", "SEM-AMB-01", "SEM-UNS-01"}
-    assert all(len(prompt.encode("utf-8")) <= 19_000 for _, prompt in sources.values())
+    assert all(
+        len(prompt.encode("utf-8")) <= CURRENT_LOCAL_PROMPT_BYTES for _, prompt in sources.values()
+    )
     fixture = json.loads(
         Path("tests/fixtures/ai/explicit-plan-literal-source-v3.json").read_text("utf-8")
     )
     assert sources["LITERAL"][0] == fixture["sourceText"]
+
+
+def test_sealed_prompt_authorization_cannot_be_rebound_to_current_extraction(tmp_path):
+    from scripts.bounded_live_acceptance import _serve
+
+    with pytest.raises(BudgetDenied):
+        approved_sources(prompt_version="plan-extract-v4")
+    with pytest.raises(BudgetDenied):
+        asyncio.run(_serve("r14-20260914-a", session_root=tmp_path))
+    with pytest.raises(BudgetDenied):
+        asyncio.run(
+            _serve("r14-20260914-a", session_root=tmp_path, prompt_version="plan-extract-v8")
+        )
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_cleanup_only_opens_its_isolated_database(tmp_path: Path) -> None:

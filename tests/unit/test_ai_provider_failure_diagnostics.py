@@ -10,7 +10,8 @@ import requests
 from sqlalchemy.exc import SQLAlchemyError
 from tests.integration.test_ai_provider_contract import _config, _secret_store
 from tests.integration.test_certified_production_runtime import NOW, Clock
-from tests.unit.test_ai_plan_extraction_v4 import _extract, _valid_output
+from tests.unit.test_current_plan_extraction_security import current_output as _valid_output
+from tests.unit.test_current_plan_extraction_security import extract as _extract
 
 from trade_plan_monitor.ai.extraction import extract_plan
 from trade_plan_monitor.ai.openai_compatible import OpenAICompatibleProvider
@@ -33,7 +34,7 @@ from trade_plan_monitor.web.monitor_composition import _ProductionRuntimeState
 @pytest.mark.parametrize("field", ["clause_id", "start", "end", "excerpt"])
 def test_mapping_diagnostic_identifies_mismatched_source_field_without_content(field):
     payload = _valid_output()
-    clause = payload["source_clauses"][0]
+    clause = payload["clauses"][0]
     clause[field] = (
         clause[field] + 1
         if field in {"start", "end"}
@@ -48,22 +49,22 @@ def test_mapping_diagnostic_identifies_mismatched_source_field_without_content(f
 
 
 @pytest.mark.parametrize(
-    "field,value", [("unit", "NONE"), ("value", 200), ("path", "SECRET-unknown-path")]
+    "field,value", [("unit", "FEN_FROM_YUAN"), ("value", 200), ("path", "SECRET-unknown-path")]
 )
 def test_mapping_diagnostic_identifies_invalid_binding_without_echoing_path(field, value):
     payload = _valid_output()
-    clause = payload["source_clauses"][0]
-    clause.update(disposition="MAPPED", paths=["rules[0].action.quantity"])
+    clause = payload["clauses"][0]
+    clause.update(disposition="POLICY", paths=["ordinary_rules[0].quantity"])
     binding = dict(
-        path="rules[0].action.quantity",
+        path="ordinary_rules[0].quantity",
         value=100,
         unit="SHARES",
         origin="SOURCE",
         clause_ids=[clause["clause_id"]],
-        binding_kind="VALUE",
+        supplement_id=None,
     )
     binding[field] = value
-    payload["field_bindings"] = [binding]
+    payload["bindings"] = [binding]
     result = _extract(payload)
     assert result.draft is None
     assert result.diagnostic.stage == "mapping"
@@ -73,21 +74,21 @@ def test_mapping_diagnostic_identifies_invalid_binding_without_echoing_path(fiel
 
 def test_structure_binding_to_scalar_is_a_mapping_failure():
     payload = _valid_output()
-    clause = payload["source_clauses"][0]
-    clause.update(disposition="MAPPED", paths=["rules[0].action.quantity"])
-    payload["field_bindings"] = [
+    clause = payload["clauses"][0]
+    clause.update(disposition="POLICY", paths=["ordinary_rules[0].quantity"])
+    payload["bindings"] = [
         dict(
-            path="rules[0].action.quantity",
+            path="ordinary_rules[0].quantity",
             value="ALL",
-            unit="NONE",
+            unit="JSON",
             origin="SOURCE",
             clause_ids=[clause["clause_id"]],
-            binding_kind="STRUCTURE",
+            supplement_id=None,
         )
     ]
     result = _extract(payload)
     assert result.status.value == "INVALID_OUTPUT"
-    assert result.diagnostic.path == "field_bindings[0].path"
+    assert result.diagnostic.path == "field_bindings[0].value"
 
 
 def test_missing_current_calendar_has_a_distinct_local_category():
@@ -208,7 +209,7 @@ def test_literal_timeout_stays_one_attempt_without_exposing_provider_details():
         max_retries=0,
         timeout_seconds=30,
         prompt_version="plan-extract-v4",
-        max_input_chars=19_000,
+        max_input_chars=50_000,
         max_output_tokens=4096,
     )
     calls = []
@@ -244,6 +245,7 @@ def test_literal_timeout_stays_one_attempt_without_exposing_provider_details():
 )
 def test_reference_diagnostic_never_logs_untrusted_exception(tmp_path, caplog, failure, expected):
     observed_failures: list[str] = []
+
     class Pipeline:
         reference_stage = TushareOperation.TRADING_CALENDAR
         _stock_semantics = object()

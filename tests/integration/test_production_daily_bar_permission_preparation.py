@@ -23,6 +23,7 @@ from test_permission_candidate_selection import _block, _seed_official_bar, _see
 from test_production_certification_gate import _composition
 
 from trade_plan_monitor.config import load_application_config
+from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import DateRangeActivation
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
 from trade_plan_monitor.live_profiles import load_stock_certification
@@ -124,6 +125,27 @@ def prepare(env):
     return asyncio.run(env.pipeline._prepare_daily_bar_permission())
 
 
+def test_current_daily_plan_prepares_real_owner_demand(tmp_path, monkeypatch):
+    """A reviewed schema-5 daily rule must own DAILY_BARS recovery itself."""
+    from tests.integration.current_activation_fixture import seed_current
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+
+    raw = unified_payload()
+    raw.update(symbol="003043.SZ", market="SZSE", risk_branches=[])
+    plan = UnifiedTradePlan.model_validate(raw)
+    with harness(tmp_path, monkeypatch, count=0, today=True) as env:
+        seed_current(tmp_path, plan=plan, clock=env.clock)
+        ready(env)
+        result = prepare(env)
+        assert result.status == "PREPARED"
+        assert result.candidate.operation is OP
+        assert result.candidate.symbol == plan.symbol
+        assert result.receipt.identity.plan_hash == plan_sha256(plan)
+        assert env.sdk.calls == []
+
+
 def observe_inspections(env, monkeypatch):
     reader = env.pipeline._permission_demand_reader
     original = reader.inspect_permission_demand_in_session
@@ -138,8 +160,23 @@ def observe_inspections(env, monkeypatch):
 
 
 def test_real_composition_has_independent_safe_permission_reader(tmp_path, monkeypatch):
+    from tests.integration.current_activation_fixture import current_sample_plan
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+
+    raw = current_sample_plan().model_dump(mode="json")
+    raw["monitoring"] = unified_payload()["monitoring"]
+    minute = raw["ordinary_rules"][0]["condition"]
+    raw["ordinary_rules"][0]["condition"] = {"type": "ALL", "conditions": [minute,
+        {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
+         "comparator": "LT", "reference": {"mode": "FIXED", "value": "4000",
+            "unit": "FEN", "as_of": "2026-09-07", "source": "Synthetic reviewed threshold"}}]}
+    plan = UnifiedTradePlan.model_validate(raw)
+
     async def scenario():
-        composition, sdk, _ = _composition(tmp_path, monkeypatch, persisted_calendar=True)
+        composition, sdk, _ = _composition(tmp_path, monkeypatch,
+            persisted_calendar=True, plan=plan)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
@@ -150,7 +187,8 @@ def test_real_composition_has_independent_safe_permission_reader(tmp_path, monke
             before = tuple(sdk.calls)
             assert pipeline._permission_demand_reader is not pipeline._historical_reader
             result = await pipeline._prepare_daily_bar_permission()
-            assert result.status == "PREPARED" and result.receipt.kind == "TODAY_REFERENCE"
+            assert result.status == "PREPARED"
+            assert result.receipt.identity.plan_hash == plan_sha256(plan)
             assert tuple(sdk.calls) == before
         finally:
             await composition.stop()

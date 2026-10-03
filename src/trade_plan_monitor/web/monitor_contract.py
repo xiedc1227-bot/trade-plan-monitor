@@ -15,19 +15,13 @@ from trade_plan_monitor.web.schemas import ErrorDetail
 
 VERSION_HEADER = "X-Monitor-Contract-Version"
 _READ_PATH = re.compile(
-    r"^/api/v1/(?:health(?:/symbols/[^/]+)?|dashboard|symbols(?:/[^/]+)?"
-    r"|explicit-plan-runtime/[^/]+)$"
+    r"^/api/v1/(?:health(?:/symbols/[^/]+)?|dashboard|symbols(?:/[^/]+)?)$"
 )
 _WRITE_PATHS = frozenset(
     f"/api/v1/{name}"
     for name in (
         "plan-activations",
         "plan-deactivations",
-        "position-lots",
-        "position-lot-closures",
-        "position-inventory-closures",
-        "position-inventory-confirmations",
-        "manual-event-risk-confirmations",
         "alert-acknowledgements",
         "diagnostic-evaluations",
         "system/legacy-plan-invalidation",

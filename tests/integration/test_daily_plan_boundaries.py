@@ -17,7 +17,7 @@ from tests.integration.test_daily_plan_chain import (
 )
 from tests.unit.test_daily_state_models import signal_payload
 
-from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
 from trade_plan_monitor.runtime.daily_service import DailyRuntimeInputs, daily_delivery_allowed
 
@@ -30,11 +30,8 @@ def enable_sell(chain):
         "zone": "PRESSURE",
         "rule_id": "pressure-sell",
     }
-    raw["ordinary_rules"] = [
-        {"status": "DISABLED", "side": "BUY", "reason": "Synthetic SELL-only fixture"},
-        sell,
-    ]
-    chain.plan = DailyTradePlan.model_validate(raw)
+    raw["ordinary_rules"] = [sell]
+    chain.plan = UnifiedTradePlan.model_validate(raw)
     chain.activate(version=2, activation_revision=1)
     chain.evaluate(series=chain.series(close=4200), official=FRIDAY)
     chain.facts()
@@ -50,7 +47,7 @@ def test_real_sell_pressure_never_sells_core_and_complete_tactical_simulation(ch
     chain.simulate(ready.snapshot["signals"][0])
     assert (
         chain.client.get(
-            f"/api/v1/daily-position-inventory?symbol={SYMBOL}&asOfTradeDate={TUESDAY}"
+            f"/api/v1/simulation-position-inventory?symbol={SYMBOL}&asOfTradeDate={TUESDAY}"
         ).json()["snapshot"]["coreQty"]
         == 100
     )
@@ -71,7 +68,7 @@ def test_unconsumed_expiry_restart_later_close_requires_new_independent_evidence
     chain.evaluate(series=later, official=TUESDAY)
     for kind in ("PRICE_STRUCTURE", "VOLUME_OR_CANDLE", "TECHNICAL"):
         chain.post(
-            "daily-plan-facts",
+            "plan-facts",
             {
                 "planVersionId": chain.version["id"],
                 "contentHash": chain.version["contentHash"],
@@ -87,7 +84,7 @@ def test_unconsumed_expiry_restart_later_close_requires_new_independent_evidence
     assert repeated.snapshot["signals"][0]["simulated_qty"] == 0
     assert repeated.event_ids == ()
     chain.post(
-        "daily-plan-facts",
+        "plan-facts",
         {
             "planVersionId": chain.version["id"],
             "contentHash": chain.version["contentHash"],
@@ -183,17 +180,17 @@ def test_send_time_quote_age_rechecked_even_when_notice_itself_is_recent(chain):
 @pytest.mark.parametrize("kind", ["ORDINARY_TECHNICAL", "SEVERE_TECHNICAL"])
 def test_each_risk_blocks_both_ordinary_sides_and_retains_exact_scope(chain, kind):
     raw = chain.plan.model_dump(mode="json")
-    raw["ordinary_rules"][1] = {
+    raw["ordinary_rules"].append({
         **raw["ordinary_rules"][0],
         "side": "SELL",
         "zone": "PRESSURE",
         "rule_id": "pressure-sell",
-    }
+    })
     for branch in raw["risk_branches"]:
         branch["target_core_qty"] = 100
         branch["involves_core"] = False
         branch["target_tactical_qty"] = 0
-    chain.plan = DailyTradePlan.model_validate(raw)
+    chain.plan = UnifiedTradePlan.model_validate(raw)
     chain.activate(version=2, activation_revision=1)
     chain.evaluate(series=chain.series(), official=FRIDAY)
     chain.facts()
@@ -204,8 +201,10 @@ def test_each_risk_blocks_both_ordinary_sides_and_retains_exact_scope(chain, kin
         chain.now = datetime(2026, 9, 22, 16, tzinfo=SH)
         chain.evaluate(series=chain.series(TUESDAY, 3810), official=TUESDAY)
     elif kind == "SEVERE_TECHNICAL":
+        chain.now += timedelta(microseconds=1)
+        chain.now += timedelta(microseconds=1)
         chain.post(
-            "daily-plan-facts",
+            "plan-facts",
             {
                 "planVersionId": chain.version["id"],
                 "contentHash": chain.version["contentHash"],
@@ -225,7 +224,7 @@ def test_each_risk_blocks_both_ordinary_sides_and_retains_exact_scope(chain, kin
             == "CLEAR"
         )
         chain.post(
-            "daily-plan-facts",
+            "plan-facts",
             {
                 "planVersionId": chain.version["id"],
                 "contentHash": chain.version["contentHash"],

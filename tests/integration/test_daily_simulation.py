@@ -23,7 +23,7 @@ from trade_plan_monitor.state.models import (
 
 
 def inventory(chain):
-    return chain.client.get("/api/v1/daily-position-inventory", params={
+    return chain.client.get("/api/v1/simulation-position-inventory", params={
         "symbol": SYMBOL, "asOfTradeDate": str(chain.now.date())}).json()["snapshot"]
 
 
@@ -38,12 +38,12 @@ def test_full_simulation_retry_restart_tplusone_and_no_actual_tables(chain):
     signal = ready.snapshot["signals"][0]
     assert inventory(chain)["totalQty"] == 100  # reminder has no effect
     payload = command(chain, signal)
-    receipt = chain.post("daily-simulated-trades", payload, key="once")
+    receipt = chain.post("simulated-trades", payload, key="once")
     assert receipt["quantity"] == 100
     assert receipt["inventory"]["totalQty"] == 200
     assert receipt["inventory"]["sellableTactical"] == 0
-    assert chain.post("daily-simulated-trades", payload, key="once") == receipt
-    chain.post("daily-simulated-trades", payload, status=409)
+    assert chain.post("simulated-trades", payload, key="once") == receipt
+    chain.post("simulated-trades", payload, status=409)
     with chain.plans._unit_of_work() as work:
         for model in (
             PositionLot,
@@ -71,7 +71,7 @@ def test_invalid_or_partial_quantity_is_zero_mutation(chain, quantity):
     _, ready = ready_chain(chain)
     before = inventory(chain)
     chain.post(
-        "daily-simulated-trades", command(chain, ready.snapshot["signals"][0], quantity), status=422
+        "simulated-trades", command(chain, ready.snapshot["signals"][0], quantity), status=422
     )
     assert inventory(chain) == before
     with chain.plans._unit_of_work() as work:
@@ -89,20 +89,20 @@ def test_missing_current_calendar_blocks_setup_and_sellability(chain):
     with chain.plans._unit_of_work() as work:
         work.daily.session.execute(delete(TradingCalendar))
         work.commit()
-    chain.post("daily-position-confirmations", {"symbol": SYMBOL, "coreQty": 100,
+    chain.post("simulation-position-confirmations", {"symbol": SYMBOL, "coreQty": 100,
         "tacticalQty": 0, "expectedRevision": 0}, status=422)
     assert inventory(chain)["known"] is False
 
 
 def test_aggregate_setup_rejects_whole_quantity_above_transport_safe_integer(chain):
     before = inventory(chain)
-    chain.post("daily-position-confirmations", {"symbol": SYMBOL,
+    chain.post("simulation-position-confirmations", {"symbol": SYMBOL,
         "coreQty": 9_007_199_254_741_000, "tacticalQty": 0,
         "expectedRevision": 0}, status=422)
     assert inventory(chain) == before
     with chain.plans._unit_of_work() as work:
         assert work.daily.list(symbol=SYMBOL, kind="POSITION") == ()
-    chain.post("daily-position-confirmations", {"symbol": SYMBOL,
+    chain.post("simulation-position-confirmations", {"symbol": SYMBOL,
         "coreQty": 9_007_199_254_740_900, "tacticalQty": 9_007_199_254_740_900,
         "expectedRevision": 0}, status=422)
     assert inventory(chain) == before
@@ -126,11 +126,11 @@ def test_preserved_broker_evidence_is_unsupported_not_a_simulation(chain):
             )
         )
         work.commit()
-    view = chain.client.get("/api/v1/daily-plan-runtime/" + SYMBOL)
+    view = chain.client.get("/api/v1/plan-runtime/" + SYMBOL)
     assert view.status_code == 200
     assert view.json()["status"] == "UNSUPPORTED"
     assert view.json()["snapshot"] is None
-    response = chain.post("daily-position-confirmations", {"symbol": SYMBOL,
+    response = chain.post("simulation-position-confirmations", {"symbol": SYMBOL,
         "coreQty": 100, "tacticalQty": 0, "expectedRevision": 0}, status=409)
     assert response["error"]["details"][0]["code"] == "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED"
     assert (
@@ -140,7 +140,7 @@ def test_preserved_broker_evidence_is_unsupported_not_a_simulation(chain):
 
 def test_removed_order_endpoint_and_editor_fields(chain):
     assert chain.client.post("/api/v1/daily-execution-reports", json={}).status_code == 404
-    operations = chain.client.get("/api/v1/daily-plan-editor-schema").json()["operationSchemas"]
+    operations = chain.client.get("/api/v1/plan-editor-schema").json()["operationSchemas"]
     assert set(operations) == {"FACT", "POSITION", "SIMULATION", "REASSESSMENT"}
     assert set(operations["POSITION"]["properties"]) == {
         "symbol",
@@ -154,12 +154,12 @@ def test_new_fact_cannot_reuse_a_stale_ready_head(chain):
     _, ready = ready_chain(chain)
     signal = ready.snapshot["signals"][0]
     chain.app.state.runtime_lifecycle = None  # commit succeeds before any runtime refresh
-    chain.post("daily-plan-facts", {"planVersionId": chain.version["id"],
+    chain.post("plan-facts", {"planVersionId": chain.version["id"],
         "contentHash": chain.version["contentHash"], "factId": "new-invalidation",
         "kind": "SIGNAL_INVALIDATION", "signalId": signal["signal_id"],
         "tradeDate": str(TUESDAY), "expectedRevision": 0,
         "evidence": "Synthetic current technical signal invalidation explicitly verified"})
-    response = chain.post("daily-simulated-trades", command(chain, signal), status=409)
+    response = chain.post("simulated-trades", command(chain, signal), status=409)
     assert response["error"]["details"][0]["code"] == "DAILY_SIMULATION_CURRENT_FACTS_REQUIRED"
     assert inventory(chain)["totalQty"] == 100
 
@@ -175,7 +175,7 @@ def test_atomic_rollback_includes_inventory_consumption_and_receipt(chain, monke
         return original(self, identity, **kwargs)
 
     monkeypatch.setattr(DailyRepository, "save", fail_receipt)
-    chain.post("daily-simulated-trades", command(chain, ready.snapshot["signals"][0]), status=422)
+    chain.post("simulated-trades", command(chain, ready.snapshot["signals"][0]), status=422)
     assert inventory(chain)["totalQty"] == 100
     with chain.plans._unit_of_work() as work:
         assert (
@@ -190,7 +190,7 @@ def test_two_distinct_confirmation_keys_cannot_consume_one_signal(chain):
     payload = command(chain, ready.snapshot["signals"][0])
     # Both requests start with the same current revisions; one atomic winner is allowed.
     def execute(key):
-        return chain.client.post("/api/v1/daily-simulated-trades", json=payload,
+        return chain.client.post("/api/v1/simulated-trades", json=payload,
             headers={"Idempotency-Key": key}).status_code
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -205,7 +205,7 @@ def test_risk_simulation_keeps_tplusone_obligation_then_fulfills_without_revivin
     series, ready = ready_chain(chain)
     chain.simulate(ready.snapshot["signals"][0])
     for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION"):
-        chain.post("daily-plan-facts", {"planVersionId": chain.version["id"],
+        chain.post("plan-facts", {"planVersionId": chain.version["id"],
             "contentHash": chain.version["contentHash"], "factId": kind,
             "kind": kind, "tradeDate": "2026-09-18", "expectedRevision": 0,
             "evidence": "Synthetic complete severe technical evidence explicitly verified"})
@@ -232,10 +232,10 @@ def test_risk_simulation_keeps_tplusone_obligation_then_fulfills_without_revivin
 
 
 def reviewed_ready(chain, *, planned=100, core=100, tactical=0):
-    from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
     raw = chain.plan.model_dump(mode="json")
     raw["ordinary_rules"][0]["quantity"] = planned
-    chain.plan = DailyTradePlan.model_validate(raw)
+    chain.plan = UnifiedTradePlan.model_validate(raw)
     chain.activate(version=2, activation_revision=1, supplement_revision=1 if planned == 100 else 0)
     series = chain.series()
     chain.evaluate(series=series)
@@ -250,7 +250,7 @@ def test_planned200_partial100_is_rejected_with_zero_mutation(chain):
     signal = ready.snapshot["signals"][0]
     assert signal["executable_qty"] == 200
     before = inventory(chain)
-    chain.post("daily-simulated-trades", command(chain, signal, 100), status=422)
+    chain.post("simulated-trades", command(chain, signal, 100), status=422)
     assert inventory(chain) == before
     with chain.plans._unit_of_work() as work:
         assert work.daily.get(signal["signal_id"])["payload"]["simulated_qty"] == 0
@@ -283,9 +283,9 @@ def test_initialization_retry_cannot_overwrite_trades_or_reset_consumption(chain
     chain.simulate(ready.snapshot["signals"][0])
     before = inventory(chain)
     original = {"symbol": SYMBOL, "coreQty": 100, "tacticalQty": 0, "expectedRevision": 0}
-    chain.post("daily-position-confirmations", original)
+    chain.post("simulation-position-confirmations", original)
     assert inventory(chain) == before
-    chain.post("daily-position-confirmations", {**original, "coreQty": 0,
+    chain.post("simulation-position-confirmations", {**original, "coreQty": 0,
         "tacticalQty": 200, "expectedRevision": before["revision"]}, status=409)
     assert inventory(chain) == before
     with chain.plans._unit_of_work() as work:
@@ -298,9 +298,9 @@ def test_initialization_retry_cannot_overwrite_trades_or_reset_consumption(chain
 def test_same_key_changed_body_is_conflict_and_preserves_original_receipt(chain):
     _, ready = ready_chain(chain)
     payload = command(chain, ready.snapshot["signals"][0])
-    original = chain.post("daily-simulated-trades", payload, key="fixed-body")
-    chain.post("daily-simulated-trades", {**payload, "quantity": 200}, key="fixed-body", status=409)
-    assert chain.post("daily-simulated-trades", payload, key="fixed-body") == original
+    original = chain.post("simulated-trades", payload, key="fixed-body")
+    chain.post("simulated-trades", {**payload, "quantity": 200}, key="fixed-body", status=409)
+    assert chain.post("simulated-trades", payload, key="fixed-body") == original
     assert inventory(chain)["totalQty"] == 200
 
 
@@ -315,14 +315,14 @@ def test_old_risk_nonwhole_target_has_typed_history_without_execution_authority(
             lineage=SYMBOL, revision=1, payload_json=json.dumps(value),
             created_at=chain.now.isoformat(), updated_at=chain.now.isoformat()))
         work.commit()
-    response = chain.client.get("/api/v1/daily-plan-runtime/" + SYMBOL)
+    response = chain.client.get("/api/v1/plan-runtime/" + SYMBOL)
     assert response.status_code == 200
     view = response.json()
     assert view["status"] == "UNSUPPORTED"
     assert view["risks"][0]["scopeEvidence"] == value["scope_evidence"]
     assert view["risks"][0]["confirmedTradeDate"] == "2026-09-18"
     assert "targetCoreQty" not in view["risks"][0]
-    chain.post("daily-position-confirmations", {"symbol": SYMBOL, "coreQty": 100,
+    chain.post("simulation-position-confirmations", {"symbol": SYMBOL, "coreQty": 100,
         "tacticalQty": 0, "expectedRevision": 0}, status=409)
 
 
@@ -342,7 +342,7 @@ def test_existing_unpublished_layout_rejects_simulation_before_mutation(chain):
         work.daily.session.execute(text("DROP TABLE daily_plan_record"))
         work.daily.session.execute(text("ALTER TABLE old_daily_layout RENAME TO daily_plan_record"))
         work.commit()
-    response = chain.post("daily-position-confirmations", {"symbol": SYMBOL, "coreQty": 100,
+    response = chain.post("simulation-position-confirmations", {"symbol": SYMBOL, "coreQty": 100,
         "tacticalQty": 0, "expectedRevision": 0}, status=409)
     assert response["error"]["details"][0]["code"] == "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED"
     with chain.plans._unit_of_work() as work:

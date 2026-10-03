@@ -6,17 +6,12 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
-from test_explicit_runtime_production import (
-    NOW as EXPLICIT_NOW,
-)
-from test_explicit_runtime_production import (
-    TARGET,
-    _database,
-    _seed_active,
-    _seed_facts,
-    _three_rule_plan,
-)
 from test_notification_delivery import NOW, _payload, _unit_of_work
+from tests.integration.current_pipeline_fixture import (
+    PIPELINE_NOW,
+    TARGET,
+    current_pipeline_fixture,
+)
 
 from trade_plan_monitor.notifications.channels import (
     ChannelDeliveryResult,
@@ -24,14 +19,14 @@ from trade_plan_monitor.notifications.channels import (
 )
 from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
-from trade_plan_monitor.runtime.explicit_service import ExplicitRuntimeEvaluationService
+from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import DeliveryAttempt, PositionInventoryConfirmation
-from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.state.models import DeliveryAttempt
 
 
 @pytest.fixture
@@ -109,41 +104,72 @@ def test_pending_scan_reaches_later_event_behind_held_events(database_engine):
     assert channel.sent == [UUID(int=1012)]
 
 
-def test_explicit_risk_requires_current_result_and_holdings(tmp_path):
-    engine = create_sqlite_engine(tmp_path / "explicit-risk.db")
-    upgrade_database(engine)
-    plan = _three_rule_plan(overlapping_risk=True)
-    _seed_active(engine, plan)
-    _seed_facts(engine, plan)
-    sessions = create_session_factory(engine)
-    def work():
-        return SqlAlchemyUnitOfWork(sessions, clock=lambda: EXPLICIT_NOW)
+def test_current_risk_reminder_requires_current_evaluation(tmp_path, monkeypatch):
+    async def scenario():
+        engine, work, plan, _, _, controller, pipeline, _ = current_pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=60, current_close_fen=949,
+        )
+        sessions = create_session_factory(engine)
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                due_at=PIPELINE_NOW, bar_end=TARGET,
+            ))
+            with work() as transaction:
+                alerts, total = transaction.alerts.list_events(
+                    symbol=plan.symbol, signal_type=None, acknowledged=None,
+                    start_at=None, end_at=None, offset=0, limit=10,
+                )
+            assert total == 1
+            risk = alerts[0]
+            assert risk.signal_type == "REMINDER"
+            assert risk.alert_kind == "RISK_ALERT"
+            assert risk.quantity is None
+            admission = CurrentDeliveryAdmission(sessions, runtime_generation=uuid4)
+            assert admission(risk, PIPELINE_NOW + timedelta(seconds=1)) is True
+            with sessions.begin() as session:
+                head = session.get(DailyRecord, "evaluation-head-" + plan.symbol)
+                assert head is not None
+                session.delete(head)
+            assert admission(risk, PIPELINE_NOW + timedelta(seconds=3)) is False
+        finally:
+            await controller.aclose()
+            engine.dispose()
 
-    outcome = asyncio.run(ExplicitRuntimeEvaluationService(
-        work, recovery_delivery=True,
-    ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=EXPLICIT_NOW))
-    risk = next(event for event in outcome.committed_events if event.signal_type == "RISK_ALERT")
-    generation = uuid4()
-    admission = CurrentDeliveryAdmission(sessions, runtime_generation=lambda: generation)
-    assert admission(risk, EXPLICIT_NOW + timedelta(seconds=1)) is True
-    with sessions.begin() as session:
-        session.delete(session.get(PositionInventoryConfirmation, plan.symbol))
-    assert admission(risk, EXPLICIT_NOW + timedelta(seconds=3)) is False
-    engine.dispose()
+    asyncio.run(scenario())
 
 
-def test_explicit_buy_releases_only_with_current_result_and_expires_at_90_seconds(tmp_path):
-    engine, plan = _database(tmp_path, "explicit-buy.db")
-    sessions = create_session_factory(engine)
+def test_current_buy_requires_fresh_quote_and_expires_after_five_minutes(
+    tmp_path, monkeypatch,
+):
+    async def scenario():
+        engine, work, plan, _, _, controller, pipeline, _ = current_pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=60, current_close_fen=990,
+        )
+        sessions = create_session_factory(engine)
+        try:
+            await pipeline.refresh_references(TARGET.date())
+            await pipeline.run_deadline(MarketDeadline(
+                kind=DeadlineKind.REALTIME_MINUTE, trade_date=TARGET.date(),
+                due_at=PIPELINE_NOW, bar_end=TARGET,
+            ))
+            with work() as transaction:
+                alerts, total = transaction.alerts.list_events(
+                    symbol=plan.symbol, signal_type="BUY", acknowledged=None,
+                    start_at=None, end_at=None, offset=0, limit=10,
+                )
+            assert total == 1
+            event = alerts[0]
+            admission = CurrentDeliveryAdmission(sessions, runtime_generation=uuid4)
+            assert admission(event, PIPELINE_NOW + timedelta(seconds=89)) is True
+            assert admission(event, PIPELINE_NOW + timedelta(seconds=90)) is True
+            assert admission(event, TARGET + timedelta(minutes=5, seconds=-1)) is True
+            assert admission(event, TARGET + timedelta(minutes=5)) is True
+            assert admission(event, TARGET + timedelta(minutes=5, seconds=1)) is False
+            assert admission(event, event.evaluated_at + timedelta(minutes=5)) is False
+        finally:
+            await controller.aclose()
+            engine.dispose()
 
-    def work():
-        return SqlAlchemyUnitOfWork(sessions, clock=lambda: EXPLICIT_NOW)
-
-    outcome = asyncio.run(ExplicitRuntimeEvaluationService(
-        work, recovery_delivery=True,
-    ).run_intraday_and_publish(plan=plan, target_bucket_end=TARGET, evaluated_at=EXPLICIT_NOW))
-    event = outcome.committed_events[0]
-    admission = CurrentDeliveryAdmission(sessions, runtime_generation=uuid4)
-    assert admission(event, TARGET + timedelta(seconds=89)) is True
-    assert admission(event, TARGET + timedelta(seconds=90)) is False
-    engine.dispose()
+    asyncio.run(scenario())

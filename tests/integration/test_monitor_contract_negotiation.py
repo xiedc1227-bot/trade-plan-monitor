@@ -13,12 +13,9 @@ from trade_plan_monitor.web.app import create_app
 READ_PATHS = (
     "/api/v1/health", "/api/v1/health/symbols/003043.SZ", "/api/v1/dashboard",
     "/api/v1/symbols", "/api/v1/symbols/003043.SZ",
-    "/api/v1/explicit-plan-runtime/003043.SZ",
 )
 WRITE_PATHS = tuple(f"/api/v1/{name}" for name in (
-    "plan-activations", "plan-deactivations", "position-lots", "position-lot-closures",
-    "position-inventory-closures", "position-inventory-confirmations",
-    "manual-event-risk-confirmations", "alert-acknowledgements", "diagnostic-evaluations",
+    "plan-activations", "plan-deactivations", "alert-acknowledgements", "diagnostic-evaluations",
     "system/legacy-plan-invalidation",
 ))
 
@@ -71,6 +68,20 @@ def test_origin_is_still_checked_before_protocol():
     )
     assert response.status_code == 403
     assert response.headers["X-Monitor-Contract-Version"] == "2"
+
+
+@pytest.mark.parametrize("method,path", [
+    ("GET", "/api/v1/explicit-plan-runtime/003043.SZ"),
+    *(("POST", f"/api/v1/{name}") for name in (
+        "position-lots", "position-lot-closures", "position-inventory-closures",
+        "position-inventory-confirmations", "manual-event-risk-confirmations",
+    )),
+])
+@pytest.mark.parametrize("headers", [{}, {"X-Monitor-Contract-Version": "2"}])
+def test_retired_routes_remain_absent_with_either_protocol_header(method, path, headers):
+    response = client_v2().request(method, path, headers=headers,
+        content=b"invalid-json" if method == "POST" else None)
+    assert response.status_code == (405 if path == "/api/v1/position-lots" else 404)
 
 
 def test_v2_requires_explicit_authoritative_read_service():

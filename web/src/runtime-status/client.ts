@@ -13,7 +13,6 @@ export function createRuntimeApi(protocol: MonitorProtocol) {
     getHealth: (signal?: AbortSignal) => read("/api/v1/health", isRuntimeHealth, signal),
     getSymbols: (offset = 0, limit = 100, signal?: AbortSignal) => read(`/api/v1/symbols?offset=${offset}&limit=${limit}`, isRuntimeSymbolCollection, signal),
     getSymbol: (symbol: string, signal?: AbortSignal) => read(`/api/v1/symbols/${encodeURIComponent(symbol)}`, (body) => isRuntimeSymbolDetail(body, symbol), signal),
-    getExplicitRuntime: (symbol: string, signal?: AbortSignal) => read(`/api/v1/explicit-plan-runtime/${encodeURIComponent(symbol)}`, (body) => isRuntimeSymbolDetail(body, symbol, true), signal),
     getSymbolHealth: (symbol: string, signal?: AbortSignal) => read(`/api/v1/health/symbols/${encodeURIComponent(symbol)}`, (body) => isRuntimeSymbolHealth(body, symbol), signal),
   });
 }

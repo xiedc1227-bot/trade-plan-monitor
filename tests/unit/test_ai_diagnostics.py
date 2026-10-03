@@ -8,7 +8,8 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from tests.unit.test_ai_plan_extraction_v4 import _extract, _valid_output
+from tests.unit.test_current_plan_extraction_security import current_output as _valid_output
+from tests.unit.test_current_plan_extraction_security import extract as _extract
 
 import trade_plan_monitor.web.ai_diagnostics as diagnostics
 

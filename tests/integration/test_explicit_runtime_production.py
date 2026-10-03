@@ -50,7 +50,6 @@ from trade_plan_monitor.state.database import (
     upgrade_database,
 )
 from trade_plan_monitor.state.events import MonitorEventType
-from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
 from trade_plan_monitor.state.models import (
     ActivePlan,
     PlanActivationState,
@@ -627,6 +626,8 @@ def test_actual_production_deadline_dispatches_only_qualified_explicit_buy(
     expected_alerts: int,
 ) -> None:
     async def scenario() -> None:
+        from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
         (
             engine,
             work,
@@ -636,7 +637,7 @@ def test_actual_production_deadline_dispatches_only_qualified_explicit_buy(
             controller,
             pipeline,
             published,
-        ) = _pipeline_fixture(
+        ) = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=last_minute_volume,
@@ -667,16 +668,14 @@ def test_actual_production_deadline_dispatches_only_qualified_explicit_buy(
                     params={"symbol": plan.symbol, "signalType": "BUY"},
                 )
             with work() as transaction:
-                inventory = transaction.positions.inventory_snapshot(
-                    plan.symbol,
-                    as_of_trade_date=TARGET.date(),
-                    cutoff=TARGET,
-                )
+                from trade_plan_monitor.state.daily_accounting import DailyAccounting
+                inventory = DailyAccounting(transaction.daily).snapshot(
+                    plan.symbol, TARGET.date())
 
             assert len(result) == 1
             assert response.status_code == 200
             assert response.json()["total"] == expected_alerts
-            assert inventory.total_qty == 100
+            assert inventory["total_qty"] == 100
             assert (
                 MonitorEventType.ALERT_CREATED in {event.event_type for event in published}
             ) is bool(expected_alerts)
@@ -706,6 +705,8 @@ def test_real_offline_scheduler_runs_sell_and_pure_five_minute_risk(
     expected_quantity: int | None,
 ) -> None:
     async def scenario() -> None:
+        from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
         (
             engine,
             work,
@@ -715,12 +716,11 @@ def test_real_offline_scheduler_runs_sell_and_pure_five_minute_risk(
             controller,
             pipeline,
             published,
-        ) = _pipeline_fixture(
+        ) = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=300,
             current_close_fen=close_fen,
-            plan=_three_rule_plan(),
             seed_inventory=seed_inventory,
         )
         try:
@@ -743,16 +743,17 @@ def test_real_offline_scheduler_runs_sell_and_pure_five_minute_risk(
                     offset=0,
                     limit=10,
                 )
-                inventory = transaction.positions.inventory_snapshot(
-                    plan.symbol,
-                    as_of_trade_date=TARGET.date(),
-                    cutoff=TARGET,
-                )
+                from trade_plan_monitor.state.daily_accounting import DailyAccounting
+                inventory = DailyAccounting(transaction.daily).snapshot(
+                    plan.symbol, TARGET.date())
             assert total == (0 if expected_type is None else 1)
             if expected_type is not None:
-                assert alerts[0].signal_type == expected_type
+                assert alerts[0].signal_type == (
+                    "REMINDER" if expected_type == "RISK_ALERT" else expected_type)
+                if expected_type == "RISK_ALERT":
+                    assert alerts[0].alert_kind == "RISK_ALERT"
                 assert alerts[0].quantity == expected_quantity
-            assert inventory.total_qty == (100 if seed_inventory else None)
+            assert inventory["total_qty"] == (100 if seed_inventory else None)
             assert (
                 sum(event.event_type is MonitorEventType.ALERT_CREATED for event in published)
                 == total
@@ -769,6 +770,8 @@ def test_real_offline_scheduler_commits_risk_and_sell_as_independent_intents(
     monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
         (
             engine,
             work,
@@ -778,12 +781,12 @@ def test_real_offline_scheduler_commits_risk_and_sell_as_independent_intents(
             controller,
             pipeline,
             published,
-        ) = _pipeline_fixture(
+        ) = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=300,
             current_close_fen=1080,
-            plan=_three_rule_plan(overlapping_risk=True),
+            overlapping_risk=True,
         )
         try:
             await pipeline.refresh_references(TARGET.date())
@@ -796,20 +799,22 @@ def test_real_offline_scheduler_commits_risk_and_sell_as_independent_intents(
                 )
             )
             cycle = results[0]
-            assert tuple(event.signal_type for event in cycle.committed_events) == (
-                "SELL",
-                "RISK_ALERT",
-            )
+            assert len(cycle.event_ids) == 2
+            with work() as transaction:
+                events, total = transaction.alerts.list_events(symbol=plan.symbol,
+                    signal_type=None, acknowledged=None, start_at=None, end_at=None,
+                    offset=0, limit=10)
+            assert total == 2
+            assert {event.signal_type for event in events} == {"SELL", "REMINDER"}
+            reminder = next(event for event in events if event.signal_type == "REMINDER")
+            assert reminder.alert_kind == "RISK_ALERT"
             assert (
                 sum(event.event_type is MonitorEventType.ALERT_CREATED for event in published) == 2
             )
             with work() as transaction:
-                inventory = transaction.positions.inventory_snapshot(
-                    plan.symbol,
-                    as_of_trade_date=TARGET.date(),
-                    cutoff=TARGET,
-                )
-            assert inventory.total_qty == inventory.sellable_qty == 100
+                from trade_plan_monitor.state.daily_accounting import DailyAccounting
+                inventory = DailyAccounting(transaction.daily).snapshot(plan.symbol, TARGET.date())
+            assert inventory["total_qty"] == inventory["sellable_tactical"] == 100
         finally:
             await controller.aclose()
             engine.dispose()
@@ -822,6 +827,8 @@ def test_real_scheduler_rolls_back_both_intents_when_second_enqueue_fails(
     monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
         (
             engine,
             work,
@@ -831,14 +838,14 @@ def test_real_scheduler_rolls_back_both_intents_when_second_enqueue_fails(
             controller,
             pipeline,
             published,
-        ) = _pipeline_fixture(
+        ) = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=300,
             current_close_fen=1080,
-            plan=_three_rule_plan(overlapping_risk=True),
+            overlapping_risk=True,
         )
-        original_enqueue = AlertOutbox.enqueue_explicit
+        original_enqueue = AlertOutbox.enqueue_daily
         attempted_ids = []
 
         def fail_second(outbox, payload):
@@ -847,7 +854,7 @@ def test_real_scheduler_rolls_back_both_intents_when_second_enqueue_fails(
                 raise RuntimeError("synthetic second enqueue failure")
             return original_enqueue(outbox, payload)
 
-        monkeypatch.setattr(AlertOutbox, "enqueue_explicit", fail_second)
+        monkeypatch.setattr(AlertOutbox, "enqueue_daily", fail_second)
         try:
             await pipeline.refresh_references(TARGET.date())
             deadline = MarketDeadline(
@@ -856,26 +863,14 @@ def test_real_scheduler_rolls_back_both_intents_when_second_enqueue_fails(
                 due_at=PIPELINE_NOW,
                 bar_end=TARGET,
             )
+            with work() as transaction:
+                before_head = transaction.daily.get("evaluation-head-" + plan.symbol)
+                before_signals = transaction.daily.current_signals(symbol=plan.symbol)
             with pytest.raises(RuntimeError, match="second enqueue"):
                 await pipeline.run_deadline(deadline)
             with work() as transaction:
-                assert (
-                    transaction.explicit_rules.get(
-                        plan_hash=plan_sha256(plan),
-                        symbol=plan.symbol,
-                        target_bucket_end=TARGET,
-                        activation_revision=1,
-                    )
-                    is None
-                )
-                assert (
-                    transaction.explicit_rules.states(
-                        plan_hash=plan_sha256(plan),
-                        symbol=plan.symbol,
-                        activation_revision=1,
-                    )
-                    == ()
-                )
+                assert transaction.daily.get("evaluation-head-" + plan.symbol) == before_head
+                assert transaction.daily.current_signals(symbol=plan.symbol) == before_signals
                 alerts, total = transaction.alerts.list_events(
                     symbol=plan.symbol,
                     signal_type=None,
@@ -890,11 +885,16 @@ def test_real_scheduler_rolls_back_both_intents_when_second_enqueue_fails(
                 event.event_type is MonitorEventType.ALERT_CREATED for event in published
             )
 
-            monkeypatch.setattr(AlertOutbox, "enqueue_explicit", original_enqueue)
+            monkeypatch.setattr(AlertOutbox, "enqueue_daily", original_enqueue)
             retried = await pipeline.run_deadline(deadline)
-            assert len(retried[0].committed_events) == 2
-            assert retried[0].committed_events[0].event_id == attempted_ids[0]
-            assert len({event.event_id for event in retried[0].committed_events}) == 2
+            assert len(retried[0].event_ids) == 2
+            assert len(set(retried[0].event_ids)) == 2
+            with work() as transaction:
+                alerts, total = transaction.alerts.list_events(symbol=plan.symbol,
+                    signal_type=None, acknowledged=None, start_at=None, end_at=None,
+                    offset=0, limit=10)
+            assert total == 2
+            assert {event.signal_type for event in alerts} == {"SELL", "REMINDER"}
         finally:
             await controller.aclose()
             engine.dispose()
@@ -981,6 +981,8 @@ def test_actual_deadline_waits_for_completed_bucket_and_restart_deduplicates(
     monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
         (
             engine,
             work,
@@ -990,7 +992,7 @@ def test_actual_deadline_waits_for_completed_bucket_and_restart_deduplicates(
             controller,
             pipeline,
             published,
-        ) = _pipeline_fixture(tmp_path, monkeypatch, current_volume=60)
+        ) = current_pipeline_fixture(tmp_path, monkeypatch, current_volume=60)
         restarted_controller = None
         try:
             await pipeline.refresh_references(TARGET.date())
@@ -1050,14 +1052,15 @@ def test_actual_deadline_waits_for_completed_bucket_and_restart_deduplicates(
                 )
 
             assert len(committed) == 1
-            assert duplicate == ()
+            assert len(duplicate) == 1 and duplicate[0].event_ids == ()
             assert len(after) == 1 and after_total == 1
             assert MonitorEventType.ALERT_CREATED in {event.event_type for event in published}
             assert MonitorEventType.ALERT_CREATED not in {
                 event.event_type for event in restarted_published
             }
             assert calls_after_recovery > calls_after_commit
-            assert len(sdk.calls) == calls_after_recovery
+            assert sdk.calls[calls_after_recovery:].count("rt_min") == 1
+            assert set(sdk.calls[calls_after_recovery:]) == {"trade_cal", "rt_min"}
             assert set(sdk.calls) <= {"trade_cal", "rt_min", "rt_min_daily"}
         finally:
             if restarted_controller is not None:
@@ -1073,22 +1076,26 @@ def test_explicit_decision_rolls_back_when_token_changes_after_result_staging(
     tmp_path: Path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
+        from trade_plan_monitor.state.daily_repository import DailyRepository
+
         (
             engine, _work_factory, _plan_value, _sdk, _build_pipeline,
             controller, pipeline, _published,
-        ) = _pipeline_fixture(tmp_path, monkeypatch, current_volume=60)
-        config = tmp_path / "config-990-60" / "app.yaml"
+        ) = current_pipeline_fixture(tmp_path, monkeypatch, current_volume=60)
+        config = tmp_path / "config-current" / "app.yaml"
         frozen = load_application_config(config).tushare
         pipeline._configuration_current = (
             lambda: load_application_config(config).tushare == frozen
         )
-        original_persist = ExplicitDecisionRepository.persist
+        original_persist = DailyRepository.save
         changed = False
 
         def drift_after_result(self, *args, **kwargs):
             nonlocal changed
             value = original_persist(self, *args, **kwargs)
-            if not changed:
+            if not changed and kwargs.get("kind") == "EVALUATION":
                 changed = True
                 config.write_text(
                     config.read_text(encoding="utf-8").replace(
@@ -1098,9 +1105,14 @@ def test_explicit_decision_rolls_back_when_token_changes_after_result_staging(
                 )
             return value
 
-        monkeypatch.setattr(ExplicitDecisionRepository, "persist", drift_after_result)
+        monkeypatch.setattr(DailyRepository, "save", drift_after_result)
         try:
             await pipeline.refresh_references(TARGET.date())
+            with engine.connect() as connection:
+                before = connection.exec_driver_sql(
+                    "SELECT id, revision, payload_json FROM daily_plan_record "
+                    "WHERE kind IN ('SIGNAL','EVALUATION') ORDER BY id"
+                ).all()
             with pytest.raises(RuntimeError):
                 await pipeline.run_deadline(MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
@@ -1109,8 +1121,9 @@ def test_explicit_decision_rolls_back_when_token_changes_after_result_staging(
             assert changed
             with engine.connect() as connection:
                 assert connection.exec_driver_sql(
-                    "SELECT count(*) FROM explicit_evaluation_ledger"
-                ).scalar_one() == 0
+                    "SELECT id, revision, payload_json FROM daily_plan_record "
+                    "WHERE kind IN ('SIGNAL','EVALUATION') ORDER BY id"
+                ).all() == before
                 assert connection.exec_driver_sql(
                     "SELECT count(*) FROM alert_event"
                 ).scalar_one() == 0
@@ -1125,16 +1138,19 @@ def test_real_monitor_composition_scheduler_dispatches_explicit_buy(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
     async def scenario() -> None:
-        database = tmp_path / "scheduled-explicit.sqlite3"
+        (seed_engine, _work_factory, plan, sdk, _build_pipeline,
+            seed_controller, _seed_pipeline, _published) = current_pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=60)
+        await seed_controller.aclose()
+        seed_engine.dispose()
+        database = tmp_path / "daily.sqlite"
         engine = create_sqlite_engine(database)
-        upgrade_database(engine)
-        plan = _plan()
-        _seed_active(engine, plan)
-        _seed_pipeline_facts(engine, plan)
         initial_now = TARGET - timedelta(minutes=1) + timedelta(seconds=15)
         with create_session_factory(engine).begin() as session:
             session.add(RuntimeLiveness(
@@ -1143,12 +1159,7 @@ def test_real_monitor_composition_scheduler_dispatches_explicit_buy(
             ))
         engine.dispose()
         clock = _SchedulerClock(initial_now)
-        config = tmp_path / "config" / "app.yaml"
-        config.parent.mkdir(parents=True)
-        config.write_text(
-            f"tushare:\n  api_url: {ENDPOINT}\n  token: offline-test-token\n",
-            encoding="utf-8",
-        )
+        config = tmp_path / "config-current" / "app.yaml"
         evidence = create_stock_certification(
             observed_at=initial_now,
             endpoint_url=ENDPOINT,
@@ -1161,7 +1172,6 @@ def test_real_monitor_composition_scheduler_dispatches_explicit_buy(
             tmp_path / "data" / "live-certification" / "tushare-stock-live.json",
             evidence,
         )
-        sdk = _ExplicitPipelineSDK(current_volume=60)
         monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
         monkeypatch.setattr(monitor_composition, "SystemClock", lambda: clock)
         composition = create_monitor_composition(
@@ -1214,14 +1224,17 @@ def test_real_monitor_composition_scheduler_dispatches_explicit_buy(
             ledger_engine = create_sqlite_engine(database)
             try:
                 with ledger_engine.connect() as connection:
-                    target, evaluated_at, revision = connection.exec_driver_sql(
-                        "SELECT target_value, evaluated_at, activation_revision "
-                        "FROM explicit_evaluation_ledger"
+                    raw, = connection.exec_driver_sql(
+                        "SELECT payload_json FROM daily_plan_record "
+                        "WHERE id = 'evaluation-head-003043.SZ'"
                     ).one()
             finally:
                 ledger_engine.dispose()
-            assert target == TARGET.isoformat() and revision == 1
-            assert evaluated_at == (TARGET + timedelta(seconds=12)).isoformat()
+            import json
+            head = json.loads(raw)
+            assert head["minute_target"] == TARGET.isoformat()
+            assert head["activation_revision"] == 1
+            assert head["evaluated_at"] == (TARGET + timedelta(seconds=12)).isoformat()
             assert set(sdk.calls) <= {"trade_cal", "rt_min", "rt_min_daily"}
         finally:
             await composition.stop()
@@ -1236,9 +1249,18 @@ def test_actual_deadline_rejects_ineligible_or_replaced_explicit_plan(
     plan_state: str,
 ) -> None:
     async def scenario() -> None:
-        seeded_plan = _plan(
-            active_date=(date(2026, 9, 11) if plan_state == "expired" else TARGET.date())
+        from tests.integration.current_pipeline_fixture import (
+            current_pipeline_fixture,
+            current_three_rule_plan,
+            replace_current_plan,
         )
+
+        from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+
+        raw = current_three_rule_plan().model_dump(mode="json")
+        if plan_state == "expired":
+            raw["activation"] = {"mode": "TRADING_DAY", "trading_day": "2026-09-11"}
+        seeded_plan = UnifiedTradePlan.model_validate(raw)
         (
             engine,
             work,
@@ -1248,11 +1270,14 @@ def test_actual_deadline_rejects_ineligible_or_replaced_explicit_plan(
             controller,
             pipeline,
             published,
-        ) = _pipeline_fixture(
+        ) = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=60,
             plan=seeded_plan,
+            activation_at=(datetime(2026, 9, 11, 16, tzinfo=SHANGHAI)
+                if plan_state == "expired" else PREPARED_AT),
+            seed_tradability=plan_state != "expired",
         )
         replacement = None
         try:
@@ -1261,7 +1286,7 @@ def test_actual_deadline_rejects_ineligible_or_replaced_explicit_plan(
                     transaction.plans.deactivate(plan.symbol, expected_revision=1)
                     transaction.commit()
             elif plan_state == "rotated":
-                replacement = _rotate_active_plan(engine, plan)
+                replacement = replace_current_plan(tmp_path, at=PREPARED_AT)
 
             await pipeline.refresh_references(TARGET.date())
             result = await pipeline.run_deadline(
@@ -1288,7 +1313,7 @@ def test_actual_deadline_rejects_ineligible_or_replaced_explicit_plan(
             if plan_state == "rotated":
                 assert replacement is not None
                 assert len(result) == 1
-                assert result[0].evaluation_result.plan_hash == plan_sha256(replacement)
+                assert result[0].plan_hash == plan_sha256(replacement)
             else:
                 assert result == ()
                 assert "rt_min" not in sdk.calls

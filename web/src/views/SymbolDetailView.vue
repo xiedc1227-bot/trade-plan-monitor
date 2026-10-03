@@ -6,23 +6,15 @@ import type {
   DataHealthStatus,
   EvidenceFactView,
   MarketIndexBarView,
-  PositionLotPage,
-  PositionPrefillView,
   SymbolDetailResponse,
   SymbolDetailUnavailableResponse,
   SymbolEventView,
 } from "../api/generated";
-import type { ManualEventRiskApi } from "../api/manualEventRisk";
-import type { PositionInventoryApi } from "../api/positions";
 import EpisodeTimeline from "../components/symbol/EpisodeTimeline.vue";
 import MarketIndexChart from "../components/market-index/MarketIndexChart.vue";
 import ReferenceMarketPanel from "../components/market-index/ReferenceMarketPanel.vue";
-import PositionLots from "../components/symbol/PositionLots.vue";
-import PositionInventoryPanel from "../components/symbol/PositionInventoryPanel.vue";
-import ManualEventRiskPanel from "../components/symbol/ManualEventRiskPanel.vue";
 import type { ChartRange } from "../components/symbol/PriceChart.vue";
 import { useChartSeries } from "../composables/useChartSeries";
-import type { PositionOperations } from "../composables/usePositions";
 import { formatDisplayDateTime, formatDisplayFactValue } from "../formatters/dateTime";
 
 interface Props {
@@ -31,16 +23,10 @@ interface Props {
   error?: string | null;
   events: readonly SymbolEventView[];
   loading?: boolean;
-  manualEventRiskApi?: ManualEventRiskApi | null;
   indexBars?: readonly MarketIndexBarView[];
   indexHistoryError?: string | null;
   indexHistoryLoading?: boolean;
   indexHistorySnapshotHash?: string | null;
-  positionAsOfTradeDate?: string | null;
-  positionApi?: PositionInventoryApi | null;
-  positionOperations?: PositionOperations | null;
-  positionPage?: PositionLotPage | null;
-  positionPrefill?: PositionPrefillView | null;
   stale?: boolean;
   unavailable?: SymbolDetailUnavailableResponse | null;
 }
@@ -53,16 +39,10 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   error: null,
   loading: false,
-  manualEventRiskApi: null,
   indexBars: () => [],
   indexHistoryError: null,
   indexHistoryLoading: false,
   indexHistorySnapshotHash: null,
-  positionAsOfTradeDate: null,
-  positionApi: null,
-  positionOperations: null,
-  positionPage: null,
-  positionPrefill: null,
   stale: false,
   unavailable: null,
 });
@@ -371,28 +351,7 @@ function formatHealth(detailValue: SymbolDetailResponse): string {
         </div>
       </section>
 
-      <div id="trade-registration" class="symbol-detail__trade-registration">
-        <PositionLots
-          :symbol="detail.summary.symbol"
-          :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
-          :initial-page="positionPage"
-          :operations="positionOperations"
-          :prefill="positionPrefill"
-          :summary-lots="detail.positionLots ?? []"
-        />
-
-        <PositionInventoryPanel
-          v-if="positionApi !== null"
-          :api="positionApi"
-          :as-of-trade-date="positionAsOfTradeDate ?? detail.summary.observedAt.slice(0, 10)"
-          :symbol="detail.summary.symbol"
-        />
-      </div>
-
-      <ManualEventRiskPanel
-        :api="manualEventRiskApi"
-        :symbol="detail.summary.symbol"
-      />
+      <a href="/plans">查看计划与模拟仓位</a>
 
       <EpisodeTimeline
         :events="events"

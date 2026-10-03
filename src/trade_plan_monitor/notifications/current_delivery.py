@@ -19,17 +19,14 @@ from trade_plan_monitor.domain.plan_models import (
 )
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.notifications.channels import NotificationEvent
-from trade_plan_monitor.notifications.delivery_eligibility import DeliveryEligibilityRepository
 from trade_plan_monitor.notifications.legacy_current_delivery import (
     _active_legacy,
     read_legacy_delivery_facts,
 )
 from trade_plan_monitor.notifications.models import (
-    ExplicitAlertEvent,
     build_alert_payload,
     build_explicit_alert_payload,
 )
-from trade_plan_monitor.notifications.outbox import AlertOutbox
 from trade_plan_monitor.notifications.recovery_eligibility import (
     ActiveExplicitPlan,
     RecoveryBarrierEvidence,
@@ -96,51 +93,8 @@ class CurrentDeliveryAdmission:
                 from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
 
                 return daily_delivery_allowed(session, event, observed)
-            outbox = AlertOutbox(
-                session,
-                clock=lambda: observed,
-                id_factory=lambda: str(event.event_id),
-            )
-            if outbox.get(event.event_id) != event:
-                return False
-            repository = DeliveryEligibilityRepository(session, clock=lambda: observed)
-            receipt = repository.get(event.event_id)
-            if receipt is None:
-                receipt = repository.initialize(event.event_id)
-            if receipt.status is RecoveryDeliveryStatus.SUPPRESS:
-                return False
-            if type(event) is ExplicitAlertEvent and event.signal_type == "RISK_ALERT":
-                return self._explicit_risk(
-                    session,
-                    repository,
-                    receipt.revision,
-                    event,
-                    observed,
-                    generation,
-                )
-            if type(event) is ExplicitAlertEvent:
-                return self._explicit_actionable(
-                    session,
-                    repository,
-                    receipt,
-                    event,
-                    observed,
-                )
-            if type(event) is not ExplicitAlertEvent and event.signal_type in {
-                "RISK_BREACH",
-                "RISK_EXIT_READY",
-                "RISK_EXIT_PENDING_SETTLEMENT",
-            }:
-                return self._legacy_risk(
-                    session,
-                    repository,
-                    receipt.revision,
-                    event,
-                    observed,
-                    generation,
-                )
-            if type(event) is not ExplicitAlertEvent:
-                return self._legacy_actionable(session, repository, receipt, event, observed)
+            # Historical event codecs remain readable, but only the current
+            # condition-plan family may produce a live channel send.
             return False
 
     def _legacy_actionable(self, session, repository, receipt, event, observed) -> bool:

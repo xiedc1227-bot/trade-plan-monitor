@@ -12,6 +12,7 @@ from sqlalchemy.engine import Engine
 from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
 from test_production_certification_gate import _composition
 from test_production_index_daily_permission_maintenance import _one_official_index_day
+from tests.integration.current_activation_fixture import current_mixed_plan, current_sample_plan
 
 from trade_plan_monitor.live_profiles import load_stock_certification
 from trade_plan_monitor.market_index.identity import MarketIndexCode
@@ -30,7 +31,9 @@ from trade_plan_monitor.state.runtime_recovery import ProviderRecoveryRepository
 
 SCOPES = {
     TushareOperation.DAILY_BARS: ("daily", "_maybe_recheck_daily_bars_permission"),
-    TushareOperation.DAILY_LIMITS: ("stk_limit", "_maybe_recheck_daily_limits_permission"),
+    TushareOperation.CURRENT_DAY_MINUTES: (
+        "rt_min_daily", "_maybe_recheck_current_day_minutes_permission",
+    ),
     TushareOperation.INDEX_DAILY: ("index_daily", "_maybe_recheck_index_daily_permission"),
     TushareOperation.INDEX_REALTIME_MINUTES: (
         "rt_idx_min_daily", "_maybe_recheck_realtime_index_permission",
@@ -42,6 +45,7 @@ SCOPES = {
 async def boundary_case(tmp_path, monkeypatch, scope):
     composition, sdk, _ = _composition(
         tmp_path, monkeypatch, active_plan=True, include_index=True, persisted_calendar=True,
+        plan=current_mixed_plan(),
     )
     try:
         await composition.start()
@@ -76,6 +80,47 @@ def persisted_rows(env):
         return repo.load()
     finally:
         engine.dispose()
+
+
+@pytest.mark.parametrize("daily_rule", [False, True])
+def test_current_plan_never_opens_retired_daily_limits_sdk_boundary(
+    tmp_path, monkeypatch, daily_rule,
+):
+    async def scenario():
+        plan = current_mixed_plan() if daily_rule else current_sample_plan()
+        composition, sdk, _ = _composition(
+            tmp_path, monkeypatch, active_plan=True, include_index=True,
+            persisted_calendar=True, plan=plan,
+        )
+        try:
+            await composition.start()
+            runtime = composition._runtime
+            pipeline = runtime._probe_capabilities.__self__._pipeline
+            control = runtime._request_controller
+            _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
+            operation = TushareOperation.DAILY_LIMITS
+            await _block(control, operation)
+            runtime._clock.current += timedelta(seconds=301)
+            raw = control.raw_permission_retry_at(operation)
+            before = tuple(sdk.calls), pipeline._permission_rotation_state
+
+            def forbidden(*_args, **_kwargs):
+                pytest.fail("retired DAILY_LIMITS reached an SDK or reservation boundary")
+
+            monkeypatch.setattr(sdk, "_limits", forbidden)
+            monkeypatch.setattr(pipeline, "_permission_probe_reservation_callback", forbidden)
+            assert not any(candidate.operation is operation
+                for candidate in pipeline.permission_probe_candidates())
+            assert await pipeline._maybe_recheck_daily_limits_permission() is (
+                PermissionMaintenanceResult.DEFERRED
+            )
+            assert control.raw_permission_retry_at(operation) == raw
+            assert control.is_permission_blocked(operation) and control.active_count == 0
+            assert (tuple(sdk.calls), pipeline._permission_rotation_state) == before
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("scope", SCOPES)
@@ -312,7 +357,9 @@ def test_final_authority_io_rechecks_memory_fences_before_sdk(tmp_path, monkeypa
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("scope", [TushareOperation.DAILY_BARS, TushareOperation.DAILY_LIMITS])
+@pytest.mark.parametrize(
+    "scope", [TushareOperation.DAILY_BARS, TushareOperation.CURRENT_DAY_MINUTES]
+)
 @pytest.mark.parametrize("semantic,offset", [(False, 0), (False, 1), (True, 1), (False, -604801)])
 def test_stock_final_time_preserves_legacy_and_semantic_rules(
     tmp_path, monkeypatch, scope, semantic, offset,

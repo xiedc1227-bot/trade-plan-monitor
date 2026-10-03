@@ -1,12 +1,10 @@
 import { createPinia, setActivePinia } from "pinia";
-import { flushPromises, mount } from "@vue/test-utils";
+import { mount } from "@vue/test-utils";
 import { defineComponent } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import App from "../../src/runtime-status/App.vue";
 import DashboardView from "../../src/runtime-status/DashboardView.vue";
 import StatusBoard from "../../src/runtime-status/StatusBoard.vue";
-import PlanInventoryPanel from "../../src/components/plans/PlanInventoryPanel.vue";
 import { createRuntimeApi } from "../../src/runtime-status/client";
 import { runtimeContextKey } from "../../src/runtime-status/context";
 import { createMonitorProtocol } from "../../src/runtime-status/protocol";
@@ -75,33 +73,4 @@ describe("runtime status UI", () => {
     expect(wrapper.text()).toContain("传输心跳不能恢复"); wrapper.unmount();
   });
 
-  it("root injection guards a command route and owns no v1 stream", async () => {
-    const requests: Request[] = [];
-    const rawFetch: typeof fetch = vi.fn(async (input, init) => {
-      const request = new Request(input, init); requests.push(request);
-      const path = new URL(request.url).pathname;
-      const body = path === "/api/v1/dashboard" ? emptyDashboard() : path === "/api/v1/health" ? { status: "RUNNING" } : {
-        asOfTradeDate: "2026-09-14", confirmationId: null, confirmedAt: null, cutoff: "2026-09-14T10:10:15.000000+08:00",
-        includedLotIds: [], inventoryRevision: 0, missingReasons: ["POSITION_UNKNOWN"], openingBalances: [],
-        sellableQuantity: null, status: "UNKNOWN", symbol: "003043.SZ", totalQuantity: null,
-      };
-      return new Response(JSON.stringify(body), { headers: path === "/api/v1/dashboard" ? { "X-Monitor-Contract-Version": "2" } : {} });
-    });
-    const route = defineComponent({ components: { PlanInventoryPanel }, template: '<div><PlanInventoryPanel symbol="003043.SZ" /></div>' });
-    const router = await routerFor(route); const socket = new EventTarget();
-    Object.assign(socket, { close: vi.fn(), readyState: 0 });
-    const sockets = vi.fn(() => socket as WebSocket);
-    const wrapper = mount(App, { props: { fetchImplementation: rawFetch, createSocket: sockets }, global: { plugins: [createPinia(), router] } });
-    await flushPromises();
-    await wrapper.get('input[type="date"]').setValue("2026-09-14"); await flushPromises();
-    const form = wrapper.get("form"); await form.findAll("input")[0]!.setValue("100"); await form.findAll("input")[1]!.setValue("100");
-    await form.get('input[type="checkbox"]').setValue(true); await form.trigger("submit"); await flushPromises();
-    expect(requests.filter(request => request.method === "POST")).toHaveLength(0);
-    expect(requests.filter(request => new URL(request.url).pathname === "/api/v1/health")).toHaveLength(1);
-    expect(wrapper.text()).toContain("应用版本已变化");
-    expect(sockets).toHaveBeenCalledTimes(1);
-    expect(sockets.mock.calls[0]).toEqual([expect.stringContaining("monitorContractVersion=2")]);
-    expect(requests.filter(request => new URL(request.url).pathname === "/api/v1/dashboard")).toHaveLength(1);
-    wrapper.unmount();
-  });
 });

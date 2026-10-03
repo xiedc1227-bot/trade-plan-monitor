@@ -227,7 +227,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       "validationIssues",
       "warnings",
     ]) ||
-    value.dailyMapping != null ||
+    !(value.dailyMapping == null || (isRecord(value.dailyMapping) && value.dailyMapping.mapping_version === "daily-mapping-v1" && Array.isArray(value.dailyMapping.clauses) && Array.isArray(value.dailyMapping.bindings) && Array.isArray(value.dailyMapping.supplements))) ||
     !isUuid(value.id) ||
     !isUuid(value.providerId) ||
     typeof value.status !== "string" ||
@@ -254,7 +254,9 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       isBoundedToken(value.promptVersion, 64) &&
       isBoundedText(value.draftPlanJson, 4 * 1024 * 1024) &&
       Array.isArray(value.evidence) &&
-      (["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"].includes(value.promptVersion)
+      (value.promptVersion === "plan-extract-v8"
+        ? value.evidence.length === 0 && isRecord(value.dailyMapping) && value.mapping == null
+        : ["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"].includes(value.promptVersion)
         ? value.evidence.length === 0 && isExtractionMapping(value.mapping)
         : value.evidence.length > 0 && value.mapping == null) &&
       value.startedAt !== null &&

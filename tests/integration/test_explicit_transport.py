@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
+from tests.integration.current_pipeline_fixture import current_three_rule_plan
 
 from trade_plan_monitor.decision.explicit_rules import (
     ExplicitInventorySnapshot,
@@ -25,6 +26,7 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
+from trade_plan_monitor.state.models import PositionLot
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.alert_service import PersistentAlertOperationService
 from trade_plan_monitor.web.app import create_app
@@ -141,8 +143,8 @@ def _work(engine, *, now: datetime = NOW):
     return SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: now)
 
 
-def test_plan_capability_reports_public_r12_activation() -> None:
-    plan_json = dump_plan_json(_plan())
+def test_plan_capability_reports_current_condition_activation() -> None:
+    plan_json = dump_plan_json(current_three_rule_plan())
     with TestClient(_app(plan_service=_RejectPlanService()), base_url=BASE_URL) as client:
         capability = client.get("/api/v1/plan-capabilities")
         blocked = client.post(
@@ -158,7 +160,7 @@ def test_plan_capability_reports_public_r12_activation() -> None:
             },
         )
         partial = json.loads(plan_json)
-        partial["rules"][0]["repeat_policy"] = None
+        partial["ordinary_rules"][0]["confirmation"] = None
         invalid = client.post(
             "/api/v1/plan-drafts",
             headers={"Idempotency-Key": "r09-v3-partial"},
@@ -172,9 +174,9 @@ def test_plan_capability_reports_public_r12_activation() -> None:
 
     assert capability.status_code == 200
     assert capability.json() == {
-        "schemaVersion": 3,
-        "executionMode": "EXPLICIT_RULES",
-        "executionVersion": "explicit-rules-v1",
+        "schemaVersion": 5,
+        "executionMode": "CONDITION_PLAN",
+        "executionVersion": "condition-plan-v1",
         "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
         "publicActivationAvailable": True,
         "isolatedTrustedReviewOnly": False,
@@ -212,7 +214,7 @@ def test_authoritative_inventory_http_distinguishes_unknown_and_confirmed_zero(
                 "/api/v1/position-inventory",
                 params={"symbol": "003043.SZ", "asOfTradeDate": "2026-09-14"},
             )
-            confirmed = client.post(
+            removed_write = client.post(
                 "/api/v1/position-inventory-confirmations",
                 headers={"Idempotency-Key": "r09-confirm-zero"},
                 json={
@@ -229,7 +231,20 @@ def test_authoritative_inventory_http_distinguishes_unknown_and_confirmed_zero(
         assert unknown.status_code == 200
         assert unknown.json()["status"] == "UNKNOWN"
         assert unknown.json()["totalQuantity"] is None
-        assert confirmed.status_code == 200, confirmed.text
+        assert removed_write.status_code == 404
+        with _work(engine, now=TARGET - timedelta(minutes=1)) as work:
+            work.positions.confirm_inventory(
+                symbol="003043.SZ", as_of_trade_date=TARGET.date(),
+                total_quantity=0, sellable_quantity=0, included_lot_ids=(),
+                complete_registration=True, expected_revision=0,
+            )
+            work.commit()
+        with TestClient(_app(position_service=service), base_url=BASE_URL) as client:
+            confirmed = client.get(
+                "/api/v1/position-inventory",
+                params={"symbol": "003043.SZ", "asOfTradeDate": "2026-09-14"},
+            )
+        assert confirmed.status_code == 200
         assert confirmed.json()["status"] == "KNOWN"
         assert confirmed.json()["totalQuantity"] == 0
         assert confirmed.json()["inventoryRevision"] == 1
@@ -359,7 +374,7 @@ def test_explicit_sell_and_risk_alerts_keep_type_quantity_and_rendering_through_
         engine.dispose()
 
 
-def test_inventory_closure_command_debits_opening_balance_without_active_plan(
+def test_removed_inventory_closure_keeps_historical_opening_balance_read_only(
     tmp_path: Path,
 ) -> None:
     engine = create_sqlite_engine(tmp_path / "opening-closure-http.sqlite3")
@@ -417,26 +432,24 @@ def test_inventory_closure_command_debits_opening_balance_without_active_plan(
                 },
             )
 
-        assert closed.status_code == 200, closed.text
-        assert replay.json() == closed.json()
-        assert closed.json() == {
-            "sourceType": "OPENING_BALANCE",
-            "sourceId": opening_id,
-            "symbol": "003043.SZ",
-            "appliedQuantity": 100,
-            "tradeDate": TARGET.date().isoformat(),
-            "beforeRemainingQuantity": 100,
-            "afterRemainingQuantity": 0,
-            "revision": 1,
-        }
+        assert closed.status_code == 404
+        assert replay.status_code == 404
         assert current.json()["status"] == "KNOWN"
-        assert current.json()["totalQuantity"] == 0
-        assert current.json()["sellableQuantity"] == 0
+        assert current.json()["totalQuantity"] == 100
+        assert current.json()["sellableQuantity"] == 100
+        with _work(engine) as work:
+            snapshot = work.positions.inventory_snapshot(
+                "003043.SZ", as_of_trade_date=TARGET.date(), cutoff=NOW,
+            )
+        assert snapshot.opening_balances[0].id == opening_id
+        assert snapshot.opening_balances[0].remaining_qty == 100
     finally:
         engine.dispose()
 
 
-def test_inventory_closure_command_debits_registered_core_lot(tmp_path: Path) -> None:
+def test_removed_inventory_closure_keeps_historical_core_lot_read_only(
+    tmp_path: Path,
+) -> None:
     engine = create_sqlite_engine(tmp_path / "lot-closure-http.sqlite3")
     upgrade_database(engine)
     try:
@@ -499,11 +512,16 @@ def test_inventory_closure_command_debits_registered_core_lot(tmp_path: Path) ->
                 },
             )
 
-        assert closed.status_code == 200, closed.text
-        assert closed.json()["sourceType"] == "LOT"
-        assert closed.json()["sourceId"] == lot.id
-        assert closed.json()["afterRemainingQuantity"] == 0
+        assert closed.status_code == 404
         assert current.json()["status"] == "KNOWN"
-        assert current.json()["totalQuantity"] == 0
+        assert current.json()["totalQuantity"] == 100
+        with _work(engine) as work:
+            snapshot = work.positions.inventory_snapshot(
+                "003043.SZ", as_of_trade_date=TARGET.date(), cutoff=NOW,
+            )
+            retained_lot = work.daily.session.get(PositionLot, lot.id)
+            assert retained_lot is not None
+            assert retained_lot.remaining_qty == 100
+        assert snapshot.included_lot_ids == (lot.id,)
     finally:
         engine.dispose()

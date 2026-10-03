@@ -3531,7 +3531,8 @@ def _plan_version_details_record(
     provenance: PlanReviewProvenance,
     extraction: StoredPlanExtractionReview | None,
 ) -> PlanVersionDetailsRecord:
-    if json.loads(version.payload_json).get("schema_version") == 4:
+    schema = json.loads(version.payload_json).get("schema_version")
+    if schema == 5 or (schema == 4 and provenance.mapping_json is not None):
         from trade_plan_monitor.state.daily_review_store import daily_version_details
 
         return daily_version_details(version, source, review, provenance)

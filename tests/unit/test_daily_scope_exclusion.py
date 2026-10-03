@@ -72,3 +72,49 @@ def test_excluded_fact_kind_cannot_enter_nested_conditions(location, kind):
         rule[location] = nested
     with pytest.raises(ValidationError):
         DailyTradePlan.model_validate(raw)
+
+
+@pytest.mark.parametrize(
+    "kind", ["TRADABILITY", "FULL_SESSION_SUSPENSION", "INDEPENDENT_EVENT", "SIGNAL_INVALIDATION"]
+)
+def test_negative_control_fact_rejected_at_api_and_storage(kind):
+    payload = {
+        "plan_version_id": "00000000-0000-4000-8000-000000000001",
+        "content_hash": "a" * 64,
+        "kind": kind,
+        "trade_date": "2026-09-22",
+        "signal_id": "previous-signal",
+        "evidence": "Synthetic verified technical assertion for this test",
+        "satisfied": False,
+    }
+    api = {**payload, "fact_id": "negative-control", "expected_revision": 0}
+    state = {
+        **payload,
+        "verified": True,
+        "verified_at": "2026-09-22T10:00:00+08:00",
+        "available_at": "2026-09-22T10:00:00+08:00",
+        "official_evidence": None,
+    }
+    for model, raw in ((DailyFactCommand, api), (DailyFactState, state)):
+        with pytest.raises(
+            ValidationError, match="negative assertions apply only to technical condition facts"
+        ):
+            model.model_validate(raw)
+
+
+def test_old_fact_defaults_true_and_explicit_negative_predicate_remains_false():
+    raw = {
+        "plan_version_id": "00000000-0000-4000-8000-000000000001",
+        "content_hash": "a" * 64,
+        "kind": "TECHNICAL",
+        "trade_date": "2026-09-22",
+        "signal_id": None,
+        "evidence": "Synthetic verified technical assertion for this test",
+        "verified": True,
+        "verified_at": "2026-09-22T10:00:00+08:00",
+        "available_at": "2026-09-22T10:00:00+08:00",
+        "official_evidence": None,
+    }
+    assert DailyFactState.model_validate(raw).satisfied is True
+    assert "satisfied" not in raw  # Reading historical bytes never mutates them.
+    assert DailyFactState.model_validate({**raw, "satisfied": False}).satisfied is False

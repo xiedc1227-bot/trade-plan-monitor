@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timedelta
-from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,18 +21,11 @@ from scripts.bounded_live_acceptance import (
     _deactivate_isolated_plan,
     _guarded_market_factory,
     _recover_activated_symbol,
-    _serve,
+    _serve_offline,
     approved_sources,
     legacy_diagnostic_assets,
 )
-from tests.integration.test_explicit_plan_review_api import (
-    _SOURCE as SYNTHETIC_SOURCE,
-)
-from tests.integration.test_explicit_plan_review_api import (
-    _confirmation_resolutions,
-    _draft_payload,
-    _mapping,
-)
+from tests.integration.test_current_plan_api import post, review_payload
 from tests.integration.test_live_pipeline_acceptance import (
     ENDPOINT,
     ControlledClock,
@@ -44,25 +36,18 @@ from tests.integration.test_live_pipeline_acceptance import (
     _write_configuration_and_evidence,
 )
 from tests.integration.test_source_treatment_review_api import (
-    FIXTURE as LITERAL_FIXTURE,
-)
-from tests.integration.test_source_treatment_review_api import (
     SOURCE as LITERAL_SOURCE,
 )
 from tests.integration.test_source_treatment_review_api import (
-    _get_path,
-    _literal_mapping,
+    assert_semantic_review,
+    literal_draft,
+    literal_mapping,
+    register,
+    save,
 )
-from tests.unit.test_ai_plan_extraction_v4 import _partial_draft
 
-from trade_plan_monitor.ai.models import (
-    ExplicitPlanDraft,
-    PlanExtractionResult,
-    PlanExtractionStatus,
-)
-from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json, server_source_clauses
+from trade_plan_monitor.ai.daily_review import daily_source_clauses
 from trade_plan_monitor.config import load_application_config
-from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.live_profiles import create_stock_certification, write_live_certification
 from trade_plan_monitor.market_data.sessions import SourceTimeLabel, session_for_minute_end
 from trade_plan_monitor.market_index.identity import MarketIndexCode
@@ -284,7 +269,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
         + "  additional_models:\n"
         + "    - display_name: DeepSeek Pro\n"
         + "      model: deepseek-v4-pro\n"
-        + "  prompt_version: plan-extract-v4\n"
+        + "  prompt_version: plan-extract-v8\n"
         + "  api_key: offline-test-key\n",
         encoding="utf-8",
     )
@@ -354,7 +339,9 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
         monitor_composition,
         "create_live_tushare_request_controller",
         lambda *, clock, require_repository_binding=False: real_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
             require_repository_binding=require_repository_binding,
         ),
     )
@@ -369,25 +356,12 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
         sent.append(case_id)
         request_timeouts.append(dict(request.extensions["timeout"]))
         source = sources[case_id][0]
-        if r17_full_window and case_id == "LITERAL":
-            partial = ExplicitPlanDraft.model_validate_json(
-                json.dumps(_draft_payload(complete=False))
-            )
-            literal_mapping = _literal_mapping(partial)
-            draft_payload = partial.model_dump(mode="json")
-            clauses = literal_mapping.source_clauses
-            bindings = literal_mapping.field_bindings
-        else:
-            draft_payload = _partial_draft()
-            clauses = server_source_clauses(source)
-            bindings = ()
+        draft = literal_draft(complete=False)
+        # Provider candidates never claim manually reviewed supplements or policy.
         content = {
-            "draft": draft_payload,
-            "mapping_version": "plan-mapping-v1",
-            "source_clauses": [clause.model_dump(mode="json") for clause in clauses],
-            "field_bindings": [binding.model_dump(mode="json") for binding in bindings],
-            "assumptions": [],
-            "warnings": [],
+            "draft": draft.model_dump(mode="json"),
+            "bindings": [],
+            "clauses": [c.model_dump(mode="json") for c in daily_source_clauses(source)],
         }
         return httpx.Response(
             200,
@@ -494,98 +468,21 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 2026, 9, scenario_day, scenario_hour, start_minute + 3, 30, tzinfo=SHANGHAI
             )
 
-            # Explicitly synthetic, numeric-equivalent review. The three fixed AI
-            # extractions above remain separate and are never passed off as this draft.
-            draft_data = _draft_payload()
-            if r17_full_window:
-                draft_data["version"] = 2
-                draft_data["activation"] = {
-                    "mode": "TRADING_DAY",
-                    "trading_day": "2026-09-14",
-                }
-            draft = ExplicitPlanDraft.model_validate_json(json.dumps(draft_data))
-            review_source = LITERAL_SOURCE if r17_full_window else SYNTHETIC_SOURCE
-            review_mapping = (
-                _literal_mapping(draft, supplemented=True) if r17_full_window else _mapping(draft)
+            # Review a separate source-bound candidate through the current human
+            # supplement API; provider outputs above never receive that authority.
+            draft = literal_draft(complete=True)
+            mapping = literal_mapping(draft)
+            assert LITERAL_SOURCE == approved_sources()["LITERAL"][0]
+            register(client, draft, mapping)
+            detail = save(client, draft, mapping)
+            assert_semantic_review(detail)
+            reviewed = post(client, "plan-review-confirmations", review_payload(detail))
+            activation = post(
+                client,
+                "plan-activations",
+                review_payload(detail, reviewId=reviewed["reviewId"], reviewRevision=1),
             )
-            if r17_full_window:
-                assert review_source == approved_sources()["LITERAL"][0]
-                assert {item.path: item.value for item in review_mapping.user_supplements}[
-                    "activation.trading_day"
-                ] == "2026-09-14"
-                for path, expected in LITERAL_FIXTURE["independentExpectedValues"].items():
-                    if expected is not None:
-                        assert _get_path(draft_data, path) == expected, path
-            extraction_id = uuid4()
-            extraction = PlanExtractionResult(
-                request_id=extraction_id,
-                provider_id=uuid4(),
-                model="offline-simulated-review",
-                prompt_version="plan-extract-v4",
-                source_text_sha256=sha256(review_source.encode()).hexdigest(),
-                draft=draft,
-                mapping=review_mapping,
-                usage=None,
-                status=PlanExtractionStatus.SUCCEEDED,
-            )
-            client.portal.call(plans.record_plan_extraction, extraction)
-            saved = client.post(
-                "/api/v1/plan-drafts",
-                headers={"Idempotency-Key": "offline-save"},
-                json={
-                    "extractionId": str(extraction_id),
-                    "planJson": dump_explicit_plan_draft_json(draft),
-                    "sourceText": review_source,
-                    "expectedRevision": 0,
-                },
-            )
-            assert saved.status_code == 200, saved.text
-            detail = saved.json()
-            resolutions = _confirmation_resolutions(detail)
-            if r17_full_window:
-                supplements = {
-                    item["path"]: item["supplementId"]
-                    for item in detail["mapping"]["userSupplements"]
-                }
-                resolutions = []
-                for issue in detail["requiredReviewIssues"]:
-                    kind = {
-                        "SOURCE_MAPPING_REVIEW_REQUIRED": "CONFIRM_MAPPING",
-                        "SOURCE_TREATMENT_REVIEW_REQUIRED": "CONFIRM_SOURCE_TREATMENT",
-                        "USER_SUPPLEMENT_REVIEW_REQUIRED": "CONFIRM_POLICY",
-                    }.get(issue["code"])
-                    if kind is None:
-                        continue
-                    item = {"issueId": issue["issueId"], "resolution": kind}
-                    if kind in {"CONFIRM_MAPPING", "CONFIRM_SOURCE_TREATMENT"}:
-                        item["bindingPath"] = issue["bindingPath"]
-                    else:
-                        item["supplementId"] = supplements[issue["path"]]
-                    resolutions.append(item)
-            reviewed = client.post(
-                "/api/v1/plan-review-confirmations",
-                headers={"Idempotency-Key": "offline-review"},
-                json={
-                    "planVersionId": detail["id"],
-                    "contentHash": detail["contentHash"],
-                    "sourceHash": detail["sourceHash"],
-                    "reviewEvidenceHash": detail["reviewEvidenceHash"],
-                    "expectedRevision": 0,
-                    "resolutions": resolutions,
-                },
-            )
-            assert reviewed.status_code == 200, reviewed.text
-            activation = client.post(
-                "/api/v1/plan-activations",
-                headers={"Idempotency-Key": "offline-activate"},
-                json={
-                    "planVersionId": detail["id"],
-                    "reviewId": reviewed.json()["reviewId"],
-                    "contentHash": detail["contentHash"],
-                    "expectedRevision": 0,
-                },
-            )
-            assert activation.status_code == 200, activation.text
+            assert activation["active"] is True
             recovery = client.portal.call(_recover_activated_symbol, runtime, clock.now().date())
             assert recovery["mode"] == "TEST_TRIGGERED_PRODUCTION_RECOVERY"
             # Afternoon recovery spans real sessions; lunch minutes are excluded.
@@ -653,18 +550,15 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
             plan = draft.to_executable()
             assert plan is not None
             with pipeline._work() as work:
-                for minute in (40, 45) if r17_full_window else (20, 25):
-                    assert (
-                        work.explicit_rules.get(
-                            plan_hash=plan_sha256(plan),
-                            symbol="003043.SZ",
-                            target_bucket_end=datetime(
-                                2026, 9, scenario_day, scenario_hour, minute, tzinfo=SHANGHAI
-                            ),
-                            activation_revision=1,
-                        )
-                        is not None
-                    )
+                evaluations = work.daily.list(symbol="003043.SZ", kind="EVALUATION")
+                evaluated_minutes = {
+                    datetime.fromisoformat(row["payload"]["evaluated_at"]).minute
+                    for row in evaluations
+                }
+                assert set((40, 45) if r17_full_window else (20, 25)) <= evaluated_minutes
+                assert all(
+                    row["payload"]["content_hash"] == detail["contentHash"] for row in evaluations
+                )
             assert all(value == 15 for value in configured_timeouts)
             assert len(created_sdks) == 2
             assert sent == list(sources)
@@ -704,7 +598,7 @@ def test_launcher_denial_exits_with_sanitized_audit_and_restores_factory(
     )
     sources = approved_sources()
     monkeypatch.setattr(launcher, "_ROOT", tmp_path)
-    monkeypatch.setattr(launcher, "approved_sources", lambda: sources)
+    monkeypatch.setattr(launcher, "approved_sources", lambda **_: sources)
     monkeypatch.setattr(monitor_composition, "SystemClock", lambda: clock)
     created: list[QuerySDK] = []
 
@@ -746,7 +640,16 @@ def test_launcher_denial_exits_with_sanitized_audit_and_restores_factory(
         # The cleanup deadline is exhausted by the next clock observation.
         ticks = iter(range(0, 10_000, 20))
         monkeypatch.setattr(launcher, "monotonic", lambda: next(ticks))
-    assert asyncio.run(_serve("r14-20260914-a")) == 1
+    assert (
+        asyncio.run(
+            _serve_offline(
+                "r14-20260914-a",
+                market_client_factory=original_factory,
+                ai_inner_transport=httpx.MockTransport(lambda _: httpx.Response(500)),
+            )
+        )
+        == 1
+    )
     audit = json.loads(
         (tmp_path / "data/r14-acceptance/r14-20260914-a/audit.json").read_text("utf-8")
     )
@@ -781,7 +684,7 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
         config.read_text("utf-8")
         + "ai:\n  profile: DEEPSEEK\n  model: deepseek-flash\n"
         + "  additional_models:\n    - display_name: DeepSeek Pro\n"
-        + "      model: deepseek-v4-pro\n  prompt_version: plan-extract-v4\n"
+        + "      model: deepseek-v4-pro\n  prompt_version: plan-extract-v8\n"
         + "  api_key: offline-test-key\n",
         encoding="utf-8",
     )
@@ -829,7 +732,9 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
         monitor_composition,
         "create_live_tushare_request_controller",
         lambda *, clock, require_repository_binding=False: real_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
             require_repository_binding=require_repository_binding,
         ),
     )

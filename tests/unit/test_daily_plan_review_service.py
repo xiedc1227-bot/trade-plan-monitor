@@ -5,11 +5,12 @@ from datetime import datetime
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from test_daily_plan import synthetic_plan_payload
 from test_daily_review import reviewed_mapping
+from test_unified_plan_domain import unified_payload as synthetic_plan_payload
 
-from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
-from trade_plan_monitor.domain.daily_plan_validation import DailyPlanDraft, daily_draft_json
+from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan as DailyTradePlan
+from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft as DailyPlanDraft
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 from trade_plan_monitor.web.routers.daily_plans import DailySupplementCommand
 from trade_plan_monitor.web.routers.plans import (

@@ -3,7 +3,7 @@ import type {
   AlertAcknowledgementCommand,
   AlertPage,
 } from "../api/generated";
-import type { PublicAlertSignalType, PublicAlertView } from "../api/alerts";
+import { matchesAlertSignalFilter, type PublicAlertSignalType, type PublicAlertView } from "../api/alerts";
 
 export interface AlertQuery {
   acknowledged: boolean | null;
@@ -503,7 +503,7 @@ function isValidPage(candidate: AlertPage, expected: AlertQuery): boolean {
       eventIds.has(item.eventId) ||
       sequences.has(item.sequence) ||
       (expected.symbol !== null && item.symbol !== expected.symbol) ||
-      (expected.signalType !== null && item.signalType !== expected.signalType) ||
+      !matchesAlertSignalFilter(item, expected.signalType) ||
       (expected.acknowledged !== null && acknowledged !== expected.acknowledged) ||
       (expected.startAt !== null && item.createdAt < expected.startAt) ||
       (expected.endAt !== null && item.createdAt > expected.endAt) ||

@@ -50,7 +50,6 @@ from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import (
     AShareSymbol,
     ExecutableTradePlan,
-    ExplicitTradePlan,
 )
 from trade_plan_monitor.domain.plan_validation import DraftReviewIssue, ValidationIssue
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
@@ -132,11 +131,11 @@ class PlanDocumentFormat(StrEnum):
 
 
 class ExplicitPlanCapabilityView(ApiValue):
-    """Backend-owned public Schema-v3 capability state."""
+    """Backend-owned capability for the single current plan workflow."""
 
-    schema_version: Literal[3] = 3
-    execution_mode: Literal["EXPLICIT_RULES"] = "EXPLICIT_RULES"
-    execution_version: Literal["explicit-rules-v1"] = "explicit-rules-v1"
+    schema_version: Literal[5] = 5
+    execution_mode: Literal["CONDITION_PLAN"] = "CONDITION_PLAN"
+    execution_version: Literal["condition-plan-v1"] = "condition-plan-v1"
     supported_actions: tuple[Literal["BUY", "SELL", "RISK_ALERT"], ...] = (
         "BUY",
         "SELL",
@@ -168,7 +167,7 @@ class PlanVersionSummary(ApiValue):
     plan_hash: Sha256Hex
     status: PlanVersionStatus
     can_activate: bool = Field(strict=True)
-    obsolete_reason: Literal["DAILY_DRAFT_OBSOLETE"] | None = None
+    obsolete_reason: Literal["DAILY_DRAFT_OBSOLETE", "LEGACY_PLANS_REQUIRE_REVIEW"] | None = None
     revision: NonNegativeSafeInteger
     created_at: ShanghaiDatetime
 
@@ -223,6 +222,7 @@ class PlanVersionView(PlanVersionSummary):
             from hashlib import sha256
 
             from trade_plan_monitor.domain.daily_plan_validation import obsolete_daily_document
+
             raw = json.loads(self.plan_json)
             if (
                 not obsolete_daily_document(raw)
@@ -234,9 +234,40 @@ class PlanVersionView(PlanVersionSummary):
             ):
                 raise ValueError("obsolete daily document must remain preserved and blocked")
             return self
-        if self.obsolete_reason is not None:
+        if self.obsolete_reason not in {None, "LEGACY_PLANS_REQUIRE_REVIEW"}:
             raise ValueError("obsolete reason requires an identified unpublished daily document")
         plan = _load_reviewable_plan(self.plan_json)
+        if self.obsolete_reason == "LEGACY_PLANS_REQUIRE_REVIEW":
+            canonical = (
+                dump_explicit_plan_draft_json(plan)
+                if isinstance(plan, ExplicitPlanDraft)
+                else daily_draft_json(plan)
+                if isinstance(plan, DailyPlanDraft)
+                else dump_plan_json(plan)
+            )
+            actual_hash = (
+                explicit_draft_sha256(plan)
+                if isinstance(plan, ExplicitPlanDraft)
+                else daily_draft_sha256(plan)
+                if isinstance(plan, DailyPlanDraft)
+                else plan_sha256(plan)
+            )
+            if (
+                plan.schema_version not in {1, 2, 3, 4}
+                or self.plan_json != canonical
+                or self.plan_hash != actual_hash
+                or (self.plan_id, self.version, self.symbol)
+                != (plan.plan_id, plan.version, plan.symbol)
+                or self.can_activate
+                or not any(
+                    i.code == "LEGACY_PLANS_REQUIRE_REVIEW" and i.activation_blocking
+                    for i in self.validation_issues
+                )
+            ):
+                raise ValueError("historical plan must remain canonical and explicitly blocked")
+            return self
+        if plan.schema_version != 5:
+            raise ValueError("historical plan requires an explicit read-only reason")
         if isinstance(plan, DailyPlanDraft):
             if self.daily_mapping is None:
                 raise ValueError("daily candidate requires current source mapping")
@@ -398,7 +429,6 @@ class PlanExtractionCommand(ApiValue):
     provider_id: UUID = Field(strict=False)
     source_text: ExtractionSourceText
     expected_revision: NonNegativeSafeInteger
-    target_contract: Literal["CONFIGURED", "DAILY_CLOSE_PLAN"] = "CONFIGURED"
 
     @field_validator("source_text")
     @classmethod
@@ -615,7 +645,9 @@ class PlanExtractionView(ApiValue):
             self.draft_plan_json,
             self.usage,
         )
-        review_data = any((self.evidence, self.assumptions, self.warnings, self.unmapped_text))
+        review_data = any(
+            (self.evidence, self.assumptions, self.warnings, self.unmapped_text, self.daily_mapping)
+        )
         if self.status is PlanExtractionOperationStatus.QUEUED:
             if self.started_at is not None or self.completed_at is not None:
                 raise ValueError("queued extraction cannot have execution timestamps")
@@ -633,51 +665,38 @@ class PlanExtractionView(ApiValue):
                 raise ValueError("successful extraction requires complete review data")
             plan_json = cast(str, self.draft_plan_json)
             plan = _load_reviewable_plan(plan_json)
-            if self.prompt_version == "plan-extract-v7":
-                if (
-                    not isinstance(plan, DailyPlanDraft)
-                    or self.daily_mapping is None
-                    or self.daily_mapping.supplements
-                    or self.mapping is not None
-                    or self.evidence
-                    or self.unmapped_text
-                    or daily_draft_json(plan) != plan_json
-                ):
-                    raise ValueError("daily extraction requires source-only Schema 4 mapping")
-                return self
-            canonical = (
-                dump_explicit_plan_draft_json(plan)
-                if isinstance(plan, ExplicitPlanDraft)
-                else dump_plan_json(plan)
-            )
-            if canonical != plan_json:
-                raise ValueError("draft_plan_json must be canonical")
-            if self.prompt_version in {
-                "plan-extract-v4",
-                "plan-extract-v5",
-                "plan-extract-v6",
-            }:
-                if self.mapping is None or self.evidence or self.unmapped_text:
-                    raise ValueError("mapping extraction requires only its bidirectional mapping")
-            else:
-                if not self.evidence or self.mapping is not None:
-                    raise ValueError("legacy extraction requires field evidence")
-                if any(len(item.excerpt) < 4 for item in self.evidence):
-                    raise ValueError("extraction evidence excerpts require four characters")
-            evidence_review = tuple(
-                issue
-                for issue in self.validation_issues
-                if issue.code == "AI_EVIDENCE_REVIEW_REQUIRED"
-                and issue.severity.value == "WARNING"
-                and issue.activation_blocking
-            )
             if (
-                self.prompt_version not in {"plan-extract-v4", "plan-extract-v5", "plan-extract-v6"}
-                and len(evidence_review) != 1
+                self.prompt_version != "plan-extract-v8"
+                or not isinstance(plan, DailyPlanDraft)
+                or plan.schema_version != 5
+                or self.daily_mapping is None
+                or self.daily_mapping.supplements
+                or self.mapping is not None
+                or self.evidence
+                or self.unmapped_text
+                or daily_draft_json(plan) != plan_json
             ):
-                raise ValueError("successful extraction requires its evidence review blocker")
-            if any(not item.material for item in self.unmapped_text):
-                raise ValueError("unreviewed unmapped text must remain material")
+                raise ValueError("current extraction requires exact source-only current mapping")
+            from trade_plan_monitor.ai.daily_review import semantic_values
+            from trade_plan_monitor.domain.daily_plan_validation import daily_draft_issues
+
+            required = {(i["code"], i["path"]) for i in daily_draft_issues(plan)}
+            bound = {binding.path for binding in self.daily_mapping.bindings}
+            required.update(
+                ("DAILY_SOURCE_BINDING_REQUIRED", path)
+                for path in semantic_values(plan).keys() - bound
+            )
+            required.update(
+                ("DAILY_SOURCE_CLAUSE_REQUIRED", "source." + clause.clause_id)
+                for clause in self.daily_mapping.clauses
+                if clause.disposition in {"UNRESOLVED", "UNSUPPORTED"}
+                or clause.disposition == "POLICY"
+                and not clause.paths
+                or any(r.disposition != "POLICY" or not r.paths for r in clause.remainders)
+            )
+            blocking = {(i.code, i.path) for i in self.validation_issues if i.activation_blocking}
+            if not required <= blocking:
+                raise ValueError("current extraction cannot discard mandatory review blockers")
         elif self.status in {
             PlanExtractionOperationStatus.INVALID_OUTPUT,
             PlanExtractionOperationStatus.PROVIDER_ERROR,
@@ -770,8 +789,6 @@ class PlanOperationService(PlanExtractionService, Protocol):
     async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None: ...
 
     async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None: ...
-
-    async def get_explicit_plan_runtime(self, *, symbol: str) -> ExplicitPlanRuntimeView | None: ...
 
     async def save_plan_draft(
         self,
@@ -963,8 +980,8 @@ async def import_plan(
         if command.format is PlanDocumentFormat.JSON
         else load_plan_yaml(command.document)
     )
-    if isinstance(imported, ExplicitTradePlan):
-        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+    if imported.schema_version != 5:
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
     result = validate_api_response(
         await service.import_plan(command=command, context=context),
         PlanVersionView,
@@ -990,17 +1007,6 @@ async def import_plan(
 @router.get("/plan-capabilities", response_model=ExplicitPlanCapabilityView)
 async def get_explicit_plan_capability() -> ExplicitPlanCapabilityView:
     return ExplicitPlanCapabilityView()
-
-
-@router.get("/explicit-plan-runtime/{symbol}", response_model=ExplicitPlanRuntimeView)
-async def get_explicit_plan_runtime(
-    symbol: PlanSymbolPath,
-    service: PlanServiceDependency,
-) -> ExplicitPlanRuntimeView:
-    result = await service.get_explicit_plan_runtime(symbol=symbol)
-    if result is None:
-        raise ApiError(ApiErrorCode.NOT_FOUND)
-    return validate_api_response(result, ExplicitPlanRuntimeView)
 
 
 @router.post("/plan-review-confirmations", response_model=PlanReviewConfirmationView)

@@ -4,7 +4,8 @@ import pytest
 from test_daily_plan_chain import Chain
 from tests.unit.test_daily_review import reviewed_mapping
 
-from trade_plan_monitor.domain.daily_plan_validation import DailyPlanDraft, daily_draft_json
+from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft as DailyPlanDraft
 
 SOURCE = "Synthetic independently reviewed daily technical policy supplements."
 
@@ -18,7 +19,7 @@ def batch_chain(tmp_path):
 
 def preview(chain, draft, mapping=None):
     return chain.post(
-        "daily-plan-review-previews",
+        "plan-review-previews",
         {
             "candidateJson": daily_draft_json(draft),
             "sourceText": SOURCE,
@@ -31,7 +32,7 @@ def register(chain, draft, items, revision):
     from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 
     return chain.post(
-        "daily-plan-review-supplements",
+        "plan-review-supplements",
         {
             "candidateJson": daily_draft_json(draft),
             "contentHash": daily_draft_content_sha256(draft),
@@ -71,19 +72,24 @@ def test_two_batches_repreview_reload_save_review_and_activate(batch_chain):
     assert repeated["review"] == complete["review"]
     saved = chain.post(
         "plan-drafts",
-        {"planJson": complete["candidateJson"], "sourceText": SOURCE,
-         "dailyMapping": complete["review"]["mapping"], "expectedRevision": 0},
+        {
+            "planJson": complete["candidateJson"],
+            "sourceText": SOURCE,
+            "dailyMapping": complete["review"]["mapping"],
+            "expectedRevision": 0,
+        },
     )
     assert saved["dailyIssues"] == []
     binding = {
-        "planVersionId": saved["id"], "contentHash": saved["contentHash"],
-        "sourceHash": saved["sourceHash"], "reviewEvidenceHash": saved["reviewEvidenceHash"],
+        "planVersionId": saved["id"],
+        "contentHash": saved["contentHash"],
+        "sourceHash": saved["sourceHash"],
+        "reviewEvidenceHash": saved["reviewEvidenceHash"],
     }
     reviewed = chain.post("plan-review-confirmations", {**binding, "expectedRevision": 0})
     activated = chain.post(
         "plan-activations",
-        {**binding, "reviewId": reviewed["reviewId"], "reviewRevision": 1,
-         "expectedRevision": 0},
+        {**binding, "reviewId": reviewed["reviewId"], "reviewRevision": 1, "expectedRevision": 0},
     )
     assert activated["active"] is True
 
@@ -115,8 +121,12 @@ def test_content_edit_invalidates_old_registry_and_review_binding(batch_chain):
     assert result["review"]["issues"]
     chain.post(
         "plan-drafts",
-        {"planJson": daily_draft_json(changed), "sourceText": SOURCE,
-         "dailyMapping": old.model_dump(mode="json"), "expectedRevision": 0},
+        {
+            "planJson": daily_draft_json(changed),
+            "sourceText": SOURCE,
+            "dailyMapping": old.model_dump(mode="json"),
+            "expectedRevision": 0,
+        },
         status=422,
     )
 
@@ -127,8 +137,10 @@ def test_duplicate_version_is_controlled_conflict_and_preserves_saved_document(b
     mapping = reviewed_mapping(draft, SOURCE)
     register(chain, draft, mapping.supplements, 0)
     body = {
-        "planJson": daily_draft_json(draft), "sourceText": SOURCE,
-        "dailyMapping": mapping.model_dump(mode="json"), "expectedRevision": 0,
+        "planJson": daily_draft_json(draft),
+        "sourceText": SOURCE,
+        "dailyMapping": mapping.model_dump(mode="json"),
+        "expectedRevision": 0,
     }
     saved = chain.post("plan-drafts", body, key="first-version-save")
     duplicate = chain.post("plan-drafts", body, key="second-version-save", status=409)

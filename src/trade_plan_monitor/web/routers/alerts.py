@@ -740,7 +740,12 @@ async def list_alerts(
         event = record.event
         if symbol is not None and event.symbol != symbol:
             raise RuntimeError("alert service returned a mismatched symbol")
-        if signal_type is not None and event.signal_type != signal_type:
+        current_risk_reminder = (
+            isinstance(event, DailyAlertEvent) and event.signal_type == "REMINDER"
+            and event.alert_kind == "RISK_ALERT" and signal_type == "RISK_ALERT"
+        )
+        if (signal_type is not None and event.signal_type != signal_type
+            and not current_risk_reminder):
             raise RuntimeError("alert service returned a mismatched signal type")
         if acknowledged is not None and (event.acknowledged_at is not None) != acknowledged:
             raise RuntimeError("alert service returned a mismatched acknowledgement state")

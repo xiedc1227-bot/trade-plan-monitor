@@ -6,6 +6,7 @@ import json
 from datetime import UTC, date, timedelta
 
 import pytest
+from sqlalchemy import select
 from tests.integration.test_position_inventory_recovery_audit import (
     DAY,
     NOW,
@@ -15,20 +16,37 @@ from tests.integration.test_position_inventory_recovery_audit import (
     _hash,
     _work,
 )
-from tests.integration.test_position_inventory_recovery_transactions import _state
 
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import AuditLog
+from trade_plan_monitor.state.models import (
+    AuditLog,
+    MonitorEvent,
+    MonitorSequence,
+    PositionInventoryConfirmation,
+    PositionInventoryState,
+    PositionLot,
+    PositionOpeningBalance,
+    RequestIdempotency,
+)
 from trade_plan_monitor.state.opening_balance_evidence import (
     UnknownOpeningMutation,
     ValidatedOpeningMutation,
     decode_opening_balance_mutation,
 )
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+
+
+def _state(engine):
+    models = (PositionLot, PositionOpeningBalance, PositionInventoryConfirmation,
+        PositionInventoryState, AuditLog, MonitorEvent, MonitorSequence, RequestIdempotency)
+    with engine.connect() as connection:
+        return {model.__tablename__: connection.execute(
+            select(model.__table__).order_by(*model.__table__.primary_key.columns)
+        ).all() for model in models}
 
 
 @pytest.fixture

@@ -1,0 +1,2 @@
+# Frozen historical acceptance bytes must be identical on Windows and POSIX.
+tests/history/t059/*.md text eol=lf

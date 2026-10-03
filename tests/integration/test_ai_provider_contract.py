@@ -960,13 +960,26 @@ def test_cancellation_during_retry_delay_stops_future_attempts() -> None:
 
 
 def test_extraction_service_uses_real_adapter_but_returns_only_an_unactivated_draft() -> None:
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.ai.daily_review import daily_source_clauses
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+    from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
     source_text = "华亚智能交易计划，低吸区 63.00–64.50，按既有白名单条件监控。"
     config = _config(max_input_chars=50_000, max_output_tokens=4_096)
     captured: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured.append(request)
-        return _completion_response(content=_extraction_content())
+        raw = unified_payload()
+        raw.update(symbol="003043.SZ", market="SZSE")
+        draft = UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(raw))
+        return _completion_response(content=json.dumps({
+            "draft": draft.model_dump(mode="json"),
+            "clauses": [c.model_dump(mode="json") for c in daily_source_clauses(source_text)],
+            "bindings": [],
+        }))
 
     async def scenario() -> object:
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -986,12 +999,16 @@ def test_extraction_service_uses_real_adapter_but_returns_only_an_unactivated_dr
     assert result.status is PlanExtractionStatus.SUCCEEDED
     assert result.draft is not None
     assert result.draft.symbol == "003043.SZ"
-    assert [issue.code for issue in result.validation_issues] == ["AI_EVIDENCE_REVIEW_REQUIRED"]
-    assert result.validation_issues[0].activation_blocking is True
+    assert result.draft.schema_version == 5
+    assert result.draft.to_executable() is not None
+    assert any(i.code == "DAILY_SOURCE_BINDING_REQUIRED" for i in result.validation_issues)
+    assert all(i.activation_blocking for i in result.validation_issues)
+    assert result.daily_mapping.supplements == ()
     assert len(captured) == 1
     request_payload = json.loads(captured[0].content)
     assert "tools" not in request_payload
     assert "UNTRUSTED_PLAN_DATA_START" in request_payload["messages"][0]["content"]
+    assert "plan-extract-v8" in request_payload["messages"][0]["content"]
 
 
 def test_extraction_service_maps_adapter_failure_without_leaking_secret() -> None:

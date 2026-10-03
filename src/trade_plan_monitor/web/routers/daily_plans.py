@@ -1,4 +1,4 @@
-"""Human-only daily evidence, exact-share inventory and actual execution boundaries."""
+"""Scoped technical evidence and isolated whole-lot simulation operations."""
 
 from datetime import date
 from typing import Annotated, Literal
@@ -21,12 +21,12 @@ from trade_plan_monitor.ai.daily_review import (
 )
 from trade_plan_monitor.domain.daily_plan_models import FactKind
 from trade_plan_monitor.domain.daily_plan_validation import (
-    DailyPlanDraft,
     daily_draft_content_sha256,
     daily_draft_json,
     load_daily_draft_json,
 )
 from trade_plan_monitor.domain.daily_scope import require_technical_text
+from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.daily_state_models import (
     DailyEvaluationState,
@@ -44,7 +44,7 @@ from trade_plan_monitor.web.routers.plans import (
 )
 from trade_plan_monitor.web.schemas import ApiValue, MutationContextDependency
 
-router = APIRouter(prefix="/api/v1", tags=["daily-plans"])
+router = APIRouter(prefix="/api/v1", tags=["plans"])
 Qty = Annotated[int, Field(strict=True, ge=0, le=9_007_199_254_740_991)]
 WholeQty = Annotated[int, Field(strict=True, ge=0, multiple_of=100, le=9_007_199_254_740_991)]
 PositiveWholeQty = Annotated[
@@ -81,15 +81,15 @@ class DailyReviewPreview(ApiValue):
 
 
 class DailyEditorSchemaView(ApiValue):
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     candidate_schema: dict
     operation_schemas: dict
 
 
-@router.get("/daily-plan-editor-schema", response_model=DailyEditorSchemaView)
+@router.get("/plan-editor-schema", response_model=DailyEditorSchemaView)
 async def editor_schema():
     return DailyEditorSchemaView(
-        candidate_schema=DailyPlanDraft.model_json_schema(),
+        candidate_schema=UnifiedPlanDraft.model_json_schema(),
         operation_schemas={
             "FACT": DailyFactCommand.model_json_schema(by_alias=True),
             "POSITION": DailyPositionCommand.model_json_schema(by_alias=True),
@@ -142,8 +142,12 @@ async def _preview(command: DailyReviewPreviewCommand, context: MutationContextD
                 *(b for b in mapping.bindings if b.path not in registered_paths),
                 *(
                     DailyFieldBinding(
-                        path=s.path, value=s.value, origin="HUMAN_SUPPLEMENT", unit="JSON",
-                        clause_ids=(), supplement_id=s.supplement_id,
+                        path=s.path,
+                        value=s.value,
+                        origin="HUMAN_SUPPLEMENT",
+                        unit="JSON",
+                        clause_ids=(),
+                        supplement_id=s.supplement_id,
                     )
                     for s in supplements
                 ),
@@ -188,7 +192,7 @@ async def _preview(command: DailyReviewPreviewCommand, context: MutationContextD
     )
 
 
-@router.post("/daily-plan-review-previews", response_model=DailyReviewPreview)
+@router.post("/plan-review-previews", response_model=DailyReviewPreview)
 async def preview(
     command: DailyReviewPreviewCommand,
     context: MutationContextDependency,
@@ -220,11 +224,19 @@ class DailyFactCommand(ApiValue):
     trade_date: date = Field(strict=False)
     signal_id: str | None = None
     evidence: str = Field(min_length=20, max_length=2000)
+    satisfied: bool = Field(default=True, strict=True)
     official_evidence: DailyOfficialEvidence | None = None
     expected_revision: Qty
 
     @model_validator(mode="after")
     def official_required(self):
+        if not self.satisfied and self.kind in {
+            "TRADABILITY",
+            "FULL_SESSION_SUSPENSION",
+            "INDEPENDENT_EVENT",
+            "SIGNAL_INVALIDATION",
+        }:
+            raise ValueError("negative assertions apply only to technical condition facts")
         if self.kind not in {"TRADABILITY", "FULL_SESSION_SUSPENSION"}:
             require_technical_text(self.evidence)
             if self.official_evidence is not None:
@@ -266,7 +278,7 @@ class DailyRiskReassessmentCommand(ApiValue):
     plan_version_id: UUID = Field(strict=False)
     content_hash: Sha256Hex
     expected_revision: Qty
-    removal_evidence: DailyOfficialEvidence
+    removal_evidence: str = Field(min_length=20, max_length=2000)
     target_core_qty: WholeQty
     target_tactical_qty: WholeQty
     involves_core: bool = Field(strict=True)
@@ -328,7 +340,7 @@ class DailyInventoryResource(ApiValue):
     snapshot: DailyInventoryApiView | None
 
 
-@router.post("/daily-plan-review-supplements", response_model=DailyMutationReceipt)
+@router.post("/plan-review-supplements", response_model=DailyMutationReceipt)
 async def supplements(
     command: DailySupplementCommand,
     service: PlanServiceDependency,
@@ -337,7 +349,7 @@ async def supplements(
     return await service.mutate_daily(operation="SUPPLEMENT", command=command, context=context)
 
 
-@router.post("/daily-plan-facts", response_model=DailyMutationReceipt)
+@router.post("/plan-facts", response_model=DailyMutationReceipt)
 async def facts(
     command: DailyFactCommand,
     service: PlanServiceDependency,
@@ -351,7 +363,7 @@ async def facts(
     return result
 
 
-@router.post("/daily-position-confirmations", response_model=DailyMutationReceipt)
+@router.post("/simulation-position-confirmations", response_model=DailyMutationReceipt)
 async def positions(
     command: DailyPositionCommand,
     service: PlanServiceDependency,
@@ -363,7 +375,7 @@ async def positions(
     return result
 
 
-@router.post("/daily-simulated-trades", response_model=DailySimulationReceipt)
+@router.post("/simulated-trades", response_model=DailySimulationReceipt)
 async def simulations(
     command: DailySimulationCommand,
     service: PlanServiceDependency,
@@ -385,7 +397,7 @@ async def _reevaluate_symbol(request, service, symbol):
             await runtime.reevaluate_daily(active.plan_version_id)
 
 
-@router.post("/daily-risk-reassessments", response_model=DailyMutationReceipt)
+@router.post("/plan-risk-reassessments", response_model=DailyMutationReceipt)
 async def reassessments(
     command: DailyRiskReassessmentCommand,
     service: PlanServiceDependency,
@@ -399,12 +411,12 @@ async def reassessments(
     return result
 
 
-@router.get("/daily-plan-runtime/{symbol}", response_model=DailyStateView)
+@router.get("/plan-runtime/{symbol}", response_model=DailyStateView)
 async def runtime(symbol: PlanSymbolPath, service: PlanServiceDependency):
     return await service.read_daily(symbol=symbol, trade_date=None)
 
 
-@router.get("/daily-position-inventory", response_model=DailyInventoryResource)
+@router.get("/simulation-position-inventory", response_model=DailyInventoryResource)
 async def inventory(
     service: PlanServiceDependency,
     symbol: Annotated[str, Query(pattern=r"^[0-9]{6}\.(SH|SZ|BJ)$")],

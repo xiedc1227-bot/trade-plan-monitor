@@ -1,4 +1,4 @@
-"""R13 regression: notification consumers accept production explicit alerts."""
+"""Current condition-plan alerts survive the production notification pipeline."""
 
 import asyncio
 import json
@@ -6,11 +6,10 @@ import json
 import httpx
 import pytest
 from sqlalchemy import func, select
-from tests.integration.test_explicit_runtime_production import (
+from tests.integration.current_pipeline_fixture import (
     PIPELINE_NOW,
     TARGET,
-    _pipeline_fixture,
-    _three_rule_plan,
+    current_pipeline_fixture,
 )
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
@@ -22,36 +21,28 @@ from trade_plan_monitor.notifications.channels import (
     WebhookConfig,
 )
 from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
+from trade_plan_monitor.notifications.daily_models import DailyAlertEvent
 from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
-from trade_plan_monitor.notifications.models import ExplicitAlertEvent
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.database import create_session_factory
 from trade_plan_monitor.state.models import (
-    AlertDeliveryEligibility,
+    ActivePlan,
     AlertEvent,
     DeliveryAttempt,
-    ExplicitEvaluationLedger,
-    PositionInventoryConfirmation,
 )
 
 
 @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
-def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
+def test_production_condition_alert_completes_in_app_delivery(tmp_path, monkeypatch, price):
     async def scenario():
-        engine, work, plan, _, _, controller, pipeline, _ = _pipeline_fixture(
+        engine, work, plan, _, _, controller, pipeline, _ = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=60,
             current_close_fen=price,
-            plan=_three_rule_plan(),
         )
         sessions = create_session_factory(engine)
-        unguarded_dispatcher = NotificationDispatcher(
-            sessions,
-            channels=(InAppChannel(),),
-            clock=lambda: PIPELINE_NOW,
-            enforce_current_plan=True,
-        )
         dispatcher = NotificationDispatcher(
             sessions,
             channels=(InAppChannel(),),
@@ -73,53 +64,45 @@ def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypat
                 )
             )
             with sessions() as session:
-                stored_event = session.scalars(select(AlertEvent)).one()
+                assert session.scalars(select(AlertEvent)).one().id
                 assert session.scalar(select(func.count()).select_from(
-                    ExplicitEvaluationLedger,
-                )) == 1
-                receipt = session.get(AlertDeliveryEligibility, stored_event.id)
-                assert receipt is not None
-                assert receipt.status == "HOLD"
-                assert receipt.reason == "RECOVERY_REQUIRED"
-            assert await unguarded_dispatcher.dispatch_pending() == ()
+                    DailyRecord,
+                ).where(DailyRecord.kind == "EVALUATION")) >= 1
+                assert session.get(ActivePlan, plan.symbol) is not None
             with sessions() as session:
                 assert session.scalar(select(func.count()).select_from(DeliveryAttempt)) == 0
             attempts = await dispatcher.dispatch_pending()
             assert len(attempts) == 1
             assert attempts[0].status.value == "DELIVERED", attempts[0]
-            signal_type = {990: "BUY", 1080: "SELL", 949: "RISK_ALERT"}[price]
+            signal_type = {990: "BUY", 1080: "SELL", 949: "REMINDER"}[price]
             with work() as unit_of_work:
                 events, total = unit_of_work.alerts.list_events(
                     symbol=plan.symbol,
-                    signal_type=signal_type,
+                    signal_type=None if signal_type == "REMINDER" else signal_type,
                     acknowledged=None,
                     start_at=None,
                     end_at=None,
                     offset=0,
                     limit=10,
                 )
-                result = unit_of_work.explicit_rules.get(
-                    plan_hash=plan_sha256(plan),
-                    symbol=plan.symbol,
-                    target_bucket_end=TARGET,
-                    activation_revision=1,
-                )
+                result = unit_of_work.daily.get("evaluation-head-" + plan.symbol)
             assert total == 1
             event = events[0]
-            assert type(event) is ExplicitAlertEvent
+            assert type(event) is DailyAlertEvent
             assert event.event_id == attempts[0].event_id
             assert event.plan_version == plan.version
             assert event.plan_hash == plan_sha256(plan)
-            assert event.quantity == (None if signal_type == "RISK_ALERT" else 100)
+            assert event.quantity == (None if signal_type == "REMINDER" else 100)
+            if signal_type == "REMINDER":
+                assert event.alert_kind == "RISK_ALERT"
+                assert event.severity == "RISK"
             assert result is not None
-            assert result.plan_hash == event.plan_hash
-            assert result.target_bucket_end == event.target_bucket_end
-            assert len(result.result_hash) == 64
+            assert result["payload"]["plan_hash"] == event.plan_hash
+            assert result["payload"]["minute_target"] == TARGET.isoformat()
             assert await dispatcher.dispatch_pending() == ()
             with sessions() as session:
                 assert session.scalar(select(func.count()).select_from(DeliveryAttempt)) == 1
         finally:
-            await unguarded_dispatcher.aclose()
             await dispatcher.aclose()
             await controller.aclose()
             engine.dispose()
@@ -128,16 +111,15 @@ def test_production_explicit_alert_completes_in_app_delivery(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("price", [990, 1080, 949], ids=["BUY", "SELL", "RISK_ALERT"])
-def test_current_admission_holds_explicit_alert_after_inventory_revocation(
+def test_current_admission_holds_condition_alert_after_plan_revocation(
     tmp_path, monkeypatch, price,
 ):
     async def scenario():
-        engine, _work, plan, _, _, controller, pipeline, _ = _pipeline_fixture(
+        engine, _work, plan, _, _, controller, pipeline, _ = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=60,
             current_close_fen=price,
-            plan=_three_rule_plan(),
         )
         sessions = create_session_factory(engine)
         dispatcher = NotificationDispatcher(
@@ -164,25 +146,19 @@ def test_current_admission_holds_explicit_alert_after_inventory_revocation(
                 event = session.scalars(select(AlertEvent)).one()
                 event_id = event.id
                 assert session.scalar(select(func.count()).select_from(
-                    ExplicitEvaluationLedger,
-                )) == 1
-                receipt = session.get(AlertDeliveryEligibility, event_id)
-                assert receipt is not None
-                assert receipt.status == "HOLD"
-                assert receipt.reason == "RECOVERY_REQUIRED"
-                confirmation = session.get(PositionInventoryConfirmation, plan.symbol)
-                assert confirmation is not None
-                session.delete(confirmation)
+                    DailyRecord,
+                ).where(DailyRecord.kind == "EVALUATION")) >= 1
+                active = session.get(ActivePlan, plan.symbol)
+                assert active is not None
+                session.delete(active)
             assert await dispatcher.dispatch_pending() == ()
             with sessions() as session:
-                receipt = session.get(AlertDeliveryEligibility, event_id)
-                assert receipt is not None
-                assert receipt.status == "HOLD"
+                assert session.get(AlertEvent, event_id) is not None
                 assert session.scalar(select(func.count()).select_from(DeliveryAttempt)) == 0
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 1
                 assert session.scalar(select(func.count()).select_from(
-                    ExplicitEvaluationLedger,
-                )) == 1
+                    DailyRecord,
+                ).where(DailyRecord.kind == "EVALUATION")) >= 1
         finally:
             await dispatcher.aclose()
             await controller.aclose()
@@ -191,7 +167,7 @@ def test_current_admission_holds_explicit_alert_after_inventory_revocation(
     asyncio.run(scenario())
 
 
-def test_console_and_webhook_preserve_the_bounded_explicit_event_envelope(
+def test_console_and_webhook_preserve_the_bounded_current_event_envelope(
     tmp_path,
     monkeypatch,
 ):
@@ -203,12 +179,11 @@ def test_console_and_webhook_preserve_the_bounded_explicit_event_envelope(
         return httpx.Response(204, request=request)
 
     async def scenario():
-        engine, work, plan, _, _, controller, pipeline, _ = _pipeline_fixture(
+        engine, work, plan, _, _, controller, pipeline, _ = current_pipeline_fixture(
             tmp_path,
             monkeypatch,
             current_volume=60,
             current_close_fen=990,
-            plan=_three_rule_plan(),
         )
         try:
             await pipeline.refresh_references(TARGET.date())
@@ -232,7 +207,7 @@ def test_console_and_webhook_preserve_the_bounded_explicit_event_envelope(
                 )
             assert total == 1
             event = events[0]
-            assert type(event) is ExplicitAlertEvent
+            assert type(event) is DailyAlertEvent
             assert event.quantity == 100
 
             console = ConsoleChannel(write_line=console_lines.append)

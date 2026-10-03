@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import Field, JsonValue
 
-from trade_plan_monitor.ai.review import server_source_clauses
+from trade_plan_monitor.ai.review import MappingValidationError, server_source_clauses
 from trade_plan_monitor.domain.daily_hash import daily_hash
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier, Text
 from trade_plan_monitor.domain.daily_plan_validation import (
@@ -241,6 +241,26 @@ _CONTRACT_VALUES = {
 }
 
 
+def _contract_values(draft):
+    if draft.schema_version != 5:
+        return _CONTRACT_VALUES
+    return {
+        **{
+            key: value
+            for key, value in _CONTRACT_VALUES.items()
+            if key
+            not in {
+                "monitoring.timeframe",
+                "execution_policy.confirmation",
+                "execution_policy.ordinary_window",
+            }
+        },
+        "schema_version": 5,
+        "execution_mode": "CONDITION_PLAN",
+        "execution_version": "condition-plan-v1",
+    }
+
+
 def daily_contract_bindings(draft):
     values = semantic_values(draft)
     return tuple(
@@ -252,7 +272,7 @@ def daily_contract_bindings(draft):
             clause_ids=(),
             supplement_id=None,
         )
-        for path, value in _CONTRACT_VALUES.items()
+        for path, value in _contract_values(draft).items()
         if values.get(path) == value
     )
 
@@ -262,7 +282,8 @@ def build_daily_review(draft, mapping, source_text):
     # These fixed software values need no source or human broker-rule evidence.
     existing_paths = {binding.path for binding in mapping.bindings}
     product_rules = tuple(
-        binding for binding in daily_contract_bindings(draft)
+        binding
+        for binding in daily_contract_bindings(draft)
         if binding.path.startswith("trading_rules.") and binding.path not in existing_paths
     )
     mapping = mapping.model_copy(update={"bindings": (*mapping.bindings, *product_rules)})
@@ -270,10 +291,17 @@ def build_daily_review(draft, mapping, source_text):
     if mapping.candidate_content_hash != digest:
         raise ValueError("mapping candidate content changed")
     expected = server_source_clauses(source_text)
-    if tuple((c.clause_id, c.start, c.end, c.excerpt) for c in mapping.clauses) != tuple(
-        (c.clause_id, c.start, c.end, c.excerpt) for c in expected
+    if len(mapping.clauses) != len(expected):
+        raise MappingValidationError("source clause count differs", "source_clauses")
+    for index, (actual_clause, expected_clause) in enumerate(
+        zip(mapping.clauses, expected, strict=True)
     ):
-        raise ValueError("source clauses do not match exact Unicode spans")
+        for field in ("clause_id", "start", "end", "excerpt"):
+            if getattr(actual_clause, field) != getattr(expected_clause, field):
+                raise MappingValidationError(
+                    "source clause differs from exact source",
+                    f"source_clauses[{index}].{field}" if index <= 255 else "source_clauses",
+                )
     values = semantic_values(draft)
     selections = tuple(
         s for c in mapping.clauses for s in c.exclusions if s.origin == "HUMAN_SCOPE_SELECTION"
@@ -316,17 +344,24 @@ def build_daily_review(draft, mapping, source_text):
         raise ValueError("duplicate supplement")
     bound = set()
     used = set()
-    for binding in mapping.bindings:
+    for binding_index, binding in enumerate(mapping.bindings):
+        diagnostic_path = (
+            f"field_bindings[{binding_index}]" if binding_index <= 255 else "field_bindings"
+        )
         if binding.path in bound or binding.path not in values:
-            raise ValueError("duplicate or unknown binding path")
+            raise MappingValidationError(
+                "duplicate or unknown binding path", diagnostic_path + ".path"
+            )
         actual = values[binding.path]
         if type(actual) is not type(binding.value) or actual != binding.value:
-            raise ValueError("binding value differs from current candidate")
+            raise MappingValidationError(
+                "binding value differs from current candidate", diagnostic_path + ".value"
+            )
         if binding.origin == "PRODUCT_CONTRACT":
             if (
                 binding.clause_ids
                 or binding.supplement_id
-                or _CONTRACT_VALUES.get(binding.path) != actual
+                or _contract_values(draft).get(binding.path) != actual
             ):
                 raise ValueError("trading policy cannot be inferred from product contract")
         elif binding.origin == "HUMAN_SUPPLEMENT":
@@ -370,14 +405,17 @@ def build_daily_review(draft, mapping, source_text):
                     Decimal(x) * 100 == actual
                     for x in re.findall(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])", excerpt)
                 ):
-                    raise ValueError("source price does not match exact yuan amount")
+                    raise MappingValidationError(
+                        "source price does not match exact yuan amount", diagnostic_path + ".unit"
+                    )
             elif isinstance(actual, bool | list) or str(actual) not in excerpt:
                 raise ValueError("source value requires an explicit scoped human definition")
         bound.add(binding.path)
     if used != set(supplements):
         raise ValueError("orphan human supplement")
     issues = list(daily_draft_issues(draft))
-    for path in values.keys() - bound:
+    unbound_paths = values.keys() - bound
+    for path in sorted(unbound_paths) if draft.schema_version == 5 else unbound_paths:
         issues.append(
             {
                 "path": path,

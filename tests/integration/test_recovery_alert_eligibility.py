@@ -126,7 +126,7 @@ def _scenario(tmp_path, kind, *, no_signal=False):
     )
 
 
-def test_legacy_intraday_alert_uses_current_activation_and_inventory(tmp_path):
+def test_historical_intraday_alert_cannot_gain_current_delivery_from_inventory(tmp_path):
     from uuid import uuid4
 
     from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
@@ -155,7 +155,7 @@ def test_legacy_intraday_alert_uses_current_activation_and_inventory(tmp_path):
     result = scenario.run(scenario.service(recovery_delivery=True))
     event = result.committed_event
     admission = CurrentDeliveryAdmission(scenario.sessions, runtime_generation=uuid4)
-    assert admission(event, scenario.target + timedelta(seconds=60)) is True
+    assert admission(event, scenario.target + timedelta(seconds=60)) is False
     with SqlAlchemyUnitOfWork(
         scenario.sessions, clock=lambda: scenario.target + timedelta(seconds=61),
     ) as work:

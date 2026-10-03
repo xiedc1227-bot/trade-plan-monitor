@@ -5,7 +5,7 @@ unknown obligation set deliberately cannot certify readiness or current data.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from trade_plan_monitor.decision.models import (
@@ -40,6 +40,17 @@ class LegacyInputStamp:
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionInputStamp:
+    immutable_record_id: str
+    calendar_start: date
+    calendar_end: date
+    calendar_fingerprint: str
+    minute_fingerprint: str
+    five_minute_fingerprint: str
+    state_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
 class PlanCompletionProof:
     runtime_generation: UUID
     configuration_revision: str
@@ -50,7 +61,7 @@ class PlanCompletionProof:
     activation_revision: int
     target: IntradayEvaluationTarget | OfficialCloseEvaluationTarget
     result_hash: str
-    input_stamp: ExplicitInputStamp | LegacyInputStamp
+    input_stamp: ExplicitInputStamp | LegacyInputStamp | ConditionInputStamp
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,7 +180,9 @@ def _read_positions(session, now):
             return 0 if row is None else row.revision
 
     return ReadOnlyPositions(
-        session, clock=lambda: now, id_factory=lambda: str(uuid4()),
+        session,
+        clock=lambda: now,
+        id_factory=lambda: str(uuid4()),
         events=MonitorEventLog(session, clock=lambda: now),
     )
 
@@ -364,16 +377,24 @@ def _legacy_input_stamp(session, plan, result, now, history, references, positio
     if snapshot.episode is not None:
         expected = snapshot.episode
         episode = next((row for row in episodes if row.id == expected.episode_id), None)
-        if episode is None or any(
-            getattr(episode, name) != getattr(expected, name)
-            for name in (
-                "symbol", "plan_hash", "episode_low_fen", "bars_since_low", "status",
-                "alerted_signal",
+        if (
+            episode is None
+            or any(
+                getattr(episode, name) != getattr(expected, name)
+                for name in (
+                    "symbol",
+                    "plan_hash",
+                    "episode_low_fen",
+                    "bars_since_low",
+                    "status",
+                    "alerted_signal",
+                )
             )
-        ) or (
-            datetime.fromisoformat(episode.started_at) != expected.started_at
-            or datetime.fromisoformat(episode.last_processed_bucket_end)
-            != expected.last_processed_bucket_end
+            or (
+                datetime.fromisoformat(episode.started_at) != expected.started_at
+                or datetime.fromisoformat(episode.last_processed_bucket_end)
+                != expected.last_processed_bucket_end
+            )
         ):
             return None
     manual = session.get(ManualEventRisk, plan.symbol)
@@ -433,10 +454,21 @@ def capture_completion_proof(
     """Owner-only factory after a real COMMITTED unit; never called by a GET."""
     from trade_plan_monitor.domain.plan_hash import plan_sha256
     from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
     from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
     from trade_plan_monitor.state.models import ActivePlan, PlanActivationState, PlanVersion
     from trade_plan_monitor.state.projections import ProjectionRepository
 
+    if isinstance(plan, UnifiedTradePlan):
+        return capture_condition_completion_proof(
+            session,
+            plan=plan,
+            result=result,
+            runtime_generation=runtime_generation,
+            configuration_revision=configuration_revision,
+            now=now,
+            consumed_inputs=consumed_inputs,
+        )
     active = session.get(ActivePlan, plan.symbol)
     state = session.get(PlanActivationState, plan.symbol)
     version = None if active is None else session.get(PlanVersion, active.plan_version_id)
@@ -488,14 +520,15 @@ def capture_completion_proof(
                 if transition.expected_revision != (0 if before is None else before.revision):
                     return None
                 expected_states[rule.rule_id] = ExplicitRuleStateSnapshot(
-                    rule_id=rule.rule_id, activation_revision=active.revision,
-                    revision=transition.next_revision, has_emitted=True,
+                    rule_id=rule.rule_id,
+                    activation_revision=active.revision,
+                    revision=transition.next_revision,
+                    has_emitted=True,
                     last_emitted_bucket_end=transition.last_emitted_bucket_end,
                 )
             if stamp.rule_state_fingerprint != _fingerprint(
-                "explicit-rule-state-v1", tuple(sorted(
-                    expected_states.values(), key=lambda item: item.rule_id
-                ))
+                "explicit-rule-state-v1",
+                tuple(sorted(expected_states.values(), key=lambda item: item.rule_id)),
             ):
                 return None
             current_inventory = _read_positions(session, now).inventory_snapshot(
@@ -504,14 +537,15 @@ def capture_completion_proof(
             if any(
                 getattr(consumed_inputs.inventory, name) != getattr(current_inventory, name)
                 for name in (
-                    "status", "total_qty", "sellable_qty", "inventory_revision", "missing_reasons"
+                    "status",
+                    "total_qty",
+                    "sellable_qty",
+                    "inventory_revision",
+                    "missing_reasons",
                 )
             ):
                 return None
-            if (
-                consumed_inputs.manual_event_risk_revision
-                != result.manual_event_risk_revision
-            ):
+            if consumed_inputs.manual_event_risk_revision != result.manual_event_risk_revision:
                 return None
             if stamp.bars_fingerprint != _fingerprint("explicit-bars-v1", consumed_inputs.bars):
                 return None
@@ -576,8 +610,12 @@ def _legacy_consumed_inputs_match(session, plan, result, inputs, now):
     openings = positions.list_opening_balances(plan.symbol)
     fresh_lots = tuple(
         PositionLotSnapshot(
-            lot_id=lot.id, symbol=lot.symbol, bucket=lot.bucket, quantity=lot.quantity,
-            remaining_quantity=lot.remaining_qty, acquired_trade_date=lot.acquired_trade_date,
+            lot_id=lot.id,
+            symbol=lot.symbol,
+            bucket=lot.bucket,
+            quantity=lot.quantity,
+            remaining_quantity=lot.remaining_qty,
+            acquired_trade_date=lot.acquired_trade_date,
             cost_fen=lot.cost_fen,
         )
         for lot in lots
@@ -591,8 +629,12 @@ def _legacy_consumed_inputs_match(session, plan, result, inputs, now):
         return False
     if inputs.target.kind == "INTRADAY":
         limit = next(
-            (item for item in MarketReferenceRepository(session).list_daily_limits(day)
-             if item.symbol == plan.symbol), None
+            (
+                item
+                for item in MarketReferenceRepository(session).list_daily_limits(day)
+                if item.symbol == plan.symbol
+            ),
+            None,
         )
         if inputs.daily_limit != limit:
             return False
@@ -608,9 +650,259 @@ def _legacy_consumed_inputs_match(session, plan, result, inputs, now):
     if plan_index_fact_requests(plan):
         reference = result.snapshot.reference_market
         stored = (
-            None if reference is None else ProjectionRepository(session)
-            .get_market_index_snapshot(reference.snapshot_hash)
+            None
+            if reference is None
+            else ProjectionRepository(session).get_market_index_snapshot(reference.snapshot_hash)
         )
         if stored is None or inputs.reference_market_snapshot != stored.snapshot:
             return False
     return True
+
+
+def _condition_state(session, symbol):
+    from sqlalchemy import select
+
+    from trade_plan_monitor.state.daily_models import DailyRecord
+
+    return tuple(
+        (row.id, row.kind, row.revision, row.payload_json)
+        for row in session.scalars(
+            select(DailyRecord)
+            .where(
+                DailyRecord.symbol == symbol,
+                DailyRecord.kind.in_(("POSITION", "FACT", "SIGNAL", "RISK")),
+            )
+            .order_by(DailyRecord.id)
+        )
+    )
+
+
+def _condition_sources(session, snapshot, start, end):
+    from trade_plan_monitor.state.repositories import (
+        MarketHistoryRepository,
+        MarketReferenceRepository,
+    )
+
+    symbol = snapshot["symbol"]
+    market = {"SZ": "SZSE", "SH": "SSE", "BJ": "BSE"}[symbol[-2:]]
+    calendar = MarketReferenceRepository(session).list_trading_days(market, start, end)
+    history = MarketHistoryRepository(session)
+    prefix = snapshot.get("minute_prefix", ())
+    minutes = (
+        ()
+        if not prefix
+        else history.list_minutes(
+            symbol,
+            start=datetime.fromisoformat(prefix[0]["bar_end"]),
+            end=datetime.fromisoformat(prefix[-1]["bar_end"]),
+        )
+    )
+    five = snapshot.get("five_minute_bars", ())
+    bars = (
+        ()
+        if not five
+        else history.list_five_minute(
+            symbol,
+            start=datetime.fromisoformat(five[0]["bar_end"]),
+            end=datetime.fromisoformat(five[-1]["bar_end"]),
+            formula_version="ta-v1",
+        )
+    )
+    return calendar, minutes, bars
+
+
+def condition_completion_matches(session, *, proof, snapshot, now):
+    """Revalidate the committed current source proof in a read-only SQLite snapshot."""
+    import json
+
+    from trade_plan_monitor.state.daily_models import DailyRecord
+
+    if proof is None or not isinstance(proof.input_stamp, ConditionInputStamp):
+        return False
+    stamp = proof.input_stamp
+    result_hash = _fingerprint("condition-result-v1", snapshot)
+    if proof.result_hash != result_hash:
+        return False
+    row = session.get(DailyRecord, stamp.immutable_record_id)
+    if (
+        row is None
+        or row.kind != "EVALUATION"
+        or row.symbol != proof.symbol
+        or row.id.startswith("evaluation-head-")
+        or json.loads(row.payload_json) != snapshot
+    ):
+        return False
+    from trade_plan_monitor.runtime.daily_service import minute_source_current
+
+    if snapshot.get("minute_target") and not minute_source_current(session, snapshot, now):
+        return False
+    if datetime.fromisoformat(snapshot["evaluated_at"]) > now:
+        return False
+    calendar, minutes, bars = _condition_sources(
+        session, snapshot, stamp.calendar_start, stamp.calendar_end
+    )
+    return (
+        stamp.calendar_fingerprint == _fingerprint("condition-calendar-v1", calendar)
+        and stamp.minute_fingerprint == _fingerprint("condition-minute-v1", minutes)
+        and stamp.five_minute_fingerprint == _fingerprint("condition-five-v1", bars)
+        and stamp.state_fingerprint
+        == _fingerprint("condition-state-v1", _condition_state(session, proof.symbol))
+    )
+
+
+def capture_condition_completion_proof(
+    session, *, plan, result, runtime_generation, configuration_revision, now, consumed_inputs
+):
+    """Only a new committed schema5 evaluation with exact consumed sources installs proof."""
+    import json
+
+    from trade_plan_monitor.domain.plan_hash import plan_sha256
+    from trade_plan_monitor.state.daily_models import DailyRecord
+    from trade_plan_monitor.state.models import ActivePlan, PlanActivationState, PlanVersion
+
+    if (
+        result.duplicate
+        or consumed_inputs is None
+        or result.snapshot.get("data_blockers")
+        or not condition_status_eligible(session, plan=plan, now=now)
+    ):
+        return None
+    snapshot = result.snapshot
+    active = session.get(ActivePlan, plan.symbol)
+    state = session.get(PlanActivationState, plan.symbol)
+    version = None if active is None else session.get(PlanVersion, active.plan_version_id)
+    head = session.get(DailyRecord, "evaluation-head-" + plan.symbol)
+    immutable = (
+        None if result.evaluation_id is None else session.get(DailyRecord, result.evaluation_id)
+    )
+    if (
+        active is None
+        or state is None
+        or version is None
+        or head is None
+        or state.plan_version_id != active.plan_version_id
+        or state.revision != active.revision
+        or snapshot["activation_revision"] != active.revision
+        or snapshot["plan_version_id"] != active.plan_version_id
+        or version.plan_hash != plan_sha256(plan)
+        or snapshot["runtime_generation"] != str(runtime_generation)
+        or json.loads(head.payload_json) != snapshot
+        or immutable is None
+        or immutable.kind != "EVALUATION"
+        or immutable.id.startswith("evaluation-head-")
+        or json.loads(immutable.payload_json) != snapshot
+    ):
+        return None
+    from trade_plan_monitor.runtime.daily_service import minute_source_current
+
+    if snapshot.get("minute_target") and not minute_source_current(session, snapshot, now):
+        return None
+    calendar = consumed_inputs.trading_calendar
+    if not calendar:
+        return None
+    start, end = calendar[0].cal_date, calendar[-1].cal_date
+    fresh_calendar, minutes, bars = _condition_sources(session, snapshot, start, end)
+    if (
+        _fingerprint("condition-calendar-v1", fresh_calendar)
+        != _fingerprint("condition-calendar-v1", calendar)
+        or _fingerprint("condition-minute-v1", minutes)
+        != _fingerprint("condition-minute-v1", consumed_inputs.minute_prefix)
+        or _fingerprint("condition-five-v1", bars)
+        != _fingerprint("condition-five-v1", consumed_inputs.five_minute_bars)
+        or snapshot.get("daily_evidence")
+        != (
+            None
+            if consumed_inputs.series is None
+            else consumed_inputs.series.model_dump(mode="json")
+        )
+    ):
+        return None
+    minute = snapshot.get("minute_target")
+    official = snapshot.get("official_trade_date")
+    if minute is None and official is None:
+        return None
+    from datetime import date
+
+    target = (
+        IntradayEvaluationTarget(bucket_end=datetime.fromisoformat(minute))
+        if minute
+        else OfficialCloseEvaluationTarget(trade_date=date.fromisoformat(official))
+    )
+    stamp = ConditionInputStamp(
+        immutable.id,
+        start,
+        end,
+        _fingerprint("condition-calendar-v1", fresh_calendar),
+        _fingerprint("condition-minute-v1", minutes),
+        _fingerprint("condition-five-v1", bars),
+        _fingerprint("condition-state-v1", _condition_state(session, plan.symbol)),
+    )
+    return PlanCompletionProof(
+        runtime_generation,
+        configuration_revision,
+        plan.symbol,
+        "CONDITION_PLAN",
+        active.plan_version_id,
+        version.plan_hash,
+        active.revision,
+        target,
+        _fingerprint("condition-result-v1", snapshot),
+        stamp,
+    )
+
+
+def condition_status_eligible(session, *, plan, now):
+    """Respect the activation window, with the existing non-alert locked-risk extension."""
+    from trade_plan_monitor.domain.plan_models import activation_is_eligible_on
+    from trade_plan_monitor.runtime.daily_service import _alert_only
+    from trade_plan_monitor.runtime.production import _daily_risk_monitoring_required
+
+    return activation_is_eligible_on(plan.activation, now.date()) or (
+        not _alert_only(plan) and _daily_risk_monitoring_required(session, plan, now)
+    )
+
+
+def condition_status_target(session, *, plan, now, proof=None):
+    """Latest applicable completed condition target from the stored exchange calendar."""
+    from datetime import time, timedelta
+
+    from trade_plan_monitor.runtime.production import _unified_minute_required
+    from trade_plan_monitor.runtime.recovery_targets import (
+        completed_minute_ends,
+        derive_recovery_target,
+    )
+    from trade_plan_monitor.state.repositories import MarketReferenceRepository
+
+    if not condition_status_eligible(session, plan=plan, now=now):
+        return None
+    days = MarketReferenceRepository(session).list_trading_days(
+        plan.market, now.date() - timedelta(days=366), now.date()
+    )
+    calendar = {day.cal_date: day.is_open for day in days}
+    if now.date() not in calendar:
+        return None
+    minute = _unified_minute_required(plan)
+    if minute:
+        capture = derive_recovery_target(now=now, is_open_on=calendar.get)
+        bucket = next(
+            (end for end in reversed(completed_minute_ends(capture)) if end.minute % 5 == 0), None
+        )
+        if bucket is None:
+            return None
+        if (
+            proof is not None
+            and isinstance(proof.target, OfficialCloseEvaluationTarget)
+            and bucket.time() == time(15)
+            and bucket.date() == proof.target.trade_date
+        ):
+            return proof.target
+        return IntradayEvaluationTarget(bucket_end=bucket)
+    official = next(
+        (
+            day.cal_date
+            for day in reversed(days)
+            if day.is_open and datetime.combine(day.cal_date, time(15), now.tzinfo) <= now
+        ),
+        None,
+    )
+    return None if official is None else OfficialCloseEvaluationTarget(trade_date=official)

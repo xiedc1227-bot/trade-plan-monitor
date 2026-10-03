@@ -16,8 +16,6 @@ from trade_plan_monitor.state.database import (
 from trade_plan_monitor.state.repositories import RevisionConflictError
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.position_service import PersistentPositionOperationService
-from trade_plan_monitor.web.routers.positions import PositionInventoryConfirmationCommand
-from trade_plan_monitor.web.schemas import MutationContext
 
 NOW = datetime(2026, 9, 14, 9, 20, tzinfo=ZoneInfo("Asia/Shanghai"))
 
@@ -174,7 +172,7 @@ def test_inventory_confirmation_counts_included_lots_once_and_fences_revision(
         engine.dispose()
 
 
-def test_inventory_confirmation_idempotency_replays_across_service_restart(
+def test_historical_inventory_survives_read_service_restart_without_writing(
     tmp_path: Path,
 ) -> None:
     engine = create_sqlite_engine(tmp_path / "inventory-idempotency.sqlite3")
@@ -194,27 +192,15 @@ def test_inventory_confirmation_idempotency_replays_across_service_restart(
                 clock=lambda: NOW,
             )
 
-        command = PositionInventoryConfirmationCommand(
-            symbol="003043.SZ",
-            as_of_trade_date=date(2026, 9, 14),
-            expected_revision=0,
-            total_quantity=100,
-            sellable_quantity=100,
-            included_lot_ids=(),
-            complete_registration=True,
-        )
-        context = MutationContext(
-            idempotency_key="inventory-confirm-1",
-            request_id="a" * 32,
-        )
-        first = asyncio.run(
-            new_service().confirm_position_inventory(command=command, context=context)
-        )
-        replay = asyncio.run(
-            new_service().confirm_position_inventory(command=command, context=context)
-        )
-
-        assert replay == first
+        with _work(engine) as work:
+            work.positions.confirm_inventory(symbol="003043.SZ", as_of_trade_date=date(2026, 9, 14),
+                total_quantity=100, sellable_quantity=100, included_lot_ids=(),
+                complete_registration=True, expected_revision=0)
+            work.commit()
+        first = asyncio.run(new_service().get_position_inventory(
+            symbol="003043.SZ", as_of_trade_date=date(2026, 9, 14)))
+        assert asyncio.run(new_service().get_position_inventory(
+            symbol="003043.SZ", as_of_trade_date=date(2026, 9, 14))) == first
         snapshot = asyncio.run(
             new_service().get_position_inventory(
                 symbol="003043.SZ",

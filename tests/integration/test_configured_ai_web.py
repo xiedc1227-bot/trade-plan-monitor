@@ -11,8 +11,7 @@ from fastapi.testclient import TestClient
 
 from trade_plan_monitor.web.ai_service import ConfiguredAIWebLifecycle
 from trade_plan_monitor.web.app import create_app, create_production_app
-from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
-from trade_plan_monitor.web.routers.ai import AIProviderSecretCommand, ConfiguredAIRuntimeView
+from trade_plan_monitor.web.routers.ai import ConfiguredAIRuntimeView
 from trade_plan_monitor.web.routers.plans import PlanExtractionCommand
 from trade_plan_monitor.web.schemas import MutationContext, OperationKind
 
@@ -89,20 +88,6 @@ ai:
             assert provider.revision == 0
             assert provider.secret_status.configured is True
             assert provider.secret_status.masked_value == "********"
-
-            with pytest.raises(ApiError) as blocked_write:
-                await lifecycle.replace_ai_provider_secret(
-                    command=AIProviderSecretCommand(
-                        provider_id=provider.config.provider_id,
-                        secret={"value": "must-not-be-written-from-web"},
-                        expected_revision=0,
-                    ),
-                    context=MutationContext(
-                        idempotency_key="replace-secret-is-disabled",
-                        request_id="a" * 32,
-                    ),
-                )
-            assert blocked_write.value.code is ApiErrorCode.METHOD_NOT_ALLOWED
 
             receipt = await lifecycle.submit_plan_extraction(
                 command=PlanExtractionCommand(

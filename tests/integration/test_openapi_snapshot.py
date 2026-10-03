@@ -16,18 +16,17 @@ GENERATOR_PATH = PROJECT_ROOT / "scripts" / "generate_frontend_types.py"
 OPENAPI_PATH = PROJECT_ROOT / "openapi.json"
 TYPESCRIPT_PATH = PROJECT_ROOT / "web" / "src" / "api" / "generated.ts"
 SPA_ENTRY_PATH = PROJECT_ROOT / "web" / "index.html"
-LOCAL_WEB_SPEC_PATH = PROJECT_ROOT / "docs" / "specifications" / "monitoring" / "SPEC-local-web.md"
+LOCAL_WEB_SPEC_PATH = (
+    PROJECT_ROOT / "docs" / "specifications" / "monitoring" / "SPEC-unified-plan.md"
+)
 LOCAL_WEB_SPEC_ZH_PATH = (
-    PROJECT_ROOT / "docs" / "specifications" / "monitoring" / "SPEC-local-web.zh-CN.md"
+    PROJECT_ROOT / "docs" / "specifications" / "monitoring" / "SPEC-unified-plan.zh-CN.md"
 )
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 APPROVED_PATHS = {
     "/api/v1/ai-runtime",
-    "/api/v1/ai-provider-secrets",
-    "/api/v1/ai-provider-tests",
     "/api/v1/ai-providers",
-    "/api/v1/ai-providers/{provider_id}",
     "/api/v1/alert-acknowledgements",
     "/api/v1/alerts",
     "/api/v1/backtest-data-syncs",
@@ -46,21 +45,19 @@ APPROVED_PATHS = {
     "/api/v1/backtest-runs/{run_id}/fills",
     "/api/v1/backtest-runs/{run_id}/market-index-series",
     "/api/v1/dashboard",
-    "/api/v1/daily-simulated-trades",
-    "/api/v1/daily-plan-editor-schema",
-    "/api/v1/daily-plan-facts",
-    "/api/v1/daily-plan-review-previews",
-    "/api/v1/daily-plan-review-supplements",
-    "/api/v1/daily-plan-runtime/{symbol}",
-    "/api/v1/daily-position-confirmations",
-    "/api/v1/daily-position-inventory",
-    "/api/v1/daily-risk-reassessments",
+    "/api/v1/simulated-trades",
+    "/api/v1/plan-editor-schema",
+    "/api/v1/plan-facts",
+    "/api/v1/plan-review-previews",
+    "/api/v1/plan-review-supplements",
+    "/api/v1/plan-runtime/{symbol}",
+    "/api/v1/simulation-position-confirmations",
+    "/api/v1/simulation-position-inventory",
+    "/api/v1/plan-risk-reassessments",
     "/api/v1/diagnostic-evaluations",
-    "/api/v1/explicit-plan-runtime/{symbol}",
     "/api/v1/health",
     "/api/v1/health/symbols/{symbol}",
     "/api/v1/manual-event-risk",
-    "/api/v1/manual-event-risk-confirmations",
     "/api/v1/market-indexes/{indexCode}/bars",
     "/api/v1/plan-activation-states/{symbol}",
     "/api/v1/plan-activations",
@@ -73,11 +70,8 @@ APPROVED_PATHS = {
     "/api/v1/plan-review-confirmations",
     "/api/v1/plan-versions",
     "/api/v1/plan-versions/{version_id}",
-    "/api/v1/position-lot-closures",
     "/api/v1/position-lots",
     "/api/v1/position-inventory",
-    "/api/v1/position-inventory-confirmations",
-    "/api/v1/position-inventory-closures",
     "/api/v1/symbols",
     "/api/v1/symbols/{symbol}",
     "/api/v1/symbols/{symbol}/bars",

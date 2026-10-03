@@ -34,6 +34,11 @@ from trade_plan_monitor.state.runtime_recovery import ProviderRecoveryRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web import monitor_composition
 
+CURRENT_SCOPES = tuple(
+    operation for operation in _PERMISSION_SCOPES
+    if operation is not TushareOperation.DAILY_LIMITS
+)
+
 
 class _RetryWait:
     """Release the actual lifecycle retry wait without substituting owner work."""
@@ -108,12 +113,14 @@ def _degraded_composition(tmp_path, monkeypatch, *, scopes=_PERMISSION_SCOPES, s
     return composition, sdk, wait
 
 
-def test_real_degraded_all_eight_permission_wakes_retain_owner_then_startup_restores(
+def test_real_degraded_current_permission_wakes_retain_owner_then_startup_restores(
     tmp_path,
     monkeypatch,
 ):
     async def scenario():
-        composition, sdk, wait = _degraded_composition(tmp_path, monkeypatch)
+        composition, sdk, wait = _degraded_composition(
+            tmp_path, monkeypatch, scopes=CURRENT_SCOPES
+        )
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
             runtime, runner = composition._runtime, composition._runner_task
@@ -160,7 +167,7 @@ def test_real_degraded_all_eight_permission_wakes_retain_owner_then_startup_rest
             assert await wait.park() == startup_due
             if failures:
                 raise failures[0]
-            assert completed == list(_PERMISSION_SCOPES)
+            assert completed == list(CURRENT_SCOPES)
             assert runtime.status is RuntimeServiceStatus.DEGRADED
             public_health = await composition.read_service.get_health()
             assert public_health.status is RuntimeServiceStatus.DEGRADED and public_health.read_only

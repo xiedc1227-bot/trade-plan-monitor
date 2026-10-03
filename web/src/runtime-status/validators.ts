@@ -85,7 +85,7 @@ export function isRuntimeSymbolDetail(value: unknown, expectedSymbol: string, ex
     if (!exact(value, [...envelopeKeys, "sequence", "summary", "legacyDetails"]) || !isPlanEntry(value.summary, value) || !isRecord(value.summary) ||
       value.summary.symbol !== expectedSymbol || explicitOnly && value.summary.planFamily !== "EXPLICIT_RULES") return false;
     const row = value.summary;
-    if (row.availability === "UNAVAILABLE" || row.planFamily === "EXPLICIT_RULES") return value.legacyDetails === null;
+    if (row.availability === "UNAVAILABLE" || ["EXPLICIT_RULES", "CONDITION_PLAN"].includes(String(row.planFamily))) return value.legacyDetails === null;
     const details = value.legacyDetails;
     if (!isRecord(details) || !exact(details, ["positionLots", "referenceMarket", "indexConditionEvidence"])) return false;
     // Reuse only v1 value validation. This temporary object never becomes a v2 projection.
@@ -114,7 +114,22 @@ function isPlanEntry(value: unknown, envelope: Record<string, unknown> & { obser
   const coordinator = envelope.runtimeStatus.coordinator as Record<string, unknown>;
   if (value.currentActionable && (value.availability !== "CURRENT" || envelope.runtimeGeneration === null ||
     !oneOf(coordinator.state, ["SCHEDULED", "WORKING"]))) return false;
-  return value.planFamily === "LEGACY_LOW_BUY" ? isLegacyEntry(value, envelope.observedAt) : isExplicitEntry(value, envelope.observedAt);
+  return value.planFamily === "LEGACY_LOW_BUY" ? isLegacyEntry(value, envelope.observedAt) : value.planFamily === "CONDITION_PLAN" ? isConditionEntry(value, envelope.observedAt) : isExplicitEntry(value, envelope.observedAt);
+}
+
+function isConditionEntry(value: Record<string, unknown>, observedAt: string): boolean {
+  if (!exact(value, [...entryKeys, "planRuntime"]) || !isRecord(value.planRuntime)) return false;
+  const runtime = value.planRuntime;
+  if (!["symbol", "planVersionId", "planHash", "activationRevision"].every(key => runtime[key] === value[key]) ||
+    !notLater(runtime.evaluatedAt, observedAt) || !Array.isArray(runtime.dataBlockers) || !runtime.dataBlockers.every(text) ||
+    !Array.isArray(runtime.signals) || !Array.isArray(runtime.risks) || !isRecord(runtime.riskAction)) return false;
+  if (!runtime.signals.every(s => isRecord(s) && text(s.signalId) && oneOf(s.side, ["BUY", "SELL"]) &&
+    oneOf(s.state, ["CONFIRMED", "READY", "SIMULATED", "EXPIRED", "INVALIDATED"]) &&
+    integer(s.plannedQty) && integer(s.simulatedQty) && integer(s.executableQty) && Array.isArray(s.blockers)) ||
+    !runtime.risks.every(r => isRecord(r) && oneOf(r.status, ["CLEAR", "PENDING", "OBSERVATION", "CONFIRMED", "FULFILLED"]))) return false;
+  const offered = runtime.signals.some(s => isRecord(s) && Number(s.executableQty) > 0) ||
+    runtime.riskAction.status === "RISK_EXIT" && Number(runtime.riskAction.coreQty ?? 0) + Number(runtime.riskAction.tacticalQty ?? 0) > 0;
+  return !value.currentActionable || value.availability === "CURRENT" && isRecord(value.scope) && value.scope.readOnly === false && offered;
 }
 
 function isLegacyEntry(value: Record<string, unknown>, observedAt: string): boolean {
@@ -185,11 +200,14 @@ function countsMatch(value: unknown, rows: Record<string, unknown>[]): boolean {
     const eligibility = current && row.planFamily === "EXPLICIT_RULES" ? row.ruleEligibility as Record<string, unknown>[] : [];
     const blocked = scope.status === "BLOCKED" || !!legacy && oneOf(health, ["BLOCKED", "GAPPED"]);
     const stale = row.availability === "CACHED" || !!legacy && !oneOf(health, ["LIVE", "BLOCKED", "GAPPED"]) || eligibility.some((rule) => rule.reasonCode === "INTRADAY_EXPIRED");
-    const risk = !!legacy && legacy.riskStatus !== "CLEAR" || eligibility.some((rule) => rule.currentActionable && rule.action === "RISK_ALERT");
+    const condition = current && row.planFamily === "CONDITION_PLAN" && isRecord(row.planRuntime) ? row.planRuntime : null;
+    const conditionRisk = !!condition && Array.isArray(condition.risks) && condition.risks.some(r => isRecord(r) && r.status !== "CLEAR");
+    const conditionStale = !!condition && Array.isArray(condition.dataBlockers) && condition.dataBlockers.length > 0;
+    const risk = conditionRisk || !!legacy && legacy.riskStatus !== "CLEAR" || eligibility.some((rule) => rule.currentActionable && rule.action === "RISK_ALERT");
     const watch = !!legacy && scope.status === "READY" && health === "LIVE" && legacy.signalType === "LOW_ZONE_WATCH";
-    const normal = current && scope.status === "READY" && !row.currentActionable && !blocked && !stale && !risk && !watch &&
+    const normal = current && scope.status === "READY" && !row.currentActionable && !blocked && !stale && !conditionStale && !risk && !watch &&
       (legacy ? health === "LIVE" && !oneOf(legacy.signalType, legacyActionable) : eligibility.every((rule) => rule.reasonCode === "NO_CURRENT_SIGNAL"));
-    counts.actionable += Number(row.currentActionable); counts.blocked += Number(blocked); counts.stale += Number(stale);
+    counts.actionable += Number(row.currentActionable); counts.blocked += Number(blocked); counts.stale += Number(stale || conditionStale);
     counts.risk += Number(risk); counts.lowZoneWatch += Number(watch); counts.normal += Number(normal);
   }
   return Object.entries(counts).every(([key, count]) => integer(value[key]) && value[key] === count);

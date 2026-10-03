@@ -108,8 +108,17 @@ class _PlanSnapshotReader:
             "planJson": dump_plan_json(plan),
             "sourceText": "华亚智能结构化交易计划",
             "reviewIssues": [],
-            "validationIssues": [],
-            "canActivate": True,
+            "validationIssues": [
+                {
+                    "code": "LEGACY_PLANS_REQUIRE_REVIEW",
+                    "path": "draft",
+                    "severity": "WARNING",
+                    "activationBlocking": True,
+                    "message": "Frozen historical plan is available only for isolated backtests.",
+                }
+            ],
+            "obsoleteReason": "LEGACY_PLANS_REQUIRE_REVIEW",
+            "canActivate": False,
             "revision": 0,
             "createdAt": "2026-08-29T09:30:00.000000+08:00",
         }
@@ -952,3 +961,53 @@ def test_cancellation_replay_keeps_the_original_job_response_after_acknowledgeme
     assert first == replay
     assert first.status_code == 202
     assert first.job.status == "CANCEL_REQUESTED"
+
+
+@pytest.mark.parametrize("additional_blocker", ["review-warning", "validation-blocker"])
+def test_frozen_backtest_eligibility_does_not_ignore_unresolved_review(
+    tmp_path, additional_blocker
+):
+    reader = _PlanSnapshotReader()
+    if additional_blocker == "review-warning":
+        reader._payload["reviewIssues"] = [
+            {
+                "kind": "WARNING",
+                "path": "draft",
+                "material": True,
+                "resolved": False,
+            }
+        ]
+    else:
+        reader._payload["validationIssues"].append(
+            {
+                "code": "MISSING_MARKET_EVIDENCE",
+                "path": "draft",
+                "severity": "WARNING",
+                "message": "Historical input is missing independently required evidence.",
+                "activationBlocking": True,
+            }
+        )
+    market_database = tmp_path / "market.sqlite3"
+    composition = create_backtest_composition_factory(
+        config_path=Path("config/app.yaml"),
+        plan_snapshot_reader=reader,
+        market_database=market_database,
+        results_database=tmp_path / "results.sqlite3",
+        cursor_key_path=tmp_path / "cursor.key",
+    )()
+    dataset_hash = _insert_empty_dataset(market_database)
+
+    async def scenario():
+        try:
+            with pytest.raises(ApiError) as caught:
+                await composition.operation_service.submit_run(
+                    command=_run_command(dataset_hash),
+                    context=MutationContext(
+                        idempotency_key="blocked-frozen-backtest", request_id="a" * 32
+                    ),
+                )
+            assert caught.value.code is ApiErrorCode.CONFLICT
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())

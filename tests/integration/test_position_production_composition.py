@@ -28,6 +28,12 @@ from trade_plan_monitor.state.models import (
     RequestIdempotency,
     RuntimeLiveness,
 )
+from trade_plan_monitor.state.repositories import (
+    MaxPositionExceededError,
+    PositionReductionError,
+    PositionT1LockedError,
+    RevisionConflictError,
+)
 from trade_plan_monitor.state.runtime_liveness import RuntimeLivenessRepository
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.app import create_app
@@ -153,17 +159,12 @@ def _buy_payload(
     }
 
 
-def _assert_conflict(response: Response) -> None:
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "CONFLICT"
-
-
 def _assert_unavailable(response: Response) -> None:
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
 
 
-def test_missing_liveness_blocks_position_write_without_mutation(tmp_path: Path) -> None:
+def test_missing_liveness_and_removed_position_write_leave_state_unchanged(tmp_path: Path) -> None:
     app, _composition, database_path = _production_position_app(
         tmp_path, initialize_liveness=False,
     )
@@ -195,7 +196,7 @@ def test_missing_liveness_blocks_position_write_without_mutation(tmp_path: Path)
                 headers={"Idempotency-Key": "webf09-missing-liveness"},
                 json=_buy_payload(),
             )
-            _assert_conflict(response)
+            assert response.status_code == 405
             assert mutation_snapshot() == before
             with sessions() as session:
                 assert session.scalars(select(RuntimeLiveness)).all() == []
@@ -293,7 +294,18 @@ def test_position_page_is_paginated_and_projects_sellability_on_the_backend(
 def test_position_calendar_distinguishes_known_closed_from_missing_authority(
     tmp_path: Path,
 ) -> None:
-    app, _composition, _database_path = _production_position_app(tmp_path)
+    app, _composition, database_path = _production_position_app(tmp_path)
+    engine = create_sqlite_engine(database_path)
+    try:
+        with SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: _FIXED_NOW) as work:
+            lot = work.positions.record_buy(
+                symbol="003043.SZ", bucket="CORE", quantity=100,
+                acquired_trade_date=date(2026, 9, 3), cost_fen=6400,
+                board_lot=100, max_position_qty=200,
+            )
+            work.commit()
+    finally:
+        engine.dispose()
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         created = client.post(
@@ -301,8 +313,8 @@ def test_position_calendar_distinguishes_known_closed_from_missing_authority(
             headers={"Idempotency-Key": "webf09-calendar-buy"},
             json=_buy_payload(),
         )
-        assert created.status_code == 200
-        lot_id = created.json()["lotId"]
+        assert created.status_code == 405
+        lot_id = lot.id
         known_closed = client.get(
             "/api/v1/position-lots",
             params={"symbol": "003043.SZ", "asOfTradeDate": "2026-09-05"},
@@ -335,14 +347,42 @@ def test_position_calendar_distinguishes_known_closed_from_missing_authority(
     assert known_closed.status_code == 200
     assert known_closed.json()["items"][0]["sellableQuantity"] == 0
     _assert_unavailable(missing)
-    _assert_conflict(closed_reduction)
-    _assert_unavailable(missing_reduction)
+    assert closed_reduction.status_code == 404
+    assert missing_reduction.status_code == 404
+    engine = create_sqlite_engine(database_path)
+    try:
+        with SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: _FIXED_NOW) as work:
+            with pytest.raises(PositionT1LockedError):
+                work.positions.reduce_lot(lot_id, quantity=100, trade_date=date(2026, 9, 3))
+            assert work.positions.get_lot(lot_id).remaining_qty == 100
+    finally:
+        engine.dispose()
 
 
 def test_position_create_replays_atomically_and_uses_active_plan_maximum(
     tmp_path: Path,
 ) -> None:
     app, _composition, database_path = _production_position_app(tmp_path)
+
+    engine = create_sqlite_engine(database_path)
+    try:
+        with SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: _FIXED_NOW) as work:
+            created_lot = work.positions.record_buy(
+                symbol="003043.SZ", bucket="CORE", quantity=200,
+                acquired_trade_date=date(2026, 9, 3), cost_fen=6400,
+                board_lot=100, max_position_qty=200,
+            )
+            work.commit()
+        with SqlAlchemyUnitOfWork(create_session_factory(engine), clock=lambda: _FIXED_NOW) as work:
+            with pytest.raises(MaxPositionExceededError):
+                work.positions.record_buy(
+                    symbol="003043.SZ", bucket="CORE", quantity=100,
+                    acquired_trade_date=date(2026, 9, 3), cost_fen=6400,
+                    board_lot=100, max_position_qty=200,
+                )
+            assert work.positions.get_lot(created_lot.id).remaining_qty == 200
+    finally:
+        engine.dispose()
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         created = client.post(
@@ -370,16 +410,11 @@ def test_position_create_replays_atomically_and_uses_active_plan_maximum(
             params={"symbol": "003043.SZ", "asOfTradeDate": "2026-09-04"},
         )
 
-    assert created.status_code == 200
-    assert created.json()["quantity"] == 200
-    assert created.json()["revision"] == 0
-    assert replayed.status_code == 200
-    assert replayed.json() == created.json()
-    _assert_conflict(maximum)
-    _assert_conflict(missing_active_plan)
+    assert created.status_code == replayed.status_code == 405
+    assert maximum.status_code == missing_active_plan.status_code == 405
     assert page.status_code == 200
     assert page.json()["total"] == 1
-    assert page.json()["items"][0]["lotId"] == created.json()["lotId"]
+    assert page.json()["items"][0]["lotId"] == created_lot.id
 
     engine = create_sqlite_engine(database_path)
     try:
@@ -391,8 +426,10 @@ def test_position_create_replays_atomically_and_uses_active_plan_maximum(
         assert evidence["schemaVersion"] == 1
         assert evidence["effectiveTradeDate"] == "2026-09-03"
         assert evidence["before"] is None
-        assert evidence["after"]["id"] == created.json()["lotId"]
+        assert evidence["after"]["id"] == created_lot.id
         assert evidence["after"]["remaining_qty"] == 200
+        with create_session_factory(engine)() as session:
+            assert session.scalars(select(RequestIdempotency)).all() == []
     finally:
         engine.dispose()
 
@@ -401,6 +438,45 @@ def test_position_closure_replays_and_rejects_t1_remaining_and_stale_revision(
     tmp_path: Path,
 ) -> None:
     app, _composition, database_path = _production_position_app(tmp_path)
+    engine = create_sqlite_engine(database_path)
+    sessions = create_session_factory(engine)
+    try:
+        with SqlAlchemyUnitOfWork(sessions, clock=lambda: _FIXED_NOW) as work:
+            lot = work.positions.record_buy(
+                symbol="003043.SZ", bucket="CORE", quantity=200,
+                acquired_trade_date=date(2026, 9, 3), cost_fen=6400,
+                board_lot=100, max_position_qty=200,
+            )
+            work.commit()
+        lot_id = lot.id
+        with SqlAlchemyUnitOfWork(sessions, clock=lambda: _FIXED_NOW) as work:
+            with pytest.raises(PositionT1LockedError):
+                work.positions.reduce_lot(
+                    lot_id, quantity=100, trade_date=date(2026, 9, 3),
+                    expected_revision=0,
+                )
+        next_day = datetime(2026, 9, 4, 10, 30, tzinfo=_SHANGHAI)
+        with SqlAlchemyUnitOfWork(sessions, clock=lambda: next_day) as work:
+            reduced_lot = work.positions.reduce_lot(
+                lot_id, quantity=100, trade_date=date(2026, 9, 4),
+                expected_revision=0,
+            )
+            work.commit()
+        assert reduced_lot.remaining_qty == 100
+        with SqlAlchemyUnitOfWork(sessions, clock=lambda: next_day) as work:
+            with pytest.raises(RevisionConflictError):
+                work.positions.reduce_lot(
+                    lot_id, quantity=100, trade_date=date(2026, 9, 4),
+                    expected_revision=0,
+                )
+        with SqlAlchemyUnitOfWork(sessions, clock=lambda: next_day) as work:
+            with pytest.raises(PositionReductionError):
+                work.positions.reduce_lot(
+                    lot_id, quantity=200, trade_date=date(2026, 9, 4),
+                    expected_revision=1,
+                )
+    finally:
+        engine.dispose()
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         created = client.post(
@@ -408,8 +484,7 @@ def test_position_closure_replays_and_rejects_t1_remaining_and_stale_revision(
             headers={"Idempotency-Key": "webf09-close-buy"},
             json=_buy_payload(quantity=200),
         )
-        assert created.status_code == 200
-        lot_id = created.json()["lotId"]
+        assert created.status_code == 405
         closure_base = {
             "lotId": lot_id,
             "quantity": 100,
@@ -450,16 +525,9 @@ def test_position_closure_replays_and_rejects_t1_remaining_and_stale_revision(
             params={"symbol": "003043.SZ", "asOfTradeDate": "2026-09-04"},
         )
 
-    _assert_conflict(t1_locked)
-    assert closed.status_code == 200
-    assert closed.json()["appliedQuantity"] == 100
-    assert closed.json()["beforeRemainingQuantity"] == 200
-    assert closed.json()["afterRemainingQuantity"] == 100
-    assert closed.json()["lot"]["revision"] == 1
-    assert replayed.status_code == 200
-    assert replayed.json() == closed.json()
-    _assert_conflict(stale)
-    _assert_conflict(exceeds_remaining)
+    assert all(response.status_code == 404 for response in (
+        t1_locked, closed, replayed, stale, exceeds_remaining,
+    ))
     assert page.status_code == 200
     assert page.json()["total"] == 1
     assert page.json()["items"][0]["remainingQuantity"] == 100

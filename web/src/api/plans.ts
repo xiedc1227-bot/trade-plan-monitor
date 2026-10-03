@@ -1,7 +1,6 @@
 import type {
   ActivePlanView,
   DraftReviewIssue,
-  ExplicitPlanRuntimeView,
   PlanActivationCommand,
   PlanDeactivationCommand,
   PlanDraftCommand,
@@ -72,27 +71,10 @@ export interface PlanApi {
   ): Promise<PlanVersionView>;
 }
 
-export interface ExplicitPlanRuntimeApi {
-  getExplicitPlanRuntime(
-    symbol: string,
-    options?: PlanRequestOptions,
-  ): Promise<ExplicitPlanRuntimeView>;
-}
-
 export function createPlanApi(
   fetchImplementation: typeof fetch = resolveApiFetch(),
-): PlanApi & ExplicitPlanRuntimeApi {
+): PlanApi {
   return Object.freeze({
-    async getExplicitPlanRuntime(symbol: string, options?: PlanRequestOptions) {
-      if (!isShareSymbol(symbol)) throw invalidResponse(0);
-      const { body, status } = await requestJson(
-        fetchImplementation,
-        `/api/v1/explicit-plan-runtime/${encodeURIComponent(symbol)}`,
-        readRequest(options),
-      );
-      if (!isExplicitPlanRuntime(body, symbol)) throw invalidResponse(status);
-      return body;
-    },
     async listPlanVersions(
       request: PlanVersionListRequest,
       options?: PlanRequestOptions,
@@ -316,7 +298,7 @@ function isPlanVersionSummary(value: unknown): value is PlanVersionSummary {
     ]) &&
     hasRequiredKeys(value, ["canActivate", "createdAt", "id", "planHash", "planId", "revision", "status", "symbol", "version"]) &&
     isOptionalObsoleteReason(value.obsoleteReason) &&
-    (value.obsoleteReason !== "DAILY_DRAFT_OBSOLETE" || value.canActivate === false) &&
+    (value.obsoleteReason == null || value.canActivate === false) &&
     typeof value.canActivate === "boolean" &&
     isShanghaiDateTime(value.createdAt) &&
     isUuid(value.id) &&
@@ -326,7 +308,7 @@ function isPlanVersionSummary(value: unknown): value is PlanVersionSummary {
     (value.status === "DRAFT" ||
       value.status === "ACTIVE" ||
       value.status === "SUPERSEDED") &&
-    (value.status !== "ACTIVE" || value.canActivate || value.obsoleteReason === "DAILY_DRAFT_OBSOLETE") &&
+    (value.status !== "ACTIVE" || value.canActivate || value.obsoleteReason != null) &&
     isShareSymbol(value.symbol) &&
     isPositiveInteger(value.version)
   );
@@ -433,8 +415,16 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
   } catch {
     document = null;
   }
-  if (isRecord(document) && document.schema_version === 4) {
-    if (document.execution_mode !== "DAILY_CLOSE_PLAN" || document.execution_version !== "daily-close-v1" ||
+  if (value.obsoleteReason === "LEGACY_PLANS_REQUIRE_REVIEW") {
+    return value.canActivate === false && isRecord(document) &&
+      [1, 2, 3, 4].includes(document.schema_version as number) &&
+      document.plan_id === value.planId && document.version === value.version && document.symbol === value.symbol &&
+      validationIssues.some((issue) => issue.code === "LEGACY_PLANS_REQUIRE_REVIEW" && issue.activationBlocking);
+  }
+  if (isRecord(document) && (document.schema_version === 4 || document.schema_version === 5)) {
+    const mode = document.schema_version === 5 ? "CONDITION_PLAN" : "DAILY_CLOSE_PLAN";
+    const executionVersion = document.schema_version === 5 ? "condition-plan-v1" : "daily-close-v1";
+    if (document.execution_mode !== mode || document.execution_version !== executionVersion ||
       document.plan_id !== value.planId || document.version !== value.version || document.symbol !== value.symbol ||
       !isRecord(value.dailyMapping) || value.dailyMapping.mapping_version !== "daily-mapping-v1" ||
       value.dailyMapping.candidate_content_hash !== value.contentHash ||
@@ -448,37 +438,14 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
 }
 
 function isOptionalObsoleteReason(value: unknown): boolean {
-  return value === undefined || value === null || value === "DAILY_DRAFT_OBSOLETE";
+  return value === undefined || value === null || value === "DAILY_DRAFT_OBSOLETE" ||
+    value === "LEGACY_PLANS_REQUIRE_REVIEW";
 }
 
 function isDailyReviewIssue(value: unknown): boolean {
   return isRecord(value) && hasExactKeys(value, ["code", "issue_id", "path", "reason"]) &&
     isValidationCode(value.code) && isBoundedText(value.issue_id, 128) &&
     isPlanPath(value.path) && isBoundedText(value.reason, 512);
-}
-
-function isExplicitPlanRuntime(value: unknown, symbol: string): value is ExplicitPlanRuntimeView {
-  if (!isRecord(value) || value.symbol !== symbol || !isUuid(value.planVersionId) ||
-    !isSha256Hash(value.planHash) || !isNonnegativeInteger(value.activationRevision) ||
-    (value.status !== "AWAITING_EVALUATION" && value.status !== "CURRENT") ||
-    !Array.isArray(value.ruleOutcomes) || !value.ruleOutcomes.every(isExplicitRuleOutcome)) return false;
-  return value.status === "CURRENT"
-    ? isShanghaiDateTime(value.evaluatedAt) && isShanghaiDateTime(value.targetBucketEnd)
-    : value.evaluatedAt === null && value.targetBucketEnd === null && value.ruleOutcomes.length === 0;
-}
-
-function isExplicitRuleOutcome(value: unknown): boolean {
-  return isRecord(value) && typeof value.ruleId === "string" &&
-    (value.action === "BUY" || value.action === "SELL" || value.action === "RISK_ALERT") &&
-    typeof value.conditionCode === "string" &&
-    (value.outcome === "SATISFIED" || value.outcome === "UNSATISFIED" || value.outcome === "MISSING_INPUT") &&
-    Array.isArray(value.missingInputs) && value.missingInputs.every((item) => typeof item === "string") &&
-    Array.isArray(value.blockers) && value.blockers.every((item) => typeof item === "string") &&
-    (value.suppressionReason === null || value.suppressionReason === "ONCE_ALREADY_EMITTED" || value.suppressionReason === "TARGET_ALREADY_EMITTED");
-}
-
-function isSha256Hash(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 }
 
 function isPlanReviewConfirmation(

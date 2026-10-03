@@ -13,15 +13,20 @@ def _facts(database):
     with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         db.row_factory = sqlite3.Row
         return {
-            table: tuple(dict(row) for row in db.execute(
-                f"SELECT * FROM {table} WHERE symbol=? ORDER BY rowid", (SYMBOL,),
-            ))
+            table: tuple(
+                dict(row)
+                for row in db.execute(
+                    f"SELECT * FROM {table} WHERE symbol=? ORDER BY rowid",
+                    (SYMBOL,),
+                )
+            )
             for table in ("minute_bar", "latest_quote")
         }
 
 
 def test_scheduled_stock_recovery_source_revocation_blocks_without_rearming(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         async with _running(tmp_path, monkeypatch, "partial") as run:
@@ -62,16 +67,22 @@ def test_scheduled_stock_recovery_source_revocation_blocks_without_rearming(
             monkeypatch.setattr(run.sdk, "_stock_minutes", held_sdk)
             run.sdk.phase = "scheduled-authority"
             run.sdk.history_available = True
-            drive = asyncio.create_task(run.clock.drive(
-                NOW.replace(minute=3, second=12), failed=run.runner_failed,
-            ))
+            drive = asyncio.create_task(
+                run.clock.drive(
+                    NOW.replace(minute=3, second=12),
+                    failed=run.runner_failed,
+                )
+            )
             entry_wait = asyncio.create_task(entered.wait())
             try:
                 done, _ = await asyncio.wait(
-                    (drive, entry_wait), timeout=10, return_when=asyncio.FIRST_COMPLETED,
+                    (drive, entry_wait),
+                    timeout=10,
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
                 assert entered.is_set(), (
-                    "real scheduled stock maintenance did not enter its SDK", run.sdk.trace,
+                    "real scheduled stock maintenance did not enter its SDK",
+                    run.sdk.trace,
                     [deadline.kind.value for deadline in deadlines],
                 )
                 assert entry_wait in done or entry_wait.done()

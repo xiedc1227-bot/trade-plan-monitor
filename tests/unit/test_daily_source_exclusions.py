@@ -74,15 +74,25 @@ def test_excluded_source_cannot_be_relabelled_as_technical_policy():
 
 
 def test_v7_review_normalizes_exact_background_and_rejects_ai_human_selection():
-    from trade_plan_monitor.ai.daily_extraction import DailyExtractionOutput
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.ai.plan_extraction import (
+        CurrentPlanExtractionOutput as DailyExtractionOutput,
+    )
     from trade_plan_monitor.ai.review import server_source_clauses
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+    from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 
     source = "Announcement verification is outside daily monitoring."
     clauses = [
         dict(c.model_dump(), disposition="UNRESOLVED", paths=(), reason="Unparsed AI text")
         for c in server_source_clauses(source)
     ]
-    output = DailyExtractionOutput(draft=draft(), clauses=clauses, bindings=())
+    output = DailyExtractionOutput(
+        draft=UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(unified_payload())),
+        clauses=clauses,
+        bindings=(),
+    )
     review = output.review(source)
     assert review.mapping.clauses[0].disposition == "BACKGROUND"
     assert review.mapping.clauses[0].exclusions[0].excerpt == source[:-1]

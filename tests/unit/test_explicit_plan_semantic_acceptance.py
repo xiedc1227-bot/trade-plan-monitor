@@ -1,70 +1,36 @@
+"""Frozen Schema3 source/meaning oracle; no retired live extraction is invoked."""
+
 from __future__ import annotations
 
-import asyncio
 import copy
 import json
 from hashlib import sha256
 from pathlib import Path
-from uuid import UUID
+from types import SimpleNamespace
 
 import pytest
 
-from trade_plan_monitor.ai.extraction import extract_plan
 from trade_plan_monitor.ai.models import (
-    AIProviderConfig,
-    AIProviderType,
     BindingKind,
     BindingOrigin,
     ClauseDisposition,
     ExplicitPlanDraft,
-    PlanExtractionStatus,
     PlanMapping,
-    SecretReference,
 )
-from trade_plan_monitor.ai.prompts import PLAN_EXTRACTION_PROMPT_V4
-from trade_plan_monitor.ai.provider import PlanExtractionRequest, RawAIResponse
-from trade_plan_monitor.ai.review import build_server_review_snapshot, server_source_clauses
+from trade_plan_monitor.ai.review import (
+    MappingValidationError,
+    build_server_review_snapshot,
+    server_source_clauses,
+)
 
 _CORPUS_PATH = (
     Path(__file__).parents[1] / "fixtures" / "ai" / "explicit-plan-semantic-acceptance-v2.json"
 )
-_PROVIDER_ID = UUID("8494b550-7119-4c66-8e32-3339ab6c95b3")
-_REQUEST_ID = UUID("927b1e10-44a4-4e2f-8db0-579059a20351")
 _SEMANTIC_CODES = frozenset({"UNRESOLVED_SEMANTICS", "UNSUPPORTED_SEMANTICS"})
 
 
-class _StaticProvider:
-    def __init__(self, content: str) -> None:
-        self.content = content
-        self.request: PlanExtractionRequest | None = None
-
-    async def test_connection(self, config: AIProviderConfig) -> None:
-        raise AssertionError("not used")
-
-    async def extract_plan(self, request: PlanExtractionRequest) -> RawAIResponse:
-        self.request = request
-        return RawAIResponse(
-            request_id=request.request_id,
-            provider_id=request.config.provider_id,
-            model=request.config.model,
-            content=self.content,
-            finish_reason="stop",
-            usage=None,
-            attempts=1,
-        )
 
 
-def _config() -> AIProviderConfig:
-    return AIProviderConfig(
-        provider_id=_PROVIDER_ID,
-        display_name="Offline semantic acceptance provider",
-        provider_type=AIProviderType.OPENAI_COMPATIBLE,
-        base_url="https://ai.example.test/v1",
-        model="offline-semantic-v2",
-        secret_ref=SecretReference(key="ai/provider/offline-semantic-v2"),
-        prompt_version=PLAN_EXTRACTION_PROMPT_V4,
-        max_retries=0,
-    )
 
 
 def _corpus() -> dict[str, object]:
@@ -201,19 +167,20 @@ def _provider_payload(case: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _extract(case: dict[str, object]):
-    provider = _StaticProvider(json.dumps(_provider_payload(case), ensure_ascii=False))
-    result = asyncio.run(
-        extract_plan(
-            request_id=_REQUEST_ID,
-            source_text=str(case["sourceText"]),
-            config=_config(),
-            provider=provider,
-        )
+def _historical_review_input(case: dict[str, object]):
+    """Decode the frozen Schema3 oracle; current extraction uses Schema5 elsewhere."""
+    payload = _provider_payload(case)
+    draft = ExplicitPlanDraft.model_validate_json(json.dumps(payload["draft"]))
+    mapping = PlanMapping.model_validate_json(json.dumps({
+        key: payload[key]
+        for key in ("mapping_version", "source_clauses", "field_bindings")
+    }))
+    snapshot = build_server_review_snapshot(
+        source_text=str(case["sourceText"]), draft=draft, mapping=mapping,
     )
-    assert provider.request is not None
-    assert "Prompt version: plan-extract-v4" in provider.request.prompt
-    return result
+    return SimpleNamespace(
+        draft=draft, mapping=mapping, validation_issues=snapshot.required_issues,
+    )
 
 
 def _cases() -> list[dict[str, object]]:
@@ -249,12 +216,11 @@ def test_v2_corpus_is_a_separate_simulated_provider_acceptance_oracle() -> None:
 
 
 @pytest.mark.parametrize("case", _cases(), ids=lambda item: str(item["id"]))
-def test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning(
+def test_each_frozen_v2_case_retains_server_review_and_its_own_meaning(
     case: dict[str, object],
 ) -> None:
-    result = _extract(case)
+    result = _historical_review_input(case)
 
-    assert result.status is PlanExtractionStatus.SUCCEEDED
     assert isinstance(result.draft, ExplicitPlanDraft)
     assert isinstance(result.mapping, PlanMapping)
     snapshot = build_server_review_snapshot(
@@ -314,10 +280,10 @@ def test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_mean
 
 
 @pytest.mark.parametrize("case", _counterexamples(), ids=lambda item: str(item["id"]))
-def test_explicit_context_and_numeric_definitions_cross_the_same_v4_review_chain(
+def test_frozen_explicit_context_and_numeric_definitions_retain_review_semantics(
     case: dict[str, object],
 ) -> None:
-    test_each_v2_case_crosses_provider_parse_and_server_review_with_its_own_meaning(case)
+    test_each_frozen_v2_case_retains_server_review_and_its_own_meaning(case)
 
 
 def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_closed() -> None:
@@ -325,7 +291,8 @@ def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_clos
 
     wrong_unit = copy.deepcopy(cases["SEM-EXP-01"])
     wrong_unit["simulatedProviderResponse"]["sourceBindings"][1]["unit"] = "SHARES"
-    assert _extract(wrong_unit).status is PlanExtractionStatus.INVALID_OUTPUT
+    with pytest.raises(MappingValidationError):
+        _historical_review_input(wrong_unit)
 
     omitted_volume = copy.deepcopy(cases["SEM-EXP-03"])
     omitted_volume["simulatedProviderResponse"]["sourceBindings"] = [
@@ -333,7 +300,7 @@ def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_clos
         for item in omitted_volume["simulatedProviderResponse"]["sourceBindings"]
         if item["path"] != "rules[0].condition.conditions[1].window_bars"
     ]
-    omitted_result = _extract(omitted_volume)
+    omitted_result = _historical_review_input(omitted_volume)
     assert any(
         issue.code == "UNMAPPED_PLAN_FIELD"
         and issue.path == "rules[0].condition.conditions[1].window_bars"
@@ -350,7 +317,7 @@ def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_clos
         if item["path"] == "rules[0].action.quantity"
     )
     quantity_binding["value"] = 200
-    quantity_result = _extract(wrong_quantity)
+    quantity_result = _historical_review_input(wrong_quantity)
     quantity_snapshot = build_server_review_snapshot(
         source_text=wrong_quantity["sourceText"],
         draft=quantity_result.draft,
@@ -374,8 +341,7 @@ def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_clos
         if item["path"] == "rules[0].action.type"
     )
     action_binding["value"] = "SELL"
-    action_result = _extract(wrong_action)
-    assert action_result.status is PlanExtractionStatus.SUCCEEDED
+    action_result = _historical_review_input(wrong_action)
     action_snapshot = build_server_review_snapshot(
         source_text=wrong_action["sourceText"],
         draft=action_result.draft,
@@ -394,7 +360,7 @@ def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_clos
     for binding in wrong_logic["simulatedProviderResponse"]["sourceBindings"]:
         if binding["path"] in {"rules[0].condition", "rules[0].condition.type"}:
             binding["value"] = "ANY"
-    logic_result = _extract(wrong_logic)
+    logic_result = _historical_review_input(wrong_logic)
     logic_snapshot = build_server_review_snapshot(
         source_text=wrong_logic["sourceText"],
         draft=logic_result.draft,
@@ -414,8 +380,7 @@ def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_clos
         if item.get("bindingKind") == "STRUCTURE" and item["path"] == "rules[0].condition"
     )
     structure_binding["clauseIndex"] = 0
-    parent_result = _extract(wrong_parent)
-    assert parent_result.status is PlanExtractionStatus.SUCCEEDED
+    parent_result = _historical_review_input(wrong_parent)
     parent_snapshot = build_server_review_snapshot(
         source_text=wrong_parent["sourceText"],
         draft=parent_result.draft,
@@ -432,7 +397,7 @@ def test_adversarial_units_omissions_and_unreviewed_semantic_mutations_fail_clos
 
     added_parameter = copy.deepcopy(cases["SEM-EXP-01"])
     added_parameter["simulatedProviderResponse"]["partialDraft"]["positionMaxQty"] = 400
-    added_result = _extract(added_parameter)
+    added_result = _historical_review_input(added_parameter)
     assert any(
         issue.code == "UNMAPPED_PLAN_FIELD" and issue.path == "position.max_qty"
         for issue in added_result.validation_issues
@@ -455,8 +420,7 @@ def test_full_plan_omitted_action_clauses_remain_explicitly_unresolved(
     ]
     response["unresolvedClauseIndexes"].append(clause_index)
 
-    result = _extract(case)
-    assert result.status is PlanExtractionStatus.SUCCEEDED
+    result = _historical_review_input(case)
     omitted_clause = result.mapping.source_clauses[clause_index]
     assert omitted_clause.disposition is ClauseDisposition.UNRESOLVED
     snapshot = build_server_review_snapshot(
@@ -477,8 +441,7 @@ def test_full_plan_omitted_action_clauses_remain_explicitly_unresolved(
 
 def test_full_synthetic_plan_preserves_omitted_clauses_and_policy_gaps() -> None:
     case = _corpus()["fullSyntheticPlan"]
-    result = _extract(case)
-    assert result.status is PlanExtractionStatus.SUCCEEDED
+    result = _historical_review_input(case)
     snapshot = build_server_review_snapshot(
         source_text=case["sourceText"],
         draft=result.draft,

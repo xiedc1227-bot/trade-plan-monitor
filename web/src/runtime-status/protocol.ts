@@ -15,7 +15,7 @@ const guardedCommands = new Set([
   "/api/v1/diagnostic-evaluations",
   "/api/v1/system/legacy-plan-invalidation",
 ]);
-const guardedRead = /^\/api\/v1\/(?:health(?:\/symbols\/[^/]+)?|dashboard|symbols(?:\/[^/]+)?|explicit-plan-runtime\/[^/]+)$/;
+const guardedRead = /^\/api\/v1\/(?:health(?:\/symbols\/[^/]+)?|dashboard|symbols(?:\/[^/]+)?)$/;
 
 export type MonitorProtocolState = "NEGOTIATING" | "COMPATIBLE" | "RELOAD_REQUIRED";
 

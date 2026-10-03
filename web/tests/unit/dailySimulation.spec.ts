@@ -1,7 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import type { PlanVersionView } from "../../src/api/generated";
-import DailyOperationsPanel from "../../src/components/daily/DailyOperationsPanel.vue";
+import DailyOperationsPanel from "../../src/components/plans/PlanSimulationPanel.vue";
 
 const version = { id: "version-1", symbol: "601021.SH", contentHash: "a".repeat(64) } as PlanVersionView;
 
@@ -48,7 +48,7 @@ describe("daily simulation operations", () => {
     await inputs[1]!.setValue("0");
     await form.trigger("submit");
     await flushPromises();
-    const mutation = request.mock.calls.find(([url]) => url.endsWith("daily-position-confirmations"));
+    const mutation = request.mock.calls.find(([url]) => url.endsWith("simulation-position-confirmations"));
     expect(mutation?.[1]).toEqual({ symbol: "601021.SH", coreQty: 100, tacticalQty: 0, expectedRevision: 3 });
     expect(form.text()).not.toMatch(/具体核验证据|软件实际可卖|期初余额明确分类|全部有效未成交/);
   });
@@ -66,7 +66,7 @@ describe("daily simulation operations", () => {
     expect(button.attributes("disabled")).toBeUndefined();
     await button.trigger("click");
     await flushPromises();
-    const mutation = request.mock.calls.find(([url]) => url.endsWith("daily-simulated-trades"));
+    const mutation = request.mock.calls.find(([url]) => url.endsWith("simulated-trades"));
     expect(mutation?.[1]).toEqual({ planVersionId: version.id, causeId: kind === "ordinary" ? "ordinary-1" : "risk-1",
       expectedCauseRevision: kind === "ordinary" ? 2 : 4, expectedInventoryRevision: 3, quantity: kind === "ordinary" ? 100 : 200 });
     expect(mutation?.[2]).toBeTruthy();
@@ -136,7 +136,7 @@ describe("daily simulation operations", () => {
     await wrapper.get("input[type='date']").setValue("2026-09-23");
     await wrapper.get("form").trigger("submit");
     await flushPromises();
-    const mutation = request.mock.calls.find(([url]) => url.endsWith("daily-plan-facts"));
+    const mutation = request.mock.calls.find(([url]) => url.endsWith("plan-facts"));
     expect(mutation?.[1]).toMatchObject({ tradeDate: "2026-09-23", planVersionId: version.id, expectedRevision: 0 });
   });
 });

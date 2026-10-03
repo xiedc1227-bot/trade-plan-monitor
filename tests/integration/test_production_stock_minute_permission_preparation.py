@@ -8,20 +8,15 @@ from threading import Event
 
 import pytest
 from sqlalchemy import event, text
-from test_explicit_runtime_production import _plan as explicit_plan
-from test_explicit_runtime_production import _seed_active as seed_explicit
 from test_live_pipeline_acceptance import (
     NOW,
     ControlledClock,
-    _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
 from test_permission_candidate_selection import _block, _seed_open_day
 from test_production_daily_bar_permission_preparation import harness
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_models import DateRangeActivation
 from trade_plan_monitor.live_profiles import load_stock_certification
 from trade_plan_monitor.runtime.request_control import TushareOperation
 
@@ -37,16 +32,20 @@ def minute_env(tmp_path, monkeypatch):
         def build(*, family="legacy", count=1, calendar=True, **kwargs):
             env = stack.enter_context(harness(
                 tmp_path, monkeypatch, today=True,
-                count=0 if family == "explicit" else count, **kwargs,
+                count=0, **kwargs,
             ))
-            if family in ("explicit", "mixed"):
-                plan = explicit_plan(active_date=NOW.date()).model_copy(update={
-                    "symbol": "003042.SZ", "plan_id": "minute-explicit",
-                })
-                monkeypatch.setattr("test_explicit_runtime_production.PREPARED_AT",
-                                    NOW.replace(hour=9, minute=0, second=0))
-                seed_explicit(env.engine, plan)
-                env.plans = (*env.plans, plan)
+            from tests.integration.current_activation_fixture import (
+                current_sample_plan,
+                seed_current,
+            )
+
+            symbols = (("003042.SZ",) if family == "explicit" else
+                ("003043.SZ", "300001.SZ") if family == "mixed" else
+                tuple(f"{3043 + i:06d}.SZ" for i in range(count)))
+            env.plans = tuple(seed_current(tmp_path, plan=current_sample_plan().model_copy(
+                update={"symbol": symbol, "plan_id": f"minute-{symbol}"}),
+                clock=ControlledClock(NOW.replace(hour=9, minute=0, second=0)))
+                for symbol in symbols)
             if calendar:
                 _seed_open_day(env.database, NOW.date())
             # Window cases legitimately predate NOW; certification must predate them too.
@@ -80,10 +79,35 @@ def prepare(env, operation):
 
 
 @pytest.mark.parametrize("operation", MINUTE_SCOPES)
+def test_current_minute_plan_prepares_real_owner_consumer(
+    tmp_path, monkeypatch, operation,
+):
+    from tests.integration.current_activation_fixture import seed_current
+
+    from trade_plan_monitor.domain.plan_hash import plan_sha256
+
+    with harness(tmp_path, monkeypatch, count=0, today=True) as env:
+        plan = seed_current(tmp_path, clock=env.clock)
+        _seed_open_day(env.database, env.clock.now().date())
+        ready(env, operation)
+        result = prepare(env, operation)
+        assert result.status == "PREPARED"
+        assert result.consumer.symbol == plan.symbol
+        assert result.consumer.family == "CONDITION_PLAN"
+        assert result.consumer.plan_hash == plan_sha256(plan)
+        assert result.candidate.operation is operation
+        assert env.sdk.calls == []
+
+
+@pytest.mark.parametrize("operation", MINUTE_SCOPES)
 def test_today_consumer_prepares_in_one_read_snapshot_without_reservation(
     tmp_path, monkeypatch, operation,
 ):
-    with harness(tmp_path, monkeypatch, today=True) as env:
+    from tests.integration.current_activation_fixture import seed_current
+
+    with harness(tmp_path, monkeypatch, today=True, count=0) as env:
+        env.plans = (seed_current(tmp_path, clock=ControlledClock(
+            NOW.replace(hour=9, minute=0, second=0))),)
         _seed_open_day(env.database, env.clock.now().date())
         asyncio.run(_block(env.controller, operation))
         env.clock.current += timedelta(seconds=301)
@@ -123,7 +147,7 @@ def test_complete_today_families_freeze_original_identity(minute_env, family):
     consumer = result.consumer
     assert consumer.symbol == plan.symbol
     assert consumer.plan_hash == plan_sha256(plan)
-    assert consumer.family == ("EXPLICIT_RULES" if family != "legacy" else "LEGACY")
+    assert consumer.family == "CONDITION_PLAN"
     assert consumer.activation_revision == 1
     assert consumer.request_date == env.clock.now().date()
     with env.sessions() as session:
@@ -147,7 +171,7 @@ def test_complete_today_families_freeze_original_identity(minute_env, family):
     "UPDATE plan_version SET symbol='003044.SZ'",
     "UPDATE plan_activation_state SET revision=2",
     "UPDATE active_plan SET revision=0",
-    "UPDATE plan_activation_state SET changed_at='2026-09-08T09:00:00+08:00'",
+    "UPDATE plan_activation_state SET changed_at='2026-09-08T08:59:00+08:00'",
     "UPDATE active_plan SET activated_at='2026-09-08T09:00:00'",
     "UPDATE plan_version SET plan_hash='bad'",
     "UPDATE plan_version SET plan_id='changed'",
@@ -274,11 +298,13 @@ def test_today_demand_needs_eligible_activation_and_composed_service(
     env = minute_env(family=family)
     ready(env)
     if gate == "service_missing":
-        setattr(env.pipeline, "evaluations" if family == "legacy" else "explicit_evaluations", None)
+        env.pipeline.daily_evaluations = None
     else:
+        from trade_plan_monitor.domain.daily_plan_models import DailyRangeActivation
+
         offset = 1 if gate == "future" else -1
         plan = env.plans[0].model_copy(update={
-            "activation": DateRangeActivation(
+            "activation": DailyRangeActivation(mode="DATE_RANGE",
                 start_date=NOW.date() + timedelta(days=offset),
                 end_date=NOW.date() + timedelta(days=offset),
             ),
@@ -347,8 +373,11 @@ def test_independent_symbol_successors_keep_daily_bar_pools_and_survive_empty_se
     mutate(env, "DELETE FROM active_plan")
     assert candidates() == {}
     assert env.pipeline._permission_rotation_state is snapshot
-    new = _sample_plan().model_copy(update={"symbol": "003046.SZ", "plan_id": "new-minute"})
-    _activate_plans(env.database, ControlledClock(env.clock.now()), (new,))
+    from tests.integration.current_activation_fixture import current_sample_plan, seed_current
+
+    new = current_sample_plan().model_copy(update={
+        "symbol": "003046.SZ", "plan_id": "new-minute"})
+    seed_current(env.database.parent, plan=new, clock=env.clock)
     assert all(item.symbol == new.symbol for item in candidates().values())
     candidate = candidates()[MINUTE_SCOPES[0]]
     assert isinstance(candidate, PermissionProbeCandidate)
@@ -436,7 +465,7 @@ def test_sql_errors_propagate(minute_env):
 
 
 def test_original_consumer_stays_frozen_across_same_hash_reactivation(minute_env):
-    from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+    from trade_plan_monitor.domain.plan_validation import PlanValidationResult
 
     env = minute_env()
     ready(env)
@@ -445,9 +474,8 @@ def test_original_consumer_stays_frozen_across_same_hash_reactivation(minute_env
     with env.work() as work:
         plan = env.plans[0]
         work.plans.deactivate(plan.symbol, expected_revision=1)
-        work.plans.activate(plan, expected_revision=2, validation=validate_trade_plan(
-            plan, available_market_evidence=ALL_MARKET_EVIDENCE,
-        ))
+        work.plans.activate(plan, expected_revision=2,
+            validation=PlanValidationResult(issues=()))
         work.commit()
     current = prepare(env, MINUTE_SCOPES[0])
     assert current.status == original.status == "PREPARED"
@@ -459,7 +487,7 @@ def test_original_consumer_stays_frozen_across_same_hash_reactivation(minute_env
 
 
 def test_snapshot_reads_original_three_table_identity_across_concurrent_commit(minute_env):
-    from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+    from trade_plan_monitor.domain.plan_validation import PlanValidationResult
 
     env = minute_env()
     ready(env)
@@ -471,9 +499,8 @@ def test_snapshot_reads_original_three_table_identity_across_concurrent_commit(m
             with env.work() as work:
                 plan = env.plans[0]
                 work.plans.deactivate(plan.symbol, expected_revision=1)
-                work.plans.activate(plan, expected_revision=2, validation=validate_trade_plan(
-                    plan, available_market_evidence=ALL_MARKET_EVIDENCE,
-                ))
+                work.plans.activate(plan, expected_revision=2,
+                    validation=PlanValidationResult(issues=()))
                 work.commit()
     event.listen(env.engine, "after_cursor_execute", after_read)
     first = prepare(env, MINUTE_SCOPES[0])
@@ -537,13 +564,26 @@ def test_bounded_active_plan_reads_reject_over_budget(minute_env, limit):
         prepare(env, MINUTE_SCOPES[0])
 
 
-def test_all_eight_scopes_preserve_ties_and_getter_is_read_free(tmp_path, monkeypatch):
+def test_all_current_scopes_preserve_ties_and_getter_is_read_free(tmp_path, monkeypatch):
     from test_permission_candidate_selection import ANCHOR
     from test_production_certification_gate import _composition
+    from tests.integration.current_activation_fixture import current_sample_plan
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+
+    raw = current_sample_plan().model_dump(mode="json")
+    raw["monitoring"] = unified_payload()["monitoring"]
+    minute = raw["ordinary_rules"][0]["condition"]
+    raw["ordinary_rules"][0]["condition"] = {"type": "ALL", "conditions": [minute,
+        {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
+         "comparator": "LT", "reference": {"mode": "FIXED", "value": "4000",
+            "unit": "FEN", "as_of": "2026-09-07", "source": "Synthetic reviewed threshold"}}]}
+    plan = UnifiedTradePlan.model_validate(raw)
 
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch, include_index=True,
-                                           persisted_calendar=True)
+                                           persisted_calendar=True, plan=plan)
         try:
             await composition.start()
             runtime = composition._runtime
@@ -554,7 +594,6 @@ def test_all_eight_scopes_preserve_ties_and_getter_is_read_free(tmp_path, monkey
                 TushareOperation.TRADING_CALENDAR,
                 TushareOperation.INDEX_HISTORICAL_MINUTES,
                 TushareOperation.INDEX_REALTIME_MINUTES,
-                TushareOperation.DAILY_LIMITS,
                 TushareOperation.DAILY_BARS,
                 TushareOperation.INDEX_DAILY,
                 *MINUTE_SCOPES,
@@ -572,9 +611,9 @@ def test_all_eight_scopes_preserve_ties_and_getter_is_read_free(tmp_path, monkey
             assert pipeline.select_due_permission_probe() == candidates[1]
             pipeline._permission_probe_deferred_until.clear()
             async with pipeline._permission_maintenance_lock:
-                pipeline._permission_probe_reservation_callback(candidates[5])()
+                pipeline._permission_probe_reservation_callback(candidates[4])()
             rotated = pipeline.permission_probe_candidates()
-            assert tuple(candidate.operation for candidate in rotated) == (*scopes[6:], *scopes[:6])
+            assert tuple(candidate.operation for candidate in rotated) == (*scopes[5:], *scopes[:5])
             assert tuple(sdk.calls) == before_sdk
             monkeypatch.setattr(pipeline, "_read_stock_minute_permission_evidence",
                                 lambda *_: pytest.fail("getter cannot query facts"))
@@ -640,6 +679,7 @@ def test_incorrect_bind_raises_without_closing_supplied_session(minute_env, monk
 
 
 def test_semantic_mode_survives_old_cert_expiry_and_rebuilds_next_day(minute_env, tmp_path):
+    from trade_plan_monitor.domain.daily_plan_models import DailyRangeActivation
     from trade_plan_monitor.domain.plan_codec import dump_plan_json
     from trade_plan_monitor.runtime.production import (
         ProductionSemanticBindings,
@@ -649,7 +689,7 @@ def test_semantic_mode_survives_old_cert_expiry_and_rebuilds_next_day(minute_env
 
     env = minute_env()
     ready(env)
-    plan = env.plans[0].model_copy(update={"activation": DateRangeActivation(
+    plan = env.plans[0].model_copy(update={"activation": DailyRangeActivation(mode="DATE_RANGE",
         start_date=NOW.date(), end_date=NOW.date() + timedelta(days=10),
     )})
     mutate(env, "UPDATE plan_version SET payload_json=:payload, plan_hash=:hash", {
@@ -687,7 +727,11 @@ def test_semantic_mode_survives_old_cert_expiry_and_rebuilds_next_day(minute_env
 def test_minute_scope_is_in_both_candidate_selector_and_cheap_due_getter(
     tmp_path, monkeypatch, operation,
 ):
-    with harness(tmp_path, monkeypatch, today=True) as env:
+    from tests.integration.current_activation_fixture import seed_current
+
+    with harness(tmp_path, monkeypatch, today=True, count=0) as env:
+        seed_current(tmp_path, clock=ControlledClock(
+            NOW.replace(hour=9, minute=0, second=0)))
         _seed_open_day(env.database, env.clock.now().date())
         asyncio.run(_block(env.controller, operation))
         env.clock.current += timedelta(seconds=301)

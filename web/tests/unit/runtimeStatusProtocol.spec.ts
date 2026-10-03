@@ -64,7 +64,7 @@ describe("isolated monitor v2 protocol", () => {
     expect(requests.filter((request) => request.method === "POST").map((request) => request.headers.get("Idempotency-Key"))).toEqual(["same-intent", "same-intent"]);
   });
 
-  it.each(["/api/v1/health", "/api/v1/health/symbols/003043.SZ", "/api/v1/dashboard", "/api/v1/symbols", "/api/v1/symbols/003043.SZ", "/api/v1/explicit-plan-runtime/003043.SZ"])("guards changed read %s without an extra preflight", async (path) => {
+  it.each(["/api/v1/health", "/api/v1/health/symbols/003043.SZ", "/api/v1/dashboard", "/api/v1/symbols", "/api/v1/symbols/003043.SZ"])("guards changed read %s without an extra preflight", async (path) => {
     const fetchImplementation = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(new Request(input, init).headers.get(header)).toBe("2");
       return response();

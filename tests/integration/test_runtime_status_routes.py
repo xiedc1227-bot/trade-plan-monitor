@@ -49,7 +49,7 @@ def test_v2_dashboard_uses_its_closed_model_and_retains_nulls():
     assert response.json()["observedAt"] == "2026-09-27T12:00:00.000000+08:00"
 
 
-def test_v2_openapi_replaces_only_six_read_operations():
+def test_v2_openapi_replaces_current_monitor_read_operations():
     old = create_app().openapi()
     new = create_app(monitor_contract_version=2, read_service=ReadService()).openapi()
     expected = {
@@ -88,11 +88,11 @@ def test_v2_openapi_declares_required_negotiation_and_response_headers():
     from trade_plan_monitor.web.monitor_contract import is_guarded_monitor_request
 
     document = create_app(monitor_contract_version=2, read_service=ReadService()).openapi()
-    guarded = 0
+    guarded = set()
     for path, operations in document["paths"].items():
         for method, operation in operations.items():
             if is_guarded_monitor_request({"type": "http", "method": method.upper(), "path": path}):
-                guarded += 1
+                guarded.add((path, method))
                 assert {
                     "name": "X-Monitor-Contract-Version",
                     "in": "header",
@@ -103,4 +103,22 @@ def test_v2_openapi_declares_required_negotiation_and_response_headers():
                     assert (
                         response["headers"]["X-Monitor-Contract-Version"]["schema"]["const"] == "2"
                     )
-    assert guarded == 16
+    assert guarded == {
+        (path, "get")
+        for path in (
+            "/api/v1/dashboard",
+            "/api/v1/health",
+            "/api/v1/health/symbols/{symbol}",
+            "/api/v1/symbols",
+            "/api/v1/symbols/{symbol}",
+        )
+    } | {
+        (path, "post")
+        for path in (
+            "/api/v1/plan-activations",
+            "/api/v1/plan-deactivations",
+            "/api/v1/system/legacy-plan-invalidation",
+            "/api/v1/alert-acknowledgements",
+            "/api/v1/diagnostic-evaluations",
+        )
+    }

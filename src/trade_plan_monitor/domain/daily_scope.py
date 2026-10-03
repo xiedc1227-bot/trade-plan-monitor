@@ -84,7 +84,7 @@ def require_inventory_assertion(excerpt):
     """Admit explicit holdings context, never common conditional trading instructions."""
     if not any(
         term in excerpt.casefold()
-        for term in ("持仓", "成本", "库存", "holdings", "inventory", "cost")
+        for term in ("持仓", "已持有", "成本", "库存", "holdings", "inventory", "cost")
     ) or any(
         term in excerpt.casefold()
         for term in (

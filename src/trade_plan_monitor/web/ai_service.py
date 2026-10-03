@@ -36,10 +36,7 @@ from trade_plan_monitor.web.ai_diagnostics import (
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.routers.ai import (
     AIProviderConfiguration,
-    AIProviderConfigurationCommand,
     AIProviderPage,
-    AIProviderSecretCommand,
-    AIProviderTestCommand,
     AIProviderView,
     ConfiguredAIProviderRuntimeView,
     ConfiguredAIRuntimeView,
@@ -194,43 +191,6 @@ class ConfiguredAIWebLifecycle:
             alternative_providers=alternatives or None,
         )
 
-    async def create_ai_provider(
-        self,
-        *,
-        command: AIProviderConfigurationCommand,
-        context: MutationContext,
-    ) -> AIProviderView:
-        del command, context
-        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
-
-    async def update_ai_provider(
-        self,
-        *,
-        provider_id: str,
-        command: AIProviderConfigurationCommand,
-        context: MutationContext,
-    ) -> AIProviderView | None:
-        del provider_id, command, context
-        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
-
-    async def replace_ai_provider_secret(
-        self,
-        *,
-        command: AIProviderSecretCommand,
-        context: MutationContext,
-    ) -> AIProviderView:
-        del command, context
-        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
-
-    async def submit_ai_provider_test(
-        self,
-        *,
-        command: AIProviderTestCommand,
-        context: MutationContext,
-    ) -> OperationReceipt:
-        del command, context
-        raise ApiError(ApiErrorCode.METHOD_NOT_ALLOWED)
-
     async def submit_plan_extraction(
         self,
         *,
@@ -269,7 +229,6 @@ class ConfiguredAIWebLifecycle:
             self._run_extraction(
                 operation_id=operation_id,
                 source_text=command.source_text,
-                target_contract=command.target_contract,
             )
         )
         self._tasks.add(task)
@@ -283,9 +242,7 @@ class ConfiguredAIWebLifecycle:
             return None
         return self._operations.get(identity)
 
-    async def _run_extraction(
-        self, *, operation_id: UUID, source_text: str, target_contract="CONFIGURED"
-    ) -> None:
+    async def _run_extraction(self, *, operation_id: UUID, source_text: str) -> None:
         queued = self._operations[operation_id]
         try:
             async with self._extraction_slots:
@@ -301,9 +258,7 @@ class ConfiguredAIWebLifecycle:
                 result = await extract_plan(
                     request_id=operation_id,
                     source_text=source_text,
-                    config=binding.config
-                    if target_contract == "CONFIGURED"
-                    else binding.config.model_copy(update={"prompt_version": "plan-extract-v7"}),
+                    config=binding.config.model_copy(update={"prompt_version": "plan-extract-v8"}),
                     provider=binding.provider,
                 )
                 completed_at = _now()
@@ -465,9 +420,9 @@ def _completed_extraction_view(
             completion_tokens=result.usage.completion_tokens,
             total_tokens=result.usage.total_tokens,
         )
-    from trade_plan_monitor.ai.daily_extraction import DailyExtractionResult
+    from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionResult
 
-    if isinstance(result, DailyExtractionResult):
+    if isinstance(result, CurrentPlanExtractionResult):
         from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
 
         return PlanExtractionView(
@@ -515,12 +470,6 @@ def _completed_extraction_view(
 
 
 def _extraction_request_hash(command: PlanExtractionCommand) -> str:
-    # Preserve existing CONFIGURED request identity; only the explicit new mode
-    # extends its own idempotency domain.
-    if command.target_contract == "DAILY_CLOSE_PLAN":
-        from trade_plan_monitor.domain.daily_hash import daily_hash
-
-        return daily_hash("daily-plan-extraction-request-v1", command.model_dump(mode="json"))
     payload = json.dumps(
         {
             "expectedRevision": command.expected_revision,

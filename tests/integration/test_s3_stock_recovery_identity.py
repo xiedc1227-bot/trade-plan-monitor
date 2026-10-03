@@ -11,7 +11,7 @@ from contextlib import closing
 from datetime import datetime, timedelta
 from threading import Event
 
-from test_live_pipeline_acceptance import ControlledClock, OfflineSDK, _activate_plans
+from test_live_pipeline_acceptance import ControlledClock, OfflineSDK
 from test_s3_startup_minute_coverage import (
     BUSINESS_TABLES,
     CUTOFF,
@@ -23,9 +23,10 @@ from test_s3_startup_minute_coverage import (
     _prefix,
     _Run,
 )
+from tests.integration.current_activation_fixture import seed_current
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
-from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+from trade_plan_monitor.domain.plan_validation import PlanValidationResult
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.scheduler import DeadlineKind
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
@@ -64,38 +65,81 @@ def _snapshot(database):
         db.row_factory = sqlite3.Row
         state = {
             name: tuple(dict(row) for row in db.execute(f"SELECT * FROM {name} ORDER BY rowid"))
-            for name in (*BUSINESS_TABLES, "alert_delivery_eligibility",
-                         "explicit_evaluation_ledger", "explicit_rule_occurrence_state")
+            for name in (
+                *BUSINESS_TABLES,
+                "alert_delivery_eligibility",
+                "explicit_evaluation_ledger",
+                "explicit_rule_occurrence_state",
+            )
         }
+        state["current_evaluation"] = tuple(
+            dict(row)
+            for row in db.execute(
+                "SELECT * FROM daily_plan_record WHERE kind='EVALUATION' "
+                "AND json_extract(payload_json, '$.minute_target') IS NOT NULL ORDER BY id"
+            )
+        )
+        for kind in ("SIGNAL", "RISK"):
+            state["current_" + kind.lower()] = tuple(
+                dict(row)
+                for row in db.execute(
+                    "SELECT * FROM daily_plan_record WHERE kind=? ORDER BY id", (kind,)
+                )
+            )
         for name in ("minute_bar", "latest_quote"):
-            state[name] = tuple(dict(row) for row in db.execute(
-                f"SELECT * FROM {name} WHERE symbol=? ORDER BY rowid", (SYMBOL,),
-            ))
-        state["risk_audits"] = tuple(dict(row) for row in db.execute(
-            "SELECT * FROM audit_log WHERE action='RISK_STATE_UPDATED' ORDER BY rowid",
-        ))
+            state[name] = tuple(
+                dict(row)
+                for row in db.execute(
+                    f"SELECT * FROM {name} WHERE symbol=? ORDER BY rowid",
+                    (SYMBOL,),
+                )
+            )
+        state["risk_audits"] = tuple(
+            dict(row)
+            for row in db.execute(
+                "SELECT * FROM audit_log WHERE action='RISK_STATE_UPDATED' ORDER BY rowid",
+            )
+        )
     return state
 
 
 def _assert_no_first_decision(state):
-    for name in ("evaluation_ledger", "evaluation_result", "symbol_decision_head", "risk_state",
-                 "explicit_evaluation_ledger", "explicit_rule_occurrence_state"):
+    for name in (
+        "evaluation_ledger",
+        "evaluation_result",
+        "symbol_decision_head",
+        "risk_state",
+        "explicit_evaluation_ledger",
+        "explicit_rule_occurrence_state",
+    ):
         assert not [row for row in state[name] if row["symbol"] == SYMBOL], (name, state[name])
+    for row in state["current_evaluation"]:
+        if row["symbol"] == SYMBOL:
+            snapshot = json.loads(row["payload_json"])
+            assert snapshot["signals"] == snapshot["risks"] == []
+            assert snapshot["next_action"] == "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION"
+    assert state["current_signal"] == state["current_risk"] == ()
     assert state["alert_event"] == state["alert_delivery_eligibility"] == ()
     assert state["delivery_attempt"] == state["risk_audits"] == ()
 
 
 def test_scheduled_stock_recovery_reactivation_rejects_old_facts_and_resumes(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
-        run = _Run(tmp_path, monkeypatch, "partial", NOW)
-        sibling = run.plan.model_copy(update={
-            "plan_id": "healthy-recovery-sibling", "symbol": "003044.SZ",
-        })
-        _activate_plans(
-            run.database, ControlledClock(NOW.replace(hour=9, minute=0, second=0)), (sibling,),
+        from tests.integration.current_activation_fixture import current_sample_plan
+
+        sibling = current_sample_plan().model_copy(
+            update={
+                "plan_id": "healthy-recovery-sibling",
+                "symbol": "003044.SZ",
+            }
         )
+        seed_current(
+            tmp_path, plan=sibling, clock=ControlledClock(NOW.replace(hour=9, minute=0, second=0))
+        )
+        run = _Run(tmp_path, monkeypatch, "partial", NOW)
         run.sdk = _IdentitySDK(run.clock, sibling.symbol)
         engine = create_sqlite_engine(run.database)
         sessions = create_session_factory(engine)
@@ -128,11 +172,14 @@ def test_scheduled_stock_recovery_reactivation_rejects_old_facts_and_resumes(
                 assert health.degraded_reason != "RUNTIME_RUNNER_FAILED", health
 
             run.sdk.phase = "scheduled"
-            drive = asyncio.create_task(run.clock.drive(
-                NOW.replace(minute=2, second=12),
-                stop_when=run.sdk.entered.is_set, failed=run.runner_failed,
-                after_wake=assert_same_owner,
-            ))
+            drive = asyncio.create_task(
+                run.clock.drive(
+                    NOW.replace(minute=2, second=12),
+                    stop_when=run.sdk.entered.is_set,
+                    failed=run.runner_failed,
+                    after_wake=assert_same_owner,
+                )
+            )
             while not run.sdk.entered.is_set():
                 assert not drive.done(), (
                     "real scheduler never entered the missing-prefix maintenance SDK",
@@ -140,11 +187,12 @@ def test_scheduled_stock_recovery_reactivation_rejects_old_facts_and_resumes(
                 )
                 await asyncio.sleep(0.005)
             assert_same_owner()
-            (owner, held_deadline), = active_deadlines.items()
+            ((owner, held_deadline),) = active_deadlines.items()
             assert held_deadline.kind is DeadlineKind.STOCK_RECOVERY
             assert owner in runtime._work_tasks and not owner.done()
-            held_scope, = (
-                item for item in pipeline._stock_recovery_schedule.snapshot()
+            (held_scope,) = (
+                item
+                for item in pipeline._stock_recovery_schedule.snapshot()
                 if item.requirement.scope_key == f"stock-prefix:{SYMBOL}"
             )
             assert held_scope.in_progress
@@ -158,10 +206,9 @@ def test_scheduled_stock_recovery_reactivation_rejects_old_facts_and_resumes(
                 original = work.plans.get_active(SYMBOL)
                 work.plans.deactivate(SYMBOL, expected_revision=original.revision)
                 replacement = work.plans.activate(
-                    run.plan, expected_revision=original.revision + 1,
-                    validation=validate_trade_plan(
-                        run.plan, available_market_evidence=ALL_MARKET_EVIDENCE,
-                    ),
+                    run.plan,
+                    expected_revision=original.revision + 1,
+                    validation=PlanValidationResult(issues=()),
                 )
                 work.commit()
             assert replacement.plan_version_id == original.plan_version_id
@@ -175,30 +222,40 @@ def test_scheduled_stock_recovery_reactivation_rejects_old_facts_and_resumes(
             assert _snapshot(run.database) == before
 
             await run.clock.drive(
-                FIFTH_DUE, failed=run.runner_failed, after_wake=assert_same_owner,
+                FIFTH_DUE,
+                failed=run.runner_failed,
+                after_wake=assert_same_owner,
             )
             assert_same_owner()
             interim = _snapshot(run.database)
             _assert_no_first_decision(interim)
-            sibling_head, = (row for row in interim["symbol_decision_head"]
-                             if row["symbol"] == sibling.symbol)
-            assert sibling_head["activation_revision"] == 1
-            sibling_result, = (row for row in interim["evaluation_result"]
-                               if row["symbol"] == sibling.symbol)
-            assert sibling_result["plan_hash"] == plan_sha256(sibling)
-            assert sibling_result["result_hash"] == sibling_head["result_hash"]
-            assert sibling_result["target_value"] == FIFTH_DUE.replace(second=0).isoformat()
-            assert sibling_result["evaluated_at"] == FIFTH_DUE.isoformat()
+            sibling_records = [
+                row for row in interim["current_evaluation"] if row["symbol"] == sibling.symbol
+            ]
+            (sibling_head,) = [
+                row for row in sibling_records if row["id"] == "evaluation-head-" + sibling.symbol
+            ]
+            (sibling_result,) = [
+                row for row in sibling_records if row["id"] != "evaluation-head-" + sibling.symbol
+            ]
+            assert sibling_head["payload_json"] == sibling_result["payload_json"]
+            sibling_snapshot = json.loads(sibling_result["payload_json"])
+            assert sibling_snapshot["activation_revision"] == 1
+            assert sibling_snapshot["plan_hash"] == plan_sha256(sibling)
+            assert sibling_snapshot["minute_target"] == FIFTH_DUE.replace(second=0).isoformat()
+            assert sibling_snapshot["evaluated_at"] == FIFTH_DUE.isoformat()
             assert FIRST_END.isoformat() not in {row["bar_end"] for row in interim["minute_bar"]}
 
             run.sdk.repair_available = True
             run.sdk.phase = "fresh-recovery"
             next_market = FIFTH_DUE + timedelta(minutes=5)
             await run.clock.drive(
-                next_market - timedelta(microseconds=1), failed=run.runner_failed,
-                stop_when=lambda: FIRST_END.isoformat() in {
-                    row["bar_end"] for row in _snapshot(run.database)["minute_bar"]
-                },
+                next_market - timedelta(microseconds=1),
+                failed=run.runner_failed,
+                stop_when=lambda: (
+                    FIRST_END.isoformat()
+                    in {row["bar_end"] for row in _snapshot(run.database)["minute_bar"]}
+                ),
                 after_wake=assert_same_owner,
             )
             assert_same_owner()
@@ -209,39 +266,49 @@ def test_scheduled_stock_recovery_reactivation_rejects_old_facts_and_resumes(
             preserved = {row["bar_end"]: row for row in repaired["minute_bar"]}
             assert all(preserved[row["bar_end"]] == row for row in before["minute_bar"])
             assert any(
-                name == "rt_min_daily" and symbol == SYMBOL and phase == "fresh-recovery"
+                name == "rt_min_daily"
+                and symbol == SYMBOL
+                and phase == "fresh-recovery"
                 and entered_at >= FIFTH_DUE > reactivated_at
                 for name, symbol, phase, entered_at in run.sdk.stock_trace
             ), run.sdk.stock_trace
             _assert_no_first_decision(repaired)
             await run.clock.drive(
-                next_market, failed=run.runner_failed, after_wake=assert_same_owner,
+                next_market,
+                failed=run.runner_failed,
+                after_wake=assert_same_owner,
             )
             assert_same_owner()
             final = _snapshot(run.database)
-            result, = (row for row in final["evaluation_result"] if row["symbol"] == SYMBOL)
-            head, = (row for row in final["symbol_decision_head"] if row["symbol"] == SYMBOL)
-            ledger, = (row for row in final["evaluation_ledger"] if row["symbol"] == SYMBOL)
-            assert head["activation_revision"] == replacement.revision
-            assert result["plan_hash"] == head["plan_hash"] == plan_sha256(run.plan)
-            assert result["result_hash"] == head["result_hash"] == ledger["result_hash"]
-            assert result["evaluation_kind"] == "INTRADAY"
-            assert result["formula_version"] == run.plan.monitoring.indicator_formula_version
-            assert result["target_value"] == next_market.replace(second=0).isoformat()
-            assert result["evaluated_at"] == next_market.isoformat()
-            assert result["source_at"] == result["target_value"]
-            snapshot = json.loads(result["result_json"])["snapshot"]
-            assert snapshot["market_data_at"] == result["target_value"]
-            assert snapshot["evaluated_at"] == result["evaluated_at"]
-            assert snapshot["price_fen"] == 6405
+            records = [row for row in final["current_evaluation"] if row["symbol"] == SYMBOL]
+            (result,) = [
+                row
+                for row in records
+                if row["id"] != "evaluation-head-" + SYMBOL
+                and json.loads(row["payload_json"])["minute_target"]
+                == next_market.replace(second=0).isoformat()
+            ]
+            (head,) = [row for row in records if row["id"] == "evaluation-head-" + SYMBOL]
+            assert result["payload_json"] == head["payload_json"]
+            snapshot = json.loads(result["payload_json"])
+            assert snapshot["activation_revision"] == replacement.revision
+            assert snapshot["plan_hash"] == plan_sha256(run.plan)
+            assert snapshot["minute_target"] == next_market.replace(second=0).isoformat()
+            assert snapshot["evaluated_at"] == next_market.isoformat()
+            assert snapshot["minute_prefix"][-1]["bar_end"] == snapshot["minute_target"]
+            assert snapshot["five_minute_bars"][-1]["close_fen"] == 6405
             assert set(end.isoformat() for end in _prefix(next_market.replace(second=0))).issubset(
                 row["bar_end"] for row in final["minute_bar"]
             )
-            assert timedelta(0) <= (
-                datetime.fromisoformat(result["evaluated_at"])
-                - datetime.fromisoformat(result["target_value"])
-            ) <= timedelta(seconds=90)
-            assert sibling_result in final["evaluation_result"]
+            assert (
+                timedelta(0)
+                <= (
+                    datetime.fromisoformat(snapshot["evaluated_at"])
+                    - datetime.fromisoformat(snapshot["minute_target"])
+                )
+                <= timedelta(seconds=90)
+            )
+            assert sibling_result in final["current_evaluation"]
             assert final["alert_event"] == final["alert_delivery_eligibility"] == ()
             assert final["delivery_attempt"] == ()
             assert run.sent == []

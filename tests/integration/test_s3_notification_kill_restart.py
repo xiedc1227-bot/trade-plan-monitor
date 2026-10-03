@@ -12,18 +12,20 @@ from threading import Event
 
 import pytest
 from sqlalchemy import Engine, event, text
-from test_live_pipeline_acceptance import ControlledClock, OfflineSDK, VirtualPace
+from test_live_pipeline_acceptance import ControlledClock, VirtualPace
 from test_s3_missed_close_kill_restart import (
     AFTER_CLOSE,
     SOURCE_CLOSE,
     SYMBOL,
+    CurrentCloseSDK,
+    _assert_history_preserved,
     _assert_one_close,
+    _inventory_bytes,
     _kill_owned,
     _seed,
     _snapshot,
 )
 
-from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
 from trade_plan_monitor.notifications.dispatcher import (
     DEFAULT_CLAIM_LEASE,
@@ -38,9 +40,12 @@ def _state(root):
     database = (root / "monitor.sqlite3").resolve()
     with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as connection:
         connection.row_factory = sqlite3.Row
-        result["eligibility"] = tuple(dict(row) for row in connection.execute(
-            "SELECT * FROM alert_delivery_eligibility ORDER BY event_id",
-        ))
+        result["eligibility"] = tuple(
+            dict(row)
+            for row in connection.execute(
+                "SELECT * FROM alert_delivery_eligibility ORDER BY event_id",
+            )
+        )
     return result
 
 
@@ -52,12 +57,15 @@ def _markers(root):
 
 
 def _business(state):
-    return {key: value for key, value in state.items()
-            if key not in {"delivery_attempt", "eligibility"}}
+    return {
+        key: value
+        for key, value in state.items()
+        if key not in {"delivery_attempt", "eligibility", "current_evaluations"}
+    }
 
 
 def _attempt(state, channel):
-    row, = (row for row in state["delivery_attempt"] if row["channel"] == channel)
+    (row,) = (row for row in state["delivery_attempt"] if row["channel"] == channel)
     assert row["attempt"] == 1
     assert row["event_id"] == state["alert_event"][0]["id"]
     return row
@@ -86,13 +94,17 @@ def _notification_child(root, phase, observed_at, reports):
         blocked.wait()
         raise AssertionError("a killed transaction boundary must never return")
 
-    class FakeSDK(OfflineSDK):
+    class FakeSDK(CurrentCloseSDK):
         def _stock_minutes(self, name, kwargs):
             frame = super()._stock_minutes(name, kwargs)
             minutes = frame["time"].map(lambda value: datetime.fromisoformat(value).time())
-            return frame.loc[minutes.map(lambda value: (
-                time(9, 30) <= value < time(11, 30) or time(13) <= value < time(15)
-            ))].reset_index(drop=True)
+            return frame.loc[
+                minutes.map(
+                    lambda value: (
+                        time(9, 30) <= value < time(11, 30) or time(13) <= value < time(15)
+                    )
+                )
+            ].reset_index(drop=True)
 
     sdk = FakeSDK(clock, (SYMBOL,), official_closes={SOURCE_CLOSE.date(): "60.00"})
 
@@ -102,17 +114,26 @@ def _notification_child(root, phase, observed_at, reports):
 
         async def deliver(self, notification):
             with (base / "external-markers.jsonl").open("a", encoding="utf-8") as stream:
-                stream.write(json.dumps({
-                    "event_id": str(notification.event_id),
-                    "signal_type": notification.signal_type.value,
-                    "symbol": notification.symbol,
-                    "trading_date": notification.trading_date.isoformat(),
-                    "observed_at": clock.now().isoformat(), "pid": os.getpid(),
-                }) + "\n")
+                stream.write(
+                    json.dumps(
+                        {
+                            "event_id": str(notification.event_id),
+                            "signal_type": str(notification.signal_type),
+                            "symbol": notification.symbol,
+                            "trading_date": notification.trading_date.isoformat(),
+                            "observed_at": clock.now().isoformat(),
+                            "pid": os.getpid(),
+                        }
+                    )
+                    + "\n"
+                )
                 stream.flush()
                 os.fsync(stream.fileno())
             return ChannelDeliveryResult(
-                channel=self.channel, delivered=True, retryable=False, response_code=200,
+                channel=self.channel,
+                delivered=True,
+                retryable=False,
+                response_code=200,
             )
 
     real_controller = monitor_composition.create_live_tushare_request_controller
@@ -120,7 +141,9 @@ def _notification_child(root, phase, observed_at, reports):
     def controller_factory(*, clock, require_repository_binding=False):
         pace = VirtualPace()
         return real_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
             require_repository_binding=require_repository_binding,
         )
 
@@ -136,11 +159,16 @@ def _notification_child(root, phase, observed_at, reports):
             alert_id = session.scalar(text("SELECT id FROM alert_event LIMIT 1"))
             if alert_id is not None:
                 # This is the first alert: the real official-close UoW has staged every row.
-                counts = {name: session.scalar(text(f"SELECT count(*) FROM {name}"))
-                          for name in ("evaluation_ledger", "evaluation_result", "risk_state",
-                                       "alert_event", "alert_delivery_eligibility",
-                                       "symbol_decision_head")}
-                assert all(value == 1 for value in counts.values()), counts
+                counts = {"alert_event": session.scalar(text("SELECT count(*) FROM alert_event"))}
+                assert counts == {"alert_event": 1}
+                assert session.scalar(text("SELECT count(*) FROM alert_delivery_eligibility")) == 0
+                assert (
+                    session.scalar(
+                        text("SELECT count(*) FROM daily_plan_record WHERE kind='EVALUATION'")
+                    )
+                    == 2
+                )
+                assert session.scalar(text("SELECT count(*) FROM risk_state")) == 0
                 assert session.scalar(text("SELECT count(*) FROM pending_official_close")) == 0
                 committed_before = _state(base)
                 if phase == "business-committed":
@@ -153,11 +181,20 @@ def _notification_child(root, phase, observed_at, reports):
     finalizing_console = False
 
     def after_receipt_update(connection, _cursor, statement, _parameters, _context, _many):
-        if (phase == "receipt-uncommitted" and finalizing_console
-                and statement.lstrip().upper().startswith("UPDATE DELIVERY_ATTEMPT ")):
-            row = connection.execute(text(
-                "SELECT id, event_id, status FROM delivery_attempt WHERE channel='CONSOLE'",
-            )).mappings().one()
+        if (
+            phase == "receipt-uncommitted"
+            and finalizing_console
+            and statement.lstrip().upper().startswith("UPDATE DELIVERY_ATTEMPT ")
+        ):
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT id, event_id, status FROM delivery_attempt WHERE channel='CONSOLE'",
+                    )
+                )
+                .mappings()
+                .one()
+            )
             assert row["status"] == "DELIVERED"
             assert len(_markers(base)) == 1
             pause(event_id=row["event_id"], attempt_id=row["id"], staged_status=row["status"])
@@ -180,7 +217,8 @@ def _notification_child(root, phase, observed_at, reports):
 
     async def scenario():
         composition = monitor_composition.create_monitor_composition(
-            config_path=base / "config/app.yaml", database_path=base / "monitor.sqlite3",
+            config_path=base / "config/app.yaml",
+            database_path=base / "monitor.sqlite3",
         )
         dispatcher = composition._runtime._dispatcher
         # Keep the mandatory real IN_APP channel and all production delivery admission.
@@ -189,13 +227,27 @@ def _notification_child(root, phase, observed_at, reports):
             health = await composition.start()
             assert health.status is RuntimeServiceStatus.RUNNING, health
             if phase != "restart":
+                current = _state(base)["current_evaluations"]
+                facts = [
+                    {
+                        k: json.loads(row["payload_json"]).get(k)
+                        for k in ("official_trade_date", "data_blockers", "alerts")
+                    }
+                    for row in current
+                ]
+                print(f"MISSED_CRASH_FACTS {facts!r}", flush=True)
                 raise AssertionError(f"startup missed requested crash window: {phase}")
             while not clock.sleep_calls:
                 await asyncio.sleep(0)
-            reports.send({
-                "phase": phase, "pid": os.getpid(), "status": health.status.value,
-                "next_sleep": clock.sleep_calls[0].isoformat(), "calls": tuple(sdk.calls),
-            })
+            reports.send(
+                {
+                    "phase": phase,
+                    "pid": os.getpid(),
+                    "status": health.status.value,
+                    "next_sleep": clock.sleep_calls[0].isoformat(),
+                    "calls": tuple(sdk.calls),
+                }
+            )
         finally:
             await composition.stop()
 
@@ -212,7 +264,8 @@ def _run_child(root, phase, observed_at):
     context = get_context("spawn")
     receive, send = context.Pipe(duplex=False)
     process = context.Process(
-        target=_notification_child, args=(str(root), phase, observed_at, send),
+        target=_notification_child,
+        args=(str(root), phase, observed_at, send),
     )
     process.start()
     send.close()
@@ -240,22 +293,26 @@ def _run_child(root, phase, observed_at):
         process.close()
 
 
-@pytest.mark.parametrize("phase", (
-    "business-uncommitted", "business-committed", "receipt-uncommitted", "receipt-committed",
-))
+@pytest.mark.parametrize(
+    "phase",
+    (
+        "business-uncommitted",
+        "business-committed",
+        "receipt-uncommitted",
+        "receipt-committed",
+    ),
+)
 def test_composition_kill_windows_preserve_intent_and_uncertain_claim(tmp_path, phase):
     plan = _seed(tmp_path)
+    inventory = _inventory_bytes(tmp_path)
+    assert inventory[0] and inventory[1] == ()
     initial = _state(tmp_path)
     assert all(not rows for rows in initial.values())
     first, killed, external = _run_child(tmp_path, phase, AFTER_CLOSE)
     assert {"trade_cal", "daily"}.issubset({name for name, _kwargs in first["calls"]})
     if phase.startswith("business-"):
         preceding = first["committed_before"]
-        assert all(not rows for name, rows in preceding.items() if name != "pending_official_close")
-        pending, = preceding["pending_official_close"]
-        assert pending["symbol"] == plan.symbol and pending["plan_hash"] == plan_sha256(plan)
-        assert pending["trade_date"] == SOURCE_CLOSE.date().isoformat()
-        assert pending["formula_version"] == plan.monitoring.indicator_formula_version
+        assert all(not rows for rows in preceding.values())
     if phase == "business-uncommitted":
         assert killed == first["committed_before"]
     else:
@@ -264,15 +321,13 @@ def test_composition_kill_windows_preserve_intent_and_uncertain_claim(tmp_path, 
     if phase.startswith("business-"):
         assert killed["delivery_attempt"] == external == ()
         if phase == "business-committed":
-            assert killed["eligibility"][0]["status"] == "HOLD"
+            assert killed["eligibility"] == ()
     else:
         assert len(killed["delivery_attempt"]) == 2
         assert _attempt(killed, "IN_APP")["status"] == "DELIVERED"
         console = _attempt(killed, "CONSOLE")
         assert console["id"] == first["attempt_id"]
-        assert console["status"] == (
-            "CLAIMED" if phase == "receipt-uncommitted" else "DELIVERED"
-        )
+        assert console["status"] == ("CLAIMED" if phase == "receipt-uncommitted" else "DELIVERED")
         assert len(external) == 1 and external[0]["event_id"] == first["event_id"]
         assert external[0]["pid"] == first["pid"]
         if phase == "receipt-uncommitted":
@@ -299,7 +354,9 @@ def test_composition_kill_windows_preserve_intent_and_uncertain_claim(tmp_path, 
 
     # Equality reclaims the same durable id/attempt; an uncertain external effect may repeat.
     recovery_report, recovered, recovered_external = _run_child(
-        tmp_path, "restart", AFTER_CLOSE + DEFAULT_CLAIM_LEASE,
+        tmp_path,
+        "restart",
+        AFTER_CLOSE + DEFAULT_CLAIM_LEASE,
     )
     assert _business(recovered) == _business(early)
     assert len(recovered["delivery_attempt"]) == 2
@@ -318,11 +375,13 @@ def test_composition_kill_windows_preserve_intent_and_uncertain_claim(tmp_path, 
         assert recovered_external == early_external
     assert all(
         marker["event_id"] == recovered["alert_event"][0]["id"]
-        and marker["signal_type"] == "RISK_BREACH" and marker["symbol"] == SYMBOL
+        and marker["signal_type"] == "REMINDER"
+        and marker["symbol"] == SYMBOL
         and marker["trading_date"] == SOURCE_CLOSE.date().isoformat()
         for marker in recovered_external
     )
 
     _run_child(tmp_path, "restart", AFTER_CLOSE + DEFAULT_CLAIM_LEASE + timedelta(seconds=1))
-    assert _state(tmp_path) == recovered
+    _assert_history_preserved(recovered, _state(tmp_path))
     assert _markers(tmp_path) == recovered_external
+    assert _inventory_bytes(tmp_path) == inventory

@@ -291,7 +291,7 @@ test("renders the authoritative dashboard and shared board-index summary at the 
     await mainContent.evaluate((element) => getComputedStyle(element).outlineStyle),
   ).toBe("none");
   await expect(page.getByText("华兴源创")).toBeVisible();
-  await expect(page.getByText("没有活动的明确规则计划。")).toBeVisible();
+  await expect(page.locator(".explicit-runtime-dashboard")).toHaveCount(0);
   await expect(page.getByTestId("market-status-strip")).toHaveCount(0);
   await expect(page.getByText("主要指数走势 · 当日")).toBeVisible();
   await expect(page.getByText("科创50").first()).toBeVisible();

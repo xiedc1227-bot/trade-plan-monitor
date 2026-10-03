@@ -19,7 +19,6 @@ from test_live_pipeline_acceptance import (
     OfflineSDK,
     VirtualPace,
     _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
 from test_production_semantic_gate import _pipeline
@@ -33,8 +32,9 @@ from test_runtime_recovery_coverage import (
 )
 from test_runtime_recovery_coverage import history as history
 from test_s3_startup_outcome_association import _DeadlineClock
+from tests.integration.current_activation_fixture import current_sample_plan as _sample_plan
+from tests.integration.current_activation_fixture import seed_current
 
-from trade_plan_monitor.domain.plan_models import TradingDayActivation
 from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.recovery_targets import derive_recovery_target
@@ -53,17 +53,21 @@ async def _running(root, monkeypatch, mode):
     assert mode == "empty"
     database = root / "monitor.sqlite3"
     seed_clock = ControlledClock(NOW.replace(hour=9, minute=0, second=0))
-    plan = _sample_plan().model_copy(update={
-        "activation": TradingDayActivation(trading_day=NOW.date()),
-    })
-    _activate_plans(database, seed_clock, (plan,))
+    plan = _sample_plan()
+    _activate_plans(database, seed_clock, ())
+    seed_current(root, plan=plan, clock=seed_clock)
     engine = create_sqlite_engine(database)
     sessions = create_session_factory(engine)
     try:
         with sessions.begin() as session:
-            session.add(RuntimeLiveness(
-                id=1, schema_version=1, revision=0, last_alive_at=seed_clock.now().isoformat(),
-            ))
+            session.add(
+                RuntimeLiveness(
+                    id=1,
+                    schema_version=1,
+                    revision=0,
+                    last_alive_at=seed_clock.now().isoformat(),
+                )
+            )
     finally:
         engine.dispose()
     configuration = _write_configuration_and_evidence(root, observed_at=NOW, include_index=False)
@@ -79,7 +83,9 @@ async def _running(root, monkeypatch, mode):
     def controller_factory(*, clock, require_repository_binding=False):
         pace = VirtualPace()
         return make_controller(
-            clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+            clock=clock,
+            monotonic=pace.monotonic,
+            pace_sleep=pace.sleep,
             require_repository_binding=require_repository_binding,
         )
 
@@ -90,17 +96,20 @@ async def _running(root, monkeypatch, mode):
     monkeypatch.setattr(httpx.Client, "send", forbid_network)
     monkeypatch.setattr(httpx.AsyncClient, "send", forbid_network)
     monkeypatch.setattr(composition_module, "SystemClock", lambda: clock)
-    monkeypatch.setattr(composition_module, "create_live_tushare_request_controller",
-                        controller_factory)
+    monkeypatch.setattr(
+        composition_module, "create_live_tushare_request_controller", controller_factory
+    )
     monkeypatch.setattr(production, "create_tushare_client", lambda _configuration: sdk)
     composition = composition_module.create_monitor_composition(
-        config_path=configuration, database_path=database,
+        config_path=configuration,
+        database_path=database,
     )
 
     def state():
         with composition._runtime._liveness_owner.unit_of_work_factory() as work:
             rows = work.history.list_minutes(
-                plan.symbol, start=NOW.replace(hour=9, minute=31, second=0),
+                plan.symbol,
+                start=NOW.replace(hour=9, minute=31, second=0),
                 end=NOW.replace(hour=15, minute=0, second=0),
             )
         return {"minutes": tuple(row.bar_end.isoformat() for row in rows)}
@@ -118,7 +127,8 @@ async def _running(root, monkeypatch, mode):
 def test_scoped_persistence_is_invocation_local(history):
     async def scenario():
         clock, provider, controller, service = setup_service(
-            history, {SYMBOL: [minute("09:31:00")]},
+            history,
+            {SYMBOL: [minute("09:31:00")]},
             persist=lambda _: pytest.fail("shared persistence callback was selected"),
         )
         calls = []
@@ -131,8 +141,10 @@ def test_scoped_persistence_is_invocation_local(history):
             result = await service.recover_scope(
                 symbol=SYMBOL,
                 target=derive_recovery_target(now=clock.now(), is_open_on=lambda _: True),
-                required_ends=(stamp("09:31:00"),), read_persisted_ends=history.read,
-                now=clock.now, persist_selected=selected,
+                required_ends=(stamp("09:31:00"),),
+                read_persisted_ends=history.read,
+                now=clock.now,
+                persist_selected=selected,
             )
             assert result.ready and calls == [(minute("09:31:00"),)]
             assert provider.calls == [SYMBOL]
@@ -162,16 +174,23 @@ def test_concurrent_scoped_fetch_and_persist_callbacks_are_not_shared(history):
             return await service.recover_scope(
                 symbol=symbol,
                 target=derive_recovery_target(now=clock.now(), is_open_on=lambda _: True),
-                required_ends=(stamp("09:31:00"),), read_persisted_ends=history.read,
-                now=clock.now, persist_selected=persist, fetch_current_day=fetch,
+                required_ends=(stamp("09:31:00"),),
+                read_persisted_ends=history.read,
+                now=clock.now,
+                persist_selected=persist,
+                fetch_current_day=fetch,
                 admission_current=lambda: True,
             )
 
         try:
             results = await asyncio.gather(one(SYMBOL), one(SIBLING))
             assert all(result.ready for result in results)
-            assert calls == [("fetch", SYMBOL), ("persist", SYMBOL),
-                             ("fetch", SIBLING), ("persist", SIBLING)]
+            assert calls == [
+                ("fetch", SYMBOL),
+                ("persist", SYMBOL),
+                ("fetch", SIBLING),
+                ("persist", SIBLING),
+            ]
             assert provider.calls == []
         finally:
             await controller.aclose()
@@ -181,9 +200,15 @@ def test_concurrent_scoped_fetch_and_persist_callbacks_are_not_shared(history):
 
 def _bar(capture, end=None, *, price=6405, received_at=NOW):
     return MinuteBar(
-        symbol=capture.symbol, bar_end=end or capture.required_ends[-1],
-        open_fen=price, high_fen=price, low_fen=price, close_fen=price,
-        volume_shares=1000, amount_yuan=Decimal("64000"), received_at=received_at,
+        symbol=capture.symbol,
+        bar_end=end or capture.required_ends[-1],
+        open_fen=price,
+        high_fen=price,
+        low_fen=price,
+        close_fen=price,
+        volume_shares=1000,
+        amount_yuan=Decimal("64000"),
+        received_at=received_at,
     )
 
 
@@ -229,7 +254,9 @@ def test_fresh_missing_difference_preserves_concurrent_minute_and_quote(tmp_path
             pipeline._persist_recovery_capture(capture, (first, incoming), cancelled=Event())
             with work() as transaction:
                 rows = transaction.history.list_minutes(
-                    capture.symbol, start=capture.required_ends[0], end=capture.required_ends[-1],
+                    capture.symbol,
+                    start=capture.required_ends[0],
+                    end=capture.required_ends[-1],
                 )
                 assert rows == (first, winner)
                 assert transaction.history.get_latest_quote(capture.symbol) == quote
@@ -253,10 +280,20 @@ def test_reactivation_rejects_old_capture_without_writing(tmp_path, monkeypatch)
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("mutation", (
-    "rollover", "reversal", "revoked", "epoch", "generation", "source", "semantics",
-    "cancellation", "calendar",
-))
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "rollover",
+        "reversal",
+        "revoked",
+        "epoch",
+        "generation",
+        "source",
+        "semantics",
+        "cancellation",
+        "calendar",
+    ),
+)
 def test_final_transaction_rejects_each_changed_capture(tmp_path, monkeypatch, mutation):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
@@ -284,10 +321,16 @@ def test_final_transaction_rejects_each_changed_capture(tmp_path, monkeypatch, m
                 from trade_plan_monitor.market_data.models import TradingDay
 
                 with work() as transaction:
-                    transaction.references.upsert_trading_days((
-                        TradingDay(exchange="SSE", cal_date=NOW.date(), is_open=False,
-                                   previous_trade_date=NOW.date() - timedelta(days=1)),
-                    ))
+                    transaction.references.upsert_trading_days(
+                        (
+                            TradingDay(
+                                exchange="SSE",
+                                cal_date=NOW.date(),
+                                is_open=False,
+                                previous_trade_date=NOW.date() - timedelta(days=1),
+                            ),
+                        )
+                    )
                     transaction.commit()
             with pytest.raises(RecoveryAdmissionChangedError):
                 pipeline._persist_recovery_capture(capture, (_bar(capture),), cancelled=cancelled)
@@ -329,9 +372,14 @@ def test_real_two_connection_reactivation_makes_read_snapshot_unwritable(tmp_pat
                 active = transaction.plans.get_active(capture.symbol)
                 assert active.revision == replacement[0].revision
                 assert transaction.history.get_latest_quote(capture.symbol) is None
-                assert transaction.history.list_minutes(
-                    capture.symbol, start=capture.required_ends[0], end=capture.required_ends[-1],
-                ) == ()
+                assert (
+                    transaction.history.list_minutes(
+                        capture.symbol,
+                        start=capture.required_ends[0],
+                        end=capture.required_ends[-1],
+                    )
+                    == ()
+                )
 
     asyncio.run(scenario())
 
@@ -379,9 +427,14 @@ def test_revocation_before_final_lock_rolls_back_all_staged_facts(tmp_path, monk
             assert entered == ["revoked"]
             with work() as transaction:
                 assert transaction.history.get_latest_quote(capture.symbol) is None
-                assert transaction.history.list_minutes(
-                    capture.symbol, start=capture.required_ends[0], end=capture.required_ends[-1],
-                ) == ()
+                assert (
+                    transaction.history.list_minutes(
+                        capture.symbol,
+                        start=capture.required_ends[0],
+                        end=capture.required_ends[-1],
+                    )
+                    == ()
+                )
 
     asyncio.run(scenario())
 
@@ -436,7 +489,8 @@ def test_scoped_programming_errors_are_not_storage_failures(history, stage):
 
     async def scenario():
         clock, _, controller, service = setup_service(
-            history, {SYMBOL: [minute("09:31:00")]},
+            history,
+            {SYMBOL: [minute("09:31:00")]},
             persist=broken if stage == "persist" else None,
         )
         try:
@@ -459,7 +513,8 @@ def test_scoped_programming_errors_are_not_storage_failures(history, stage):
 def test_guard_change_at_either_coverage_read_is_typed_retarget(history, read_number):
     async def scenario():
         clock, provider, controller, service = setup_service(
-            history, {SYMBOL: [minute("09:31:00")]},
+            history,
+            {SYMBOL: [minute("09:31:00")]},
         )
         reads = 0
 
@@ -474,7 +529,9 @@ def test_guard_change_at_either_coverage_read_is_typed_retarget(history, read_nu
             result = await service.recover_scope(
                 symbol=SYMBOL,
                 target=derive_recovery_target(now=clock.now(), is_open_on=lambda _: True),
-                required_ends=(stamp("09:31:00"),), read_persisted_ends=read, now=clock.now,
+                required_ends=(stamp("09:31:00"),),
+                read_persisted_ends=read,
+                now=clock.now,
             )
             assert result.retarget_required and not result.ready
             assert result.error_code is None and result.persistence_error is None
@@ -494,13 +551,15 @@ def test_storage_error_retains_original_cause_without_retry(history, phase):
 
     async def scenario():
         clock, provider, controller, service = setup_service(
-            history, {SYMBOL: [minute("09:31:00")]},
+            history,
+            {SYMBOL: [minute("09:31:00")]},
         )
         try:
             result = await service.recover_scope(
                 symbol=SYMBOL,
                 target=derive_recovery_target(now=clock.now(), is_open_on=lambda _: True),
-                required_ends=(stamp("09:31:00"),), now=clock.now,
+                required_ends=(stamp("09:31:00"),),
+                now=clock.now,
                 read_persisted_ends=fail if phase == "read" else history.read,
                 persist_selected=fail if phase == "persist" else None,
             )
@@ -558,7 +617,9 @@ def test_actual_wrapper_finishes_before_frozen_business_sdk_guard(tmp_path, monk
 
 @pytest.mark.parametrize("kind", ("configuration", "semantics"))
 def test_real_worker_revocation_uses_baseline_lock_and_notifies_after_release(
-    tmp_path, monkeypatch, kind,
+    tmp_path,
+    monkeypatch,
+    kind,
 ):
     async def scenario():
         async with _running(tmp_path, monkeypatch, "empty") as run:
@@ -571,7 +632,8 @@ def test_real_worker_revocation_uses_baseline_lock_and_notifies_after_release(
             published_epoch = baseline.authority_epoch
             stage = MarketHistoryRepository.upsert_minutes
             notify_name = (
-                "_set_configuration_restart_required" if kind == "configuration"
+                "_set_configuration_restart_required"
+                if kind == "configuration"
                 else "_set_semantic_reload_blocked"
             )
             notify = getattr(runtime, notify_name)
@@ -608,7 +670,8 @@ def test_real_worker_revocation_uses_baseline_lock_and_notifies_after_release(
 
 
 def test_real_database_ready_publication_is_locked_but_migration_and_disposal_are_not(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     from sqlalchemy import Engine
 
@@ -653,11 +716,19 @@ def test_real_database_ready_publication_is_locked_but_migration_and_disposal_ar
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("field", (
-    "_stopping", "_cleanup_complete", "_cleanup_failed", "_liveness_failed",
-))
+@pytest.mark.parametrize(
+    "field",
+    (
+        "_stopping",
+        "_cleanup_complete",
+        "_cleanup_failed",
+        "_liveness_failed",
+    ),
+)
 def test_final_fence_preserves_all_actual_lifecycle_admission_dependencies(
-    tmp_path, monkeypatch, field,
+    tmp_path,
+    monkeypatch,
+    field,
 ):
     async def scenario():
         async with _running(tmp_path, monkeypatch, "empty") as run:
@@ -730,12 +801,25 @@ def test_business_worker_has_no_sql_and_final_lock_has_only_clean_commit(tmp_pat
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize(("hour", "minute_value", "expected"), (
-    (9, 30, 0), (9, 31, 1), (11, 30, 120), (12, 15, 120),
-    (13, 0, 120), (13, 1, 121), (15, 0, 240), (15, 30, 240),
-))
+@pytest.mark.parametrize(
+    ("hour", "minute_value", "expected"),
+    (
+        (9, 30, 0),
+        (9, 31, 1),
+        (11, 30, 120),
+        (12, 15, 120),
+        (13, 0, 120),
+        (13, 1, 121),
+        (15, 0, 240),
+        (15, 30, 240),
+    ),
+)
 def test_capture_uses_exact_bounded_trading_prefix_excluding_lunch(
-    tmp_path, monkeypatch, hour, minute_value, expected,
+    tmp_path,
+    monkeypatch,
+    hour,
+    minute_value,
+    expected,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, _):
@@ -747,8 +831,10 @@ def test_capture_uses_exact_bounded_trading_prefix_excluding_lunch(
                 assert capture is None
             else:
                 assert len(capture.required_ends) == expected
-                assert not any(11 * 60 + 30 < end.hour * 60 + end.minute <= 13 * 60
-                               for end in capture.required_ends)
+                assert not any(
+                    11 * 60 + 30 < end.hour * 60 + end.minute <= 13 * 60
+                    for end in capture.required_ends
+                )
                 assert capture.required_ends[-1] == capture.target.completed_minute_end
 
     asyncio.run(scenario())
@@ -767,7 +853,8 @@ def test_capture_authority_failure_is_not_silently_skipped(tmp_path, monkeypatch
 
 
 def test_real_provider_wait_preserves_concurrent_winner_despite_later_response_receipt(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
@@ -799,7 +886,8 @@ def test_real_provider_wait_preserves_concurrent_winner_despite_later_response_r
                 assert result.ready and entries == ["rt_min_daily"]
                 with work() as transaction:
                     rows = transaction.history.list_minutes(
-                        capture.symbol, start=capture.required_ends[0],
+                        capture.symbol,
+                        start=capture.required_ends[0],
                         end=capture.required_ends[-1],
                     )
                     assert tuple(row.bar_end for row in rows) == capture.required_ends
@@ -839,7 +927,8 @@ def test_waiting_for_serial_scope_rechecks_original_activation_before_fetch(tmp_
 
 
 def test_scoped_commit_storage_failure_rolls_back_and_preserves_original_error(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, with_plan=True) as (pipeline, sdk, _, _, work):
@@ -869,7 +958,9 @@ def test_scoped_commit_storage_failure_rolls_back_and_preserves_original_error(
 
 @pytest.mark.parametrize("at_wrapper", (True, False), ids=("before-SDK", "after-SDK"))
 def test_begin_shutdown_synchronously_revokes_attempt_before_cancel_or_drain(
-    tmp_path, monkeypatch, at_wrapper,
+    tmp_path,
+    monkeypatch,
+    at_wrapper,
 ):
     async def scenario():
         async with _running(tmp_path, monkeypatch, "empty") as run:
@@ -904,7 +995,9 @@ def test_begin_shutdown_synchronously_revokes_attempt_before_cancel_or_drain(
 
             monkeypatch.setattr(pipeline.recovery, "recover_scope", record_token)
             monkeypatch.setattr(client, "_current", wrapper) if at_wrapper else monkeypatch.setattr(
-                sdk, "_stock_minutes", endpoint,
+                sdk,
+                "_stock_minutes",
+                endpoint,
             )
             task = asyncio.create_task(pipeline._recover_frozen_scope(capture))
             lifecycle._work_tasks.add(task)
@@ -1048,7 +1141,8 @@ def test_unpublished_candidate_with_no_pipeline_can_be_stopped_repeatedly(tmp_pa
 
 
 def test_new_legal_generation_registers_fresh_tokens_instead_of_old_cancelled_tokens(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     from trade_plan_monitor.runtime.recovery import RecoveryService
 
@@ -1088,7 +1182,8 @@ def test_lifecycle_rejects_noncallable_revocation_callback(monkeypatch, callback
 
     constructor = lifecycle_tests.RuntimeLifecycleService
     monkeypatch.setattr(
-        lifecycle_tests, "RuntimeLifecycleService",
+        lifecycle_tests,
+        "RuntimeLifecycleService",
         lambda **kwargs: constructor(**kwargs, revoke_active_recovery_attempts=callback),
     )
     with pytest.raises(TypeError, match="revoke_active_recovery_attempts must be callable"):
@@ -1110,7 +1205,8 @@ def test_lifecycle_honors_a_valid_falsey_revocation_callable(monkeypatch):
     constructor = lifecycle_tests.RuntimeLifecycleService
     callback = FalseyRevoker()
     monkeypatch.setattr(
-        lifecycle_tests, "RuntimeLifecycleService",
+        lifecycle_tests,
+        "RuntimeLifecycleService",
         lambda **kwargs: constructor(**kwargs, revoke_active_recovery_attempts=callback),
     )
     service = lifecycle_tests._service()

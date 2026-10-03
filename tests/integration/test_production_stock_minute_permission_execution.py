@@ -984,9 +984,9 @@ def test_semantic_owner_uses_original_authority_not_old_certification_expiry(
 ):
     from test_production_stock_minute_permission_preparation import mutate
 
+    from trade_plan_monitor.domain.daily_plan_models import DailyRangeActivation
     from trade_plan_monitor.domain.plan_codec import dump_plan_json
     from trade_plan_monitor.domain.plan_hash import plan_sha256
-    from trade_plan_monitor.domain.plan_models import DateRangeActivation
     from trade_plan_monitor.runtime.production import (
         ProductionSemanticBindings,
         SemanticContractBinding,
@@ -996,7 +996,7 @@ def test_semantic_owner_uses_original_authority_not_old_certification_expiry(
     env = execution_env()
     operation = MINUTE_SCOPES[0]
     ready(env, operation)
-    plan = env.plans[0].model_copy(update={"activation": DateRangeActivation(
+    plan = env.plans[0].model_copy(update={"activation": DailyRangeActivation(mode="DATE_RANGE",
         start_date=env.clock.now().date(), end_date=env.clock.now().date() + timedelta(days=10),
     )})
     mutate(env, "UPDATE plan_version SET payload_json=:payload, plan_hash=:hash", {

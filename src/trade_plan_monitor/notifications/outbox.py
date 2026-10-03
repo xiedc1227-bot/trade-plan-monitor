@@ -11,7 +11,7 @@ from hashlib import sha256
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -478,9 +478,16 @@ class AlertOutbox:
         if symbol is not None:
             filters.append(func.json_extract(AlertEventRow.payload_json, "$.symbol") == symbol)
         if signal_type is not None:
-            filters.append(
-                func.json_extract(AlertEventRow.payload_json, "$.signal_type") == signal_type
-            )
+            stored_signal = func.json_extract(AlertEventRow.payload_json, "$.signal_type")
+            matching_signal = stored_signal == signal_type
+            if signal_type == "RISK_ALERT":
+                matching_signal = or_(matching_signal, and_(
+                    stored_signal == "REMINDER",
+                    func.json_extract(AlertEventRow.payload_json, "$.payload_schema_version")
+                    == "daily-simulation-alert-v1",
+                    func.json_extract(AlertEventRow.payload_json, "$.alert_kind") == "RISK_ALERT",
+                ))
+            filters.append(matching_signal)
         if acknowledged is not None:
             acknowledgement_column = AlertEventRow.acknowledged_at
             filters.append(

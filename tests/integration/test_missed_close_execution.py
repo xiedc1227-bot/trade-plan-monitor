@@ -117,7 +117,17 @@ def _counts(recovery):
     with recovery.engine.connect() as connection:
         return tuple(connection.scalar(text(f"SELECT count(*) FROM {table}")) for table in (
             "evaluation_ledger", "evaluation_result", "risk_state", "alert_event",
-        ))
+    ))
+
+
+def _assert_legacy_alerts_held(recovery, *events):
+    """Frozen recovery events remain readable but have no live delivery authority."""
+    with recovery.engine.connect() as connection:
+        for event in events:
+            receipt = connection.execute(text(
+                "SELECT status, reason FROM alert_delivery_eligibility WHERE event_id=:event_id"
+            ), {"event_id": str(event.event_id)}).one()
+            assert receipt == ("HOLD", "RECOVERY_REQUIRED")
 
 
 def _run_close_in_fresh_process(database_path, trade_date, observed_at, expected_status,
@@ -238,28 +248,22 @@ def test_two_missed_closes_use_historical_holdings_and_source_risk_time_after_re
     assert _counts(recovery) == before == (2, 2, 1, 2)
 
 
-def test_current_delivery_suppresses_intermediate_breach_and_keeps_current_exit(recovery):
+def test_current_delivery_holds_both_frozen_missed_close_alerts(recovery):
     first = recovery.run(D1).committed_event
     second = recovery.run(D2).committed_event
     generation = uuid4()
     admission = CurrentDeliveryAdmission(
         recovery.sessions, runtime_generation=lambda: generation,
     )
-    now = recovery.clock[0] + timedelta(seconds=1)
-    assert admission(first, now) is False
-    assert admission(second, now) is True
-    with recovery.engine.connect() as connection:
-        rows = connection.execute(text(
-            "SELECT event_id, status, reason FROM alert_delivery_eligibility ORDER BY event_id"
-        )).all()
-    by_id = {event_id: (status, reason) for event_id, status, reason in rows}
-    assert by_id[str(first.event_id)] == ("SUPPRESS", "STAGE_SUPERSEDED")
-    assert by_id[str(second.event_id)] == ("ELIGIBLE", "CURRENT_INSTRUCTION")
     with recovery.engine.connect() as connection:
         before = connection.scalar(text(
             "SELECT count(*) FROM audit_log WHERE action='ALERT_DELIVERY_CLASSIFIED'"
         ))
-    assert admission(second, now + timedelta(seconds=1)) is True
+    now = recovery.clock[0] + timedelta(seconds=1)
+    assert admission(first, now) is False
+    assert admission(second, now) is False
+    assert admission(second, now + timedelta(seconds=1)) is False
+    _assert_legacy_alerts_held(recovery, first, second)
     with recovery.engine.connect() as connection:
         after = connection.scalar(text(
             "SELECT count(*) FROM audit_log WHERE action='ALERT_DELIVERY_CLASSIFIED'"
@@ -267,7 +271,7 @@ def test_current_delivery_suppresses_intermediate_breach_and_keeps_current_exit(
     assert after == before
 
 
-def test_proven_old_risk_is_suppressed_after_plan_deactivation(recovery):
+def test_proven_old_risk_remains_held_after_plan_deactivation(recovery):
     event = recovery.run(D1).committed_event
     with recovery.work() as unit:
         active = unit.plans.get_active(event.symbol)
@@ -275,14 +279,10 @@ def test_proven_old_risk_is_suppressed_after_plan_deactivation(recovery):
         unit.commit()
     admission = CurrentDeliveryAdmission(recovery.sessions, runtime_generation=uuid4)
     assert admission(event, recovery.clock[0] + timedelta(seconds=1)) is False
-    with recovery.engine.connect() as connection:
-        status = connection.execute(text(
-            "SELECT status, reason FROM alert_delivery_eligibility WHERE event_id=:event_id"
-        ), {"event_id": str(event.event_id)}).one()
-    assert status == ("SUPPRESS", "ACTIVE_IDENTITY_INVALID")
+    _assert_legacy_alerts_held(recovery, event)
 
 
-def test_repeated_legacy_exit_releases_only_latest_applicable_occurrence(recovery):
+def test_repeated_legacy_exits_remain_held_without_current_authority(recovery):
     recovery.run(D1)
     earlier = recovery.run(D2).committed_event
     d3 = date(2026, 8, 26)
@@ -301,15 +301,11 @@ def test_repeated_legacy_exit_releases_only_latest_applicable_occurrence(recover
     )
     now = recovery.clock[0] + timedelta(seconds=1)
     assert admission(earlier, now) is False
-    assert admission(latest, now) is True
-    with recovery.engine.connect() as connection:
-        reasons = dict(connection.execute(text(
-            "SELECT event_id, reason FROM alert_delivery_eligibility"
-        )).all())
-    assert reasons[str(earlier.event_id)] == "NEWER_EXIT_OCCURRENCE"
+    assert admission(latest, now) is False
+    _assert_legacy_alerts_held(recovery, earlier, latest)
 
 
-def test_confirmed_manual_sale_makes_old_exit_inapplicable(recovery):
+def test_confirmed_manual_sale_cannot_promote_old_exit(recovery):
     recovery.run(D1)
     exit_event = recovery.run(D2).committed_event
     recovery.clock[0] += timedelta(seconds=1)
@@ -318,11 +314,7 @@ def test_confirmed_manual_sale_makes_old_exit_inapplicable(recovery):
         work.commit()
     admission = CurrentDeliveryAdmission(recovery.sessions, runtime_generation=uuid4)
     assert admission(exit_event, recovery.clock[0] + timedelta(seconds=1)) is False
-    with recovery.engine.connect() as connection:
-        reason = connection.scalar(text(
-            "SELECT reason FROM alert_delivery_eligibility WHERE event_id=:event_id"
-        ), {"event_id": str(exit_event.event_id)})
-    assert reason == "TARGET_INAPPLICABLE"
+    _assert_legacy_alerts_held(recovery, exit_event)
 
 
 def test_recovery_barrier_holds_d1_breach_until_d2_resolution(recovery):
@@ -333,14 +325,10 @@ def test_recovery_barrier_holds_d1_breach_until_d2_resolution(recovery):
     second = recovery.run(D2)
     assert second.evaluation_result.snapshot.risk.status == "CLEAR"
     assert admission(first, recovery.clock[0] + timedelta(seconds=1)) is False
-    with recovery.engine.connect() as connection:
-        reason = connection.scalar(text(
-            "SELECT reason FROM alert_delivery_eligibility WHERE event_id=:event_id"
-        ), {"event_id": str(first.event_id)})
-    assert reason == "RISK_RESOLVED"
+    _assert_legacy_alerts_held(recovery, first)
 
 
-def test_opening_only_legacy_exit_is_admitted_without_a_fabricated_lot(recovery):
+def test_opening_only_legacy_exit_is_held_without_a_fabricated_lot(recovery):
     recovery.clock[0] = datetime(2026, 8, 25, 9, 1, tzinfo=ZONE)
     with recovery.work() as work:
         work.positions.reduce_lot(recovery.lot.id, quantity=100, trade_date=D1)
@@ -355,7 +343,8 @@ def test_opening_only_legacy_exit_is_admitted_without_a_fabricated_lot(recovery)
     exit_event = recovery.run(D2).committed_event
     assert exit_event.target_lot_id is None
     admission = CurrentDeliveryAdmission(recovery.sessions, runtime_generation=uuid4)
-    assert admission(exit_event, recovery.clock[0] + timedelta(seconds=1)) is True
+    assert admission(exit_event, recovery.clock[0] + timedelta(seconds=1)) is False
+    _assert_legacy_alerts_held(recovery, exit_event)
 
 
 def test_cannot_skip_an_earlier_missing_close(recovery):

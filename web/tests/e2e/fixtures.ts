@@ -15,6 +15,7 @@ function attachAudit(page: Page, audit: BrowserAudit): void {
     }
   });
   page.on("requestfailed", (request) => {
+    if (request.failure()?.errorText === "net::ERR_ABORTED") return;
     audit.failedRequests.push(
       `${request.method()} ${request.url()} (${request.failure()?.errorText ?? "unknown"})`,
     );

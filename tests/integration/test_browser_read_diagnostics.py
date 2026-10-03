@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 from test_persistent_monitor_read_service import _NOW, _setup
-from tests.browser.explicit_server import observe_read_failures
+from tests.browser.read_diagnostics import observe_read_failures
 
 from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority
 from trade_plan_monitor.state.database import create_session_factory

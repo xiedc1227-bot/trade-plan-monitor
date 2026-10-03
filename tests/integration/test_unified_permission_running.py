@@ -11,6 +11,7 @@ from test_production_index_daily_permission_maintenance import _one_official_ind
 from test_production_index_historical_permission_probe import _complete_index_day
 from test_s3_permission_reservation_process import _business_rows, _checkpoint_rows
 from test_s3_startup_minute_coverage import _DeadlineClock
+from tests.integration.current_activation_fixture import current_mixed_plan
 
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.runtime.production import _PERMISSION_SCOPES, PermissionMaintenanceResult
@@ -23,6 +24,7 @@ def _composition(tmp_path, monkeypatch, *, stock=True):
     composition, sdk, _ = certification_fixture._composition(
         tmp_path, monkeypatch, active_plan=stock, include_index=True,
         stock_certification=stock, persisted_calendar=True,
+        plan=current_mixed_plan() if stock else None,
     )
     _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
     monkeypatch.setattr(sdk, "_historical_index_minutes", lambda _: _complete_index_day(
@@ -142,7 +144,7 @@ def test_actual_permission_sdk_overrun_preserves_original_market_review(
 
 
 @pytest.mark.parametrize("stock", [True, False])
-def test_running_real_scheduler_repairs_all_eight_scopes_without_business_writes(
+def test_running_real_scheduler_repairs_current_scopes_without_business_writes(
     tmp_path, monkeypatch, stock,
 ):
     async def scenario():
@@ -154,7 +156,9 @@ def test_running_real_scheduler_repairs_all_eight_scopes_without_business_writes
             pipe, control, clock = state._pipeline, runtime._request_controller, runtime._clock
             generation, runner = runtime.runtime_generation, composition._runner_task
             assert await clock.park()
-            scopes = _PERMISSION_SCOPES if stock else tuple(
+            scopes = tuple(
+                op for op in _PERMISSION_SCOPES if op is not TushareOperation.DAILY_LIMITS
+            ) if stock else tuple(
                 op for op in _PERMISSION_SCOPES if op.value.startswith("index_")
             )
             for operation in scopes:

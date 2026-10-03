@@ -7,6 +7,15 @@ from trade_plan_monitor.decision.daily_conditions import compare
 from trade_plan_monitor.decision.daily_lifecycle import next_session
 
 
+def _condition_evidence_ids(evidence):
+    """Retain every leaf consumed by a nested severe-condition confirmation."""
+    return list(dict.fromkeys((
+        *evidence.bar_ids,
+        *evidence.fact_ids,
+        *(identity for child in evidence.children for identity in _condition_evidence_ids(child)),
+    )))
+
+
 def advance_daily_risks(
     plan,
     *,
@@ -19,6 +28,7 @@ def advance_daily_risks(
     facts,
     effective_start_date=None,
     allow_new_causes=True,
+    severe_evidence=None,
 ):
     results = []
     by_kind = {r["kind"]: r for r in previous}
@@ -105,12 +115,18 @@ def advance_daily_risks(
                 )
                 for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION")
             ]
-            if all(found):
+            quantitative = hasattr(branch, "condition")
+            confirmed = (severe_evidence is not None and severe_evidence.outcome == "SATISFIED"
+                if quantitative else all(found))
+            if confirmed:
                 execution = next_session(close_date, session_dates)
                 state.update(
                     status="CONFIRMED",
                     confirmed_trade_date=str(close_date),
-                    evidence_ids=[f["id"] for f in found],
+                    evidence_ids=(_condition_evidence_ids(severe_evidence)
+                        if quantitative else [f["id"] for f in found]),
+                    **({"technical_evidence": [severe_evidence.model_dump(mode="json")]}
+                        if quantitative else {}),
                     earliest_execution_date=None if execution is None else str(execution),
                 )
                 if execution is None:

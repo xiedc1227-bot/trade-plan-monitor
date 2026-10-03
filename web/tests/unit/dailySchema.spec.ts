@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialValue, resolveSchema, schemaChoices } from "../../src/components/daily/schema";
+import { initialValue, resolveSchema, schemaChoices } from "../../src/components/plans/planSchema";
 
 describe("daily candidate structured editor", () => {
   it("never fills numeric strategy parameters or endpoints while creating a condition", () => {

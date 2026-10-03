@@ -102,26 +102,6 @@
         "title": "AIProviderConfiguration",
         "type": "object"
       },
-      "AIProviderConfigurationCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "config": {
-            "$ref": "#/components/schemas/AIProviderConfiguration"
-          },
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "config",
-          "expectedRevision"
-        ],
-        "title": "AIProviderConfigurationCommand",
-        "type": "object"
-      },
       "AIProviderPage": {
         "additionalProperties": false,
         "properties": {
@@ -159,54 +139,6 @@
           "total"
         ],
         "title": "AIProviderPage",
-        "type": "object"
-      },
-      "AIProviderSecretCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "providerId": {
-            "format": "uuid",
-            "title": "Providerid",
-            "type": "string"
-          },
-          "secret": {
-            "$ref": "#/components/schemas/SecretWrite"
-          }
-        },
-        "required": [
-          "providerId",
-          "secret",
-          "expectedRevision"
-        ],
-        "title": "AIProviderSecretCommand",
-        "type": "object"
-      },
-      "AIProviderTestCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "providerId": {
-            "format": "uuid",
-            "title": "Providerid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "providerId",
-          "expectedRevision"
-        ],
-        "title": "AIProviderTestCommand",
         "type": "object"
       },
       "AIProviderType": {
@@ -5352,6 +5284,18 @@
             "title": "Activationrevision",
             "type": "integer"
           },
+          "alertKind": {
+            "anyOf": [
+              {
+                "const": "RISK_ALERT",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alertkind"
+          },
           "causeId": {
             "title": "Causeid",
             "type": "string"
@@ -5424,7 +5368,8 @@
           "nextStep": {
             "enum": [
               "CONFIRM_SIMULATED_TRADE",
-              "REVIEW_RISK_EXIT"
+              "REVIEW_RISK_EXIT",
+              "REVIEW_ALERT"
             ],
             "title": "Nextstep",
             "type": "string"
@@ -5489,6 +5434,17 @@
             ],
             "title": "Riskscope"
           },
+          "ruleId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ruleid"
+          },
           "sequence": {
             "exclusiveMinimum": 0.0,
             "title": "Sequence",
@@ -5497,7 +5453,8 @@
           "severity": {
             "enum": [
               "ACTION",
-              "RISK"
+              "RISK",
+              "INFO"
             ],
             "title": "Severity",
             "type": "string"
@@ -5506,7 +5463,8 @@
             "enum": [
               "BUY",
               "SELL",
-              "RISK_EXIT"
+              "RISK_EXIT",
+              "REMINDER"
             ],
             "title": "Signaltype",
             "type": "string"
@@ -6052,8 +6010,8 @@
             "type": "object"
           },
           "schemaVersion": {
-            "const": 4,
-            "default": 4,
+            "const": 5,
+            "default": 5,
             "title": "Schemaversion",
             "type": "integer"
           }
@@ -6072,6 +6030,15 @@
             "minimum": 0.0,
             "title": "Activationrevision",
             "type": "integer"
+          },
+          "alerts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailyRuleReminderState"
+            },
+            "maxItems": 10,
+            "title": "Alerts",
+            "type": "array"
           },
           "contentHash": {
             "pattern": "^[0-9a-f]{64}$",
@@ -6107,8 +6074,38 @@
             "title": "Factrevisions",
             "type": "array"
           },
+          "fiveMinuteBars": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FiveMinuteBar"
+            },
+            "maxItems": 1000,
+            "title": "Fiveminutebars",
+            "type": "array"
+          },
           "inventory": {
             "$ref": "#/components/schemas/DailyInventoryApiView"
+          },
+          "minutePrefix": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MinuteBar"
+            },
+            "maxItems": 240,
+            "title": "Minuteprefix",
+            "type": "array"
+          },
+          "minuteTarget": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutetarget"
           },
           "nextAction": {
             "enum": [
@@ -6157,12 +6154,34 @@
           "riskAction": {
             "$ref": "#/components/schemas/DailyRiskActionApiView"
           },
+          "riskInputKnown": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskinputknown"
+          },
           "risks": {
             "items": {
               "$ref": "#/components/schemas/DailyRiskApiView"
             },
             "title": "Risks",
             "type": "array"
+          },
+          "runtimeGeneration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimegeneration"
           },
           "signals": {
             "items": {
@@ -6309,6 +6328,11 @@
             "format": "uuid",
             "title": "Planversionid",
             "type": "string"
+          },
+          "satisfied": {
+            "default": true,
+            "title": "Satisfied",
+            "type": "boolean"
           },
           "signalId": {
             "anyOf": [
@@ -7519,6 +7543,14 @@
             "title": "Targettacticalqty",
             "type": "integer"
           },
+          "technicalEvidence": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidence"
+            },
+            "title": "Technicalevidence",
+            "type": "array"
+          },
           "verifiedAt": {
             "anyOf": [
               {
@@ -7573,7 +7605,10 @@
             "type": "string"
           },
           "removalEvidence": {
-            "$ref": "#/components/schemas/DailyOfficialEvidence"
+            "maxLength": 2000,
+            "minLength": 20,
+            "title": "Removalevidence",
+            "type": "string"
           },
           "riskId": {
             "title": "Riskid",
@@ -7618,6 +7653,93 @@
           "scopeEvidence"
         ],
         "title": "DailyRiskReassessmentCommand",
+        "type": "object"
+      },
+      "DailyRuleReminderState": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_kind": {
+            "const": "RISK_ALERT",
+            "title": "Alert Kind",
+            "type": "string"
+          },
+          "cause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause Id"
+          },
+          "confirmation_kind": {
+            "enum": [
+              "OFFICIAL_DAILY_CLOSE",
+              "COMPLETED_BAR_CLOSE"
+            ],
+            "title": "Confirmation Kind",
+            "type": "string"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_trade_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Trade Date"
+          },
+          "evidence": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 1,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "alert_kind",
+          "cause_id",
+          "outcome",
+          "confirmation_kind",
+          "confirmed_trade_date",
+          "confirmed_at",
+          "evidence"
+        ],
+        "title": "DailyRuleReminderState",
         "type": "object"
       },
       "DailySeries": {
@@ -7716,6 +7838,27 @@
             "title": "Bucket",
             "type": "string"
           },
+          "confirmationKind": {
+            "default": "OFFICIAL_DAILY_CLOSE",
+            "enum": [
+              "OFFICIAL_DAILY_CLOSE",
+              "COMPLETED_BAR_CLOSE"
+            ],
+            "title": "Confirmationkind",
+            "type": "string"
+          },
+          "confirmedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedat"
+          },
           "confirmedTradeDate": {
             "format": "date",
             "title": "Confirmedtradedate",
@@ -7723,7 +7866,14 @@
           },
           "evidence": {
             "items": {
-              "$ref": "#/components/schemas/DailyConditionEvidence"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DailyConditionEvidence"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedConditionEvidence"
+                }
+              ]
             },
             "title": "Evidence",
             "type": "array"
@@ -7751,6 +7901,15 @@
               }
             ],
             "title": "Executiondate"
+          },
+          "executionWindow": {
+            "default": "NEXT_EXCHANGE_SESSION_ONLY",
+            "enum": [
+              "NEXT_EXCHANGE_SESSION_ONLY",
+              "CURRENT_SESSION"
+            ],
+            "title": "Executionwindow",
+            "type": "string"
           },
           "lineage": {
             "title": "Lineage",
@@ -9420,17 +9579,17 @@
       },
       "ExplicitPlanCapabilityView": {
         "additionalProperties": false,
-        "description": "Backend-owned public Schema-v3 capability state.",
+        "description": "Backend-owned capability for the single current plan workflow.",
         "properties": {
           "executionMode": {
-            "const": "EXPLICIT_RULES",
-            "default": "EXPLICIT_RULES",
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
             "title": "Executionmode",
             "type": "string"
           },
           "executionVersion": {
-            "const": "explicit-rules-v1",
-            "default": "explicit-rules-v1",
+            "const": "condition-plan-v1",
+            "default": "condition-plan-v1",
             "title": "Executionversion",
             "type": "string"
           },
@@ -9455,8 +9614,8 @@
             "type": "boolean"
           },
           "schemaVersion": {
-            "const": 3,
-            "default": 3,
+            "const": 5,
+            "default": 5,
             "title": "Schemaversion",
             "type": "integer"
           },
@@ -9479,171 +9638,6 @@
           }
         },
         "title": "ExplicitPlanCapabilityView",
-        "type": "object"
-      },
-      "ExplicitPlanRuntimeView": {
-        "additionalProperties": false,
-        "description": "Current active v3 rule state for a single symbol's read model.",
-        "properties": {
-          "activationRevision": {
-            "maximum": 9007199254740991.0,
-            "minimum": 0.0,
-            "title": "Activationrevision",
-            "type": "integer"
-          },
-          "evaluatedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evaluatedat"
-          },
-          "planHash": {
-            "maxLength": 64,
-            "minLength": 64,
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Planhash",
-            "type": "string"
-          },
-          "planVersionId": {
-            "format": "uuid",
-            "title": "Planversionid",
-            "type": "string"
-          },
-          "ruleOutcomes": {
-            "items": {
-              "$ref": "#/components/schemas/ExplicitRuleOutcomeView"
-            },
-            "maxItems": 3,
-            "title": "Ruleoutcomes",
-            "type": "array"
-          },
-          "status": {
-            "enum": [
-              "AWAITING_EVALUATION",
-              "CURRENT"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "symbol": {
-            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-            "title": "Symbol",
-            "type": "string"
-          },
-          "targetBucketEnd": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Targetbucketend"
-          }
-        },
-        "required": [
-          "symbol",
-          "planVersionId",
-          "planHash",
-          "activationRevision",
-          "status",
-          "evaluatedAt",
-          "targetBucketEnd",
-          "ruleOutcomes"
-        ],
-        "title": "ExplicitPlanRuntimeView",
-        "type": "object"
-      },
-      "ExplicitRuleOutcomeView": {
-        "additionalProperties": false,
-        "description": "One persisted v3 rule result, never coerced into a legacy decision.",
-        "properties": {
-          "action": {
-            "enum": [
-              "BUY",
-              "SELL",
-              "RISK_ALERT"
-            ],
-            "title": "Action",
-            "type": "string"
-          },
-          "blockers": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 8,
-            "title": "Blockers",
-            "type": "array"
-          },
-          "conditionCode": {
-            "title": "Conditioncode",
-            "type": "string"
-          },
-          "conditionEvidence": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ExplicitConditionEvidenceView"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "missingInputs": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 32,
-            "title": "Missinginputs",
-            "type": "array"
-          },
-          "outcome": {
-            "enum": [
-              "SATISFIED",
-              "UNSATISFIED",
-              "MISSING_INPUT"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          },
-          "ruleId": {
-            "title": "Ruleid",
-            "type": "string"
-          },
-          "suppressionReason": {
-            "anyOf": [
-              {
-                "enum": [
-                  "ONCE_ALREADY_EMITTED",
-                  "TARGET_ALREADY_EMITTED"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Suppressionreason"
-          }
-        },
-        "required": [
-          "ruleId",
-          "action",
-          "conditionCode",
-          "outcome",
-          "suppressionReason"
-        ],
-        "title": "ExplicitRuleOutcomeView",
         "type": "object"
       },
       "ExtractionIssue": {
@@ -9798,6 +9792,70 @@
           "excerpt"
         ],
         "title": "FieldEvidence",
+        "type": "object"
+      },
+      "FiveMinuteBar": {
+        "additionalProperties": false,
+        "description": "Immutable complete session-contained five-minute aggregate.",
+        "properties": {
+          "amount_yuan": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Yuan",
+            "type": "string"
+          },
+          "bar_end": {
+            "format": "date-time",
+            "title": "Bar End",
+            "type": "string"
+          },
+          "close_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Close Fen",
+            "type": "integer"
+          },
+          "formula_version": {
+            "const": "ta-v1",
+            "default": "ta-v1",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "high_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "High Fen",
+            "type": "integer"
+          },
+          "low_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Low Fen",
+            "type": "integer"
+          },
+          "open_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Open Fen",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "volume_shares": {
+            "minimum": 0.0,
+            "title": "Volume Shares",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "symbol",
+          "bar_end",
+          "open_fen",
+          "high_fen",
+          "low_fen",
+          "close_fen",
+          "volume_shares",
+          "amount_yuan"
+        ],
+        "title": "FiveMinuteBar",
         "type": "object"
       },
       "FixedDailyReference": {
@@ -10257,47 +10315,6 @@
         ],
         "title": "LegacyPlanPreviewResponse",
         "type": "object"
-      },
-      "ManualEventRiskConfirmationCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "expiresOn": {
-            "format": "date",
-            "title": "Expireson",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ManualEventRiskStatus"
-          },
-          "symbol": {
-            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "symbol",
-          "status",
-          "expiresOn",
-          "expectedRevision"
-        ],
-        "title": "ManualEventRiskConfirmationCommand",
-        "type": "object"
-      },
-      "ManualEventRiskStatus": {
-        "description": "The two explicit user outcomes; absent or stale records remain unknown.",
-        "enum": [
-          "CLEAR",
-          "RISK_PRESENT"
-        ],
-        "title": "ManualEventRiskStatus",
-        "type": "string"
       },
       "ManualEventRiskUnknownReason": {
         "enum": [
@@ -10833,6 +10850,180 @@
         "title": "MarketTurnoverSummaryView",
         "type": "object"
       },
+      "MinuteBar": {
+        "additionalProperties": false,
+        "description": "One normalized completed minute in integer fen, shares, and yuan.",
+        "properties": {
+          "amount_yuan": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Yuan",
+            "type": "string"
+          },
+          "bar_end": {
+            "format": "date-time",
+            "title": "Bar End",
+            "type": "string"
+          },
+          "close_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Close Fen",
+            "type": "integer"
+          },
+          "high_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "High Fen",
+            "type": "integer"
+          },
+          "low_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Low Fen",
+            "type": "integer"
+          },
+          "open_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Open Fen",
+            "type": "integer"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "volume_shares": {
+            "minimum": 0.0,
+            "title": "Volume Shares",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "open_fen",
+          "high_fen",
+          "low_fen",
+          "close_fen",
+          "symbol",
+          "bar_end",
+          "volume_shares",
+          "amount_yuan",
+          "received_at"
+        ],
+        "title": "MinuteBar",
+        "type": "object"
+      },
+      "MinuteCloseBelow": {
+        "additionalProperties": false,
+        "properties": {
+          "price_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Price Fen",
+            "type": "integer"
+          },
+          "timeframe_minutes": {
+            "const": 5,
+            "title": "Timeframe Minutes",
+            "type": "integer"
+          },
+          "type": {
+            "const": "MINUTE_CLOSE_BELOW",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "timeframe_minutes",
+          "price_fen"
+        ],
+        "title": "MinuteCloseBelow",
+        "type": "object"
+      },
+      "MinuteCloseInRange": {
+        "additionalProperties": false,
+        "properties": {
+          "high_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "High Fen",
+            "type": "integer"
+          },
+          "include_high": {
+            "title": "Include High",
+            "type": "boolean"
+          },
+          "include_low": {
+            "title": "Include Low",
+            "type": "boolean"
+          },
+          "low_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Low Fen",
+            "type": "integer"
+          },
+          "timeframe_minutes": {
+            "const": 5,
+            "title": "Timeframe Minutes",
+            "type": "integer"
+          },
+          "type": {
+            "const": "MINUTE_CLOSE_IN_RANGE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "timeframe_minutes",
+          "low_fen",
+          "high_fen",
+          "include_low",
+          "include_high"
+        ],
+        "title": "MinuteCloseInRange",
+        "type": "object"
+      },
+      "MinuteVolumeToMeanGte": {
+        "additionalProperties": false,
+        "properties": {
+          "history_scope": {
+            "const": "CONTIGUOUS_TRADING_BARS",
+            "title": "History Scope",
+            "type": "string"
+          },
+          "minimum_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Minimum Ratio",
+            "type": "string"
+          },
+          "timeframe_minutes": {
+            "const": 5,
+            "title": "Timeframe Minutes",
+            "type": "integer"
+          },
+          "type": {
+            "const": "MINUTE_VOLUME_TO_MEAN_GTE",
+            "title": "Type",
+            "type": "string"
+          },
+          "window_bars": {
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Window Bars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "timeframe_minutes",
+          "window_bars",
+          "minimum_ratio",
+          "history_scope"
+        ],
+        "title": "MinuteVolumeToMeanGte",
+        "type": "object"
+      },
       "MissingInputCode": {
         "description": "Closed reasons why a condition cannot be evaluated safely.",
         "enum": [
@@ -11350,15 +11541,6 @@
             "maxLength": 200000,
             "minLength": 1,
             "title": "Sourcetext",
-            "type": "string"
-          },
-          "targetContract": {
-            "default": "CONFIGURED",
-            "enum": [
-              "CONFIGURED",
-              "DAILY_CLOSE_PLAN"
-            ],
-            "title": "Targetcontract",
             "type": "string"
           }
         },
@@ -11922,7 +12104,10 @@
           "obsoleteReason": {
             "anyOf": [
               {
-                "const": "DAILY_DRAFT_OBSOLETE",
+                "enum": [
+                  "DAILY_DRAFT_OBSOLETE",
+                  "LEGACY_PLANS_REQUIRE_REVIEW"
+                ],
                 "type": "string"
               },
               {
@@ -12055,7 +12240,10 @@
           "obsoleteReason": {
             "anyOf": [
               {
-                "const": "DAILY_DRAFT_OBSOLETE",
+                "enum": [
+                  "DAILY_DRAFT_OBSOLETE",
+                  "LEGACY_PLANS_REQUIRE_REVIEW"
+                ],
                 "type": "string"
               },
               {
@@ -12224,173 +12412,6 @@
         "title": "PlanVersionView",
         "type": "object"
       },
-      "PositionInventoryClosureCommand": {
-        "additionalProperties": false,
-        "description": "Debit one explicit ledger source after a real-world sale is recorded.",
-        "properties": {
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "quantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Quantity",
-            "type": "integer"
-          },
-          "sourceId": {
-            "format": "uuid",
-            "title": "Sourceid",
-            "type": "string"
-          },
-          "sourceType": {
-            "enum": [
-              "LOT",
-              "OPENING_BALANCE"
-            ],
-            "title": "Sourcetype",
-            "type": "string"
-          },
-          "tradeDate": {
-            "format": "date",
-            "title": "Tradedate",
-            "type": "string"
-          }
-        },
-        "required": [
-          "sourceType",
-          "sourceId",
-          "quantity",
-          "tradeDate",
-          "expectedRevision"
-        ],
-        "title": "PositionInventoryClosureCommand",
-        "type": "object"
-      },
-      "PositionInventoryClosureView": {
-        "additionalProperties": false,
-        "properties": {
-          "afterRemainingQuantity": {
-            "minimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Afterremainingquantity",
-            "type": "integer"
-          },
-          "appliedQuantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Appliedquantity",
-            "type": "integer"
-          },
-          "beforeRemainingQuantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Beforeremainingquantity",
-            "type": "integer"
-          },
-          "revision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Revision",
-            "type": "integer"
-          },
-          "sourceId": {
-            "format": "uuid",
-            "title": "Sourceid",
-            "type": "string"
-          },
-          "sourceType": {
-            "enum": [
-              "LOT",
-              "OPENING_BALANCE"
-            ],
-            "title": "Sourcetype",
-            "type": "string"
-          },
-          "symbol": {
-            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-            "title": "Symbol",
-            "type": "string"
-          },
-          "tradeDate": {
-            "format": "date",
-            "title": "Tradedate",
-            "type": "string"
-          }
-        },
-        "required": [
-          "sourceType",
-          "sourceId",
-          "symbol",
-          "appliedQuantity",
-          "tradeDate",
-          "beforeRemainingQuantity",
-          "afterRemainingQuantity",
-          "revision"
-        ],
-        "title": "PositionInventoryClosureView",
-        "type": "object"
-      },
-      "PositionInventoryConfirmationCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "asOfTradeDate": {
-            "format": "date",
-            "title": "Asoftradedate",
-            "type": "string"
-          },
-          "completeRegistration": {
-            "const": true,
-            "title": "Completeregistration",
-            "type": "boolean"
-          },
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "includedLotIds": {
-            "default": [],
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "maxItems": 200,
-            "title": "Includedlotids",
-            "type": "array"
-          },
-          "sellableQuantity": {
-            "minimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Sellablequantity",
-            "type": "integer"
-          },
-          "symbol": {
-            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-            "title": "Symbol",
-            "type": "string"
-          },
-          "totalQuantity": {
-            "minimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Totalquantity",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "symbol",
-          "asOfTradeDate",
-          "expectedRevision",
-          "totalQuantity",
-          "sellableQuantity",
-          "completeRegistration"
-        ],
-        "title": "PositionInventoryConfirmationCommand",
-        "type": "object"
-      },
       "PositionInventoryView": {
         "additionalProperties": false,
         "description": "Three-state-safe authoritative inventory projection.",
@@ -12518,144 +12539,6 @@
           "confirmedAt"
         ],
         "title": "PositionInventoryView",
-        "type": "object"
-      },
-      "PositionLotClosureCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "lotId": {
-            "format": "uuid",
-            "title": "Lotid",
-            "type": "string"
-          },
-          "quantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Quantity",
-            "type": "integer"
-          },
-          "tradeDate": {
-            "format": "date",
-            "title": "Tradedate",
-            "type": "string"
-          }
-        },
-        "required": [
-          "lotId",
-          "quantity",
-          "tradeDate",
-          "expectedRevision"
-        ],
-        "title": "PositionLotClosureCommand",
-        "type": "object"
-      },
-      "PositionLotClosureView": {
-        "additionalProperties": false,
-        "description": "Auditable reduction receipt bound to the exact command and lot transition.",
-        "properties": {
-          "afterRemainingQuantity": {
-            "minimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Afterremainingquantity",
-            "type": "integer"
-          },
-          "appliedQuantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Appliedquantity",
-            "type": "integer"
-          },
-          "beforeRemainingQuantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Beforeremainingquantity",
-            "type": "integer"
-          },
-          "lot": {
-            "$ref": "#/components/schemas/trade_plan_monitor__web__routers__positions__PositionLotView"
-          },
-          "tradeDate": {
-            "format": "date",
-            "title": "Tradedate",
-            "type": "string"
-          }
-        },
-        "required": [
-          "lot",
-          "appliedQuantity",
-          "tradeDate",
-          "beforeRemainingQuantity",
-          "afterRemainingQuantity"
-        ],
-        "title": "PositionLotClosureView",
-        "type": "object"
-      },
-      "PositionLotCreateCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "acquiredTradeDate": {
-            "format": "date",
-            "title": "Acquiredtradedate",
-            "type": "string"
-          },
-          "bucket": {
-            "enum": [
-              "CORE",
-              "TACTICAL"
-            ],
-            "title": "Bucket",
-            "type": "string"
-          },
-          "costFen": {
-            "exclusiveMinimum": 0.0,
-            "title": "Costfen",
-            "type": "integer"
-          },
-          "expectedRevision": {
-            "maximum": 9.223372036854776e+18,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "quantity": {
-            "exclusiveMinimum": 0.0,
-            "multipleOf": 100.0,
-            "title": "Quantity",
-            "type": "integer"
-          },
-          "relatedAlertId": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Relatedalertid"
-          },
-          "symbol": {
-            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "symbol",
-          "bucket",
-          "quantity",
-          "acquiredTradeDate",
-          "costFen",
-          "expectedRevision"
-        ],
-        "title": "PositionLotCreateCommand",
         "type": "object"
       },
       "PositionLotPage": {
@@ -13516,25 +13399,6 @@
         "title": "SecretStatusView",
         "type": "object"
       },
-      "SecretWrite": {
-        "additionalProperties": false,
-        "description": "Transient replacement input whose representations remain masked.",
-        "properties": {
-          "value": {
-            "format": "password",
-            "maxLength": 8192,
-            "minLength": 1,
-            "title": "Value",
-            "type": "string",
-            "writeOnly": true
-          }
-        },
-        "required": [
-          "value"
-        ],
-        "title": "SecretWrite",
-        "type": "object"
-      },
       "SignalType": {
         "description": "Every display decision defined by the approved engine contract.",
         "enum": [
@@ -14376,6 +14240,302 @@
         "title": "UnfilledReason",
         "type": "string"
       },
+      "UnifiedAll": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ALL": "#/components/schemas/UnifiedAll",
+                  "ANY": "#/components/schemas/UnifiedAny",
+                  "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                  "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                  "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                  "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                  "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                  "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                  "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGte",
+                  "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DailyPriceCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriceInRange"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyVolumeRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCandleRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyIndicatorCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCloseSequence"
+                },
+                {
+                  "$ref": "#/components/schemas/ReviewedDailyFact"
+                },
+                {
+                  "$ref": "#/components/schemas/MinuteCloseInRange"
+                },
+                {
+                  "$ref": "#/components/schemas/MinuteCloseBelow"
+                },
+                {
+                  "$ref": "#/components/schemas/MinuteVolumeToMeanGte"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedAll"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedAny"
+                }
+              ]
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "type": {
+            "const": "ALL",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "conditions"
+        ],
+        "title": "UnifiedAll",
+        "type": "object"
+      },
+      "UnifiedAny": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ALL": "#/components/schemas/UnifiedAll",
+                  "ANY": "#/components/schemas/UnifiedAny",
+                  "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                  "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                  "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                  "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                  "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                  "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                  "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGte",
+                  "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DailyPriceCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriceInRange"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyVolumeRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCandleRatio"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyIndicatorCompare"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyCloseSequence"
+                },
+                {
+                  "$ref": "#/components/schemas/ReviewedDailyFact"
+                },
+                {
+                  "$ref": "#/components/schemas/MinuteCloseInRange"
+                },
+                {
+                  "$ref": "#/components/schemas/MinuteCloseBelow"
+                },
+                {
+                  "$ref": "#/components/schemas/MinuteVolumeToMeanGte"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedAll"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedAny"
+                }
+              ]
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "type": {
+            "const": "ANY",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "conditions"
+        ],
+        "title": "UnifiedAny",
+        "type": "object"
+      },
+      "UnifiedConditionEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "bar_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Bar Ids",
+            "type": "array"
+          },
+          "basis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Id"
+          },
+          "children": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidence"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "condition": {
+            "discriminator": {
+              "mapping": {
+                "ALL": "#/components/schemas/UnifiedAll",
+                "ANY": "#/components/schemas/UnifiedAny",
+                "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGte",
+                "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DailyPriceCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriceInRange"
+              },
+              {
+                "$ref": "#/components/schemas/DailyVolumeRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCandleRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyIndicatorCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewedDailyFact"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseInRange"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseBelow"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteVolumeToMeanGte"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAll"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAny"
+              }
+            ],
+            "title": "Condition"
+          },
+          "fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "operands": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Operands",
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "session_dates": {
+            "default": [],
+            "items": {},
+            "title": "Session Dates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "condition"
+        ],
+        "title": "UnifiedConditionEvidence",
+        "type": "object"
+      },
       "UnmappedText": {
         "additionalProperties": false,
         "description": "Unsupported source text that cannot become an executable condition.",
@@ -14705,316 +14865,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/api/v1/ai-provider-secrets": {
-      "post": {
-        "operationId": "replace_ai_provider_secret_api_v1_ai_provider_secrets_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AIProviderSecretCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AIProviderView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Replace Ai Provider Secret",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
-    "/api/v1/ai-provider-tests": {
-      "post": {
-        "operationId": "submit_ai_provider_test_api_v1_ai_provider_tests_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AIProviderTestCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationReceipt"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Submit Ai Provider Test",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
     "/api/v1/ai-providers": {
       "get": {
         "operationId": "list_ai_providers_api_v1_ai_providers_get",
@@ -15167,324 +15017,6 @@
           }
         },
         "summary": "List Ai Providers",
-        "tags": [
-          "ai"
-        ]
-      },
-      "post": {
-        "operationId": "create_ai_provider_api_v1_ai_providers_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AIProviderConfigurationCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AIProviderView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Create Ai Provider",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
-    "/api/v1/ai-providers/{provider_id}": {
-      "patch": {
-        "operationId": "update_ai_provider_api_v1_ai_providers__provider_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "provider_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Provider Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AIProviderConfigurationCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AIProviderView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Update Ai Provider",
         "tags": [
           "ai"
         ]
@@ -19110,1363 +18642,6 @@
         ]
       }
     },
-    "/api/v1/daily-plan-editor-schema": {
-      "get": {
-        "operationId": "editor_schema_api_v1_daily_plan_editor_schema_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyEditorSchemaView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Editor Schema",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-plan-facts": {
-      "post": {
-        "operationId": "facts_api_v1_daily_plan_facts_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DailyFactCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyMutationReceipt"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Facts",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-plan-review-previews": {
-      "post": {
-        "operationId": "preview_api_v1_daily_plan_review_previews_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DailyReviewPreviewCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyReviewPreview"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Preview",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-plan-review-supplements": {
-      "post": {
-        "operationId": "supplements_api_v1_daily_plan_review_supplements_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DailySupplementCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyMutationReceipt"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Supplements",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-plan-runtime/{symbol}": {
-      "get": {
-        "operationId": "runtime_api_v1_daily_plan_runtime__symbol__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "symbol",
-            "required": true,
-            "schema": {
-              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-              "title": "Symbol",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyStateView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Runtime",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-position-confirmations": {
-      "post": {
-        "operationId": "positions_api_v1_daily_position_confirmations_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DailyPositionCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyMutationReceipt"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Positions",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-position-inventory": {
-      "get": {
-        "operationId": "inventory_api_v1_daily_position_inventory_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "symbol",
-            "required": true,
-            "schema": {
-              "pattern": "^[0-9]{6}\\.(SH|SZ|BJ)$",
-              "title": "Symbol",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "asOfTradeDate",
-            "required": true,
-            "schema": {
-              "format": "date",
-              "title": "Asoftradedate",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyInventoryResource"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Inventory",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-risk-reassessments": {
-      "post": {
-        "operationId": "reassessments_api_v1_daily_risk_reassessments_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DailyRiskReassessmentCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailyMutationReceipt"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Reassessments",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
-    "/api/v1/daily-simulated-trades": {
-      "post": {
-        "operationId": "simulations_api_v1_daily_simulated_trades_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DailySimulationCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DailySimulationReceipt"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Simulations",
-        "tags": [
-          "daily-plans"
-        ]
-      }
-    },
     "/api/v1/dashboard": {
       "get": {
         "operationId": "get_dashboard_api_v1_dashboard_get",
@@ -20758,149 +18933,6 @@
         "summary": "Evaluate Diagnostic",
         "tags": [
           "alerts"
-        ]
-      }
-    },
-    "/api/v1/explicit-plan-runtime/{symbol}": {
-      "get": {
-        "operationId": "get_explicit_plan_runtime_api_v1_explicit_plan_runtime__symbol__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "symbol",
-            "required": true,
-            "schema": {
-              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-              "title": "Symbol",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExplicitPlanRuntimeView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Get Explicit Plan Runtime",
-        "tags": [
-          "plans"
         ]
       }
     },
@@ -21316,161 +19348,6 @@
           }
         },
         "summary": "Get Manual Event Risk",
-        "tags": [
-          "manual-event-risk"
-        ]
-      }
-    },
-    "/api/v1/manual-event-risk-confirmations": {
-      "post": {
-        "operationId": "confirm_manual_event_risk_api_v1_manual_event_risk_confirmations_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ManualEventRiskConfirmationCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ManualEventRiskView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Confirm Manual Event Risk",
         "tags": [
           "manual-event-risk"
         ]
@@ -22414,6 +20291,137 @@
         ]
       }
     },
+    "/api/v1/plan-editor-schema": {
+      "get": {
+        "operationId": "editor_schema_api_v1_plan_editor_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyEditorSchemaView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Editor Schema",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
     "/api/v1/plan-extractions": {
       "post": {
         "operationId": "submit_plan_extraction_api_v1_plan_extractions_post",
@@ -22707,6 +20715,161 @@
           }
         },
         "summary": "Get Plan Extraction",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-facts": {
+      "post": {
+        "operationId": "facts_api_v1_plan_facts_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyFactCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Facts",
         "tags": [
           "plans"
         ]
@@ -23017,6 +21180,614 @@
           }
         },
         "summary": "Confirm Plan Review",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-review-previews": {
+      "post": {
+        "operationId": "preview_api_v1_plan_review_previews_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyReviewPreviewCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyReviewPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-review-supplements": {
+      "post": {
+        "operationId": "supplements_api_v1_plan_review_supplements_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailySupplementCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Supplements",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-risk-reassessments": {
+      "post": {
+        "operationId": "reassessments_api_v1_plan_risk_reassessments_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyRiskReassessmentCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Reassessments",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-runtime/{symbol}": {
+      "get": {
+        "operationId": "runtime_api_v1_plan_runtime__symbol__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Runtime",
         "tags": [
           "plans"
         ]
@@ -23530,471 +22301,6 @@
         ]
       }
     },
-    "/api/v1/position-inventory-closures": {
-      "post": {
-        "operationId": "close_position_inventory_api_v1_position_inventory_closures_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PositionInventoryClosureCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PositionInventoryClosureView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Close Position Inventory",
-        "tags": [
-          "positions"
-        ]
-      }
-    },
-    "/api/v1/position-inventory-confirmations": {
-      "post": {
-        "operationId": "confirm_position_inventory_api_v1_position_inventory_confirmations_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PositionInventoryConfirmationCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PositionInventoryView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Confirm Position Inventory",
-        "tags": [
-          "positions"
-        ]
-      }
-    },
-    "/api/v1/position-lot-closures": {
-      "post": {
-        "operationId": "close_position_lot_api_v1_position_lot_closures_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PositionLotClosureCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PositionLotClosureView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Close Position Lot",
-        "tags": [
-          "positions"
-        ]
-      }
-    },
     "/api/v1/position-lots": {
       "get": {
         "operationId": "list_position_lots_api_v1_position_lots_get",
@@ -24170,9 +22476,11 @@
         "tags": [
           "positions"
         ]
-      },
+      }
+    },
+    "/api/v1/simulated-trades": {
       "post": {
-        "operationId": "record_position_lot_api_v1_position_lots_post",
+        "operationId": "simulations_api_v1_simulated_trades_post",
         "parameters": [
           {
             "in": "header",
@@ -24191,7 +22499,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PositionLotCreateCommand"
+                "$ref": "#/components/schemas/DailySimulationCommand"
               }
             }
           },
@@ -24202,7 +22510,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/trade_plan_monitor__web__routers__positions__PositionLotView"
+                  "$ref": "#/components/schemas/DailySimulationReceipt"
                 }
               }
             },
@@ -24319,9 +22627,317 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Record Position Lot",
+        "summary": "Simulations",
         "tags": [
-          "positions"
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/simulation-position-confirmations": {
+      "post": {
+        "operationId": "positions_api_v1_simulation_position_confirmations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyPositionCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMutationReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Positions",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/simulation-position-inventory": {
+      "get": {
+        "operationId": "inventory_api_v1_simulation_position_inventory_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asOfTradeDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Asoftradedate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyInventoryResource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inventory",
+        "tags": [
+          "plans"
         ]
       }
     },

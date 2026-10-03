@@ -150,6 +150,15 @@ def load_daily_draft_json(document):
         object_pairs_hook=_reject_duplicate_json_keys,
         parse_constant=_reject_json_constant,
     )
+    if isinstance(raw, dict) and raw.get("schema_version") == 5:
+        from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+        from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
+        _validate_data_tree(raw)
+        try:
+            return UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(raw))
+        except ValidationError:
+            return UnifiedPlanDraft.model_validate(raw)
     if not isinstance(raw, dict) or raw.get("schema_version") != 4:
         raise ValueError("not a Schema 4 draft")
     if obsolete_daily_document(raw):
@@ -171,7 +180,12 @@ def obsolete_daily_document(document):
         return False
 
     if set(raw.get("trading_rules") or {}) & {
-        "buy_min_qty", "buy_increment", "sell_increment", "odd_lot_liquidation", "evidence", "as_of"
+        "buy_min_qty",
+        "buy_increment",
+        "sell_increment",
+        "odd_lot_liquidation",
+        "evidence",
+        "as_of",
     }:
         return True
 
@@ -198,11 +212,18 @@ def daily_draft_content_sha256(draft):
     data = draft.executable_payload()
     for key in ("plan_id", "version", "name", "metadata"):
         data.pop(key)
-    return daily_hash("daily-plan-review-content-v1", data)
+    domain = (
+        "plan-review-content-v2" if draft.schema_version == 5 else "daily-plan-review-content-v1"
+    )
+    return daily_hash(domain, data)
 
 
 def daily_draft_issues(draft):
     """Validation is rerun server-side; a missing field cannot be dismissed by acknowledgement."""
+    if draft.schema_version == 5:
+        from trade_plan_monitor.domain.unified_plan_validation import unified_plan_issues
+
+        return unified_plan_issues(draft)
     try:
         DailyTradePlan.model_validate(draft.executable_payload())
         return ()

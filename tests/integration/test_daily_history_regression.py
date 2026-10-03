@@ -8,15 +8,15 @@ from tests.integration.test_daily_plan_chain import (
     SYMBOL,
     TUESDAY,
     WEDNESDAY,
-    official_proof,
     ready_chain,
 )
 from tests.integration.test_daily_plan_chain import chain as chain
 
 
-def fact(chain, kind, day, suffix="new", signal=None):
+def fact(chain, kind, day, suffix="new", signal=None, satisfied=True):
+    chain.now += timedelta(microseconds=1)
     return chain.post(
-        "daily-plan-facts",
+        "plan-facts",
         {
             "planVersionId": chain.version["id"],
             "contentHash": chain.version["contentHash"],
@@ -24,6 +24,7 @@ def fact(chain, kind, day, suffix="new", signal=None):
             "kind": kind,
             "tradeDate": str(day),
             "signalId": signal,
+            "satisfied": satisfied,
             "expectedRevision": 0,
             "evidence": "Synthetic complete official technical evidence independently reviewed",
         },
@@ -75,21 +76,23 @@ def test_reassessment_cutover_prevents_replaying_consumed_official_close_and_fac
     chain.now += timedelta(minutes=1)
     branch = next(b for b in chain.plan.risk_branches if b.kind == "SEVERE_TECHNICAL")
     chain.post(
-        "daily-risk-reassessments",
+        "plan-risk-reassessments",
         {
             "symbol": SYMBOL,
             "riskId": risk["risk_id"],
             "planVersionId": chain.version["id"],
             "contentHash": chain.version["contentHash"],
             "expectedRevision": risk["revision"],
-            "removalEvidence": official_proof(chain),
+            "removalEvidence": (
+                "Reviewer independently confirms the technical invalidation is removed."
+            ),
             "targetCoreQty": branch.target_core_qty,
             "targetTacticalQty": branch.target_tactical_qty,
             "involvesCore": branch.involves_core,
             "scopeEvidence": branch.scope_evidence,
         },
     )
-    current = chain.client.get(f"/api/v1/daily-plan-runtime/{SYMBOL}").json()["snapshot"]
+    current = chain.client.get(f"/api/v1/plan-runtime/{SYMBOL}").json()["snapshot"]
     assert next(r for r in current["risks"] if r["kind"] == "SEVERE_TECHNICAL")["status"] == "CLEAR"
     replay = chain.evaluate(series=series, price=3970)
     cleared = next(r for r in replay.snapshot["risks"] if r["kind"] == "SEVERE_TECHNICAL")
@@ -142,13 +145,13 @@ def test_simulated_exit_fulfills_risk_allows_independent_buy_and_later_new_cause
     old_signal = ready.snapshot["signals"][0]["signal_id"]
     for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION"):
         fact(chain, kind, FRIDAY, suffix="exit")
-    view = chain.client.get(f"/api/v1/daily-plan-runtime/{SYMBOL}").json()["snapshot"]
+    view = chain.client.get(f"/api/v1/plan-runtime/{SYMBOL}").json()["snapshot"]
     assert (
         next(r for r in view["risks"] if r["kind"] == "SEVERE_TECHNICAL")["status"] == "CONFIRMED"
     )
     action = chain.evaluate(series=series, price=3970).snapshot["risk_action"]
     chain.simulate(action, 100)
-    view = chain.client.get(f"/api/v1/daily-plan-runtime/{SYMBOL}").json()["snapshot"]
+    view = chain.client.get(f"/api/v1/plan-runtime/{SYMBOL}").json()["snapshot"]
     assert (
         next(r for r in view["risks"] if r["kind"] == "SEVERE_TECHNICAL")["status"] == "FULFILLED"
     )
@@ -162,6 +165,8 @@ def test_simulated_exit_fulfills_risk_allows_independent_buy_and_later_new_cause
     chain.evaluate(series=chain.series(TUESDAY), official=TUESDAY)
     for kind in ("PRICE_STRUCTURE", "VOLUME_OR_CANDLE", "TECHNICAL"):
         fact(chain, kind, TUESDAY, suffix="after-exit")
+    for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION"):
+        fact(chain, kind, TUESDAY, suffix="reviewed-clear-tuesday", satisfied=False)
     fact(chain, "INDEPENDENT_EVENT", TUESDAY, suffix="after-exit", signal=old_signal)
     result = chain.evaluate(series=chain.series(TUESDAY), official=TUESDAY)
     assert result.snapshot["signals"][-1]["signal_id"] != old_signal

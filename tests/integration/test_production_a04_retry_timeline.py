@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -12,20 +13,19 @@ from test_live_pipeline_acceptance import (
     NOW,
     OfflineSDK,
     _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
+from tests.integration.current_activation_fixture import current_sample_plan, seed_current
 
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.runtime.health import RuntimeResourceStatus, RuntimeServiceStatus
 from trade_plan_monitor.runtime.request_control import create_live_tushare_request_controller
 from trade_plan_monitor.runtime.service import RuntimeLifecycleService, _RetryWaitOutcome
+from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import (
     AlertEvent,
-    EvaluationResult,
     RuntimeLiveness,
-    SymbolDecisionHead,
 )
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition
 
@@ -89,8 +89,9 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
     async def scenario() -> None:
         timeline = UnifiedTimeline(NOW)
         database = tmp_path / "monitor.sqlite3"
-        plan = _sample_plan()
-        _activate_plans(database, timeline, (plan,))
+        plan = current_sample_plan()
+        _activate_plans(database, timeline, ())
+        seed_current(tmp_path, plan=plan, clock=timeline)
         engine = create_sqlite_engine(database)
         try:
             with create_session_factory(engine).begin() as session:
@@ -213,7 +214,19 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
                 frame = composition.websocket_service._heartbeat_frame(dashboard.sequence)
                 assert frame["runtimeLive"] is False and frame["runtimeGeneration"] is None
                 with state._session_factory() as session:
-                    assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                    assert (
+                        session.scalar(
+                            select(func.count())
+                            .select_from(DailyRecord)
+                            .where(
+                                DailyRecord.kind == "EVALUATION",
+                                func.json_extract(
+                                    DailyRecord.payload_json, "$.minute_target"
+                                ).is_not(None),
+                            )
+                        )
+                        == 0
+                    )
                     assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
                 backoff = controller.backoff_until(f"calendar:SSE:{NOW.date()}")
                 assert backoff is not None
@@ -252,7 +265,19 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
             timeline.scheduler_release.set()
             await _until(lambda: len(timeline.scheduler_deadlines) == 2)
             with state._session_factory() as session:
-                assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                assert (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(DailyRecord)
+                        .where(
+                            DailyRecord.kind == "EVALUATION",
+                            func.json_extract(DailyRecord.payload_json, "$.minute_target").is_not(
+                                None
+                            ),
+                        )
+                    )
+                    == 0
+                )
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
             evaluation_due = NOW.replace(hour=10, minute=10, second=12, microsecond=0)
             target = NOW.replace(hour=10, minute=10, second=0, microsecond=0).isoformat()
@@ -270,43 +295,57 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
                 assert runtime.runtime_generation == generation
                 assert not composition._runner_failed and composition._restart_attempts == 0
                 with state._session_factory() as session:
-                    assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
+                    assert (
+                        session.scalar(
+                            select(func.count())
+                            .select_from(DailyRecord)
+                            .where(
+                                DailyRecord.kind == "EVALUATION",
+                                func.json_extract(
+                                    DailyRecord.payload_json, "$.minute_target"
+                                ).is_not(None),
+                            )
+                        )
+                        == 0
+                    )
                     assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
             else:
                 raise AssertionError("original 10:10:12 duty was not reached within eight wakes")
             assert timeline.scheduler_deadlines[-1] == evaluation_due
             timeline.scheduler_release.set()
 
+            def current_evaluations(session):
+                return tuple(
+                    json.loads(row.payload_json)
+                    for row in session.scalars(
+                        select(DailyRecord).where(
+                            DailyRecord.kind == "EVALUATION",
+                            DailyRecord.id != "evaluation-head-" + plan.symbol,
+                        )
+                    )
+                    if json.loads(row.payload_json)["minute_target"] == target
+                )
+
             def committed() -> bool:
                 with state._session_factory() as session:
-                    return (
-                        session.scalar(
-                            select(func.count())
-                            .select_from(EvaluationResult)
-                            .where(
-                                EvaluationResult.plan_hash == plan_sha256(plan),
-                                EvaluationResult.symbol == plan.symbol,
-                                EvaluationResult.evaluation_kind == "INTRADAY",
-                                EvaluationResult.target_value == target,
-                            )
-                        )
-                        == 1
-                    )
+                    return len(current_evaluations(session)) == 1
 
             await _until(committed)
             assert composition._runtime is runtime
             assert runtime.runtime_generation == generation
             assert not composition._runner_failed
             with state._session_factory() as session:
-                results = tuple(session.scalars(select(EvaluationResult)))
+                results = current_evaluations(session)
                 assert len(results) == 1
-                assert results[0].target_value == target
-                assert results[0].evaluated_at == evaluation_due.isoformat()
-                head = session.get(SymbolDecisionHead, plan.symbol)
-                assert head is not None
-                assert head.plan_hash == plan_sha256(plan)
-                assert head.activation_revision == 1
-                assert head.target_value == target
+                assert results[0]["minute_target"] == target
+                assert results[0]["plan_hash"] == plan_sha256(plan)
+                assert results[0]["evaluated_at"] == evaluation_due.isoformat()
+                row = session.get(DailyRecord, "evaluation-head-" + plan.symbol)
+                assert row is not None
+                head = json.loads(row.payload_json)
+                assert head["plan_hash"] == plan_sha256(plan)
+                assert head["activation_revision"] == 1
+                assert head["minute_target"] == target
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
             assert composition._restart_attempts == 0
         finally:

@@ -8,23 +8,22 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pandas as pd
 import pytest
-from pydantic import ValidationError
+from tests.integration.current_activation_fixture import current_sample_plan, seed_current
 
 from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.decision.models import (
     ConditionEvidence,
     ConditionOutcome,
-    DataHealthStatus,
-    SignalType,
 )
 from trade_plan_monitor.domain.plan_codec import load_plan_yaml
+from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.live_profiles import (
     create_index_certification,
     create_stock_certification,
@@ -55,6 +54,7 @@ from trade_plan_monitor.runtime.service import (
     RuntimeEvaluationService,
     RuntimeLifecycleService,
 )
+from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.database import (
     create_session_factory,
     create_sqlite_engine,
@@ -64,8 +64,6 @@ from trade_plan_monitor.state.events import MonitorEvent, MonitorEventType
 from trade_plan_monitor.state.models import RuntimeLiveness
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition
-from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMonitorReadService
-from trade_plan_monitor.web.routers.dashboard import DashboardResponse
 
 NOW = datetime(2026, 9, 8, 10, 0, 15, tzinfo=SHANGHAI)
 INDEX_CUTOFF = datetime(2026, 9, 8, 10, 35, tzinfo=SHANGHAI)
@@ -256,15 +254,11 @@ class OfflineSDK:
         while trade_day.weekday() > 4:
             trade_day -= timedelta(days=1)
         bucket_ends = tuple(
-            datetime.combine(trade_day, datetime.min.time(), SHANGHAI).replace(
-                hour=9, minute=35
-            )
+            datetime.combine(trade_day, datetime.min.time(), SHANGHAI).replace(hour=9, minute=35)
             + timedelta(minutes=5 * index)
             for index in range(24)
         ) + tuple(
-            datetime.combine(trade_day, datetime.min.time(), SHANGHAI).replace(
-                hour=13, minute=5
-            )
+            datetime.combine(trade_day, datetime.min.time(), SHANGHAI).replace(hour=13, minute=5)
             + timedelta(minutes=5 * index)
             for index in range(24)
         )
@@ -635,9 +629,7 @@ def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
             )
 
             assert result == ()
-            assert set(pipeline.index_service.latest_snapshots()) == set(
-                ALWAYS_ON_INDEX_CODES
-            )
+            assert set(pipeline.index_service.latest_snapshots()) == set(ALWAYS_ON_INDEX_CODES)
             with work_factory() as work:
                 snapshots = work.projections.list_latest_market_index_snapshots(
                     mapping_version="board-index-map-v1",
@@ -646,14 +638,16 @@ def test_production_pipeline_collects_dashboard_indexes_without_active_plans(
                 events = work.events.replay_page_after(after_sequence).events
             if close_attempt is not None:
                 recovered = next(
-                    item.snapshot for item in snapshots
+                    item.snapshot
+                    for item in snapshots
                     if item.snapshot.index_code is MarketIndexCode.SSE_COMPOSITE
                 )
                 assert recovered.health is MarketIndexHealth.LIVE
                 assert recovered.completed_bucket_at == INDEX_CUTOFF.replace(hour=15, minute=0)
-            assert tuple(
-                snapshot.snapshot.index_code for snapshot in snapshots
-            ) == DASHBOARD_INDEX_CODES
+            assert (
+                tuple(snapshot.snapshot.index_code for snapshot in snapshots)
+                == DASHBOARD_INDEX_CODES
+            )
             assert tuple(event.event_type for event in events) == (
                 MonitorEventType.MARKET_INDEX_UPDATED,
             ) * len(ALWAYS_ON_INDEX_CODES)
@@ -766,14 +760,11 @@ def test_optional_index_failure_does_not_change_stock_only_plan_evaluation(
         case_root = tmp_path / ("index-failed" if fail_index else "index-live")
         case_root.mkdir()
         clock = ControlledClock(INDEX_CUTOFF.replace(hour=9, minute=0))
-        plan = _plan(
-            plan_id="stock-only-v2",
-            symbol="300001.SZ",
-            market="SZSE",
-            condition={"type": "NON_DECREASING_CLOSE"},
-        )
+        raw = current_sample_plan().model_dump(mode="json")
+        raw.update(plan_id="stock-only-current", symbol="300001.SZ")
+        plan = UnifiedTradePlan.model_validate(raw)
         database = case_root / "monitor.sqlite3"
-        _activate_plans(database, clock, (plan,))
+        seed_current(case_root, plan=plan, clock=clock)
         clock.current = INDEX_CUTOFF + timedelta(seconds=12)
         config = _write_configuration_and_evidence(
             case_root, observed_at=clock.now(), include_index=True
@@ -828,10 +819,12 @@ def test_optional_index_failure_does_not_change_stock_only_plan_evaluation(
                     bar_end=INDEX_CUTOFF,
                 )
             )
-            assert len(results) == 1 and results[0].status is IntradayCycleStatus.COMMITTED
-            decision = results[0].evaluation_result
-            assert decision is not None
-            assert decision.snapshot.reference_market is None
+            assert len(results) == 1 and not results[0].duplicate
+            decision = results[0].snapshot
+            assert decision["plan_hash"] == plan_sha256(plan)
+            assert decision["minute_target"] == INDEX_CUTOFF.isoformat()
+            assert decision["data_blockers"] == []
+            assert decision["signals"] == decision["risks"] == []
             return decision, pipeline.index_service.latest_snapshots()[
                 MarketIndexCode.CHINEXT
             ].health
@@ -844,11 +837,18 @@ def test_optional_index_failure_does_not_change_stock_only_plan_evaluation(
         failed, failed_index = await run_case(True)
         assert healthy_index is MarketIndexHealth.LIVE
         assert failed_index is MarketIndexHealth.BLOCKED
-        assert failed.result_hash == healthy.result_hash
-        assert failed.signal_intent == healthy.signal_intent
-        assert failed.next_step == healthy.next_step
-        assert failed.satisfied_conditions == healthy.satisfied_conditions
-        assert failed.unmet_conditions == healthy.unmet_conditions
+        for field in (
+            "plan_hash",
+            "signals",
+            "risks",
+            "risk_action",
+            "next_action",
+            "minute_target",
+            "minute_prefix",
+            "five_minute_bars",
+            "quote",
+        ):
+            assert failed[field] == healthy[field]
 
     asyncio.run(scenario())
 
@@ -879,8 +879,8 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
                 await asyncio.Event().wait()
 
         clock = TimerClock(NOW.replace(hour=9, minute=0))
-        plan = _sample_plan()
-        _activate_plans(database, clock, (plan,))
+        plan = current_sample_plan()
+        seed_current(tmp_path, plan=plan, clock=clock)
         # This fixture represents a restart of an already-running monitor.
         seeded_engine = create_sqlite_engine(database)
         try:
@@ -929,8 +929,9 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
         original_run = first._runtime._run_deadline
 
         async def capture(deadline):
-            observed.append((deadline, first._runtime.runtime_generation,
-                             first._runtime._schedule_owner))
+            observed.append(
+                (deadline, first._runtime.runtime_generation, first._runtime._schedule_owner)
+            )
             return await original_run(deadline)
 
         first._runtime._run_deadline = capture
@@ -940,27 +941,40 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
         assert started.delivery.status is RuntimeResourceStatus.READY
 
         try:
-            before = await _wait_for_decision_head(database, plan.symbol, clock)
+            before = await _wait_for_current_head(database, plan.symbol, clock)
             await asyncio.wait_for(parked.wait(), timeout=5)
         except AssertionError as error:
             raise AssertionError(f"runtime={first.health()} calls={sdk.calls!r}") from error
         assert clock.sleep_calls
-        assert [deadline.due_at for deadline, _, _ in observed
-                if deadline.kind is DeadlineKind.REALTIME_MINUTE] == [
-            NOW.replace(minute=minute, second=12) for minute in range(1, 6)
-        ]
-        assert all(generation == started.runtime_generation and owner is first._runner_task
-                   for _, generation, owner in observed)
+        assert [
+            deadline.due_at
+            for deadline, _, _ in observed
+            if deadline.kind is DeadlineKind.REALTIME_MINUTE
+        ] == [NOW.replace(minute=minute, second=12) for minute in range(1, 6)]
+        assert all(
+            generation == started.runtime_generation and owner is first._runner_task
+            for _, generation, owner in observed
+        )
         assert first.health().status is RuntimeServiceStatus.RUNNING
         assert not first._runner_task.done()
         assert Counter(name for name, _ in sdk.calls)["rt_min"] == 5
-        assert before.result.evaluation_identity.bucket_end == NOW.replace(minute=5, second=0)
-        assert before.result.snapshot.evaluated_at == NOW.replace(minute=5, second=12)
+        snapshot = json.loads(before)
+        assert snapshot["minute_target"] == NOW.replace(minute=5, second=0).isoformat()
+        assert snapshot["evaluated_at"] == NOW.replace(minute=5, second=12).isoformat()
+        assert snapshot["plan_hash"] == plan_sha256(plan)
+        assert snapshot["activation_revision"] == 1
         engine, work_factory = _work_factory(database, clock)
         try:
             with work_factory() as work:
+                records = tuple(
+                    work._session.scalars(
+                        select(DailyRecord).where(DailyRecord.kind == "EVALUATION")
+                    )
+                )
+                assert len(records) == 2
+                assert {record.payload_json for record in records} == {before}
                 for model in (EvaluationResult, SymbolDecisionHead):
-                    assert work._session.scalar(select(func.count()).select_from(model)) == 1
+                    assert work._session.scalar(select(func.count()).select_from(model)) == 0
         finally:
             engine.dispose()
         await first.stop()
@@ -973,7 +987,7 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
         restarted = await second.start()
         assert restarted.status is RuntimeServiceStatus.RUNNING
         assert restarted.delivery.status is RuntimeResourceStatus.READY
-        after = await _wait_for_decision_head(database, plan.symbol, restarted_clock)
+        after = await _wait_for_current_head(database, plan.symbol, restarted_clock)
         assert after == before
         for _ in range(20):
             if restarted_clock.sleep_calls:
@@ -995,22 +1009,43 @@ def test_cross_day_official_risk_breach_restores_from_sqlite_dashboard(
     async def scenario() -> None:
         target_date = NOW.date()
         clock = ControlledClock(NOW.replace(hour=9, minute=0))
-        plan_payload = _sample_plan().model_dump(mode="python", round_trip=True)
-        plan_payload["activation"] = {
-            "mode": "DATE_RANGE",
-            "start_date": target_date,
-            "end_date": target_date,
-        }
-        plan = TradePlan.model_validate(plan_payload)
+        raw = current_sample_plan().model_dump(mode="json")
+        from tests.unit.test_unified_plan_domain import unified_payload
+
+        raw["monitoring"] = unified_payload()["monitoring"]
+        raw["ordinary_rules"] = []
+        raw["alert_rules"] = [
+            {
+                "kind": "RISK_ALERT",
+                "rule_id": "official-close-risk",
+                "condition": {
+                    "type": "DAILY_PRICE_COMPARE",
+                    "field": "close",
+                    "offset": 0,
+                    "comparator": "LT",
+                    "reference": {
+                        "mode": "FIXED",
+                        "value": "6200",
+                        "unit": "FEN",
+                        "as_of": str(target_date),
+                        "source": "Synthetic reviewed official close threshold",
+                    },
+                },
+                "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},
+            }
+        ]
+        plan = UnifiedTradePlan.model_validate(raw)
         database = tmp_path / "monitor.sqlite3"
-        _activate_plans(database, clock, (plan,))
+        seed_current(tmp_path, plan=plan, clock=clock)
         clock.current = NOW + timedelta(days=1)
         config = _write_configuration_and_evidence(
             tmp_path,
             observed_at=clock.now(),
             include_index=False,
         )
-        sdk = OfflineSDK(
+        from tests.integration.test_s3_missed_close_kill_restart import CurrentCloseSDK
+
+        sdk = CurrentCloseSDK(
             clock,
             (plan.symbol,),
             official_closes={target_date: "55.00"},
@@ -1041,40 +1076,41 @@ def test_cross_day_official_risk_breach_restores_from_sqlite_dashboard(
         )
         try:
             await pipeline.refresh_references(target_date)
-            result = await pipeline.evaluations.run_official_close(
-                plan=plan,
-                trade_date=target_date,
-                evaluated_at=clock.now(),
-                close_attempt=1,
+            result = await pipeline.daily_evaluations.run_target(
+                plan=plan, official_trade_date=target_date, evaluated_at=clock.now()
             )
-            assert result.status is OfficialCloseCycleStatus.COMMITTED
-            decision = result.evaluation_result
-            assert decision is not None
-            assert decision.snapshot.signal_type is SignalType.RISK_BREACH
-            assert decision.snapshot.data_health.status is DataHealthStatus.STALE
-            assert decision.snapshot.evaluated_at.date() > target_date
+            assert not result.duplicate
+            snapshot = result.snapshot
+            assert snapshot["official_trade_date"] == str(target_date)
+            assert snapshot["evaluated_at"] == clock.now().isoformat()
+            assert snapshot["daily_evidence"]["bars"][-1]["close"] == "5500"
+            assert snapshot["alerts"][0]["outcome"] == "SATISFIED"
+            assert snapshot["signals"] == snapshot["risks"] == []
+            assert len(result.event_ids) == 1
+            # Read through a fresh lifecycle/database connection after the source owner closes.
+            from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
-            stopped_health = SimpleNamespace(
-                status=RuntimeServiceStatus.STOPPED,
-                read_only=False,
-                started_at=clock.now(),
-                next_poll_at=None,
-                runtime_generation=generation,
-            )
-            dashboard = await PersistentMonitorReadService(
-                work_factory,
-                lambda: stopped_health,
-                clock=clock.now,
-            ).get_dashboard()
-            assert isinstance(dashboard, DashboardResponse)
-            restored = dashboard.symbols[0].decision
-            assert restored.result_hash == decision.result_hash
-            assert restored.signal_type is SignalType.RISK_BREACH
-            assert restored.data_health.status is DataHealthStatus.STALE
-            assert restored.risk_breach_trade_date == target_date
-            assert restored.market_data_at == NOW.replace(hour=15, minute=0, second=0)
-            with pytest.raises(ValidationError, match="actionable decisions require LIVE"):
-                restored.model_copy(update={"signal_type": SignalType.BUY_CORE_READY})
+            reader = PersistentPlanWebLifecycle(database_path=database, clock=clock.now)
+            await reader.start()
+            try:
+                view = await reader.read_daily(symbol=plan.symbol, trade_date=None)
+            finally:
+                await reader.stop()
+            assert view.status == "CURRENT"
+            assert view.snapshot.plan_hash == plan_sha256(plan)
+            assert view.snapshot.official_trade_date == target_date
+            assert view.snapshot.alerts[0].outcome == "SATISFIED"
+            with work_factory() as work:
+                from trade_plan_monitor.state.models import AlertEvent
+
+                event = work._session.get(AlertEvent, result.event_ids[0])
+                payload = json.loads(event.payload_json)
+                assert payload["signal_type"] == "REMINDER"
+                assert payload["alert_kind"] == "RISK_ALERT"
+                assert payload["quantity"] is None
+                assert payload["simulated_qty"] == 0
+                assert payload["confirmed_trade_date"] == str(target_date)
+                assert payload["trading_date"] == str(clock.now().date())
         finally:
             await controller.aclose()
             engine.dispose()
@@ -1112,11 +1148,10 @@ def test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity(
     async def scenario() -> None:
         clock = ControlledClock(NOW)
         database = tmp_path / "monitor.sqlite3"
-        payload = _sample_plan().model_dump(mode="python", round_trip=True)
+        payload = current_sample_plan().model_dump(mode="python")
         payload["activation"] = activation
-        payload["entry"] = {"condition": {"type": "PRICE_IN_ZONE", "zone": "LOW_BUY"}}
-        payload["blockers"] = {"condition": {"type": "PRICE_IN_ZONE", "zone": "LOW_BUY"}}
-        plan = TradePlan.model_validate(payload)
+        payload["ordinary_rules"][0]["condition"]["price_fen"] = 6500
+        plan = UnifiedTradePlan.model_validate(payload)
         runtime_time = clock.current
         if activation["mode"] == "TRADING_DAY":
             activation_date = activation["trading_day"]
@@ -1126,7 +1161,7 @@ def test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity(
             activation_date = NOW.date()
         assert isinstance(activation_date, date)
         clock.current = datetime.combine(activation_date, runtime_time.timetz())
-        _activate_plans(database, clock, (plan,))
+        seed_current(tmp_path, plan=plan, clock=clock)
         clock.current = runtime_time
         config = _write_configuration_and_evidence(
             tmp_path,
@@ -1185,6 +1220,8 @@ def test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity(
             with work_factory() as work:
                 assert work.plans.get_active(plan.symbol) is not None
                 assert work.projections.get_decision_head(plan.symbol) is None
+                assert work.daily.get("evaluation-head-" + plan.symbol) is None
+                assert work.daily.list(symbol=plan.symbol, kind="EVALUATION") == ()
                 alerts, total = work.alerts.list_events(
                     symbol=plan.symbol,
                     signal_type=None,
@@ -1207,7 +1244,7 @@ def test_production_pipeline_never_evaluates_or_alerts_outside_plan_validity(
     "recovery_mode",
     ("success", "official_missing", "index_error", "revision_conflict"),
 )
-def test_startup_batches_persisted_pending_closes_by_date_and_shared_index(
+def test_frozen_service_batches_persisted_pending_closes_by_date_and_shared_index(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     recovery_mode: str,
@@ -1388,6 +1425,8 @@ def test_startup_batches_persisted_pending_closes_by_date_and_shared_index(
         seed = pipeline_with(seed_sdk, seed_controller)
         try:
             await seed.refresh_references(target_date)
+            assert seed.active_plans() == ()
+            await _warm_frozen_references(seed, plans, target_date, work_factory)
             pending = await seed.evaluations.run_official_close_batch(
                 plans=plans,
                 trade_date=target_date,
@@ -1433,18 +1472,34 @@ def test_startup_batches_persisted_pending_closes_by_date_and_shared_index(
         recovery = pipeline_with(recovery_sdk, recovery_controller)
         try:
             await recovery.refresh_references(startup_date)
-            if recovery_mode in {"success", "index_error"}:
-                await recovery.recover_startup(startup_date)
-            elif recovery_mode == "official_missing":
-                with pytest.raises(RuntimeError, match="startup recovery failed"):
-                    await recovery.recover_startup(startup_date)
-            else:
-                from trade_plan_monitor.state.projections import (
-                    ProjectionIdentityConflictError,
+            assert recovery.active_plans() == ()
+            await recovery.recover_startup(startup_date)
+            assert all(
+                recovery.evaluations.pending_close_date(p.symbol) == target_date for p in plans
+            )
+            await _warm_frozen_references(recovery, plans, target_date, work_factory)
+
+            async def frozen_batch():
+                results = await recovery.evaluations.run_official_close_batch(
+                    plans=plans, trade_date=target_date, evaluated_at=clock.now(), close_attempt=1
                 )
+                if any(
+                    item.status
+                    not in {OfficialCloseCycleStatus.COMMITTED, OfficialCloseCycleStatus.DUPLICATE}
+                    for item in results
+                ):
+                    raise RuntimeError("frozen startup recovery failed")
+
+            if recovery_mode in {"success", "index_error"}:
+                await frozen_batch()
+            elif recovery_mode == "official_missing":
+                with pytest.raises(RuntimeError, match="frozen startup recovery failed"):
+                    await frozen_batch()
+            else:
+                from trade_plan_monitor.state.projections import ProjectionIdentityConflictError
 
                 with pytest.raises(ProjectionIdentityConflictError):
-                    await recovery.recover_startup(startup_date)
+                    await frozen_batch()
 
             index_calls = [
                 (name, str(kwargs["ts_code"]))
@@ -1579,13 +1634,14 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
         plans = (same_index_one, same_index_two, bse, other_index, schema_one)
         database = tmp_path / "monitor.sqlite3"
         _activate_plans(database, clock, plans)
+        current = seed_current(tmp_path, clock=clock)
         clock.current = INDEX_CUTOFF + timedelta(seconds=12)
         config = _write_configuration_and_evidence(
             tmp_path,
             observed_at=clock.now(),
             include_index=True,
         )
-        sdk = OfflineSDK(clock, tuple(plan.symbol for plan in plans))
+        sdk = OfflineSDK(clock, (*tuple(plan.symbol for plan in plans), current.symbol))
         monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
         pace = VirtualPace()
         controller = create_live_tushare_request_controller(
@@ -1601,18 +1657,29 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
 
         # Persist only historical input: startup now repairs at most one symbol.
         symbols = tuple(plan.symbol for plan in plans)
-        prefix = tuple(INDEX_CUTOFF.replace(hour=9, minute=31) + timedelta(minutes=offset)
-                       for offset in range(64))
+        prefix = tuple(
+            INDEX_CUTOFF.replace(hour=9, minute=31) + timedelta(minutes=offset)
+            for offset in range(64)
+        )
         with work_factory() as work:
             assert all(work.history.get_latest_quote(symbol) is None for symbol in symbols)
-            work.history.upsert_minutes(tuple(
-                MinuteBar(
-                    symbol=symbol, bar_end=end, open_fen=6400, high_fen=6410,
-                    low_fen=6390, close_fen=6405, volume_shares=1000,
-                    amount_yuan=Decimal("64000"), received_at=clock.now(),
+            work.history.upsert_minutes(
+                tuple(
+                    MinuteBar(
+                        symbol=symbol,
+                        bar_end=end,
+                        open_fen=6400,
+                        high_fen=6410,
+                        low_fen=6390,
+                        close_fen=6405,
+                        volume_shares=1000,
+                        amount_yuan=Decimal("64000"),
+                        received_at=clock.now(),
+                    )
+                    for symbol in symbols
+                    for end in prefix
                 )
-                for symbol in symbols for end in prefix
-            ))
+            )
             # The repository derives replaceable quotes; this fixture seeds minutes only.
             work._session.execute(delete(LatestQuote).where(LatestQuote.symbol.in_(symbols)))
             work.commit()
@@ -1648,26 +1715,55 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
             assert profile.capabilities[MarketIndexCode.BSE_50] is (
                 TushareMarketIndexCapabilityStatus.ERROR
             )
-            assert (
-                sum(
-                    status is TushareMarketIndexCapabilityStatus.READY
-                    for status in profile.capabilities.values()
-                )
-                == len(ALWAYS_ON_INDEX_CODES)
-            )
+            assert sum(
+                status is TushareMarketIndexCapabilityStatus.READY
+                for status in profile.capabilities.values()
+            ) == len(ALWAYS_ON_INDEX_CODES)
             assert controller.executor_workers == 1
             assert controller.max_concurrency == 1
 
             await pipeline.refresh_references(INDEX_CUTOFF.date())
             await pipeline.recover_startup(INDEX_CUTOFF.date())
             assert Counter(name for name, _ in sdk.calls)["rt_min_daily"] <= 1
-            results = await pipeline.run_deadline(
+            current_results = await pipeline.run_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=INDEX_CUTOFF.date(),
                     due_at=clock.now(),
                     bar_end=INDEX_CUTOFF,
                 )
+            )
+            assert len(current_results) == 1
+            assert current_results[0].snapshot["plan_hash"] == plan_sha256(current)
+            assert current_results[0].snapshot["data_blockers"] == []
+            assert pipeline.active_plans() == (current,)
+            await _warm_frozen_references(pipeline, plans, INDEX_CUTOFF.date(), work_factory)
+            from trade_plan_monitor.market_index.requirements import plan_index_fact_requests
+            from trade_plan_monitor.market_index.snapshots import _blocked_snapshot
+
+            frozen_snapshots = dict(pipeline.index_service.latest_snapshots())
+            frozen_snapshots[MarketIndexCode.BSE_50] = _blocked_snapshot(
+                index_code=MarketIndexCode.BSE_50,
+                decision_cutoff=INDEX_CUTOFF,
+                requests=plan_index_fact_requests(bse),
+                issue=MarketIndexIssueCode.PROVIDER_UNAVAILABLE,
+                observed_at=clock.now(),
+            )
+            frozen_batch, _events = pipeline.evaluations._persist_market_index_batch(
+                RuntimeMarketIndexBatch(
+                    decision_cutoff=INDEX_CUTOFF, snapshots_by_index=frozen_snapshots
+                )
+            )
+            # Explicit typed historical inputs exercise the frozen predicate/evidence oracle.
+            fetched = pipeline.provider.realtime_minutes(tuple(plan.symbol for plan in plans))
+            results = await pipeline.evaluations.run_intraday_batch_from_minutes(
+                plans=plans,
+                bucket_end=INDEX_CUTOFF,
+                evaluated_at=clock.now(),
+                minutes_by_symbol={
+                    p.symbol: tuple(m for m in fetched if m.symbol == p.symbol) for p in plans
+                },
+                market_index_batch=frozen_batch,
             )
             assert all(result.status is IntradayCycleStatus.COMMITTED for result in results)
 
@@ -1681,7 +1777,9 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
             with work_factory() as work:
                 for symbol in symbols:
                     bars = work.history.list_minutes(
-                        symbol, start=prefix[0], end=INDEX_CUTOFF,
+                        symbol,
+                        start=prefix[0],
+                        end=INDEX_CUTOFF,
                     )
                     assert tuple(bar.bar_end for bar in bars) == (*prefix, INDEX_CUTOFF)
                     head = work.projections.get_decision_head(symbol)
@@ -1718,7 +1816,7 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
             bse_snapshot = decisions[bse.symbol].snapshot.reference_market
             assert bse_snapshot is not None
             assert bse_snapshot.health is MarketIndexHealth.BLOCKED
-            assert pipeline.index_service.latest_snapshots()[MarketIndexCode.BSE_50].issues == (
+            assert frozen_batch.snapshots_by_index[MarketIndexCode.BSE_50].issues == (
                 MarketIndexIssueCode.PROVIDER_UNAVAILABLE,
             )
             evidence_roots = decisions[bse.symbol].snapshot.condition_evidence
@@ -1775,6 +1873,179 @@ def test_production_pipeline_shares_index_snapshots_and_fails_closed_after_inval
             ] == list(calls_before_invalidation)
         finally:
             await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+async def _wait_for_current_head(database, symbol, clock):
+    from sqlalchemy import select
+
+    engine = create_sqlite_engine(database)
+    try:
+        sessions = create_session_factory(engine)
+        for _ in range(500):
+            with sessions() as session:
+                head = session.get(DailyRecord, "evaluation-head-" + symbol)
+                if head is not None:
+                    snapshot = json.loads(head.payload_json)
+                    if snapshot.get("minute_target") == clock.now().replace(second=0).isoformat():
+                        immutable = tuple(
+                            session.scalars(
+                                select(DailyRecord).where(DailyRecord.kind == "EVALUATION")
+                            )
+                        )
+                        assert any(
+                            row.id != head.id and row.payload_json == head.payload_json
+                            for row in immutable
+                        )
+                        return head.payload_json
+            await asyncio.sleep(0.01)
+        raise AssertionError("scheduled current runtime did not persist the target head")
+    finally:
+        engine.dispose()
+
+
+async def _warm_frozen_references(pipeline, plans, target_date, work_factory):
+    """Acquire explicit history for retained service tests, never current plan admission."""
+    for exchange in sorted({plan.market for plan in plans}):
+        days = pipeline.provider.trading_calendar_for_exchange(
+            exchange, target_date - timedelta(days=366), target_date
+        )
+        with work_factory() as work:
+            work.references.upsert_trading_days(days)
+            work.commit()
+    for plan in plans:
+        bars = pipeline.provider.daily_bars(
+            plan.symbol, target_date - timedelta(days=366), target_date - timedelta(days=1)
+        )
+        assert bars
+        with work_factory() as work:
+            work.history.upsert_daily_bars(bars)
+            work.commit()
+
+
+@pytest.mark.parametrize("official_close, expected_alerts", (("55.00", 1), ("70.00", 0)))
+def test_current_daily_reminder_startup_and_restart_keep_source_binding(
+    tmp_path,
+    monkeypatch,
+    official_close,
+    expected_alerts,
+):
+    """The real installed owner evaluates a reviewed prior close without inventory authority."""
+    from sqlalchemy import func, select
+    from tests.integration.test_s3_missed_close_kill_restart import CurrentCloseSDK
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    import trade_plan_monitor.runtime.production as production
+    import trade_plan_monitor.web.monitor_composition as monitor_composition
+    from trade_plan_monitor.state.models import AlertEvent, EvaluationResult, SymbolDecisionHead
+
+    async def scenario():
+        clock = ControlledClock(NOW.replace(hour=9, minute=0, second=0), released_sleeps=0)
+        raw = current_sample_plan().model_dump(mode="json")
+        raw["ordinary_rules"] = []
+        raw["monitoring"] = unified_payload()["monitoring"]
+        raw["alert_rules"] = [
+            {
+                "kind": "RISK_ALERT",
+                "rule_id": "startup-source-reminder",
+                "condition": {
+                    "type": "DAILY_PRICE_COMPARE",
+                    "field": "close",
+                    "offset": 0,
+                    "comparator": "LT",
+                    "reference": {
+                        "mode": "FIXED",
+                        "value": "6200",
+                        "unit": "FEN",
+                        "as_of": str(NOW.date()),
+                        "source": "Synthetic reviewed official close threshold",
+                    },
+                },
+                "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},
+            }
+        ]
+        plan = UnifiedTradePlan.model_validate(raw)
+        seed_current(tmp_path, plan=plan, clock=clock)
+        database = tmp_path / "monitor.sqlite3"
+        engine = create_sqlite_engine(database)
+        sessions = create_session_factory(engine)
+        with sessions.begin() as session:
+            session.add(
+                RuntimeLiveness(
+                    id=1, schema_version=1, revision=0, last_alive_at=clock.now().isoformat()
+                )
+            )
+        clock.current = NOW + timedelta(days=1)
+        config = _write_configuration_and_evidence(
+            tmp_path, observed_at=clock.now(), include_index=False
+        )
+        sdk = CurrentCloseSDK(clock, (plan.symbol,), official_closes={NOW.date(): official_close})
+        monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
+        monkeypatch.setattr(monitor_composition, "SystemClock", lambda: clock)
+
+        def controller_factory(*, clock, require_repository_binding=False):
+            pace = VirtualPace()
+            return create_live_tushare_request_controller(
+                clock=clock,
+                monotonic=pace.monotonic,
+                pace_sleep=pace.sleep,
+                require_repository_binding=require_repository_binding,
+            )
+
+        monkeypatch.setattr(
+            monitor_composition, "create_live_tushare_request_controller", controller_factory
+        )
+
+        def committed():
+            with sessions() as session:
+                head = session.get(DailyRecord, "evaluation-head-" + plan.symbol)
+                assert head is not None
+                rows = tuple(
+                    (row.id, row.revision, row.payload_json)
+                    for row in session.scalars(
+                        select(DailyRecord)
+                        .where(DailyRecord.kind == "EVALUATION")
+                        .order_by(DailyRecord.id)
+                    )
+                )
+                assert len(rows) == 2
+                assert {row[2] for row in rows} == {head.payload_json}
+                assert (
+                    session.scalar(select(func.count()).select_from(AlertEvent)) == expected_alerts
+                )
+                for model in (EvaluationResult, SymbolDecisionHead):
+                    assert session.scalar(select(func.count()).select_from(model)) == 0
+                return rows, json.loads(head.payload_json)
+
+        first = create_monitor_composition(config_path=config, database_path=database)
+        try:
+            assert (await first.start()).status is RuntimeServiceStatus.RUNNING
+            before, snapshot = committed()
+            assert snapshot["plan_hash"] == plan_sha256(plan)
+            assert snapshot["activation_revision"] == 1
+            assert snapshot["official_trade_date"] == str(NOW.date())
+            assert snapshot["daily_evidence"]["bars"][-1]["close"] == str(
+                int(Decimal(official_close) * 100)
+            )
+            assert snapshot["alerts"][0]["outcome"] == (
+                "SATISFIED" if expected_alerts else "UNSATISFIED"
+            )
+            assert snapshot["minute_target"] is None
+            assert snapshot["signals"] == snapshot["risks"] == []
+            assert "daily" in [name for name, _kwargs in sdk.calls]
+            assert "adj_factor" in [name for name, _kwargs in sdk.calls]
+            assert "rt_min" not in [name for name, _kwargs in sdk.calls]
+        finally:
+            await first.stop()
+        second = create_monitor_composition(config_path=config, database_path=database)
+        try:
+            assert (await second.start()).status is RuntimeServiceStatus.RUNNING
+            after, restored = committed()
+            assert after == before and restored == snapshot
+        finally:
+            await second.stop()
             engine.dispose()
 
     asyncio.run(scenario())

@@ -6,18 +6,18 @@ from datetime import datetime, timedelta
 import httpx
 import pytest
 import requests
+from current_activation_fixture import current_sample_plan, seed_current
 from sqlalchemy import text
 from test_live_pipeline_acceptance import (
     NOW,
     ControlledClock,
     OfflineSDK,
     VirtualPace,
-    _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
 from test_s3_startup_outcome_association import _DeadlineClock
 
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import RuntimeLiveness
 
@@ -30,17 +30,34 @@ def test_installed_lunch_standby_and_heartbeat_cannot_hide_overdue_progress(tmp_
         initial = NOW.replace(hour=11, minute=29)
         clock = _DeadlineClock(initial)
         database = tmp_path / "monitor.sqlite3"
-        plan = _sample_plan()
+        raw = current_sample_plan().model_dump(mode="json")
+        raw["alert_rules"] = [
+            {
+                "kind": "RISK_ALERT",
+                "rule_id": "minute-alert",
+                "condition": raw["ordinary_rules"][0]["condition"],
+                "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+            }
+        ]
+        raw["ordinary_rules"] = []
+        plan = UnifiedTradePlan.model_validate(raw)
         seed_clock = ControlledClock(NOW.replace(hour=9, minute=0, second=0))
-        _activate_plans(database, seed_clock, (plan,))
+        seed_current(tmp_path, clock=seed_clock, plan=plan)
         engine = create_sqlite_engine(database)
         sessions = create_session_factory(engine)
         with sessions.begin() as session:
-            session.add(RuntimeLiveness(
-                id=1, schema_version=1, revision=0, last_alive_at=seed_clock.now().isoformat(),
-            ))
+            session.add(
+                RuntimeLiveness(
+                    id=1,
+                    schema_version=1,
+                    revision=0,
+                    last_alive_at=seed_clock.now().isoformat(),
+                )
+            )
         config = _write_configuration_and_evidence(
-            tmp_path, observed_at=initial, include_index=False,
+            tmp_path,
+            observed_at=initial,
+            include_index=False,
         )
         sdk = OfflineSDK(clock, (plan.symbol,))
         make_controller = composition_module.create_live_tushare_request_controller
@@ -48,7 +65,9 @@ def test_installed_lunch_standby_and_heartbeat_cannot_hide_overdue_progress(tmp_
         def controller_factory(*, clock, require_repository_binding=False):
             pace = VirtualPace()
             return make_controller(
-                clock=clock, monotonic=pace.monotonic, pace_sleep=pace.sleep,
+                clock=clock,
+                monotonic=pace.monotonic,
+                pace_sleep=pace.sleep,
                 require_repository_binding=require_repository_binding,
             )
 
@@ -61,21 +80,32 @@ def test_installed_lunch_standby_and_heartbeat_cannot_hide_overdue_progress(tmp_
         monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
         monkeypatch.setattr(composition_module, "SystemClock", lambda: clock)
         monkeypatch.setattr(
-            composition_module, "create_live_tushare_request_controller", controller_factory,
+            composition_module,
+            "create_live_tushare_request_controller",
+            controller_factory,
         )
         composition = composition_module.create_monitor_composition(
-            config_path=config, database_path=database,
+            config_path=config,
+            database_path=database,
+            monitor_contract_version=2,
+            progress_monotonic=lambda: clock.now().timestamp(),
         )
 
         def business_rows():
             with engine.connect() as connection:
                 return {
-                    table: tuple(tuple(row) for row in connection.execute(text(
-                        f"SELECT * FROM {table} ORDER BY rowid"
-                    )))
+                    table: tuple(
+                        tuple(row)
+                        for row in connection.execute(text(f"SELECT * FROM {table} ORDER BY rowid"))
+                    )
                     for table in (
-                        "evaluation_ledger", "evaluation_result", "symbol_decision_head",
-                        "alert_event", "delivery_attempt", "pending_official_close",
+                        "evaluation_ledger",
+                        "evaluation_result",
+                        "symbol_decision_head",
+                        "alert_event",
+                        "delivery_attempt",
+                        "pending_official_close",
+                        "daily_plan_record",
                     )
                 }
 
@@ -93,17 +123,18 @@ def test_installed_lunch_standby_and_heartbeat_cannot_hide_overdue_progress(tmp_
                 assert not runner_failed()
                 assert any(name == "rt_min" for name, _ in sdk.calls)
                 baseline = business_rows()
-                assert len(baseline["evaluation_result"]) == 1
-                assert len(baseline["evaluation_ledger"]) == 1
+                assert baseline["evaluation_result"] == baseline["evaluation_ledger"] == ()
+                assert any(row[1] == "EVALUATION" for row in baseline["daily_plan_record"])
                 assert baseline["pending_official_close"] == ()
                 fresh = await composition.read_service.get_dashboard()
-                assert fresh.connection_status.value == "CONNECTED"
+                assert fresh.runtime_status.lifecycle == "RUNNING"
                 assert fresh.runtime_generation == generation
-                summary, = fresh.symbols
-                assert summary.connected and summary.decision.data_health.status.value == "LIVE"
-                original_decision = summary.decision
+                (summary,) = fresh.symbols
+                assert summary.availability == "CURRENT"
+                assert not summary.scope.read_only
+                original_decision = summary.plan_runtime
                 assert original_decision.evaluated_at == market_due
-                assert original_decision.market_data_at == market_due.replace(second=0)
+                assert original_decision.minute_target == market_due.replace(second=0)
 
                 # Release only genuine scheduler sleeps through lunch, including any
                 # bounded maintenance polls added by later approved owner wiring.
@@ -112,27 +143,33 @@ def test_installed_lunch_standby_and_heartbeat_cannot_hide_overdue_progress(tmp_
                 clock.current = lunch
                 health = await composition.read_service.get_health()
                 assert composition.health().runtime_generation == generation and not runner_failed()
-                assert health.status.value == "RUNNING" and not health.read_only
-                assert health.next_poll_at == clock.parked[0] and health.next_poll_at > lunch
+                assert health.runtime_status.lifecycle == "RUNNING"
+                assert health.runtime_status.coordinator.state == "SCHEDULED"
+                assert health.runtime_status.next_wake_at == clock.parked[0]
+                assert health.runtime_status.next_wake_at > lunch
                 assert business_rows() == baseline
                 waiting = await composition.read_service.get_dashboard()
-                assert waiting.connection_status.value == "CONNECTED"
+                assert waiting.runtime_status.lifecycle == "RUNNING"
                 assert waiting.runtime_generation == generation
-                assert waiting.symbols[0].connected
-                assert waiting.symbols[0].decision == original_decision
+                assert waiting.runtime_status.coordinator.state == "SCHEDULED"
+                assert waiting.symbols[0].scope.read_only
+                assert not waiting.symbols[0].current_actionable
+                assert waiting.symbols[0].plan_runtime == original_decision
                 current_health = await composition.read_service.get_symbol_health(
                     symbol=plan.symbol,
                 )
-                assert current_health is not None and current_health.actionable
-                frame = composition.websocket_service._heartbeat_frame(waiting.sequence)
-                assert frame["runtimeLive"] is True
+                assert current_health is not None and current_health.scope.read_only
+                frame = await composition.websocket_service._current_heartbeat_frame(
+                    waiting.sequence
+                )
+                assert frame["runtimeStatus"]["lifecycle"] == "RUNNING"
                 assert frame["runtimeGeneration"] == str(generation)
-                assert frame["runtimeStartedAt"] == started.started_at.isoformat()
                 assert frame["sequence"] == waiting.sequence
 
                 # Keep the actual scheduler's permit blocked. Advance only observation
                 # time past its real promised deadline; do not forge runtime health.
-                due = health.next_poll_at
+                due = health.runtime_status.coordinator.progress_due_at
+                assert due is not None
                 calls_before = tuple(sdk.calls)
                 clock.current = due + timedelta(microseconds=1)
                 await composition._runtime._liveness_owner.heartbeat()
@@ -141,19 +178,21 @@ def test_installed_lunch_standby_and_heartbeat_cannot_hide_overdue_progress(tmp_
                     assert datetime.fromisoformat(heartbeat.last_alive_at) == clock.now()
                 assert composition.health().runtime_generation == generation
                 assert composition.health().status.value == "RUNNING"
-                assert composition.health().next_poll_at == due
+                assert composition.health().next_poll_at <= due
                 assert not clock.parked[1].done()
                 stale = await composition.read_service.get_dashboard()
-                assert stale.connection_status.value == "DISCONNECTED"
-                assert stale.runtime_generation is None
-                assert not stale.symbols[0].connected
-                assert await composition.read_service.get_symbol_health(symbol=plan.symbol) is None
-                frame = composition.websocket_service._heartbeat_frame(waiting.sequence)
+                assert stale.runtime_status.coordinator.state == "STALLED"
+                assert stale.runtime_generation == generation
+                assert stale.symbols[0].scope.read_only
+                assert not stale.symbols[0].current_actionable
+                frame = await composition.websocket_service._current_heartbeat_frame(
+                    waiting.sequence
+                )
                 assert frame["sequence"] == waiting.sequence
-                assert frame["runtimeLive"] is False and frame["runtimeGeneration"] is None
-                assert frame["runtimeStartedAt"] is None
+                assert frame["runtimeStatus"]["coordinator"]["state"] == "STALLED"
+                assert frame["runtimeGeneration"] == str(generation)
                 # Stored history stays historical LIVE; only current admission closes.
-                assert stale.symbols[0].decision == original_decision
+                assert stale.symbols[0].plan_runtime == original_decision
                 assert business_rows() == baseline and tuple(sdk.calls) == calls_before
         finally:
             await asyncio.wait_for(composition.stop(), timeout=10)

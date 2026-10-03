@@ -1,0 +1,57 @@
+# Specification: One Trade Plan Workflow
+
+> Canonical English contract. The matching review copy is `SPEC-unified-plan.zh-CN.md`.
+
+## U01. Authority and boundary
+
+The user's correction on 2026-10-02 restores the original single plan capability: paste source → AI draft → edit and review → explicitly activate → monitor conditions → reminders and explicitly requested simulated trades. This contract supersedes the separate daily-plan product and the live legacy/explicit family selection. A condition's period is a data requirement, never a separate plan business type. Existing board-index research and backtesting are independent; this change adds no index judgment.
+
+Fundamentals are reviewed by the user when generating the plan. They are not monitored facts, runtime blockers, or simulation gates. Exact source exclusions remain visible and review-bound. No broker orders, execution tracking, partial fills, unknown orders, reservations, or client allocation are introduced.
+
+## U02. Current model
+
+The only new executable contract is Schema 5, `CONDITION_PLAN`, `condition-plan-v1`. Frozen Schema 1–4 bytes, hashes and audit records retain their original interpretation; the format number is internal history information, not a product selector. New extraction uses one server-owned prompt and review path. Old drafts require a newly extracted, edited and reviewed version; they are never silently converted or rehashed.
+
+Each ordinary rule contains one explicit condition tree, quantity, validity, independent-signal policy, confirmation and execution window. Source-defined ALL/ANY composition is preserved. Conditions may combine existing completed daily leaves and completed five-minute leaves. Optional `alert_rules` preserve source-defined reminder-only technical conditions, with explicit confirmation and no trading quantity, liquidation target or inventory effect; they cannot authorize simulation. Optional levels, zones and technical exit branches are included only when supported by the source or an explicit reviewed human supplement. Missing meaning stays unresolved; no strategy threshold, branch, quantity, date or grouping is invented. Only `position.max_qty` is mandatory; optional CORE/TACTICAL allocation metadata is policy, never initialized inventory.
+
+## U03. Time and evidence
+
+`OFFICIAL_DAILY_CLOSE` confirms from official completed daily evidence and uses `NEXT_EXCHANGE_SESSION_ONLY` for ordinary simulation. `COMPLETED_BAR_CLOSE` with `timeframe_minutes=5` confirms from a complete five-minute bar and uses `CURRENT_SESSION`. These values must be explicit and consistent. Mixed trees use one evaluation cutoff: daily leaves cannot consume provisional intraday closes or future official bars; minute leaves cannot consume incomplete, gapped or later-received minutes. Fixed and dynamic references, adjustments, formula version and warm-up retain their existing proven semantics.
+
+Data acquisition freezes plan version, hash and activation revision before I/O and rechecks them in the commit transaction. Recovery obtains only the required evidence and a valid minute quote; a daily-only plan must not require legacy `ta-v1` five-minute indicators. Missing data blocks the dependent condition rather than inventing a pass. Technical risk latches retain official-close confirmation, T+1, priority and reviewed removal. Nonquantified technical judgments require the explicitly scoped human evidence named by the plan; technical removal evidence does not require an announcement institution, title or HTTPS URL.
+
+Scoped technical review facts explicitly record `satisfied=true` or `satisfied=false`; an absent fact remains unknown. The latest eligible review at the cutoff applies, while contradictory assertions at the same cutoff block evaluation. Negative technical facts cannot negate tradability, full-session suspension, independent-event or signal-invalidation control evidence. Composite risk conditions retain every consumed leaf evidence ID so a later risk review cannot replay already consumed evidence.
+
+Minute replay can reuse a decision only while its persisted source bucket, plan/review/activation, scoped facts, risks and relevant inventory remain current. A later source correction requires reevaluation. Send-time reminder admission rechecks those scoped facts and the current source evidence; a previously queued positive reminder cannot remain eligible after its evidence becomes stale or false.
+
+Current runtime status requires a committed completion proof bound to runtime generation, configuration revision, active plan identity, the latest applicable completed target, calendar and consumed source/state evidence. A read must revalidate that proof; missing or changed authority leaves the preserved evaluation cached and read-only. Reading status never acquires data or changes business records. A rule's explicit confirmation period also determines its target when its condition contains only reviewed technical facts.
+
+## U04. One operation path
+
+`/plans` is the sole current workspace. It shows source, structured candidate, omissions, bindings, review, saved versions, activation and simulation state. Save creates an inactive draft. Review binds source/content/evidence/revision. Activation is a separate command. Changing source or content invalidates earlier approval. Neither extraction, alerts, acknowledgement, review nor refresh changes holdings.
+
+Current formal API operations use `/api/v1/plan-extractions`, `/api/v1/plan-drafts`, `/api/v1/plan-imports`, `/api/v1/plan-review-previews`, `/api/v1/plan-review-supplements`, `/api/v1/plan-review-confirmations`, `/api/v1/plan-activations`, `/api/v1/plan-deactivations`, `/api/v1/plan-facts`, `/api/v1/simulation-position-confirmations`, `/api/v1/simulation-position-inventory`, `/api/v1/plan-risk-reassessments`, `/api/v1/simulated-trades` and `/api/v1/plan-runtime/{symbol}`. No current route uses a separate `/daily-*` operation family. AI provider configuration is read-only in the API and loaded once from the project file. Old `dailyMapping` wire fields and internal `Daily*` names remain shared review/accounting compatibility details, never a second current workflow.
+
+OpenAPI snapshot SHA-256: `4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255`. This is the current snapshot approval; historical snapshot identities remain recoverable from Git and are never relabeled as current approval.
+
+Simulation is explicit, isolated from registered real positions and offline research fills, and applies exactly one complete positive multiple of 100 shares. Initial simulated inventory, held/sellable shares and plan targets also use multiples of 100. The server revalidates active identity, review, signal/risk authority, inventory revision, quote, calendar, T+1, CORE protection, maximum position and idempotency under one symbol transaction. No partial substitute is applied when the full authorized quantity is unavailable.
+
+A reminder-only current plan requires current plan identity, its own activation window and condition evidence, without simulation inventory authority. Existing incompatible accounting records do not prevent a reminder, and evaluation must not mutate earlier position, signal, risk or simulation records. Historical risk cannot extend the reminder plan's activation window; simulation remains blocked without compatible accounting authority.
+
+The notification center displays current reminder-only events and includes them under the `RISK_ALERT` filter. Their retained `REMINDER` payload marker and `alertKind=RISK_ALERT` identify review-only evidence; quantity, execution date, risk scope and simulation authority remain absent. Acknowledgement remains an independent idempotent read marker.
+
+## U05. Removal and retention
+
+Remove the separate daily route, page and extraction workspace, current target-contract selector and unused AI configuration write/test methods. Remove ordinary real-fill and ongoing fundamental/event-risk controls from the current plan flow. Retain frozen model codecs and historical review readers solely to interpret existing bytes; retain legacy decision logic where isolated historical backtest replay depends on it. Retain certified minute normalization, daily indicators, risk timing, simulation accounting and recovery where the one current evaluator needs them. Retained dependencies must be listed in the verification report. Historical daily acceptance cannot certify this change.
+
+## U06. Acceptance
+
+1. One real browser path extracts, edits, reviews, saves and explicitly activates through formal API services.
+2. A current plan contains daily and minute conditions; production evaluation proves cutoff separation and activation-race protection.
+3. Reminders/acknowledgement/review/refresh leave holdings unchanged. Explicit full-lot simulation preserves T+1, CORE, limits and idempotency; incompatible or partial quantities are rejected.
+4. There is no second extraction workspace or live family selector. Historical bytes and hashes remain unchanged; old formats cannot bypass the current fundamental boundary.
+5. Appropriate Python, frontend, formal API, production-composition and browser checks pass. Reports distinguish deterministic local evidence, unavailable external provider certification and unresolved failures.
+
+## U07. Documentation parity
+
+Both language versions preserve U01–U07, field names, format numbers, API paths, timing, boundaries and acceptance criteria. Current indexes point here. Keep useful frozen compatibility constraints and necessary acceptance evidence; remove superseded specifications and completed process records from the maintained tree. Historical Git evidence never authorizes current behavior.

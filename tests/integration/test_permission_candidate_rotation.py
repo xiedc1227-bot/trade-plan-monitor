@@ -6,6 +6,7 @@ import asyncio
 from datetime import timedelta
 
 import pytest
+from current_activation_fixture import current_mixed_plan
 from sqlalchemy import delete
 from test_live_pipeline_acceptance import NOW, ControlledClock, _activate_plans, _sample_plan
 from test_permission_candidate_selection import (
@@ -39,13 +40,18 @@ from trade_plan_monitor.state.runtime_recovery import (
 )
 
 
-def test_six_scope_tie_rotates_only_after_reservation_even_when_queue_aborts(
-    tmp_path, monkeypatch,
+def test_current_scope_tie_rotates_only_after_reservation_even_when_queue_aborts(
+    tmp_path,
+    monkeypatch,
 ) -> None:
     async def scenario() -> None:
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=True, include_index=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=True,
+            include_index=True,
             persisted_calendar=True,
+            plan=current_mixed_plan(),
         )
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
@@ -58,7 +64,6 @@ def test_six_scope_tie_rotates_only_after_reservation_even_when_queue_aborts(
                 TushareOperation.TRADING_CALENDAR,
                 TushareOperation.INDEX_HISTORICAL_MINUTES,
                 TushareOperation.INDEX_REALTIME_MINUTES,
-                TushareOperation.DAILY_LIMITS,
                 TushareOperation.DAILY_BARS,
                 TushareOperation.INDEX_DAILY,
             )
@@ -82,8 +87,10 @@ def test_six_scope_tie_rotates_only_after_reservation_even_when_queue_aborts(
 
             with pytest.raises(RequestNotStartedError):
                 await control.recheck_permission(
-                    first.operation, lambda: pytest.fail("SDK must not start"),
-                    work_key="rotation:queue-abort", can_start=lambda: False,
+                    first.operation,
+                    lambda: pytest.fail("SDK must not start"),
+                    work_key="rotation:queue-abort",
+                    can_start=lambda: False,
                     on_reserved=on_reserved,
                 )
             assert acknowledgements == ["durable"]
@@ -102,11 +109,15 @@ def test_six_scope_tie_rotates_only_after_reservation_even_when_queue_aborts(
 
 
 def test_daily_bar_pools_alternate_and_follow_missing_pair_sort_key(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     async def scenario() -> None:
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=False, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=False,
+            persisted_calendar=True,
         )
         database = tmp_path / "monitor.sqlite3"
         first_plan = _sample_plan()
@@ -141,20 +152,28 @@ def test_daily_bar_pools_alternate_and_follow_missing_pair_sort_key(
             )
             for pool, symbol, day in expected:
                 candidate = next(
-                    item for item in pipeline.permission_probe_candidates()
+                    item
+                    for item in pipeline.permission_probe_candidates()
                     if item.operation is TushareOperation.DAILY_BARS
                 )
                 assert (candidate.daily_bar_pool, candidate.symbol, candidate.anchor_date) == (
-                    pool, symbol, day,
+                    pool,
+                    symbol,
+                    day,
                 )
-                assert next(
-                    item for item in pipeline.permission_probe_candidates()
-                    if item.operation is TushareOperation.DAILY_BARS
-                ) == candidate
+                assert (
+                    next(
+                        item
+                        for item in pipeline.permission_probe_candidates()
+                        if item.operation is TushareOperation.DAILY_BARS
+                    )
+                    == candidate
+                )
                 runtime._clock.current += timedelta(seconds=300)
                 with pytest.raises(RequestControlError):
                     await control.recheck_permission(
-                        TushareOperation.DAILY_BARS, denied,
+                        TushareOperation.DAILY_BARS,
+                        denied,
                         work_key="rotation:daily-bars",
                         on_reserved=pipeline._permission_probe_reservation_callback(candidate),
                     )
@@ -162,74 +181,95 @@ def test_daily_bar_pools_alternate_and_follow_missing_pair_sort_key(
             engine = create_sqlite_engine(database)
             try:
                 with create_session_factory(engine).begin() as session:
-                    session.execute(delete(StoredDailyBar).where(
-                        StoredDailyBar.symbol == second_plan.symbol,
-                        StoredDailyBar.trade_date == EARLIER,
-                        StoredDailyBar.is_official.is_(True),
-                    ))
+                    session.execute(
+                        delete(StoredDailyBar).where(
+                            StoredDailyBar.symbol == second_plan.symbol,
+                            StoredDailyBar.trade_date == EARLIER,
+                            StoredDailyBar.is_official.is_(True),
+                        )
+                    )
             finally:
                 engine.dispose()
             _seed_official_bar(database, first_plan.symbol, EARLIER, NOW)
             candidate = next(
-                item for item in pipeline.permission_probe_candidates()
+                item
+                for item in pipeline.permission_probe_candidates()
                 if item.operation is TushareOperation.DAILY_BARS
             )
             assert (candidate.daily_bar_pool, candidate.symbol, candidate.anchor_date) == (
-                "O", first_plan.symbol, ANCHOR,
+                "O",
+                first_plan.symbol,
+                ANCHOR,
             )
             runtime._clock.current += timedelta(seconds=300)
             with pytest.raises(RequestControlError):
                 await control.recheck_permission(
-                    TushareOperation.DAILY_BARS, denied,
+                    TushareOperation.DAILY_BARS,
+                    denied,
                     work_key="rotation:daily-bars",
                     on_reserved=pipeline._permission_probe_reservation_callback(candidate),
                 )
             candidate = next(
-                item for item in pipeline.permission_probe_candidates()
+                item
+                for item in pipeline.permission_probe_candidates()
                 if item.operation is TushareOperation.DAILY_BARS
             )
             assert (candidate.daily_bar_pool, candidate.symbol, candidate.anchor_date) == (
-                "F", second_plan.symbol, EARLIER,
+                "F",
+                second_plan.symbol,
+                EARLIER,
             )
             runtime._clock.current += timedelta(seconds=300)
             with pytest.raises(RequestControlError):
                 await control.recheck_permission(
-                    TushareOperation.DAILY_BARS, denied,
+                    TushareOperation.DAILY_BARS,
+                    denied,
                     work_key="rotation:daily-bars",
                     on_reserved=pipeline._permission_probe_reservation_callback(candidate),
                 )
             engine = create_sqlite_engine(database)
             try:
                 with create_session_factory(engine).begin() as session:
-                    session.execute(delete(StoredDailyBar).where(
-                        StoredDailyBar.is_official.is_(True),
-                        StoredDailyBar.symbol.in_((first_plan.symbol, second_plan.symbol)),
-                    ))
+                    session.execute(
+                        delete(StoredDailyBar).where(
+                            StoredDailyBar.is_official.is_(True),
+                            StoredDailyBar.symbol.in_((first_plan.symbol, second_plan.symbol)),
+                        )
+                    )
             finally:
                 engine.dispose()
-            assert next(
-                item for item in pipeline.permission_probe_candidates()
-                if item.operation is TushareOperation.DAILY_BARS
-            ).daily_bar_pool == "F"
+            assert (
+                next(
+                    item
+                    for item in pipeline.permission_probe_candidates()
+                    if item.operation is TushareOperation.DAILY_BARS
+                ).daily_bar_pool
+                == "F"
+            )
             candidate = next(
-                item for item in pipeline.permission_probe_candidates()
+                item
+                for item in pipeline.permission_probe_candidates()
                 if item.operation is TushareOperation.DAILY_BARS
             )
             runtime._clock.current += timedelta(seconds=300)
             with pytest.raises(RequestControlError):
                 await control.recheck_permission(
-                    TushareOperation.DAILY_BARS, denied,
+                    TushareOperation.DAILY_BARS,
+                    denied,
                     work_key="rotation:daily-bars",
                     on_reserved=pipeline._permission_probe_reservation_callback(candidate),
                 )
             _seed_official_bar(database, first_plan.symbol, ANCHOR, NOW)
             _seed_official_bar(database, second_plan.symbol, EARLIER, NOW)
             restored = next(
-                item for item in pipeline.permission_probe_candidates()
+                item
+                for item in pipeline.permission_probe_candidates()
                 if item.operation is TushareOperation.DAILY_BARS
             )
             assert (restored.daily_bar_pool, restored.symbol, restored.anchor_date) == (
-                "O", second_plan.symbol, EARLIER,
+                "O",
+                second_plan.symbol,
+                EARLIER,
             )
             assert tuple(sdk.calls) == sdk_before
         finally:
@@ -260,7 +300,8 @@ def test_missing_pair_uses_strict_successor_across_symbol_and_date() -> None:
 
 
 def test_failed_reservation_save_does_not_advance_pipeline_rotation(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     class FailingRepository(ProviderRecoveryRepository):
         fail_save = False
@@ -272,18 +313,27 @@ def test_failed_reservation_save_does_not_advance_pipeline_rotation(
 
     async def scenario() -> None:
         composition, sdk, _ = _composition(
-            tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
+            tmp_path,
+            monkeypatch,
+            active_plan=True,
+            persisted_calendar=True,
+            plan=current_mixed_plan(),
         )
         engine = create_sqlite_engine(tmp_path / "reservation-failure.db")
         upgrade_database(engine)
         repository = FailingRepository(
-            create_session_factory(engine), provider_identity="b" * 64,
+            create_session_factory(engine),
+            provider_identity="b" * 64,
         )
         clock = ControlledClock(NOW)
         control = TushareRequestController(
-            clock=clock, executor_workers=1, max_concurrency=1,
-            min_interval=timedelta(0), jitter=timedelta(0),
-            in_cycle_retries=0, recovery_repository=repository,
+            clock=clock,
+            executor_workers=1,
+            max_concurrency=1,
+            min_interval=timedelta(0),
+            jitter=timedelta(0),
+            in_cycle_retries=0,
+            recovery_repository=repository,
         )
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
@@ -295,7 +345,8 @@ def test_failed_reservation_save_does_not_advance_pipeline_rotation(
                 TushareOperation.DAILY_BARS,
             )
             candidate = next(
-                item for item in pipeline.permission_probe_candidates()
+                item
+                for item in pipeline.permission_probe_candidates()
                 if item.operation is TushareOperation.DAILY_BARS
             )
             before = pipeline._permission_rotation_state

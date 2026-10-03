@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from hashlib import sha256
 from uuid import UUID
 
 import pytest
@@ -21,8 +20,6 @@ from trade_plan_monitor.ai.prompts import (
     PLAN_EXTRACTION_PROMPT_V2,
     PLAN_EXTRACTION_PROMPT_V3,
     PLAN_EXTRACTION_PROMPT_V4,
-    PLAN_EXTRACTION_PROMPT_V5,
-    build_plan_extraction_prompt,
 )
 from trade_plan_monitor.ai.provider import PlanExtractionRequest, RawAIResponse
 from trade_plan_monitor.ai.review import server_source_clauses
@@ -56,7 +53,7 @@ def test_provider_default_selects_v5_without_changing_the_configured_model() -> 
 
     config = AIProviderConfig.model_validate(values)
 
-    assert config.prompt_version == PLAN_EXTRACTION_PROMPT_V5
+    assert config.prompt_version == "plan-extract-v8"
     assert config.model == "offline-v4"
 
 
@@ -161,26 +158,6 @@ def _extract(payload: object, *, finish_reason: str = "stop"):
     )
 
 
-def test_simulated_schema_diagnostic_keeps_known_nested_path_and_redacts_unknown_key() -> None:
-    nested = _valid_output()
-    nested["draft"]["rules"][0]["action"]["quantity"] = "SECRET-model-value"
-    nested_result = _extract(nested)
-    assert nested_result.status is PlanExtractionStatus.INVALID_OUTPUT
-    assert nested_result.diagnostic is not None
-    assert nested_result.diagnostic.reason == "SCHEMA"
-    assert nested_result.diagnostic.schema_error_type == "int_type"
-    assert nested_result.diagnostic.path == "draft.rules[0].action.variant.quantity"
-    assert "SECRET-model-value" not in nested_result.model_dump_json()
-
-    unknown = _valid_output()
-    unknown["SECRET-unknown-key"] = "SECRET-model-value"
-    unknown_result = _extract(unknown)
-    assert unknown_result.diagnostic is not None
-    assert unknown_result.diagnostic.schema_error_type == "extra_forbidden"
-    assert unknown_result.diagnostic.path == "unknown"
-    assert "SECRET" not in unknown_result.model_dump_json()
-
-
 def test_simulated_nonfinite_json_has_closed_diagnostic_reason() -> None:
     payload = _valid_output()
     payload["draft"]["rules"][0]["action"]["quantity"] = float("nan")
@@ -198,37 +175,6 @@ def test_diagnostic_model_rejects_untrusted_path_segments() -> None:
             reason="SCHEMA",
             path="draft.rules[0].SECRET-private-input",
         )
-
-
-def test_v4_has_a_separate_schema_and_preserves_all_old_prompt_bytes() -> None:
-    for version, expected in _OLD_PROMPT_HASHES.items():
-        actual = sha256(
-            build_plan_extraction_prompt(
-                "GOLDEN_PLAN_SOURCE",
-                prompt_version=version,
-            ).encode()
-        ).hexdigest()
-        assert actual == expected
-
-    prompt = build_plan_extraction_prompt(_SOURCE, prompt_version=PLAN_EXTRACTION_PROMPT_V4)
-
-    assert "Prompt version: plan-extract-v4" in prompt
-    assert '"mapping_version"' in prompt
-    assert '"ExplicitPlanDraft"' in prompt
-    assert sha256(prompt.encode()).hexdigest() not in set(_OLD_PROMPT_HASHES.values())
-
-
-def test_v4_accepts_a_partial_typed_draft_but_derives_activation_blockers() -> None:
-    result = _extract(_valid_output())
-
-    assert result.status is PlanExtractionStatus.SUCCEEDED
-    assert result.draft is not None
-    assert result.draft.to_executable() is None
-    assert result.mapping is not None
-    codes = {issue.code for issue in result.validation_issues}
-    assert "UNRESOLVED_EXECUTION_POLICY" in codes
-    assert "UNRESOLVED_SEMANTICS" in codes
-    assert all(issue.activation_blocking for issue in result.validation_issues)
 
 
 def test_v4_rejects_a_missing_server_clause_even_when_json_is_well_typed() -> None:

@@ -149,7 +149,7 @@ export function createRuntimeMonitor({ api, protocol, store, origin, createSocke
     else if (planReadOnlyChanged(previousStatus, frame.runtimeStatus)) refresh();
     else if (snapshot.symbols.some((row) => row.availability === "CURRENT" && (row.planFamily === "LEGACY_LOW_BUY"
       ? row.currentActionable && row.actionableUntil === null
-      : row.ruleEligibility.some((rule) => rule.currentActionable && rule.action === "RISK_ALERT")))) refresh();
+      : row.planFamily === "CONDITION_PLAN" ? row.currentActionable : row.ruleEligibility.some((rule) => rule.currentActionable && rule.action === "RISK_ALERT")))) refresh();
     armExpiry();
   }
 

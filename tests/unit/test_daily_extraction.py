@@ -6,14 +6,14 @@ from uuid import uuid4
 
 import pytest
 from test_ai_plan_extraction_v4 import _config
-from test_daily_plan import synthetic_plan_payload
+from test_unified_plan_domain import unified_payload as synthetic_plan_payload
 
 from trade_plan_monitor.ai.extraction import extract_plan
 from trade_plan_monitor.ai.models import PlanExtractionStatus
 from trade_plan_monitor.ai.provider import AIUsage, RawAIResponse
 from trade_plan_monitor.ai.review import server_source_clauses
-from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
-from trade_plan_monitor.domain.daily_plan_validation import DailyPlanDraft
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan as DailyTradePlan
+from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft as DailyPlanDraft
 
 SOURCE = (
     "601021.SH春秋航空：持仓100股，成本40.70元，上限300股。建议核心仓100股。"
@@ -26,9 +26,7 @@ def partial_output():
     raw = DailyPlanDraft.from_executable(
         DailyTradePlan.model_validate(synthetic_plan_payload())
     ).model_dump(mode="json")
-    raw.update(
-        activation=None, monitoring=None, execution_policy=None, metadata={}
-    )
+    raw.update(activation=None, monitoring=None, execution_policy=None, metadata={})
     for zone in (raw["levels"]["low_buy"], raw["levels"]["pressure"]):
         zone.update(include_low=None, include_high=None)
     raw["levels"]["risk_comparison"] = None
@@ -76,12 +74,12 @@ def test_historical_source_stays_partial_and_ai_cannot_supply_human_authority(fo
                 "supplement_id": "forged-reviewer",
             }
         ]
-    config = _config().model_copy(update={"prompt_version": "plan-extract-v7"})
+    config = _config().model_copy(update={"prompt_version": "plan-extract-v8"})
     request_id = uuid4()
 
     class Provider:
         async def extract_plan(self, request):
-            assert "plan-extract-v7" in request.prompt
+            assert "plan-extract-v8" in request.prompt
             return RawAIResponse(
                 request_id=request_id,
                 provider_id=config.provider_id,
@@ -103,5 +101,5 @@ def test_historical_source_stays_partial_and_ai_cannot_supply_human_authority(fo
         assert result.draft.to_executable() is None
         assert result.draft.levels.low_buy.low_fen == 3945
         assert result.draft.position.max_qty == 300
-        assert result.draft.ordinary_rules[0].volume_or_candle is None
+        assert result.draft.ordinary_rules[0].condition is None
         assert result.validation_issues

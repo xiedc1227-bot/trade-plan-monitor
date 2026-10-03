@@ -14,32 +14,21 @@ from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.state.models import PlanVersionStatus
 from trade_plan_monitor.state.repositories import (
-    IdempotencyInProgressError,
-    IdempotencyKeyReuseError,
     ManualEventRiskRecord,
     RepositoryError,
-    RevisionConflictError,
 )
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
-from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
-from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, operation_hash
 from trade_plan_monitor.web.routers.manual_event_risk import (
-    ManualEventRiskConfirmationCommand,
     ManualEventRiskUnknownReason,
     ManualEventRiskView,
     ManualEventRiskViewStatus,
 )
-from trade_plan_monitor.web.schemas import MutationContext
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
-class _ActivePlanRequiredError(Exception):
-    pass
 
 
-class _ExpiredConfirmationError(Exception):
-    pass
 
 
 class PersistentManualEventRiskOperationService:
@@ -62,32 +51,6 @@ class PersistentManualEventRiskOperationService:
         except RepositoryError:
             raise RuntimeError("manual event risk read failed") from None
 
-    async def confirm_manual_event_risk(
-        self,
-        *,
-        command: ManualEventRiskConfirmationCommand,
-        context: MutationContext,
-    ) -> ManualEventRiskView:
-        try:
-            return await to_thread.run_sync(
-                partial(
-                    self._confirm_sync,
-                    command=command,
-                    context=context,
-                    request_hash=operation_hash("CONFIRM_MANUAL_EVENT_RISK", command),
-                )
-            )
-        except IdempotencyKeyReuseError:
-            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
-        except (
-            _ActivePlanRequiredError,
-            _ExpiredConfirmationError,
-            IdempotencyInProgressError,
-            RevisionConflictError,
-        ):
-            raise ApiError(ApiErrorCode.CONFLICT) from None
-        except RepositoryError:
-            raise RuntimeError("manual event risk confirmation failed") from None
 
     def _get_sync(self, *, symbol: str) -> ManualEventRiskView:
         now = _shanghai_datetime(self._clock())
@@ -96,39 +59,6 @@ class PersistentManualEventRiskOperationService:
             record = work.manual_event_risk.get(symbol)
         return _view(symbol=symbol, scope=scope, record=record, as_of=now)
 
-    def _confirm_sync(
-        self,
-        *,
-        command: ManualEventRiskConfirmationCommand,
-        context: MutationContext,
-        request_hash: str,
-    ) -> ManualEventRiskView:
-        now = _shanghai_datetime(self._clock())
-        if command.expires_on < now.date():
-            raise _ExpiredConfirmationError
-        with self._unit_of_work_factory() as work:
-            replay = claim_replay(
-                work,
-                context=context,
-                request_hash=request_hash,
-                model_type=ManualEventRiskView,
-            )
-            if replay is not None:
-                return replay
-            scope = _active_scope(work, command.symbol)
-            if scope is None:
-                raise _ActivePlanRequiredError
-            record = work.manual_event_risk.upsert(
-                symbol=command.symbol,
-                plan_hash=scope.plan_hash,
-                status=command.status,
-                expires_on=command.expires_on,
-                expected_revision=command.expected_revision,
-            )
-            result = _view(symbol=command.symbol, scope=scope, record=record, as_of=now)
-            complete_replay(work, context=context, request_hash=request_hash, response=result)
-            work.commit()
-            return result
 
 
 class _ActivePlanScope:

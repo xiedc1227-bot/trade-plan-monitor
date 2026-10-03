@@ -1,19 +1,35 @@
-"""Recovered source minutes supply future explicit rolling windows without replay."""
+"""Recovered source minutes supply future condition windows without replay."""
 
 import asyncio
 from datetime import timedelta
 from threading import Event
 
 import pytest
-import test_explicit_runtime_production as fixture
 from sqlalchemy import func, select
+from tests.integration import current_pipeline_fixture as fixture
 
-from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
 from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.models import AlertDeliveryEligibility, AlertEvent, DeliveryAttempt
+
+
+def _business_rows(transaction, symbol, *, kinds=("EVALUATION", "SIGNAL", "RISK")):
+    return tuple((kind, row["id"], row["revision"], row["payload"])
+        for kind in kinds
+        for row in transaction.daily.list(symbol=symbol, kind=kind))
+
+
+def _missed_diagnostic(transaction, symbol, target):
+    rows = tuple(row for row in transaction.daily.list(symbol=symbol, kind="EVALUATION")
+        if row["payload"].get("minute_target") == target.isoformat())
+    assert len(rows) == 2
+    head, immutable = next(row for row in rows if row["id"] == "evaluation-head-" + symbol), next(
+        row for row in rows if row["id"] != "evaluation-head-" + symbol)
+    assert head["payload"] == immutable["payload"]
+    assert "CURRENT_DAY_MINUTE_PREFIX_MISSING" in immutable["payload"]["data_blockers"]
+    return immutable
 
 
 @pytest.mark.parametrize("precovered", [False, True])
@@ -30,7 +46,7 @@ def test_recovery_materializes_complete_history_without_replaying_decisions(
     monkeypatch.setattr(fixture, "ProductionMonitorPipeline", build)
 
     async def scenario():
-        engine, work, plan, sdk, _, controller, pipeline, _ = fixture._pipeline_fixture(
+        engine, work, plan, sdk, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
             tmp_path, monkeypatch, current_volume=300,
         )
 
@@ -45,14 +61,25 @@ def test_recovery_materializes_complete_history_without_replaying_decisions(
             await pipeline.refresh_references(fixture.TARGET.date())
             await deadline(fixture.TARGET)
             assert pipeline.runtime_status_snapshot()[2][0].completion is not None
+            with work() as transaction:
+                actionable_before = _business_rows(transaction, plan.symbol,
+                    kinds=("SIGNAL", "RISK"))
+                events_before = transaction._session.scalar(
+                    select(func.count()).select_from(AlertEvent))
             missed = fixture.TARGET + timedelta(minutes=5)
             # Provider is still held at the earlier target; the new bucket cannot commit.
             await deadline(missed)
             with work() as transaction:
-                assert transaction.explicit_rules.get(
-                    plan_hash=plan_sha256(plan), symbol=plan.symbol,
-                    target_bucket_end=missed, activation_revision=1,
-                ) is None
+                _missed_diagnostic(transaction, plan.symbol, missed)
+                actionable_after = _business_rows(transaction, plan.symbol,
+                    kinds=("SIGNAL", "RISK"))
+                assert {(kind, identity) for kind, identity, *_ in actionable_after} == {
+                    (kind, identity) for kind, identity, *_ in actionable_before}
+                assert all(row["payload"]["executable_qty"] == 0
+                    for row in transaction.daily.list(symbol=plan.symbol, kind="SIGNAL"))
+                assert transaction._session.scalar(
+                    select(func.count()).select_from(AlertEvent)) == events_before
+            assert pipeline.runtime_status_snapshot()[2][0].completion is None
             pipeline._clock.current = missed + timedelta(minutes=1, seconds=15)
             sdk.source_time = missed
             if precovered:
@@ -70,6 +97,7 @@ def test_recovery_materializes_complete_history_without_replaying_decisions(
                 counts_before = tuple(transaction._session.scalar(
                     select(func.count()).select_from(model)
                 ) for model in (AlertEvent, AlertDeliveryEligibility, DeliveryAttempt))
+                business_before = _business_rows(transaction, plan.symbol)
             recovered = (await pipeline._run_stock_recovery_unit(maintenance=False)).result
             assert recovered.ready
             if precovered:
@@ -77,17 +105,15 @@ def test_recovery_materializes_complete_history_without_replaying_decisions(
             with work() as transaction:
                 bars = transaction.history.list_five_minute(
                     plan.symbol, start=missed, end=missed + timedelta(minutes=5),
-                    formula_version=plan.monitoring.indicator_formula_version,
+                    formula_version="ta-v1",
                 )
                 assert tuple(bar.bar_end for bar in bars) == (missed,)
-                assert transaction.explicit_rules.get(
-                    plan_hash=plan_sha256(plan), symbol=plan.symbol,
-                    target_bucket_end=missed, activation_revision=1,
-                ) is None
+                _missed_diagnostic(transaction, plan.symbol, missed)
                 counts_after = tuple(transaction._session.scalar(
                     select(func.count()).select_from(model)
                 ) for model in (AlertEvent, AlertDeliveryEligibility, DeliveryAttempt))
                 assert counts_after == counts_before
+                assert _business_rows(transaction, plan.symbol) == business_before
             # The next real market duty consumes complete history; no old duty is replayed.
             future = missed + timedelta(minutes=5)
             for offset in range(2, 6):
@@ -125,13 +151,14 @@ def test_recovery_materializes_complete_history_without_replaying_decisions(
             )
             assert (await reader.get_symbol(symbol=plan.symbol)).summary.availability == "CURRENT"
             with work() as transaction:
-                result = transaction.explicit_rules.get(
-                    plan_hash=plan_sha256(plan), symbol=plan.symbol,
-                    target_bucket_end=future, activation_revision=1,
-                )
-                evidence = result.rule_results[0].condition_evidence
-                assert not evidence.missing_inputs
-                assert all(not child.missing_inputs for child in evidence.children)
+                results = transaction.daily.list(symbol=plan.symbol, kind="EVALUATION")
+                result = next(row for row in results
+                    if row["payload"].get("minute_target") == future.isoformat())
+                assert result["payload"]["signals"]
+                assert "CURRENT_DAY_MINUTE_PREFIX_MISSING" not in result["payload"][
+                    "data_blockers"]
+                assert all(signal["state"] != "MISSING_INPUT"
+                    for signal in result["payload"]["signals"])
         finally:
             await controller.aclose()
             engine.dispose()
@@ -144,7 +171,7 @@ def test_recovered_aggregation_is_session_contained_and_capture_fenced(
     tmp_path, monkeypatch, fence,
 ):
     async def scenario():
-        engine, work, plan, _, _, controller, pipeline, _ = fixture._pipeline_fixture(
+        engine, work, plan, _, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
             tmp_path, monkeypatch, current_volume=300,
         )
         try:
@@ -179,7 +206,7 @@ def test_recovered_aggregation_is_session_contained_and_capture_fenced(
             with work() as transaction:
                 bars = transaction.history.list_five_minute(
                     plan.symbol, start=morning, end=cutoff + timedelta(minutes=2),
-                    formula_version=plan.monitoring.indicator_formula_version,
+                    formula_version="ta-v1",
                 )
                 assert tuple(bar.bar_end for bar in bars) == (() if fence else (morning,))
                 persisted = transaction.history.list_minutes(

@@ -19,6 +19,31 @@ from trade_plan_monitor.web.monitor_composition import _ProductionRuntimeState
 NOW = datetime(2026, 9, 8, 10, 0, 15, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
+def _activate_current_minute_alert(tmp_path, at):
+    from tests.integration.test_daily_plan_chain import Chain
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+
+    chain = Chain(tmp_path)
+    chain.now = at
+    raw = unified_payload()
+    raw.update(
+        symbol="003043.SZ", market="SZSE", levels=None, monitoring=None,
+        ordinary_rules=[], risk_branches=[],
+        alert_rules=[{
+            "kind": "RISK_ALERT", "rule_id": "completed-minute-risk-alert",
+            "condition": {"type": "MINUTE_CLOSE_BELOW", "timeframe_minutes": 5,
+                          "price_fen": 6500},
+            "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+        }],
+    )
+    chain.plan = UnifiedTradePlan.model_validate(raw)
+    with chain.client:
+        chain.activate(source="Synthetic completed five-minute risk reminder.")
+    return chain.plan
+
+
 class Clock:
     current = NOW
 
@@ -146,6 +171,7 @@ class SDK:
         self.clock = clock
         self.engine = engine
         self.calls = []
+        self.minute_close = "64.05"
 
     def __getattr__(self, name):
         def request(**kwargs):
@@ -226,6 +252,8 @@ class SDK:
                     [
                         dict(
                             base,
+                            **({"close": self.minute_close, "high": "66.10"}
+                               if name == "rt_min" and self.minute_close != "64.05" else {}),
                             ts_code="003043.SZ",
                             freq="1MIN",
                             time=minute.strftime("%Y-%m-%d %H:%M:%S"),
@@ -243,18 +271,16 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
 
     import trade_plan_monitor.runtime.production as production
     import trade_plan_monitor.web.monitor_composition as monitor_composition
-    from trade_plan_monitor.domain.plan_codec import load_plan_yaml
-    from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
     from trade_plan_monitor.runtime.health import RuntimeResourceStatus, RuntimeServiceStatus
     from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
     from trade_plan_monitor.state.database import upgrade_database
-    from trade_plan_monitor.state.models import EvaluationResult, RuntimeLiveness
+    from trade_plan_monitor.state.models import RuntimeLiveness
     from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
     from trade_plan_monitor.web.monitor_composition import create_monitor_composition
 
     async def scenario():
         clock = ControlledClock(NOW.replace(hour=9, minute=0))
-        database = tmp_path / "monitor.sqlite3"
+        database = tmp_path / "daily.sqlite"
         engine = create_sqlite_engine(database)
         upgrade_database(engine)
         sessions = create_session_factory(engine)
@@ -262,16 +288,7 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
         def work():
             return SqlAlchemyUnitOfWork(sessions, clock=clock.now)
 
-        sample = Path(__file__).parents[2] / "config/plans/003043.SZ.sample.yaml"
-        plan = load_plan_yaml(sample.read_text(encoding="utf-8"))
-        with work() as transaction:
-            transaction.plans.save_draft(plan, source_text="production wiring acceptance")
-            transaction.plans.activate(
-                plan,
-                expected_revision=0,
-                validation=validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE),
-            )
-            transaction.commit()
+        plan = _activate_current_minute_alert(tmp_path, clock.now())
         with sessions.begin() as session:
             session.add(RuntimeLiveness(
                 id=1, schema_version=1, revision=0,
@@ -336,15 +353,43 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
                     bar_end=NOW.replace(second=0),
                 )
                 result = await state.run_deadline(deadline)
-                assert [row.status.value for row in result] == ["COMMITTED"]
+                assert len(result) == 1
+                assert result[0].symbol == plan.symbol
                 with work() as transaction:
-                    before = transaction.projections.get_decision_head(plan.symbol)
-                with sessions() as session:
-                    assert session.query(EvaluationResult).count() == 1
+                    before = transaction.daily.get("evaluation-head-" + plan.symbol)
                 assert before is not None
                 calls = len(sdk.calls)
-                assert await state.run_deadline(deadline) == ()
+                repeated = await state.run_deadline(deadline)
+                assert len(repeated) == 1
+                assert repeated[0].snapshot == result[0].snapshot
                 assert len(sdk.calls) == calls
+                from trade_plan_monitor.market_data.models import MinuteBar
+                from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
+
+                assert result[0].snapshot["alerts"][0]["outcome"] == "SATISFIED"
+                with work() as transaction:
+                    original = transaction.history.list_minutes(
+                        plan.symbol, start=deadline.bar_end - timedelta(minutes=4),
+                        end=deadline.bar_end,
+                    )[-1]
+                    corrected = MinuteBar.model_validate({
+                        **original.model_dump(), "close_fen": 6600, "high_fen": 6610,
+                        "received_at": NOW + timedelta(seconds=1),
+                    })
+                    transaction.history.upsert_minutes((corrected,))
+                    transaction.commit()
+                clock.current = NOW + timedelta(seconds=1)
+                with work() as transaction:
+                    old_event = transaction.alerts.get(
+                        __import__("uuid").UUID(result[0].event_ids[0]))
+                    assert not daily_delivery_allowed(
+                        transaction.daily.session, old_event, clock.now())
+                sdk.minute_close = "66.00"
+                corrected_result = await state.run_deadline(deadline)
+                assert corrected_result[0].snapshot["alerts"][0]["outcome"] == "UNSATISFIED"
+                assert sum(name == "rt_min" for name, _ in sdk.calls) == 2
+                with work() as transaction:
+                    before = transaction.daily.get("evaluation-head-" + plan.symbol)
             finally:
                 await first.stop()
 
@@ -353,13 +398,12 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
                 sdk.engine = second._runtime._run_deadline.__self__._engine
                 assert (await second.start()).status is RuntimeServiceStatus.RUNNING
                 assert second._runtime.runtime_generation != generation
-                assert await second._runtime._run_deadline.__self__.run_deadline(deadline) == ()
+                resumed = await second._runtime._run_deadline.__self__.run_deadline(deadline)
+                assert len(resumed) == 1
                 with work() as transaction:
-                    after = transaction.projections.get_decision_head(plan.symbol)
+                    after = transaction.daily.get("evaluation-head-" + plan.symbol)
                 assert before == after
-                with sessions() as session:
-                    assert session.query(EvaluationResult).count() == 1
-                assert sum(name == "rt_min" for name, _ in sdk.calls) == 1
+                assert sum(name == "rt_min" for name, _ in sdk.calls) == 3
             finally:
                 await second.stop()
         finally:
@@ -380,8 +424,6 @@ def test_production_deadline_repairs_only_detected_gaps_with_realtime_budget(
 ):
     import trade_plan_monitor.runtime.production as production
     from trade_plan_monitor.config import load_application_config
-    from trade_plan_monitor.domain.plan_codec import load_plan_yaml
-    from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
     from trade_plan_monitor.runtime.production import ProductionMonitorPipeline
     from trade_plan_monitor.runtime.scheduler import (
         DeadlineKind,
@@ -413,7 +455,7 @@ def test_production_deadline_repairs_only_detected_gaps_with_realtime_budget(
     async def scenario():
         clock = Clock()
         clock.current = NOW.replace(hour=9, minute=0)
-        database = tmp_path / "monitor.sqlite3"
+        database = tmp_path / "daily.sqlite"
         engine = create_sqlite_engine(database)
         upgrade_database(engine)
         sessions = create_session_factory(engine)
@@ -421,19 +463,7 @@ def test_production_deadline_repairs_only_detected_gaps_with_realtime_budget(
         def work():
             return SqlAlchemyUnitOfWork(sessions, clock=clock.now)
 
-        sample = Path(__file__).parents[2] / "config/plans/003043.SZ.sample.yaml"
-        plan = load_plan_yaml(sample.read_text(encoding="utf-8"))
-        with work() as transaction:
-            transaction.plans.save_draft(plan, source_text="gap repair wiring acceptance")
-            transaction.plans.activate(
-                plan,
-                expected_revision=0,
-                validation=validate_trade_plan(
-                    plan,
-                    available_market_evidence=ALL_MARKET_EVIDENCE,
-                ),
-            )
-            transaction.commit()
+        plan = _activate_current_minute_alert(tmp_path, clock.now())
 
         base_minute = NOW.replace(second=0, microsecond=0)
         clock.current = base_minute + timedelta(seconds=seconds_after_minute)
@@ -494,7 +524,9 @@ def test_production_deadline_repairs_only_detected_gaps_with_realtime_budget(
             )
             await asyncio.sleep(0)
             assert set(asyncio.all_tasks()) == tasks_before
-            assert result == ()
+            assert len(result) == 1
+            assert result[0].symbol == plan.symbol
+            assert result[0].event_ids == ()
             with work() as transaction:
                 repaired = transaction.history.list_minutes(plan.symbol, start=gap, end=gap)
                 assert transaction.projections.get_decision_head(plan.symbol) is None

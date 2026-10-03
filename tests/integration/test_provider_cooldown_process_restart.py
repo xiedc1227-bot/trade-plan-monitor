@@ -11,10 +11,9 @@ from test_live_pipeline_acceptance import (
     ControlledClock,
     OfflineSDK,
     VirtualPace,
-    _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
+from tests.integration.current_activation_fixture import current_sample_plan, seed_current
 
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
@@ -57,7 +56,7 @@ def _run_monitor(root: str, observed_at, induce_limit: bool, outcomes) -> None:
             await asyncio.Event().wait()
 
         clock.sleep_until = sleep_until
-    sdk = OfflineRateLimitedSDK(clock, (_sample_plan().symbol,))
+    sdk = OfflineRateLimitedSDK(clock, (current_sample_plan().symbol,))
     real_controller = monitor_composition.create_live_tushare_request_controller
 
     def controller_factory(*, clock, require_repository_binding=False):
@@ -126,7 +125,7 @@ def test_observed_429_blocks_physical_work_after_controlled_process_restart(
 ):
     database = tmp_path / "monitor.sqlite3"
     clock = ControlledClock(NOW.replace(hour=9, minute=0))
-    _activate_plans(database, clock, (_sample_plan(),))
+    seed_current(tmp_path, clock=clock)
     engine = create_sqlite_engine(database)
     try:
         with create_session_factory(engine).begin() as session:

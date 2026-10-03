@@ -16,6 +16,7 @@ from test_production_daily_bar_permission_preparation import harness, ready
 from test_production_index_daily_permission_maintenance import _one_official_index_day
 from test_production_index_historical_permission_probe import _complete_index_day
 from test_unified_permission_legacy_owners import OWNERS, _case
+from tests.integration.current_activation_fixture import current_mixed_plan
 
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.market_index.identity import MarketIndexCode
@@ -44,6 +45,7 @@ async def _active_case(tmp_path, monkeypatch):
         include_index=True,
         stock_certification=True,
         persisted_calendar=True,
+        plan=current_mixed_plan(),
     )
     try:
         assert (await composition.start()).status.value == "RUNNING"
@@ -71,15 +73,21 @@ async def _active_case(tmp_path, monkeypatch):
         await composition.stop()
 
 
-def test_eight_equal_due_scopes_get_one_real_proof_each(tmp_path, monkeypatch):
+CURRENT_SCOPES = tuple(
+    operation for operation in _PERMISSION_SCOPES
+    if operation is not TushareOperation.DAILY_LIMITS
+)
+
+
+def test_current_equal_due_scopes_get_one_real_proof_each(tmp_path, monkeypatch):
     async def scenario():
         async with _active_case(tmp_path, monkeypatch) as (_, pipe, control, sdk):
-            for operation in _PERMISSION_SCOPES:
+            for operation in CURRENT_SCOPES:
                 await _block(control, operation)
-            raw = {control.raw_permission_retry_at(op) for op in _PERMISSION_SCOPES}
+            raw = {control.raw_permission_retry_at(op) for op in CURRENT_SCOPES}
             assert len(raw) == 1
             pipe._clock.current += timedelta(seconds=301)
-            for i, operation in enumerate(_PERMISSION_SCOPES):
+            for i, operation in enumerate(CURRENT_SCOPES):
                 before = len(sdk.calls)
                 result = await pipe.run_permission_maintenance_unit()
                 assert result is PermissionMaintenanceResult.PROBED, (operation, sdk.calls[-1])
@@ -87,9 +95,30 @@ def test_eight_equal_due_scopes_get_one_real_proof_each(tmp_path, monkeypatch):
                 assert pipe._permission_rotation_state.last_operation is operation
                 assert all(
                     control.is_permission_blocked(op) is (j > i)
-                    for j, op in enumerate(_PERMISSION_SCOPES)
+                    for j, op in enumerate(CURRENT_SCOPES)
                 )
             assert pipe.next_permission_probe_due_at() is None
+
+    asyncio.run(scenario())
+
+
+def test_current_plan_does_not_authorize_retired_daily_limits_probe(tmp_path, monkeypatch):
+    async def scenario():
+        async with _active_case(tmp_path, monkeypatch) as (_, pipe, control, sdk):
+            operation = TushareOperation.DAILY_LIMITS
+            await _block(control, operation)
+            pipe._clock.current += timedelta(seconds=301)
+            before = tuple(sdk.calls), pipe._permission_rotation_state
+            raw = control.raw_permission_retry_at(operation)
+            assert await pipe.run_permission_maintenance_unit() is (
+                PermissionMaintenanceResult.DEFERRED
+            )
+            assert control.is_permission_blocked(operation)
+            assert control.raw_permission_retry_at(operation) == raw
+            assert (tuple(sdk.calls), pipe._permission_rotation_state) == before
+            assert pipe._permission_probe_deferred_until[operation] == (
+                pipe._clock.now() + timedelta(seconds=30)
+            )
 
     asyncio.run(scenario())
 
@@ -136,14 +165,13 @@ def test_global_authority_loss_never_becomes_local_polling(
     asyncio.run(scenario())
 
 
-REMAINING = _PERMISSION_SCOPES[3:]
+REMAINING = CURRENT_SCOPES[3:]
 
 
 @pytest.mark.parametrize(
     "operation",
     (
-        *_PERMISSION_SCOPES[:3],
-        TushareOperation.DAILY_LIMITS,
+        *CURRENT_SCOPES[:3],
         TushareOperation.INDEX_DAILY,
     ),
 )
@@ -190,7 +218,6 @@ def test_held_preparation_authority_loss_does_not_reserve_or_poll(
     "operation",
     [
         TushareOperation.TRADING_CALENDAR,
-        TushareOperation.DAILY_LIMITS,
         TushareOperation.INDEX_DAILY,
     ],
 )

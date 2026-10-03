@@ -11,12 +11,9 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field, model_validator
 
 from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
-from trade_plan_monitor.state.repositories import ManualEventRiskStatus
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.schemas import (
     ApiValue,
-    MutationContext,
-    MutationContextDependency,
     validate_api_response,
 )
 
@@ -69,22 +66,11 @@ class ManualEventRiskView(ApiValue):
         return self
 
 
-class ManualEventRiskConfirmationCommand(ApiValue):
-    symbol: AShareSymbol
-    status: ManualEventRiskStatus = Field(strict=False)
-    expires_on: date = Field(strict=False)
-    expected_revision: NonNegativeRevision
 
 
 class ManualEventRiskOperationService(Protocol):
     async def get_manual_event_risk(self, *, symbol: str) -> ManualEventRiskView: ...
 
-    async def confirm_manual_event_risk(
-        self,
-        *,
-        command: ManualEventRiskConfirmationCommand,
-        context: MutationContext,
-    ) -> ManualEventRiskView: ...
 
 
 def get_manual_event_risk_operation_service(request: Request) -> ManualEventRiskOperationService:
@@ -114,28 +100,9 @@ async def get_manual_event_risk(
     return result
 
 
-@router.post("/manual-event-risk-confirmations", response_model=ManualEventRiskView)
-async def confirm_manual_event_risk(
-    command: ManualEventRiskConfirmationCommand,
-    context: MutationContextDependency,
-    service: ManualEventRiskServiceDependency,
-) -> ManualEventRiskView:
-    result = validate_api_response(
-        await service.confirm_manual_event_risk(command=command, context=context),
-        ManualEventRiskView,
-    )
-    if (
-        result.symbol != command.symbol
-        or result.status.value != command.status.value
-        or result.expires_on != command.expires_on
-        or result.revision != command.expected_revision + 1
-    ):
-        raise RuntimeError("manual event risk confirmation receipt is inconsistent")
-    return result
 
 
 __all__ = [
-    "ManualEventRiskConfirmationCommand",
     "ManualEventRiskOperationService",
     "ManualEventRiskUnknownReason",
     "ManualEventRiskView",

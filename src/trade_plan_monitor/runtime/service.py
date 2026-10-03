@@ -2791,11 +2791,11 @@ class RuntimeDeadlineCoordinator:
             )
             daily_results = []
             for plan in daily_plans:
-                daily_results.append(
-                    await self._daily_evaluation_service.run_target(
-                        plan=plan, evaluated_at=observed_at, official_trade_date=deadline.trade_date
-                    )
+                result = await self._daily_evaluation_service.run_target(
+                    plan=plan, evaluated_at=observed_at, official_trade_date=deadline.trade_date
                 )
+                if result is not None:
+                    daily_results.append(result)
             return (*legacy_results, *daily_results)
 
         bar_end = deadline.bar_end
@@ -2834,11 +2834,12 @@ class RuntimeDeadlineCoordinator:
                 minutes = (
                     () if context is None or context.five_minute_bar is None else context.minutes
                 )
-                daily_results.append(
-                    await self._daily_evaluation_service.run_target(
-                        plan=plan, evaluated_at=observed_at, minutes=minutes
-                    )
+                result = await self._daily_evaluation_service.run_target(
+                    plan=plan, evaluated_at=observed_at, minutes=minutes,
+                    expected_activation_revision=activation_revisions[plan.symbol]
                 )
+                if result is not None:
+                    daily_results.append(result)
         if five_minute_bucket_end(bar_end) != bar_end:
             await self._evaluation_service.persist_symbol_health_batch(
                 tuple(context.health for context in batch.contexts),

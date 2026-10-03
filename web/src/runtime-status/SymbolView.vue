@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { RouterLink } from "vue-router";
 import PageIntro from "../components/common/PageIntro.vue";
-import { createPositionApi } from "../api/positions";
-import { createManualEventRiskApi } from "../api/manualEventRisk";
-import PositionLots from "../components/symbol/PositionLots.vue";
-import PositionInventoryPanel from "../components/symbol/PositionInventoryPanel.vue";
-import ManualEventRiskPanel from "../components/symbol/ManualEventRiskPanel.vue";
 import ReferenceMarketPanel from "../components/market-index/ReferenceMarketPanel.vue";
-import type { PositionOperations } from "../composables/usePositions";
 import { useRuntimeContext } from "./context";
 import PlanRow from "./PlanRow.vue";
 import StatusBoard from "./StatusBoard.vue";
@@ -15,13 +10,6 @@ import HistoryPanel from "./HistoryPanel.vue";
 import { useRuntimeRead } from "./useRuntimeRead";
 const props = defineProps<{ symbol: string }>();
 const { api, store } = useRuntimeContext();
-const positionApi = createPositionApi();
-const manualApi = createManualEventRiskApi();
-const operations: PositionOperations = {
-  closePosition: ({ command, idempotencyKey }) => positionApi.closePosition(command, idempotencyKey),
-  createPosition: ({ command, idempotencyKey }) => positionApi.createPosition(command, idempotencyKey),
-  listPositions: (request) => positionApi.listPositions(request),
-};
 const { value: detail, error, loading } = useRuntimeRead((signal) => api.getSymbol(props.symbol, signal), [() => props.symbol, () => store.observedAt, () => store.snapshot]);
 const currentDetail = computed(() => {
   const value = detail.value;
@@ -32,7 +20,6 @@ const currentDetail = computed(() => {
   return installed && installed.planVersionId === value.summary.planVersionId && installed.planHash === value.summary.planHash &&
     installed.activationRevision === value.summary.activationRevision ? value : null;
 });
-const asOfTradeDate = computed(() => currentDetail.value?.observedAt.slice(0, 10) ?? null);
 </script>
 
 <template>
@@ -49,9 +36,7 @@ const asOfTradeDate = computed(() => currentDetail.value?.observedAt.slice(0, 10
         <HistoryPanel :symbol="symbol" :observed-at="currentDetail.observedAt"
           :decision="currentDetail.summary.availability !== 'UNAVAILABLE' && currentDetail.summary.planFamily === 'LEGACY_LOW_BUY' ? currentDetail.summary.decision : null"
           :stale="currentDetail.summary.availability !== 'CURRENT' || store.transport !== 'LIVE'" />
-        <PositionLots v-if="asOfTradeDate" :symbol="symbol" :as-of-trade-date="asOfTradeDate" :operations="operations" />
-        <PositionInventoryPanel :symbol="symbol" :as-of-trade-date="asOfTradeDate" :api="positionApi" />
-        <ManualEventRiskPanel :symbol="symbol" :api="manualApi" />
+        <RouterLink :to="`/plans/${currentDetail.summary.planVersionId}`">查看计划与模拟仓位</RouterLink>
       </template>
       <p v-else>该股票当前没有活动计划。</p>
     </template>

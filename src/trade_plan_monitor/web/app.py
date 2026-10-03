@@ -321,13 +321,13 @@ def create_app(
     else:
         app.include_router(runtime_status_router)
         # FastAPI clones included routes; never mutate the shared v1 routers.
-        for source, replaced in (
-            (symbols_router, {"/api/v1/symbols", "/api/v1/symbols/{symbol}"}),
-            (plans_router, {"/api/v1/explicit-plan-runtime/{symbol}"}),
-        ):
-            retained = APIRouter()
-            retained.routes.extend(route for route in source.routes if route.path not in replaced)
-            app.include_router(retained)
+        replaced = {"/api/v1/symbols", "/api/v1/symbols/{symbol}"}
+        retained = APIRouter()
+        retained.routes.extend(
+            route for route in symbols_router.routes if route.path not in replaced
+        )
+        app.include_router(retained)
+        app.include_router(plans_router)
     app.include_router(daily_plans_router)
     app.include_router(system_router)
     app.include_router(ai_router)

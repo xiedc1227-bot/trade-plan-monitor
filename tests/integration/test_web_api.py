@@ -42,7 +42,7 @@ from trade_plan_monitor.decision.models import (
     SignalType,
     SymbolDecisionSnapshot,
 )
-from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json, load_plan_yaml
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import PriceInZoneCondition
 from trade_plan_monitor.notifications.identity import alert_dedup_key
@@ -1141,42 +1141,74 @@ _MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 
 def _sample_plan_document() -> tuple[str, str]:
-    plan = load_plan_yaml(Path("config/plans/003043.SZ.sample.yaml").read_text(encoding="utf-8"))
+    plan = load_plan_json(_current_import_document())
     return dump_plan_json(plan), plan_sha256(plan)
+
+
+def _current_import_document() -> str:
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+
+    raw = unified_payload()
+    raw.update(symbol="003043.SZ", market="SZSE", plan_id="huaya-smart")
+    return dump_plan_json(UnifiedTradePlan.model_validate(raw))
 
 
 def _plan_version_payload(
     *,
     version_id: str = _PLAN_VERSION_ID,
     blocked: bool = False,
+    plan=None,
+    source=None,
 ) -> dict[str, object]:
-    plan_json, plan_hash = _sample_plan_document()
-    review_issues = (
-        [
-            {
-                "kind": "WARNING",
-                "path": "levels.pressure",
-                "material": True,
-                "resolved": False,
-            }
-        ]
-        if blocked
-        else []
-    )
+    from tests.unit.test_daily_review import reviewed_mapping
+
+    from trade_plan_monitor.ai.daily_review import DailyMapping, build_daily_review
+    from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json, daily_draft_sha256
+    from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
+    source = source or "Synthetic manually reviewed technical policy for this API fixture."
+    draft = UnifiedPlanDraft.from_executable(plan or load_plan_json(_current_import_document()))
+    raw_mapping = reviewed_mapping(draft, source).model_dump(mode="json")
+    if blocked:
+        raw_mapping["clauses"][0]["disposition"] = "UNRESOLVED"
+    mapping = DailyMapping.model_validate(raw_mapping)
+    snapshot = build_daily_review(draft, mapping, source)
     return {
         "id": version_id,
-        "planId": "huaya-smart",
-        "version": 1,
-        "symbol": "003043.SZ",
-        "planHash": plan_hash,
+        "planId": draft.plan_id,
+        "version": draft.version,
+        "symbol": draft.symbol,
+        "planHash": daily_draft_sha256(draft),
         "status": "DRAFT",
-        "planJson": plan_json,
-        "sourceText": "华亚智能结构化交易计划",
-        "reviewIssues": review_issues,
-        "validationIssues": [],
+        "planJson": daily_draft_json(draft),
+        "sourceText": source,
+        "reviewIssues": [
+            {"kind": "WARNING", "path": "levels.pressure", "material": True, "resolved": False}
+        ]
+        if blocked
+        else [],
+        "validationIssues": [
+            {
+                "code": issue.code,
+                "path": issue.path,
+                "severity": "WARNING",
+                "message": issue.reason,
+                "activationBlocking": True,
+            }
+            for issue in snapshot.issues
+        ],
         "canActivate": not blocked,
         "revision": 3,
         "createdAt": _API_NOW,
+        "contentHash": snapshot.content_hash,
+        "sourceHash": snapshot.source_hash,
+        "reviewEvidenceHash": snapshot.evidence_hash,
+        "reviewRevision": 1 if not blocked else 0,
+        "reviewId": "80000000-0000-4000-8000-000000000008" if not blocked else None,
+        "dailyMapping": mapping.model_dump(mode="json"),
+        "dailyIssues": [issue.model_dump(mode="json") for issue in snapshot.issues],
     }
 
 
@@ -1290,7 +1322,9 @@ class _FakePlanOperationService:
                 context.request_id,
             )
         )
-        return _plan_version_payload()
+        return _plan_version_payload(
+            source=command.source_text, plan=load_plan_json(command.plan_json)
+        )
 
     async def import_plan(self, *, command: object, context: object) -> object:
         self.calls.append(
@@ -1302,9 +1336,39 @@ class _FakePlanOperationService:
                 context.idempotency_key,
             )
         )
-        payload = _plan_version_payload()
-        payload["sourceText"] = command.document
-        return payload
+        from tests.unit.test_daily_review import reviewed_mapping
+
+        from trade_plan_monitor.ai.daily_review import build_daily_review
+        from trade_plan_monitor.domain.daily_plan_validation import (
+            daily_draft_json,
+            daily_draft_sha256,
+        )
+        from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
+        draft = UnifiedPlanDraft.from_executable(load_plan_json(command.document))
+        mapping = reviewed_mapping(draft, command.document)
+        snapshot = build_daily_review(draft, mapping, command.document)
+        return {
+            "id": _PLAN_VERSION_ID,
+            "planId": draft.plan_id,
+            "version": draft.version,
+            "symbol": draft.symbol,
+            "planHash": daily_draft_sha256(draft),
+            "status": "DRAFT",
+            "planJson": daily_draft_json(draft),
+            "sourceText": command.document,
+            "reviewIssues": [],
+            "validationIssues": [],
+            "canActivate": False,
+            "revision": 3,
+            "createdAt": _API_NOW,
+            "contentHash": snapshot.content_hash,
+            "sourceHash": snapshot.source_hash,
+            "reviewEvidenceHash": snapshot.evidence_hash,
+            "reviewRevision": 0,
+            "dailyMapping": mapping.model_dump(mode="json"),
+            "dailyIssues": [issue.model_dump(mode="json") for issue in snapshot.issues],
+        }
 
     async def submit_plan_extraction(self, *, command: object, context: object) -> object:
         self.calls.append(
@@ -1326,7 +1390,20 @@ class _FakePlanOperationService:
         self.calls.append(("get_plan_extraction", operation_id))
         if operation_id != _EXTRACTION_ID:
             return None
-        plan_json, _ = _sample_plan_document()
+        from tests.unit.test_ai_plan_extraction_v4 import _config, _StaticProvider
+        from tests.unit.test_current_plan_extraction_security import SOURCE, current_output
+
+        from trade_plan_monitor.ai.extraction import extract_plan
+        from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+
+        result = await extract_plan(
+            request_id=UUID(_EXTRACTION_ID),
+            source_text=SOURCE,
+            config=_config(),
+            provider=_StaticProvider(json.dumps(current_output())),
+        )
+        assert result.draft is not None
+        plan_json = daily_draft_json(result.draft)
         return {
             "id": _EXTRACTION_ID,
             "providerId": _PROVIDER_ID,
@@ -1334,29 +1411,17 @@ class _FakePlanOperationService:
             "submittedAt": _API_NOW - timedelta(seconds=2),
             "startedAt": _API_NOW - timedelta(seconds=1),
             "completedAt": _API_NOW,
-            "sourceTextSha256": "c" * 64,
+            "sourceTextSha256": result.source_text_sha256,
             "model": "example-model",
-            "promptVersion": "plan-extract-v1",
+            "promptVersion": "plan-extract-v8",
             "draftPlanJson": plan_json,
-            "evidence": [
-                {
-                    "path": "plan_id",
-                    "excerpt": "华亚智能交易计划",
-                    "start": 0,
-                    "end": 8,
-                }
-            ],
+            "dailyMapping": result.daily_mapping.model_dump(mode="json"),
+            "evidence": [],
             "assumptions": [],
             "warnings": [],
             "unmappedText": [],
             "validationIssues": [
-                {
-                    "code": "AI_EVIDENCE_REVIEW_REQUIRED",
-                    "path": "draft",
-                    "severity": "WARNING",
-                    "message": "Review AI field evidence before activation.",
-                    "activationBlocking": True,
-                }
+                i.model_dump(mode="json", by_alias=True) for i in result.validation_issues
             ],
             "usage": {
                 "promptTokens": 100,
@@ -1415,76 +1480,6 @@ class _FakeAIOperationService:
             "offset": offset,
             "limit": limit,
             "total": 1,
-        }
-
-    async def create_ai_provider(self, *, command: object, context: object) -> object:
-        self.calls.append(
-            (
-                "create_ai_provider",
-                str(command.config.provider_id),
-                command.expected_revision,
-                context.idempotency_key,
-            )
-        )
-        payload = _provider_payload()
-        payload["revision"] = 0
-        return payload
-
-    async def update_ai_provider(
-        self,
-        *,
-        provider_id: str,
-        command: object,
-        context: object,
-    ) -> object | None:
-        self.calls.append(
-            (
-                "update_ai_provider",
-                provider_id,
-                command.expected_revision,
-                context.idempotency_key,
-            )
-        )
-        payload = _provider_payload()
-        payload["revision"] = command.expected_revision + 1
-        return payload
-
-    async def replace_ai_provider_secret(
-        self,
-        *,
-        command: object,
-        context: object,
-    ) -> object:
-        self.calls.append(
-            (
-                "replace_ai_provider_secret",
-                str(command.provider_id),
-                command.expected_revision,
-                context.idempotency_key,
-                repr(command.secret),
-            )
-        )
-        return _provider_payload(configured=True)
-
-    async def submit_ai_provider_test(
-        self,
-        *,
-        command: object,
-        context: object,
-    ) -> object:
-        self.calls.append(
-            (
-                "submit_ai_provider_test",
-                str(command.provider_id),
-                command.expected_revision,
-                context.idempotency_key,
-            )
-        )
-        return {
-            "operationId": _PROVIDER_TEST_ID,
-            "kind": "AI_PROVIDER_TEST",
-            "status": "QUEUED",
-            "submittedAt": _API_NOW,
         }
 
 
@@ -1662,7 +1657,7 @@ def test_plan_draft_and_import_require_current_revision_and_idempotency_context(
         headers={"Idempotency-Key": "plan-import-1"},
         json={
             "format": "JSON",
-            "document": plan_json,
+            "document": _current_import_document(),
             "symbol": "003043.SZ",
             "expectedRevision": 2,
         },
@@ -1689,7 +1684,7 @@ def test_plan_import_requires_the_document_symbol_before_service(
     plan_json, _ = _sample_plan_document()
     body: dict[str, object] = {
         "format": "JSON",
-        "document": plan_json,
+        "document": _current_import_document(),
         "expectedRevision": 0,
     }
     if symbol is not None:
@@ -1820,7 +1815,7 @@ def test_plan_import_rejects_a_service_response_for_another_symbol() -> None:
         headers={"Idempotency-Key": "cross-symbol-response"},
         json={
             "format": "JSON",
-            "document": plan_json,
+            "document": _current_import_document(),
             "symbol": "003043.SZ",
             "expectedRevision": 0,
         },
@@ -1842,15 +1837,7 @@ def test_plan_draft_accepts_a_base_identity_and_revalidates_the_server_version()
                 )
             )
             assigned = load_plan_json(command.plan_json).model_copy(update={"version": 2})
-            payload = _plan_version_payload()
-            payload.update(
-                {
-                    "planHash": plan_sha256(assigned),
-                    "planJson": dump_plan_json(assigned),
-                    "sourceText": command.source_text,
-                    "version": assigned.version,
-                }
-            )
+            payload = _plan_version_payload(plan=assigned, source=command.source_text)
             return payload
 
     service = _ServerVersionService()
@@ -1928,7 +1915,7 @@ def test_plan_draft_and_import_cannot_return_an_active_version() -> None:
         headers={"Idempotency-Key": "active-import"},
         json={
             "format": "JSON",
-            "document": plan_json,
+            "document": _current_import_document(),
             "symbol": "003043.SZ",
             "expectedRevision": 0,
         },
@@ -1999,7 +1986,11 @@ def test_plan_extraction_status_exposes_review_data_but_no_raw_model_output() ->
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "SUCCEEDED"
-    assert payload["evidence"][0]["path"] == "plan_id"
+    assert payload["evidence"] == []
+    assert json.loads(payload["draftPlanJson"])["schema_version"] == 5
+    assert payload["dailyMapping"]["clauses"]
+    assert payload["dailyMapping"]["supplements"] == []
+    assert any(i["activationBlocking"] for i in payload["validationIssues"])
     assert payload["usage"] == {
         "promptTokens": 100,
         "completionTokens": 50,
@@ -2221,7 +2212,9 @@ def test_plan_idempotency_conflict_mismatch_and_completed_replay_are_stable() ->
             if existing is not None and existing != fingerprint:
                 raise ApiError(ApiErrorCode.VALIDATION_ERROR)
             self.claims[key] = fingerprint
-            return _plan_version_payload()
+            return _plan_version_payload(
+                source=command.source_text, plan=load_plan_json(command.plan_json)
+            )
 
     service = _IdempotentService()
     app = create_app(plan_service=service)
@@ -2311,70 +2304,13 @@ def test_plan_extraction_rejects_a_wrong_operation_receipt_kind() -> None:
     _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
 
 
-def test_ai_provider_configuration_is_paginated_created_and_replaced_by_revision() -> None:
+def test_ai_provider_configuration_is_paginated_and_read_only() -> None:
     service = _FakeAIOperationService()
-    app = create_app(ai_service=service)
-    client = TestClient(app)
-    config = _provider_config_payload()
-
+    client = TestClient(create_app(ai_service=service))
     page = client.get("/api/v1/ai-providers", params={"offset": 0, "limit": 20})
-    created = client.post(
-        "/api/v1/ai-providers",
-        headers={"Idempotency-Key": "provider-create"},
-        json={"config": config, "expectedRevision": 0},
-    )
-    updated = client.patch(
-        f"/api/v1/ai-providers/{_PROVIDER_ID}",
-        headers={"Idempotency-Key": "provider-update"},
-        json={"config": config, "expectedRevision": 3},
-    )
-
     assert page.status_code == 200
     assert page.json()["items"][0]["config"]["providerId"] == _PROVIDER_ID
-    assert created.status_code == 200
-    assert updated.status_code == 200
-    assert service.calls == [
-        ("list_ai_providers", 0, 20),
-        ("create_ai_provider", _PROVIDER_ID, 0, "provider-create"),
-        ("update_ai_provider", _PROVIDER_ID, 3, "provider-update"),
-    ]
-
-
-def test_ai_provider_create_and_update_reject_mismatched_service_configuration() -> None:
-    class _MismatchedProviderService(_FakeAIOperationService):
-        async def create_ai_provider(self, *, command: object, context: object) -> object:
-            payload = _provider_payload()
-            config = payload["config"]
-            assert isinstance(config, dict)
-            config["model"] = "other-model"
-            return payload
-
-        async def update_ai_provider(
-            self,
-            *,
-            provider_id: str,
-            command: object,
-            context: object,
-        ) -> object:
-            return await self.create_ai_provider(command=command, context=context)
-
-    app = create_app(ai_service=_MismatchedProviderService())
-    client = TestClient(app, raise_server_exceptions=False)
-    body = {"config": _provider_config_payload(), "expectedRevision": 3}
-
-    created = client.post(
-        "/api/v1/ai-providers",
-        headers={"Idempotency-Key": "mismatched-create"},
-        json={**body, "expectedRevision": 0},
-    )
-    updated = client.patch(
-        f"/api/v1/ai-providers/{_PROVIDER_ID}",
-        headers={"Idempotency-Key": "mismatched-update"},
-        json=body,
-    )
-
-    _assert_error_envelope(created, status=500, code="INTERNAL_ERROR")
-    _assert_error_envelope(updated, status=500, code="INTERNAL_ERROR")
+    assert service.calls == [("list_ai_providers", 0, 20)]
 
 
 def test_plan_and_ai_provider_empty_pages_allow_offset_after_total() -> None:
@@ -2403,115 +2339,6 @@ def test_plan_and_ai_provider_empty_pages_allow_offset_after_total() -> None:
     assert provider_response.json()["items"] == []
 
 
-def test_ai_provider_secret_is_write_only_masked_and_never_reaches_response() -> None:
-    secret = "api-key-that-must-never-leak"
-    service = _FakeAIOperationService()
-    app = create_app(ai_service=service)
-
-    response = TestClient(app).post(
-        "/api/v1/ai-provider-secrets",
-        headers={"Idempotency-Key": "provider-secret"},
-        json={
-            "providerId": _PROVIDER_ID,
-            "secret": {"value": secret},
-            "expectedRevision": 3,
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json()["secretStatus"] == {
-        "configured": True,
-        "source": "STORE",
-        "maskedValue": "********",
-        "generation": 1,
-    }
-    assert secret not in response.text
-    assert secret not in repr(service.calls)
-    assert "********" in service.calls[0][-1]
-
-
-def test_ai_provider_update_and_secret_replace_require_advanced_revision_receipts() -> None:
-    class _StaleProviderService(_FakeAIOperationService):
-        async def update_ai_provider(
-            self,
-            *,
-            provider_id: str,
-            command: object,
-            context: object,
-        ) -> object:
-            return _provider_payload()
-
-        async def replace_ai_provider_secret(
-            self,
-            *,
-            command: object,
-            context: object,
-        ) -> object:
-            return _provider_payload()
-
-    app = create_app(ai_service=_StaleProviderService())
-    client = TestClient(app, raise_server_exceptions=False)
-
-    updated = client.patch(
-        f"/api/v1/ai-providers/{_PROVIDER_ID}",
-        headers={"Idempotency-Key": "stale-provider-update"},
-        json={"config": _provider_config_payload(), "expectedRevision": 3},
-    )
-    secret = client.post(
-        "/api/v1/ai-provider-secrets",
-        headers={"Idempotency-Key": "stale-provider-secret"},
-        json={
-            "providerId": _PROVIDER_ID,
-            "secret": {"value": "replacement-secret"},
-            "expectedRevision": 3,
-        },
-    )
-
-    _assert_error_envelope(updated, status=500, code="INTERNAL_ERROR")
-    _assert_error_envelope(secret, status=500, code="INTERNAL_ERROR")
-
-
-def test_ai_provider_test_returns_202_and_never_runs_provider_in_request_handler() -> None:
-    service = _FakeAIOperationService()
-    app = create_app(ai_service=service)
-
-    response = TestClient(app).post(
-        "/api/v1/ai-provider-tests",
-        headers={"Idempotency-Key": "provider-test"},
-        json={"providerId": _PROVIDER_ID, "expectedRevision": 3},
-    )
-
-    assert response.status_code == 202
-    assert response.json()["operationId"] == _PROVIDER_TEST_ID
-    assert response.json()["status"] == "QUEUED"
-    assert service.provider_test_runs == 0
-    assert service.calls == [("submit_ai_provider_test", _PROVIDER_ID, 3, "provider-test")]
-
-
-def test_ai_provider_test_rejects_a_wrong_operation_receipt_kind() -> None:
-    class _WrongReceiptService(_FakeAIOperationService):
-        async def submit_ai_provider_test(
-            self,
-            *,
-            command: object,
-            context: object,
-        ) -> object:
-            receipt = await super().submit_ai_provider_test(command=command, context=context)
-            assert isinstance(receipt, dict)
-            receipt["kind"] = "PLAN_EXTRACTION"
-            return receipt
-
-    app = create_app(ai_service=_WrongReceiptService())
-
-    response = TestClient(app, raise_server_exceptions=False).post(
-        "/api/v1/ai-provider-tests",
-        headers={"Idempotency-Key": "wrong-operation-kind"},
-        json={"providerId": _PROVIDER_ID, "expectedRevision": 3},
-    )
-
-    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
-
-
 def test_ai_provider_response_cannot_expose_secret_material_or_raw_provider_body() -> None:
     secret = "server-side-secret-material"
 
@@ -2532,83 +2359,6 @@ def test_ai_provider_response_cannot_expose_secret_material_or_raw_provider_body
     _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
     assert secret not in response.text
     assert "raw upstream body" not in response.text
-
-
-def test_ai_provider_configuration_rejects_unsafe_remote_http_before_service_call() -> None:
-    service = _FakeAIOperationService()
-    app = create_app(ai_service=service)
-    config = _provider_config_payload()
-    config["baseUrl"] = "http://remote.example.test/v1"
-
-    response = TestClient(app).post(
-        "/api/v1/ai-providers",
-        headers={"Idempotency-Key": "unsafe-provider-url"},
-        json={"config": config, "expectedRevision": 0},
-    )
-
-    _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
-    assert service.calls == []
-
-
-@pytest.mark.parametrize(
-    ("method", "path", "body"),
-    [
-        (
-            "post",
-            "/api/v1/ai-providers",
-            {"config": _provider_config_payload()},
-        ),
-        (
-            "patch",
-            f"/api/v1/ai-providers/{_PROVIDER_ID}",
-            {"config": _provider_config_payload()},
-        ),
-        (
-            "post",
-            "/api/v1/ai-provider-secrets",
-            {"providerId": _PROVIDER_ID, "secret": {"value": "secret"}},
-        ),
-        (
-            "post",
-            "/api/v1/ai-provider-tests",
-            {"providerId": _PROVIDER_ID},
-        ),
-    ],
-)
-def test_ai_provider_mutations_require_expected_revision(
-    method: str,
-    path: str,
-    body: dict[str, object],
-) -> None:
-    app = create_app(ai_service=_FakeAIOperationService())
-
-    response = getattr(TestClient(app), method)(
-        path,
-        headers={"Idempotency-Key": "revision-required"},
-        json=body,
-    )
-
-    error = _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
-    assert any(detail["location"][-1] == "expectedRevision" for detail in error["details"])
-
-
-def test_ai_provider_invalid_secret_error_never_echoes_input() -> None:
-    app = create_app(ai_service=_FakeAIOperationService())
-    secret = "s" * 8_193
-
-    response = TestClient(app).post(
-        "/api/v1/ai-provider-secrets",
-        headers={"Idempotency-Key": "invalid-secret"},
-        json={
-            "providerId": _PROVIDER_ID,
-            "secret": {"value": secret},
-            "expectedRevision": 3,
-        },
-    )
-
-    error = _assert_error_envelope(response, status=422, code="VALIDATION_ERROR")
-    assert secret not in response.text
-    assert all("input" not in detail for detail in error["details"])
 
 
 def test_plan_extraction_rejects_lone_surrogate_before_service_call_without_leak() -> None:
@@ -2858,46 +2608,6 @@ class _FakePositionOperationService:
             "total": max(1, offset + 1),
         }
 
-    async def record_position_lot(self, *, command: object, context: object) -> object:
-        self.calls.append(
-            (
-                "record_position_lot",
-                command.symbol,
-                command.bucket,
-                command.quantity,
-                command.acquired_trade_date,
-                command.cost_fen,
-                str(command.related_alert_id),
-                command.expected_revision,
-                context.idempotency_key,
-                context.request_id,
-            )
-        )
-        return _position_lot_payload()
-
-    async def close_position_lot(self, *, command: object, context: object) -> object:
-        self.calls.append(
-            (
-                "close_position_lot",
-                str(command.lot_id),
-                command.quantity,
-                command.trade_date,
-                command.expected_revision,
-                context.idempotency_key,
-            )
-        )
-        return {
-            "lot": _position_lot_payload(
-                remaining_quantity=0,
-                sellable_quantity=0,
-                closed_at=_API_NOW,
-            ),
-            "appliedQuantity": command.quantity,
-            "tradeDate": command.trade_date,
-            "beforeRemainingQuantity": 100,
-            "afterRemainingQuantity": 0,
-        }
-
 
 class _FakeAlertOperationService:
     def __init__(self) -> None:
@@ -2974,118 +2684,16 @@ class _FakeAlertOperationService:
         }
 
 
-def test_position_lots_are_paginated_and_manual_create_close_are_explicit() -> None:
+def test_historical_position_lots_are_paginated_read_only() -> None:
     service = _FakePositionOperationService()
-    app = create_app(position_service=service)
-    client = TestClient(app)
-
-    page = client.get(
+    page = TestClient(create_app(position_service=service)).get(
         "/api/v1/position-lots",
-        params={
-            "symbol": "003043.SZ",
-            "asOfTradeDate": "2026-08-24",
-            "offset": 2,
-            "limit": 5,
-        },
+        params={"symbol": "003043.SZ", "asOfTradeDate": "2026-08-24", "offset": 2, "limit": 5},
     )
-    created = client.post(
-        "/api/v1/position-lots",
-        headers={"Idempotency-Key": "position-buy-1"},
-        json={
-            "symbol": "003043.SZ",
-            "bucket": "CORE",
-            "quantity": 100,
-            "acquiredTradeDate": "2026-08-21",
-            "costFen": 6_400,
-            "relatedAlertId": _ALERT_ID,
-            "expectedRevision": 0,
-        },
-    )
-    closed = client.post(
-        "/api/v1/position-lot-closures",
-        headers={"Idempotency-Key": "position-close-1"},
-        json={
-            "lotId": _POSITION_LOT_ID,
-            "quantity": 100,
-            "tradeDate": "2026-08-24",
-            "expectedRevision": 0,
-        },
-    )
-
     assert page.status_code == 200
     assert page.json()["symbol"] == "003043.SZ"
-    assert page.json()["asOfTradeDate"] == "2026-08-24"
-    assert page.json()["offset"] == 2
-    assert page.json()["limit"] == 5
     assert page.json()["items"][0]["sellableQuantity"] == 100
-    assert created.status_code == 200
-    assert created.json()["revision"] == 0
-    assert created.json()["relatedAlertId"] == _ALERT_ID
-    assert closed.status_code == 200
-    assert closed.json()["lot"]["remainingQuantity"] == 0
-    assert closed.json()["lot"]["closedAt"] is not None
-    assert closed.json()["appliedQuantity"] == 100
-    assert closed.json()["beforeRemainingQuantity"] == 100
-    assert closed.json()["afterRemainingQuantity"] == 0
-    assert service.calls[0] == (
-        "list_position_lots",
-        "003043.SZ",
-        date(2026, 8, 24),
-        2,
-        5,
-    )
-    assert _REQUEST_ID_PATTERN.fullmatch(service.calls[1][-1])
-
-
-def test_position_commands_enforce_board_lot_maximum_and_t_plus_one() -> None:
-    class _PolicyService(_FakePositionOperationService):
-        async def record_position_lot(self, *, command: object, context: object) -> object:
-            self.calls.append(("record_position_lot", command.quantity))
-            raise ApiError(ApiErrorCode.CONFLICT)
-
-        async def close_position_lot(self, *, command: object, context: object) -> object:
-            self.calls.append(("close_position_lot", command.trade_date))
-            raise ApiError(ApiErrorCode.CONFLICT)
-
-    service = _PolicyService()
-    app = create_app(position_service=service)
-    client = TestClient(app)
-    base = {
-        "symbol": "003043.SZ",
-        "bucket": "CORE",
-        "acquiredTradeDate": "2026-08-24",
-        "costFen": 6_400,
-        "expectedRevision": 0,
-    }
-
-    board_lot = client.post(
-        "/api/v1/position-lots",
-        headers={"Idempotency-Key": "bad-board-lot"},
-        json={**base, "quantity": 50},
-    )
-    maximum = client.post(
-        "/api/v1/position-lots",
-        headers={"Idempotency-Key": "maximum-position"},
-        json={**base, "quantity": 100},
-    )
-    t_plus_one = client.post(
-        "/api/v1/position-lot-closures",
-        headers={"Idempotency-Key": "same-day-close"},
-        json={
-            "lotId": _POSITION_LOT_ID,
-            "quantity": 100,
-            "tradeDate": "2026-08-24",
-            "expectedRevision": 0,
-        },
-    )
-
-    _assert_error_envelope(board_lot, status=422, code="VALIDATION_ERROR")
-    _assert_error_envelope(maximum, status=409, code="CONFLICT")
-    _assert_error_envelope(t_plus_one, status=409, code="CONFLICT")
-    assert service.calls == [
-        ("record_position_lot", 100),
-        ("close_position_lot", date(2026, 8, 24)),
-    ]
+    assert service.calls == [("list_position_lots", "003043.SZ", date(2026, 8, 24), 2, 5)]
 
 
 def test_alerts_filter_and_paginate_with_non_submitting_position_prefill() -> None:
@@ -3360,65 +2968,6 @@ def test_acknowledging_an_already_acknowledged_alert_is_a_revision_noop() -> Non
     assert response.json()["revision"] == 1
 
 
-def test_position_response_rejects_non_durable_revision_and_closure_drift() -> None:
-    class _UnsafePositionService(_FakePositionOperationService):
-        async def list_position_lots(self, **kwargs: object) -> object:
-            payload = await super().list_position_lots(**kwargs)
-            payload["items"][0]["revision"] = 7
-            return payload
-
-        async def close_position_lot(self, **kwargs: object) -> object:
-            payload = await super().close_position_lot(**kwargs)
-            payload["appliedQuantity"] = 200
-            return payload
-
-    client = TestClient(
-        create_app(position_service=_UnsafePositionService()),
-        raise_server_exceptions=False,
-    )
-    listed = client.get(
-        "/api/v1/position-lots",
-        params={"symbol": "003043.SZ", "asOfTradeDate": "2026-08-24"},
-    )
-    closed = client.post(
-        "/api/v1/position-lot-closures",
-        headers={"Idempotency-Key": "closure-drift"},
-        json={
-            "lotId": _POSITION_LOT_ID,
-            "quantity": 100,
-            "tradeDate": "2026-08-24",
-            "expectedRevision": 0,
-        },
-    )
-
-    _assert_error_envelope(listed, status=500, code="INTERNAL_ERROR")
-    _assert_error_envelope(closed, status=500, code="INTERNAL_ERROR")
-
-
-def test_position_closure_response_rejects_same_day_acquisition() -> None:
-    class _SameDayClosureService(_FakePositionOperationService):
-        async def close_position_lot(self, **kwargs: object) -> object:
-            payload = await super().close_position_lot(**kwargs)
-            payload["lot"]["acquiredTradeDate"] = date(2026, 8, 24)
-            return payload
-
-    response = TestClient(
-        create_app(position_service=_SameDayClosureService()),
-        raise_server_exceptions=False,
-    ).post(
-        "/api/v1/position-lot-closures",
-        headers={"Idempotency-Key": "same-day-receipt-drift"},
-        json={
-            "lotId": _POSITION_LOT_ID,
-            "quantity": 100,
-            "tradeDate": "2026-08-24",
-            "expectedRevision": 0,
-        },
-    )
-
-    _assert_error_envelope(response, status=500, code="INTERNAL_ERROR")
-
-
 def test_diagnostic_response_rejects_evaluation_identity_drift() -> None:
     class _IdentityDriftService(_FakeAlertOperationService):
         async def evaluate_diagnostic(self, **kwargs: object) -> object:
@@ -3535,26 +3084,6 @@ def test_t038_idempotency_conflict_mismatch_and_completed_replay_are_stable() ->
     ("path", "body"),
     [
         (
-            "/api/v1/position-lots",
-            {
-                "symbol": "003043.SZ",
-                "bucket": "CORE",
-                "quantity": 100,
-                "acquiredTradeDate": "2026-08-21",
-                "costFen": 6_400,
-                "expectedRevision": 0,
-            },
-        ),
-        (
-            "/api/v1/position-lot-closures",
-            {
-                "lotId": _POSITION_LOT_ID,
-                "quantity": 100,
-                "tradeDate": "2026-08-24",
-                "expectedRevision": 0,
-            },
-        ),
-        (
             "/api/v1/alert-acknowledgements",
             {"alertId": _ALERT_ID, "expectedRevision": 0},
         ),
@@ -3587,24 +3116,6 @@ def test_t038_mutations_require_idempotency_key(
 @pytest.mark.parametrize(
     ("path", "body"),
     [
-        (
-            "/api/v1/position-lots",
-            {
-                "symbol": "003043.SZ",
-                "bucket": "CORE",
-                "quantity": 100,
-                "acquiredTradeDate": "2026-08-21",
-                "costFen": 6_400,
-            },
-        ),
-        (
-            "/api/v1/position-lot-closures",
-            {
-                "lotId": _POSITION_LOT_ID,
-                "quantity": 100,
-                "tradeDate": "2026-08-24",
-            },
-        ),
         (
             "/api/v1/alert-acknowledgements",
             {"alertId": _ALERT_ID},

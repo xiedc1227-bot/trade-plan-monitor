@@ -34,11 +34,24 @@ from trade_plan_monitor.ai.secrets import InMemorySecretStore, SecretWrite
 from trade_plan_monitor.config import load_application_config
 
 _ROOT = Path(__file__).parents[2]
+# T059 is a frozen historical acceptance, not approval of the current workflow.
+# Preserve exact Git-baseline bytes so document maintenance cannot reinterpret it.
+_HISTORICAL_DOCUMENTS = _ROOT / "tests" / "history" / "t059"
 _REPORTS = (
-    _ROOT / "docs" / "verification" / "release-acceptance.md",
-    _ROOT / "docs" / "verification" / "release-acceptance.zh-CN.md",
+    _HISTORICAL_DOCUMENTS / "release-acceptance.md",
+    _HISTORICAL_DOCUMENTS / "release-acceptance.zh-CN.md",
 )
-_READMES = (_ROOT / "README.md", _ROOT / "README.zh-CN.md")
+_READMES = (_HISTORICAL_DOCUMENTS / "README.md", _HISTORICAL_DOCUMENTS / "README.zh-CN.md")
+# Reports: 880c76fecfbf002bbc1b73d717c54d542429e7e8.
+# Operator guides: 030075c4946bf34833a0155fde6b4deda3c79055.
+_DOCUMENT_DIGESTS = {
+    "release-acceptance.md": "60512636ba3456dc2396eb080b8e76ff08724fb661ef43dbc2bc3bd8363a7853",
+    "release-acceptance.zh-CN.md": (
+        "9452e100b9b08a55e969fc03c8c6206254ccafbb47b86757daeb802e56726d0d"
+    ),
+    "README.md": "dca42831a2d36019f4339e823211ba7fc20583510bf791dc0ab444f80a82a3fd",
+    "README.zh-CN.md": "3c1bdd823b251a8482246dac3a06725244477b28b74890c82bac4a876c7d01eb",
+}
 _BASE_URL_ENV = "TRADE_PLAN_MONITOR_AI_LIVE_BASE_URL"
 _MODEL_ENV = "TRADE_PLAN_MONITOR_AI_LIVE_MODEL"
 _AUTHORIZATION_ENV = "TRADE_PLAN_MONITOR_AI_LIVE_AUTHORIZATION_SHA256"
@@ -123,8 +136,11 @@ def _fail(code: str) -> None:
 
 
 def _read_utf8_preserving_newlines(path: Path) -> str:
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != _DOCUMENT_DIGESTS[path.name]:
+        _fail("T059_RELEASE_DOCUMENT_BYTES_CHANGED")
     try:
-        return path.read_bytes().decode("utf-8")
+        return data.decode("utf-8")
     except UnicodeDecodeError:
         _fail("T059_RELEASE_DOCUMENT_UTF8_INVALID")
 
@@ -300,6 +316,14 @@ def test_ai_live_authorization_is_selector_first_and_target_bound() -> None:
     )
     assert authorized_config.model == "model-a"
     assert authorized_store is project_store
+
+
+def test_historical_acceptance_document_reader_rejects_changed_bytes(tmp_path: Path) -> None:
+    for source in (*_REPORTS, *_READMES):
+        altered = tmp_path / source.name
+        altered.write_bytes(source.read_bytes() + b"\n")
+        with pytest.raises(pytest.fail.Exception, match="T059_RELEASE_DOCUMENT_BYTES_CHANGED"):
+            _read_utf8_preserving_newlines(altered)
 
 
 def test_final_acceptance_state_guard_rejects_document_regressions() -> None:

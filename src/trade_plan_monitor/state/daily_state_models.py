@@ -3,10 +3,11 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import DailySupplement
 from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
+from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
     FactKind,
@@ -17,8 +18,9 @@ from trade_plan_monitor.domain.daily_plan_models import (
     WholeQty,
 )
 from trade_plan_monitor.domain.daily_scope import require_technical_text
+from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
-from trade_plan_monitor.market_data.models import ShanghaiDatetime
+from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime
 
 Digest = str
 
@@ -47,12 +49,20 @@ class DailyFactState(DailyValue):
     prior_signal_id: str | None = None
     evidence: str = Field(min_length=20, max_length=2000)
     verified: Literal[True]
+    satisfied: bool = Field(default=True, strict=True)
     verified_at: ShanghaiDatetime
     available_at: ShanghaiDatetime
     official_evidence: DailyOfficialProof | None
 
     @model_validator(mode="after")
     def proof(self):
+        if not self.satisfied and self.kind in {
+            "TRADABILITY",
+            "FULL_SESSION_SUSPENSION",
+            "INDEPENDENT_EVENT",
+            "SIGNAL_INVALIDATION",
+        }:
+            raise ValueError("negative assertions apply only to technical condition facts")
         if self.kind not in {"TRADABILITY", "FULL_SESSION_SUSPENSION"}:
             require_technical_text(self.evidence)
             if self.official_evidence is not None:
@@ -94,7 +104,7 @@ class DailySignalState(DailyValue):
     confirmed_trade_date: date
     execution_date: date | None
     evidence_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
-    evidence: tuple[DailyConditionEvidence, ...]
+    evidence: tuple[DailyConditionEvidence | UnifiedConditionEvidence, ...]
     plan_version_id: str
     review_id: str
     basis_id: str
@@ -102,6 +112,13 @@ class DailySignalState(DailyValue):
     blockers: tuple[str, ...]
     reset_trade_date: date | None = None
     risk_invalidated: bool = False
+    confirmation_kind: Literal["OFFICIAL_DAILY_CLOSE", "COMPLETED_BAR_CLOSE"] = (
+        "OFFICIAL_DAILY_CLOSE"
+    )
+    execution_window: Literal["NEXT_EXCHANGE_SESSION_ONLY", "CURRENT_SESSION"] = (
+        "NEXT_EXCHANGE_SESSION_ONLY"
+    )
+    confirmed_at: ShanghaiDatetime | None = None
     revision: Qty | None = None
 
     @model_validator(mode="after")
@@ -110,9 +127,16 @@ class DailySignalState(DailyValue):
             self.simulated_qty not in {0, self.planned_qty}
             or self.executable_qty not in {0, self.planned_qty}
             or (self.state == "SIMULATED") != (self.simulated_qty == self.planned_qty)
-            or self.risk_invalidated and self.executable_qty != 0
-            or self.state in {"EXPIRED", "INVALIDATED", "SIMULATED"} and self.executable_qty != 0
-            or self.execution_date is not None and self.execution_date <= self.confirmed_trade_date
+            or self.risk_invalidated
+            and self.executable_qty != 0
+            or self.state in {"EXPIRED", "INVALIDATED", "SIMULATED"}
+            and self.executable_qty != 0
+            or self.execution_date is not None
+            and (
+                self.execution_date < self.confirmed_trade_date
+                or self.execution_date == self.confirmed_trade_date
+                and self.execution_window != "CURRENT_SESSION"
+            )
         ):
             raise ValueError("stored signal has inconsistent atomic consumption/window")
         return self
@@ -146,6 +170,7 @@ class DailyRiskState(DailyValue):
     cause_cutover_at: ShanghaiDatetime | None = None
     consumed_evidence_ids: tuple[str, ...] = ()
     fulfilled_at: ShanghaiDatetime | None = None
+    technical_evidence: tuple[UnifiedConditionEvidence, ...] = ()
 
     @model_validator(mode="after")
     def branch(self):
@@ -249,9 +274,20 @@ def validate_daily_payload(kind, value):
     if model is not None:
         model.model_validate(value)
     elif kind == "EXTRACTION":
-        from trade_plan_monitor.ai.daily_extraction import DailyExtractionResult
+        from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionResult
+        from trade_plan_monitor.domain.daily_plan_validation import DailyPlanDraft
 
-        DailyExtractionResult.model_validate(value)
+        class HistoricalExtractionEvidence(CurrentPlanExtractionResult):
+            """Decode frozen Schema4 audit bytes without enabling an extraction workflow."""
+
+            draft: DailyPlanDraft
+
+        model = (
+            CurrentPlanExtractionResult
+            if value.get("draft", {}).get("schema_version") == 5
+            else HistoricalExtractionEvidence
+        )
+        model.model_validate(value)
     elif kind == "EVALUATION":
         validate_daily_evaluation(value)
     elif kind == "REASSESSMENT":
@@ -263,7 +299,11 @@ def validate_daily_payload(kind, value):
         }:
             raise ValueError("invalid reassessment audit")
         DailyRiskState.model_validate(value["prior_risk"]["payload"])
-        DailyOfficialProof.model_validate(value["removal_evidence"])
+        proof = value["removal_evidence"]
+        if isinstance(proof, str):
+            require_technical_text(proof)
+        else:
+            DailyOfficialProof.model_validate(proof)
     else:
         raise ValueError("unknown daily record kind")
 
@@ -326,6 +366,17 @@ class DailyFactRevision(DailyValue):
     revision: Qty
 
 
+class DailyRuleReminderState(DailyValue):
+    rule_id: str
+    alert_kind: Literal["RISK_ALERT"]
+    cause_id: str | None
+    outcome: Literal["SATISFIED", "UNSATISFIED", "MISSING_INPUT"]
+    confirmation_kind: Literal["OFFICIAL_DAILY_CLOSE", "COMPLETED_BAR_CLOSE"]
+    confirmed_trade_date: date | None
+    confirmed_at: ShanghaiDatetime | None
+    evidence: tuple[dict, ...] = Field(max_length=1)
+
+
 class DailyEvaluationState(DailyValue):
     symbol: str
     plan_version_id: str
@@ -338,14 +389,30 @@ class DailyEvaluationState(DailyValue):
     inventory: DailyInventoryView
     fact_revisions: tuple[DailyFactRevision, ...]
     signals: tuple[DailySignalState, ...] = Field(max_length=500)
+    alerts: tuple[DailyRuleReminderState, ...] = Field(default=(), max_length=10)
     risks: tuple[DailyRiskState, ...] = Field(max_length=2)
     risk_action: DailyRiskAction
+    risk_input_known: bool | None = None
     data_blockers: tuple[str, ...]
     daily_evidence: DailySeries | None
     quote: DailyExecutionQuote | None
+    minute_target: ShanghaiDatetime | None = None
+    runtime_generation: str | None = None
+    minute_prefix: tuple[MinuteBar, ...] = Field(default=(), max_length=240)
+    five_minute_bars: tuple[FiveMinuteBar, ...] = Field(default=(), max_length=1000)
     next_action: Literal[
         "REVIEW_RISK_EXIT", "CONFIRM_SIMULATED_TRADE", "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION"
     ]
+
+    @field_validator("minute_prefix", "five_minute_bars", mode="before")
+    @classmethod
+    def market_json(cls, value, info):
+        import json
+
+        model = MinuteBar if info.field_name == "minute_prefix" else FiveMinuteBar
+        return tuple(
+            model.model_validate_json(json.dumps(v)) if isinstance(v, dict) else v for v in value
+        )
 
     @model_validator(mode="after")
     def availability(self):

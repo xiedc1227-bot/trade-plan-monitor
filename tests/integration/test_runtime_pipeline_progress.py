@@ -76,7 +76,7 @@ def test_only_installed_retry_disposition_can_complete_failure(retry_installed):
 
 
 def test_real_explicit_pipeline_reports_individual_committed_units(tmp_path, monkeypatch):
-    import test_explicit_runtime_production as fixture
+    from tests.integration import current_pipeline_fixture as fixture
 
     from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 
@@ -92,7 +92,7 @@ def test_real_explicit_pipeline_reports_individual_committed_units(tmp_path, mon
     monkeypatch.setattr(fixture, "ProductionMonitorPipeline", build)
 
     async def scenario():
-        engine, _, _, _, _, controller, pipeline, _ = fixture._pipeline_fixture(
+        engine, _, _, _, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
             tmp_path, monkeypatch, current_volume=300,
         )
         try:
@@ -185,10 +185,10 @@ def test_cancelled_real_worker_cannot_complete_progress_before_physical_drain(
 ):
     from threading import Event
 
-    import test_explicit_runtime_production as fixture
+    from tests.integration import current_pipeline_fixture as fixture
 
     async def scenario():
-        engine, _, _, _, _, controller, pipeline, _ = fixture._pipeline_fixture(
+        engine, _, _, _, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
             tmp_path, monkeypatch, current_volume=300,
         )
         owner = Owner(pipeline._clock)

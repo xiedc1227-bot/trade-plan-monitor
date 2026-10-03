@@ -13,7 +13,7 @@ const scopeKeys = ["scopeKey", "kind", "status", "reasonCode", "requiredTarget",
 export const planIdentityKeys = ["symbol", "planFamily", "planVersionId", "planHash", "activationRevision"];
 
 export function isPlanIdentity(value: Record<string, unknown>): boolean {
-  return symbol(value.symbol) && oneOf(value.planFamily, ["LEGACY_LOW_BUY", "EXPLICIT_RULES"]) && uuid(value.planVersionId) && hash(value.planHash) && integer(value.activationRevision) && value.activationRevision > 0;
+  return symbol(value.symbol) && oneOf(value.planFamily, ["LEGACY_LOW_BUY", "EXPLICIT_RULES", "CONDITION_PLAN"]) && uuid(value.planVersionId) && hash(value.planHash) && integer(value.activationRevision) && value.activationRevision > 0;
 }
 
 export function isRuntimeScope(value: unknown, observedAt: string): boolean {

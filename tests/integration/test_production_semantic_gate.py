@@ -12,10 +12,9 @@ from test_live_pipeline_acceptance import (
     ControlledClock,
     OfflineSDK,
     VirtualPace,
-    _activate_plans,
-    _sample_plan,
     _write_configuration_and_evidence,
 )
+from tests.integration.current_activation_fixture import seed_current
 
 from trade_plan_monitor.config import load_application_config
 from trade_plan_monitor.live_profiles import read_stock_certification_history
@@ -74,9 +73,7 @@ def _pipeline(tmp_path, monkeypatch, *, stock=True, index=True, swapped=False, w
     if swapped:
         stock_binding, index_binding = index_binding, stock_binding
     if with_plan:
-        _activate_plans(
-            tmp_path / "monitor.sqlite3", ControlledClock(NOW.replace(hour=9)), (_sample_plan(),)
-        )
+        seed_current(tmp_path, clock=ControlledClock(NOW.replace(hour=9)))
     engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
     upgrade_database(engine)
     sessions = create_session_factory(engine)
@@ -144,16 +141,21 @@ def test_old_evidence_allows_current_request_only_with_valid_injected_semantics(
 
 
 def test_index_head_does_not_commit_after_configuration_drifts_during_staging(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     async def scenario():
         with _pipeline(tmp_path, monkeypatch, stock=False, index=True) as (
-            pipeline, _sdk, _directory, _sdk_version, _work,
+            pipeline,
+            _sdk,
+            _directory,
+            _sdk_version,
+            _work,
         ):
             config = tmp_path / "config/app.yaml"
             frozen = load_application_config(config).tushare
-            pipeline._configuration_current = (
-                lambda: load_application_config(config).tushare == frozen
+            pipeline._configuration_current = lambda: (
+                load_application_config(config).tushare == frozen
             )
             original_put = ProjectionRepository.put_market_index_snapshot
             changed = False
