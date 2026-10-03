@@ -1413,7 +1413,7 @@ class _FakePlanOperationService:
             "completedAt": _API_NOW,
             "sourceTextSha256": result.source_text_sha256,
             "model": "example-model",
-            "promptVersion": "plan-extract-v8",
+            "promptVersion": "plan-extract-v9",
             "draftPlanJson": plan_json,
             "dailyMapping": result.daily_mapping.model_dump(mode="json"),
             "evidence": [],

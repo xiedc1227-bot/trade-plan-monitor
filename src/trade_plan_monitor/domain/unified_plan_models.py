@@ -128,6 +128,16 @@ class UnifiedMonitoring(DailyValue):
     macd_min_observations: int = Field(strict=True, ge=1, le=500)
 
 
+class PlanActiveValidity(DailyValue):
+    """Ordinary rule authority follows explicit plan activation."""
+
+    mode: Literal["PLAN_ACTIVE"]
+
+
+# A plain union keeps historical DailyValidity's omitted DATE_RANGE mode valid.
+UnifiedValidity = PlanActiveValidity | DailyValidity
+
+
 class UnifiedRule(DailyValue):
     status: Literal["ENABLED"]
     side: Literal["BUY", "SELL"]
@@ -138,7 +148,7 @@ class UnifiedRule(DailyValue):
     confirmation: UnifiedConfirmation
     execution_window: Literal["NEXT_EXCHANGE_SESSION_ONLY", "CURRENT_SESSION"]
     zone: Literal["LOW_BUY", "PRESSURE"] | None
-    validity: DailyValidity
+    validity: UnifiedValidity
     invalidation: Literal["RISK_OR_REVIEWED_INVALIDATION"]
     independent_signal: UnifiedIndependentSignal
 

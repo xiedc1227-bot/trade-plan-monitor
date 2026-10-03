@@ -258,7 +258,114 @@ def _contract_values(draft):
         "schema_version": 5,
         "execution_mode": "CONDITION_PLAN",
         "execution_version": "condition-plan-v1",
+        **({"activation.mode": "MANUAL"}
+           if draft.activation is not None and draft.activation.mode == "MANUAL" else {}),
+        **{f"ordinary_rules[{index}].validity.mode": "PLAN_ACTIVE"
+           for index, rule in enumerate(draft.ordinary_rules)
+           if rule.validity is not None and rule.validity.mode == "PLAN_ACTIVE"},
     }
+
+
+def _persistent_deadline_issues(draft, mapping):
+    """Guard recognizable source limits only for new persistent/default authority.
+
+    This deliberately does not change reconstruction of historical dated reviews.
+    Exact clause review remains responsible for meaning outside these narrow cues.
+    A scoped human conversion must quote each affected clause in its reason.
+    """
+    if draft.schema_version != 5:
+        return ()
+    paths = {f"ordinary_rules[{i}].validity.mode": rule.side
+             for i, rule in enumerate(draft.ordinary_rules)
+             if rule.validity is not None and rule.validity.mode == "PLAN_ACTIVE"}
+    if not paths:
+        return ()
+    limit = re.compile(
+        r"(?:规则|计划|买入|卖出|交易).{0,24}(?:有效至|有效期|截止|到期|仅限|期限)"
+        r"|(?:有效至|截止日期|到期日期|有效期限)"
+        r"|直到人工停用或(?=\d{4}[-年]|未来|本周|下周)"
+        r"|\b(?:rule|plan|buy|sell|trade).{0,32}\b(?:expires?|until|deadline|only for)\b",
+        re.IGNORECASE,
+    )
+    supplements = {s.supplement_id: s for s in mapping.supplements}
+    issues = []
+    for clause in mapping.clauses:
+        lifetime = re.sub(
+            r"(?:计划|规则)?有效(?:期限|期)[：:]?\s*持续有效"
+            r"(?:(?:[，,]\s*)?直到人工停用(?:或(?:审核启用新版本替换|新版本正式替换))?"
+            r"|(?!(?:[，,]\s*)?直到人工))(?=[，,。；;\n]|$)", "", clause.excerpt)
+        lifetime = re.sub(
+            r"\buntil\s+(?:(?:manually deactivated|manual deactivation)"
+            r"(?: or replaced by a reviewed (?:new )?version)?|"
+            r"replaced by a reviewed (?:new )?version)(?=\s*[.;,\n]|$)",
+            "", lifetime, flags=re.I)
+        # Remove only a recognized local occurrence window. Never exempt the whole
+        # fragment: another cutoff can occur before or after it without punctuation.
+        lifetime = re.sub(
+            r"单(?:次|个)(?:日线|买入|卖出)?(?:信号|指令)(?:的)?"
+            r"(?:有效执行窗口)?(?:仅限|仅|只在)?(?:确认后的)?"
+            r"下一(?:个)?交易日(?:收盘前|收盘)?(?:可执行|执行|有效)", "", lifetime)
+        lifetime = re.sub(
+            r"\b(?:a )?single(?:[- ](?:buy|sell))?[- ]signal "
+            r"(?:executes? )?only (?:for )?next (?:trading day|(?:exchange )?session)\b",
+            "", lifetime, flags=re.I)
+        fragments = re.split(r"[。；;,，\n]", lifetime)
+        scoped = r"规则|计划|买入|卖出|\brule\b|\bplan\b|\bbuy\b|\bsell\b"
+        limited = []
+        for part in fragments:
+            cue = limit.search(part)
+            if cue is None:
+                continue
+            if (re.search(r"报告|行情|数据|指标|资料|证据|\breport\b|\bevidence\b", part, re.I)
+                    and not re.search(scoped, part, re.I)):
+                continue
+            limited.append(part)
+        unresolved = set()
+        for part in limited:
+            dates = set(re.findall(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)", part))
+            date_bindings = [b for b in mapping.bindings if b.origin == "SOURCE"
+                             and clause.clause_id in b.clause_ids
+                             and re.fullmatch(
+                                 r"(?:activation|ordinary_rules\[\d+\]\.validity)"
+                                 r"\.(?:start_date|end_date)", b.path)]
+            # A start date cannot discharge a cutoff; one retained restriction cannot
+            # hide a second deadline or an ambiguous relative duration in its clause.
+            sides = {side for side, cue in (("BUY", r"买入|\bbuy\b"),
+                                           ("SELL", r"卖出|\bsell\b"))
+                     if re.search(cue, part, re.I)}
+            plan_limit = bool(re.search(r"计划|\bplan\b", part, re.I)) and not (
+                sides or re.search(r"规则|\brule\b", part, re.I))
+            for path, side in paths.items():
+                if sides and side not in sides:
+                    continue
+                prefix = "activation" if plan_limit else path.removesuffix(".mode")
+                if dates and (
+                    dates <= {b.value for b in date_bindings if b.path.startswith(prefix + ".")}
+                    and any(b.path == prefix + ".end_date" and b.value in dates
+                            for b in date_bindings)
+                ):
+                    continue
+                unresolved.add(path)
+        if not unresolved:
+            continue
+        pending = []
+        for path in sorted(unresolved):
+            binding = next((b for b in mapping.bindings if b.path == path), None)
+            supplement = None if binding is None else supplements.get(binding.supplement_id)
+            if (binding is not None and binding.origin == "HUMAN_SUPPLEMENT"
+                    and supplement is not None and clause.excerpt in supplement.reason
+                    and re.search(r"改为持续有效|convert to PLAN_ACTIVE", supplement.reason)):
+                continue
+            pending.append(path)
+        if pending:
+            issues.append({"path": "source." + clause.clause_id,
+                           "code": "PLAN_SOURCE_TIME_LIMIT_REQUIRED",
+                           "reason": "受影响参数：" + ", ".join(pending)
+                           + "。保留原文期限为DATE_RANGE或待确认；"
+                           "如需改为持续有效，"
+                           "请在该规则有效期模式的人工补充理由中引用完整原句并写明“改为持续有效”，"
+                           "重新审核后明确启用。"})
+    return tuple(issues)
 
 
 def daily_contract_bindings(draft):
@@ -414,6 +521,7 @@ def build_daily_review(draft, mapping, source_text):
     if used != set(supplements):
         raise ValueError("orphan human supplement")
     issues = list(daily_draft_issues(draft))
+    issues.extend(_persistent_deadline_issues(draft, mapping))
     unbound_paths = values.keys() - bound
     for path in sorted(unbound_paths) if draft.schema_version == 5 else unbound_paths:
         issues.append(

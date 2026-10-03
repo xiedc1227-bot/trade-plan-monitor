@@ -12,7 +12,7 @@ from tests.integration.test_web_api import _FakeLifecycle
 from tests.unit.test_daily_review import reviewed_mapping
 from tests.unit.test_unified_plan_domain import unified_payload
 
-from trade_plan_monitor.ai.daily_review import daily_source_clauses
+from trade_plan_monitor.ai.daily_review import daily_contract_bindings, daily_source_clauses
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, dump_plan_yaml
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
@@ -27,12 +27,14 @@ SOURCE = "Synthetic human-reviewed supplements for this fixture."
 def simple_plan():
     raw = unified_payload()
     raw.update(levels=None, monitoring=None, risk_branches=[])
+    raw["activation"] = {"mode": "MANUAL"}
     raw["position"] = {"max_qty": 1000}
     raw["ordinary_rules"][0].update(
         zone=None,
         condition={"type": "MINUTE_CLOSE_BELOW", "timeframe_minutes": 5, "price_fen": 4000},
         confirmation={"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
         execution_window="CURRENT_SESSION",
+        validity={"mode": "PLAN_ACTIVE"},
     )
     return UnifiedTradePlan.model_validate(raw)
 
@@ -108,12 +110,12 @@ def make_app(tmp_path, *, ai=False):
 
         def provider(request):
             messages = json.loads(request.content)["messages"]
-            assert "plan-extract-v8" in messages[0]["content"]
+            assert "plan-extract-v9" in messages[0]["content"]
             draft = UnifiedPlanDraft.from_executable(simple_plan())
             output = {
                 "draft": draft.model_dump(mode="json"),
                 "clauses": [c.model_dump(mode="json") for c in daily_source_clauses(SOURCE)],
-                "bindings": [],
+                "bindings": [b.model_dump(mode="json") for b in daily_contract_bindings(draft)],
             }
             return httpx.Response(
                 200,
@@ -162,7 +164,12 @@ def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
             if result["status"] not in {"QUEUED", "RUNNING"}:
                 break
         assert result["status"] == "SUCCEEDED"
-        assert result["promptVersion"] == "plan-extract-v8"
+        assert result["promptVersion"] == "plan-extract-v9"
+        extracted = json.loads(result["draftPlanJson"])
+        assert extracted["activation"] == {"mode": "MANUAL"}
+        assert extracted["ordinary_rules"][0]["validity"] == {"mode": "PLAN_ACTIVE"}
+        assert not any(i["path"] in {"activation.mode", "ordinary_rules[0].validity.mode"}
+                       for i in result["validationIssues"])
         assert result["validationIssues"]
         saved_unresolved = post(
             client,
@@ -224,6 +231,7 @@ def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
         )
         assert changed_source["sourceHash"] != saved["sourceHash"]
         assert changed_source["reviewId"] is None and not changed_source["canActivate"]
+        assert client.get("/api/v1/plan-activation-states/601021.SH").json() == active
         stale = {**active_command, "planVersionId": changed_source["id"], "expectedRevision": 1}
         post(client, "plan-activations", stale, expected=409)
         post(
@@ -232,6 +240,14 @@ def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
             review_payload(saved, expectedRevision=0),
             expected=409,
         )
+        replacement_review = post(
+            client, "plan-review-confirmations", review_payload(changed_source))
+        assert client.get("/api/v1/plan-activation-states/601021.SH").json() == active
+        replacement_active = post(client, "plan-activations", review_payload(
+            changed_source, reviewId=replacement_review["reviewId"], reviewRevision=1,
+            expectedRevision=1))
+        assert replacement_active["revision"] == 2
+        assert replacement_active["planVersionId"] == changed_source["id"]
 
 
 @pytest.mark.parametrize("format", ["JSON", "YAML"])

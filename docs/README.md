@@ -4,7 +4,7 @@
 
 English documents are canonical implementation inputs; matching `.zh-CN.md` files are equivalent Chinese review copies. Use the [project README](../README.md) for installation and routine checks, the [capability map](architecture/CAPABILITY-MAP.md) for module boundaries, and [One Trade Plan Workflow](specifications/monitoring/SPEC-unified-plan.md) for current product behavior.
 
-One `/plans` workspace uses Schema 5 and `plan-extract-v8`: source → draft → edit/review → explicit activation → mixed daily/five-minute monitoring → reminders and explicit whole-trade simulation. Fundamentals are generation-time review only. Alerts/acknowledgement never change inventory. Frozen Schema 1–4 readers and independent research retain their original bytes/hashes; they cannot authorize new live operations.
+One `/plans` workspace uses Schema 5 and `plan-extract-v9`: source → draft → edit/review → explicit activation → mixed daily/five-minute monitoring → reminders and explicit whole-trade simulation. Fundamentals are generation-time review only. Alerts/acknowledgement never change inventory. Frozen Schema 1–4 readers and independent research retain their original bytes/hashes; they cannot authorize new live operations.
 
 Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-status.json`](../openapi.runtime-status.json). The installed entry uses monitor contract `2`. Local acceptance does not certify live-provider availability, user-database migration, manual NVDA review or deployment; these remain separate verification work.
 

@@ -8,7 +8,7 @@
 
 | Module ID | 职责 | 依赖 |
 |---|---|---|
-| `plan-domain`, `ai-plan-drafting` | 当前类型化计划、原文证据、遗漏与准确人工审核；`plan-extract-v8` 仅负责提取 | `local-web`, `strategy-state` |
+| `plan-domain`, `ai-plan-drafting` | 当前类型化计划、原文证据、遗漏与准确人工审核；`plan-extract-v9` 仅负责提取 | `local-web`, `strategy-state` |
 | `market-data`, `index-identity`, `index-data` | 已认证归一化、日历、正式日线/完整分钟证据及共用参考指数事实 | `provider-contract` |
 | `decision-engine` | 纯函数、精确、原文定义的条件求值；当前与冻结重放契约分离 | `plan-domain`, `market-data` |
 | `strategy-state`, `live-state-store` | 不可变计划/审核身份、限定范围事实、完成证明及原子隔离模拟记账 | `decision-engine` |

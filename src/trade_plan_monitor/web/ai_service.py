@@ -258,7 +258,7 @@ class ConfiguredAIWebLifecycle:
                 result = await extract_plan(
                     request_id=operation_id,
                     source_text=source_text,
-                    config=binding.config.model_copy(update={"prompt_version": "plan-extract-v8"}),
+                    config=binding.config.model_copy(update={"prompt_version": "plan-extract-v9"}),
                     provider=binding.provider,
                 )
                 completed_at = _now()

@@ -41,7 +41,7 @@ def _config(*, timeout_seconds: int = 5) -> AIProviderConfig:
         max_input_chars=75_000,
         max_output_tokens=128,
         temperature=0,
-        prompt_version="plan-extract-v8",
+        prompt_version="plan-extract-v9",
     )
 
 

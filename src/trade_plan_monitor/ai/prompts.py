@@ -9,7 +9,7 @@ PLAN_EXTRACTION_PROMPT_V3: Final = "plan-extract-v3"
 PLAN_EXTRACTION_PROMPT_V4: Final = "plan-extract-v4"
 PLAN_EXTRACTION_PROMPT_V5: Final = "plan-extract-v5"
 PLAN_EXTRACTION_PROMPT_V6: Final = "plan-extract-v6"
-PLAN_EXTRACTION_PROMPT_VERSION: Final = "plan-extract-v8"
+PLAN_EXTRACTION_PROMPT_VERSION: Final = "plan-extract-v9"
 MAX_SOURCE_TEXT_CHARS: Final = 150_000
 
 

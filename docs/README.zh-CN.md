@@ -4,7 +4,7 @@
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
 
-单一 `/plans` 工作台使用 Schema 5 与 `plan-extract-v8`：原文 → 草稿 → 修改/审核 → 明确启用 → 日线/五分钟混合监测 → 提醒及明确整单模拟。基本面仅在生成计划时审核。提醒/已读绝不改变库存。冻结 Schema 1–4 读取与独立研究保留原有字节/哈希，不能授权新实时操作。
+单一 `/plans` 工作台使用 Schema 5 与 `plan-extract-v9`：原文 → 草稿 → 修改/审核 → 明确启用 → 日线/五分钟混合监测 → 提醒及明确整单模拟。基本面仅在生成计划时审核。提醒/已读绝不改变库存。冻结 Schema 1–4 读取与独立研究保留原有字节/哈希，不能授权新实时操作。
 
 机器 API 权威位于 [`openapi.json`](../openapi.json) 和 [`openapi.runtime-status.json`](../openapi.runtime-status.json)。安装入口使用监控协议 `2`。本地验收不认证真实供应商可用性、用户数据库迁移、人工 NVDA 审阅或部署；这些仍是单独验证工作。
 

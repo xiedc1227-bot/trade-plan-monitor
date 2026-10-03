@@ -24,6 +24,8 @@ watch(() => props.planVersionId, id => work.load(id), { immediate: true });
       <h2 id="daily-editor-title">编辑规则、周期与执行窗口</h2>
       <p>未知参数保持空白。ALL表示全部满足，ANY表示任一满足。固定参照需值、单位、日期与来源；动态参照需指标、公式与完整窗口。</p>
       <p>模拟数量统一按100股整数倍；买入后下一交易日可卖，系统计算结算日期。</p>
+      <p>普通规则默认持续有效直到人工停用或审核启用新版本替换；单次信号仍按其执行窗口到期。原文或历史日期限制保留为DATE_RANGE，不会自动转换。保存草稿不替换已启用版本。</p>
+      <p>原文有期限而改为持续有效时，在该规则有效期模式的人工补充理由中引用完整原句并写明“改为持续有效”，重新审核后明确启用。</p>
       <PlanFieldEditor :schema="schema" :definitions="definitions" path="" :model-value="candidate" :hidden-fields="[]" @update:model-value="work.edit" />
       <button type="button" :disabled="busy" @click="work.action(work.refreshPreview)">检查当前参数与来源</button>
     </section>

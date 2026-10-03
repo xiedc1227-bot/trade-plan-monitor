@@ -28,7 +28,8 @@ def current_plan(*, mixed=True, risk=False):
     raw = unified_payload()
     raw["risk_branches"] = raw["risk_branches"][:1] if risk else []
     rule = raw["ordinary_rules"][0]
-    rule.update(zone=None, confirmation={"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+    rule.update(validity={"mode": "PLAN_ACTIVE"}, zone=None,
+                confirmation={"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
                 execution_window="CURRENT_SESSION")
     minute = {"type": "MINUTE_CLOSE_BELOW", "timeframe_minutes": 5, "price_fen": 4000}
     rule["condition"] = {"type": "ALL", "conditions": [

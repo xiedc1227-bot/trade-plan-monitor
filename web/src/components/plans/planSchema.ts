@@ -35,7 +35,7 @@ export function initialValue(schema: Schema): Json {
   return null;
 }
 export const fieldLabels: Record<string, string> = {
-  symbol: "股票代码", name: "计划名称", market: "交易所", activation: "启用日期范围",
+  symbol: "股票代码", name: "计划名称", market: "交易所", activation: "计划启用方式",
   levels: "价格区间和风险线", low_buy: "低吸区间", pressure: "压力区间", low_fen: "下界（分）",
   high_fen: "上界（分）", include_low: "包含下界", include_high: "包含上界", risk_line_fen: "风险线（分）",
   risk_comparison: "风险线比较", position: "拟定仓位政策", max_qty: "最大持仓（股）", core_target_qty: "拟定CORE（股）",
@@ -48,7 +48,7 @@ export const fieldLabels: Record<string, string> = {
   trading_rules: "固定模拟交易规则", monitoring: "指标计算口径（可选）", execution_policy: "提醒执行规则",
   quantity: "计划数量（股）", status: "启用或关闭规则", side: "买入或卖出", bucket: "仓位类型",
   mode: "模式", type: "条件类型 / ALL全部满足 / ANY任一满足", threshold: "明确阈值", reference: "固定或动态参照",
-  evidence_requirement: "人工证据的明确判定要求", validity: "有效期", start_date: "开始日期", end_date: "结束日期",
+  evidence_requirement: "人工证据的明确判定要求", validity: "规则有效期", start_date: "开始日期", end_date: "结束日期",
   fact_kind: "核验事实类型", validity_scope: "事实适用范围",
   window: "窗口长度", parameters: "指标参数", reason: "具体原因", rule_id: "规则名称", conditions: "条件组", condition: "交易条件（日线 / 5分钟 / 混合）", confirmation: "确认方式", execution_window: "执行窗口", timeframe_minutes: "分钟周期", low: "下界（分）", high: "上界（分）", price_fen: "价格阈值（分）", window_bars: "5分钟成交量平均窗口", minimum_ratio: "最小量比", mean_window: "平均量窗口", ratio: "量比阈值",
   planVersionId: "当前不可变计划版本", contentHash: "当前审核内容绑定", expectedRevision: "当前记录版本",
@@ -61,6 +61,9 @@ export const fieldLabels: Record<string, string> = {
   involvesCore: "重评是否涉及CORE", scopeEvidence: "重评范围具体依据",
 };
 export const choiceLabels: Record<string, string> = {
+  PlanActiveValidity: "持续有效直到人工停用或审核启用新版本替换",
+  DailyValidity: "保留原文或历史日期限制（DATE_RANGE）",
+  PLAN_ACTIVE: "随当前计划持续有效", MANUAL: "人工启用或停用",
   ReviewedDailyFact: "人工核验条件", DailyAll: "ALL全部满足", DailyAny: "ANY任一满足",
   UnifiedAll: "ALL全部满足（日线 / 5分钟可混合）", UnifiedAny: "ANY任一满足（日线 / 5分钟可混合）",
   MinuteCloseInRange: "5分钟收盘价区间", MinuteVolumeToMeanGte: "5分钟量比", MinuteCloseBelow: "5分钟收盘价跌破",

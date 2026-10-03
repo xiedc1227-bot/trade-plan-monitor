@@ -6,7 +6,6 @@ from pydantic import Field, ValidationError
 
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyActivation,
-    DailyValidity,
     DailyValue,
     Identifier,
     PositiveWholeQty,
@@ -24,6 +23,7 @@ from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedMonitoring,
     UnifiedPositionPolicy,
     UnifiedTradePlan,
+    UnifiedValidity,
 )
 
 
@@ -37,7 +37,7 @@ class UnifiedDraftRule(DailyValue):
     confirmation: UnifiedConfirmation | None
     execution_window: Literal["NEXT_EXCHANGE_SESSION_ONLY", "CURRENT_SESSION"] | None
     zone: Literal["LOW_BUY", "PRESSURE"] | None
-    validity: DailyValidity | None
+    validity: UnifiedValidity | None
     invalidation: Literal["RISK_OR_REVIEWED_INVALIDATION"] | None
     independent_signal: UnifiedIndependentSignal | None
 
@@ -94,6 +94,19 @@ def unified_plan_issues(draft):
         UnifiedTradePlan.model_validate(draft.executable_payload())
         return ()
     except ValidationError as error:
+        errors = []
+        for item in error.errors(include_url=False, include_context=False, include_input=True):
+            location = list(item["loc"])
+            if "validity" in location and "ordinary_rules" in location:
+                index = location.index("validity")
+                branch = location[index + 1] if len(location) > index + 1 else None
+                if branch in {"PlanActiveValidity", "function-after[order(), DailyValidity]"}:
+                    validity = draft.ordinary_rules[location[1]].validity
+                    persistent = validity is not None and validity.mode == "PLAN_ACTIVE"
+                    if (branch == "PlanActiveValidity") != persistent:
+                        continue
+                    location.pop(index + 1)
+            errors.append({**item, "loc": location})
         return tuple(
             {
                 "path": ".".join(str(x) for x in e["loc"]),
@@ -102,5 +115,5 @@ def unified_plan_issues(draft):
                 else "PLAN_PARAMETER_INVALID",
                 "reason": "Supply the reviewed parameter and its source or human evidence.",
             }
-            for e in error.errors(include_url=False, include_context=False, include_input=True)
+            for e in errors
         )

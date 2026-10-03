@@ -2,7 +2,7 @@
 
 ## S01. Objective and compatibility
 
-[One Trade Plan Workflow](SPEC-unified-plan.md) governs the current Schema 5 / `plan-extract-v8` source-review path. Full source spans, unresolved meaning, human supplements and exact source/content/revision binding remain visible. Fundamentals are generation-time review background, never runtime or simulation blockers. Source-defined trading and reminder-only clauses must retain their independent meaning; inventory prose never initializes holdings.
+[One Trade Plan Workflow](SPEC-unified-plan.md) governs the current Schema 5 / `plan-extract-v9` source-review path. Full source spans, unresolved meaning, human supplements and exact source/content/revision binding remain visible. Fundamentals are generation-time review background, never runtime or simulation blockers. Source-defined trading and reminder-only clauses must retain their independent meaning; inventory prose never initializes holdings.
 
 The finite `plan-mapping-v2`, `source-processing-v1` and `plan-review-evidence-v2` treatments below document frozen historical review decoding. They do not restore prompt v1–v7 or real-position write routes. Historical v1 snapshots/hashes retain their original interpretation; exact stored derivation must remain verifiable.
 

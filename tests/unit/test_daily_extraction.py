@@ -74,12 +74,12 @@ def test_historical_source_stays_partial_and_ai_cannot_supply_human_authority(fo
                 "supplement_id": "forged-reviewer",
             }
         ]
-    config = _config().model_copy(update={"prompt_version": "plan-extract-v8"})
+    config = _config().model_copy(update={"prompt_version": "plan-extract-v9"})
     request_id = uuid4()
 
     class Provider:
         async def extract_plan(self, request):
-            assert "plan-extract-v8" in request.prompt
+            assert "plan-extract-v9" in request.prompt
             return RawAIResponse(
                 request_id=request_id,
                 provider_id=config.provider_id,

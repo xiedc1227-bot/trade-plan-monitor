@@ -37,7 +37,9 @@ def confirm_signal(
             if datetime.combine(session, time(15), target.tzinfo) <= target), None)
         if series is None or series.bars[-1].trade_date != last_official_day:
             return None
-    if not rule.validity.start_date <= day <= rule.validity.end_date:
+    if rule.validity.mode == "DATE_RANGE" and not (
+        rule.validity.start_date <= day <= rule.validity.end_date
+    ):
         return None
     evidence = evaluate_unified_condition(
         rule.condition,

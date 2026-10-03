@@ -262,7 +262,7 @@ def test_sealed_prompt_authorization_cannot_be_rebound_to_current_extraction(tmp
         asyncio.run(_serve("r14-20260914-a", session_root=tmp_path))
     with pytest.raises(BudgetDenied):
         asyncio.run(
-            _serve("r14-20260914-a", session_root=tmp_path, prompt_version="plan-extract-v8")
+            _serve("r14-20260914-a", session_root=tmp_path, prompt_version="plan-extract-v9")
         )
     assert list(tmp_path.iterdir()) == []
 

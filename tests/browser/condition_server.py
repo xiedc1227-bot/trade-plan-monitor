@@ -24,6 +24,7 @@ from tests.integration.test_web_api import _runtime_health_payload
 from tests.unit.test_ai_plan_extraction_v4 import _config
 
 from trade_plan_monitor.ai.composition import ConfiguredAIProviderBinding
+from trade_plan_monitor.ai.daily_review import daily_contract_bindings
 from trade_plan_monitor.ai.models import AIProviderProfile
 from trade_plan_monitor.ai.provider import AIUsage, RawAIResponse
 from trade_plan_monitor.ai.review import server_source_clauses
@@ -46,7 +47,7 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
     """Only the external provider is injected; the extraction lifecycle stays real."""
 
     async def start(self):
-        config = _config().model_copy(update={"prompt_version": "plan-extract-v8"})
+        config = _config().model_copy(update={"prompt_version": "plan-extract-v9"})
         owner = self
 
         class Provider:
@@ -54,7 +55,8 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
                 raw = UnifiedPlanDraft.from_executable(owner.plan).model_dump(mode="json")
                 output = {
                     "draft": raw,
-                    "bindings": [],
+                    "bindings": [b.model_dump(mode="json") for b in daily_contract_bindings(
+                        UnifiedPlanDraft.from_executable(owner.plan))],
                     "clauses": [
                         {
                             "clause_id": c.clause_id,

@@ -1,6 +1,6 @@
 # Frozen Plan Domain and Replay Compatibility
 
-> Frozen Schema 1–4 compatibility reference. New live extraction, review, activation and simulation use [One Trade Plan Workflow](SPEC-unified-plan.md), Schema 5 and `plan-extract-v8`. The model/rule meanings below apply only to historical readers and isolated research replay; they do not expose old live commands or authorize activation. Existing bytes, hashes, review evidence and research identities must remain unchanged.
+> Frozen Schema 1–4 compatibility reference. New live extraction, review, activation and simulation use [One Trade Plan Workflow](SPEC-unified-plan.md), Schema 5 and `plan-extract-v9`. The model/rule meanings below apply only to historical readers and isolated research replay; they do not expose old live commands or authorize activation. Existing bytes, hashes, review evidence and research identities must remain unchanged.
 
 ## Public Contract
 

@@ -254,7 +254,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       isBoundedToken(value.promptVersion, 64) &&
       isBoundedText(value.draftPlanJson, 4 * 1024 * 1024) &&
       Array.isArray(value.evidence) &&
-      (value.promptVersion === "plan-extract-v8"
+      ((value.promptVersion === "plan-extract-v9" || value.promptVersion === "plan-extract-v8")
         ? value.evidence.length === 0 && isRecord(value.dailyMapping) && value.mapping == null
         : ["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"].includes(value.promptVersion)
         ? value.evidence.length === 0 && isExtractionMapping(value.mapping)

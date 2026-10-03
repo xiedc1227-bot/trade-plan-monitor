@@ -339,12 +339,12 @@ def test_current_extraction_keeps_missing_review_and_mixed_conditions_visible():
             for c in server_source_clauses(source)
         ],
     }
-    config = _config().model_copy(update={"prompt_version": "plan-extract-v8"})
+    config = _config().model_copy(update={"prompt_version": "plan-extract-v9"})
     identity = uuid4()
 
     class Provider:
         async def extract_plan(self, request):
-            assert "plan-extract-v8" in request.prompt
+            assert "plan-extract-v9" in request.prompt
             return RawAIResponse(
                 request_id=identity,
                 provider_id=config.provider_id,

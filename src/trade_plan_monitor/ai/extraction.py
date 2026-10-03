@@ -61,7 +61,7 @@ async def extract_plan(
 ) -> PlanExtractionResult:
     """Extract one review-only draft without persistence or activation side effects."""
 
-    config = config.model_copy(update={"prompt_version": "plan-extract-v8"})
+    config = config.model_copy(update={"prompt_version": "plan-extract-v9"})
     prompt = build_plan_extraction_prompt(
         source_text,
         prompt_version=config.prompt_version,

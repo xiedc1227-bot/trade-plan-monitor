@@ -38,7 +38,8 @@ def current_three_rule_plan(*, overlapping_risk=False):
     raw.update(symbol="003043.SZ", market="SZSE", levels=None, monitoring=None,
                risk_branches=[])
     base = raw["ordinary_rules"][0]
-    base.update(zone=None, confirmation={"kind": "COMPLETED_BAR_CLOSE",
+    base.update(validity={"mode": "PLAN_ACTIVE"}, zone=None,
+        confirmation={"kind": "COMPLETED_BAR_CLOSE",
         "timeframe_minutes": 5}, execution_window="CURRENT_SESSION")
     base["condition"] = {"type": "ALL", "conditions": [
         {"type": "MINUTE_CLOSE_IN_RANGE", "timeframe_minutes": 5,

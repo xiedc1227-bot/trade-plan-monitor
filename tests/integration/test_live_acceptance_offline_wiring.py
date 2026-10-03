@@ -269,7 +269,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
         + "  additional_models:\n"
         + "    - display_name: DeepSeek Pro\n"
         + "      model: deepseek-v4-pro\n"
-        + "  prompt_version: plan-extract-v8\n"
+        + "  prompt_version: plan-extract-v9\n"
         + "  api_key: offline-test-key\n",
         encoding="utf-8",
     )
@@ -684,7 +684,7 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
         config.read_text("utf-8")
         + "ai:\n  profile: DEEPSEEK\n  model: deepseek-flash\n"
         + "  additional_models:\n    - display_name: DeepSeek Pro\n"
-        + "      model: deepseek-v4-pro\n  prompt_version: plan-extract-v8\n"
+        + "      model: deepseek-v4-pro\n  prompt_version: plan-extract-v9\n"
         + "  api_key: offline-test-key\n",
         encoding="utf-8",
     )

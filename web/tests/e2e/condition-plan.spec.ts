@@ -66,6 +66,9 @@ test("one production workspace extracts, edits mixed periods, reviews, explicitl
   expect(saved.canActivate).toBe(false);
   const document = JSON.parse(saved.planJson);
   expect(document.schema_version).toBe(5);
+  expect(document.ordinary_rules[0].validity).toEqual({ mode: "PLAN_ACTIVE" });
+  await expect(page.locator('[id="daily-.ordinary_rules[0].validity"]')).toHaveValue("0");
+  await expect(page.locator('[id="daily-.ordinary_rules[0].validity.end_date"]')).toHaveCount(0);
   expect(document.ordinary_rules[0].condition.conditions.map((leaf: { type: string }) => leaf.type)).toEqual(["DAILY_PRICE_COMPARE", "MINUTE_CLOSE_BELOW"]);
   expect(document.alert_rules).toMatchObject([{ kind: "RISK_ALERT", rule_id: "five-minute-low-risk",
     condition: { type: "MINUTE_CLOSE_BELOW", price_fen: 950 } }]);

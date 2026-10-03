@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAIPlanApi } from "../../src/api/ai";
+import partialExtraction from "../fixtures/ai-partial-extraction.json";
 
 const runtime = {
   baseUrl: "https://api.deepseek.com/",
@@ -15,6 +16,14 @@ const runtime = {
 };
 
 describe("AI plan API", () => {
+  it("reads frozen v8 current-family responses without changing their draft or mapping", async () => {
+    const result = { ...partialExtraction, promptVersion: "plan-extract-v8" };
+    const api = createAIPlanApi(vi.fn(async () => jsonResponse(result)) as typeof fetch);
+    await expect(api.getExtraction(result.id)).resolves.toMatchObject({
+      promptVersion: "plan-extract-v8", draftPlanJson: result.draftPlanJson,
+      dailyMapping: result.dailyMapping,
+    });
+  });
   it.each(["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"])(
     "accepts %s mapping while rejecting a result with neither mapping nor evidence",
     async (promptVersion) => {

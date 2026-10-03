@@ -8,7 +8,7 @@ A local single-user application binds to `127.0.0.1` and monitors at most 10 A-s
 
 | Module ID | Responsibility | Depends on |
 |---|---|---|
-| `plan-domain`, `ai-plan-drafting` | Current typed plan, source evidence, omissions and exact human review; `plan-extract-v8` performs extraction only | `local-web`, `strategy-state` |
+| `plan-domain`, `ai-plan-drafting` | Current typed plan, source evidence, omissions and exact human review; `plan-extract-v9` performs extraction only | `local-web`, `strategy-state` |
 | `market-data`, `index-identity`, `index-data` | Certified normalization, calendar, official daily/complete minute evidence and shared informational index facts | `provider-contract` |
 | `decision-engine` | Pure, exact, source-defined condition evaluation; current and frozen replay contracts stay separate | `plan-domain`, `market-data` |
 | `strategy-state`, `live-state-store` | Immutable plan/review identities, scoped facts, completion proofs and atomic isolated simulation accounting | `decision-engine` |
