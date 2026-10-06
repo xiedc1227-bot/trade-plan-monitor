@@ -12,16 +12,9 @@ Incrementally acquire explicitly authorized historical A-share facts, store immu
 
 One dataset may contain 1–10 symbols so synchronized facts can be reused, but `backtest-engine` still runs one reviewed plan version and one symbol at a time. Historical `stk_mins` evidence remains independent of live `rt_min` and `rt_min_daily`; this module cannot complete `T058`.
 
-## Commands
+## Operation entry points
 
-The existing compatibility commands remain:
-
-```powershell
-python -m trade_plan_monitor backtest sync --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31 --allow-network
-python -m trade_plan_monitor backtest verify --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31
-```
-
-`sync` is the only network-capable operation. `verify`, coverage inspection, dataset listing, and frozen reads are local-only. Long-running Web submissions are owned by `backtest-jobs`, not by this command adapter.
+Web/API submits `DATA_SYNC` and `DATASET_VERIFY` through `backtest-jobs`. Only explicitly authorized `DATA_SYNC` may access the network. Verification, coverage inspection, dataset listing, and frozen reads are local-only. No backtest CLI adapter remains.
 
 ## Public Contracts
 
@@ -60,7 +53,7 @@ Cancellation is cooperative. Sync checks before each provider call, after each r
 
 ## Security and Observability
 
-Trust boundaries are the Web/CLI scope, environment secret reference, provider responses, and on-disk SQLite content. Assets are the Tushare credential, immutable historical facts, dataset identities, and local storage availability.
+Trust boundaries are the Web/API scope, environment secret reference, provider responses, and on-disk SQLite content. Assets are the Tushare credential, immutable historical facts, dataset identities, and local storage availability.
 
 - Require explicit network authorization and an environment secret reference for every sync submission.
 - Never persist or log tokens, authorization headers, raw provider bodies, rejected payloads, database paths from a Web request, or stack traces.
@@ -80,7 +73,7 @@ Trust boundaries are the Web/CLI scope, environment secret reference, provider r
 
 ## Project Structure
 
-Historical provider interfaces and Tushare mapping stay under `src/trade_plan_monitor/market_data/`. Dataset identity, synchronization, storage, canonicalization, and storage guards stay under `src/trade_plan_monitor/backtest/`. CLI composition stays in `src/trade_plan_monitor/cli.py`. This logical module split does not require moving working files solely to mirror a documentation name.
+Historical provider interfaces and Tushare mapping stay under `src/trade_plan_monitor/market_data/`. Dataset identity, synchronization, storage, canonicalization, and storage guards stay under `src/trade_plan_monitor/backtest/`. Worker operations are composed in `src/trade_plan_monitor/backtest/application.py`. This logical module split does not require moving working files solely to mirror a documentation name.
 
 ## Code Style
 

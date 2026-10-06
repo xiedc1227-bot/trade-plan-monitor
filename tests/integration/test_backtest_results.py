@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from trade_plan_monitor.backtest.application import BacktestApplicationService
+from trade_plan_monitor.backtest.composition import create_backtest_composition
 from trade_plan_monitor.backtest.dataset import DatasetManifest, DatasetScope
 from trade_plan_monitor.backtest.jobs import BacktestJobRepository
 from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
@@ -44,9 +44,11 @@ _SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 def test_backtest_storage_domains_reject_aliases_and_live_tables(tmp_path) -> None:
-    with pytest.raises(ValueError, match="must be different"):
-        BacktestApplicationService(
+    with pytest.raises(ValueError, match="another storage domain"):
+        create_backtest_composition(
             config_path=tmp_path / "app.yaml",
+            plan_snapshot_reader=None,
+            cursor_key_path=tmp_path / "cursor.key",
             market_database=tmp_path / "same.sqlite3",
             results_database=tmp_path / "same.sqlite3",
         )

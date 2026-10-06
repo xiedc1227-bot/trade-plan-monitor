@@ -10,21 +10,15 @@ Replay one immutable reviewed plan version for one symbol over a frozen dataset 
 
 `backtest-engine` consumes `backtest-data` and reuses the approved `plan-domain`, `market-data`, `strategy-state`, and pure `decision-engine` contracts. It owns run input identity, event-time replay, simulated execution, metrics, and the canonical report. It does not own provider calls, mutable jobs, HTTP, Vue, result retention, or live monitoring.
 
-One run means one immutable validated plan snapshot and its one symbol. A Web submission must bind that snapshot to one RFC 4122 `planVersionId`; the CLI compatibility adapter reads a reviewed plan file and therefore uses no live plan-version lookup identity. The selected plan need not be live-active, because backtesting supports review before activation, but it must pass the same deterministic validation required for `canActivate=true`. Multi-symbol shared cash, portfolio execution, optimization, and batch comparison are outside the first release.
+One run means one immutable validated plan snapshot and its one symbol. A Web submission must bind that snapshot to one RFC 4122 `planVersionId`. The selected plan need not be live-active, because backtesting supports review before activation, but it must pass the same deterministic validation required for `canActivate=true`. Multi-symbol shared cash, portfolio execution, optimization, and batch comparison are outside the first release.
 
-## Commands
+## Operation entry points
 
-The CLI compatibility adapter remains:
-
-```powershell
-python -m trade_plan_monitor backtest run --dataset <dataset_hash> --plan config/plans/003043.SZ.sample.yaml --initial-cash-yuan 100000 --commission-rate 0.0003 --minimum-commission-yuan 5 --stamp-duty-rate 0.0005 --transfer-fee-rate 0.00001 --buy-slippage-bps 2 --sell-slippage-bps 2 --no-event-risk
-```
-
-The six fee/slippage values above are examples, not defaults. Web execution is submitted through `backtest-jobs`; replay never runs inside an HTTP request handler.
+Web/API submits `BACKTEST_RUN` through `backtest-jobs` with explicit execution costs, slippage, and research assumptions. Background workers execute frozen inputs; replay never runs inside an HTTP request handler. No backtest CLI or plan-file compatibility adapter remains.
 
 ## Public Contracts
 
-Add immutable `BacktestRunInput` and `BacktestInitialLotInput` values. `BacktestRunInput` contains `runFormulaVersion`, the canonical plan snapshot and recomputed `plan_sha256`, optional `plan_version_id: UUID | None` lookup identity, `dataset_hash`, initial cash, normalized initial lots, `ExecutionConfig`, explicit event-risk assumption, context bounds, and schema/formula versions. A Web submission requires the UUID, while the CLI plan-file adapter stores `None`. `planVersionId` is audit/lookup metadata only and is excluded from the run-hash preimage; the snapshot contributes through exact `plan_sha256` and `plan.version` only.
+Add immutable `BacktestRunInput` and `BacktestInitialLotInput` values. `BacktestRunInput` contains `runFormulaVersion`, the canonical plan snapshot and recomputed `plan_sha256`, optional `plan_version_id: UUID | None` lookup identity, `dataset_hash`, initial cash, normalized initial lots, `ExecutionConfig`, explicit event-risk assumption, context bounds, and schema/formula versions. A Web submission requires the UUID; `None` remains supported only by domain inputs and existing historical results. `planVersionId` is audit/lookup metadata only and is excluded from the run-hash preimage; the snapshot contributes through exact `plan_sha256` and `plan.version` only.
 
 `BacktestInitialLotInput` is separate from live `PositionLot` and contains `lotKey`, `bucket`, `acquiredTradeDate`, `quantity`, and `costBasisFen`. `lotKey` is a caller-stable 1–64 character identifier matching `[A-Za-z0-9][A-Za-z0-9._-]*` and is unique within the command. Multiple lots may share `(bucket, acquiredTradeDate)` when their `lotKey` values differ. Inputs are normalized by `(bucket, acquiredTradeDate, lotKey)`; quantities are positive 100-share board lots, and `costBasisFen` is the positive remaining total cost of the entire lot, not a per-share price. Run-specific `PositionLot` IDs are derived only after the v2 run hash exists, using `lotKey` as the stable source key. This preserves same-day lot identity/tie-breaking and removes the cycle caused by using a `PositionLot` that already requires `run_id` to calculate that same `run_id`.
 
@@ -80,7 +74,7 @@ Structured run events use stable names and bounded fields such as `jobId`, `runI
 
 ## Project Structure
 
-Replay, execution models, canonical run/report identity, and application-neutral value objects stay under `src/trade_plan_monitor/backtest/`. Production decision contracts remain under their existing domain/decision/market-data packages. CLI and HTTP adapters may compose the engine but never own or duplicate execution rules.
+Replay, execution models, canonical run/report identity, and application-neutral value objects stay under `src/trade_plan_monitor/backtest/`. Production decision contracts remain under their existing domain/decision/market-data packages. HTTP adapters may compose the engine but never own or duplicate execution rules.
 
 ## Code Style
 

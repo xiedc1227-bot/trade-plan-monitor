@@ -103,7 +103,7 @@ Historical calendar acquisition always passes an explicit `exchange="SSE"` or `e
 
 An authorized observation on 2026-08-25 returned 241 `stk_mins` rows for `600000.SH` on 2026-08-24, labeled 09:30 through 15:00. `TushareHistoricalMinuteProvider` defaults to `UNVERIFIED` and fails before the SDK call. The explicit implemented profile `TUSHARE_STK_MINS_241_END_V1` preserves the 09:30 source row as non-strategy `opening_special`, requires every other source label to be an exact canonical minute end, and returns 240 executable bars. No implementation may silently discard, shift, or accept all 241 rows.
 
-Historical network retrieval is allowed only in an explicitly authorized `backtest sync`. It occurs outside database transactions, validates at most 1,000 rows per persistence batch, and emits no raw response or credential material. Offline `backtest verify` and `backtest run` make zero provider calls.
+Historical network retrieval is allowed only in an explicitly authorized `DATA_SYNC`. It occurs outside database transactions, validates at most 1,000 rows per persistence batch, and emits no raw response or credential material. Offline `DATASET_VERIFY` and `BACKTEST_RUN` make zero provider calls.
 
 Frozen historical artifacts remain untrusted at rest: every dataset read recomputes the canonical artifact content hash and compares it with the referenced `artifact_hash` before parsing. A mismatch is corruption/tampering and blocks replay; a valid-looking hash string is insufficient.
 
@@ -191,7 +191,7 @@ Adapters normalize data and classify errors only; they contain no trading rules.
 
 - Always: validate every third-party response before persistence.
 - Always: keep the configured Tushare token and permission-related error details out of reports.
-- Always: keep historical and realtime capability/timestamp evidence independent; historical retrieval is authorized only for `backtest sync`.
+- Always: keep historical and realtime capability/timestamp evidence independent; historical retrieval is authorized only for `DATA_SYNC`.
 - Always: fail closed when the trading day is unknown, actual price limits are missing, minutes are stale, or daily history is insufficient.
 - Ask first: change formula version, adjustment policy, default grace, or add a second provider.
 - Never: substitute a hard-coded 10% limit for actual daily limit prices in a buy decision.

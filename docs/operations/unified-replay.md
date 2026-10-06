@@ -2,18 +2,18 @@
 
 ## R01. Local synthetic example
 
-Run from `trade-plan-monitor/` with the existing development environment. This command creates a new temporary directory, synthetic raw daily/minute data, a frozen dataset, complete Schema 5 minute/daily plans, explicit research declarations, and separate JSON/CSV results. It contacts no provider and reads no local application configuration.
+Run from `trade-plan-monitor/` with the existing development environment. This command creates a new temporary directory, synthetic raw daily/minute data, a frozen dataset, complete Schema 5 minute/daily plans, explicit research declarations, as input files. It contacts no provider and reads no local application configuration.
 
 ```powershell
 $replayDemo = Join-Path $env:TEMP ("unified-replay-" + [guid]::NewGuid().ToString("N"))
-.venv/Scripts/python.exe scripts/create_unified_replay_fixture.py --output $replayDemo --run
+.venv/Scripts/python.exe scripts/create_unified_replay_fixture.py --output $replayDemo
 ```
 
-Omit `--run` to create files only. Output directories must be empty. The generated `dataset.json` contains `datasetHash`; `minute-plan.json` / `minute-research.json` and `daily-plan.json` / `daily-research.json` are independent usable pairs. All prices and conditions are synthetic. The daily example explicitly declares synthetic constant adjustment factors; these must never be copied as proof for real raw data. Both scripts initially contain no operations, so signals appear while inventory and cash remain unchanged. The minute signal confirms at 09:35 with `CURRENT_SESSION`; the daily signal confirms on 2026-08-24 with `NEXT_EXCHANGE_SESSION_ONLY` for 2026-08-25. Neither means a trade was executed.
+The generator creates inputs only; it does not execute a backtest. Output directories must be empty. The generated `dataset.json` contains `datasetHash`; `minute-plan.json` / `minute-research.json` and `daily-plan.json` / `daily-research.json` are independent usable pairs. All prices and conditions are synthetic. The daily example explicitly declares synthetic constant adjustment factors; these must never be copied as proof for real raw data. Both scripts initially contain no operations, so signals appear while inventory and cash remain unchanged. The minute signal confirms at 09:35 with `CURRENT_SESSION`; the daily signal confirms on 2026-08-24 with `NEXT_EXCHANGE_SESSION_ONLY` for 2026-08-25. Neither means a trade was executed.
 
-## R02. Existing CLI and Web entrances
+## R02. Existing Web/API entrances
 
-`backtest run` accepts `--research-input <local-json-path>` for a complete current plan. Existing cash, execution costs, `--market-db`, `--results-db` and `--report-dir` options still apply. Initial lots are provided through API/Web `initialLots`; the current CLI starts with no lots. The builder's `--run` uses this real CLI path. The API accepts the parsed JSON as `researchInput`, never a filesystem path. Legacy plans forbid this field. Current plans require it.
+The API accepts parsed JSON as `researchInput`, never a filesystem path. Legacy plans forbid this field; current plans require it. API/Web accepts initial lots through `initialLots`. The backtest CLI and compatibility adapters have been removed.
 
 For Web use, select the exact saved, reviewed current version on `/backtests/new` and paste the matching research JSON in “统一计划研究输入 JSON”. The plan does not need live activation. The server independently checks the saved immutable review; `review.confirmed: true` in the JSON cannot approve an unreviewed plan. Nested research fields keep their snake_case names, including `started_at`, `inventory_known`, `review.content_hash`, `adjustment_proofs` and `operations`. Outer HTTP fields retain camelCase. Missing or mismatched research authority returns a conflict; malformed or unsupported assumptions return validation errors.
 

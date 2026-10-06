@@ -14,7 +14,7 @@
 
 ## 命令
 
-首版不公开新的直接 worker 命令。生产 FastAPI lifespan 启停一个明确注入的协调器及其拥有的两个 executor。协调、轮询、lease 恢复和 heartbeat 决策保留在事件循环；对应面向事件循环的同步 SQLite 调用只在自有仓储 executor 中运行，operation 进度从 operation executor 持久化，执行接收跨线程安全取消 Token。关闭时停止新 claim、请求取消、关闭排队 Future，并在有界供应商/SQLite/安全边界契约后释放两个 executor；后台 Task 失败时也必须释放。禁止 `asyncio.to_thread`、默认 executor 和未跟踪请求 Task。现有 CLI 命令继续作为兼容适配器，并必须迁移到相同应用用例，不能复制业务规则。未来离线维护命令需要另行批准。
+首版不公开新的直接 worker 命令。生产 FastAPI lifespan 启停一个明确注入的协调器及其拥有的两个 executor。协调、轮询、lease 恢复和 heartbeat 决策保留在事件循环；对应面向事件循环的同步 SQLite 调用只在自有仓储 executor 中运行，operation 进度从 operation executor 持久化，执行接收跨线程安全取消 Token。关闭时停止新 claim、请求取消、关闭排队 Future，并在有界供应商/SQLite/安全边界契约后释放两个 executor；后台 Task 失败时也必须释放。禁止 `asyncio.to_thread`、默认 executor 和未跟踪请求 Task。移除回测 CLI 适配器及命令专用的独立协调器；Web/API lifespan 负责执行任务。共用维护事务保留为内部领域能力；本次移除不新增自动清理调度器或替代的公开命令。
 
 ## 任务模型
 
@@ -74,7 +74,7 @@ CANCELLED
 
 ## 安全与可观测性
 
-信任边界包括浏览器/CLI 命令、已持久化规范请求 JSON、Worker Claim Token、供应商/引擎失败和进程重启。需要保护的资产包括本地可用性、不可变结果 identity、供应商凭据、计划内容和实时零副作用保证。
+信任边界包括浏览器/API 请求、已持久化规范请求 JSON、Worker Claim Token、供应商/引擎失败和进程重启。需要保护的资产包括本地可用性、不可变结果 identity、供应商凭据、计划内容和实时零副作用保证。
 
 - 只持久化运行所需的有界规范结构化计划快照；任务中绝不持久化自然语言原文或提取证据。绝不记录密钥、供应商响应、堆栈、SQL、客户端提供的数据库路径、计划内容或 Claim Token。
 - 把持久化 `allowNetwork: true` 视为任务限定的已审计授权事实。执行时只从当前服务端配置解析凭据；取消/终态绝不把授权转移给重新提交。

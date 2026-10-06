@@ -12,16 +12,9 @@
 
 `run_id` 是确定性研究输出 identity；`job_id` 是一次持久化提交操作，任务的 `attempt` 统计 worker claim generation。新写入只持久化完整 materialized 运行。失败和取消任务属于 `backtest-jobs`，因此之后的任务仍可完成同一个 `run_id`。现有 `BacktestRunStatus.FAILED` 和 `BacktestRunStatus.CANCELLED` 继续作为旧序列化数据的代码级兼容值；首个任务 Schema 迁移必须证明没有此类数据库行占用 `run_id`，新数据库写入路径也不能创建此类行。
 
-## 命令
+## 操作入口
 
-保留 CLI 兼容界面：
-
-```powershell
-python -m trade_plan_monitor backtest list --limit 20 --offset 0
-python -m trade_plan_monitor backtest prune --batch-size 1000
-```
-
-CLI 文件继续是本地投影。Web 导出通过 `backtest-api` 流式返回已验证内容，绝不暴露本地报告路径。
+Web/API 负责结果查询、置顶和导出。`backtest-api` 流式返回已验证内容，不暴露本地报告路径。有界保留期清理服务保留为内部领域能力，不新增替代的公开入口，不保留回测 CLI 列表或清理命令。
 
 ## 公共契约
 

@@ -12,16 +12,9 @@ Persist immutable completed research results in `backtest-results.sqlite3`, expo
 
 `run_id` is deterministic research-output identity; `job_id` is one durable submitted operation, and its `attempt` counts worker-claim generations. New writes persist only complete materialized runs. Failed and cancelled jobs belong to `backtest-jobs`, so a later job can complete the same `run_id`. Existing `BacktestRunStatus.FAILED` and `BacktestRunStatus.CANCELLED` remain code-level compatibility values for old serialized data; the first job-schema migration must prove that no such database row occupies a `run_id`, and the new database write path cannot create one.
 
-## Commands
+## Operation entry points
 
-The CLI compatibility surface remains:
-
-```powershell
-python -m trade_plan_monitor backtest list --limit 20 --offset 0
-python -m trade_plan_monitor backtest prune --batch-size 1000
-```
-
-CLI files remain local projections. Web export streams verified content through `backtest-api` and never exposes a local report path.
+Web/API provides result queries, pinning, and exports. `backtest-api` streams verified content without exposing local report paths. The bounded retention cleanup service remains an internal domain capability without a replacement public entry point; no backtest CLI list or prune command remains.
 
 ## Public Contracts
 

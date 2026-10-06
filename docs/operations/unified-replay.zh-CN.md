@@ -2,18 +2,18 @@
 
 ## R01. 本地合成示例
 
-在 `trade-plan-monitor/` 使用既有开发环境执行。此命令创建新的临时目录、合成原始日线/分钟数据、冻结数据集、完整 Schema 5 分钟/日线计划、明确研究声明及独立 JSON/CSV 结果。不会连接供应商，也不会读取本地应用配置。
+在 `trade-plan-monitor/` 使用既有开发环境执行。此命令创建新的临时目录、合成原始日线/分钟数据、冻结数据集、完整 Schema 5 分钟/日线计划、明确研究声明输入文件。不会连接供应商，也不会读取本地应用配置。
 
 ```powershell
 $replayDemo = Join-Path $env:TEMP ("unified-replay-" + [guid]::NewGuid().ToString("N"))
-.venv/Scripts/python.exe scripts/create_unified_replay_fixture.py --output $replayDemo --run
+.venv/Scripts/python.exe scripts/create_unified_replay_fixture.py --output $replayDemo
 ```
 
-省略 `--run` 可只生成文件。输出目录必须为空。生成的 `dataset.json` 包含 `datasetHash`；`minute-plan.json` / `minute-research.json` 和 `daily-plan.json` / `daily-research.json` 是可独立使用的两对输入。所有价格和条件均为合成值。日线示例明确声明合成常数复权因子；绝不能把它复制为真实原始数据的证明。两份脚本初始均无操作，因此会产生信号，但库存和现金不变。分钟信号在 09:35 确认，窗口为 `CURRENT_SESSION`；日线信号在 2026-08-24 确认，窗口为 2026-08-25 的 `NEXT_EXCHANGE_SESSION_ONLY`。两者都不代表已经成交。
+生成器仅创建输入，不执行回测。输出目录必须为空。生成的 `dataset.json` 包含 `datasetHash`；`minute-plan.json` / `minute-research.json` 和 `daily-plan.json` / `daily-research.json` 是可独立使用的两对输入。所有价格和条件均为合成值。日线示例明确声明合成常数复权因子；绝不能把它复制为真实原始数据的证明。两份脚本初始均无操作，因此会产生信号，但库存和现金不变。分钟信号在 09:35 确认，窗口为 `CURRENT_SESSION`；日线信号在 2026-08-24 确认，窗口为 2026-08-25 的 `NEXT_EXCHANGE_SESSION_ONLY`。两者都不代表已经成交。
 
-## R02. 既有 CLI 与 Web 入口
+## R02. 既有 Web/API 入口
 
-`backtest run` 对完整当前计划接受 `--research-input <local-json-path>`。既有现金、执行成本、`--market-db`、`--results-db` 和 `--report-dir` 选项继续适用。初始批次通过 API/Web 的 `initialLots` 提供；当前 CLI 以无批次开始。生成器的 `--run` 使用这条真实 CLI 链路。API 接受已解析 JSON 作为 `researchInput`，不接受文件路径。旧计划禁止该字段，当前计划必须提供。
+API 接受已解析 JSON 作为 `researchInput`，不接受文件路径。旧计划禁止该字段，当前计划必须提供。初始批次通过 API/Web 的 `initialLots` 提供。回测 CLI 及兼容适配器已移除。
 
 Web 使用时，在 `/backtests/new` 选择完全对应的已保存、已审核当前版本，并把匹配研究 JSON 粘贴到“统一计划研究输入 JSON”。计划不必真实激活。服务器独立检查已保存的不可变审核；JSON 中的 `review.confirmed: true` 不能批准未审核计划。嵌套研究字段保持 snake_case，包括 `started_at`、`inventory_known`、`review.content_hash`、`adjustment_proofs` 和 `operations`。外层 HTTP 字段仍用 camelCase。缺失或不匹配研究权限返回冲突；格式错误或不支持的假设返回校验错误。
 

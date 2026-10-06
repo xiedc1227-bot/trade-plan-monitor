@@ -4,11 +4,11 @@
 
 基线：`6118569`；日期：2026-10-03，Asia/Shanghai。本增量契约属于 `backtest-engine`，必要适配涉及 `backtest-results`、`backtest-jobs`、`backtest-api` 和 `backtest-web`。仅对 Schema 5 替代这些模块中“仅旧计划”的假设。当前监测仍以 `SPEC-unified-plan.md` U01–U08 为准。用户授权设计、内部审核、顺序实施和最终独立审核，无需再次阶段确认。
 
-通过既有离线运行、任务、结果、CLI 和 Web 入口，使用不可变历史证据回放一份完整已审核的 `UnifiedTradePlan`（`CONDITION_PLAN`、`condition-plan-v1`）。不要求实时激活。完成标准是复现并验证当前监测语义，而非仅让旧历史引擎接受新的 Python 类型。
+通过既有离线运行、任务、结果和 Web/API 入口，使用不可变历史证据回放一份完整已审核的 `UnifiedTradePlan`（`CONDITION_PLAN`、`condition-plan-v1`）。不要求实时激活。完成标准是复现并验证当前监测语义，而非仅让旧历史引擎接受新的 Python 类型。
 
 ## UR02. 范围与依赖边界
 
-单一能力，实施顺序：冻结研究输入 → 共用监测回放 → 持久化结果 → CLI/API/页面 → 一致性验收。旧回放保持不变。复用 `unified_conditions`、`unified_lifecycle`、`daily_risk` 和当前记账/操作检查。检查实际调用路径，不复制策略建立第二套评估器。
+单一能力，实施顺序：冻结研究输入 → 共用监测回放 → 持久化结果 → API/页面 → 一致性验收。旧回放保持不变。复用 `unified_conditions`、`unified_lifecycle`、`daily_risk` 和当前记账/操作检查。检查实际调用路径，不复制策略建立第二套评估器。
 
 优先使用私有临时研究会话，以冻结时间、确定性身份、隔离仓储和无发送出口调用当前运行与共用操作参与者。不得创建生产组合或依赖实时状态。只有隔离确有需要时才允许最小提取纯状态转换/操作参与者，并提供在线回归证据。研究逻辑位于 `backtest/`；在线计划 API 不成为第二套研究 API。研究专用适配器可禁止通知入队；在线默认行为保持不变。
 
@@ -50,7 +50,7 @@ Schema 5 使用 `backtest-run-v4`，哈希包含精确计划哈希/版本、数�
 
 当前决策的 `signals`、`risks` 和 `risk_action` 描述评估状态；`resulting_signals`、`resulting_risks` 与 `inventory_after` 描述该事件明确脚本执行后的状态。`alerts` 保留实际运行的提醒证据。CSV 区分 `monitor_status` 与 `valuation_status`。所有计算得到的公开资金值，包括累计费用，都必须保持安全整数；溢出以 `RESEARCH_VALUATION_SAFE_NUMBER_EXCEEDED` 明确失败。达到 70,000 个决策事件后，后续评估在再次调用运行服务之前以 `RESEARCH_EVENT_LIMIT_EXCEEDED` 失败。
 
-`POST /api/v1/backtest-runs` 对当前快照接受 `researchInput`；服务端审核校验仍是权威，未激活已审核计划可用。工作者只读取冻结请求。CLI `backtest run` 接受本地研究输入文件；API 不接受文件路径。既有 `/backtests/new` 提供明确研究输入并解释空脚本；`/backtests/:runId` 展示当前证据及被阻断操作。提供可用夹具和命令。已知格式错误/当前不支持输入映射为可理解的校验/冲突响应，不能产生类型错误/500。保留响应大小、分页及安全整数边界。必要时同步两份 OpenAPI 和生成类型。
+`POST /api/v1/backtest-runs` 对当前快照接受 `researchInput`；服务端审核校验仍是权威，未激活已审核计划可用。工作者只读取冻结请求。API 不接受文件路径；回测 CLI 适配器已移除。既有 `/backtests/new` 提供明确研究输入并解释空脚本；`/backtests/:runId` 展示当前证据及被阻断操作。提供可用夹具和命令。已知格式错误/当前不支持输入映射为可理解的校验/冲突响应，不能产生类型错误/500。保留响应大小、分页及安全整数边界。必要时同步两份 OpenAPI 和生成类型。
 
 ## UR07. 验收矩阵
 
@@ -65,11 +65,11 @@ Schema 5 使用 `backtest-run-v4`，哈希包含精确计划哈希/版本、数�
 | UR-A07 | 明确整单模拟、一次消费、请求重放、T+1、CORE、容量、未知库存及部分数量拒绝。 |
 | UR-A08 | 对相同事实/状态/脚本与当前运行/操作入口逐事件比较，另独立断言信号、证据、时间、窗口、阻断和库存/风险转换。仅比较同一辅助函数的两次调用不充分。 |
 | UR-A09 | 重复报告/JSON/CSV 字节相同；仅修改未来事实/操作后早期规范化结果不变；取消不发布部分结果。 |
-| UR-A10 | 真实既有 CLI 和临时数据库 API/任务/发布/读取/导出链路，当前页面表单/结果测试及隔离浏览器路径通过合成已审核夹具。外部供应商/AI/实时数据库/通知调用为零。 |
+| UR-A10 | 真实临时数据库 API/任务/发布/读取/导出链路，当前页面表单/结果测试及隔离浏览器路径通过合成已审核夹具。外部供应商/AI/实时数据库/通知调用为零。 |
 
 ## UR08. 允许文件、检查与排除项
 
-允许：`backtest/` 内聚焦模块（含新研究契约/适配器/运行/投影）、必需 CLI 分发、回测 HTTP 模式/路由、当前回测 Vue 组件/composable/生成 API 类型、对应测试/夹具和中英文文档。UR02 允许运行/决策/记账操作参与者的最小共用提取，并要求回归覆盖。不计划升级依赖、生产模式迁移或实时配置变更。Python 沿用 frozen strict 值、snake_case 和精确 Decimal/分算术；Vue 使用 Composition API、TypeScript、`<script setup>`。
+允许：`backtest/` 内聚焦模块（含新研究契约/适配器/运行/投影）、回测 HTTP 模式/路由、当前回测 Vue 组件/composable/生成 API 类型、对应测试/夹具和中英文文档。UR02 允许运行/决策/记账操作参与者的最小共用提取，并要求回归覆盖。不计划升级依赖、生产模式迁移或实时配置变更。Python 沿用 frozen strict 值、snake_case 和精确 Decimal/分算术；Vue 使用 Composition API、TypeScript、`<script setup>`。
 
 运行 `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'`、受影响回测/当前运行集成检查、`.venv/Scripts/python.exe -m ruff check src tests scripts`、`.venv/Scripts/python.exe -m compileall -q src`、`.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`、`git diff --check`，以及 `web/` 下 `npm run test -- --run`、`npm run type-check`、`npm run build`、适用 `npm run test:e2e`。共用参与者变更时扩大集成检查。保留未受影响的高成本容量证据，不将其重标为当前功能验收。成对验证文件记录真实命令/结果、跳过项和限制。独立变异检查一个重要新增门槛。
 

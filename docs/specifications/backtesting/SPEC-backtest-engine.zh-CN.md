@@ -10,21 +10,15 @@
 
 `backtest-engine` 消费 `backtest-data`，并复用已批准的 `plan-domain`、`market-data`、`strategy-state` 和纯 `decision-engine` 契约。它负责运行输入 identity、事件时间回放、模拟成交、指标和规范报告。它不负责供应商调用、可变任务、HTTP、Vue、结果保留或实时监控。
 
-一次运行表示一个不可变且已校验的计划快照及其一只股票。Web 提交必须把该快照绑定到一个 RFC 4122 `planVersionId`；CLI 兼容适配器读取经审核的计划文件，因此不使用实时计划版本查找 identity。所选计划不要求已在实时链路激活，因为回测支持激活前审阅；但必须通过与 `canActivate=true` 相同的确定性校验。多股票共享资金、组合成交、参数寻优和批量比较不在首版范围。
+一次运行表示一个不可变且已校验的计划快照及其一只股票。Web 提交必须把该快照绑定到一个 RFC 4122 `planVersionId`。所选计划不要求已在实时链路激活，因为回测支持激活前审阅；但必须通过与 `canActivate=true` 相同的确定性校验。多股票共享资金、组合成交、参数寻优和批量比较不在首版范围。
 
-## 命令
+## 操作入口
 
-保留 CLI 兼容适配器：
-
-```powershell
-python -m trade_plan_monitor backtest run --dataset <dataset_hash> --plan config/plans/003043.SZ.sample.yaml --initial-cash-yuan 100000 --commission-rate 0.0003 --minimum-commission-yuan 5 --stamp-duty-rate 0.0005 --transfer-fee-rate 0.00001 --buy-slippage-bps 2 --sell-slippage-bps 2 --no-event-risk
-```
-
-上述六个费用/滑点值是示例，不是默认值。Web 执行通过 `backtest-jobs` 提交；回放绝不在 HTTP 请求处理器中运行。
+Web/API 通过 `backtest-jobs` 提交 `BACKTEST_RUN`，显式提供成交费用、滑点和研究假设。后台工作者执行冻结输入；回放不在 HTTP 请求处理器内运行。不保留回测 CLI 或计划文件兼容适配器。
 
 ## 公共契约
 
-新增不可变 `BacktestRunInput` 和 `BacktestInitialLotInput` 值。`BacktestRunInput` 包含 `runFormulaVersion`、规范计划快照与重新计算的 `plan_sha256`、可选的 `plan_version_id: UUID | None` 查找 identity、`dataset_hash`、初始现金、规范化初始持仓、`ExecutionConfig`、明确事件风险假设、上下文边界和 Schema/公式版本。Web 提交要求 UUID，而 CLI 计划文件适配器保存 `None`。`planVersionId` 只作为审计/查找元数据，不进入运行哈希 preimage；快照只通过精确 `plan_sha256` 和 `plan.version` 参与 identity。
+新增不可变 `BacktestRunInput` 和 `BacktestInitialLotInput` 值。`BacktestRunInput` 包含 `runFormulaVersion`、规范计划快照与重新计算的 `plan_sha256`、可选的 `plan_version_id: UUID | None` 查找 identity、`dataset_hash`、初始现金、规范化初始持仓、`ExecutionConfig`、明确事件风险假设、上下文边界和 Schema/公式版本。Web 提交要求 UUID；仅领域输入和既有历史结果继续允许 `None`。`planVersionId` 只作为审计/查找元数据，不进入运行哈希 preimage；快照只通过精确 `plan_sha256` 和 `plan.version` 参与 identity。
 
 `BacktestInitialLotInput` 与实时 `PositionLot` 分离，包含 `lotKey`、`bucket`、`acquiredTradeDate`、`quantity` 和 `costBasisFen`。`lotKey` 是调用方稳定的 1–64 字符标识，必须匹配 `[A-Za-z0-9][A-Za-z0-9._-]*`，并且在命令内唯一。不同 `lotKey` 的多个持仓可以共享 `(bucket, acquiredTradeDate)`。输入按 `(bucket, acquiredTradeDate, lotKey)` 规范化；数量必须是正数 100 股整手，`costBasisFen` 表示整批持仓的正数剩余总成本，并不是每股价格。v2 运行哈希生成后，才使用 `lotKey` 作为稳定 source key 派生运行限定的 `PositionLot` ID。这样既保留同日多批次 identity/tie-break，也消除使用一个已经需要 `run_id` 的 `PositionLot` 来计算同一个 `run_id` 所形成的循环。
 
@@ -80,7 +74,7 @@ python -m trade_plan_monitor backtest run --dataset <dataset_hash> --plan config
 
 ## 项目结构
 
-回放、成交模型、规范运行/报告 identity 和与应用无关的值对象保留在 `src/trade_plan_monitor/backtest/`。生产决策契约继续保留在现有 domain/decision/market-data 包。CLI 与 HTTP 适配器可以组合引擎，但绝不拥有或复制成交规则。
+回放、成交模型、规范运行/报告 identity 和与应用无关的值对象保留在 `src/trade_plan_monitor/backtest/`。生产决策契约继续保留在现有 domain/decision/market-data 包。HTTP 适配器可以组合引擎，但绝不拥有或复制成交规则。
 
 ## 代码风格
 

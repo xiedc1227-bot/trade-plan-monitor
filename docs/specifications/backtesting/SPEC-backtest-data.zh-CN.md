@@ -12,16 +12,9 @@
 
 一个数据集可以包含 1–10 只股票以复用同步事实，但 `backtest-engine` 每次仍只运行一个经审核的计划版本和一只股票。历史 `stk_mins` 证据继续独立于实时 `rt_min` 和 `rt_min_daily`；本模块不能完成 `T058`。
 
-## 命令
+## 操作入口
 
-保留现有兼容命令：
-
-```powershell
-python -m trade_plan_monitor backtest sync --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31 --allow-network
-python -m trade_plan_monitor backtest verify --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31
-```
-
-`sync` 是唯一允许联网的操作。`verify`、覆盖检查、数据集列表和冻结读取都只在本地执行。长时间 Web 提交由 `backtest-jobs` 负责，而不是由此命令适配层负责。
+Web/API 通过 `backtest-jobs` 提交 `DATA_SYNC` 和 `DATASET_VERIFY`。只有经明确授权的 `DATA_SYNC` 可以联网。校验、覆盖检查、数据集列表和冻结读取均仅限本地。不保留回测 CLI 适配器。
 
 ## 公共契约
 
@@ -60,7 +53,7 @@ python -m trade_plan_monitor backtest verify --symbols 003043.SZ --start 2025-01
 
 ## 安全与可观测性
 
-信任边界包括 Web/CLI 范围、环境密钥引用、供应商响应和磁盘 SQLite 内容。需要保护的资产是 Tushare 凭据、不可变历史事实、数据集 identity 和本地存储可用性。
+信任边界包括 Web/API 范围、环境密钥引用、供应商响应和磁盘 SQLite 内容。需要保护的资产是 Tushare 凭据、不可变历史事实、数据集 identity 和本地存储可用性。
 
 - 每次同步提交都要求明确联网授权和环境密钥引用。
 - 绝不持久化或记录 Token、Authorization Header、原始供应商响应、被拒绝 payload、来自 Web 请求的数据库路径或堆栈信息。
@@ -80,7 +73,7 @@ python -m trade_plan_monitor backtest verify --symbols 003043.SZ --start 2025-01
 
 ## 项目结构
 
-历史供应商接口与 Tushare 映射保留在 `src/trade_plan_monitor/market_data/`。数据集 identity、同步、存储、规范化和存储保护保留在 `src/trade_plan_monitor/backtest/`。CLI 组合保留在 `src/trade_plan_monitor/cli.py`。此逻辑模块拆分不要求仅为了匹配文档名称而移动正常工作的文件。
+历史供应商接口与 Tushare 映射保留在 `src/trade_plan_monitor/market_data/`。数据集 identity、同步、存储、规范化和存储保护保留在 `src/trade_plan_monitor/backtest/`。工作者操作在 `src/trade_plan_monitor/backtest/application.py` 中组合。此逻辑模块拆分不要求仅为了匹配文档名称而移动正常工作的文件。
 
 ## 代码风格
 

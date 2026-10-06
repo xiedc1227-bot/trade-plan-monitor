@@ -4,7 +4,7 @@
 
 ## 目标
 
-提供可在非开市时间准备和运行的确定性 A 股回测。经明确授权的 `backtest sync` 操作把 Tushare/QuickSync 历史数据增量下载到隔离的行情 SQLite 数据库；`backtest verify` 冻结精确、按内容寻址的 `dataset_hash`；`backtest run` 只消费该冻结本地数据集、经审核计划和显式成交假设，不访问网络，也不依赖墙上时钟休眠。
+提供可在非开市时间准备和运行的确定性 A 股回测。经明确授权的 `DATA_SYNC` 操作把 Tushare/QuickSync 历史数据增量下载到隔离的行情 SQLite 数据库；`DATASET_VERIFY` 冻结精确、按内容寻址的 `dataset_hash`；`BACKTEST_RUN` 只消费该冻结本地数据集、经审核计划和显式成交假设，不访问网络，也不依赖墙上时钟休眠。
 
 回测复用生产计划、行情规范化、指标和纯决策契约，只为研究新增隔离且版本化的模拟成交模型。它绝不发送订单、修改实时监控状态，也不声称历史 `stk_mins` 能证明实时 `rt_min` 或 `rt_min_daily` 契约。
 
@@ -19,7 +19,7 @@
 
 ## 模块拆分
 
-`backtest` 继续作为稳定总标识和现有 CLI MVP 的兼容归属。已于 2026-08-26 批准的能力地图把下一版本拆成六个可独立审核的模块，并按依赖顺序实现：
+`backtest` 继续作为稳定总标识和Web/API 流程的归属。已于 2026-08-26 批准的能力地图把下一版本拆成六个可独立审核的模块，并按依赖顺序实现：
 
 1. [`backtest-data`](SPEC-backtest-data.zh-CN.md) — 经授权的历史获取、不可变修订、覆盖、校验与冻结 `dataset_hash`；
 2. [`backtest-engine`](SPEC-backtest-engine.zh-CN.md) — 针对一个经审核计划版本和一只股票的确定性事件时间回放与 `execution-model-v1`；
@@ -30,31 +30,19 @@
 
 能力地图和模块方向已经批准，用户已于 2026-08-26 确认链接的详细规格集合。双语跨模块一致性审计修正了 UUID/CLI 查找 identity、精确金额/时间投影、旧结果复用、增量导出、发布大小及变更幂等条款，且不改变已批准边界。用户已于 2026-08-26 确认这些修正契约，因此聚合详细规格现按修正内容获批。第 15 节与 `BT009`～`BT050` 的授权历史早于现已完成的离线实现。当前 Web/API 表面使用冻结的 42 路径契约，WEBF13 在不改变该契约的前提下完成路由/旅程验收。提交、推送、依赖安装和真实联网访问继续需要分别授权；现有 `BT001`～`BT008` 仍保留为本地 MVP 历史，不作重标。
 
-## 命令
+## 操作入口
 
-已实现的 CLI 界面明确独立，不与现有 `replay` 命令重叠：
-
-```powershell
-python -m trade_plan_monitor backtest sync --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31 --allow-network
-python -m trade_plan_monitor backtest verify --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31
-python -m trade_plan_monitor backtest run --dataset <dataset_hash> --plan config/plans/003043.SZ.sample.yaml --initial-cash-yuan 100000 --commission-rate 0.0003 --minimum-commission-yuan 5 --stamp-duty-rate 0.0005 --transfer-fee-rate 0.00001 --buy-slippage-bps 2 --sell-slippage-bps 2 --no-event-risk
-python -m trade_plan_monitor backtest list --limit 20 --offset 0
-python -m trade_plan_monitor backtest prune --batch-size 1000
-```
-
-只有 `sync` 允许使用网络和配置的 `tushare.token`，并且同时需要用户明确授权和字面量 `--allow-network` 参数；`verify`、`run`、`list` 和 `prune` 均仅限本地。`sync` 与 `verify` 默认把 `warmup_start` 设为 `start` 之前 400 个日历日；显式覆盖时，两条命令必须使用相同值。数据集未冻结并验证、六项费用/滑点输入未全部提供，或没有恰好选择 `--no-event-risk` 与 `--manual-event-risk` 之一时，`run` 必须失败。上述数值只是示例假设，不是默认值。当前 `replay` 命令保留既有监控事件语义。
-
-`OfflineBacktestRunner` 会把不可变 `initial_lots` 纳入 `run_id`。经过校验的公开 Web/API 初始持仓输入以及置顶/取消置顶路径已经实现，并有验收证据覆盖。当前 CLI 仍只暴露 `--initial-cash-yuan`，因此 CLI 运行传入空的初始持仓 tuple，且 CLI 运维命令仍为 `list` 和 `prune`。
+Web/API 提交 `DATA_SYNC`、`DATASET_VERIFY` 和 `BACKTEST_RUN`，由后台任务协调器执行。只有经明确授权的 `DATA_SYNC` 允许联网；校验与回放只读取本地冻结数据。费用、滑点、初始现金、初始持仓及事件风险假设通过经校验的请求提供。结果通过 Web/API 查询、导出和置顶，有界保留期清理服务保留为内部领域能力，不新增替代的公开清理入口。回测 CLI 及其兼容适配器已移除。应用启动命令和既有监控 `replay` 命令不受影响。
 
 ## 架构与隔离
 
 ```text
 Tushare/QuickSync
-       │ 明确授权的 backtest sync；网络位于事务外
+       │ 明确授权的 DATA_SYNC；网络位于事务外
        ▼
 backtest-market.sqlite3
   规范化不可变行修订 + 清单
-       │ backtest verify → 冻结 dataset_hash
+       │ DATASET_VERIFY → 冻结 dataset_hash
        ▼
 离线事件时间回放 ──→ 现有纯决策引擎
        │               + BACKTEST execution-model-v1
@@ -71,7 +59,7 @@ backtest-results.sqlite3
 | `backtest-market.sqlite3` | 规范历史 artifact、不可变修订、当前 head、数据集 manifest/成员关系、`dataset_hash` | 实时状态、模拟成交、结果详情 |
 | `backtest-results.sqlite3` | 不可变运行输入、摘要、判断、信号、成交/未成交原因、每日权益、保留元数据 | 复制的行情 K 线、实时状态、密钥 |
 
-行情库和结果库路径必须解析为不同文件。创建 Schema 前，每个存储都必须拒绝包含实时表或另一回测存储域表前缀的既有 SQLite 数据库。回测数据库不进入实时监控在线备份。Web `BACKTEST_RUN` 提交可以打开一个只读实时存储事务，并且只读取恰好一个不可变计划版本。系统会校验该版本，并在响应前把规范计划快照随已接受请求持久化到 durable 边界；提交对实时存储执行零写入。该 durable 边界提交后，worker 与确定性回放对实时存储执行零读取和零写入。直接 CLI `backtest run` 通过显式 `--plan` 文件接收计划，在本地校验相同快照契约，并且绝不打开实时存储。已完成的 `BC01` 证据比较 Web 提交前后以及 worker/回放前后的精确实时逻辑状态，并断言通知调用次数为零。
+行情库和结果库路径必须解析为不同文件。创建 Schema 前，每个存储都必须拒绝包含实时表或另一回测存储域表前缀的既有 SQLite 数据库。回测数据库不进入实时监控在线备份。Web `BACKTEST_RUN` 提交可以打开一个只读实时存储事务，并且只读取恰好一个不可变计划版本。系统会校验该版本，并在响应前把规范计划快照随已接受请求持久化到 durable 边界；提交对实时存储执行零写入。该 durable 边界提交后，worker 与确定性回放对实时存储执行零读取和零写入。已完成的 `BC01` 证据比较 Web 提交前后以及 worker/回放前后的精确实时逻辑状态，并断言通知调用次数为零。
 
 ## 历史供应商契约
 
@@ -90,11 +78,11 @@ Tushare 映射为 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily`。
 
 历史同步必须针对范围内存在的交易所分别显式请求 `trade_cal(exchange="SSE", ...)` 和 `trade_cal(exchange="SZSE", ...)`，绝不能依赖省略或空的 exchange 参数。Tushare 官方 `trade_cal` 契约未把 BSE 列为受支持交易所。因此任何 `.BJ` 范围都必须在联网或持久化前以稳定阻断原因 `UNSUPPORTED_HISTORICAL_CALENDAR:BSE` 拒绝。只有另行验证并批准 BSE 日历契约后才能支持北交所历史数据；这不影响实时计划领域继续识别 `.BJ`。
 
-2026-08-25 经授权观察到 `600000.SH` 在 2026-08-24 的 `stk_mins` 返回 241 行，时间覆盖 09:30 至 15:00。供应商构造器继续以 `UNVERIFIED` 失败关闭。CLI 组合显式选择已实现的版本化契约 `TUSHARE_STK_MINS_241_END_V1`：它把 09:30 来源行保留为不参与策略的 `opening_special`，并要求其余结束标签行与现有 240 个规范交易分钟结束时间完全匹配。未知配置不能调用 SDK 或冻结数据集；任何实现都不能静默删除、平移或全部接受这 241 行。
+2026-08-25 经授权观察到 `600000.SH` 在 2026-08-24 的 `stk_mins` 返回 241 行，时间覆盖 09:30 至 15:00。供应商构造器继续以 `UNVERIFIED` 失败关闭。工作者组合显式选择已实现的版本化契约 `TUSHARE_STK_MINS_241_END_V1`：它把 09:30 来源行保留为不参与策略的 `opening_special`，并要求其余结束标签行与现有 240 个规范交易分钟结束时间完全匹配。未知配置不能调用 SDK 或冻结数据集；任何实现都不能静默删除、平移或全部接受这 241 行。
 
 ## 增量同步
 
-`backtest sync` 遵守以下不变量：
+`DATA_SYNC` 遵守以下不变量：
 
 1. 获取前校验股票、闭区间日期范围、供应商能力、交易所日历和已配置的不复权价格策略。一个 `DatasetScope` 包含 1–10 只不重复股票，`start` 到 `end` 最多跨 5 个日历年，`warmup_start` 到 `start` 最多跨 2 个日历年；更大请求会在联网或持久化前失败。
 2. 根据本地当前 head 计算缺失的股票/交易日/接口来源，只请求缺失来源或明确要求刷新的来源。每个已获取参考数据响应必须精确包含请求 identity：`trade_cal` 覆盖其显式交易所的每个日历日，`daily` 覆盖请求区间内每个预期开市日的 `(symbol, trade_date)`，`stk_limit` 覆盖每个请求开市日的 `(symbol, trade_date)`。identity 缺失、多余或重复时会在持久化前分别以 `INVALID_RESPONSE:trade_cal`、`INVALID_RESPONSE:daily` 或 `INVALID_RESPONSE:stk_limit` 失败；`--refresh` 绝不能用不完整响应替换完整 head。
@@ -109,7 +97,7 @@ Tushare 映射为 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily`。
 
 ## 数据集校验与标识
 
-`backtest verify` 完全离线并且失败关闭，校验：
+`DATASET_VERIFY` 完全离线并且失败关闭，校验：
 
 - 根据 `trade_cal` 检查精确股票/日期覆盖，包括周末、节假日、午休和规范 09:30/15:00 边界；
 - 版本化历史标签映射，以及每个完整普通交易日恰好 240 条可用一分钟 K 线，除非显式表示交易所时段例外；
@@ -127,7 +115,7 @@ Tushare 映射为 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily`。
 
 `dataset_hash` 是以下内容的规范哈希：数据集 Schema 版本、历史标签配置、股票/日期范围、复权策略、有序不可变行修订哈希、日历/涨跌停/日线事实和预热边界。供应商回执时间和本地数据库行 ID 不参与哈希，除非它们选择了不同内容修订。事实不变时再次校验必须逐字节返回相同哈希。供应商修订会生成新哈希，同时旧数据集仍可复现。
 
-所有回测内容哈希和 identity 哈希都使用同一套精确 Decimal 规范化。`0.0003` 与 `0.00030` 这类数值相等但 scale 不同的有限值会序列化为相同的非指数定点文本，因此产生相同哈希；零统一表示为 `0`，拒绝二进制浮点，并且任何结果都不依赖进程全局 Decimal context。精确定点展开超过 10,000 个字符的值会在哈希前失败关闭，不能耗尽内存或形成依赖 context 的 identity。CLI 元转分同样不依赖全局 context：最多接受两位小数及其后任意额外尾零，在展开前拒绝超大指数，并要求转换结果不超过 signed 64-bit 分上限 `9,223,372,036,854,775,807`。
+所有回测内容哈希和 identity 哈希都使用同一套精确 Decimal 规范化。`0.0003` 与 `0.00030` 这类数值相等但 scale 不同的有限值会序列化为相同的非指数定点文本，因此产生相同哈希；零统一表示为 `0`，拒绝二进制浮点，并且任何结果都不依赖进程全局 Decimal context。精确定点展开超过 10,000 个字符的值会在哈希前失败关闭，不能耗尽内存或形成依赖 context 的 identity。
 
 内容寻址必须在每次读取冻结 artifact 时重新验证，不能只在插入时验证。解析或回放被引用 artifact 前，存储必须重新计算其规范内容哈希并与冻结的 `artifact_hash` 比较；任何不一致都产生稳定的篡改/损坏阻断。即使 manifest 或哈希字符串语法合法，也绝不能授权已被修改的 `content_json`。
 
@@ -182,7 +170,7 @@ MVP 使用一个显式有界滚动上下文：最新 512 根完整五分钟 K �
 
 ## 结果与报告
 
-兼容结果 Schema 可以读取有界的 `COMPLETED`、`FAILED` 和 `CANCELLED` 摘要。任务化路径以原子方式 materialize 完整 `COMPLETED` 研究结果，其中包含输入 identity、覆盖范围、数据质量阻断项、假设、事件起止时间和公式版本；失败/取消尝试诊断保留为有界任务记录，使同一确定性 `run_id` 以后仍可完成。当前 CLI 会 materialize 已完成运行。成功内存报告及保留期内详情行包括：
+兼容结果 Schema 可以读取有界的 `COMPLETED`、`FAILED` 和 `CANCELLED` 摘要。任务化路径以原子方式 materialize 完整 `COMPLETED` 研究结果，其中包含输入 identity、覆盖范围、数据质量阻断项、假设、事件起止时间和公式版本；失败/取消尝试诊断保留为有界任务记录，使同一确定性 `run_id` 以后仍可完成。成功内存报告及保留期内详情行包括：
 
 - 数据覆盖与缺口摘要；
 - 有序判断及 `result_hash`；
@@ -195,7 +183,7 @@ MVP 使用一个显式有界滚动上下文：最新 512 根完整五分钟 K �
 
 指标语义也以限制形式显式公开：`DAILY_EQUITY_DRAWDOWN_SAMPLING` 表示最大回撤只使用每日权益点，不能声称捕获盘中低谷；`WIN_RATE_PER_SELL_FILL_NOT_ROUND_TRIP` 表示胜率按卖出成交分类，而不是重建完整往返交易；`METRIC_DECIMAL_PRECISION_28_HALF_EVEN` 表示收益率、回撤及胜率除法使用 precision 28 和 `ROUND_HALF_EVEN` 的隔离 Decimal context。这三个 Token 都保留在报告假设/限制中，环境进程 precision 不能改变指标字节或 identity。
 
-MVP 通过 CLI 输出稳定的 `backtest-report-summary-v1` JSON 和模拟成交 CSV。两者缺失时都能根据长期摘要/成交行确定性重建。判断、信号、未成交结果和每日权益属于独立有界详情行，受相同的 100 次/90 天或 14 天保留规则约束；它们绝不嵌入永久规范 blob，清理后即不可用。系统保存每日而非每分钟账户权益。原始供应商响应和重复历史 K 线不是结果资产。已批准的 FastAPI/Vue 方向现通过冻结的 42 路径 OpenAPI/生成 TypeScript 契约和真实生产路由实现。WEBF13 记录最终路由接线和新建回测旅程，不改变该契约；只有 Router 占位仍不能算完成。
+历史 `backtest-report-summary-v1` JSON 和模拟成交 CSV 作为冻结产物继续可读。两者缺失时都能根据长期摘要/成交行确定性重建。判断、信号、未成交结果和每日权益属于独立有界详情行，受相同的 100 次/90 天或 14 天保留规则约束；它们绝不嵌入永久规范 blob，清理后即不可用。系统保存每日而非每分钟账户权益。原始供应商响应和重复历史 K 线不是结果资产。已批准的 FastAPI/Vue 方向现通过冻结的 42 路径 OpenAPI/生成 TypeScript 契约和真实生产路由实现。WEBF13 记录最终路由接线和新建回测旅程，不改变该契约；只有 Router 占位仍不能算完成。
 
 ## 保留与性能
 
@@ -213,17 +201,17 @@ MVP 通过 CLI 输出稳定的 `backtest-report-summary-v1` JSON 和模拟成交
 
 清理使用带索引的 `run_id`、状态、完成/创建时间、materialization 和置顶状态，以最多 1,000 行的有界批次删除，并且绝不在实时监控或回测运行期间执行大型 `VACUUM`。`prune` 在同一总批次预算内先移除符合条件的废弃 staged 详情/成交/摘要行，再移除已发布过期详情；近期或置顶 stage 仍可用于恢复。WAL 检查点只在安全阶段/停止边界执行；`VACUUM` 是显式离线维护操作。
 
-结果存储已经实现置顶状态和清理豁免。公开 Web/API 置顶/取消置顶与初始持仓管理已经实现；当前 CLI 提供 `list` 与 `prune`，但尚未提供置顶/取消置顶命令或初始持仓输入。
+结果存储已经实现置顶状态和清理豁免。公开 Web/API 置顶/取消置顶与初始持仓管理已经实现。
 
 在获批的最多 10 只股票规模下，一个普通年度约有 600,000 条分钟行，5 年约 3,000,000 条。查询必须使用 `(symbol, bar_end)` 或数据集/运行/日期索引，按交易日有界分块回放，不能把多年数据一次性载入内存。已完成的 `BC01` 性能验收定义明确的数据库、WAL、内存、任务和线程上限，并证明重复运行不会增长行情表或结果表。当前仓库级门禁由实时生产链路验收记录单独报告。
 
 ## 安全与运维边界
 
-- 始终：`backtest sync` 必须使用环境密钥引用并获得明确联网授权。
+- 始终：`DATA_SYNC` 必须使用环境密钥引用并获得明确联网授权。
 - 始终：下载事实必须先校验再持久化，并保留稳定、脱敏的供应商错误。
 - 始终：网络调用位于数据库事务外，三个存储域保持隔离。
 - 始终：已接受的 Web 运行只能在只读实时存储事务中解析恰好一个不可变计划版本，在响应前持久化其已校验快照，并且提交期间对实时存储执行零写入。
-- 始终：直接 CLI 运行使用显式 CLI `--plan` 文件；durable 提交边界之后，worker 和回放对实时存储执行零读取和零写入。
+- 始终：durable 提交边界之后，worker 和回放对实时存储执行零读取和零写入。
 - 始终：历史日历显式请求 `SSE`/`SZSE` 交易所 identity；在另行验证 BSE 日历契约前阻断 `.BJ`。
 - 始终：每次读取冻结 artifact 都重新计算哈希，报告文件只能根据已验证的 staged 规范内容恢复。
 - 始终：配置和报告显著说明不复权价格/公司行动限制。MVP 不会静默应用 `qfq` 或 `hfq`，也不模拟分红、拆股、配股或其他公司行动。

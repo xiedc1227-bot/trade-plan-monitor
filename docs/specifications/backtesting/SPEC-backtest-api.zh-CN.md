@@ -113,7 +113,7 @@ python scripts/generate_frontend_types.py --check
 | `BacktestAssumptionsView` | `eventRiskAssumption`、`executionConfig`、`executionConfigHash`、`priceAdjustmentPolicy`、`historicalProfile` |
 | `BacktestFormulaVersionsView` | `runFormulaVersion`、`reportSchemaVersion`、`executionFormulaVersion`、`metricFormulaVersion` |
 
-`BacktestRunView.coverage` 是 `BacktestRunCoverageView`，而数据集/任务校验 coverage 是 `BacktestDatasetCoverageView`。`BacktestAssumptionsView.executionConfig` 是 `BacktestExecutionConfigView`。上述每个 `*Fen` 输出都是 `FenText`；`totalReturn`、`maximumDrawdown`、`winRate`、费率和滑点是其 Domain 范围内的规范 `DecimalText`，绝不是 JSON Number。`limitations` 是最多 32 个稳定 Token 的有序、不重复列表，每项最多 128 个字符。`planVersionId` 可空，因为来自 CLI 的已完成结果可能没有实时计划行；`planVersionId` 过滤只匹配相同非空审计引用并排除空值行。只有原子发布已完成结果后才存在运行资源；不存在部分或失败的 `BacktestRunView`。
+`BacktestRunView.coverage` 是 `BacktestRunCoverageView`，而数据集/任务校验 coverage 是 `BacktestDatasetCoverageView`。`BacktestAssumptionsView.executionConfig` 是 `BacktestExecutionConfigView`。上述每个 `*Fen` 输出都是 `FenText`；`totalReturn`、`maximumDrawdown`、`winRate`、费率和滑点是其 Domain 范围内的规范 `DecimalText`，绝不是 JSON Number。`limitations` 是最多 32 个稳定 Token 的有序、不重复列表，每项最多 128 个字符。`planVersionId` 可空，因为既有历史结果可能没有实时计划行；`planVersionId` 过滤只匹配相同非空审计引用并排除空值行。只有原子发布已完成结果后才存在运行资源；不存在部分或失败的 `BacktestRunView`。
 
 ### 结果 Schema
 

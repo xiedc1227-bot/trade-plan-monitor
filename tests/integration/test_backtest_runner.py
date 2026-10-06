@@ -13,10 +13,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-import trade_plan_monitor.backtest.application as application_module
+import trade_plan_monitor.backtest.reporting as reporting_module
 import trade_plan_monitor.backtest.runner as runner_module
 import trade_plan_monitor.decision.models as decision_models_module
-from trade_plan_monitor.backtest.application import BacktestApplicationService
 from trade_plan_monitor.backtest.control import BacktestCancellationResult, CancellationToken
 from trade_plan_monitor.backtest.dataset import DatasetScope
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
@@ -1549,47 +1548,38 @@ def test_missing_report_files_are_rebuilt_from_materialized_results(
     tmp_path,
     monkeypatch,
 ) -> None:
-    market_path = tmp_path / "market.sqlite3"
-    dataset_hash = _seed_dataset(BacktestMarketStore(market_path))
-    result_path = tmp_path / "results.sqlite3"
-    report_directory = tmp_path / "reports"
-    service = BacktestApplicationService(
-        config_path=tmp_path / "unused.yaml",
-        market_database=market_path,
-        results_database=result_path,
-        report_directory=report_directory,
+    market_store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    report = OfflineBacktestRunner(market_store).run(
+        plan=_plan(),
+        dataset_hash=_seed_dataset(market_store),
+        initial_cash_fen=10_000_000,
+        execution_config=_execution_config(),
+        manual_event_risk=False,
     )
-    monkeypatch.setattr(application_module, "_load_plan", lambda _path: _plan())
-    original_write = application_module.write_report_files
+    store = BacktestResultStore(tmp_path / "results.sqlite3")
+    persist_report(store, report)
+    summary = store.get_run(report.run_id)
+    assert summary is not None
+    fills = store.list_fills(report.run_id)
+    json_path = tmp_path / "reports" / f"{report.run_id}.json"
+    csv_path = tmp_path / "reports" / f"{report.run_id}.fills.csv"
+    original_write = reporting_module._atomic_write
 
     def fail_report_write(*_args, **_kwargs):
         raise OSError("injected report write failure")
 
-    monkeypatch.setattr(application_module, "write_report_files", fail_report_write)
-    arguments = {
-        "dataset_hash": dataset_hash,
-        "plan_path": tmp_path / "plan.yaml",
-        "initial_cash_yuan": Decimal("100000"),
-        "commission_rate": Decimal("0.0003"),
-        "minimum_commission_yuan": Decimal("5"),
-        "stamp_duty_rate": Decimal("0.0005"),
-        "transfer_fee_rate": Decimal("0.00001"),
-        "buy_slippage_bps": Decimal("2"),
-        "sell_slippage_bps": Decimal("2"),
-        "manual_event_risk": False,
-    }
+    monkeypatch.setattr(reporting_module, "_atomic_write", fail_report_write)
     with pytest.raises(OSError, match="injected report"):
-        service.run(**arguments)
-
-    run = BacktestResultStore(result_path).list_runs()[0]
-    json_path = report_directory / f"{run.run_id}.json"
-    csv_path = report_directory / f"{run.run_id}.fills.csv"
+        reporting_module.write_persisted_report_files(
+            summary, fills, json_path=json_path, csv_path=csv_path
+        )
+    assert store.get_run(report.run_id) == summary
     assert not json_path.exists()
     assert not csv_path.exists()
 
-    monkeypatch.setattr(application_module, "write_report_files", original_write)
-    recovered = service.run(**arguments)
-
-    assert recovered.reused is True
+    monkeypatch.setattr(reporting_module, "_atomic_write", original_write)
+    reporting_module.write_persisted_report_files(
+        summary, fills, json_path=json_path, csv_path=csv_path
+    )
     assert json_path.exists()
     assert csv_path.exists()

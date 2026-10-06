@@ -8,7 +8,6 @@ from contextlib import closing
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
-from inspect import getsource
 from pathlib import Path
 from threading import Event, Thread, get_ident
 from time import monotonic
@@ -18,7 +17,6 @@ import pytest
 
 from trade_plan_monitor.backtest import application as backtest_application
 from trade_plan_monitor.backtest.application import (
-    BacktestApplicationService,
     create_backtest_job_operations,
 )
 from trade_plan_monitor.backtest.control import (
@@ -27,13 +25,11 @@ from trade_plan_monitor.backtest.control import (
     CancellationToken,
 )
 from trade_plan_monitor.backtest.dataset import (
-    BacktestDatasetCoverage,
     DatasetManifest,
     DatasetScope,
 )
 from trade_plan_monitor.backtest.jobs import (
     BacktestDatasetScopeRequest,
-    BacktestDatasetVerificationJobResult,
     BacktestDataSyncJobResult,
     BacktestJobCoordinator,
     BacktestJobOperations,
@@ -41,7 +37,6 @@ from trade_plan_monitor.backtest.jobs import (
     BacktestJobStatus,
     BacktestRunJobRequest,
     BacktestRunJobResult,
-    DatasetVerifyJobRequest,
     DataSyncJobRequest,
 )
 from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
@@ -561,68 +556,6 @@ def test_active_repository_failure_cannot_bypass_shutdown_timeout(tmp_path) -> N
     asyncio.run(scenario())
 
 
-def test_local_job_composition_binds_transport_sqlite_and_shutdown_to_one_policy(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    config_path = tmp_path / "app.yaml"
-    config_path.write_text(
-        "tushare:\n  api_url: https://api.quicksync.cn\n  timeout_seconds: 30\n",
-        encoding="utf-8",
-    )
-    captured_timeouts: list[int] = []
-
-    def capture_client(configuration):
-        captured_timeouts.append(configuration.timeout_seconds)
-        return object()
-
-    class ClosedDayProvider:
-        def trading_calendar(self, exchange: str, start: date, end: date):
-            assert (exchange, start, end) == ("SSE", _TRADE_DATE, _TRADE_DATE)
-            return (
-                TradingDay(
-                    exchange="SSE",
-                    cal_date=_TRADE_DATE,
-                    is_open=False,
-                    previous_trade_date=date(2026, 8, 21),
-                ),
-            )
-
-        def historical_minute_batch(self, *_args):
-            raise AssertionError("closed day must not request minutes")
-
-        def daily_limits(self, *_args):
-            raise AssertionError("closed day must not request limits")
-
-        def daily_bars(self, *_args):
-            raise AssertionError("closed day must not request daily bars")
-
-    monkeypatch.setattr(backtest_application, "create_tushare_client", capture_client)
-    monkeypatch.setattr(
-        backtest_application,
-        "TushareHistoricalMinuteProvider",
-        lambda *_args, **_kwargs: ClosedDayProvider(),
-    )
-    use_cases = backtest_application._LocalBacktestJobUseCases(
-        config_path=config_path,
-        market_database=tmp_path / "bounded-market.sqlite3",
-        results_database=tmp_path / "bounded-results.sqlite3",
-    )
-
-    result = asyncio.run(
-        use_cases.execute(
-            _sync_request(),
-            request_id="8" * 32,
-        )
-    )
-
-    assert result.network_calls == 1
-    assert captured_timeouts == [2]
-    assert use_cases._market_store._busy_timeout_ms == 2_000
-    assert use_cases._repository._busy_timeout_ms == 2_000
-    assert use_cases._results._busy_timeout_ms == 2_000
-    assert use_cases._shutdown_policy.cancellation_safe_boundary_seconds == 4.5
-    assert use_cases._shutdown_policy.shutdown_timeout_seconds == 5.0
 
 
 def test_public_operation_factory_is_lazy_and_uses_explicit_stores(
@@ -873,76 +806,3 @@ def test_maintenance_rolls_back_job_pruning_when_result_participant_fails(
         maintenance.prune(as_of=now[0], batch_size=1_000)
 
     assert repository.get(receipt.job_id) is not None
-
-
-def test_cli_facade_routes_typed_sync_and_verify_through_durable_job_use_cases(
-    tmp_path,
-) -> None:
-    calls: list[tuple[object, str | None]] = []
-    coverage = BacktestDatasetCoverage(
-        symbol_count=1,
-        trading_day_count=1,
-        calendar_row_count=1,
-        minute_day_count=1,
-        minute_bar_count=240,
-        daily_limit_row_count=1,
-        daily_bar_row_count=1,
-        blockers=(),
-    )
-
-    class DurableUseCases:
-        async def execute(self, request, *, request_id=None):
-            calls.append((request, request_id))
-            if isinstance(request, DataSyncJobRequest):
-                return BacktestDataSyncJobResult(
-                    calendar_rows=1,
-                    minute_days=1,
-                    daily_limit_rows=1,
-                    daily_bar_rows=1,
-                    network_calls=4,
-                )
-            assert isinstance(request, DatasetVerifyJobRequest)
-            return BacktestDatasetVerificationJobResult(
-                ready=True,
-                dataset_hash=_hash("verified-dataset"),
-                coverage=coverage,
-                blockers=(),
-            )
-
-    service = BacktestApplicationService(
-        config_path=tmp_path / "unused.yaml",
-        market_database=tmp_path / "market.sqlite3",
-        results_database=tmp_path / "results.sqlite3",
-        report_directory=tmp_path / "reports",
-        job_use_cases=DurableUseCases(),
-    )
-
-    sync_result = asyncio.run(
-        service.sync(
-            symbols=("600000.SH",),
-            start=_TRADE_DATE,
-            end=_TRADE_DATE,
-            warmup_start=_TRADE_DATE,
-            refresh=False,
-            allow_network=True,
-        )
-    )
-    verify_result = service.verify(
-        symbols=("600000.SH",),
-        start=_TRADE_DATE,
-        end=_TRADE_DATE,
-        warmup_start=_TRADE_DATE,
-    )
-
-    assert sync_result.network_calls == 4
-    assert verify_result.ready is True
-    assert verify_result.dataset_hash == _hash("verified-dataset")
-    assert isinstance(calls[0][0], DataSyncJobRequest)
-    assert calls[0][0].allow_network is True
-    assert calls[0][1] is not None
-    assert isinstance(calls[1][0], DatasetVerifyJobRequest)
-    assert calls[1][1] is None
-    run_source = getsource(BacktestApplicationService.run)
-    assert "OfflineBacktestRunner" not in run_source
-    assert "persist_report" not in run_source
-    assert "_execute_job" in run_source

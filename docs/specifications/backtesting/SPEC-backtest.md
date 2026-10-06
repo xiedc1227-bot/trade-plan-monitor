@@ -4,7 +4,7 @@
 
 ## Objective
 
-Provide a deterministic A-share backtest that can be prepared and run outside market hours. An explicitly authorized `backtest sync` operation incrementally downloads Tushare/QuickSync historical data into an isolated market-data SQLite database. `backtest verify` freezes an exact content-addressed `dataset_hash`, and `backtest run` consumes only that frozen local dataset, the reviewed plan, and explicit execution assumptions without network access or wall-clock sleeps.
+Provide a deterministic A-share backtest that can be prepared and run outside market hours. An explicitly authorized `DATA_SYNC` operation incrementally downloads Tushare/QuickSync historical data into an isolated market-data SQLite database. `DATASET_VERIFY` freezes an exact content-addressed `dataset_hash`, and `BACKTEST_RUN` consumes only that frozen local dataset, the reviewed plan, and explicit execution assumptions without network access or wall-clock sleeps.
 
 The backtest reuses the production plan, market normalization, indicator, and pure decision contracts. It adds an isolated, versioned simulated-execution model for research only. It never sends an order, changes live monitoring state, or claims that historical `stk_mins` proves the live `rt_min` or `rt_min_daily` contracts.
 
@@ -19,7 +19,7 @@ The user approved this module on 2026-08-25 so historical-data validation and tr
 
 ## Module Decomposition
 
-`backtest` remains the stable umbrella identity and the compatibility home of the existing CLI MVP. The approved 2026-08-26 capability map decomposes the next release into six independently reviewable modules, implemented in dependency order:
+`backtest` remains the stable umbrella identity and the home of the Web/API workflow. The approved 2026-08-26 capability map decomposes the next release into six independently reviewable modules, implemented in dependency order:
 
 1. [`backtest-data`](SPEC-backtest-data.md) — authorized historical acquisition, immutable revisions, coverage, verification, and frozen `dataset_hash`;
 2. [`backtest-engine`](SPEC-backtest-engine.md) — deterministic event-time replay and `execution-model-v1` for one reviewed plan version and one symbol;
@@ -30,31 +30,19 @@ The user approved this module on 2026-08-25 so historical-data validation and tr
 
 The capability map and module direction are approved, and the user confirmed the linked detailed specification set on 2026-08-26. A bilingual cross-module consistency pass corrected UUID/CLI lookup identity, exact money/time projections, legacy-result reuse, incremental export, publication-size, and mutation-idempotency clauses without changing the approved boundaries. The user confirmed those corrected contracts on 2026-08-26, so the aggregate detailed specification is approved as corrected. The Section 15 and `BT009`–`BT050` authorization history preceded the now-complete offline implementation. The current Web/API surface uses the frozen 42-path contract, and WEBF13 closes route/journey acceptance without changing it. Commit, push, dependency installation, and real network access remain separately authorized actions; existing `BT001`–`BT008` work remains the local MVP history rather than being relabeled.
 
-## Commands
+## Operation entry points
 
-The implemented CLI surface is explicit and non-overlapping with the existing `replay` command:
-
-```powershell
-python -m trade_plan_monitor backtest sync --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31 --allow-network
-python -m trade_plan_monitor backtest verify --symbols 003043.SZ --start 2025-01-02 --end 2025-12-31
-python -m trade_plan_monitor backtest run --dataset <dataset_hash> --plan config/plans/003043.SZ.sample.yaml --initial-cash-yuan 100000 --commission-rate 0.0003 --minimum-commission-yuan 5 --stamp-duty-rate 0.0005 --transfer-fee-rate 0.00001 --buy-slippage-bps 2 --sell-slippage-bps 2 --no-event-risk
-python -m trade_plan_monitor backtest list --limit 20 --offset 0
-python -m trade_plan_monitor backtest prune --batch-size 1000
-```
-
-`sync` is the only command allowed to use the network and the configured `tushare.token`; it requires both user authorization and the literal `--allow-network` flag. `verify`, `run`, `list`, and `prune` are local-only. `sync` and `verify` default `warmup_start` to 400 calendar days before `start`; an explicit override must match across both commands. `run` fails unless its dataset is frozen and verified, all six fee/slippage inputs are present, and exactly one of `--no-event-risk` or `--manual-event-risk` is selected. The numeric values above are illustrative assumptions, not defaults. The current `replay` command keeps its existing monitor-event semantics.
-
-`OfflineBacktestRunner` includes immutable `initial_lots` in `run_id`. Validated public Web/API initial-lot input and pin/unpin paths are implemented and covered by acceptance evidence. The current CLI still exposes only `--initial-cash-yuan`, so CLI runs supply an empty initial-lot tuple and CLI operational commands remain `list` and `prune`.
+Web/API submits `DATA_SYNC`, `DATASET_VERIFY`, and `BACKTEST_RUN` to the background job coordinator. Only explicitly authorized `DATA_SYNC` may access the network; verification and replay read frozen local data. Validated requests supply fees, slippage, initial cash, initial lots, and event-risk assumptions. Web/API provides result queries, exports, and pinning; the bounded retention service remains an internal domain capability without a replacement public cleanup entry point. The backtest CLI and its compatibility adapters have been removed. Application startup and the existing monitoring `replay` command are unaffected.
 
 ## Architecture and Isolation
 
 ```text
 Tushare/QuickSync
-       │ explicit backtest sync; network outside transactions
+       │ explicit DATA_SYNC; network outside transactions
        ▼
 backtest-market.sqlite3
   normalized immutable row revisions + manifests
-       │ backtest verify → frozen dataset_hash
+       │ DATASET_VERIFY → frozen dataset_hash
        ▼
 offline event-time replay ──→ existing pure decision engine
        │                       + BACKTEST execution-model-v1
@@ -71,7 +59,7 @@ The three storage domains are separate:
 | `backtest-market.sqlite3` | normalized historical artifacts, immutable revisions, current heads, dataset manifests/membership, `dataset_hash` | live state, simulated fills, result details |
 | `backtest-results.sqlite3` | immutable run inputs, summaries, decisions, signals, fills/unfilled reasons, daily equity, retention metadata | copied market bars, live state, secrets |
 
-Market and result paths must resolve to different files. Before schema creation, each store rejects an existing SQLite database containing live tables or the other backtest domain's table prefixes. Backtest databases are not included in live-monitor online backups. A Web `BACKTEST_RUN` submission may open one read-only live-store transaction to read exactly one immutable plan version. It validates that version and durably persists the canonical plan snapshot with the accepted request before responding; submission performs zero live-store writes. Once that durable boundary commits, the worker and deterministic replay perform zero live-store reads and zero live-store writes. Direct CLI `backtest run` receives the plan through the explicit `--plan` file, validates the same snapshot contract locally, and never opens the live store. Completed `BC01` evidence compares exact logical live state immediately before and after Web submission, then immediately before and after worker/replay, and asserts zero notification calls.
+Market and result paths must resolve to different files. Before schema creation, each store rejects an existing SQLite database containing live tables or the other backtest domain's table prefixes. Backtest databases are not included in live-monitor online backups. A Web `BACKTEST_RUN` submission may open one read-only live-store transaction to read exactly one immutable plan version. It validates that version and durably persists the canonical plan snapshot with the accepted request before responding; submission performs zero live-store writes. Once that durable boundary commits, the worker and deterministic replay perform zero live-store reads and zero live-store writes. Completed `BC01` evidence compares exact logical live state immediately before and after Web submission, then immediately before and after worker/replay, and asserts zero notification calls.
 
 ## Historical Provider Contract
 
@@ -90,11 +78,11 @@ Tushare mapping is `stk_mins`, `trade_cal`, `stk_limit`, and unadjusted `daily`.
 
 Historical synchronization requests `trade_cal(exchange="SSE", ...)` and `trade_cal(exchange="SZSE", ...)` explicitly for the exchanges present in the scope; it never relies on an omitted or empty exchange argument. The official Tushare `trade_cal` contract does not list BSE as a supported exchange. Therefore any `.BJ` scope is rejected before network or persistence with stable blocker `UNSUPPORTED_HISTORICAL_CALENDAR:BSE`. BSE history remains unavailable until a separately verified calendar contract is approved; this does not remove `.BJ` from the live plan domain.
 
-The authorized 2026-08-25 observation for `600000.SH` on 2026-08-24 returned 241 `stk_mins` rows from 09:30 through 15:00. The provider constructor remains fail-closed at `UNVERIFIED`. The implemented versioned contract `TUSHARE_STK_MINS_241_END_V1`, selected explicitly by the CLI composition, preserves the 09:30 source row as non-strategy `opening_special` and requires the other end-labeled rows to match the existing 240 canonical trading-minute ends exactly. Unknown profiles cannot call the SDK or freeze a dataset; no implementation silently deletes, shifts, or accepts all 241 rows.
+The authorized 2026-08-25 observation for `600000.SH` on 2026-08-24 returned 241 `stk_mins` rows from 09:30 through 15:00. The provider constructor remains fail-closed at `UNVERIFIED`. The implemented versioned contract `TUSHARE_STK_MINS_241_END_V1`, selected explicitly by the worker composition, preserves the 09:30 source row as non-strategy `opening_special` and requires the other end-labeled rows to match the existing 240 canonical trading-minute ends exactly. Unknown profiles cannot call the SDK or freeze a dataset; no implementation silently deletes, shifts, or accepts all 241 rows.
 
 ## Incremental Synchronization
 
-`backtest sync` follows these invariants:
+`DATA_SYNC` follows these invariants:
 
 1. Validate symbols, closed date range, provider capability, exchange calendar, and configured unadjusted-price policy before retrieval. One `DatasetScope` contains 1–10 unique symbols, spans at most 5 calendar years from `start` through `end`, and permits at most 2 calendar years from `warmup_start` through `start`; broader requests fail before network or persistence.
 2. Compute missing symbol/trading-day/interface surfaces from local current heads and request only missing or explicitly refreshed surfaces. Every fetched reference response must contain exactly the requested identities: `trade_cal` covers every calendar date for its explicit exchange, `daily` covers every expected open-day `(symbol, trade_date)` in its requested span, and `stk_limit` covers every requested open-day `(symbol, trade_date)`. A missing, extra, or duplicate identity fails before persistence as `INVALID_RESPONSE:trade_cal`, `INVALID_RESPONSE:daily`, or `INVALID_RESPONSE:stk_limit`; `--refresh` cannot replace a complete head with a partial response.
@@ -109,7 +97,7 @@ Historical market data is retained as a shared deduplicated cache. A dataset ref
 
 ## Dataset Verification and Identity
 
-`backtest verify` is fully offline and fail-closed. It validates:
+`DATASET_VERIFY` is fully offline and fail-closed. It validates:
 
 - exact symbol/date coverage against `trade_cal`, including weekends, holidays, lunch, and the canonical 09:30/15:00 boundaries;
 - the versioned historical-label mapping and exactly 240 usable one-minute bars per full normal trading day unless an explicit exchange-session exception is represented;
@@ -127,7 +115,7 @@ Because `verify` receives no plan, plan-specific indicator sufficiency is checke
 
 `dataset_hash` is the canonical hash of the dataset-schema version, historical-label profile, symbol/date scope, adjustment policy, ordered immutable row-revision hashes, calendar/limit/daily facts, and warm-up boundary. Provider receipt time and local database row IDs are excluded unless they select a different content revision. Reverification of unchanged facts returns the same hash byte-for-byte. A provider correction creates a new hash while old datasets remain reproducible.
 
-Every backtest content and identity hash uses the same exact Decimal canonicalization. Finite numerically equal values with different scale, such as `0.0003` and `0.00030`, serialize to the same non-exponent fixed-point text and therefore the same hash; zero is always `0`, binary floating point is rejected, and no result depends on the process-global Decimal context. A value whose exact fixed-point expansion would exceed 10,000 characters fails closed before hashing rather than exhausting memory or creating a context-dependent identity. CLI yuan-to-fen conversion is equally context-independent: it accepts at most two fractional digits plus any additional trailing fractional zeroes, rejects an oversized exponent before expansion, and requires the converted amount to fit signed 64-bit fen, at most `9,223,372,036,854,775,807`.
+Every backtest content and identity hash uses the same exact Decimal canonicalization. Finite numerically equal values with different scale, such as `0.0003` and `0.00030`, serialize to the same non-exponent fixed-point text and therefore the same hash; zero is always `0`, binary floating point is rejected, and no result depends on the process-global Decimal context. A value whose exact fixed-point expansion would exceed 10,000 characters fails closed before hashing rather than exhausting memory or creating a context-dependent identity.
 
 Content addressing is verified on every frozen-artifact read, not only at insertion. Before parsing or replaying a referenced artifact, the store recomputes its canonical content hash and compares it with the frozen `artifact_hash`; any mismatch is a stable tamper/corruption blocker. A syntactically valid manifest or hash string never authorizes changed `content_json`.
 
@@ -182,7 +170,7 @@ Result publication uses a staged/materialized recovery protocol. It first stages
 
 ## Results and Reports
 
-The compatibility result schema can read bounded `COMPLETED`, `FAILED`, and `CANCELLED` summaries. The job-based path atomically materializes only complete `COMPLETED` research results with input identities, coverage, data-quality blockers, assumptions, start/end event time, and formula versions; failed/cancelled attempt diagnostics remain bounded job records so the same deterministic `run_id` can later complete. The current CLI materializes completed runs. Successful in-memory reports and retained detail rows include:
+The compatibility result schema can read bounded `COMPLETED`, `FAILED`, and `CANCELLED` summaries. The job-based path atomically materializes only complete `COMPLETED` research results with input identities, coverage, data-quality blockers, assumptions, start/end event time, and formula versions; failed/cancelled attempt diagnostics remain bounded job records so the same deterministic `run_id` can later complete. Successful in-memory reports and retained detail rows include:
 
 - data coverage and gap summary;
 - ordered decisions and `result_hash` values;
@@ -195,7 +183,7 @@ Every persisted detail identity is scoped by `run_id` as well as its decision/si
 
 Metric semantics are also explicit limitations: `DAILY_EQUITY_DRAWDOWN_SAMPLING` means maximum drawdown uses daily equity points and does not claim an intraday trough; `WIN_RATE_PER_SELL_FILL_NOT_ROUND_TRIP` means win rate classifies sell fills rather than reconstructed round trips; and `METRIC_DECIMAL_PRECISION_28_HALF_EVEN` means return, drawdown, and win-rate division uses an isolated Decimal context with precision 28 and `ROUND_HALF_EVEN`. All three tokens remain in the report assumptions/limitations, and ambient process precision cannot change metric bytes or identities.
 
-The MVP emits stable `backtest-report-summary-v1` JSON and a simulated-fill CSV through the CLI. Both can be deterministically reconstructed from the long-lived summary/fill rows when absent. Decisions, signals, unfilled outcomes, and daily equity remain separate bounded detail rows subject to the same 100-run/90-day or 14-day retention rules; they are never embedded in a permanent canonical blob, and pruning them makes them unavailable. The system persists daily rather than minute account equity. Raw provider responses and duplicated historical bars are not result artifacts. The approved FastAPI/Vue direction is implemented through the frozen 42-path OpenAPI/generated-TypeScript contract and real production routes. WEBF13 documents the final route wiring and new-backtest journey without changing that contract; a router-only placeholder remains insufficient.
+Historical `backtest-report-summary-v1` JSON and simulated-fill CSV remain readable as frozen artifacts. Both can be deterministically reconstructed from the long-lived summary/fill rows when absent. Decisions, signals, unfilled outcomes, and daily equity remain separate bounded detail rows subject to the same 100-run/90-day or 14-day retention rules; they are never embedded in a permanent canonical blob, and pruning them makes them unavailable. The system persists daily rather than minute account equity. Raw provider responses and duplicated historical bars are not result artifacts. The approved FastAPI/Vue direction is implemented through the frozen 42-path OpenAPI/generated-TypeScript contract and real production routes. WEBF13 documents the final route wiring and new-backtest journey without changing that contract; a router-only placeholder remains insufficient.
 
 ## Retention and Performance
 
@@ -213,17 +201,17 @@ Retention is explicit for published details and abandoned unpublished stages:
 
 Cleanup uses indexed `run_id`, status, completion/creation time, materialization, and pin state, deletes in bounded batches of at most 1,000 rows, and never runs a large `VACUUM` while monitoring or backtesting is active. `prune` first removes eligible abandoned staged detail/fill/summary rows within the same total batch budget, then published expired detail; recent or pinned stages remain available for recovery. WAL checkpoint occurs at safe phase/shutdown boundaries; `VACUUM` is an explicit offline maintenance operation.
 
-Pin state and prune exemption are implemented in the result store. Public Web/API pin/unpin and initial-lot management are implemented; the current CLI exposes `list` and `prune` but not pin/unpin or initial-lot input.
+Pin state and prune exemption are implemented in the result store. Public Web/API pin/unpin and initial-lot management are implemented.
 
 At the approved maximum of 10 symbols, one normal year is approximately 600,000 minute rows and 5 years approximately 3,000,000. Queries must use `(symbol, bar_end)` or dataset/run/date indexes and replay in day-sized bounded chunks rather than loading a multi-year dataset into memory. Completed `BC01` performance acceptance defines explicit database, WAL, memory, task, and thread ceilings and proves repeated runs do not grow market or result tables. The current repository-wide gate is reported separately by the live-production-chain acceptance record.
 
 ## Security and Operational Boundaries
 
-- Always require an environment secret reference and explicit network authorization for `backtest sync`.
+- Always require an environment secret reference and explicit network authorization for `DATA_SYNC`.
 - Always validate downloaded facts before persistence and preserve stable sanitized provider errors.
 - Always keep network calls outside database transactions and keep the three storage domains isolated.
 - Always resolve exactly one immutable plan version for an accepted Web run in a read-only live-store transaction, persist its validated snapshot before responding, and perform zero live-store writes during submission.
-- Always use the explicit CLI `--plan` file for direct CLI runs and enforce zero live-store reads and writes by workers and replay after the durable submission boundary.
+- Always enforce zero live-store reads and writes by workers and replay after the durable submission boundary.
 - Always request historical calendars for explicit `SSE`/`SZSE` exchange identities and block `.BJ` until a separately verified BSE calendar contract exists.
 - Always recompute frozen artifact hashes on read and recover report files only from verified staged canonical content.
 - Always state unadjusted-price/corporate-action limitations prominently in configuration and reports. The MVP does not silently apply `qfq` or `hfq` and does not model dividends, splits, rights issues, or other corporate actions.

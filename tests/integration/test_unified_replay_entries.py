@@ -1,8 +1,6 @@
-"""Real temporary HTTP/job/results and local CLI entries for reviewed current replay."""
+"""Real temporary HTTP/job/results entries for reviewed current replay."""
 
-import json
 import time
-from pathlib import Path
 from threading import Event
 from uuid import uuid4
 
@@ -159,53 +157,3 @@ def test_reviewed_inactive_current_api_job_read_export_uses_frozen_input(
         export = client.get(f"/api/v1/backtest-runs/{run_id}/exports/SUMMARY_JSON")
         assert export.status_code == 200, export.text
         assert export.json()["schemaVersion"] == "backtest-report-summary-v4"
-
-
-def test_real_cli_current_run_reads_local_input_and_publishes(tmp_path, capsys):
-    from trade_plan_monitor.cli import main
-    from trade_plan_monitor.domain.plan_codec import dump_plan_json
-
-    store, dataset_hash, plan, frozen = fixture(tmp_path)
-    plan_path = tmp_path / "plan.json"
-    research_path = tmp_path / "research.json"
-    plan_path.write_text(dump_plan_json(plan), encoding="utf-8")
-    research_path.write_text(frozen.model_dump_json(), encoding="utf-8")
-    result = main(
-        [
-            "backtest",
-            "run",
-            "--dataset",
-            dataset_hash,
-            "--plan",
-            str(plan_path),
-            "--research-input",
-            str(research_path),
-            "--initial-cash-yuan",
-            "10000",
-            "--commission-rate",
-            "0.0003",
-            "--minimum-commission-yuan",
-            "5",
-            "--stamp-duty-rate",
-            "0.0005",
-            "--transfer-fee-rate",
-            "0.00001",
-            "--buy-slippage-bps",
-            "1",
-            "--sell-slippage-bps",
-            "1",
-            "--no-event-risk",
-            "--market-db",
-            str(tmp_path / "market.sqlite"),
-            "--results-db",
-            str(tmp_path / "results.sqlite"),
-            "--report-dir",
-            str(tmp_path / "reports"),
-        ]
-    )
-    assert result == 0
-    output = json.loads(capsys.readouterr().out)
-    assert (
-        json.loads(Path(output["json_report"]).read_text())["schemaVersion"]
-        == "backtest-report-summary-v4"
-    )

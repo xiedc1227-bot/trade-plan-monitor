@@ -14,7 +14,7 @@ Jobs share `backtest-results.sqlite3` with result records but use their own tabl
 
 ## Commands
 
-No new direct worker command is public in the first release. The production FastAPI lifespan starts and stops one explicitly injected coordinator plus both owned executors. Coordination, polling, lease-recovery, and heartbeat decisions remain on the event loop; their event-loop-facing synchronous SQLite calls run only in the owned repository executor, operation progress persists from the operation executor, and execution receives a cross-thread-safe cancellation token. Shutdown stops new claims, requests cancellation, closes queued futures, and releases both executors after the bounded provider/SQLite/safe-boundary contract, including when the background task fails. `asyncio.to_thread`, the default executor, and untracked request tasks are forbidden. Existing CLI commands remain compatibility adapters and must migrate to the same application use cases without duplicating business rules. A future offline maintenance command requires separate approval.
+No new direct worker command is public in the first release. The production FastAPI lifespan starts and stops one explicitly injected coordinator plus both owned executors. Coordination, polling, lease-recovery, and heartbeat decisions remain on the event loop; their event-loop-facing synchronous SQLite calls run only in the owned repository executor, operation progress persists from the operation executor, and execution receives a cross-thread-safe cancellation token. Shutdown stops new claims, requests cancellation, closes queued futures, and releases both executors after the bounded provider/SQLite/safe-boundary contract, including when the background task fails. `asyncio.to_thread`, the default executor, and untracked request tasks are forbidden. Backtest CLI adapters and their standalone command-owned coordinator are removed; the Web/API lifespan owns job execution. The shared maintenance transaction remains an internal domain capability; removal does not add an automatic cleanup scheduler or a replacement public command.
 
 ## Job Model
 
@@ -74,7 +74,7 @@ For `BACKTEST_RUN`, `backtest-jobs` owns the shared Unit of Work. The completion
 
 ## Security and Observability
 
-Trust boundaries are browser/CLI commands, persisted canonical request JSON, worker claim tokens, provider/engine failures, and process restart. Assets are local availability, immutable result identity, provider credentials, plan contents, and the guarantee of zero live side effects.
+Trust boundaries are browser/API requests, persisted canonical request JSON, worker claim tokens, provider/engine failures, and process restart. Assets are local availability, immutable result identity, provider credentials, plan contents, and the guarantee of zero live side effects.
 
 - Persist only the bounded canonical structured plan snapshot required by a run; never persist raw natural-language source or extraction evidence in a job. Never log secrets, provider bodies, stack traces, SQL, client-supplied database paths, plan contents, or claim tokens.
 - Treat persisted `allowNetwork: true` as a job-scoped audited authorization fact. Resolve credentials only from current server configuration at execution time; cancellation/terminal state never transfers authorization to a resubmission.

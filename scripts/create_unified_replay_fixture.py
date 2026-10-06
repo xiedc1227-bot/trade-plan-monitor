@@ -179,50 +179,10 @@ def create_fixture(directory: Path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--run", action="store_true", help="also run both real local CLI examples")
     args = parser.parse_args()
     directory = args.output.resolve()
     dataset_hash = create_fixture(directory)
     print(json.dumps({"directory": str(directory), "datasetHash": dataset_hash}))
-    if args.run:
-        from trade_plan_monitor.cli import main as cli
-
-        for mode in ("minute", "daily"):
-            result = cli(
-                [
-                    "backtest",
-                    "run",
-                    "--dataset",
-                    dataset_hash,
-                    "--plan",
-                    str(directory / f"{mode}-plan.json"),
-                    "--research-input",
-                    str(directory / f"{mode}-research.json"),
-                    "--initial-cash-yuan",
-                    "10000",
-                    "--commission-rate",
-                    "0.0003",
-                    "--minimum-commission-yuan",
-                    "5",
-                    "--stamp-duty-rate",
-                    "0.0005",
-                    "--transfer-fee-rate",
-                    "0.00001",
-                    "--buy-slippage-bps",
-                    "1",
-                    "--sell-slippage-bps",
-                    "1",
-                    "--no-event-risk",
-                    "--market-db",
-                    str(directory / "market.sqlite"),
-                    "--results-db",
-                    str(directory / "results.sqlite"),
-                    "--report-dir",
-                    str(directory / "reports"),
-                ]
-            )
-            if result:
-                raise SystemExit(result)
 
 
 if __name__ == "__main__":
