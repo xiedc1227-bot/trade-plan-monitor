@@ -36,6 +36,8 @@
 
 ## 回测规格
 
+- [监控闭环回测方案 — DRAFT，待审阅](specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md) ([English](specifications/backtesting/PROPOSAL-monitor-loop-backtest.md))
+- 当前监控闭环实施：[方案](../tasks/plan.zh-CN.md)（[English](../tasks/plan.md)）与[任务](../tasks/todo.zh-CN.md)（[English](../tasks/todo.md)）；待实施。
 - [统一计划历史回放](specifications/backtesting/SPEC-unified-replay.zh-CN.md) ([English](specifications/backtesting/SPEC-unified-replay.md))
 - [backtest-api](specifications/backtesting/SPEC-backtest-api.zh-CN.md) ([English](specifications/backtesting/SPEC-backtest-api.md))
 - [backtest-data](specifications/backtesting/SPEC-backtest-data.zh-CN.md) ([English](specifications/backtesting/SPEC-backtest-data.md))
