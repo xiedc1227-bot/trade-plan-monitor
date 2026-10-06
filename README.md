@@ -192,6 +192,8 @@ command changes directories itself.
 | Command | Purpose | Current availability |
 |---|---|---|
 | `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | Serve packaged SPA, API, WebSocket, file-configured AI drafting, and persistent plan management | Available; WEBF05 composes the monitor lazily and reports honest read-only `DEGRADED` until live prerequisites are verified; missing projections remain unavailable |
+| `SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT` / `SQLITE_EMPTY_WAL_RECOVERY_BUSY` / `SQLITE_EMPTY_WAL_RECOVERY_FAILED` | Backtest store startup can recover an empty `-wal` (optionally with `-shm`) only after immutable inspection confirms the complete current schema and no pending migration or metadata correction. SQLite checkpoints and closes the recovery connection; startup then repeats strict inventory and requires all sidecars to be gone. Close other application/IDE database connections if recovery is busy or sidecars remain. Non-empty WAL, rollback journals, orphaned files, unknown/legacy schemas and pending extensions still require stopped, verified maintenance; never delete sidecars manually. Migration inventory itself remains read-only and rejects every sidecar. |
+| `SQLITE_SOURCE_BUSY_OR_UNREADABLE` | SQLite byte-range locks on Windows or filesystem permissions prevented reading a source file during preflight. Close other database connections and check file permissions before retrying. Preflight preserves the source. |
 | `python -m trade_plan_monitor --help` | Show the stable installed command surface | Available |
 | `python -m pytest -q` | Run the complete backend suite | Available; offline |
 | `python -m ruff check --no-cache src tests` | Run backend lint | Available; offline |

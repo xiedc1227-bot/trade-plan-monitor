@@ -45,6 +45,7 @@ from trade_plan_monitor.backtest.migration import (
     MigrationPreflightError,
     create_market_index_schema,
     inspect_market_database,
+    prepare_store_initialization,
     require_safe_store_initialization,
 )
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
@@ -339,7 +340,9 @@ class BacktestMarketStore:
         self._busy_timeout_ms = busy_timeout_ms
         if self._path.exists() and not self._path.is_file():
             raise ValueError("database_path must point to a file")
-        self._migration_inventory = inspect_market_database(self._path)
+        self._migration_inventory = prepare_store_initialization(
+            self._path, store="market", busy_timeout_ms=busy_timeout_ms
+        )
         reject_incompatible_database(
             self._path,
             store_name="backtest market",

@@ -160,6 +160,8 @@ p95 ≤ 200 毫秒。排除 ECharts 的入口/共享包必须 ≤ 150 KiB gzip�
 | 命令 | 用途 | 当前可用性 |
 |---|---|---|
 | `trade-plan-monitor web --config config/app.yaml --host 127.0.0.1 --port 8765` | 提供已打包 SPA、API、WebSocket、配置文件驱动的 AI 草稿和持久计划管理 | 可用；WEBF05 惰性组合监控，并在实时前置条件验证前诚实报告只读 `DEGRADED`；缺失权威投影时保持不可用 |
+| `SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT` / `SQLITE_EMPTY_WAL_RECOVERY_BUSY` / `SQLITE_EMPTY_WAL_RECOVERY_FAILED` | 回测存储启动只在不可变只读检查确认结构为完整当前版本、没有待迁移项或元数据修正后，恢复空 `-wal`（可伴随 `-shm`）。SQLite 执行 checkpoint 并关闭恢复连接，随后启动重新执行严格预检，要求所有伴随文件均已消失。若恢复被占用阻断或伴随文件仍存在，关闭其他应用/IDE 的数据库连接。有内容的 WAL、回滚日志、孤立文件、未知/旧结构及待扩展结构仍需在停止状态下进行已验证维护；不要手动删除伴随文件。迁移预检本身保持只读，拒绝所有伴随文件。 |
+| `SQLITE_SOURCE_BUSY_OR_UNREADABLE` | Windows 上的 SQLite 字节范围锁或文件系统权限阻止了预检读取源文件。关闭其他数据库连接并检查文件权限后重试。预检保留源文件。 |
 | `python -m trade_plan_monitor --help` | 显示稳定的安装式命令面 | 可用 |
 | `python -m pytest -q` | 运行完整后端测试 | 可用；离线 |
 | `python -m ruff check --no-cache src tests` | 运行后端代码检查 | 可用；离线 |

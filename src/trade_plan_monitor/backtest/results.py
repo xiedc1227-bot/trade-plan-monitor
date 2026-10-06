@@ -34,7 +34,7 @@ from pydantic import (
 from trade_plan_monitor.backtest.canonical import canonical_decimal, canonical_json
 from trade_plan_monitor.backtest.migration import (
     MigrationInventory,
-    inspect_result_database,
+    prepare_store_initialization,
     require_safe_store_initialization,
 )
 from trade_plan_monitor.backtest.run_input import BacktestRunInput
@@ -603,7 +603,9 @@ class BacktestResultStore:
         self._path = Path(database_path).expanduser().resolve()
         if self._path.exists() and not self._path.is_file():
             raise ValueError("database_path must point to a file")
-        self._migration_inventory = inspect_result_database(self._path)
+        self._migration_inventory = prepare_store_initialization(
+            self._path, store="result", busy_timeout_ms=busy_timeout_ms
+        )
         reject_incompatible_database(
             self._path,
             store_name="backtest result",

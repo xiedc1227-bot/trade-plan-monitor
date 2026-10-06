@@ -46,6 +46,7 @@ from trade_plan_monitor.backtest.migration import (
     MigrationPreflightError,
     create_backtest_job_schema,
     inspect_result_database,
+    prepare_store_initialization,
     require_safe_store_initialization,
 )
 from trade_plan_monitor.backtest.results import (
@@ -170,7 +171,9 @@ class BacktestJobRepository:
                 clock=monotonic_clock,
             )
         )
-        self._migration_inventory = inspect_result_database(self._path)
+        self._migration_inventory = prepare_store_initialization(
+            self._path, store="result", busy_timeout_ms=busy_timeout_ms
+        )
         reject_incompatible_database(
             self._path,
             store_name="backtest job",

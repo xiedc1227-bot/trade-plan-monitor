@@ -311,9 +311,11 @@ def test_composite_lifespan_preserves_direct_services_and_original_validation_er
     assert events[-2:] == ["runtime.start", "runtime.stop"]
 
 
+@pytest.mark.parametrize("empty_wal_remnants", [False, True])
 def test_real_production_composition_starts_and_stops_one_coordinator(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
+    empty_wal_remnants: bool,
 ) -> None:
     calls = {"start": 0, "shutdown": 0}
     original_start = BacktestJobCoordinator.start
@@ -332,6 +334,12 @@ def test_real_production_composition_starts_and_stops_one_coordinator(
     market_database = tmp_path / "market.sqlite3"
     results_database = tmp_path / "results.sqlite3"
     cursor_key_path = tmp_path / "cursor.key"
+    if empty_wal_remnants:
+        backtest_composition.BacktestMarketStore(market_database)
+        job_repository.BacktestJobRepository(results_database)
+        for database in (market_database, results_database):
+            Path(f"{database}-wal").write_bytes(b"")
+            Path(f"{database}-shm").write_bytes(bytes(32_768))
     factory = create_backtest_composition_factory(
         config_path=Path("config/app.yaml"),
         plan_snapshot_reader=_PlanSnapshotReader(),
@@ -348,6 +356,9 @@ def test_real_production_composition_starts_and_stops_one_coordinator(
         assert market_database.is_file()
         assert results_database.is_file()
         assert cursor_key_path.is_file()
+        for database in (market_database, results_database):
+            assert not Path(f"{database}-wal").exists()
+            assert not Path(f"{database}-shm").exists()
 
     assert calls == {"start": 1, "shutdown": 1}
 

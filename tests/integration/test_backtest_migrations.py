@@ -15,6 +15,7 @@ import pytest
 
 import trade_plan_monitor.backtest.migration as migration_module
 from trade_plan_monitor.backtest.dataset import DatasetScope
+from trade_plan_monitor.backtest.jobs.repository import BacktestJobRepository
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.migration import (
     DatabaseState,
@@ -709,6 +710,137 @@ def test_sidecar_blocker_preserves_main_schema_journal_and_sidecar_bytes(
         match="SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT",
     ):
         BacktestMarketStore(path)
+
+    assert _database_state(path) == before
+
+
+@pytest.mark.parametrize("store_factory", [BacktestMarketStore, BacktestJobRepository])
+def test_current_store_reopens_after_empty_wal_and_shm_are_left_behind(
+    tmp_path: Path,
+    store_factory,
+) -> None:
+    path = tmp_path / "empty-wal.sqlite3"
+    store = store_factory(path)
+    if store_factory is BacktestMarketStore:
+        _seed_frozen_market_dataset(store)
+    before = _database_state(path)
+    Path(f"{path}-wal").write_bytes(b"")
+    Path(f"{path}-shm").write_bytes(bytes(32_768))
+
+    store_factory(path)
+
+    assert _database_state(path) == before
+    assert not Path(f"{path}-wal").exists()
+    assert not Path(f"{path}-shm").exists()
+
+
+def test_result_store_reopens_after_empty_wal_is_left_behind(tmp_path: Path) -> None:
+    path = tmp_path / "result-empty-wal.sqlite3"
+    BacktestJobRepository(path)
+    before = _database_state(path)
+    Path(f"{path}-wal").write_bytes(b"")
+
+    BacktestResultStore(path)
+
+    assert _database_state(path) == before
+
+
+def test_empty_wal_does_not_relax_read_only_migration_inventory(tmp_path: Path) -> None:
+    path = tmp_path / "inventory-empty-wal.sqlite3"
+    BacktestMarketStore(path)
+    Path(f"{path}-wal").write_bytes(b"")
+    before = _database_state(path)
+
+    with pytest.raises(MigrationPreflightError, match="SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT"):
+        inspect_market_database(path)
+
+    assert _database_state(path) == before
+
+
+@pytest.mark.parametrize("seed", [_seed_partial_market_schema, _seed_legacy_results])
+def test_empty_wal_on_legacy_store_is_preserved_without_recovery(tmp_path: Path, seed) -> None:
+    path = tmp_path / "legacy-empty-wal.sqlite3"
+    seed(path)
+    Path(f"{path}-wal").write_bytes(b"")
+    before = _database_state(path)
+    factory = BacktestMarketStore if seed is _seed_partial_market_schema else BacktestResultStore
+
+    with pytest.raises(MigrationPreflightError, match="SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT"):
+        factory(path)
+
+    assert _database_state(path) == before
+
+
+@pytest.mark.parametrize("begin", ["BEGIN", "BEGIN IMMEDIATE"])
+def test_empty_wal_recovery_refuses_a_database_with_another_connection(
+    tmp_path: Path,
+    begin: str,
+) -> None:
+    path = tmp_path / "busy-empty-wal.sqlite3"
+    BacktestMarketStore(path)
+    before = _database_state(path)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute(begin)
+        connection.execute("SELECT COUNT(*) FROM market_artifact").fetchone()
+        assert Path(f"{path}-wal").stat().st_size == 0
+
+        with pytest.raises(
+            MigrationPreflightError,
+            match="SQLITE_(EMPTY_WAL_RECOVERY_BUSY|SIDECARS_REQUIRE_STOPPED_CHECKPOINT|"
+            "SOURCE_BUSY_OR_UNREADABLE)",
+        ):
+            BacktestMarketStore(path, busy_timeout_ms=50)
+
+        assert Path(f"{path}-wal").exists()
+        assert Path(f"{path}-shm").exists()
+
+    assert _database_state(path) == before
+
+
+@pytest.mark.parametrize("extra_sidecar", ["-journal", "-shm"])
+def test_empty_wal_recovery_preserves_unsafe_sidecar_combinations(
+    tmp_path: Path,
+    extra_sidecar: str,
+) -> None:
+    path = tmp_path / "unsafe-sidecars.sqlite3"
+    BacktestMarketStore(path)
+    if extra_sidecar == "-journal":
+        Path(f"{path}-wal").write_bytes(b"")
+    Path(f"{path}{extra_sidecar}").write_bytes(b"preserve-this-evidence")
+    before = _database_state(path)
+
+    with pytest.raises(MigrationPreflightError, match="SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT"):
+        BacktestMarketStore(path)
+
+    assert _database_state(path) == before
+
+
+@pytest.mark.parametrize("kind", ["unknown", "pending_extension", "utc_metadata"])
+def test_empty_wal_recovery_preserves_sources_needing_maintenance(
+    tmp_path: Path,
+    kind: str,
+) -> None:
+    path = tmp_path / "maintenance-empty-wal.sqlite3"
+    if kind == "unknown":
+        with closing(sqlite3.connect(path)) as connection:
+            connection.execute("CREATE TABLE unrelated (value TEXT)")
+    elif kind == "pending_extension":
+        BacktestResultStore(path)
+    else:
+        BacktestMarketStore(path)
+        with closing(sqlite3.connect(path)) as connection:
+            connection.execute(
+                "INSERT INTO market_dataset (dataset_hash, manifest_json, created_at) "
+                "VALUES (?, '{}', '2026-08-24T07:20:00.000000+00:00')",
+                ("1" * 64,),
+            )
+            connection.commit()
+    Path(f"{path}-wal").write_bytes(b"")
+    before = _database_state(path)
+    factory = BacktestResultStore if kind == "pending_extension" else BacktestMarketStore
+
+    with pytest.raises(MigrationPreflightError, match="SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT"):
+        factory(path)
 
     assert _database_state(path) == before
 

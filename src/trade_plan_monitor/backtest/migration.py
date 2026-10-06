@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 
 from trade_plan_monitor.backtest.time import normalize_market_metadata_timestamp
 
@@ -1092,6 +1093,47 @@ def inspect_result_database(path: str | Path) -> MigrationInventory:
     return _inspect_database(path, store="result")
 
 
+def prepare_store_initialization(
+    path: str | Path, *, store: Literal["market", "result"], busy_timeout_ms: int
+) -> MigrationInventory:
+    """Recover empty WAL remnants on a current store, then repeat strict inventory.
+
+    Migration inventory remains read-only and refuses all sidecars. Only startup
+    may let SQLite clean up an empty WAL after immutable schema/content checks;
+    legacy, unknown, pending-extension and non-empty WAL sources are untouched.
+    """
+
+    if store not in ("market", "result"):
+        raise ValueError("store must be market or result")
+    try:
+        return _inspect_database(path, store=store)
+    except MigrationPreflightError as error:
+        if error.code != "SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT":
+            raise
+
+    inventory = _inspect_database(path, store=store, allow_empty_wal=True)
+    if inventory.database_state is not DatabaseState.CURRENT or inventory.migration_reasons:
+        raise MigrationPreflightError("SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT")
+    assert_source_unchanged(inventory)
+    try:
+        with closing(
+            sqlite3.connect(
+                f"{inventory.database_path.as_uri()}?mode=rw",
+                uri=True,
+                timeout=busy_timeout_ms / 1_000,
+                isolation_level=None,
+            )
+        ) as connection:
+            # SQLite owns locking, checkpointing and sidecar cleanup. Never unlink
+            # files: even an initially empty WAL can be used by another connection.
+            row = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            if row is None or row[0] != 0:
+                raise MigrationPreflightError("SQLITE_EMPTY_WAL_RECOVERY_BUSY")
+    except sqlite3.Error as error:
+        raise MigrationPreflightError("SQLITE_EMPTY_WAL_RECOVERY_FAILED") from error
+    return _inspect_database(path, store=store)
+
+
 def require_safe_store_initialization(inventory: MigrationInventory) -> None:
     """Block automatic initialization when it would perform an unapproved migration."""
 
@@ -1745,7 +1787,9 @@ def _result_completed_only_content_hash(connection: sqlite3.Connection) -> str:
     return digest.hexdigest()
 
 
-def _inspect_database(path: str | Path, *, store: str) -> MigrationInventory:
+def _inspect_database(
+    path: str | Path, *, store: str, allow_empty_wal: bool = False
+) -> MigrationInventory:
     normalized_path = _normalize_path(path)
     before = _source_fingerprint(normalized_path)
     if not before.exists or before.size_bytes == 0:
@@ -1762,7 +1806,11 @@ def _inspect_database(path: str | Path, *, store: str) -> MigrationInventory:
         )
     if _read_header(normalized_path) != _SQLITE_HEADER:
         raise MigrationPreflightError("MIGRATION_SOURCE_NOT_SQLITE")
-    if before.sidecars:
+    if before.sidecars and not (
+        allow_empty_wal
+        and any(item.suffix == "-wal" and item.size_bytes == 0 for item in before.sidecars)
+        and all(item.suffix in ("-wal", "-shm") for item in before.sidecars)
+    ):
         raise MigrationPreflightError("SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT")
 
     try:
@@ -2321,9 +2369,13 @@ def _read_header(path: Path) -> bytes:
 
 def _hash_file(path: Path) -> str:
     digest = sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
+    try:
+        with path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+    except PermissionError as error:
+        # Windows SQLite byte-range locks can deny reads of an active SHM file.
+        raise MigrationPreflightError("SQLITE_SOURCE_BUSY_OR_UNREADABLE") from error
     return digest.hexdigest()
 
 
@@ -2358,5 +2410,6 @@ __all__ = [
     "inspect_result_database",
     "migrate_market_metadata",
     "migrate_result_database",
+    "prepare_store_initialization",
     "require_safe_store_initialization",
 ]
