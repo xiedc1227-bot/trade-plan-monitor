@@ -25,7 +25,6 @@ from trade_plan_monitor.market_data.models import AShareSymbol
 
 MAX_JOB_REQUEST_BYTES = 256 * 1024
 MAX_JOB_ERROR_CHARACTERS = 512
-MAX_QUEUED_JOBS = 100
 JOB_IDEMPOTENCY_DAYS = 14
 JOB_LEASE_SECONDS = 30
 JOB_MAX_CLAIM_GENERATIONS = 3
@@ -432,7 +431,6 @@ __all__ = [
     "JOB_PROGRESS_INTERVAL_SECONDS",
     "MAX_JOB_ERROR_CHARACTERS",
     "MAX_JOB_REQUEST_BYTES",
-    "MAX_QUEUED_JOBS",
     "BacktestDatasetScopeRequest",
     "BacktestDatasetVerificationJobResult",
     "BacktestDataSyncJobResult",

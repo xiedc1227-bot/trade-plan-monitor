@@ -227,7 +227,7 @@ class _DeferredCoordinator:
     def authorize_new_job(self, job_id: str) -> None:
         with self._lock:
             if self._instance is None:
-                self._pending_authorizations |= {job_id}
+                self._pending_authorizations = frozenset({job_id})
             elif self._instance.accepting:
                 self._instance.authorize_jobs(frozenset({job_id}))
 
@@ -661,8 +661,8 @@ class _ProductionBacktestService:
 
     async def resume_jobs(self, job_ids: frozenset[str]) -> None:
         """Validate explicitly selected pending work without changing its attempts."""
-        if not isinstance(job_ids, frozenset) or not 1 <= len(job_ids) <= 100:
-            raise ValueError("resume requires 1..100 selected job IDs")
+        if not isinstance(job_ids, frozenset) or len(job_ids) != 1:
+            raise ValueError("resume requires one selected job ID")
         for job_id in job_ids:
             job = await self._run_sync(self._repository.get, job_id)
             if job is None or job.status not in (
@@ -1250,13 +1250,8 @@ def _scope_request(scope: BacktestDatasetScopeInput) -> BacktestDatasetScopeRequ
 
 
 def _job_admission_api_error(error: JobAdmissionError) -> ApiError:
-    if error.code == "IDEMPOTENCY_CONFLICT":
+    if error.code in {"IDEMPOTENCY_CONFLICT", "BACKTEST_BUSY"}:
         return ApiError(ApiErrorCode.CONFLICT)
-    if error.code == "QUEUE_FULL":
-        return ApiError(
-            ApiErrorCode.RATE_LIMITED,
-            retry_after_seconds=_RETRY_AFTER_SECONDS,
-        )
     raise RuntimeError("unknown backtest job admission error")
 
 

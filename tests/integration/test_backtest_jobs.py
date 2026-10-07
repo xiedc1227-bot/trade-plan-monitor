@@ -279,22 +279,13 @@ def test_materialized_run_is_reused_immediately_and_same_key_expires_after_14_da
     assert _row_count(path, "backtest_job_idempotency") == 2
 
 
-def test_queue_capacity_is_exactly_100_and_lists_are_bounded(tmp_path: Path) -> None:
+def test_single_unfinished_task_and_history_list_bounds(tmp_path: Path) -> None:
     repository = BacktestJobRepository(tmp_path / "capacity.sqlite3")
-    for index in range(100):
-        receipt = repository.submit(
-            DatasetVerifyJobRequest(scope=_scope(day=index)),
-            f"verify-{index}",
-        )
-        assert receipt.status is BacktestJobStatus.QUEUED
-
-    with pytest.raises(JobAdmissionError) as full:
-        repository.submit(
-            DatasetVerifyJobRequest(scope=_scope(day=100)),
-            "verify-overflow",
-        )
-    assert full.value.code == "QUEUE_FULL"
-    assert len(repository.list_jobs(limit=100)) == 100
+    first = repository.submit(DatasetVerifyJobRequest(scope=_scope()), "first")
+    with pytest.raises(JobAdmissionError) as busy:
+        repository.submit(DatasetVerifyJobRequest(scope=_scope(day=21)), "second")
+    assert busy.value.code == "BACKTEST_BUSY"
+    assert tuple(item.job_id for item in repository.list_jobs(limit=100)) == (first.job_id,)
     with pytest.raises(ValueError, match="limit"):
         repository.list_jobs(limit=101)
 
@@ -334,6 +325,7 @@ def test_strict_requests_bounds_and_each_sync_job_owns_its_authorization(
         "sync-one",
         request_id="1" * 32,
     )
+    repository.request_cancel(first.job_id, "finish-first")
     clock.advance(timedelta(seconds=1))
     second = repository.submit(
         DataSyncJobRequest(scope=_scope(day=5), refresh=False, allow_network=True),
@@ -549,44 +541,47 @@ def test_job_keyset_query_filters_and_freezes_created_membership(tmp_path: Path)
         DatasetVerifyJobRequest(scope=_scope(day=33)),
         "query-oldest",
     )
+    repository.request_cancel(oldest.job_id, "finish-oldest")
     clock.advance(timedelta(seconds=1))
     middle = repository.submit(
         DataSyncJobRequest(scope=_scope(day=34), refresh=False, allow_network=True),
         "query-middle",
         request_id="a" * 32,
     )
+    repository.request_cancel(middle.job_id, "finish-middle")
     clock.advance(timedelta(seconds=1))
     run_input = _run_input("query-newest")
     newest = repository.submit(BacktestRunJobRequest(run_input=run_input), "query-newest")
 
     first_page = repository.query_jobs(
         kinds=(),
-        statuses=(BacktestJobStatus.QUEUED,),
+        statuses=(BacktestJobStatus.QUEUED, BacktestJobStatus.CANCELLED),
         created_from=datetime(2026, 8, 28, 14, 0, tzinfo=_SHANGHAI),
         created_to=datetime(2026, 8, 28, 14, 0, 2, tzinfo=_SHANGHAI),
         limit=2,
     )
     assert isinstance(first_page, BacktestJobQueryResult)
     assert tuple(item.job_id for item in first_page.items) == (newest.job_id, middle.job_id)
-    assert first_page.membership_revision == 3
+    assert first_page.membership_revision == 5
     assert repository.current_membership_revision() == first_page.membership_revision
 
     high_water = (first_page.items[0].created_at, first_page.items[0].job_id)
     after = (first_page.items[-1].created_at, first_page.items[-1].job_id)
+    repository.request_cancel(newest.job_id, "finish-newest")
     clock.advance(timedelta(seconds=1))
     later = repository.submit(
         DatasetVerifyJobRequest(scope=_scope(day=35)),
         "query-after-high-water",
     )
     second_page = repository.query_jobs(
-        statuses=(BacktestJobStatus.QUEUED,),
+        statuses=(BacktestJobStatus.QUEUED, BacktestJobStatus.CANCELLED),
         high_water=high_water,
         after=after,
         limit=101,
     )
     assert tuple(item.job_id for item in second_page.items) == (oldest.job_id,)
     assert later.job_id not in {item.job_id for item in second_page.items}
-    assert second_page.membership_revision == 4
+    assert second_page.membership_revision == 7
 
     by_identity = repository.query_jobs(
         kinds=(BacktestJobKind.DATASET_VERIFY, BacktestJobKind.BACKTEST_RUN),
@@ -605,13 +600,19 @@ def test_job_keyset_query_filters_and_freezes_created_membership(tmp_path: Path)
     assert {item.job_id for item in mixed_statuses.items} == {later.job_id, oldest.job_id}
 
 
+def _submit_cancelled(repository, request, key):
+    receipt = repository.submit(request, key)
+    repository.request_cancel(receipt.job_id, "finish-" + key)
+    return receipt
+
+
 def test_job_keyset_query_breaks_equal_created_times_by_descending_job_id(
     tmp_path: Path,
 ) -> None:
     clock = _Clock(datetime(2026, 8, 28, 14, 30, tzinfo=_SHANGHAI))
     repository = BacktestJobRepository(tmp_path / "job-keyset-tie.sqlite3", clock=clock)
     receipts = tuple(
-        repository.submit(
+        _submit_cancelled(repository,
             DatasetVerifyJobRequest(scope=_scope(day=36 + index)),
             f"query-tie-{index}",
         )
@@ -633,18 +634,18 @@ def test_job_keyset_insertion_fence_blocks_same_timestamp_late_insert(
 ) -> None:
     clock = _Clock(datetime(2026, 8, 28, 14, 45, tzinfo=_SHANGHAI))
     repository = BacktestJobRepository(tmp_path / "job-keyset-insertion.sqlite3", clock=clock)
-    oldest = repository.submit(
+    oldest = _submit_cancelled(repository,
         DatasetVerifyJobRequest(scope=_scope(day=38)),
         "same-time-oldest",
     )
-    newest = repository.submit(
+    newest = _submit_cancelled(repository,
         DatasetVerifyJobRequest(scope=_scope(day=39)),
         "same-time-newest",
     )
 
     first = repository.query_jobs(limit=1)
     assert tuple(item.job_id for item in first.items) == (newest.job_id,)
-    late = repository.submit(
+    late = _submit_cancelled(repository,
         DatasetVerifyJobRequest(scope=_scope(day=40)),
         "same-time-late",
     )

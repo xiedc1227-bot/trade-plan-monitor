@@ -18,6 +18,7 @@ from trade_plan_monitor.backtest.jobs import (
     BacktestJobStatus,
     DatasetVerifyJobRequest,
     DataSyncJobRequest,
+    JobAdmissionError,
 )
 from trade_plan_monitor.backtest.jobs.models import BacktestDataSyncJobResult, BacktestJobPhase
 from trade_plan_monitor.backtest.service_contract import BacktestServiceState
@@ -92,9 +93,7 @@ def test_unselected_expired_claim_is_untouched_and_old_completion_cannot_publish
 
 
 @pytest.mark.parametrize("cancelled", (False, True))
-def test_expired_history_releases_slot_without_mutation_and_resume_waits_for_live_lease(
-    tmp_path, cancelled,
-):
+def test_expired_history_keeps_slot_until_selected_recovery(tmp_path, cancelled):
     now = datetime(2026, 8, 24, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
     repository = BacktestJobRepository(tmp_path / "jobs.sqlite3", clock=lambda: now)
     old = repository.submit(request(), "old", request_id="1" * 32)
@@ -102,67 +101,43 @@ def test_expired_history_releases_slot_without_mutation_and_resume_waits_for_liv
     if cancelled:
         repository.request_cancel(old.job_id, "cancel-old")
     before = repository.get(old.job_id)
-    new = repository.submit(
-        DatasetVerifyJobRequest(scope=request().scope), "new", request_id="2" * 32,
-    )
-    assert repository.claim_next(authorized_job_ids=frozenset({new.job_id})) is None
     now += timedelta(seconds=30)
-    assert repository.recover_expired(authorized_job_ids=frozenset({new.job_id})) is None
-    new_claim = repository.claim_next(authorized_job_ids=frozenset({new.job_id}))
-    assert new_claim.job_id == new.job_id
+    with pytest.raises(JobAdmissionError):
+        repository.submit(DatasetVerifyJobRequest(scope=request().scope), "new")
+    assert repository.claim_next() is None
     assert repository.get(old.job_id) == before
-    assert repository.recover_expired(authorized_job_ids=frozenset({old.job_id})) is None
     old_token = old_claim.claim_token.get_secret_value()
     assert not repository.heartbeat(old.job_id, old_token)
-    assert not repository.update_progress(
-        old.job_id, old_token, phase=BacktestJobPhase.SYNCING_DATA, completed_units=1,
-    )
+    assert not repository.update_progress(old.job_id, old_token,
+        phase=BacktestJobPhase.SYNCING_DATA, completed_units=1)
     assert not repository.complete(old.job_id, old_token, BacktestDataSyncJobResult(
-        calendar_rows=0, minute_days=0, daily_limit_rows=0, daily_bar_rows=0, network_calls=0,
-    ))
-    assert repository.fail(new.job_id, new_claim.claim_token.get_secret_value(), "TEST", "Test.")
+        calendar_rows=0, minute_days=0, daily_limit_rows=0, daily_bar_rows=0, network_calls=0))
     resumed = repository.recover_expired(authorized_job_ids=frozenset({old.job_id}))
     if cancelled:
         assert resumed is None
         assert repository.get(old.job_id).status is BacktestJobStatus.CANCELLED
+        assert repository.submit(DatasetVerifyJobRequest(scope=request().scope), "new")
     else:
-        assert resumed.job_id == old.job_id
-        assert resumed.attempt == 2
+        assert resumed.job_id == old.job_id and resumed.attempt == 2
         assert resumed.claim_token != old_claim.claim_token
 
 
-def test_multiple_dormant_claims_do_not_starve_selected_recovery(tmp_path):
+def test_recovery_retains_one_job_identity_until_terminal(tmp_path):
     now = datetime(2026, 8, 24, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
     repository = BacktestJobRepository(tmp_path / "jobs.sqlite3", clock=lambda: now)
     old = repository.submit(request(), "old", request_id="1" * 32)
-    repository.claim_next()
+    first = repository.claim_next()
     now += timedelta(seconds=31)
-    selected = repository.submit(
-        DatasetVerifyJobRequest(scope=request().scope), "selected", request_id="2" * 32,
-    )
-    repository.claim_next(authorized_job_ids=frozenset({selected.job_id}))
-    now += timedelta(seconds=31)
-    before = repository.get(old.job_id)
-    selected_before = repository.get(selected.job_id)
-    fresh = repository.submit(
-        request().model_copy(update={"refresh": True}), "fresh", request_id="3" * 32,
-    )
-    fresh_claim = repository.claim_next(authorized_job_ids=frozenset({fresh.job_id}))
-    assert fresh_claim.job_id == fresh.job_id
-    assert repository.recover_expired(authorized_job_ids=frozenset({selected.job_id})) is None
-    assert repository.get(old.job_id) == before
-    assert repository.get(selected.job_id) == selected_before
-    assert repository.fail(
-        fresh.job_id, fresh_claim.claim_token.get_secret_value(), "TEST", "Test.",
-    )
-    recovered = repository.recover_expired(authorized_job_ids=frozenset({selected.job_id}))
-    assert recovered.job_id == selected.job_id
-    assert recovered.attempt == 2
-    assert repository.get(old.job_id) == before
-    assert repository.recover_expired(authorized_job_ids=frozenset({old.job_id})) is None
+    second = repository.recover_expired(authorized_job_ids=frozenset({old.job_id}))
+    assert second.job_id == first.job_id and second.attempt == 2
+    assert second.claim_token != first.claim_token
+    with pytest.raises(JobAdmissionError):
+        repository.submit(DatasetVerifyJobRequest(scope=request().scope), "new")
+    assert repository.fail(old.job_id, second.claim_token.get_secret_value(), "TEST", "Test.")
+    assert repository.submit(DatasetVerifyJobRequest(scope=request().scope), "new")
 
 
-def test_new_claim_and_selected_recovery_race_admit_only_one_lease(tmp_path):
+def test_new_submission_and_selected_recovery_race_keeps_one_task(tmp_path):
     now = datetime(2026, 8, 24, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
     path = tmp_path / "jobs.sqlite3"
     repository = BacktestJobRepository(path, clock=lambda: now)
@@ -170,25 +145,21 @@ def test_new_claim_and_selected_recovery_race_admit_only_one_lease(tmp_path):
     old = repository.submit(request(), "old", request_id="1" * 32)
     repository.claim_next()
     now += timedelta(seconds=31)
-    fresh = repository.submit(
-        DatasetVerifyJobRequest(scope=request().scope), "fresh", request_id="2" * 32,
-    )
     barrier = Barrier(2)
-
-    def claim_new():
+    def submit_new():
         barrier.wait()
-        return repository.claim_next(authorized_job_ids=frozenset({fresh.job_id}))
-
+        with pytest.raises(JobAdmissionError):
+            repository.submit(DatasetVerifyJobRequest(scope=request().scope), "new")
     def resume_old():
         barrier.wait()
         return other.recover_expired(authorized_job_ids=frozenset({old.job_id}))
-
     with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = (executor.submit(claim_new), executor.submit(resume_old))
-        claims = [future.result() for future in futures]
-    assert sum(claim is not None for claim in claims) == 1
-    assert repository.claim_next(authorized_job_ids=frozenset({fresh.job_id})) is None
-    assert other.recover_expired(authorized_job_ids=frozenset({old.job_id})) is None
+        blocked = executor.submit(submit_new)
+        resumed = executor.submit(resume_old)
+        blocked.result()
+        assert resumed.result().job_id == old.job_id
+    assert len(repository.list_jobs()) == 1
+    assert repository.claim_next() is None
 
 
 def test_unknown_lease_blocks_claim_and_recovery(tmp_path):
@@ -196,16 +167,15 @@ def test_unknown_lease_blocks_claim_and_recovery(tmp_path):
     repository = BacktestJobRepository(tmp_path / "jobs.sqlite3", clock=lambda: now)
     old = repository.submit(request(), "old", request_id="1" * 32)
     repository.claim_next()
-    new = repository.submit(
-        DatasetVerifyJobRequest(scope=request().scope), "new", request_id="2" * 32,
-    )
+    with pytest.raises(JobAdmissionError):
+        repository.submit(DatasetVerifyJobRequest(scope=request().scope), "new")
     # Model a damaged legacy store; the production schema normally rejects NULL.
     with sqlite3.connect(repository.database_path) as connection:
         connection.execute("PRAGMA ignore_check_constraints = ON")
         connection.execute("UPDATE backtest_job SET lease_expires_at = NULL WHERE job_id = ?",
                            (old.job_id,))
     now += timedelta(seconds=31)
-    assert repository.claim_next(authorized_job_ids=frozenset({new.job_id})) is None
+    assert repository.claim_next() is None
     assert repository.recover_expired(authorized_job_ids=frozenset({old.job_id})) is None
 
 
@@ -214,9 +184,6 @@ def test_expired_physical_worker_still_blocks_next_job_in_same_coordinator(tmp_p
         now = datetime(2026, 8, 24, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
         repository = BacktestJobRepository(tmp_path / "jobs.sqlite3", clock=lambda: now)
         first = repository.submit(request(), "first", request_id="1" * 32)
-        second = repository.submit(
-            DatasetVerifyJobRequest(scope=request().scope), "second", request_id="2" * 32,
-        )
         entered = Event()
         release = Event()
         calls = []
@@ -231,7 +198,7 @@ def test_expired_physical_worker_still_blocks_next_job_in_same_coordinator(tmp_p
 
         coordinator = BacktestJobCoordinator(
             repository=repository, operations=HeldOperations(),
-            authorized_job_ids=frozenset({first.job_id, second.job_id}),
+            authorized_job_ids=frozenset({first.job_id}),
             poll_interval_seconds=0.01, heartbeat_interval_seconds=0.01,
         )
         await coordinator.start()
@@ -243,13 +210,23 @@ def test_expired_physical_worker_still_blocks_next_job_in_same_coordinator(tmp_p
             await asyncio.sleep(0.06)
             assert not coordinator.physically_drained
             assert calls == [first.job_id]
-            assert repository.get(second.job_id).status is BacktestJobStatus.QUEUED
+            with pytest.raises(JobAdmissionError):
+                repository.submit(DatasetVerifyJobRequest(scope=request().scope), "second")
             release.set()
             async with asyncio.timeout(2):
-                while repository.get(second.job_id).status is not BacktestJobStatus.FAILED:
+                while not coordinator.physically_drained or coordinator.authorized_job_ids:
                     await asyncio.sleep(0.005)
-            assert calls == [first.job_id, second.job_id]
+            assert calls == [first.job_id]
             assert repository.get(first.job_id).status is BacktestJobStatus.RUNNING
+            with pytest.raises(JobAdmissionError):
+                repository.submit(DatasetVerifyJobRequest(scope=request().scope), "second")
+            coordinator.authorize_jobs(frozenset({first.job_id}))
+            async with asyncio.timeout(2):
+                while repository.get(first.job_id).status is not BacktestJobStatus.FAILED:
+                    await asyncio.sleep(0.005)
+            assert set(calls) == {first.job_id}
+            assert repository.get(first.job_id).status is BacktestJobStatus.FAILED
+            assert repository.submit(DatasetVerifyJobRequest(scope=request().scope), "second")
         finally:
             release.set()
             await coordinator.shutdown()
@@ -324,10 +301,13 @@ def test_production_history_and_readiness_leave_backlog_dormant_until_selected(
         await manager.ensure(execution=True)
         await asyncio.sleep(0.03)
         assert repository.get(old.job_id).status is BacktestJobStatus.QUEUED
-        receipt = await composition.operation_service.submit_dataset_verification(
-            command=command, context=MutationContext(idempotency_key="new", request_id="2" * 32),
-        )
-        await wait_terminal(repository, receipt.receipt.job_id)
+        from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+        with pytest.raises(ApiError) as blocked:
+            await composition.operation_service.submit_dataset_verification(
+                command=command,
+                context=MutationContext(idempotency_key="new", request_id="2" * 32),
+            )
+        assert blocked.value.code is ApiErrorCode.CONFLICT
         assert repository.get(old.job_id).status is BacktestJobStatus.QUEUED
         assert manager.snapshot.state is BacktestServiceState.READY
         await manager.stop()

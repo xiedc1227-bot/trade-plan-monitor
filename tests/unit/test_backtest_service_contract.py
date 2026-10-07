@@ -60,7 +60,7 @@ def test_timing_defaults_are_observation_budgets_not_thread_termination() -> Non
     assert config.request_wait_seconds == 1
     assert config.initialization_watchdog_seconds == 5
     assert config.shutdown_wait_seconds == 5
-    assert config.max_resume_jobs == 100
+    assert config.max_resume_jobs == 1
     assert config.recovery_delays_seconds == (1, 5, 15)
 
 
@@ -73,3 +73,9 @@ def test_unbounded_or_invalid_wait_is_rejected(value: float) -> None:
 def test_negative_outstanding_work_is_rejected() -> None:
     with pytest.raises(ValueError):
         BacktestServiceSnapshot(outstanding_work=-1)
+
+
+@pytest.mark.parametrize("value", [0, 2, 100, True])
+def test_multi_job_recovery_configuration_is_rejected(value):
+    with pytest.raises(ValueError):
+        BacktestServiceConfig(max_resume_jobs=value)

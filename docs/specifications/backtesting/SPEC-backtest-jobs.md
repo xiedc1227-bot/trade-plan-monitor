@@ -56,13 +56,13 @@ The same-key submission/cancellation replay guarantee lasts while a job is nonte
 
 Resolving a new public run intent atomically reserves its key before the single live plan-snapshot read. The unresolved reservation has a renewable 30-second lease with a 10-second owner heartbeat. Another request may observe and poll the reservation but never deletes or takes it over merely because its deadline passed. Expired unresolved reservations are removed only by the jobs-owned maintenance transaction within the shared `<=1,000` row budget; the next request may claim only after that cleanup. Finalize and release are fenced by the original claim generation, so one new intent persists at most one immutable plan snapshot and creates at most one job.
 
-At most 100 `QUEUED` jobs may exist. Admission beyond that bound fails with a stable queue-full condition. At all times, the count of `RUNNING` plus `CANCEL_REQUESTED` jobs is at most one.
+User-authorized concurrency correction, 2026-10-07, [ADR 0009](../../decisions/0009-single-unfinished-backtest-task.md): permit at most one unfinished operation across sync/verify/replay. `QUEUED`, `RUNNING` and `CANCEL_REQUESTED` occupy the same admission slot, including expired or unknown worker leases. An unresolved run-snapshot reservation also occupies it until release/finalization or jobs-owned orphan cleanup. A different new operation fails as internal `BACKTEST_BUSY`, mapped to existing public `409 CONFLICT`, without a new job or reservation. Same-key replay and same-operation deduplication return the existing resource. Only terminal completion/failure/cancellation releases the job slot; a cancellation request alone does not. Historical terminal records and paginated history remain supported; multiple unfinished jobs cannot be newly queued.
 
 ## Worker Lease and Recovery
 
 The single active slot is protected by an atomic database claim and opaque claim token. Lease duration is 30 seconds; an active worker heartbeats at least every 10 seconds. A stale claim cannot update progress, finish, cancel, or publish a result. Progress persists at most once per second except for phase and terminal transitions, is monotonic within an attempt, and may reset only when `attempt` increments.
 
-An expired `RUNNING` claim with `attempt < 3` is reclaimed with a new token and `attempt + 1`; expiry at `attempt=3` ends as `FAILED` with `WORKER_RECOVERY_EXHAUSTED`. An expired `CANCEL_REQUESTED` job becomes `CANCELLED`. Recovery resumes sync only when its persisted `allowNetwork: true` authorization remains present, through immutable-head deduplication; it may reuse an already published dataset and reruns strategy replay from the frozen beginning. Strategy event cursors remain deferred.
+Only explicit selected recovery can reclaim an expired unfinished task; ordinary admission remains closed until it reaches a terminal state. Recovery cannot overlap a still-running local worker. Only explicit selected recovery can reclaim an expired unfinished task; ordinary admission remains closed until it reaches a terminal state. Recovery cannot overlap a still-running local worker. An expired `RUNNING` claim with `attempt < 3` is reclaimed with a new token and `attempt + 1`; expiry at `attempt=3` ends as `FAILED` with `WORKER_RECOVERY_EXHAUSTED`. An expired `CANCEL_REQUESTED` job becomes `CANCELLED`. Recovery resumes sync only when its persisted `allowNetwork: true` authorization remains present, through immutable-head deduplication; it may reuse an already published dataset and reruns strategy replay from the frozen beginning. Strategy event cursors remain deferred.
 
 ## Cancellation and Publication Race
 
@@ -86,7 +86,7 @@ On-call questions are: What is running and how old is it? Why is a job blocked/f
 
 ## Performance Budgets
 
-- Exactly one active execution slot and at most 100 queued jobs.
+- At most one unfinished job or unresolved submission reservation; exactly one active execution slot.
 - Job payload is at most 256 KiB; progress writes occur at most once per second outside transitions.
 - Public list page size is `1..100`; job request/diagnostic metadata is retained 14 days.
 - This module owns one maintenance Unit of Work that deletes at most 1,000 eligible job/stage/detail rows across one coordinated budget and calls `backtest-results` only with the remaining budget.
@@ -103,20 +103,20 @@ Use frozen strict request/view values, explicit transition functions, parameteri
 
 ## Testing Strategy
 
-Use deterministic fake operations and clocks. Cover twenty concurrent identical submissions, key/payload conflict and 14-day expiry, canonical `Asia/Shanghai`/`+08:00` lifecycle/deadline persistence and rejection of alternate datetime forms, active-operation deduplication, `attempt=0` queued/reused jobs, three total claim generations across two worker objects, stale-token fencing, monotonic progress, queued/running cancellation, both cancel/publication transaction orders, queue capacity, restart after every safe boundary, persisted sync authorization/no credential/re-authorization on resubmission, no duplicate facts/manifests/fills/details, reused completed run, failed/cancelled rerun under the same `run_id`, renewable run-intent reservation fencing and orphan cleanup inside one 1,000-row maintenance budget, both dedicated executors/lifespan cleanup after success, timeout, and background failure, a blocking synchronous fake that does not block HTTP polling/heartbeat, and zero request-handler replay/provider work.
+Use deterministic fake operations and clocks. Cover twenty concurrent identical submissions, key/payload conflict and 14-day expiry, canonical `Asia/Shanghai`/`+08:00` lifecycle/deadline persistence and rejection of alternate datetime forms, active-operation deduplication, `attempt=0` queued/reused jobs, three total claim generations across two worker objects, stale-token fencing, monotonic progress, queued/running cancellation, both cancel/publication transaction orders, single-task admission across different concurrent operations, expired leases and snapshot reservations, restart after every safe boundary, persisted sync authorization/no credential/re-authorization on resubmission, no duplicate facts/manifests/fills/details, reused completed run, failed/cancelled rerun under the same `run_id`, renewable run-intent reservation fencing and orphan cleanup inside one 1,000-row maintenance budget, both dedicated executors/lifespan cleanup after success, timeout, and background failure, a blocking synchronous fake that does not block HTTP polling/heartbeat, and zero request-handler replay/provider work.
 
 ## Boundaries
 
 - Always: persist before acknowledging submission, atomically claim/state-transition, fence stale workers, and check cancellation at module safe boundaries.
 - Always: keep one slot, one result database, typed bounded payloads, and zero live-state/notification effects.
-- Ask first: change concurrency, 30-second lease, 10-second heartbeat, three total claim generations, 100-job queue, 14-day retention/idempotency window, add logical retries, subprocesses, distributed workers, or live-state access.
+- Ask first: change concurrency, 30-second lease, 10-second heartbeat, three total claim generations, one unfinished task, 14-day retention/idempotency window, add logical retries, subprocesses, distributed workers, or live-state access.
 - Never: run work in an HTTP handler/event loop/default executor, spawn untracked request tasks, accept two active jobs, let stale workers publish, expose claim tokens/secrets/paths, inherit network authorization across jobs, or treat cancellation as a completed research result.
 
 ## Success Criteria
 
 - Twenty concurrent identical submissions create one job and execute once.
 - Two workers produce one valid active claim; stale tokens perform zero successful writes.
-- `RUNNING + CANCEL_REQUESTED <= 1` always holds.
+- New admission preserves `QUEUED + RUNNING + CANCEL_REQUESTED <= 1`; lease expiry alone never admits a different task. Explicit recovery selects at most one historical job and waits for physical worker drain.
 - Cancellation/publication races produce exactly one terminal outcome and zero partial result visibility.
 - Crash recovery creates no duplicate provider facts, datasets, fills, or details.
 - A cancelled/failed run later completes under the same `run_id` and a new `job_id`.

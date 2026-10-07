@@ -3,6 +3,7 @@
 > 中文审阅版。英文权威版为 `0001-isolate-backtest-jobs-from-results.md`；两份文档必须保持语义一致。
 
 - 状态：`Accepted`
+- 并发补充：[ADR 0009](0009-single-unfinished-backtest-task.zh-CN.md) 自 2026-10-07 起要求一个未完成任务；其他身份/发布决定继续适用。
 - 日期：`2026-08-26`
 - 项目：`backtest`
 - 模块：`backtest-engine`、`backtest-results`、`backtest-jobs`、`backtest-api`、`backtest-web`

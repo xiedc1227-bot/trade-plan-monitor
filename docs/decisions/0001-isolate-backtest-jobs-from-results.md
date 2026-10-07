@@ -3,6 +3,7 @@
 > Canonical agent-facing English version. The human-review Chinese version is `0001-isolate-backtest-jobs-from-results.zh-CN.md`; both documents must remain semantically equivalent.
 
 - Status: `Accepted`
+- Concurrency clarification: [ADR 0009](0009-single-unfinished-backtest-task.md) requires one unfinished task from 2026-10-07; all other identity/publication decisions remain applicable.
 - Date: `2026-08-26`
 - Initiative: `backtest`
 - Modules: `backtest-engine`, `backtest-results`, `backtest-jobs`, `backtest-api`, `backtest-web`

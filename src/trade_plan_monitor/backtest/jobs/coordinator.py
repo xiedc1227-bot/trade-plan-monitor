@@ -105,6 +105,10 @@ class BacktestJobCoordinator:
             raise TypeError("repository does not satisfy the coordinator contract")
         if not callable(getattr(operations, "execute", None)):
             raise TypeError("operations must expose execute")
+        if authorized_job_ids is not None and (
+            not isinstance(authorized_job_ids, frozenset) or len(authorized_job_ids) > 1
+        ):
+            raise ValueError("explicit authorization requires at most one immutable job ID")
         self._poll_interval_seconds = _bounded_seconds(
             poll_interval_seconds,
             name="poll_interval_seconds",
@@ -162,13 +166,13 @@ class BacktestJobCoordinator:
 
     def authorize_jobs(self, job_ids: frozenset[str]) -> None:
         """Thread-safe current-session authority; readiness grants no job IDs."""
-        if not isinstance(job_ids, frozenset) or len(job_ids) > 100:
-            raise ValueError("explicit authorization requires at most 100 immutable job IDs")
+        if not isinstance(job_ids, frozenset) or len(job_ids) > 1:
+            raise ValueError("explicit authorization requires at most one immutable job ID")
         with self._authorization_lock:
             if self._stopping or self._closed:
                 raise RuntimeError("backtest coordinator is stopping")
             if self._authorized_job_ids is not None:
-                self._authorized_job_ids |= job_ids
+                self._authorized_job_ids = job_ids
 
     def _track(self, future: Future) -> Future:
         with self._authorization_lock:

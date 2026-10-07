@@ -6,6 +6,7 @@ Canonical English; the matching `.zh-CN.md` is the Chinese review copy.
 - Date: 2026-10-07, Asia/Shanghai
 - Related: ML14–ML17, IP09, ML-T30–ML-T39
 - ADR 0001 execution placement, queue identity and atomic publication remain applicable
+- ADR 0009 supplies the current single-unfinished-task admission and single selected recovery rule.
 
 ## Context
 

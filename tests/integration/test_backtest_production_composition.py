@@ -576,11 +576,7 @@ def test_cursor_key_fails_closed_when_owner_only_permissions_cannot_be_applied(
     assert existing_key_path.read_bytes() == b"k" * 32
 
 
-def test_production_queue_exhaustion_exposes_retry_after_metadata(
-    tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(job_repository, "MAX_QUEUED_JOBS", 0)
+def test_production_busy_operation_returns_conflict(tmp_path) -> None:
     composition = create_backtest_composition_factory(
         config_path=Path("config/app.yaml"),
         plan_snapshot_reader=None,
@@ -594,6 +590,14 @@ def test_production_queue_exhaustion_exposes_retry_after_metadata(
     )
 
     async def scenario() -> ApiError:
+        from trade_plan_monitor.backtest.jobs import DatasetVerifyJobRequest
+        composition.operation_service._repository.submit(
+            DatasetVerifyJobRequest(
+                scope=backtest_composition._scope_request(_verification_command().scope).model_copy(
+                    update={"symbols": ("601021.SH",)}
+                )
+            ), "pending",
+        )
         with pytest.raises(ApiError) as raised:
             await composition.operation_service.submit_dataset_verification(
                 command=_verification_command(),
@@ -604,8 +608,8 @@ def test_production_queue_exhaustion_exposes_retry_after_metadata(
 
     error = asyncio.run(scenario())
 
-    assert error.code is ApiErrorCode.RATE_LIMITED
-    assert error.retry_after_seconds == 2
+    assert error.code is ApiErrorCode.CONFLICT
+    assert error.retry_after_seconds is None
 
 
 def test_production_mutations_fail_closed_after_coordinator_failure(

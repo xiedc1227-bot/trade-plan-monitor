@@ -22,7 +22,6 @@ from trade_plan_monitor.backtest.jobs.models import (
     JOB_MAX_CLAIM_GENERATIONS,
     JOB_PROGRESS_INTERVAL_SECONDS,
     MAX_JOB_REQUEST_BYTES,
-    MAX_QUEUED_JOBS,
     BacktestDatasetVerificationJobResult,
     BacktestDataSyncJobResult,
     BacktestJobCancellationReceipt,
@@ -129,7 +128,7 @@ class JobAdmissionError(RuntimeError):
 
     _MESSAGES = {
         "IDEMPOTENCY_CONFLICT": "Idempotency key is already bound to another request.",
-        "QUEUE_FULL": "The durable backtest queue is full.",
+        "BACKTEST_BUSY": "An unfinished backtest operation occupies the single task slot.",
     }
 
     def __init__(self, code: str) -> None:
@@ -327,20 +326,12 @@ class BacktestJobRepository:
                 connection.commit()
                 return receipt
 
+            _require_free_submission_slot(connection, exclude_key=normalized_key)
             reused_result = (
                 _verified_materialized_run(connection, request.run_input)
                 if isinstance(request, BacktestRunJobRequest)
                 else None
             )
-            if reused_result is None:
-                queued = int(
-                    connection.execute(
-                        "SELECT COUNT(*) FROM backtest_job WHERE status = 'QUEUED'"
-                    ).fetchone()[0]
-                )
-                if queued >= MAX_QUEUED_JOBS:
-                    raise JobAdmissionError("QUEUE_FULL")
-
             reused = reused_result is not None
             status = BacktestJobStatus.COMPLETED if reused else BacktestJobStatus.QUEUED
             phase = BacktestJobPhase.TERMINAL if reused else BacktestJobPhase.QUEUED
@@ -520,6 +511,7 @@ class BacktestJobRepository:
                     if claimed_at <= previous_claimed_at:
                         claimed_at = previous_claimed_at + timedelta(microseconds=1)
             if row is None:
+                _require_free_submission_slot(connection)
                 claimed_at_text = format_shanghai_datetime(claimed_at)
                 expires_at_text = format_shanghai_datetime(
                     claimed_at + timedelta(seconds=_RUN_RESERVATION_SECONDS)
@@ -1361,7 +1353,7 @@ class BacktestJobRepository:
         terminal_expiry = format_shanghai_datetime(now + timedelta(days=JOB_IDEMPOTENCY_DAYS))
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            if _execution_slot_occupied(connection, now_text):
+            if _execution_slot_occupied(connection, now_text, recovering=True):
                 connection.commit()
                 return None
             rows = connection.execute(
@@ -2010,17 +2002,38 @@ def _receipt_from_row(row: sqlite3.Row | tuple[object, ...]) -> BacktestJobRecei
     )
 
 
-def _execution_slot_occupied(connection: sqlite3.Connection, now_text: str) -> bool:
-    """Expired history stays dormant; valid or unknown leases keep the slot closed.
+def _require_free_submission_slot(
+    connection: sqlite3.Connection, *, exclude_key: str | None = None,
+) -> None:
+    """One transaction covers the unresolved snapshot intent and unfinished job."""
+    job = connection.execute(
+        "SELECT 1 FROM backtest_job WHERE status IN ('QUEUED', 'RUNNING', 'CANCEL_REQUESTED') "
+        "LIMIT 1"
+    ).fetchone()
+    reservation = connection.execute(
+        "SELECT 1 FROM backtest_job_idempotency WHERE operation = 'SUBMIT' "
+        "AND job_id IS NULL AND response_json IS NULL "
+        "AND (? IS NULL OR idempotency_key != ?) LIMIT 1",
+        (exclude_key, exclude_key),
+    ).fetchone()
+    if job is not None or reservation is not None:
+        raise JobAdmissionError("BACKTEST_BUSY")
+
+
+def _execution_slot_occupied(
+    connection: sqlite3.Connection, now_text: str, *, recovering: bool = False,
+) -> bool:
+    """Only explicit recovery can reclaim an expired unfinished task's slot.
 
     The coordinator additionally drains its physical worker before requesting
     another claim. A persisted lease alone cannot prove that local work ended.
     """
+    lease_filter = "AND (lease_expires_at IS NULL OR lease_expires_at > ?) " if recovering else ""
     rows = connection.execute(
         "SELECT job_id FROM backtest_job "
         "WHERE status IN ('RUNNING', 'CANCEL_REQUESTED') "
-        "AND (lease_expires_at IS NULL OR lease_expires_at > ?) LIMIT 2",
-        (now_text,),
+        + lease_filter + "LIMIT 2",
+        (now_text,) if recovering else (),
     ).fetchall()
     if len(rows) > 1:
         raise RuntimeError("durable job store contains more than one occupied execution slot")

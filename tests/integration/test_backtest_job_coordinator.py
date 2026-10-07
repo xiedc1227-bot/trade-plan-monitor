@@ -369,15 +369,12 @@ def test_shutdown_stops_claiming_cancels_active_work_and_joins_owned_resources(
     async def scenario() -> None:
         repository = BacktestJobRepository(tmp_path / "shutdown.sqlite3")
         first = repository.submit(_sync_request(), "first", request_id="3" * 32)
-        second = repository.submit(
-            DataSyncJobRequest(
-                scope=_scope_request(),
-                refresh=True,
-                allow_network=True,
-            ),
-            "second",
-            request_id="4" * 32,
-        )
+        from trade_plan_monitor.backtest.jobs import JobAdmissionError
+        with pytest.raises(JobAdmissionError):
+            repository.submit(
+                DataSyncJobRequest(scope=_scope_request(), refresh=True, allow_network=True),
+                "second", request_id="4" * 32,
+            )
         operations = _BlockingOperations(stop_on_cancel=True)
         coordinator = BacktestJobCoordinator(
             repository=repository,
@@ -397,7 +394,8 @@ def test_shutdown_stops_claiming_cancels_active_work_and_joins_owned_resources(
         assert operations.cancel_seen.is_set()
         assert len(operations.thread_ids) == 1
         assert repository.get(first.job_id).status is BacktestJobStatus.RUNNING
-        assert repository.get(second.job_id).status is BacktestJobStatus.QUEUED
+        assert len(repository.list_jobs()) == 1
+        assert repository.claim_next() is None
         assert not any(
             thread.name.startswith("backtest-job-worker")
             for thread in __import__("threading").enumerate()

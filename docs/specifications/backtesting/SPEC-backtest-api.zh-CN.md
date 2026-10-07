@@ -172,7 +172,7 @@ python scripts/generate_frontend_types.py --check
 | `COMPLETED` | `409 CONFLICT` | 不修改 |
 | `FAILED` | `409 CONFLICT` | 不修改 |
 
-队列耗尽返回带 `Retry-After` 的 `429 RATE_LIMITED`；缺少服务/Worker/配置返回 `503 SERVICE_UNAVAILABLE`。资源缺失返回 `404 NOT_FOUND`。每个错误使用现有闭合 `ErrorResponse` 信封和固定 `ApiErrorCode`；公开消息固定且经过脱敏。每个请求获得服务端生成的 32 字符小写十六进制请求 ID，并位于 `X-Request-ID`；忽略客户端提供的 ID。每个提交 `202` 包含 `Location: /api/v1/backtest-jobs/{job_id}`。非终态 `202` 还包含 `Retry-After: 2`；立即复用的 `COMPLETED` Receipt 省略 `Retry-After`。运行中/已请求取消的取消 `202` 包含两个 Header。
+未完成回测操作或未解析提交预留以 `409 CONFLICT` 拒绝不同的新任务，包括取消中或租约过期后；相同请求复用既有资源。见 [ADR 0009](../../decisions/0009-single-unfinished-backtest-task.zh-CN.md)。缺少服务/Worker/配置返回 `503 SERVICE_UNAVAILABLE`。资源缺失返回 `404 NOT_FOUND`。每个错误使用现有闭合 `ErrorResponse` 信封和固定 `ApiErrorCode`；公开消息固定且经过脱敏。每个请求获得服务端生成的 32 字符小写十六进制请求 ID，并位于 `X-Request-ID`；忽略客户端提供的 ID。每个提交 `202` 包含 `Location: /api/v1/backtest-jobs/{job_id}`。非终态 `202` 还包含 `Retry-After: 2`；立即复用的 `COMPLETED` Receipt 省略 `Retry-After`。运行中/已请求取消的取消 `202` 包含两个 Header。
 
 ## 应用与安全边界
 
@@ -198,7 +198,7 @@ HTTP RED 证据以有界 Label 记录 Route Template 速率、错误类别和延
 
 ## 测试策略
 
-契约测试覆盖每个 Method/Path/Status/Schema；所有字段与跨字段约束；JavaScript-safe 分值输入和 `FenText` 输出；统一 `Asia/Shanghai`/`+08:00` 日期时间往返、0～6 位输入到固定六位规范化，以及拒绝 `Z`、无偏移、超精度和其他偏移；费率/滑点边界；200 个初始持仓和 `lotKey` 规范化；计划快照校验及 Worker/回放对实时数据库零访问；任务进度/结果 Union；数据集/运行 View；过滤；精确 Cursor 格式、签名、高水位遍历、密钥轮换、篡改和过滤不匹配；100 项、32 KiB/item 和低于 4 MiB 响应闸门；全部可用性状态；14 天幂等与竞态；`202` 下立即完成复用；置顶 Revision；完整取消矩阵；队列满重试；缺少服务；Origin/Body/安全 Header；脱敏；v1 排除、v2 64 KiB 流式导出和断连中止；请求 ID；以及请求处理器零工作。
+契约测试覆盖每个 Method/Path/Status/Schema；所有字段与跨字段约束；JavaScript-safe 分值输入和 `FenText` 输出；统一 `Asia/Shanghai`/`+08:00` 日期时间往返、0～6 位输入到固定六位规范化，以及拒绝 `Z`、无偏移、超精度和其他偏移；费率/滑点边界；200 个初始持仓和 `lotKey` 规范化；计划快照校验及 Worker/回放对实时数据库零访问；任务进度/结果 Union；数据集/运行 View；过滤；精确 Cursor 格式、签名、高水位遍历、密钥轮换、篡改和过滤不匹配；100 项、32 KiB/item 和低于 4 MiB 响应闸门；全部可用性状态；14 天幂等与竞态；`202` 下立即完成复用；置顶 Revision；完整取消矩阵；单任务冲突；缺少服务；Origin/Body/安全 Header；脱敏；v1 排除、v2 64 KiB 流式导出和断连中止；请求 ID；以及请求处理器零工作。
 
 OpenAPI 测试固定精确 42 条路径，重新生成 TypeScript 并拒绝 Schema/Status 漂移。生产组合测试证明真实服务和生命周期可达，而不是默认落入 `DEGRADED`/`SERVICE_UNAVAILABLE`。性能测试及其实测阈值在获批准的实现计划中定义，不能在规格实现期间临时发明。
 
