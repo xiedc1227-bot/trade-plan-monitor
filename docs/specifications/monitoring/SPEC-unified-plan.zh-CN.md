@@ -32,7 +32,7 @@
 
 当前正式 API 操作使用 `/api/v1/plan-extractions`、`/api/v1/plan-drafts`、`/api/v1/plan-imports`、`/api/v1/plan-review-previews`、`/api/v1/plan-review-supplements`、`/api/v1/plan-review-confirmations`、`/api/v1/plan-activations`、`/api/v1/plan-deactivations`、`/api/v1/plan-facts`、`/api/v1/simulation-position-confirmations`、`/api/v1/simulation-position-inventory`、`/api/v1/plan-risk-reassessments`、`/api/v1/simulated-trades` 和 `/api/v1/plan-runtime/{symbol}`。当前路由没有独立 `/daily-*` 操作族。AI 供应商配置在 API 中只读，并从项目文件一次加载。旧 `dailyMapping` 传输字段和内部 `Daily*` 名称作为共用审核/记账兼容细节保留，不能构成第二套当前流程。
 
-OpenAPI 快照 SHA-256：`4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255`。这是当前快照批准；历史快照身份仍可从 Git 恢复，绝不重新标记为当前批准。
+OpenAPI 快照 SHA-256：`8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`。于 2026-10-07（Asia/Shanghai）依据 [SPEC-unified-replay](../backtesting/SPEC-unified-replay.zh-CN.md) UR01/UR03/UR04/UR05/UR06/UR08 审阅，覆盖已在 `7a92f75` 提交的既有统一研究扩展：增量 `researchInput`、强类型研究决策/操作详情、指标/权益投影及其有界支持结构。路由、操作参数/响应和其他全部既有监测/错误/任务结构不变，生成物与实际路由一致。[MV12](../../verification/monitor-loop-backtest.zh-CN.md#mv12-隔离收尾与契约审阅) 记录全部 37 处 schema 差异及实际检查。原批准 `4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255` 保留为 `a0915f7` 的历史身份，不再视为当前批准。此次纠正仅批准既有统一研究契约；未来监控闭环准备/服务 API 及 ML-T29/ML-C10 最终验收仍待完成。
 
 模拟交易必须明确操作，与登记的真实持仓和离线研究成交隔离，一次完整应用正数 100 股整数倍数量。初始模拟库存、持有/可卖数量及计划目标也必须为 100 股整数倍。服务端在单股票事务内复核激活身份、审核、信号/风险依据、库存修订、报价、日历、T+1、CORE 保护、最大持仓和幂等。完整授权数量不可执行时不得替代为部分交易。
 

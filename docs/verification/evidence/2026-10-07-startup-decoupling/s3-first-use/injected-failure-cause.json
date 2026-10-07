@@ -1,0 +1,6 @@
+{
+  "bytes": 16,
+  "ownerOnlyAcl": true,
+  "exception": "ValueError",
+  "reason": "cursor key must contain exactly 32 bytes"
+}

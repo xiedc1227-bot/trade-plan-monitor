@@ -1,0 +1,145 @@
+{
+  "at": "2026-10-07T15:31:19.432187+08:00",
+  "phase": "serving",
+  "pid": 25668,
+  "server_started": true,
+  "calls": {
+    "web/monitor_composition.py:MonitorWebComposition.start": 3,
+    "backtest/thread_ownership.py:BacktestThreadOwner.__init__": 1
+  },
+  "threads": [
+    "MainThread",
+    "AnyIO worker thread",
+    "asyncio_0"
+  ],
+  "tasks": [
+    "Task-16",
+    "Task-1",
+    "mv11-observer",
+    "Task-2",
+    "Task-4",
+    "trade-plan-monitor-runtime"
+  ],
+  "files": [
+    {
+      "path": ".mv11-disposable",
+      "bytes": 0
+    },
+    {
+      "path": "config\\app.yaml",
+      "bytes": 4
+    },
+    {
+      "path": "data\\backtest-cursor.key",
+      "bytes": 16
+    },
+    {
+      "path": "data\\monitor.ai-extraction-diagnostics.jsonl",
+      "bytes": 0
+    },
+    {
+      "path": "data\\monitor.cursor.key",
+      "bytes": 32
+    },
+    {
+      "path": "data\\monitor.sqlite3",
+      "bytes": 4096
+    },
+    {
+      "path": "data\\monitor.sqlite3-shm",
+      "bytes": 32768
+    },
+    {
+      "path": "data\\monitor.sqlite3-wal",
+      "bytes": 494432
+    }
+  ],
+  "blocked_network": [],
+  "backtest": {
+    "state": "NOT_INITIALIZED",
+    "generation": 0,
+    "authorized_job_ids": [],
+    "outstanding_work": 0,
+    "read_capability_available": false
+  },
+  "runtime": {
+    "last_completed_minute": null,
+    "latest_evaluation_at": null,
+    "gaps": [],
+    "recovery_issues": [],
+    "next_retry_at": "2026-10-07T15:31:30.152901+08:00",
+    "cooldown_until": null,
+    "providers": [
+      {
+        "capability": "current_day_minutes",
+        "status": "ERROR",
+        "checked_at": "2026-10-07T15:31:00.150960+08:00",
+        "latency_ms": 0,
+        "error_code": "TUSHARE_NOT_CONFIGURED",
+        "next_retry_at": null
+      },
+      {
+        "capability": "daily_bars",
+        "status": "ERROR",
+        "checked_at": "2026-10-07T15:31:00.150960+08:00",
+        "latency_ms": 0,
+        "error_code": "TUSHARE_NOT_CONFIGURED",
+        "next_retry_at": null
+      },
+      {
+        "capability": "daily_limits",
+        "status": "ERROR",
+        "checked_at": "2026-10-07T15:31:00.150960+08:00",
+        "latency_ms": 0,
+        "error_code": "TUSHARE_NOT_CONFIGURED",
+        "next_retry_at": null
+      },
+      {
+        "capability": "realtime_minutes",
+        "status": "ERROR",
+        "checked_at": "2026-10-07T15:31:00.150960+08:00",
+        "latency_ms": 0,
+        "error_code": "TUSHARE_NOT_CONFIGURED",
+        "next_retry_at": null
+      },
+      {
+        "capability": "trading_calendar",
+        "status": "ERROR",
+        "checked_at": "2026-10-07T15:31:00.150960+08:00",
+        "latency_ms": 0,
+        "error_code": "TUSHARE_NOT_CONFIGURED",
+        "next_retry_at": null
+      }
+    ],
+    "executor": {
+      "max_workers": 1,
+      "active_count": 0,
+      "waiting_count": 0
+    },
+    "database": {
+      "status": "READY",
+      "wal_status": "READY",
+      "last_checkpoint_at": null,
+      "last_backup_at": null,
+      "error_code": null
+    },
+    "delivery": {
+      "status": "UNVERIFIED",
+      "pending_count": 0,
+      "failed_count": 0,
+      "last_delivered_at": null,
+      "next_retry_at": null,
+      "error_code": null
+    },
+    "status": "DEGRADED",
+    "read_only": true,
+    "block_reason": null,
+    "degraded_reason": "PROVIDER_UNAVAILABLE",
+    "observed_at": "2026-10-07T15:31:19.433701+08:00",
+    "started_at": "2026-10-07T15:30:59.979260+08:00",
+    "stopped_at": null,
+    "last_completed_minute_age_seconds": null,
+    "latest_evaluation_age_seconds": null,
+    "next_poll_at": null
+  }
+}

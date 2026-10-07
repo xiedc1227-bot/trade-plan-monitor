@@ -1,0 +1,60 @@
+{
+  "scenarios": {
+    "s1-start": {
+      "status": "PASS",
+      "pid": 20760,
+      "startupState": "NOT_INITIALIZED",
+      "beforeShutdownState": "NOT_INITIALIZED",
+      "normalShutdownSeconds": 18.043,
+      "shutdownRemovedRuntimeAndBacktest": true,
+      "shutdownBacktestThreads": [],
+      "externalConnections": 0
+    },
+    "s1-restart": {
+      "status": "PASS",
+      "pid": 37240,
+      "startupState": "NOT_INITIALIZED",
+      "beforeShutdownState": "NOT_INITIALIZED",
+      "normalShutdownSeconds": 0.152,
+      "shutdownRemovedRuntimeAndBacktest": true,
+      "shutdownBacktestThreads": [],
+      "externalConnections": 0
+    },
+    "s2-corrupt": {
+      "status": "PASS",
+      "pid": 25668,
+      "startupState": "NOT_INITIALIZED",
+      "beforeShutdownState": "DEGRADED",
+      "normalShutdownSeconds": 1.123,
+      "shutdownRemovedRuntimeAndBacktest": true,
+      "shutdownBacktestThreads": [],
+      "externalConnections": 0
+    },
+    "s3-first-use": {
+      "status": "PASS",
+      "cached503HttpProbes": 4,
+      "factoryCalls": 1,
+      "retryAfterOnCachedFailure": false,
+      "monitorStoppedBeforeShutdown": false,
+      "failureCacheObservedSeconds": 78.279,
+      "backtestState": "DEGRADED",
+      "normalShutdownEvidence": "s2-corrupt/lifecycle.jsonl"
+    }
+  },
+  "sourcePreservation": {
+    "filesChecked": 240,
+    "changed": []
+  },
+  "evidenceChecks": [
+    {
+      "port": 58537,
+      "noListener": true
+    },
+    {
+      "port": 58538,
+      "noListener": true
+    }
+  ],
+  "runtimeBlockers": [],
+  "overall": "PASS startup-decoupling only"
+}

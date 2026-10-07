@@ -1,0 +1,59 @@
+{
+  "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor",
+  "buildCwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\web",
+  "buildCommand": "npm run build",
+  "buildResult": "PASS; vite v8.2.1; 854 modules transformed",
+  "launches": [
+    {
+      "scenario": "s1-start",
+      "launcher": "PowerShell Start-Process -WindowStyle Hidden -WorkingDirectory repository -RedirectStandardOutput stdout.log -RedirectStandardError stderr.log -PassThru",
+      "executable": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Scripts\\python.exe",
+      "arguments": [
+        "scripts/verify_backtest_startup_decoupling.py",
+        "--serve",
+        "--root",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\data\\mv11-normal",
+        "--evidence",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\docs\\verification\\evidence\\2026-10-07-startup-decoupling\\s1-start",
+        "--port",
+        "58537"
+      ]
+    },
+    {
+      "scenario": "s1-restart",
+      "launcher": "PowerShell Start-Process -WindowStyle Hidden -WorkingDirectory repository -RedirectStandardOutput stdout.log -RedirectStandardError stderr.log -PassThru",
+      "executable": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Scripts\\python.exe",
+      "arguments": [
+        "scripts/verify_backtest_startup_decoupling.py",
+        "--serve",
+        "--root",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\data\\mv11-normal",
+        "--evidence",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\docs\\verification\\evidence\\2026-10-07-startup-decoupling\\s1-restart",
+        "--port",
+        "58537"
+      ]
+    },
+    {
+      "scenario": "s2-corrupt",
+      "launcher": "PowerShell Start-Process -WindowStyle Hidden -WorkingDirectory repository -RedirectStandardOutput stdout.log -RedirectStandardError stderr.log -PassThru",
+      "executable": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Scripts\\python.exe",
+      "arguments": [
+        "scripts/verify_backtest_startup_decoupling.py",
+        "--serve",
+        "--root",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\data\\mv11-corrupt",
+        "--evidence",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\docs\\verification\\evidence\\2026-10-07-startup-decoupling\\s2-corrupt",
+        "--port",
+        "58538",
+        "--corrupt-key"
+      ]
+    }
+  ],
+  "probeHeaders": {
+    "X-Monitor-Contract-Version": "2"
+  },
+  "browserTool": "mcp__cua_repl",
+  "browser": "Codex In-app Browser; only task-created tabs 1, 2, 3; all closed"
+}

@@ -1,0 +1,17 @@
+{
+  "keyBytes": 16,
+  "keySha256": "8f9b639758d13018ba455fa2f9475d08eea2e863cd4e0a657e34d9da60b7a764",
+  "backtest": {
+    "state": "NOT_INITIALIZED",
+    "generation": 0,
+    "authorized_job_ids": [],
+    "outstanding_work": 0,
+    "read_capability_available": false
+  },
+  "calls": {
+    "web/monitor_composition.py:MonitorWebComposition.start": 3,
+    "backtest/thread_ownership.py:BacktestThreadOwner.__init__": 1
+  },
+  "backtestDatabases": [],
+  "blockedNetwork": []
+}

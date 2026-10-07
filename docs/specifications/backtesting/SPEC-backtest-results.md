@@ -4,7 +4,7 @@
 
 ## Objective
 
-Persist immutable completed research results in `backtest-results.sqlite3`, expose only verified materialized records, retain summaries and simulated fills long term, bound diagnostic detail, and provide integrity-checked pagination, export, pinning, retention, and reconstruction.
+Persist immutable completed research results in `backtest-results.sqlite3`, expose only verified materialized records, retain the latest 30 historical runs with their summaries, simulated fills and normal details, bound diagnostic detail, and preserve existing integrity-checked pagination, export, pinning, retention, and reconstruction contracts for retained runs.
 
 ## Relationship and Scope
 
@@ -55,18 +55,22 @@ Pin state and pin revision remain outside canonical summary/report identity. A s
 
 Completed summaries expose closed typed coverage, assumptions, formula versions, final metrics, costs, limitation Tokens, plan/dataset/run identities, timestamps, and counts. Every active persisted, queried, cursor-bound, published, and exported datetime is canonical timezone-aware `Asia/Shanghai` RFC 3339 text in exact `YYYY-MM-DDTHH:MM:SS.ffffff+08:00` form; `Z`, offsetless values, more than 6 fractional digits, and other offsets are rejected before persistence/publication. Arbitrary `dict[str, object]` payloads are never a public API contract.
 
-The original complete `reportHash` remains the audit identity after bounded details expire. Stable active `backtest-report-summary-v2` JSON and `backtest-simulated-fills-v2` CSV can be reconstructed incrementally from verified long-lived v2 summary/fill rows without provider access, strategy replay, new database rows, or a complete in-memory export. Immutable UTC-normalized v1 artifacts remain available only through explicitly identified offline compatibility tooling; they are never silently emitted as the active export version. Iterators use bounded reads, observe caller cancellation between batches, and let `backtest-api` emit chunks no larger than 64 KiB. Expired decisions, signals, outcomes, and equity detail remain expired and cannot be reconstructed. Exports never contain database/report paths, live state, credentials, or raw provider responses.
+The original complete `reportHash` remains the audit identity after bounded details expire. Stable active `backtest-report-summary-v2` JSON and `backtest-simulated-fills-v2` CSV can be reconstructed incrementally from verified retained v2 summary/fill rows without provider access, strategy replay, new database rows, or a complete in-memory export. Immutable UTC-normalized v1 artifacts remain available only through explicitly identified offline compatibility tooling; they are never silently emitted as the active export version. Iterators use bounded reads, observe caller cancellation between batches, and let `backtest-api` emit chunks no larger than 64 KiB. Expired decisions, signals, outcomes, and equity detail remain expired and cannot be reconstructed. Exports never contain database/report paths, live state, credentials, or raw provider responses.
 
 ## Retention Contract
 
+Policy update, 2026-10-07: the user cancelled disk/log budgets and requested a total cap of 30 historical backtest records. The following is the authorized target for ML-T21, not a claim that cleanup is already implemented. Current code still retains summaries/fills long term and bounds successful detail to 100 runs/90 days. This target supersedes those result-retention defaults; existing job/idempotency retention remains unchanged. Do not directly clean user databases as part of this design update.
+
 | Record class | Default retention |
 |---|---|
-| materialized run summary, canonical input hashes/snapshots, assumptions, final metrics, and fill ledger | long term |
-| successful decision/signal/outcome/daily-equity detail | newest 100 runs and no more than 90 days; whichever bound is reached first |
+| materialized historical run summary, canonical input hashes/snapshots, assumptions, final metrics, and fill ledger | latest 30 materialized runs in total; delete the oldest excess run records |
+| decision/signal/outcome/daily-equity detail | same retained 30 runs; delete with its run, without a separate 90-day expiry |
 | failed/cancelled job diagnostics and explicitly enabled debug trace | 14 days |
 | abandoned unmaterialized, unpinned staged summary/fill/detail | 14 days |
-| pinned run detail | exempt until unpinned |
+| pinned run | included in the total 30-run cap; pin metadata remains compatible and does not exempt a run |
 | dataset/market revision referenced by a retained run | retained by `backtest-data` |
+
+After publishing a new result, trigger the existing bounded maintenance path; add no cleanup scheduler. Count all materialized historical results across supported modes/statuses, ordered by publication/retention time descending and `run_id` descending for ties. Delete the oldest excess runs with their summaries, fills, details and run-only artifacts; retain shared datasets/snapshots or inputs still referenced by retained runs or jobs. Never delete queued/running jobs or their staging. Duplicate publication of the same run does not consume another slot. Retained result/export bytes remain unchanged; deleted runs are unavailable rather than partially readable. No disk-byte limit, free-space admission threshold, log quota or new log rotation is required.
 
 Cleanup is indexed and bounded. `backtest-jobs` supplies one total budget of at most 1,000 rows and calls result cleanup as a one-way dependency; results never start a second budget or prune job rows. It never runs a large `VACUUM` while monitoring or backtesting is active. WAL checkpoint is passive and occurs only at a safe/quiescent boundary; `VACUUM` remains an explicit offline maintenance action.
 
@@ -100,7 +104,7 @@ Cover staged invisibility, 1,000-row read-snapshot verification and short-writer
 
 ## Boundaries
 
-- Always: expose only materialized, hash-verified, typed results and preserve long-term summary/fill audit facts.
+- Always: expose only materialized, hash-verified, typed results and preserve complete summary/fill audit facts for the retained 30 runs.
 - Always: keep retention/indexing bounded and distinguish `AVAILABLE`, `EXPIRED`, and `NOT_RECORDED`.
 - Ask first: change result/export schema, status semantics, retention defaults, pagination ceilings, pin behavior, destructive run deletion, or online `VACUUM`.
 - Never: expose staged/partial data, copy bars, reconstruct expired details, return unbounded collections, hide corruption through filtering, mutate canonical completed content, or disclose paths/secrets/provider bodies.
@@ -113,9 +117,9 @@ Cover staged invisibility, 1,000-row read-snapshot verification and short-writer
 - Cursor pages contain no duplicates or gaps over a static ordered result set.
 - Summary/fill exports are byte-stable and reconstructable without replay; expired detail stays unavailable.
 - All active persisted, paginated, and exported datetimes use `Asia/Shanghai`/`+08:00`; existing `run_id`/`dataset_hash`/`reportHash` identities remain unchanged, UTC v1 result/export bytes remain immutable compatibility artifacts, and active v2 result/export goldens are byte-stable.
-- Long-term rows do not grow on an identical repeated run, while detail/job retention remains bounded.
-- Pin/unpin uses explicit revision and correctly changes retention eligibility without changing `reportHash`.
+- Identical repeated publication does not consume another history slot; the 31st materialized run triggers oldest-first complete-run cleanup. Verify summary/fill/detail removal, shared-reference protection, queued/running safety, restart and bounded partial cleanup; job/idempotency retention remains unchanged.
+- Pin/unpin uses explicit revision without changing `reportHash`; pinned runs remain inside the total 30-run cap.
 
 ## Open Questions
 
-Destructive deletion of a completed run and server-side comparison exports remain deferred. Per-run JSON/CSV export, paginated details, and client-side comparison of explicitly selected summaries are sufficient for the first release.
+Automatic oldest-first deletion beyond 30 historical runs is authorized by the 2026-10-07 policy update and remains pending ML-T21 implementation. A new public manual-deletion API and server-side comparison exports remain deferred. Existing per-run JSON/CSV exports remain compatible for retained runs; add no new export development.

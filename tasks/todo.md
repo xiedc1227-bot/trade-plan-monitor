@@ -1,13 +1,15 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Pending implementation, 2026-10-06. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T29 are not implemented. Previously completed historical tasks are retained below.
+> Implementation authorized, updated 2026-10-07. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T30–ML-T34 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
+
+Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-backtest.md#mv10-complete-acceptance-gap-register). Startup-decoupling-only acceptance is [MV11](../docs/verification/monitor-loop-backtest.md#mv11-startup-decoupling-acceptance-only); do not make the pending business/resource redesign its prerequisite. Both reference existing scope without adding requirements. Cancelled protection items cannot return as implicit prerequisites.
 
 ## ML-T01. Define frozen loop input and time boundaries
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** None
+- **Dependencies:** `ML-T30`
 - **Acceptance:** Strict versioned inputs separate source/activation/end times, account cost/mark and zero/unknown cash; validate the proposed limits without altering legacy encodings. Same-version continuation and end-date resolution are deterministic.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/loop_input.py`, `src/trade_plan_monitor/backtest/plan_schedule.py`, `tests/unit/test_monitor_loop_input.py`, `tests/unit/test_monitor_loop_schedule.py`
@@ -103,8 +105,8 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 ## ML-T10. Resume sequential extraction safely
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T07`, `ML-T08`, `ML-T09`
-- **Acceptance:** Claim items with generation/source/base fences, reuse the AI concurrency budget and persist progress outside calls. Retry only bounded retryable failures; cancel/restart/edit rejects stale completion and preserves unaffected predecessors.
+- **Dependencies:** `ML-T07`, `ML-T08`, `ML-T09`, `ML-T34`
+- **Acceptance:** Claim items with generation/source/base fences, reuse existing extraction guards and persist progress outside calls. Extract batch items sequentially. Retry only bounded retryable failures; cancel/restart/edit rejects stale completion and preserves unaffected predecessors. Run preparation in owned backtest threads with bounded calls; recovery cannot repeat an unknown paid request. A new global AI budget is not a resource-isolation prerequisite.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_worker.py`
 - **Scope:** M (5 primary files including tests); **Trace:** ML-A16, ML-A18.
@@ -121,8 +123,8 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 ## ML-T12. Expose the preparation application path
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T10`, `ML-T11`
-- **Acceptance:** Connect bounded create/read/edit/extract/cancel/review operations to application ownership and startup/shutdown. Real HTTP tests prove revision conflicts, idempotency, pagination and fake-AI progress without mutating live plans.
+- **Dependencies:** `ML-T10`, `ML-T11`, `ML-T33`
+- **Acceptance:** Connect bounded create/read/edit/extract/cancel/review operations to on-demand capability ownership and acquired-resource shutdown. Real HTTP tests prove revision conflicts, idempotency, pagination and fake-AI progress without mutating live plans. Bind preparation only after guarded service readiness; preparation-store startup failure degrades backtest only.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_plan_preparation_api.py`
 - **Scope:** M (5 primary files including tests); **Trace:** ML-A10, ML-A16, ML-A18.
@@ -185,8 +187,8 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 ## ML-T18. Submit a loop run with one resolved time boundary
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T16`, `ML-T17`
-- **Acceptance:** Extend submission additively with reviewed preparation identity and optional end; freeze input and cutoff under the idempotency reservation. Duplicate requests after midnight reuse the original result; stale reviews and invalid ranges reject.
+- **Dependencies:** `ML-T16`, `ML-T17`, `ML-T33`
+- **Acceptance:** Extend submission additively with reviewed preparation identity and optional end; freeze input and cutoff under the idempotency reservation. Duplicate requests after midnight reuse the original result; stale reviews and invalid ranges reject. Resolve/freeze submission through the backtest service and owned repository executor; preserve independent store ownership.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_run_api.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `tests/integration/test_monitor_loop_submission.py`
 - **Scope:** M (4 primary files including tests); **Trace:** ML-A09, ML-A10, ML-A15, ML-A18.
@@ -199,11 +201,11 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 ## ML-T19. Run frozen loop inputs through the background worker
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T05`, `ML-T06`, `ML-T17`, `ML-T18`
-- **Acceptance:** Dispatch by input discriminator with existing lease/cancel ownership; load frozen artifacts only. No backtest CLI entry, compatibility adapter, or command-owned coordinator remains.
+- **Dependencies:** `ML-T05`, `ML-T06`, `ML-T17`, `ML-T18`, `ML-T34`
+- **Acceptance:** Dispatch by input discriminator with existing lease/cancel ownership; load frozen artifacts only. No backtest CLI entry, compatibility adapter, or command-owned coordinator remains. Dispatch in the dedicated thread after lifecycle/admission gates; preserve single-slot and atomic-publication semantics.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_worker.py tests/integration/test_backtest_job_coordinator.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/runner.py`, `tests/integration/test_monitor_loop_worker.py`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A01, ML-A09, ML-A10.
+- **Scope:** M (3 primary files including tests); **Trace:** ML-A01, ML-A09, ML-A10.
 
 ## ML-T20. Project causal events and valid valuations
 
@@ -218,7 +220,7 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 
 - [ ] Complete implementation and task verification.
 - **Dependencies:** `ML-T19`, `ML-T20`
-- **Acceptance:** Stream typed events, verify stored input/report hashes and publish only complete runs. Cancel/failure/limit overflow leaves no completed partial report; retention pins chain artifacts required by results and exports.
+- **Acceptance:** Stream typed events, verify stored input/report hashes and publish only complete runs. Cancel/failure/limit overflow leaves no completed partial report; retain the latest 30 materialized historical runs in total, ordered by publication/retention time descending and run_id for ties. New result publication triggers existing bounded maintenance to delete the oldest excess runs with summaries/fills/details; pins do not bypass the cap. Protect queued/running jobs and shared datasets/snapshots still referenced by retained runs or jobs. Retained runs pin chain artifacts required by loop results; their existing supported-mode exports remain byte-compatible. Add no new cleanup scheduler or resource-budget framework.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py tests/integration/test_backtest_publication.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`
 - **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A10.
@@ -228,14 +230,14 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 - [ ] Worker publishes only complete retained results.
 - [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
 
-## ML-T22. Expose paginated loop results and exports
+## ML-T22. Expose paginated loop results; retain export compatibility
 
 - [ ] Complete implementation and task verification.
 - **Dependencies:** `ML-T21`
-- **Acceptance:** Existing result/detail/export paths expose typed loop events, version history and cutoff coverage with stable paging. Old summaries/CSV/JSON remain byte-compatible; new projections identify their schema explicitly.
-- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_monitor_loop_exports.py tests/integration/test_backtest_exports.py -q -m "not live"`
-- **Primary files:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/backtest_export.py`, `tests/integration/test_monitor_loop_result_api.py`, `tests/integration/test_monitor_loop_exports.py`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A10, ML-A15.
+- **Acceptance:** Result/detail paths expose typed loop events, version history and cutoff coverage with stable paging and explicit schema identification. Preserve old summaries and existing supported-mode CSV/JSON contracts and bytes. Add no loop export format, route, UI, bulk jobs or export mutex admission. Run heavy result projection in owned threads with bounded paging; backpressure affects backtest admission only.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_backtest_exports.py -q -m "not live"`
+- **Primary files:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `tests/integration/test_monitor_loop_result_api.py`
+- **Scope:** M (3 primary files including tests); **Trace:** ML-A09, ML-A10, ML-A15.
 
 ## ML-T23. Generate final run and result contracts
 
@@ -257,7 +259,7 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 
 ### ML-C08. Checkpoint
 
-- [ ] Result/export APIs and run creation work with old/new contracts.
+- [ ] Result APIs and run creation work with old/new contracts; existing exports remain compatible without new development.
 - [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
 
 ## ML-T25. Explain plan and execution history in results
@@ -272,17 +274,17 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 ## ML-T26. Prove parity, causality and failure atomicity
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T06`, `ML-T11`, `ML-T16`, `ML-T21`
+- **Dependencies:** `ML-T06`, `ML-T11`, `ML-T16`, `ML-T21`, `ML-T34`
 - **Acceptance:** Compare online application participants with loop state using independent expected outputs; mutate future evidence and inject transaction/worker faults. Include one deliberate invariant mutation check; fake AI/provider/sink counters prove isolation.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_parity.py tests/integration/test_monitor_loop_faults.py tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **Primary files:** `tests/integration/test_monitor_loop_parity.py`, `tests/integration/test_monitor_loop_faults.py`, `tests/fixtures/monitor-loop/scenarios.json`, `tests/integration/test_plan_preparation_worker.py`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A01–ML-A18.
+- **Scope:** M (4 primary files including tests); **Trace:** ML-A01–ML-A24.
 
 ## ML-T27. Verify the complete browser journey
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T24`, `ML-T25`, `ML-T26`
-- **Acceptance:** Use real mounted API/composition with fake external services for upload → retry/edit → review → run → results/export. Prove the fixture supplies no future trade script and tests neither mocked result-only screens nor live user databases.
+- **Dependencies:** `ML-T24`, `ML-T25`, `ML-T26`, `ML-T36`
+- **Acceptance:** Use real mounted API/composition with fake external services for upload → retry/edit → review → run → results. Prove the fixture supplies no future trade script and tests neither mocked result-only screens nor live user databases. Include service-down/unknown-cancel/recovery navigation while monitor pages remain usable.
 - **Verification:** `npm --prefix web run test:e2e -- tests/e2e/monitor-loop-backtest.spec.ts`; `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_production_composition.py -q -m "not live"`
 - **Primary files:** `web/tests/e2e/monitor-loop-backtest.spec.ts`, `web/tests/fixtures/monitor-loop.json`, `tests/integration/test_monitor_loop_production_composition.py`
 - **Scope:** M (3 primary files including tests); **Trace:** ML-A10, ML-A16, ML-A18.
@@ -295,16 +297,16 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 ## ML-T28. Record operation guidance and executed evidence
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T27`
+- **Dependencies:** `ML-T27`, `ML-T37`
 - **Acceptance:** Document actual supported API/UI behavior and source limitations in both languages. Execute the plan's relevant final gates and record exact results, unresolved failures and evidence scope; never claim live AI/provider certification.
 - **Verification:** `git diff --check`
 - **Primary files:** `docs/operations/monitor-loop-backtest.md`, `docs/operations/monitor-loop-backtest.zh-CN.md`, `docs/verification/monitor-loop-backtest.md`, `docs/verification/monitor-loop-backtest.zh-CN.md`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A01–ML-A18.
+- **Scope:** M (4 primary files including tests); **Trace:** ML-A01–ML-A24.
 
 ## ML-T29. Align reviewed specifications and API approval
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T23`, `ML-T28`
+- **Dependencies:** `ML-T23`, `ML-T28`, `ML-T38`, `ML-T39`
 - **Acceptance:** Review the final API/behavior diff with its bilingual contract; record only the resulting approved snapshot identity and final implementation scope. Preserve old approval history and explicitly distinguish the previously known baseline mismatch.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_openapi_snapshot.py -q -m "not live"`
 - **Primary files:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`, `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`, `docs/specifications/monitoring/SPEC-unified-plan.md`, `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`
@@ -312,9 +314,116 @@ Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute 
 
 ### ML-C10. Checkpoint
 
-- [ ] All ML-A01–ML-A18 evidence and reviewed bilingual contracts are complete.
+- [ ] All ML-A01–ML-A24 evidence and reviewed bilingual contracts are complete.
 - [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
 
+## ML-T30. Freeze on-demand lifecycle and capability contracts
+
+- [x] Complete implementation and task verification.
+- **Dependencies:** None
+- **Acceptance:** Define NOT_INITIALIZED/READ_READY versus execution readiness, inert startup/status, single-flight gates, per-session authorized job IDs and physical drain. Preserve identities/atomic publication; no background warm-up or approval stamping.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/unit/test_backtest_service_contract.py -q -m "not live"`
+- **Primary files:** `src/trade_plan_monitor/backtest/service_contract.py`, `src/trade_plan_monitor/backtest/service_config.py`, `tests/unit/test_backtest_service_contract.py`
+- **Scope:** M (3 primary files including tests); **Trace:** ML-A19, ML-A22, ML-A24.
+
+## ML-T31. Remove backtest preparation from application startup
+
+- [x] Complete implementation and task verification.
+- **Dependencies:** `ML-T30`
+- **Acceptance:** Application startup/shutdown/status/OpenAPI/monitor navigation invokes no backtest factory/start/store/key/executor/provider and schedules no warm-up. Deliberately unusable backtest-only configuration does not block a healthy monitor/Web startup. Cleanup only acquired resources; first-use failure remains scoped.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_startup_isolation.py tests/integration/test_backtest_production_composition.py tests/integration/test_monitor_production_composition.py -q -m "not live"`
+- **Primary files:** `src/trade_plan_monitor/web/lifespan.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_backtest_startup_isolation.py`, `tests/integration/test_backtest_production_composition.py`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A19, ML-A20.
+
+## ML-T32. Initialize bounded backtest capabilities once on demand
+
+- [x] Complete implementation and task verification.
+- **Dependencies:** `ML-T31`
+- **Acceptance:** A guarded single-flight manager handles concurrent first use, lazy executors, waiter cancellation and generation fences. Split metadata READ_READY from execution READY; reads/status never activate the coordinator. Return truthful initializing/unavailable responses and retain resource ownership until physical drain.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_production_composition.py -q -m "not live"`
+- **Primary files:** `src/trade_plan_monitor/backtest/thread_lifecycle.py`, `src/trade_plan_monitor/backtest/thread_ownership.py`, `src/trade_plan_monitor/backtest/service_lifecycle.py`, `src/trade_plan_monitor/web/app.py`, `tests/integration/test_backtest_thread_ownership.py`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A19, ML-A20, ML-A22.
+- **Executed connection changes:** `web/lifespan.py` imports the manager; `backtest/composition.py` owns the metadata adapter. The narrow 503 `Retry-After` extension in `web/errors.py` and its response test were explicitly authorized by the user. See verification for evidence.
+
+### ML-C11. Checkpoint
+
+- [x] Inert startup/status/shutdown, single-flight first use and read/execution separation pass.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
+
+## ML-T33. Gate job recovery and cancellation by explicit use
+
+- [x] Complete implementation and task verification.
+- **Dependencies:** `ML-T32`
+- **Acceptance:** Restart leaves backlog dormant. Reads and readiness do not claim/recover/execute jobs; current-session new-job and explicitly selected resume IDs gate coordination. Preserve cancel/complete/lease fences, 30-second leases/3 claim generations and drain-before-replacement. No blind paid retry or failed/cancelled requeue.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_job_coordinator.py tests/integration/test_backtest_jobs.py -q -m "not live"`
+- **Primary files:** `src/trade_plan_monitor/backtest/service_lifecycle.py`, `src/trade_plan_monitor/backtest/jobs/coordinator.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_backtest_thread_recovery.py`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A20, ML-A21.
+- **Progress:** On 2026-10-07 the user selected dormant history with safe slot release. Expired historical RUNNING/CANCEL_REQUESTED records are preserved; only explicit selection recovers/acknowledges cancellation. New jobs claim only without a valid/unknown lease and after local physical work returns. Recovery filters authorized IDs first; multiple dormant records cause neither total-count errors nor selection starvation. The 30-second lease/3-generation, stale-token, cancellation/publication/idempotency and physical-drain regressions pass; no new status/schema migration. Executed evidence: MV12.
+
+## ML-T34. Preserve existing limits and pace historical sync
+
+- [x] Complete implementation and task verification.
+- **Dependencies:** `ML-T33`
+- **Acceptance:** Preserve and regress existing finite queues/input/event limits, single execution, bounded threads/paging and storage-domain guards. Add no dynamic memory/CPU sampling controller, pressure threshold or pressure-triggered admission/cancellation. Historical sync stays single-active and gains only local fixed request-start spacing, initially 1.25 seconds using the existing pacing value. Preserve existing request timeouts/error mapping and cancellation during waits; no new retry policy. Monitor request control is unchanged. No global quota pool, live-capacity reservation, cross-business scheduling, shared cooldown, account/interface registry, adaptive allocation or quota UI. Low-frequency AI extraction retains existing guards and sequential batches and does not block this task. Stream records and cooperatively cancel; no hard per-thread CPU/memory guarantee. Replay constructs no live provider/sink.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_sync_pacing.py tests/integration/test_backtest_results.py tests/integration/test_backtest_thread_ownership.py -q -m "not live"`
+- **Primary files:** `src/trade_plan_monitor/backtest/sync.py`, `tests/integration/test_backtest_sync_pacing.py`
+- **Scope:** S (2 primary files including tests); **Trace:** ML-A20, ML-A22, ML-A23.
+- **Scope decision:** On 2026-10-07 the user requested minimal scope. The former live-capacity reservation item is replaced by local sync pacing in `backtest/sync.py` with fake spacing/cancellation tests. Remove the planned generic `backtest/capability_admission.py` module and provider-admission test; no new connections in `web/ai_service.py`, `runtime/request_control.py` or `backtest/application.py` are required for this item. Quota certification or shared-budget decisions no longer gate it. Storage protection retains existing independent defaults, path normalization and live-table/mixed-domain guards only; no new deep file identity or cross-file alias framework. Disk/log budgets and free-space admission thresholds are cancelled. The latest-30 historical-run retention policy belongs to ML-T21 and does not gate isolation. Cancel the planned `backtest/resource_control.py` and generic `test_backtest_resource_boundaries.py`; existing guards need regression only. Local sync pacing and existing guard regression pass, with the ML-T33 dependency completed; executed evidence is in MV12. Remove the proposed blanket preparation/replay mutex from this release; keep the existing sync/verify/replay slot and batch-level revision/freeze protections, without a new cross-operation lock, queue or scheduling layer.
+
+### ML-C12. Checkpoint
+
+- [x] Drain-aware recovery/cancellation, existing guard regression and local sync pacing pass.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
+
+## ML-T35. Expose lazy service status and explicit recovery API
+
+- [ ] Complete implementation and task verification.
+- **Dependencies:** `ML-T12`, `ML-T23`, `ML-T33`, `ML-T34`
+- **Acceptance:** Status/stop are inert when unused; first actual data/operation request activates needed capabilities after guards/validation. Recovery explicitly retries preparation or selected resumeJobIds (<=100) with epoch/revision/idempotency. Scoped 503/Retry-After means no job admitted; initialization polling cannot restart failed preparation.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_service_api.py -q -m "not live"`
+- **Primary files:** `src/trade_plan_monitor/web/routers/backtest_service.py`, `src/trade_plan_monitor/web/backtest_service_schemas.py`, `src/trade_plan_monitor/web/app.py`, `tests/integration/test_backtest_service_api.py`
+- **Scope:** M (4 primary files including tests); **Trace:** ML-A19, ML-A21, ML-A24.
+
+## ML-T39. Generate independent service transport contracts
+
+- [ ] Complete implementation and task verification.
+- **Dependencies:** `ML-T35`
+- **Acceptance:** Generate mounted service resources and typed capabilities/errors in both contract profiles. Check that monitor endpoints and unaffected payloads retain their prior meaning; preserve the stale approval record for explicit final review. No handwritten duplicate transport models.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_service_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
+- **Primary files:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_backtest_service_contract.py`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A19, ML-A24.
+
+## ML-T36. Show first-use preparation and scoped recovery in Web
+
+- [ ] Complete implementation and task verification.
+- **Dependencies:** `ML-T39`
+- **Acceptance:** Only active backtest data requests trigger lazy preparation; route prefetch/global status polling stays inert. Show unused/initializing/read-ready/execution-ready/failure distinctly, preserve forms across 503 and reuse mutation keys. Opening history never resumes jobs/AI; explicit retry/resume shows selected backlog and monitoring stays usable.
+- **Verification:** `npm --prefix web run test -- --run tests/unit/BacktestServiceState.spec.ts`; `npm --prefix web run type-check`
+- **Primary files:** `web/src/api/backtestService.ts`, `web/src/composables/useBacktestService.ts`, `web/src/components/backtests/BacktestServiceState.vue`, `web/src/views/BacktestNewView.vue`, `web/tests/unit/BacktestServiceState.spec.ts`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A21, ML-A24.
+
+## ML-T37. Verify Windows lazy activation and thread boundaries
+
+- [ ] Complete implementation and task verification.
+- **Dependencies:** `ML-T26`, `ML-T27`, `ML-T34`, `ML-T36`
+- **Acceptance:** Prove zero backtest work across app startup/monitor navigation/status/prefetch/shutdown, concurrent first-use single initialization, read-only history without backlog execution and explicit selected resume. Inject first-use errors/late futures/cancel races with controllable fixtures; retain ML17 10-stock load gates and accepted thread limits.
+- **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_isolation_fault_matrix.py tests/integration/test_monitor_loop_parity.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/verify_backtest_thread_load.py --profile windows-threads --offline`
+- **Primary files:** `tests/integration/test_backtest_isolation_fault_matrix.py`, `tests/fixtures/monitor-loop/isolation.json`, `scripts/verify_backtest_thread_load.py`, `tests/integration/test_backtest_sync_pacing.py`
+- **Scope:** M (4 primary files including tests); **Trace:** ML-A08, ML-A19–ML-A24.
+
+## ML-T38. Record on-demand thread operation guidance
+
+- [ ] Complete implementation and task verification.
+- **Dependencies:** `ML-T37`
+- **Acceptance:** Paired guidance explains dormant startup, first-use preparation, metadata versus execution, explicit backlog resume, scoped repair and drain-aware stop. Document shared-process risks without mandatory process upgrade; preserve identities and the historical baseline approval mismatch with its reviewed correction.
+- **Verification:** `git diff --check`
+- **Primary files:** `docs/operations/monitor-loop-backtest.md`, `docs/operations/monitor-loop-backtest.zh-CN.md`, `docs/verification/monitor-loop-backtest.md`, `docs/verification/monitor-loop-backtest.zh-CN.md`
+- **Scope:** M (4 primary files including tests); **Trace:** ML-A19–ML-A24.
+
+### ML-C13. Checkpoint
+
+- [ ] Service API/UI and recorded Windows thread fault/load acceptance pass; ML-C10 remains the final combined gate.
+- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
 ---
 
 The following original completed historical record is preserved; it does not imply completion of the current implementation.

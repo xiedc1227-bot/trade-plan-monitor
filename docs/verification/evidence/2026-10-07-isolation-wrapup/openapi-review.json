@@ -1,0 +1,173 @@
+{
+  "approved_commit": "a0915f71b52a415e55086587e029c38e126c0d49",
+  "approved_sha256": "4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255",
+  "current_sha256": "8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833",
+  "changes": [
+    {
+      "path": "/components/schemas/BacktestDetailView/anyOf",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/BacktestDetailView/discriminator",
+      "change": "removed"
+    },
+    {
+      "path": "/components/schemas/BacktestDetailView/oneOf",
+      "change": "removed"
+    },
+    {
+      "path": "/components/schemas/BacktestEquitySeries/properties/items/items/$ref",
+      "change": "removed"
+    },
+    {
+      "path": "/components/schemas/BacktestEquitySeries/properties/items/items/anyOf",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/BacktestRunCommand/properties/researchInput",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/BacktestRunSummaryView/properties/metrics/$ref",
+      "change": "removed"
+    },
+    {
+      "path": "/components/schemas/BacktestRunSummaryView/properties/metrics/anyOf",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/BacktestRunSummaryView/properties/metrics/title",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/BacktestRunView/properties/metrics/$ref",
+      "change": "removed"
+    },
+    {
+      "path": "/components/schemas/BacktestRunView/properties/metrics/anyOf",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/BacktestRunView/properties/metrics/title",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/DailyInventoryView",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/DailyOfficialProof",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/DailyRiskAction",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/DailyRiskState",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/DailySignalState",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchAdjustmentProof",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchConditionEvidence",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchDeactivate",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchDecisionEvent",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchDecisionView",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchEquityView",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchFact",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchFactor",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchMetricsView",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchOperationOutcome",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchOperationValuation",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchOperationView",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchReassessment",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchReminder",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchReplace",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchReview",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchRuleEvidence",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/ResearchSimulation",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/TradingDay",
+      "change": "added"
+    },
+    {
+      "path": "/components/schemas/UnifiedResearchInput",
+      "change": "added"
+    }
+  ],
+  "review_checks": {
+    "changed_existing_schemas": [
+      "BacktestDetailView",
+      "BacktestEquitySeries",
+      "BacktestRunCommand",
+      "BacktestRunSummaryView",
+      "BacktestRunView"
+    ],
+    "added_schema_count": 25,
+    "removed_schemas": [],
+    "all_paths_operations_responses_parameters_identical": true,
+    "all_other_existing_monitor_error_job_schemas_identical": true,
+    "current_snapshot_equals_committed_HEAD": true,
+    "implementation_commit": "7a92f75",
+    "authority": "SPEC-unified-replay UR01/UR03/UR04/UR05/UR06/UR08",
+    "conclusion": "stale approval record for previously authorized unified research extension"
+  },
+  "artifact_note": "Compact review index; exact schema bodies are reproducible from the recorded Git commits. Full duplicate schema/diff backups were removed during commit preparation."
+}

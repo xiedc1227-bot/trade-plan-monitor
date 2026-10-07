@@ -1,13 +1,15 @@
 # 当前任务清单：监控闭环回测
 
-> 待实施，2026-10-06。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T29 均未实施。其后保留此前已完成的历史清单。
+> 已授权实施，2026-10-07。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T30–ML-T34 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
+
+完整交付缺口按 [MV10](../docs/verification/monitor-loop-backtest.zh-CN.md#mv10-完整验收缺口清单) 分组。仅启动解耦验收见 [MV11](../docs/verification/monitor-loop-backtest.zh-CN.md#mv11-仅启动解耦验收)，不得把待完成业务/资源改造作为其前置条件。两者均引用既有范围，不新增要求。已取消保护项不能重新成为隐含前置条件。
 
 ## ML-T01. 定义冻结闭环输入与时间边界
 
 - [ ] 完成实现和本项验证.
-- **依赖:** 无
+- **依赖:** `ML-T30`
 - **验收:** 严格版本化输入区分原文/激活/结束时间、账户成本/市值及零/未知现金；校验建议上限，不改变旧编码。同版本沿用和结束日期解析确定。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/loop_input.py`, `src/trade_plan_monitor/backtest/plan_schedule.py`, `tests/unit/test_monitor_loop_input.py`, `tests/unit/test_monitor_loop_schedule.py`
@@ -103,8 +105,8 @@
 ## ML-T10. 安全恢复顺序提取
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T07`, `ML-T08`, `ML-T09`
-- **验收:** 用代次/原文/基线保护领取条目，共用 AI 并发预算，在调用外持久化进度。仅有界重试可重试失败，取消/重启/编辑拒绝陈旧完成并保留未受影响前序。
+- **依赖:** `ML-T07`, `ML-T08`, `ML-T09`, `ML-T34`
+- **验收:** 用代次/原文/基线保护领取条目，复用既有提取防护，在调用外持久化进度。批内逐项顺序提取。仅有界重试可重试失败，取消/重启/编辑拒绝陈旧完成并保留未受影响前序。准备在自有回测线程运行，调用有界；恢复不能重复结果未知的付费请求。新增全局 AI 预算不是资源隔离前置条件。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_worker.py`
 - **范围:** M (5 个主要文件，含测试); **追溯:** ML-A16, ML-A18.
@@ -121,8 +123,8 @@
 ## ML-T12. 接通准备应用接口
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T10`, `ML-T11`
-- **验收:** 将有界创建/读取/编辑/提取/取消/审核接入应用所有权和启停。真实 HTTP 测试证明修订冲突、幂等、分页与虚拟 AI 进度，不修改在线计划。
+- **依赖:** `ML-T10`, `ML-T11`, `ML-T33`
+- **验收:** 将有界创建/读取/编辑/提取/取消/审核接入按需能力所有权及已取得资源的关闭流程。真实 HTTP 测试证明修订冲突、幂等、分页与虚拟 AI 进度，不修改在线计划。 受保护服务就绪后才绑定准备，准备存储启动失败仅降级回测。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_plan_preparation_api.py`
 - **范围:** M (5 个主要文件，含测试); **追溯:** ML-A10, ML-A16, ML-A18.
@@ -185,8 +187,8 @@
 ## ML-T18. 以一次确定的时间边界提交闭环运行
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T16`, `ML-T17`
-- **验收:** 增量提交已审核准备身份和可选结束日期，在幂等预留下冻结输入/截止。跨午夜重复请求复用原结果，拒绝陈旧审核和无效区间。
+- **依赖:** `ML-T16`, `ML-T17`, `ML-T33`
+- **验收:** 增量提交已审核准备身份和可选结束日期，在幂等预留下冻结输入/截止。跨午夜重复请求复用原结果，拒绝陈旧审核和无效区间。 通过回测服务和自有仓库执行器解析/冻结提交，保持独立存储归属。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_run_api.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `tests/integration/test_monitor_loop_submission.py`
 - **范围:** M (4 个主要文件，含测试); **追溯:** ML-A09, ML-A10, ML-A15, ML-A18.
@@ -199,11 +201,11 @@
 ## ML-T19. 通过后台工作者执行冻结闭环输入
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T05`, `ML-T06`, `ML-T17`, `ML-T18`
-- **验收:** 按输入区分值分发，沿用租约/取消所有权，只读取冻结产物。不保留回测 CLI 入口、兼容适配器或命令专用协调器。
+- **依赖:** `ML-T05`, `ML-T06`, `ML-T17`, `ML-T18`, `ML-T34`
+- **验收:** 按输入区分值分发，沿用租约/取消所有权，只读取冻结产物。不保留回测 CLI 入口、兼容适配器或命令专用协调器。 生命周期/准入门槛后在专用线程分派，保留单槽和原子发布语义。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_worker.py tests/integration/test_backtest_job_coordinator.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/runner.py`, `tests/integration/test_monitor_loop_worker.py`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A01, ML-A09, ML-A10.
+- **范围:** M (3 个主要文件，含测试); **追溯:** ML-A01, ML-A09, ML-A10.
 
 ## ML-T20. 投影因果事件与有效估值
 
@@ -218,7 +220,7 @@
 
 - [ ] 完成实现和本项验证.
 - **依赖:** `ML-T19`, `ML-T20`
-- **验收:** 流式保存强类型事件，验证输入/报告哈希，只发布完整运行。取消/失败/超限不留下已完成部分报告，保留期固定结果和导出依赖的计划链。
+- **验收:** 流式保存强类型事件，验证输入/报告哈希，只发布完整运行。取消/失败/超限不留下已完成部分报告，历史已发布结果总共保留最新 30 个，按发布/保留时间降序、run_id 稳定破同序。新结果发布后触发既有有界维护，清理最旧超额运行及其摘要/成交/详情，置顶不豁免总数上限。保护排队/运行中任务，以及仍被保留运行或任务引用的共用数据集/快照。保留运行固定闭环结果依赖的计划链，其既有支持模式导出保持字节兼容。不新增清理调度器或资源预算框架。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py tests/integration/test_backtest_publication.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`
 - **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A10.
@@ -228,14 +230,14 @@
 - [ ] 工作者只发布完整且依赖保留正确的结果。
 - [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
-## ML-T22. 提供分页闭环结果与导出
+## ML-T22. 提供分页闭环结果，保留导出兼容
 
 - [ ] 完成实现和本项验证.
 - **依赖:** `ML-T21`
-- **验收:** 既有结果/明细/导出路径分页提供强类型闭环事件、版本历史和截止覆盖。旧摘要/CSV/JSON 字节兼容，新投影明确区分模式。
-- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_monitor_loop_exports.py tests/integration/test_backtest_exports.py -q -m "not live"`
-- **主要文件:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/backtest_export.py`, `tests/integration/test_monitor_loop_result_api.py`, `tests/integration/test_monitor_loop_exports.py`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A10, ML-A15.
+- **验收:** 结果/明细路径稳定分页提供强类型闭环事件、版本历史和截止覆盖，明确标识模式。保留旧摘要及既有支持模式的 CSV/JSON 契约和字节。不新增闭环导出格式、路由、UI、批量任务或导出互斥准入。重型结果投影在自有线程执行并有界分页，背压仅影响回测准入。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_backtest_exports.py -q -m "not live"`
+- **主要文件:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `tests/integration/test_monitor_loop_result_api.py`
+- **范围:** M (3 个主要文件，含测试); **追溯:** ML-A09, ML-A10, ML-A15.
 
 ## ML-T23. 生成最终运行与结果契约
 
@@ -257,7 +259,7 @@
 
 ### ML-C08. 检查点
 
-- [ ] 结果/导出 API 和运行创建兼容新旧契约。
+- [ ] 结果 API 和运行创建兼容新旧契约，既有导出保持兼容，不新增开发。
 - [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
 ## ML-T25. 在结果中解释计划与执行历史
@@ -272,17 +274,17 @@
 ## ML-T26. 证明一致性、因果性与故障原子性
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T06`, `ML-T11`, `ML-T16`, `ML-T21`
+- **依赖:** `ML-T06`, `ML-T11`, `ML-T16`, `ML-T21`, `ML-T34`
 - **验收:** 以独立预期输出对比在线参与者与闭环状态，修改未来证据并注入事务/工作者故障。做一次关键约束变异检查，虚拟 AI/供应商/出口计数证明隔离。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_parity.py tests/integration/test_monitor_loop_faults.py tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **主要文件:** `tests/integration/test_monitor_loop_parity.py`, `tests/integration/test_monitor_loop_faults.py`, `tests/fixtures/monitor-loop/scenarios.json`, `tests/integration/test_plan_preparation_worker.py`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A01–ML-A18.
+- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A01–ML-A24.
 
 ## ML-T27. 验证完整浏览器流程
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T24`, `ML-T25`, `ML-T26`
-- **验收:** 真实挂载 API/组合配虚拟外部服务，贯通上传→重试/编辑→审核→运行→结果/导出。证明夹具未预写未来交易，不只测假结果页，不访问真实用户库。
+- **依赖:** `ML-T24`, `ML-T25`, `ML-T26`, `ML-T36`
+- **验收:** 真实挂载 API/组合配虚拟外部服务，贯通上传→重试/编辑→审核→运行→结果。证明夹具未预写未来交易，不只测假结果页，不访问真实用户库。 加入服务停止/未知取消/恢复导航，监控页面保持可用。
 - **验证:** `npm --prefix web run test:e2e -- tests/e2e/monitor-loop-backtest.spec.ts`; `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_production_composition.py -q -m "not live"`
 - **主要文件:** `web/tests/e2e/monitor-loop-backtest.spec.ts`, `web/tests/fixtures/monitor-loop.json`, `tests/integration/test_monitor_loop_production_composition.py`
 - **范围:** M (3 个主要文件，含测试); **追溯:** ML-A10, ML-A16, ML-A18.
@@ -295,16 +297,16 @@
 ## ML-T28. 记录操作指南与实际验证证据
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T27`
+- **依赖:** `ML-T27`, `ML-T37`
 - **验收:** 双语记录实际支持的 API/UI 行为及原文限制。执行方案相关最终检查并记录真实结果、未解决失败和证据范围，不宣称真实 AI/供应商认证。
 - **验证:** `git diff --check`
 - **主要文件:** `docs/operations/monitor-loop-backtest.md`, `docs/operations/monitor-loop-backtest.zh-CN.md`, `docs/verification/monitor-loop-backtest.md`, `docs/verification/monitor-loop-backtest.zh-CN.md`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A01–ML-A18.
+- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A01–ML-A24.
 
 ## ML-T29. 对齐已审阅规格与API批准
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T23`, `ML-T28`
+- **依赖:** `ML-T23`, `ML-T28`, `ML-T38`, `ML-T39`
 - **验收:** 结合双语契约审阅最终 API/行为差异，仅记录由此批准的快照身份和最终实现范围。保留旧批准历史，明确区分此前已知基线不一致。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_openapi_snapshot.py -q -m "not live"`
 - **主要文件:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`, `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`, `docs/specifications/monitoring/SPEC-unified-plan.md`, `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`
@@ -312,9 +314,116 @@
 
 ### ML-C10. 检查点
 
-- [ ] 全部 ML-A01–ML-A18 证据及已审阅双语契约完整。
+- [ ] 全部 ML-A01–ML-A24 证据及已审阅双语契约完整。
 - [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
+## ML-T30. 冻结按需生命周期与能力契约
+
+- [x] 完成实现和本项验证。
+- **依赖:** 无
+- **验收:** 定义 NOT_INITIALIZED/READ_READY 与执行就绪，无副作用启动/状态、single-flight 门槛、会话授权任务 ID 和物理排空。保留身份/原子发布，不后台预热、不直接填批准摘要。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/unit/test_backtest_service_contract.py -q -m "not live"`
+- **主要文件:** `src/trade_plan_monitor/backtest/service_contract.py`, `src/trade_plan_monitor/backtest/service_config.py`, `tests/unit/test_backtest_service_contract.py`
+- **范围:** M (3 个主要文件，含测试); **追溯:** ML-A19, ML-A22, ML-A24.
+
+## ML-T31. 从应用启动移除回测准备
+
+- [x] 完成实现和本项验证。
+- **依赖:** `ML-T30`
+- **验收:** 应用启动/关闭/状态/OpenAPI/监控导航不调用回测工厂/start/存储/密钥/执行器/供应商、不安排预热。回测专用无效配置不阻止健康监控/Web 启动。仅清理已取得资源，首次使用失败保持局部。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_startup_isolation.py tests/integration/test_backtest_production_composition.py tests/integration/test_monitor_production_composition.py -q -m "not live"`
+- **主要文件:** `src/trade_plan_monitor/web/lifespan.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_backtest_startup_isolation.py`, `tests/integration/test_backtest_production_composition.py`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A19, ML-A20.
+
+## ML-T32. 按需一次初始化有界回测能力
+
+- [x] 完成实现和本项验证。
+- **依赖:** `ML-T31`
+- **验收:** 受保护 single-flight 管理器处理并发首次使用、按需执行器、等待者取消及代次保护。拆分元数据 READ_READY 与执行 READY，读取/状态不激活协调器。真实返回初始化/不可用，物理排空前保留资源归属。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_production_composition.py -q -m "not live"`
+- **主要文件:** `src/trade_plan_monitor/backtest/thread_lifecycle.py`, `src/trade_plan_monitor/backtest/thread_ownership.py`, `src/trade_plan_monitor/backtest/service_lifecycle.py`, `src/trade_plan_monitor/web/app.py`, `tests/integration/test_backtest_thread_ownership.py`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A19, ML-A20, ML-A22.
+- **实际连接改动:** `web/lifespan.py` 导入管理器，`backtest/composition.py` 拥有元数据适配器。用户明确授权 `web/errors.py` 中 503 `Retry-After` 的窄扩展及其响应测试。实际证据见验证记录。
+
+### ML-C11. 检查点
+
+- [x] 无副作用启动/状态/关闭、single-flight 首次使用及读取/执行分离通过。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+
+## ML-T33. 用明确使用约束任务恢复与取消
+
+- [x] 完成实现和本项验证。
+- **依赖:** `ML-T32`
+- **验收:** 重启保持积压休眠。读取/就绪不领取/恢复/执行任务，当前会话新任务和明确选择恢复 ID 约束协调器。保留取消/完成/租约保护、30 秒租约/3 个领取代次及排空后替换。不盲目付费重试、不重排失败/取消。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_job_coordinator.py tests/integration/test_backtest_jobs.py -q -m "not live"`
+- **主要文件:** `src/trade_plan_monitor/backtest/service_lifecycle.py`, `src/trade_plan_monitor/backtest/jobs/coordinator.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_backtest_thread_recovery.py`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A20, ML-A21.
+- **进展:** 2026-10-07 用户选择“旧任务休眠，安全释放执行槽”。过期历史 RUNNING/CANCEL_REQUESTED 保留原记录，仅明确选中才恢复/确认取消；新任务可在无有效/未知租约且本进程工作已返回后领取。恢复先筛选授权 ID，多个休眠记录不造成总数误报或选中任务饥饿。30 秒租约/最多 3 代、旧 token 保护、取消/发布/幂等及物理排空回归通过；无新增状态/数据库迁移。实际证据见 MV12。
+
+## ML-T34. 保留既有限制并为历史同步限速
+
+- [x] 完成实现和本项验证。
+- **依赖:** `ML-T33`
+- **验收:** 保留并回归既有有限队列/输入/事件限制、单执行、有界线程/分页及存储领域防护。不新增动态内存/CPU 采样控制器、压力阈值或压力触发的准入/取消。历史同步保留单活跃操作，仅增加本地固定请求开始间隔，初始沿用已有 1.25 秒节奏值。保留既有请求超时/错误映射及等待期间取消，不新增重试策略。监测请求控制保持既有行为。不新增全局额度池、正式容量预留、跨业务调度、共用冷却、账号/接口注册表、动态分配或额度页面。低频 AI 提取保留既有防护和批内顺序执行，不阻塞本项。流式记录、协作取消，不保证每线程硬 CPU/内存上限。回放不构造正式供应商/发送器。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_sync_pacing.py tests/integration/test_backtest_results.py tests/integration/test_backtest_thread_ownership.py -q -m "not live"`
+- **主要文件:** `src/trade_plan_monitor/backtest/sync.py`, `tests/integration/test_backtest_sync_pacing.py`
+- **范围:** S (2 个主要文件，含测试); **追溯:** ML-A20, ML-A22, ML-A23.
+- **范围决策:** 2026-10-07 用户要求最小范围。原正式容量预留项替换为 `backtest/sync.py` 内本地限速及虚拟间隔/取消测试。移除计划中的通用 `backtest/capability_admission.py` 模块及供应商准入测试，本项不要求新增 `web/ai_service.py`、`runtime/request_control.py` 或 `backtest/application.py` 连接。额度认证或共用预算决策不再构成门槛。存储保护仅保留既有独立默认文件、路径规范化及正式表/领域混用防护，不新增深度文件身份或跨文件别名框架。取消磁盘/日志预算及空闲容量准入阈值。历史回测最新 30 个保留策略归 ML-T21，不作为隔离门槛。取消计划中的 `backtest/resource_control.py` 及通用 `test_backtest_resource_boundaries.py`，既有防护只需回归。本地同步限速及既有防护回归已通过，ML-T33 依赖已完成；实际证据见 MV12。从本次范围移除拟议的全局准备/回放互斥，保留同步/验证/回放既有任务槽及批次级修订/冻结保护，不新增跨操作锁、队列或调度层。
+
+### ML-C12. 检查点
+
+- [x] 感知排空恢复/取消、既有防护回归及本地同步限速通过。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+
+## ML-T35. 公开惰性服务状态与明确恢复 API
+
+- [ ] 完成实现和本项验证。
+- **依赖:** `ML-T12`, `ML-T23`, `ML-T33`, `ML-T34`
+- **验收:** 未使用时状态/停止无副作用，真正数据/操作请求通过 guard/校验后激活所需能力。恢复按 epoch/修订/幂等明确重试准备或已选 resumeJobIds（<=100）。局部 503/Retry-After 表示任务未准入，初始化轮询不能重启失败准备。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_service_api.py -q -m "not live"`
+- **主要文件:** `src/trade_plan_monitor/web/routers/backtest_service.py`, `src/trade_plan_monitor/web/backtest_service_schemas.py`, `src/trade_plan_monitor/web/app.py`, `tests/integration/test_backtest_service_api.py`
+- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A19, ML-A21, ML-A24.
+
+## ML-T39. 生成独立服务传输契约
+
+- [ ] 完成实现和本项验证。
+- **依赖:** `ML-T35`
+- **验收:** 生成已挂载服务资源及强类型能力/错误，覆盖两种契约 profile。检查监控端点和未受影响载荷语义不变；陈旧批准记录留待明确最终审阅。不手写重复传输模型。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_service_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
+- **主要文件:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_backtest_service_contract.py`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A19, ML-A24.
+
+## ML-T36. 网页显示首次使用准备与局部恢复
+
+- [ ] 完成实现和本项验证。
+- **依赖:** `ML-T39`
+- **验收:** 仅活跃回测数据请求触发惰性准备，路由预取/全局状态轮询无副作用。区分未用/初始化/读取就绪/执行就绪/失败，503 保留表单并复用变更键。打开历史不恢复任务/AI，明确重试/恢复展示选中积压，监控可用。
+- **验证:** `npm --prefix web run test -- --run tests/unit/BacktestServiceState.spec.ts`; `npm --prefix web run type-check`
+- **主要文件:** `web/src/api/backtestService.ts`, `web/src/composables/useBacktestService.ts`, `web/src/components/backtests/BacktestServiceState.vue`, `web/src/views/BacktestNewView.vue`, `web/tests/unit/BacktestServiceState.spec.ts`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A21, ML-A24.
+
+## ML-T37. 验证 Windows 惰性激活与线程边界
+
+- [ ] 完成实现和本项验证。
+- **依赖:** `ML-T26`, `ML-T27`, `ML-T34`, `ML-T36`
+- **验收:** 证明应用启动/监控导航/状态/预取/关闭零回测工作、并发首次使用只初始化一次、只读历史不执行积压、明确选择恢复。可控夹具注入首次使用错误/晚到 future/取消竞态，保留 ML17 10 只股票负载门槛及已接受线程限制。
+- **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_isolation_fault_matrix.py tests/integration/test_monitor_loop_parity.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/verify_backtest_thread_load.py --profile windows-threads --offline`
+- **主要文件:** `tests/integration/test_backtest_isolation_fault_matrix.py`, `tests/fixtures/monitor-loop/isolation.json`, `scripts/verify_backtest_thread_load.py`, `tests/integration/test_backtest_sync_pacing.py`
+- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A08, ML-A19–ML-A24.
+
+## ML-T38. 记录按需线程操作指导
+
+- [ ] 完成实现和本项验证。
+- **依赖:** `ML-T37`
+- **验收:** 双语指导解释休眠启动、首次准备、元数据与执行、明确积压恢复、局部修复和感知排空停止。说明共享进程风险，不必升级进程，保留身份及历史基线批准不一致与其审阅修复记录。
+- **验证:** `git diff --check`
+- **主要文件:** `docs/operations/monitor-loop-backtest.md`, `docs/operations/monitor-loop-backtest.zh-CN.md`, `docs/verification/monitor-loop-backtest.md`, `docs/verification/monitor-loop-backtest.zh-CN.md`
+- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A19–ML-A24.
+
+### ML-C13. 检查点
+
+- [ ] 服务 API/UI 及有记录的 Windows 线程故障/负载验收通过；ML-C10 仍为最终合并门槛。
+- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 ---
 
 以下为原有已完成历史记录，保留原内容；不代表本次实现已完成。
