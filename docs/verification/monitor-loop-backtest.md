@@ -2,7 +2,7 @@
 
 Canonical English; Chinese review copy: [monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md). Updated 2026-10-07, Asia/Shanghai. This is partial executed evidence, not final acceptance. Baseline: `main` `e95de03` with the existing uncommitted design and Shengxin research files preserved. Implementation is authorized; the user subsequently authorized cleanup, commits and GitHub push on 2026-10-07. Paid requests, production migration and deployment remain outside scope.
 
-Current progress is recorded in MV12: ML-T33, ML-T34 and ML-C12 are verified, and the existing unified research OpenAPI approval was concretely reviewed and corrected. MV01–MV10 remain evidence from their original checks; MV11 startup-decoupling PASS is unchanged. Historical pending/failure statements below are not current blockers.
+Current task-admission correction and private single-plan cycle evidence are MV18/MV19: ML-T01–ML-T05 and ML-C01/ML-C02 are implemented and verified. MV17 records single-plan scope, MV16 atomic settlement, MV15 private reminders and MV14 input/shared simulation. MV18 supersedes earlier expiry-releases-slot and preparation concurrency choices. MV01–MV17 remain historical evidence; MV11 startup-decoupling PASS and verified ML-T30–ML-T34/ML-C12 remain. Preparation, dataset/worker/API/UI/report integration and final acceptance remain pending; history below is not current blocker status.
 
 ## MV01. Implemented boundary
 
@@ -228,3 +228,137 @@ Executed from `trade-plan-monitor/` with offline fixtures and temporary database
 | Document and scope review | Paired IDs/heading structure/relative links; completed historical todo tail; explicit staged-file review | PASS for all 7 bilingual pairs. Cleanup links resolve; independent research remains unmodified. |
 
 Both pytest commands retain the existing Starlette/httpx deprecation warning. Review found no unresolved in-scope issue. These checks add packaging/compatibility evidence; they do not complete the remaining 34 business/UI/load tasks or authorize deployment, paid requests or production changes.
+
+## MV14. Frozen input and shared simulation foundation
+
+On 2026-10-07, implementation started from `0db69c9` under the existing business authorization. ML-T01 and ML-T02 are complete, each within its four primary files, with paired todo/verification updates. Independent Shengxin research files are preserved. This round performed no commit, push, production change, live monitor, paid request, notification or deployment.
+
+### MV14.1 Implemented behavior
+
+ML-T01 adds strict immutable `monitor-loop-input-v1` / `backtest-run-v5` values, with no v1–v4 codec changes. Opening facts distinguish unknown/zero cash, unknown inventory/cost/sellability, exact `401050`-fen cost and independent market mark. Account facts may precede monitoring start; future facts/unavailable marks are rejected. Cash, costs, quantities and market value retain safe-integer checks, including unknown cash. Content review binds original source hashes and evidence hash and must exist by submission. Authoring date/time, availability, information cutoff, effective day and review time are distinct; date-only sources gain no invented timestamp, and later-authored plans remain retrospective. Calendar preflight rejects duplicate/unknown/closed dates and uncovered starts. Successors switch at daily boundaries; identical continuation retains activation and future versions cannot rename earlier authority IDs. Existing activation/rule validity remains authoritative.
+
+An injected aware submission clock resolves omitted/null or explicit end dates once in Asia/Shanghai. Past/holiday dates remain inclusive; today freezes the submission instant. Before-start/future dates and forged cutoff/origin values fail. Source limits remain 256 items, 8 MiB UTF-8 total and 150,000 characters per source; opening lots remain capped at 200. Evaluations including refreshes, reminders, intents and attempts each have a 70,000 cap. Define one batch extraction slot and 3 total retryable attempts. Worker enforcement, submission reservation and cutoff dataset wiring remain future tasks; these values do not implement them.
+
+ML-T02 extracts the existing checks/writes into `state/simulation.py`, with typed commands/receipts and transport-independent rejection codes. It writes inventory, signal consumption, risk fulfilment and receipt within the caller's transaction, without committing. Web retains idempotency, commit and error mapping; old research simulation no longer uses the private HTTP helper. Tests independently check exact ledger rollback, receipt values, revisions, full quantity and no Web imports during execution.
+
+### MV14.2 Executed checks
+
+All commands ran from `trade-plan-monitor/` with offline fixtures and temporary databases. New tests first failed for missing modules. A later red test exposed future-review admission and passed after its fix. New fixture mismatches (SSE/SZSE calendar and quote freshness before session checks) were corrected to existing behavior; no existing test/assertion was edited, skipped or weakened.
+
+| Check | Command | Result |
+|---|---|---|
+| ML-T01 | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py -q -m 'not live'` | 35 passed, 0.59 seconds. |
+| ML-T02 | `.venv/Scripts/python.exe -m pytest tests/integration/test_simulation_participant.py tests/integration/test_unified_simulation_transactions.py tests/integration/test_unified_replay.py -q -m 'not live'` | 25 passed, 50.86 seconds; includes 7 new participant cases. |
+| Online/shared/frozen compatibility | `.venv/Scripts/python.exe -m pytest tests/integration/test_unified_runtime.py tests/integration/test_unified_replay_parity.py tests/integration/test_backtest_compatibility.py tests/integration/test_daily_plan_chain.py tests/integration/test_daily_history_regression.py tests/integration/test_openapi_snapshot.py -q -m 'not live'` | 56 passed, 47.61 seconds after extraction. |
+| Final unit/contract regression | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 2793 passed, 4 live tests deselected, 20.83 seconds after the final input fix. |
+| Static/generated artifacts | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`; `git diff --check` | PASS; both canonical monitor v2 and compatibility monitor v1 remain current. |
+| Structural review | Paired heading IDs/commands/task checkboxes; original completed todo tail; normalized AST comparison of the original and extracted execution bodies | PASS. The AST comparison excludes only the changed docstring/signature and transport-type/error mapping names. |
+
+### MV14.3 Review and remaining scope
+
+Self-review with the `code-review` skill compared the extracted body to the prior helper and checked authorization, arithmetic, determinism and bounds. Source/evidence approval binding, unknown-cash market-value bounds, separate account/start times and future-review admission were corrected. Public schemas/transports and current allocation/simulation/transaction rules remain unchanged. Existing Starlette/httpx deprecation warnings remain. No future API digest was approved.
+
+ML-C01 still requires ML-T03 reminder capture. There is no automatic loop, atomic cash participant, preparation workflow, new result/API/UI or completed Windows load acceptance yet. 32 of the existing 39 slices remain pending. Next dependencies are ML-T03, ML-T04 atomic accounts and ML-T05 offline single-plan cycles. This evidence neither claims them complete nor reinstates cancelled scope.
+
+## MV15. Private reminders and ML-C01
+
+### MV15.1 Implemented behavior
+
+ML-T03 is complete in two slices: unknown opening-lot persistence/accounting, then private monitoring/reminder capture. `LoopSession` creates only a fresh private SQLite file, seeds frozen review/active bindings and calendar, and injects virtual time and causal reminder IDs into the shared runtime. Its source row is explicitly a reviewed manifest, not invented original source text. Historical opening holdings remain unchanged by evaluation or capture; no live provider, sink, network or Web execution path is used.
+
+`ReminderCapture` uses `daily_delivery_allowed`, records CAPTURED/SUPPRESSED receipts atomically, deduplicates retries, enforces the 70,000 cap and returns bounded pages. Quote age and corrected minute/fact/inventory/review/activation evidence suppress delivery. The new red minute-correction test exposed a missing ordinary send fence; the shared ordinary predicate now applies the existing minute-source check. Valid online behavior remains covered. Pure technical alerts have no quantity or execution candidate. The explicitly tagged private opening variant preserves unknown acquisition dates and sellability; unknown/zero availability blocks sells, while an explicit whole-lot availability permits the existing full-quantity check. No production migration or API/generated contract changes are required.
+
+### MV15.2 Executed checks
+
+All commands ran offline from `trade-plan-monitor/` with temporary stores. New tests first failed for missing private-session/state support; the corrected-minute fence failed before its fix. Fixture corrections retained actual later receipt times. No existing tests, assertions or thresholds were weakened.
+
+| Check | Command | Result |
+|---|---|---|
+| ML-T03 | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_reminders.py tests/integration/test_unified_runtime.py -q -m 'not live'` | 40 passed, 12.14 seconds; includes 18 new private-loop cases. |
+| Shared state/online regression | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_reminders.py tests/integration/test_unified_runtime.py tests/integration/test_daily_simulation.py tests/integration/test_daily_simulation_review_regressions.py tests/integration/test_simulation_participant.py tests/integration/test_unified_simulation_transactions.py -q -m 'not live'` | 79 passed, 36.91 seconds. |
+| Unit/contract regression | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 2793 passed, 4 live tests deselected, 21.68 seconds. |
+| Static/generated artifacts | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`; `git diff --check` | PASS; canonical monitor v2 and compatibility monitor v1 remain current. |
+
+### MV15.3 Review and remaining scope
+
+Self-review checked frozen authority, source labels, missing facts, rollback/idempotency, bounded reads, temporal fences and shared behavior. ML-C01 is complete. Atomic cash, automatic response cycles, daily plan switching, preparation, result/API/UI and full load acceptance remain pending; 31 of 39 tasks remain. ML-T04/ML-T05 are next. Existing Starlette/httpx deprecation warnings remain. No commit, push, paid/live action or deployment was performed in this continuation.
+
+## MV16. Atomic private account settlement
+
+### MV16.1 Implemented behavior
+
+ML-T04 adds `LoopAccountParticipant` and exact-fen cost/state/receipt values, composed only by the fresh private session. The shared simulation participant retains quantity, T+1, CORE/risk and occurrence authority. One caller-owned transaction covers cash, lot costs, inventory, signal consumption/risk fulfilment, shared receipt and money receipt. No participant commits itself. Private tables require no production migration. Observation mode rejects execution.
+
+Use absolute per-share fen slippage and the existing upward rounding of each proportional fee. The source example buy 100 at 28.70 uses fill price 2871 fen, notional 287100, fees 503; sell 100 at 29.30 uses 2929, 292900 and 650. These are frozen source assumptions, not current statutory rates. Cash admission uses the whole quantity including fees; unknown cash or a one-fen shortage rejects without mutation. Fees/cash/cost totals retain safe-integer checks. The shared receipt records the authorization quote; the money receipt separately records the slipped fill price and costs.
+
+The opening 401050-fen basis is retained without a new buy or purchase fee. Sold basis follows the actual shared batch debits. Proportional released basis rounds down to whole fen; the residual stays with the remaining lot, preserving total cost. Unknown basis remains unknown and makes realized cost-based P/L unknown. Repeated keys require identical command/cost settings and return the original immutable receipt. Receipt validation checks settlement/quantity and resulting bucket quantities. Failures after inventory writes and after all money/receipt writes, stale revisions and invalid retries leave no partial effects. Commit-time minute-source revalidation prevents a correction after evaluation from authorizing a fill; a new red test exposed this gap before the fix. Non-execution record kinds cannot act as money causes.
+
+### MV16.2 Executed checks
+
+All runs used offline fixtures and temporary databases from `trade-plan-monitor/`. New fee/account tests first failed for missing modules or participant methods. No existing assertions or gates were lowered.
+
+| Check | Command | Result |
+|---|---|---|
+| ML-T04 final target | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_costs.py tests/integration/test_monitor_loop_account.py -q -m 'not live'` | 21 passed, 2.11 seconds after final receipt/commit fences; 8 cost and 13 account cases. |
+| Loop/shared/legacy replay | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_costs.py tests/integration/test_monitor_loop_account.py tests/integration/test_monitor_loop_reminders.py tests/integration/test_simulation_participant.py tests/integration/test_unified_replay.py tests/integration/test_unified_replay_parity.py tests/integration/test_openapi_snapshot.py -q -m 'not live'` | 76 passed, 84.47 seconds; before final private receipt/commit fences. |
+| Unit/contract regression | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 2801 passed, 4 live tests deselected, 21.11 seconds after receipt and minute-source validation. |
+| Static/generated artifacts | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | PASS; monitor v2 and compatibility v1 unchanged. |
+| Document/worktree checks | `git diff --check`; paired heading IDs, commands, task states and original completed todo tail | PASS. |
+
+### MV16.3 Review and remaining scope
+
+Self-review checked cash bounds, exact rounding, opening cost preservation, shared debit reconciliation, unknown P/L, receipt bindings and rollback. ML-T04 is complete. ML-T05 automatic response timing and a full single-plan cycle are still pending; this participant alone does not implement next-minute selection, price-limit admission or result publication. ML-C02 remains open. 30 of 39 tasks remain. No commit/push, paid provider, production state or live notification was used.
+
+## MV17. Single-plan scope correction and input regression
+
+### MV17.1 Accepted scope and implementation
+
+On 2026-10-07 the user required single-plan backtesting only. Each run freezes exactly one complete reviewed plan/source and one initial effective binding. It may continue across trading days while valid; execution updates the ledger without changing plan content. Daily replacement, predecessor inheritance/merge, multi-plan preparation and simultaneous multi-plan replay are outside this release. ML-T06/ML-T09 and ML-A07 are cancelled, not passed/completed; their IDs and earlier evidence remain. Active dependencies/checkpoints exclude them. Proposal, plan and todo were updated in both languages. Nine tasks are completed; 28 of 37 active tasks remain, with 39 registered IDs and 13 checkpoints.
+
+The private source/input contracts now reject second sources/entries including duplicate versions, model copies and decoded payloads. Selection keeps one activation across days, availability and expiry fences; successor selection is removed. Reviewed evidence hashes keep their independent bounded collection. Preserve optional end/cutoff, opening-account precision, fees/atomic state, legacy encodings and existing isolation/provider/event limits. Unavailable authority reports `LOOP_PLAN_AUTHORITY_UNAVAILABLE`, not a request to switch plans. Preparation/API/UI remain planned single-source work, not implemented by this scope correction.
+
+### MV17.2 Executed checks
+
+Offline checks used temporary stores only. New cardinality cases first produced 3 failures and 1 pass under the prior multi-entry implementation. Old positive batch/switch fixtures were replaced by explicit rejection, fixed-plan continuation/expiry and dataset/causal-identity cases because the user cancelled that behavior. Other causal, account and public compatibility assertions remain. Static checking found two long test lines; formatting was corrected without changing assertions.
+
+| Check | Command | Result |
+|---|---|---|
+| Single-plan input/time | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py -q -m 'not live'` | 39 passed, 0.57 seconds. |
+| Reminder/account/fees | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_reminders.py tests/integration/test_monitor_loop_account.py tests/unit/test_monitor_loop_costs.py -q -m 'not live'` | 39 passed, 3.53 seconds after final authority-error wording. |
+| Unit/contract regression | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 2805 passed, 4 live tests deselected, 21.32 seconds. |
+| Static/generated artifacts | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | PASS after formatting; canonical monitor v2 and compatibility monitor v1 remain current. |
+| Document/worktree checks | `git diff --check`; paired headings/IDs/dependencies/commands/files/numeric thresholds and original completed todo tails | PASS. |
+
+### MV17.3 Review and remaining scope
+
+Self-review checked one-plan cardinality, immutable-copy/decoded-input fences, cross-day activation/expiry, independent evidence bindings and causal IDs across dataset revisions. Existing public schemas/generated files remain unchanged. The full automatic response cycle is still pending ML-T05; these checks do not complete it, preparation, results/UI or load acceptance. Existing Starlette/httpx deprecation remains. No commit/push, paid request, production state, live notification or deployment was used.
+
+## MV18. Single unfinished task admission
+
+The latest user correction requires one unfinished task, not merely one executing thread. Removed the 100-job queue capacity, authorization accumulation and multi-ID recovery. Existing SQLite write transactions now reject different new sync/verify/replay operations while any job is QUEUED/RUNNING/CANCEL_REQUESTED, including expired/unknown leases. Pending snapshot reservations also block new operations until release/finalization or jobs-owned orphan cleanup. Same-key and same-operation idempotency remain. Terminal state releases admission; cancellation requested does not. Selected recovery authorizes one job and preserves physical drain, 30-second leases/3 generations and stale-token/publication fences. Internal `BACKTEST_BUSY` uses existing public `409 CONFLICT`; no API fields/schema/dependencies/migration were added. ADR 0009 supersedes the earlier queue and expiry/preparation concurrency choices. Preparation is still pending and must inherit this entry rule.
+
+The new admission test initially failed all 15 cases against multi-task admission. After correction and adding expired-reservation coverage, all 16 cases pass within the following combined gate. Existing bulk queue fixtures now create terminal history records, preserving pagination, membership fences, stale-token and worker-drain assertions.
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_single_task.py tests/integration/test_backtest_jobs.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_job_coordinator.py tests/integration/test_backtest_run_api.py tests/integration/test_backtest_production_composition.py tests/integration/test_backtest_job_api.py tests/unit/test_backtest_service_contract.py tests/integration/test_monitor_loop_cycle.py tests/integration/test_monitor_loop_reminders.py tests/integration/test_monitor_loop_account.py tests/integration/test_simulation_participant.py tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py tests/unit/test_monitor_loop_costs.py -q -m 'not live' --tb=short
+```
+
+Result: **278 passed, 1 skipped, 27.98 seconds**. The skip is the existing POSIX ownership check on Windows. Later cycle calendar/volume cases and the final scope guard are verified in MV19. No test was skipped/deleted to make the correction pass. Unrelated live-monitor request queues and result/history paging remain outside this cleanup.
+
+## MV19. Private single-plan response cycle
+
+ML-T05/ML-C02 are implemented and verified. Frozen causal frames drive shared monitoring and eligible local reminder capture; bounded intents use frozen response delay and the next complete minute interval. The 09:35:12 reminder cannot fill on the 09:35–09:36 interval: the fixture buys at 09:37 and sells at 09:42, each for 100 shares. Independent expected values assert cash `503590` fen, remaining accounting cost `798654` fen, total 200 shares, zero sellable TACTICAL and 15 evaluations including post-fill refreshes. There is no future trade script.
+
+The first buy/sell integration failed because the fixture supplied ten source minutes where current delivery expects the latest five-minute bucket; corrected the fixture to the established source contract, preserving send-time fences. Risk tests use explicitly certified historical daily revisions available at each virtual instant. Shared risk priority blocks a pending ordinary buy, executes the authorized risk quantity and retains a latched exit after plan expiry. Expired ordinary authority closes without switching/reactivating a plan. Unknown/closed sessions, insufficient volume, price limits and cash block whole fills; an interval cannot repeat. Cancellation and intent/attempt/evaluation boundaries stop additional account commits. Frozen input limits remain 70000. Observe/recorded modes create no automatic trades.
+
+| Check | Command | Result |
+|---|---|---|
+| Cycle, reminders, atomic accounts and shared simulation | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_cycle.py tests/integration/test_monitor_loop_reminders.py tests/integration/test_monitor_loop_account.py tests/integration/test_simulation_participant.py -q -m 'not live' --tb=short` | 57 passed, 9.65 seconds; includes 19 cycle cases. |
+| Lease and historical compatibility | `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_job_leases.py tests/integration/test_backtest_acceptance.py::test_fake_production_journey_is_complete_offline_and_live_state_is_unchanged tests/integration/test_backtest_acceptance.py::test_each_fixture_symbol_has_stable_buy_and_t1_exit_bytes tests/integration/test_backtest_acceptance.py::test_prior_evidence_manifest_and_bilingual_reports_fail_closed -q -m 'not live' --tb=short` | 10 passed, 4.24 seconds; offline application, BUY/SELL/T+1 byte repeatability and evidence manifest preserved. |
+| Unit/contract regression | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live' --tb=short` | 2809 passed, 4 live deselected, 21.18 seconds. |
+| Static/generated files | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | PASS; monitor v2 and compatibility v1 remain current. |
+| Documentation/workspace | `git diff --check`; paired headings/IDs/literal commands, fields, paths, thresholds, dependency/checkpoint counts and original completed todo tail | PASS; 9 bilingual pairs, 39 retained task IDs/13 checkpoints; 10 completed, 27 pending active, 2 cancelled; original history unchanged. |
+
+Two broader legacy acceptance invocations were interrupted during unrelated year-scale fixtures; neither full invocation is counted as PASS. The second name-based filter still included a year-scale case, so final related checks use the explicit node selection above. Capacity thresholds and test definitions are unchanged; full loop load acceptance remains pending.
+
+Self-review checked transactional admission/reservation races, idempotent retries, terminal release, single recovery authorization, minute/quote/limit/calendar binding, exact quantities/costs, shared risk authority, expiry observation and bounded feedback. Existing Starlette/httpx deprecation remains. This private slice does not implement preparation, recorded-action import, frozen-dataset reader, worker/API/UI/report integration or full loop load acceptance. There are 10 completed and 27 pending active tasks, 37 active / 39 retained IDs; ML-T06/ML-T09 remain cancelled and ML-T07 is next. No commit/push, paid request, production state, live notification or deployment was used in this slice.

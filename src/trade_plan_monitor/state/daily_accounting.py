@@ -108,10 +108,10 @@ class DailyAccounting:
         for bucket in ("core", "tactical"):
             own = [b for b in batches if b["bucket"] == bucket.upper()]
             result[bucket + "_qty"] = sum(b["quantity"] for b in own)
+            available = [self._available(b, trade_date, exchange) for b in own]
             result["sellable_" + bucket] = (
-                None if current is None or not current.is_open else sum(
-                    b["quantity"] for b in own if self._settled(b, trade_date, exchange)
-                )
+                None if current is None or not current.is_open or None in available
+                else sum(available)
             )
         result["total_qty"] = result["core_qty"] + result["tactical_qty"]
         return result
@@ -122,6 +122,23 @@ class DailyAccounting:
             return acquired <= day
         proof = self.repo.session.get(TradingCalendar, (exchange, acquired))
         return acquired < day and proof is not None and proof.is_open
+
+    def _available(self, batch, day, exchange):
+        if batch.get("origin") != "monitor-loop-opening-v1":
+            return batch["quantity"] if self._settled(batch, day, exchange) else 0
+        observed = date.fromisoformat(batch["observed_trade_date"])
+        if day < observed:
+            return None
+        explicit = batch["sellable_quantity"]
+        if batch["acquired_trade_date"] is None:
+            return explicit
+        if day == observed and explicit is not None:
+            return explicit
+        acquired = date.fromisoformat(batch["acquired_trade_date"])
+        proof = self.repo.session.get(TradingCalendar, (exchange, acquired))
+        if acquired >= day:
+            return 0
+        return batch["quantity"] if proof is not None and proof.is_open else None
 
     def initialize(self, *, symbol, core_qty, tactical_qty, expected_revision, now):
         self.repo.lock_symbol(symbol)
@@ -185,12 +202,17 @@ class DailyAccounting:
             else:
                 left = quantity
                 for batch in sorted(
-                    batches, key=lambda b: (b["acquired_trade_date"], b["id"]), reverse=True
+                    batches, key=lambda b: (b["acquired_trade_date"] or "", b["id"]), reverse=True
                 ):
-                    if batch["bucket"] != bucket or not self._settled(batch, now.date(), exchange):
+                    available = self._available(batch, now.date(), exchange)
+                    if batch["bucket"] != bucket or not available:
                         continue
-                    debit = min(left, batch["quantity"])
+                    debit = min(left, available)
                     batch["quantity"] -= debit
+                    if batch.get("origin") == "monitor-loop-opening-v1" and (
+                        batch["sellable_quantity"] is not None
+                    ):
+                        batch["sellable_quantity"] = max(0, batch["sellable_quantity"] - debit)
                     left -= debit
                     if not left:
                         break

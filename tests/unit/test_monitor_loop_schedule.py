@@ -1,0 +1,241 @@
+"""Independent time and calendar expectations for the new loop contract."""
+
+from datetime import UTC, date, datetime, timedelta
+
+import pytest
+from pydantic import ValidationError
+from tests.unit.test_unified_replay_input import research_plan
+
+from trade_plan_monitor.backtest.plan_schedule import (
+    LoopEndBoundary,
+    LoopPlanReview,
+    LoopPlanVersion,
+    LoopSchedule,
+    LoopScheduleEntry,
+)
+from trade_plan_monitor.backtest.time import SHANGHAI
+from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+from trade_plan_monitor.market_data.models import TradingDay
+
+
+def at(day=20, hour=9, minute=0, second=0):
+    return datetime(2026, 8, day, hour, minute, second, tzinfo=SHANGHAI)
+
+
+def version(key="p1", *, plan=None, available=None, authored=None, evidence=None):
+    plan = plan or research_plan()
+    return LoopPlanVersion(
+        version_id=key,
+        plan_hash=plan_sha256(plan),
+        snapshot=plan,
+        source_hashes=("1" * 64,),
+        evidence_hash="2" * 64,
+        authored_at=authored or at(19, 18),
+        available_at=available or at(20, 8),
+        information_cutoff=evidence or at(19, 15),
+        review=LoopPlanReview(
+            content_hash=daily_plan_content_sha256(plan),
+            reviewed_at=at(26, 18),
+            confirmed=True,
+            source_hashes=("1" * 64,),
+            evidence_hash="2" * 64,
+            evidence="Offline reviewed fixture; retrospective provenance stays explicit.",
+        ),
+    )
+
+
+def row(day=20, *, value=None):
+    return LoopScheduleEntry(effective_trade_date=date(2026, 8, day), version=value or version())
+
+
+@pytest.mark.parametrize(
+    "second", [row(), row(21), row(21, value=version("p2", available=at(21, 0)))]
+)
+def test_single_plan_contract_rejects_every_second_entry(second):
+    with pytest.raises(ValidationError):
+        LoopSchedule(entries=(row(), second))
+
+
+def calendar():
+    return tuple(
+        TradingDay(
+            exchange="SSE",
+            cal_date=date(2026, 8, day),
+            is_open=day not in (22, 23),
+            previous_trade_date=date(2026, 8, previous),
+        )
+        for day, previous in ((19, 18), (20, 19), (21, 20), (22, 21), (23, 21), (24, 21))
+    )
+
+
+@pytest.mark.parametrize("requested", [None, date(2026, 8, 24)])
+def test_today_default_or_explicit_freezes_the_submission_instant(requested):
+    # The UTC day is still August 23. No host clock or timezone may choose the date.
+    submitted = datetime(2026, 8, 23, 16, 5, tzinfo=UTC)
+    frozen = LoopEndBoundary.resolve(started_at=at(), submitted_at=submitted, end_date=requested)
+    assert frozen.resolved_end_date == date(2026, 8, 24)
+    assert frozen.evidence_cutoff == at(24, 0, 5)
+    assert frozen.origin == ("DEFAULTED" if requested is None else "EXPLICIT")
+    assert LoopEndBoundary.model_validate_json(frozen.model_dump_json()) == frozen
+    # Rereading after midnight uses only persisted values.
+    assert frozen.model_copy().evidence_cutoff == at(24, 0, 5)
+
+
+def test_past_holiday_end_remains_inclusive_without_shifting_to_a_session():
+    frozen = LoopEndBoundary.resolve(
+        started_at=at(),
+        submitted_at=at(24, 10),
+        end_date=date(2026, 8, 23),
+    )
+    assert frozen.resolved_end_date == date(2026, 8, 23)
+    assert frozen.evidence_cutoff == at(23, 23, 59, 59).replace(microsecond=999999)
+
+
+@pytest.mark.parametrize("end", [date(2026, 8, 19), date(2026, 8, 25)])
+def test_before_start_and_future_end_are_rejected(end):
+    with pytest.raises(ValueError):
+        LoopEndBoundary.resolve(started_at=at(), submitted_at=at(24), end_date=end)
+
+
+def test_resolution_rejects_naive_clock_future_start_and_forged_frozen_cutoff():
+    for submitted in (at(24).replace(tzinfo=None), at(19)):
+        with pytest.raises(ValueError):
+            LoopEndBoundary.resolve(started_at=at(), submitted_at=submitted)
+    frozen = LoopEndBoundary.resolve(started_at=at(), submitted_at=at(24))
+    for update in (
+        {"evidence_cutoff": at(24) + timedelta(seconds=1)},
+        {"resolved_end_date": date(2026, 8, 23)},
+        {"origin": "EXPLICIT"},
+    ):
+        with pytest.raises(ValidationError):
+            frozen.model_copy(update=update)
+
+
+def test_single_plan_carries_across_days_with_the_same_activation():
+    first = version()
+    schedule = LoopSchedule(entries=(row(value=first),))
+    schedule.preflight(calendar(), started_at=at(), evidence_cutoff=at(24, 15))
+    initial = schedule.select(at())
+    assert initial.version == first
+    assert initial.continued is False
+    assert schedule.select(at(21, 0)).version == first
+    carried = schedule.select(at(24, 12))
+    assert carried.version == first
+    assert carried.activated_at == initial.activated_at == at(20, 8)
+    assert carried.authority_id == initial.authority_id
+    assert carried.effective_trade_date == date(2026, 8, 20)
+    assert carried.continued is True
+
+
+def test_intraday_first_plan_never_becomes_visible_before_availability():
+    first = version(available=at(20, 10, 15))
+    schedule = LoopSchedule(entries=(row(value=first),))
+    assert schedule.select(at(20, 10)) is None
+    assert schedule.select(at(20, 10, 15)).activated_at == at(20, 10, 15)
+    with pytest.raises(ValueError, match="uncovered"):
+        schedule.preflight(calendar(), started_at=at(), evidence_cutoff=at(24))
+    schedule.preflight(calendar(), started_at=at(20, 10, 15), evidence_cutoff=at(24))
+
+
+def test_single_plan_cannot_be_backdated_before_its_availability_day():
+    with pytest.raises(ValidationError, match="availability"):
+        LoopSchedule(entries=(row(value=version(available=at(21, 10))),))
+
+
+def test_single_plan_rejects_replacements_and_other_symbols():
+    changed = research_plan().model_copy(update={"name": "Changed immutable binding"})
+    with pytest.raises(ValidationError):
+        LoopSchedule(entries=(row(), row(21, value=version(plan=changed))))
+    other = research_plan().model_copy(update={"symbol": "002240.SZ", "market": "SZSE"})
+    with pytest.raises(ValidationError):
+        LoopSchedule(entries=(row(), row(21, value=version("p2", plan=other))))
+
+
+def test_calendar_preflight_rejects_closed_unknown_duplicate_and_uncovered_dates():
+    for day in (22, 25):
+        schedule = LoopSchedule(entries=(row(day, value=version(available=at(day, 0))),))
+        with pytest.raises(ValueError):
+            schedule.preflight(calendar(), started_at=at(day), evidence_cutoff=at(26))
+    schedule = LoopSchedule(entries=(row(),))
+    with pytest.raises(ValueError):
+        schedule.preflight(calendar() + (calendar()[1],), started_at=at(), evidence_cutoff=at(24))
+    with pytest.raises(ValueError, match="uncovered"):
+        schedule.preflight(calendar(), started_at=at(19), evidence_cutoff=at(24))
+
+
+def test_single_plan_does_not_extend_expired_activation():
+    expired = research_plan().model_copy(
+        update={
+            "activation": {
+                "mode": "DATE_RANGE",
+                "start_date": date(2026, 8, 21),
+                "end_date": date(2026, 8, 21),
+            },
+        }
+    )
+    schedule = LoopSchedule(entries=(row(21, value=version(plan=expired, available=at(21, 0))),))
+    assert schedule.select(at(21)).version.snapshot == expired
+    assert schedule.select(at(24)) is None
+    with pytest.raises(ValueError, match="activation"):
+        LoopSchedule(entries=(row(value=version(plan=expired)),))
+
+
+def test_single_plan_rejects_second_entries_on_copy_and_serialized_input():
+    original = LoopSchedule(entries=(row(),))
+    with pytest.raises(ValidationError):
+        original.model_copy(update={"entries": (row(), row(21))})
+    payload = original.model_dump(mode="json")
+    payload["entries"].append(row(21).model_dump(mode="json"))
+    with pytest.raises(ValidationError):
+        LoopSchedule.model_validate(payload)
+    assert LoopSchedule.model_validate_json(original.model_dump_json()) == original
+
+
+def test_review_hashes_offsets_and_information_cutoffs_are_validated():
+    good = version()
+    for update in (
+        {"plan_hash": "0" * 64},
+        {"review": good.review.model_copy(update={"content_hash": "0" * 64})},
+        {"available_at": at().replace(tzinfo=UTC)},
+        {"information_cutoff": at(21)},
+        {"source_hashes": ("1" * 64, "1" * 64)},
+        {"source_hashes": ("3" * 64,)},
+        {"evidence_hash": "3" * 64},
+    ):
+        with pytest.raises(ValidationError):
+            good.model_copy(update=update)
+    retrospective = version(authored=at(25, 18))
+    assert retrospective.retrospective is True
+    assert good.retrospective is False
+
+
+def test_authoring_date_only_is_preserved_without_an_invented_timestamp():
+    original = version()
+    dated = original.model_copy(update={"authored_at": None, "authored_date": date(2026, 8, 19)})
+    assert dated.authored_at is None
+    assert dated.retrospective is False
+    later = dated.model_copy(update={"authored_date": date(2026, 8, 25)})
+    assert later.retrospective is True
+    with pytest.raises(ValidationError):
+        dated.model_copy(update={"authored_date": None})
+    with pytest.raises(ValidationError):
+        original.model_copy(update={"authored_date": date(2026, 8, 25)})
+
+
+def test_post_close_plan_never_authorizes_an_earlier_session():
+    value = version(authored=at(20, 18), evidence=at(20, 15), available=at(21, 0))
+    schedule = LoopSchedule(entries=(row(21, value=value),))
+    assert schedule.select(at(20, 15)) is None
+    assert schedule.select(at(21, 0)).version == value
+
+
+def test_single_plan_requires_one_entry_and_keeps_evidence_bindings_independent():
+    with pytest.raises(ValidationError):
+        LoopSchedule(entries=())
+    first = version()
+    hashes = ("1" * 64, "3" * 64)
+    reviewed = first.model_copy(update={
+        "source_hashes": hashes,
+        "review": first.review.model_copy(update={"source_hashes": hashes}),
+    })
+    assert LoopSchedule(entries=(row(value=reviewed),)).select(at()).version == reviewed

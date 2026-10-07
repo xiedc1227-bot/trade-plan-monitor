@@ -213,12 +213,36 @@ class DailySimulationBatch(DailyValue):
     baseline: bool = Field(strict=True)
 
 
+class DailyOpeningSimulationBatch(DailyValue):
+    """Private replay facts; missing dates never become synthetic acquisitions."""
+
+    origin: Literal["monitor-loop-opening-v1"]
+    id: str
+    bucket: Literal["CORE", "TACTICAL"]
+    quantity: PositiveWholeQty
+    acquired_trade_date: date | None
+    observed_trade_date: date
+    sellable_quantity: WholeQty | None
+
+    @model_validator(mode="after")
+    def consistent(self):
+        if self.sellable_quantity is not None and self.sellable_quantity > self.quantity:
+            raise ValueError("opening sellable quantity exceeds the lot")
+        if self.acquired_trade_date is not None and (
+            self.acquired_trade_date > self.observed_trade_date
+            or self.acquired_trade_date == self.observed_trade_date
+            and self.sellable_quantity not in (None, 0)
+        ):
+            raise ValueError("opening acquisition contradicts observed T+1 availability")
+        return self
+
+
 class DailyPositionState(DailyValue):
     simulation_version: Literal["daily-simulation-v1"]
     initialized_at: ShanghaiDatetime
     initial_core_qty: WholeQty
     initial_tactical_qty: WholeQty
-    batches: tuple[DailySimulationBatch, ...] = Field(max_length=500)
+    batches: tuple[DailySimulationBatch | DailyOpeningSimulationBatch, ...] = Field(max_length=500)
 
 
 class DailySimulationState(DailyValue):

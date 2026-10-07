@@ -3,7 +3,7 @@
 import json
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from pydantic import Field, model_validator
 
@@ -187,6 +187,7 @@ class DailyRuntimeEvaluationService:
         committed_result_observer=None,
         clock=None,
         commit_admission=None,
+        event_id_factory: Callable[[str], UUID] | None = None,
     ):
         self._work = unit_of_work_factory
         self._prepare = prepare_inputs
@@ -194,6 +195,7 @@ class DailyRuntimeEvaluationService:
         self._observe = committed_result_observer
         self._clock = clock
         self._admission = commit_admission
+        self._event_id = event_id_factory or (lambda _key: uuid4())
         self._current_inputs = {}
 
     def _binding(self, work, plan):
@@ -986,7 +988,7 @@ class DailyRuntimeEvaluationService:
             return None
         event = work.alerts.enqueue_daily(
             DailyAlertPayload(
-                event_id=uuid4(),
+                event_id=self._event_id(key),
                 dedup_key=key,
                 plan_id=plan.plan_id,
                 plan_version=plan.version,
@@ -1175,6 +1177,10 @@ def daily_delivery_allowed(session, event, now):
         return False
     head = repo.get("evaluation-head-" + event.symbol)
     if head is None or head["payload"]["plan_version_id"] != event.plan_version_id:
+        return False
+    if head["payload"].get("minute_target") is not None and not minute_source_current(
+        session, head["payload"], now
+    ):
         return False
     if not DailyAccounting(repo).evaluation_current(
         head["payload"],

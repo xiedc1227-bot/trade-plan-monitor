@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-07，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前进展见 MV12：ML-T33、ML-T34 与 ML-C12 已验证，既有统一研究 OpenAPI 的陈旧批准已具体审阅并纠正。MV01–MV10 保留为当时证据；MV11 启动解耦 PASS 保持不变。以下历史待定/失败文字不代表当前阻断。
+当前任务准入纠正及私有单计划循环证据见 MV18/MV19：ML-T01–ML-T05 与 ML-C01/ML-C02 已实现并验证。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV17 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。准备、数据集/工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -228,3 +228,137 @@ ML-T30–ML-T34 及 ML-C11/ML-C12 已完成，既有 39 项任务中仍有 34 �
 | 文档与范围审阅 | 双语 ID/标题结构/相对链接；已完成历史 todo 尾部；明确暂存文件审阅 | 7 对双语文档全部 PASS。清理后链接可解析，独立研究保持未修改。 |
 
 两组 pytest 保留既有 Starlette/httpx 弃用告警。审阅未发现尚未解决的范围内问题。这些检查新增整理提交/兼容证据，不代表完成剩余 34 项业务/UI/负载任务，也不授权部署、付费请求或生产改动。
+
+## MV14. 冻结输入与共用模拟基础
+
+2026-10-07，基于既有业务授权，从 `0db69c9` 开始实施。ML-T01 与 ML-T02 已完成，各限定在四个主要文件内，同时更新成对 todo/验证记录。独立盛新研究文件已保留。本轮未提交、推送、修改生产环境、启动真实监控、调用付费供应商、发送通知或部署。
+
+### MV14.1 已实现行为
+
+ML-T01 新增严格不可变 `monitor-loop-input-v1` / `backtest-run-v5` 值，不改变 v1–v4 编解码。期初事实区分未知/零现金、未知持仓/成本/可卖量、精确 `401050` 分成本与独立市价估值。账户事实可早于监控起点；未来事实/尚不可用的估值被拒绝。现金、成本、数量和市值保留安全整数检查，未知现金时也检查市值。内容审核绑定原始原文哈希和证据哈希，并须在提交时已存在。编写日期/时间、可用时间、信息截止、生效日和审核时间彼此独立；仅有日期时不编造精确时间，后写计划仍标记为回溯研究。日历预检拒绝重复/未知/非交易日期与未覆盖起点。后续版本在日边界切换；同版本沿用保留激活身份，未来版本不重命名早期权限 ID。既有激活/规则有效期仍为权威约束。
+
+注入的带时区提交时钟在 Asia/Shanghai 一次解析缺省/null 或明确结束日期。过去/节假日保留包含式边界，今日冻结在提交时刻。早于起点/未来日期和伪造截止/来源值被拒绝。原文上限为 256 项、UTF-8 合计 8 MiB、单项 150,000 字符；期初批次上限仍为 200。包含刷新的评估、提醒、意图和尝试各上限 70,000。定义批内一个提取槽、可重试失败共 3 次尝试。工作者执行、提交预留与截止数据集连接仍为后续任务，这些值本身未实现上述能力。
+
+ML-T02 将既有校验/写入提取到 `state/simulation.py`，使用类型化命令/回执与不依赖传输的拒绝码。在调用方事务内写入持仓、信号消费、风险完成和回执，内部不提交。Web 保留幂等、提交和错误映射；旧研究模拟不再使用私有 HTTP 辅助函数。测试独立检查精确账本回滚、回执值、修订、完整数量及执行期间不导入 Web。
+
+### MV14.2 已执行检查
+
+所有命令从 `trade-plan-monitor/` 执行，使用离线夹具和临时数据库。新增测试首次因模块缺失而失败。后续红测试检出未来审核准入，修正后通过。新增夹具不匹配（SSE/SZSE 日历、会话检查前先检查报价新鲜度）按既有行为纠正；未修改、跳过或削弱既有测试/断言。
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| ML-T01 | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py -q -m 'not live'` | 35 passed，0.59 秒。 |
+| ML-T02 | `.venv/Scripts/python.exe -m pytest tests/integration/test_simulation_participant.py tests/integration/test_unified_simulation_transactions.py tests/integration/test_unified_replay.py -q -m 'not live'` | 25 passed，50.86 秒；包含 7 项新增参与者案例。 |
+| 在线/共用/冻结兼容 | `.venv/Scripts/python.exe -m pytest tests/integration/test_unified_runtime.py tests/integration/test_unified_replay_parity.py tests/integration/test_backtest_compatibility.py tests/integration/test_daily_plan_chain.py tests/integration/test_daily_history_regression.py tests/integration/test_openapi_snapshot.py -q -m 'not live'` | 提取后 56 passed，47.61 秒。 |
+| 最终单元/契约回归 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 最终输入修正后 2793 passed，排除 4 项 live 测试，20.83 秒。 |
+| 静态/生成产物 | `.venv/Scripts/python.exe -m ruff check src tests scripts`；`.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`；`git diff --check` | PASS；canonical monitor v2 与 compatibility monitor v1 均保持最新。 |
+| 结构审阅 | 成对标题 ID/命令/任务勾选；原已完成 todo 尾部；原执行函数体与提取后函数体的规范化 AST 比对 | PASS。AST 比对仅排除变化的文档字符串/签名，以及传输类型/错误映射名称。 |
+
+### MV14.3 审阅与剩余范围
+
+使用 `code-review` 技能自审，比对提取后的函数体与原辅助函数，检查授权、算术、确定性和上限。已修正原文/证据批准绑定、未知现金时的市值范围、账户/起点时间区分与未来审核准入。公开模式/传输类型及当前分仓/模拟/事务规则不变。保留既有 Starlette/httpx 弃用告警。未批准未来 API 摘要。
+
+ML-C01 仍需 ML-T03 提醒记录。尚未形成自动闭环、原子资金参与者、准备工作流、新结果/API/UI 或完整 Windows 负载验收。既有 39 个薄片中仍有 32 个待完成。下一依赖为 ML-T03、ML-T04 原子账户和 ML-T05 离线单计划循环。本证据不宣称已完成这些能力，也不重新加入已取消范围。
+
+## MV15. 私有提醒与 ML-C01
+
+### MV15.1 已实现行为
+
+ML-T03 分两个薄片完成：未知期初批次的存储/账户计算，再接私有监控/提醒记录。`LoopSession` 仅新建私有 SQLite 文件，写入冻结审阅/激活绑定及日历，向共用运行时注入虚拟时间与因果提醒 ID。原文记录明确标识为已审阅清单，不伪造原始文本。求值和记录不会改变历史期初持仓；不使用真实供应商、发送出口、网络或 Web 执行路径。
+
+`ReminderCapture` 使用 `daily_delivery_allowed`，原子记录 CAPTURED/SUPPRESSED 回执、去重重试、执行 70,000 上限并返回有界分页。过期报价以及已修订的分钟/事实/持仓/审阅/激活证据均抑制送达。新增分钟修订红测试暴露普通发送路径遗漏校验；共用普通资格现使用既有分钟来源检查，有效在线行为仍由回归覆盖。纯技术提醒不携带数量或执行候选资格。明确标记的私有期初批次保留未知买入日期及可卖量；未知/零可卖量阻止卖出，明确整手可卖量则允许既有完整数量检查。不需要生产迁移或 API/生成契约变更。
+
+### MV15.2 已执行检查
+
+所有命令从 `trade-plan-monitor/` 离线执行，使用临时存储。新增测试先因缺少私有会话/状态支持而失败；分钟修订校验在修复前失败。测试夹具修正保留真实的较晚接收时间。未削弱既有测试、断言或门槛。
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| ML-T03 | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_reminders.py tests/integration/test_unified_runtime.py -q -m 'not live'` | 40 passed，12.14 秒；包含 18 个新增私有闭环用例。 |
+| 共用状态/在线回归 | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_reminders.py tests/integration/test_unified_runtime.py tests/integration/test_daily_simulation.py tests/integration/test_daily_simulation_review_regressions.py tests/integration/test_simulation_participant.py tests/integration/test_unified_simulation_transactions.py -q -m 'not live'` | 79 passed，36.91 秒。 |
+| 单元/合同回归 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 2793 passed，4 个 live 测试 deselected，21.68 秒。 |
+| 静态/生成产物 | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`; `git diff --check` | PASS；canonical monitor v2 与 compatibility monitor v1 均保持最新。 |
+
+### MV15.3 自审及剩余范围
+
+自审检查冻结授权、原文标识、缺失事实、回滚/幂等、有界读取、时序校验和共用行为。ML-C01 已完成。原子资金、自动响应循环、按日计划切换、准备、结果/API/UI 和完整负载验收仍待完成；39 项任务中尚有 31 项。下一项为 ML-T04/ML-T05。保留既有 Starlette/httpx 弃用告警。本次继续未提交、推送、调用付费/真实服务或部署。
+
+## MV16. 私有账户原子结算
+
+### MV16.1 已实现行为
+
+ML-T04 新增 `LoopAccountParticipant` 以及整分精度的费用/状态/回执类型，仅在新建私有会话组合。共用模拟参与者保留数量、T+1、CORE/风险与信号次数授权。一项调用方控制的事务覆盖资金、批次成本、持仓、信号消耗/风险完成、共用回执及资金回执；参与者本身不提交。私有表无需生产迁移。观察模式拒绝执行。
+
+使用每股绝对分滑点及既有比例费用逐项向上取整。原文示例以 28.70 买入 100 股时，成交价 2871 分、金额 287100、费用 503；以 29.30 卖出 100 股时，分别为 2929、292900 和 650。这些是冻结原文假设，不代表现行法定费率。资金准入使用含费用的完整数量；未知资金或仅差一分均拒绝且不改变状态。费用/资金/成本总额保持安全整数校验。共用回执记录授权行情价；资金回执单独记录含滑点成交价及费用。
+
+期初 401050 分成本原样保留，不生成新买入或重复购买费。卖出成本跟随共用持仓的实际批次扣减。按比例释放成本向下取整到分，尾差留在剩余批次，保持总成本守恒。未知成本保持未知，并使按成本计算的已实现盈亏未知。重复请求键要求命令/费用设置相同，并返回原不可变回执。回执校验核对费用/数量及结果分仓数量。持仓写入后、全部资金/回执写入后的故障，陈旧修订和非法重试均不留下部分效果。提交时复核分钟来源，防止求值后的修订仍授权成交；新增红测试在修复前暴露该缺口。非执行记录类型不能作为资金成交原因。
+
+### MV16.2 已执行检查
+
+所有检查从 `trade-plan-monitor/` 使用离线夹具和临时数据库执行。新增费用/账户测试先因缺少模块或参与者方法而失败。未降低既有断言或门槛。
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| ML-T04 最终目标检查 | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_costs.py tests/integration/test_monitor_loop_account.py -q -m 'not live'` | 最终回执/提交校验后 21 passed，2.11 秒；8 个费用与 13 个账户用例。 |
+| 闭环/共用/旧回放 | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_costs.py tests/integration/test_monitor_loop_account.py tests/integration/test_monitor_loop_reminders.py tests/integration/test_simulation_participant.py tests/integration/test_unified_replay.py tests/integration/test_unified_replay_parity.py tests/integration/test_openapi_snapshot.py -q -m 'not live'` | 76 passed，84.47 秒；在最终私有回执/提交校验之前执行。 |
+| 单元/合同回归 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 回执及分钟来源校验后 2801 passed，4 个 live 测试 deselected，21.11 秒。 |
+| 静态/生成产物 | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | PASS；monitor v2 和 compatibility v1 不变。 |
+| 文档/工作区检查 | `git diff --check`；配对章节 ID、命令、任务状态及原已完成历史清单 | PASS。 |
+
+### MV16.3 自审及剩余范围
+
+自审检查资金范围、精确取整、期初成本保留、共用扣减对账、未知盈亏、回执绑定和回滚。ML-T04 已完成。ML-T05 自动响应时序和完整单计划循环仍待完成；资金参与者本身不实现下一分钟选择、涨跌停准入或结果发布。ML-C02 保持开放。39 项任务中尚有 30 项。未提交/推送、调用付费供应商、生产状态或真实通知。
+
+## MV17. 单计划范围纠正及输入回归
+
+### MV17.1 已接受范围与实现
+
+用户于 2026-10-07 要求仅实现单计划回测。每次运行冻结恰好一份完整已审核计划/原文及一个初始生效绑定。计划有效时可跨交易日延续，执行更新账本而不改变计划内容。按日替换、前版继承/合并、多计划准备及多计划同时回测排除本期。ML-T06/ML-T09 与 ML-A07 为取消，而非通过/完成，保留 ID 及此前证据。活动依赖/检查点排除它们。方案、实施计划和任务清单双语同步。完成 9 项，37 个活动任务剩余 28 项，保留 39 个 ID 和 13 个检查点。
+
+私有原文/输入契约现拒绝第二原文/条目，包括重复版本、模型复制及解码载荷。选择保留跨日同一激活、可用和到期防护，移除后继选择。已审核证据哈希保留独立有界集合。保留可选结束/截止、期初账户精度、费用/原子状态、旧编码及既有隔离/供应商/事件限制。授权不可用报告 `LOOP_PLAN_AUTHORITY_UNAVAILABLE`，不要求切换计划。准备/API/UI 仍为计划中的单原文工作，本次范围纠正未实现这些功能。
+
+### MV17.2 已执行检查
+
+离线检查仅用临时库。新增数量限制用例在原多条目实现下先出现 3 项失败、1 项通过。用户取消该行为，因此原批次/切换正向夹具替换为明确拒绝、固定计划延续/到期及数据集/因果身份用例，其他因果、账户和公开兼容断言保留。静态检查发现两处测试行过长，修正格式且不改变断言。
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| 单计划输入/时间 | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py -q -m 'not live'` | 39 通过，0.57 秒。 |
+| 提醒/账户/费用 | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_reminders.py tests/integration/test_monitor_loop_account.py tests/unit/test_monitor_loop_costs.py -q -m 'not live'` | 最终授权错误措辞修改后 39 通过，3.53 秒。 |
+| 单元/契约回归 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live'` | 2805 通过，排除 4 项 live 测试，21.32 秒。 |
+| 静态/生成产物 | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | 格式修正后 PASS，监控 v2 与兼容监控 v1 保持最新。 |
+| 文档/工作区 | `git diff --check`；双语标题/ID/依赖/命令/文件/数字阈值及原始已完成 todo 尾部 | PASS。 |
+
+### MV17.3 审阅与剩余范围
+
+自审覆盖单计划数量限制、不可变复制/解码输入防护、跨日激活/到期、独立证据绑定及数据集修订下的因果 ID。既有公开模式/生成文件不变。完整自动响应闭环仍待 ML-T05，本次检查不代表它、准备、结果/UI 或负载验收完成。既有 Starlette/httpx 弃用提示保留。未提交/推送，未使用付费请求、生产状态、真实通知或部署。
+
+## MV18. 单个未完成任务准入
+
+用户最新纠正要求一个未完成任务，不能仅限制一个执行线程。移除 100 任务队列容量、授权累积及多 ID 恢复。现有 SQLite 写事务在任何 QUEUED/RUNNING/CANCEL_REQUESTED 任务存在时拒绝不同的新同步/验证/回放，包括过期/未知租约。未完成快照预留也阻止新操作，直到释放/完成绑定或任务拥有的孤儿清理。同 key 及同操作幂等保留。终态释放准入，请求取消不会释放。选中恢复授权一个任务，保留物理排空、30 秒租约/3 代及旧 token/发布保护。内部 `BACKTEST_BUSY` 使用既有公开 `409 CONFLICT`，未新增 API 字段/数据结构/依赖/迁移。ADR 0009 覆盖此前队列及过期/准备并发选择。准备仍待完成，入口须继承同一规则。
+
+新增准入测试在多任务实现下最初 15 项全部失败。修正并补充过期预留覆盖后，16 项均在以下组合检查中通过。原批量排队夹具改为创建终态历史记录，保留分页、成员变动保护、旧 token 和线程排空断言。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_single_task.py tests/integration/test_backtest_jobs.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_job_coordinator.py tests/integration/test_backtest_run_api.py tests/integration/test_backtest_production_composition.py tests/integration/test_backtest_job_api.py tests/unit/test_backtest_service_contract.py tests/integration/test_monitor_loop_cycle.py tests/integration/test_monitor_loop_reminders.py tests/integration/test_monitor_loop_account.py tests/integration/test_simulation_participant.py tests/unit/test_monitor_loop_input.py tests/unit/test_monitor_loop_schedule.py tests/unit/test_monitor_loop_costs.py -q -m 'not live' --tb=short
+```
+
+结果：**278 通过，1 跳过，27.98 秒**。跳过项是 Windows 环境下既有 POSIX 所有权检查。后补日历/成交量用例及最终范围保护见 MV19。没有通过跳过/删除测试使修正通过。无关在线监测请求队列及结果/历史分页不属本次清理范围。
+
+## MV19. 私有单计划响应循环
+
+ML-T05/ML-C02 已实现并验证。冻结因果帧驱动共享监控及合格本地提醒捕获，有界意图使用固定响应延迟和下一完整分钟区间。09:35:12 提醒不能使用 09:35–09:36 区间；夹具在 09:37 买入、09:42 卖出，每次 100 股。独立预期断言现金 `503590` 分、剩余账户成本 `798654` 分、总股数 200、TACTICAL 可卖数为零，以及含成交后刷新在内的 15 次评估。无需未来交易脚本。
+
+首次买卖集成因夹具将十个来源分钟传给只接受最新五分钟桶的发送校验而失败；已按既有来源契约修正夹具，保留发送时保护。风险用例提供在每个虚拟时刻明确已可用的历史日线认证修订。共享风险优先级阻断待处理普通买入，执行授权风险数量，并在计划到期后保留已锁定退出义务。到期普通权限关闭，不切换/重新激活计划。未知/休市交易日、不足成交量、涨跌停与现金阻断完整成交，同一区间不重复尝试。取消及意图/尝试/评估上限阻止额外账户提交。冻结输入上限保持 70000。观察/已记录模式不自动产生交易。
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| 循环、提醒、原子账户和共享模拟 | `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_cycle.py tests/integration/test_monitor_loop_reminders.py tests/integration/test_monitor_loop_account.py tests/integration/test_simulation_participant.py -q -m 'not live' --tb=short` | 57 通过，9.65 秒；包含 19 个循环用例。 |
+| 租约与历史兼容 | `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_job_leases.py tests/integration/test_backtest_acceptance.py::test_fake_production_journey_is_complete_offline_and_live_state_is_unchanged tests/integration/test_backtest_acceptance.py::test_each_fixture_symbol_has_stable_buy_and_t1_exit_bytes tests/integration/test_backtest_acceptance.py::test_prior_evidence_manifest_and_bilingual_reports_fail_closed -q -m 'not live' --tb=short` | 10 通过，4.24 秒；离线应用、BUY/SELL/T+1 字节可重复及证据清单保留。 |
+| 单元/契约回归 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live' --tb=short` | 2809 通过，排除 4 个 live，21.18 秒。 |
+| 静态/生成文件 | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | PASS，监控 v2 和兼容 v1 保持最新。 |
+| 文档/工作区 | `git diff --check`；双语标题/ID/字面命令、字段、路径、阈值、依赖/检查点计数及原已完成 todo 尾部 | PASS；9 对双语，保留 39 个任务 ID/13 个检查点；10 完成、27 待完成活动、2 取消，原历史不变。 |
+
+两轮较广的既有验收调用在无关全年规模夹具中结束，均不把完整调用计为 PASS。第二轮按名称筛选仍包含全年用例，因此最终相关检查改为上表明确节点选择。容量阈值及测试定义不变，完整闭环负载验收仍待完成。
+
+自审覆盖事务准入/预留竞态、幂等重试、终态释放、单个恢复授权、分钟/报价/限价/日历绑定、精确数量/费用、共享风险权限、到期观察及有界反馈。既有 Starlette/httpx 弃用提示保留。此私有切片未实现准备、已记录动作导入、冻结数据集读取、工作线程/API/UI/报告集成或完整闭环负载验收。完成 10 项、待完成活动任务 27 项，37 活动 / 保留 39 个 ID；ML-T06/ML-T09 继续取消，下一项为 ML-T07。本切片未提交/推送，未使用付费请求、生产状态、真实通知或部署。
