@@ -215,6 +215,7 @@ class BacktestJobRepository:
         idempotency_key: str,
         *,
         request_id: str | None = None,
+        on_admitted: Callable[[str], None] | None = None,
     ) -> BacktestJobReceipt:
         """Atomically replay, deduplicate, reuse, or admit one durable operation."""
 
@@ -223,12 +224,15 @@ class BacktestJobRepository:
             idempotency_key,
             request_id=request_id,
             reservation=None,
+            on_admitted=on_admitted,
         )
 
     def finalize_run_submission(
         self,
         request: BacktestRunJobRequest,
         reservation: BacktestRunSubmissionReservation,
+        *,
+        on_admitted: Callable[[str], None] | None = None,
     ) -> BacktestJobReceipt:
         """Admit one resolved run only while its durable public-intent claim is owned."""
 
@@ -241,6 +245,7 @@ class BacktestJobRepository:
             reservation.idempotency_key,
             request_id=None,
             reservation=reservation,
+            on_admitted=on_admitted,
         )
 
     def _submit(
@@ -250,6 +255,7 @@ class BacktestJobRepository:
         *,
         request_id: str | None,
         reservation: BacktestRunSubmissionReservation | None,
+        on_admitted: Callable[[str], None] | None,
     ) -> BacktestJobReceipt:
 
         if not isinstance(
@@ -415,6 +421,8 @@ class BacktestJobRepository:
                 expires_at=expires_at,
             )
             connection.commit()
+            if not reused and on_admitted is not None:
+                on_admitted(job_id)
             return receipt
 
     def get(self, job_id: str) -> BacktestJobView | None:
@@ -743,30 +751,32 @@ class BacktestJobRepository:
             ).fetchall()
         return tuple(_view_from_row(row) for row in rows)
 
-    def claim_next(self) -> BacktestJobClaim | None:
+    def claim_next(
+        self, *, authorized_job_ids: frozenset[str] | None = None,
+    ) -> BacktestJobClaim | None:
         """Atomically claim the oldest queued job when the single slot is free."""
 
+        if authorized_job_ids == frozenset():
+            return None
+        parameters = () if authorized_job_ids is None else tuple(
+            _validate_job_id(job_id) for job_id in sorted(authorized_job_ids)
+        )
+        authorization = "" if authorized_job_ids is None else (
+            " AND job_id IN (" + ",".join("?" for _ in parameters) + ")"
+        )
         now = self._now()
         now_text = format_shanghai_datetime(now)
         lease_text = format_shanghai_datetime(now + timedelta(seconds=JOB_LEASE_SECONDS))
         claim_token = token_hex(32)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            active = connection.execute(
-                "SELECT job_id FROM backtest_job "
-                "WHERE status IN ('RUNNING', 'CANCEL_REQUESTED') LIMIT 2"
-            ).fetchall()
-            if len(active) > 1:
-                raise RuntimeError("durable job store contains more than one active job")
-            if active:
+            if _execution_slot_occupied(connection, now_text):
                 connection.commit()
                 return None
             row = connection.execute(
-                """
-                SELECT job_id FROM backtest_job
-                WHERE status = 'QUEUED' AND attempt = 0
-                ORDER BY created_at, job_id LIMIT 1
-                """
+                "SELECT job_id FROM backtest_job WHERE status = 'QUEUED' AND attempt = 0"
+                + authorization + " ORDER BY created_at, job_id LIMIT 1",
+                parameters,
             ).fetchone()
             if row is None:
                 connection.commit()
@@ -1333,14 +1343,27 @@ class BacktestJobRepository:
         self._progress_throttle.forget(f"{normalized_job_id}:{normalized_token}")
         return True
 
-    def recover_expired(self) -> BacktestJobClaim | None:
-        """Recover or terminate the one expired active claim deterministically."""
+    def recover_expired(
+        self, *, authorized_job_ids: frozenset[str] | None = None,
+    ) -> BacktestJobClaim | None:
+        """Recover selected expired work only when no valid lease occupies the slot."""
 
+        if authorized_job_ids == frozenset():
+            return None
+        parameters = () if authorized_job_ids is None else tuple(
+            _validate_job_id(job_id) for job_id in sorted(authorized_job_ids)
+        )
+        authorization = "" if authorized_job_ids is None else (
+            " AND job_id IN (" + ",".join("?" for _ in parameters) + ")"
+        )
         now = self._now()
         now_text = format_shanghai_datetime(now)
         terminal_expiry = format_shanghai_datetime(now + timedelta(days=JOB_IDEMPOTENCY_DAYS))
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if _execution_slot_occupied(connection, now_text):
+                connection.commit()
+                return None
             rows = connection.execute(
                 """
                 SELECT job_id, kind, status, request_json, run_id, dataset_hash,
@@ -1348,18 +1371,15 @@ class BacktestJobRepository:
                        network_authorized_at
                 FROM backtest_job
                 WHERE status IN ('RUNNING', 'CANCEL_REQUESTED')
-                ORDER BY created_at, job_id LIMIT 2
+                  AND lease_expires_at <= ?
                 """
+                + authorization + " ORDER BY created_at, job_id LIMIT 1",
+                (now_text, *parameters),
             ).fetchall()
-            if len(rows) > 1:
-                raise RuntimeError("durable job store contains more than one active job")
             if not rows:
                 connection.commit()
                 return None
             row = rows[0]
-            if row[9] is None or str(row[9]) > now_text:
-                connection.commit()
-                return None
             job_id = str(row[0])
             kind = BacktestJobKind(str(row[1]))
             status = BacktestJobStatus(str(row[2]))
@@ -1988,6 +2008,23 @@ def _receipt_from_row(row: sqlite3.Row | tuple[object, ...]) -> BacktestJobRecei
         reused=bool(row[17]),
         submitted_at=parse_shanghai_datetime(str(row[12])),
     )
+
+
+def _execution_slot_occupied(connection: sqlite3.Connection, now_text: str) -> bool:
+    """Expired history stays dormant; valid or unknown leases keep the slot closed.
+
+    The coordinator additionally drains its physical worker before requesting
+    another claim. A persisted lease alone cannot prove that local work ended.
+    """
+    rows = connection.execute(
+        "SELECT job_id FROM backtest_job "
+        "WHERE status IN ('RUNNING', 'CANCEL_REQUESTED') "
+        "AND (lease_expires_at IS NULL OR lease_expires_at > ?) LIMIT 2",
+        (now_text,),
+    ).fetchall()
+    if len(rows) > 1:
+        raise RuntimeError("durable job store contains more than one occupied execution slot")
+    return bool(rows)
 
 
 def _claim_from_row(row: sqlite3.Row | tuple[object, ...]) -> BacktestJobClaim:

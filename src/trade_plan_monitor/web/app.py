@@ -10,9 +10,12 @@ from pathlib import Path
 from typing import Final
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 
+from trade_plan_monitor.backtest.service_lifecycle import BacktestServiceUnavailable
 from trade_plan_monitor.web.blocked_mutations import enforce_blocked_read_only
-from trade_plan_monitor.web.errors import install_error_boundary
+from trade_plan_monitor.web.errors import ApiError, ApiErrorCode, install_error_boundary
 from trade_plan_monitor.web.lifespan import (
     AIWebLifecycleFactory,
     BacktestLifecycleFactory,
@@ -88,6 +91,51 @@ class ProductionAssetError(RuntimeError):
     """The installed distribution does not contain a complete Vue build."""
 
     code = "WEB_ASSETS_UNAVAILABLE"
+
+
+async def _prepare_backtest_request(request: Request) -> None:
+    """Actual backtest data use prepares only the capability that it needs."""
+
+    if not request.url.path.startswith("/api/v1/backtest-"):
+        return
+    manager = getattr(request.app.state, "backtest_lifecycle", None)
+    if manager is None:
+        return
+    execution = request.method == "POST" and request.url.path in {
+        "/api/v1/backtest-data-syncs",
+        "/api/v1/backtest-dataset-verifications",
+        "/api/v1/backtest-runs",
+    }
+    if request.method == "POST":
+        # FastAPI resolves router dependencies before validating the endpoint body.
+        # Reuse its mounted command model so rejected input cannot acquire resources.
+        body_field = getattr(request.scope.get("route"), "body_field", None)
+        if body_field is not None:
+            _value, errors = body_field.validate(await request.json(), loc=("body",))
+            if errors:
+                raise RequestValidationError(errors) from None
+        from trade_plan_monitor.web.schemas import MutationContext
+
+        try:
+            MutationContext(
+                idempotency_key=request.headers.get("Idempotency-Key"),
+                request_id=request.state.request_id,
+            )
+        except ValidationError as error:
+            raise RequestValidationError(error.errors()) from None
+    try:
+        composition = await manager.ensure(execution=execution)
+    except BacktestServiceUnavailable:
+        snapshot = manager.snapshot
+        from trade_plan_monitor.backtest.service_contract import BacktestServiceState
+
+        retry_after = (
+            1 if snapshot.outstanding_work and snapshot.state is not BacktestServiceState.DEGRADED
+            else None
+        )
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=retry_after) from None
+    request.app.state.backtest_read_service = composition.read_service
+    request.app.state.backtest_operation_service = composition.operation_service
 
 
 @contextmanager
@@ -336,11 +384,11 @@ def create_app(
     app.include_router(alerts_router)
     app.include_router(websocket_router)
     app.include_router(market_indexes_router)
-    app.include_router(backtest_data_router)
-    app.include_router(backtest_jobs_router)
-    app.include_router(backtest_runs_router)
-    app.include_router(backtest_results_router)
-    app.include_router(backtest_exports_router)
+    for backtest_router in (
+        backtest_data_router, backtest_jobs_router, backtest_runs_router,
+        backtest_results_router, backtest_exports_router,
+    ):
+        app.include_router(backtest_router, dependencies=[Depends(_prepare_backtest_request)])
     if static_files is not None:
 
         async def serve_static(request: Request) -> Response:

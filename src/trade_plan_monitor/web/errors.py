@@ -79,11 +79,11 @@ class ApiError(Exception):
         if len(details) > _MAX_VALIDATION_DETAILS:
             raise ValueError("API error details exceed the public bound")
         if retry_after_seconds is not None and (
-            code is not ApiErrorCode.RATE_LIMITED
+            code not in (ApiErrorCode.RATE_LIMITED, ApiErrorCode.SERVICE_UNAVAILABLE)
             or type(retry_after_seconds) is not int
             or not 1 <= retry_after_seconds <= 3_600
         ):
-            raise ValueError("retry_after_seconds must be 1..3600 only for RATE_LIMITED errors")
+            raise ValueError("retry_after_seconds must be 1..3600 only for 429 or 503 errors")
         self.code = code
         self.details = details
         self.retry_after_seconds = retry_after_seconds

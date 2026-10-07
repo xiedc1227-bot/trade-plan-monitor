@@ -8,12 +8,12 @@ from collections.abc import Callable, Mapping
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from functools import partial
 from pathlib import Path
+from threading import Lock
 from typing import Protocol
 from uuid import UUID
 
-from anyio import sleep, to_thread
+from anyio import sleep
 from pydantic import BaseModel, ValidationError
 
 from trade_plan_monitor.backtest.application import (
@@ -83,6 +83,8 @@ from trade_plan_monitor.backtest.run_input import (
     BacktestInitialLotInput,
     BacktestRunInput,
 )
+from trade_plan_monitor.backtest.service_lifecycle import BacktestServiceUnavailable
+from trade_plan_monitor.backtest.thread_lifecycle import BacktestMetadataThread
 from trade_plan_monitor.backtest.time import (
     SHANGHAI,
     format_shanghai_datetime,
@@ -193,6 +195,57 @@ class Coordinator(Protocol):
     async def shutdown(self) -> None: ...
 
 
+class _DeferredCoordinator:
+    """Metadata preparation retains no coordinator or execution thread."""
+
+    def __init__(self, factory: Callable[[], BacktestJobCoordinator]) -> None:
+        self._factory = factory
+        self._instance: BacktestJobCoordinator | None = None
+        self._lock = Lock()
+        self._pending_authorizations: frozenset[str] = frozenset()
+
+    async def start(self) -> None:
+        with self._lock:
+            if self._instance is None:
+                self._instance = self._factory()
+                self._instance.authorize_jobs(self._pending_authorizations)
+                self._pending_authorizations = frozenset()
+        await self._instance.start()
+
+    @property
+    def authorized_job_ids(self) -> frozenset[str]:
+        with self._lock:
+            return (
+                self._pending_authorizations if self._instance is None
+                else self._instance.authorized_job_ids
+            )
+
+    @property
+    def physically_drained(self) -> bool:
+        return self._instance is None or self._instance.physically_drained
+
+    def authorize_new_job(self, job_id: str) -> None:
+        with self._lock:
+            if self._instance is None:
+                self._pending_authorizations |= {job_id}
+            elif self._instance.accepting:
+                self._instance.authorize_jobs(frozenset({job_id}))
+
+    def authorize_jobs(self, job_ids: frozenset[str]) -> None:
+        with self._lock:
+            if self._instance is None:
+                raise RuntimeError("execution must be explicitly activated before resume")
+            self._instance.authorize_jobs(job_ids)
+
+    async def shutdown(self) -> None:
+        if self._instance is not None:
+            await self._instance.shutdown()
+
+    def raise_if_failed(self) -> None:
+        if self._instance is not None:
+            self._instance.raise_if_failed()
+
+
 class BacktestComposition:
     """Own one service façade and exactly one coordinator lifecycle."""
 
@@ -221,6 +274,20 @@ class BacktestComposition:
     def operation_service(self) -> object:
         return self._operation_service
 
+    @property
+    def authorized_job_ids(self) -> frozenset[str]:
+        return getattr(self._coordinator, "authorized_job_ids", frozenset())
+
+    @property
+    def outstanding_work(self) -> int:
+        return (
+            int(not getattr(self._coordinator, "physically_drained", True))
+            + getattr(self._read_service, "outstanding_work", 0)
+        )
+
+    async def resume_jobs(self, job_ids: frozenset[str]) -> None:
+        await self._operation_service.resume_jobs(job_ids)
+
     async def start(self) -> None:
         if self._stopped:
             raise RuntimeError("backtest composition is already stopped")
@@ -232,8 +299,11 @@ class BacktestComposition:
     async def stop(self) -> None:
         if self._stopped:
             return
-        self._stopped = True
         await self._coordinator.shutdown()
+        stop_metadata = getattr(self._read_service, "stop_metadata", None)
+        if stop_metadata is not None:
+            await stop_metadata()
+        self._stopped = True
         self._started = False
 
 
@@ -280,7 +350,7 @@ def create_backtest_composition(
     results_database: Path = DEFAULT_BACKTEST_RESULTS_DATABASE,
     cursor_key_path: Path = DEFAULT_BACKTEST_CURSOR_KEY,
 ) -> BacktestComposition:
-    """Open the explicitly owned production stores only at lifespan startup."""
+    """Prepare local metadata only after explicit use; execution stays dormant."""
 
     key = _load_or_create_cursor_key(cursor_key_path)
     market_store = BacktestMarketStore(
@@ -295,15 +365,15 @@ def create_backtest_composition(
         results_database,
         busy_timeout_ms=_SQLITE_BUSY_TIMEOUT_MS,
     )
-    operations = create_backtest_job_operations(
-        config_path=config_path,
-        market_store=market_store,
-        result_store=result_store,
-    )
-    coordinator = BacktestJobCoordinator(
-        repository=repository,
-        operations=operations,
-        shutdown_timeout_seconds=_SHUTDOWN_TIMEOUT_SECONDS,
+    coordinator = _DeferredCoordinator(
+        lambda: BacktestJobCoordinator(
+            repository=repository,
+            operations=create_backtest_job_operations(
+                config_path=config_path, market_store=market_store, result_store=result_store,
+            ),
+            shutdown_timeout_seconds=_SHUTDOWN_TIMEOUT_SECONDS,
+            authorized_job_ids=frozenset(),
+        ),
     )
     domain_signer = HmacCursorSigner(key)
     service = _ProductionBacktestService(
@@ -355,6 +425,22 @@ class _ProductionBacktestService:
         self._coordinator = coordinator
         self._result_cursor_signer = result_cursor_signer
         self._job_cursor_signer = job_cursor_signer
+        self._metadata_thread = BacktestMetadataThread()
+
+    @property
+    def outstanding_work(self) -> int:
+        return self._metadata_thread.outstanding_work
+
+    async def stop_metadata(self) -> None:
+        await self._metadata_thread.stop()
+
+    async def _run_sync[ResultT](
+        self, function: Callable[..., ResultT], /, *args: object, **kwargs: object,
+    ) -> ResultT:
+        try:
+            return await self._metadata_thread.run(function, *args, **kwargs)
+        except BacktestServiceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
 
     async def submit_data_sync(
         self,
@@ -369,11 +455,12 @@ class _ProductionBacktestService:
             allow_network=True,
         )
         try:
-            receipt = await _run_sync(
+            receipt = await self._run_sync(
                 self._repository.submit,
                 request,
                 context.idempotency_key,
                 request_id=context.request_id,
+                on_admitted=self._coordinator.authorize_new_job,
             )
         except JobAdmissionError as error:
             raise _job_admission_api_error(error) from None
@@ -387,10 +474,11 @@ class _ProductionBacktestService:
     ) -> BacktestJobSubmissionOutcome:
         self._require_coordinator_healthy()
         try:
-            receipt = await _run_sync(
+            receipt = await self._run_sync(
                 self._repository.submit,
                 DatasetVerifyJobRequest(scope=_scope_request(command.scope)),
                 context.idempotency_key,
+                on_admitted=self._coordinator.authorize_new_job,
             )
         except JobAdmissionError as error:
             raise _job_admission_api_error(error) from None
@@ -409,7 +497,7 @@ class _ProductionBacktestService:
         intent_json = canonical_json(command.canonical_payload())
         try:
             for _attempt in range(_RUN_CLAIM_POLL_ATTEMPTS):
-                claim = await _run_sync(
+                claim = await self._run_sync(
                     self._repository.claim_run_submission,
                     intent_json,
                     context.idempotency_key,
@@ -468,7 +556,7 @@ class _ProductionBacktestService:
                 or command.research_input.review.content_hash != snapshot.content_hash):
                 raise ApiError(ApiErrorCode.CONFLICT)
             try:
-                manifest = await _run_sync(
+                manifest = await self._run_sync(
                     self._market_store.dataset_manifest,
                     command.dataset_hash,
                 )
@@ -513,10 +601,11 @@ class _ProductionBacktestService:
                 raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
             if reservation_lost.is_set():
                 raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
-            receipt = await _run_sync(
+            receipt = await self._run_sync(
                 self._repository.finalize_run_submission,
                 BacktestRunJobRequest(run_input=run_input),
                 reservation,
+                on_admitted=self._coordinator.authorize_new_job,
             )
             reservation = None
             return _run_submission_outcome(receipt)
@@ -527,7 +616,7 @@ class _ProductionBacktestService:
                 reservation_heartbeat.cancel()
                 await asyncio.gather(reservation_heartbeat, return_exceptions=True)
             if reservation is not None:
-                await _run_sync(
+                await self._run_sync(
                     self._repository.release_run_submission,
                     reservation,
                 )
@@ -539,7 +628,7 @@ class _ProductionBacktestService:
     ) -> None:
         while True:
             await sleep(_RUN_RESERVATION_HEARTBEAT_SECONDS)
-            if not await _run_sync(self._repository.renew_run_submission, reservation):
+            if not await self._run_sync(self._repository.renew_run_submission, reservation):
                 lost.set()
                 return
 
@@ -549,9 +638,8 @@ class _ProductionBacktestService:
         command: BacktestJobCancellationCommand,
         context: MutationContext,
     ) -> BacktestJobCancellationOutcome:
-        self._require_coordinator_healthy()
         try:
-            binding = await _run_sync(
+            binding = await self._run_sync(
                 self._repository.request_cancel_with_view,
                 command.job_id,
                 context.idempotency_key,
@@ -571,6 +659,19 @@ class _ProductionBacktestService:
             retry_after_seconds=_RETRY_AFTER_SECONDS if active else None,
         )
 
+    async def resume_jobs(self, job_ids: frozenset[str]) -> None:
+        """Validate explicitly selected pending work without changing its attempts."""
+        if not isinstance(job_ids, frozenset) or not 1 <= len(job_ids) <= 100:
+            raise ValueError("resume requires 1..100 selected job IDs")
+        for job_id in job_ids:
+            job = await self._run_sync(self._repository.get, job_id)
+            if job is None or job.status not in (
+                BacktestJobStatus.QUEUED, BacktestJobStatus.RUNNING,
+                BacktestJobStatus.CANCEL_REQUESTED,
+            ):
+                raise ApiError(ApiErrorCode.CONFLICT)
+        self._coordinator.authorize_jobs(job_ids)
+
     def _require_coordinator_healthy(self) -> None:
         try:
             self._coordinator.raise_if_failed()
@@ -585,7 +686,7 @@ class _ProductionBacktestService:
         context: MutationContext,
     ) -> BacktestRunView:
         try:
-            record = await _run_sync(
+            record = await self._run_sync(
                 self._results.set_pinned,
                 run_id,
                 pinned=command.pinned,
@@ -617,7 +718,7 @@ class _ProductionBacktestService:
             adjustment_policy=filters.adjustment_policy,
         )
         try:
-            page = await _run_sync(
+            page = await self._run_sync(
                 self._datasets.list_datasets,
                 filters=domain_filters,
                 limit=limit,
@@ -638,7 +739,7 @@ class _ProductionBacktestService:
 
     async def get_dataset(self, *, dataset_hash: str) -> BacktestDatasetView | None:
         try:
-            value = await _run_sync(self._datasets.get_dataset, dataset_hash)
+            value = await self._run_sync(self._datasets.get_dataset, dataset_hash)
         except DatasetNotFoundError:
             return None
         return _dataset_view(value)
@@ -664,7 +765,7 @@ class _ProductionBacktestService:
             raise RuntimeError("plan snapshot reader returned a mismatched version")
         plan = load_plan_json(snapshot.plan_json)
         try:
-            manifest = await _run_sync(
+            manifest = await self._run_sync(
                 self._market_store.dataset_manifest,
                 dataset_hash,
             )
@@ -719,7 +820,7 @@ class _ProductionBacktestService:
             )
         if manifest.market_index_data_hash is None:  # pragma: no cover - manifest guard
             raise RuntimeError("v2 dataset is missing its market-index data hash")
-        _revision, bars = await _run_sync(
+        _revision, bars = await self._run_sync(
             _read_frozen_market_index_membership,
             self._market_store,
             dataset_hash,
@@ -766,7 +867,7 @@ class _ProductionBacktestService:
         filter_payload = filters.canonical_payload()
         membership_sensitive = filters.status is not None or filters.dataset_hash is not None
         current_revision = (
-            await _run_sync(self._repository.current_membership_revision)
+            await self._run_sync(self._repository.current_membership_revision)
             if membership_sensitive
             else None
         )
@@ -785,7 +886,7 @@ class _ProductionBacktestService:
             if cursor_state.last_seen is None:
                 raise ApiError(ApiErrorCode.VALIDATION_ERROR)
             after = _job_position(cursor_state.last_seen)
-        result = await _run_sync(
+        result = await self._run_sync(
             self._repository.query_jobs,
             kinds=tuple(BacktestJobKind(value) for value in (filters.kind or ())),
             statuses=tuple(BacktestJobStatus(value) for value in (filters.status or ())),
@@ -842,7 +943,7 @@ class _ProductionBacktestService:
         )
 
     async def get_job(self, *, job_id: str) -> BacktestJobView | None:
-        value = await _run_sync(self._repository.get, job_id)
+        value = await self._run_sync(self._repository.get, job_id)
         return None if value is None else _job_view(value)
 
     async def list_runs(
@@ -861,7 +962,7 @@ class _ProductionBacktestService:
             pinned=filters.pinned,
         )
         try:
-            page = await _run_sync(
+            page = await self._run_sync(
                 self._results.list_runs,
                 filters=domain_filters,
                 limit=limit,
@@ -892,7 +993,7 @@ class _ProductionBacktestService:
 
     async def get_run(self, *, run_id: str) -> BacktestRunView | None:
         try:
-            record = await _run_sync(self._results.get_run, run_id)
+            record = await self._run_sync(self._results.get_run, run_id)
         except BacktestResultNotFoundError:
             return None
         return await self._run_view(record)
@@ -905,7 +1006,7 @@ class _ProductionBacktestService:
         cursor: str | None,
     ) -> BacktestFillPage:
         try:
-            page = await _run_sync(
+            page = await self._run_sync(
                 self._results.list_fills,
                 run_id,
                 limit=limit,
@@ -944,7 +1045,7 @@ class _ProductionBacktestService:
     ) -> BacktestDetailPage:
         domain_filters = BacktestDetailFilters(kind=BacktestDetailKind(filters.kind))
         try:
-            page = await _run_sync(
+            page = await self._run_sync(
                 self._results.list_details,
                 run_id,
                 filters=domain_filters,
@@ -979,7 +1080,7 @@ class _ProductionBacktestService:
 
     async def get_equity_series(self, *, run_id: str) -> BacktestEquitySeries:
         try:
-            series = await _run_sync(self._results.get_equity_series, run_id)
+            series = await self._run_sync(self._results.get_equity_series, run_id)
         except BacktestResultNotFoundError:
             raise ApiError(ApiErrorCode.NOT_FOUND) from None
         return BacktestEquitySeries.model_validate(
@@ -998,7 +1099,7 @@ class _ProductionBacktestService:
         limit: int,
     ) -> BacktestMarketIndexSeriesView:
         try:
-            record = await _run_sync(self._results.get_run, run_id)
+            record = await self._run_sync(self._results.get_run, run_id)
         except BacktestResultNotFoundError:
             raise ApiError(ApiErrorCode.NOT_FOUND) from None
         reference = _reference_market_view(record)
@@ -1012,13 +1113,13 @@ class _ProductionBacktestService:
                     "conditionSummaries": [],
                 }
             )
-        run_input = await _run_sync(self._result_store.get_run_input, run_id)
+        run_input = await self._run_sync(self._result_store.get_run_input, run_id)
         if run_input is None:
             raise RuntimeError("index-bearing run is missing its immutable input")
         requirement = build_backtest_index_requirement(run_input.plan_snapshot)
         if not requirement.required or requirement.binding is None:
             raise RuntimeError("stored reference-market identity contradicts the run input")
-        dataset_revision, bars = await _run_sync(
+        dataset_revision, bars = await self._run_sync(
             _read_frozen_market_index_membership,
             self._market_store,
             run_input.dataset_hash,
@@ -1085,7 +1186,7 @@ class _ProductionBacktestService:
         export_kind: BacktestExportKind,
         cancelled: Callable[[], bool],
     ) -> PreparedBacktestExport | None:
-        record = await _run_sync(self._result_store.get_result_run, run_id)
+        record = await self._run_sync(self._result_store.get_result_run, run_id)
         if record is None:
             return None
         if export_kind == "SUMMARY_JSON":
@@ -1114,22 +1215,13 @@ class _ProductionBacktestService:
         return _run_summary_view(record)
 
     async def _run_view(self, record: BacktestRunRecord) -> BacktestRunView:
-        run_input = await _run_sync(
+        run_input = await self._run_sync(
             self._result_store.get_run_input,
             record.summary.run_id,
         )
         if run_input is None:
             raise RuntimeError("verified result is missing its immutable run input")
         return _run_view(record, run_input)
-
-
-async def _run_sync[ResultT](
-    function: Callable[..., ResultT],
-    /,
-    *args: object,
-    **kwargs: object,
-) -> ResultT:
-    return await to_thread.run_sync(partial(function, *args, **kwargs))
 
 
 def _load_or_create_cursor_key(path: Path) -> bytes:

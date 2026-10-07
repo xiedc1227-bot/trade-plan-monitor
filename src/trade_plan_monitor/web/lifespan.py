@@ -9,6 +9,7 @@ from typing import Protocol
 from anyio import to_thread
 from fastapi import FastAPI, Request
 
+from trade_plan_monitor.backtest.service_lifecycle import LazyBacktestLifecycle
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.origin_guard import (
     DEFAULT_WEB_PORT,
@@ -107,7 +108,7 @@ def create_runtime_lifespan(
         stop = getattr(runtime, "stop", None)
         if not callable(start) or not callable(stop):
             raise TypeError("runtime lifecycle must expose start and stop")
-        backtest: BacktestLifecycle | None = None
+        backtest: LazyBacktestLifecycle | None = None
         backtest_stop: Callable[[], object] | None = None
         ai_lifecycle: AIWebLifecycle | None = None
         ai_stop: Callable[[], object] | None = None
@@ -151,26 +152,19 @@ def create_runtime_lifespan(
                 await plan_start()
                 app.state.plan_operation_service = plan_lifecycle.operation_service
             if backtest_lifecycle_factory is not None:
-                backtest = await to_thread.run_sync(backtest_lifecycle_factory)
-                backtest_start = getattr(backtest, "start", None)
-                backtest_stop = getattr(backtest, "stop", None)
-                if not callable(backtest_start) or not callable(backtest_stop):
-                    raise TypeError("backtest lifecycle must expose start and stop")
-                if not hasattr(backtest, "read_service") or not hasattr(
-                    backtest,
-                    "operation_service",
-                ):
-                    raise TypeError("backtest lifecycle must expose both services")
+                backtest = LazyBacktestLifecycle(backtest_lifecycle_factory)
+                backtest_stop = backtest.stop
                 app.state.backtest_lifecycle = backtest
-                await backtest_start()
-                app.state.backtest_read_service = backtest.read_service
-                app.state.backtest_operation_service = backtest.operation_service
             yield
         finally:
             try:
                 if backtest_stop is not None:
                     _clear_backtest_service_state(app)
-                    await backtest_stop()
+                    try:
+                        await backtest_stop()
+                    except Exception:
+                        # A backtest cleanup defect must not prevent monitor cleanup.
+                        app.state.backtest_cleanup_failed = True
             finally:
                 try:
                     if plan_stop is not None:

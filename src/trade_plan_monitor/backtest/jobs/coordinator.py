@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
+from threading import Lock
 from typing import Protocol
 
 from trade_plan_monitor.backtest.control import (
@@ -65,6 +66,15 @@ class BacktestJobOperationPort(Protocol):
     ) -> BacktestJobResult: ...
 
 
+class _TrackedExecutor(ThreadPoolExecutor):
+    def __init__(self, track: Callable[[Future], Future], *, thread_name_prefix: str) -> None:
+        super().__init__(max_workers=1, thread_name_prefix=thread_name_prefix)
+        self._track = track
+
+    def submit(self, function, /, *args, **kwargs):
+        return self._track(super().submit(function, *args, **kwargs))
+
+
 class BacktestJobCoordinator:
     """Claim durable jobs while all blocking operation work stays on one thread."""
 
@@ -76,6 +86,7 @@ class BacktestJobCoordinator:
         poll_interval_seconds: float = 0.1,
         heartbeat_interval_seconds: float = 1.0,
         shutdown_timeout_seconds: float = 5.0,
+        authorized_job_ids: frozenset[str] | None = None,
     ) -> None:
         required_repository_methods = (
             "claim_next",
@@ -111,12 +122,17 @@ class BacktestJobCoordinator:
         )
         self._repository = repository
         self._operations = operations
-        self._executor = ThreadPoolExecutor(
-            max_workers=1,
+        self._authorization_lock = Lock()
+        self._authorized_job_ids = authorized_job_ids
+        self._physical_futures: set[Future] = set()
+        self._drain_task: asyncio.Task[None] | None = None
+        self._shutdown_error: BaseException | None = None
+        self._executor = _TrackedExecutor(
+            self._track,
             thread_name_prefix="backtest-job-worker",
         )
-        self._repository_executor = ThreadPoolExecutor(
-            max_workers=1,
+        self._repository_executor = _TrackedExecutor(
+            self._track,
             thread_name_prefix="backtest-job-store",
         )
         self._task: asyncio.Task[None] | None = None
@@ -129,6 +145,40 @@ class BacktestJobCoordinator:
     @property
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
+
+    @property
+    def authorized_job_ids(self) -> frozenset[str]:
+        with self._authorization_lock:
+            return self._authorized_job_ids or frozenset()
+
+    @property
+    def physically_drained(self) -> bool:
+        with self._authorization_lock:
+            return not self._physical_futures
+
+    @property
+    def accepting(self) -> bool:
+        return not self._stopping and not self._closed
+
+    def authorize_jobs(self, job_ids: frozenset[str]) -> None:
+        """Thread-safe current-session authority; readiness grants no job IDs."""
+        if not isinstance(job_ids, frozenset) or len(job_ids) > 100:
+            raise ValueError("explicit authorization requires at most 100 immutable job IDs")
+        with self._authorization_lock:
+            if self._stopping or self._closed:
+                raise RuntimeError("backtest coordinator is stopping")
+            if self._authorized_job_ids is not None:
+                self._authorized_job_ids |= job_ids
+
+    def _track(self, future: Future) -> Future:
+        with self._authorization_lock:
+            self._physical_futures.add(future)
+        future.add_done_callback(self._physical_finished)
+        return future
+
+    def _physical_finished(self, future: Future) -> None:
+        with self._authorization_lock:
+            self._physical_futures.discard(future)
 
     def raise_if_failed(self) -> None:
         """Fail closed once the owned background task terminates unexpectedly."""
@@ -179,47 +229,51 @@ class BacktestJobCoordinator:
             self._wake_event.set()
         if self._active_cancellation is not None:
             self._active_cancellation.cancel()
-        task = self._task
-        timeout_error: TimeoutError | None = None
-        task_error: BaseException | None = None
+        if self._drain_task is None:
+            self._drain_task = asyncio.create_task(self._drain_and_close())
         try:
-            if task is not None:
-                try:
-                    await asyncio.wait_for(
-                        asyncio.shield(task),
-                        timeout=self._shutdown_timeout_seconds,
-                    )
-                except TimeoutError as error:
-                    timeout_error = error
-                    task.cancel()
-                    await asyncio.gather(task, return_exceptions=True)
-                except BaseException as error:
-                    task_error = error
-        finally:
-            self._executor.shutdown(
-                wait=timeout_error is None,
-                cancel_futures=True,
+            await asyncio.wait_for(
+                asyncio.shield(self._drain_task), self._shutdown_timeout_seconds,
             )
-            self._repository_executor.shutdown(
-                wait=timeout_error is None,
-                cancel_futures=True,
-            )
-            self._closed = True
-        if timeout_error is not None:
+        except TimeoutError as error:
             raise RuntimeError(
                 "backtest coordinator operation violated its shutdown safe boundary"
-            ) from timeout_error
-        if task_error is not None:
-            raise task_error
+            ) from error
+        if self._shutdown_error is not None:
+            raise self._shutdown_error
+
+    async def _drain_and_close(self) -> None:
+        if self._task is not None:
+            try:
+                await asyncio.shield(self._task)
+            except BaseException as error:
+                self._shutdown_error = error
+        while not self.physically_drained:
+            with self._authorization_lock:
+                pending = tuple(self._physical_futures)
+            await asyncio.gather(
+                *(asyncio.shield(asyncio.wrap_future(future)) for future in pending),
+                return_exceptions=True,
+            )
+        self._executor.shutdown(wait=True, cancel_futures=True)
+        self._repository_executor.shutdown(wait=True, cancel_futures=True)
+        self._closed = True
 
     stop = shutdown
 
     async def _run(self) -> None:
         try:
             while not self._stopping:
-                claim = await self._repository_call(self._repository.recover_expired)
+                with self._authorization_lock:
+                    authorized = self._authorized_job_ids
+                recovery = self._repository.recover_expired
+                next_claim = self._repository.claim_next
+                if authorized is not None:
+                    recovery = partial(recovery, authorized_job_ids=authorized)
+                    next_claim = partial(next_claim, authorized_job_ids=authorized)
+                claim = await self._repository_call(recovery)
                 if claim is None:
-                    claim = await self._repository_call(self._repository.claim_next)
+                    claim = await self._repository_call(next_claim)
                 if claim is None:
                     if self._wake_event is None:  # pragma: no cover - start owns initialization
                         raise RuntimeError("coordinator wake event is unavailable")
@@ -232,6 +286,9 @@ class BacktestJobCoordinator:
                         pass
                     continue
                 await self._execute_claim(claim)
+                with self._authorization_lock:
+                    if self._authorized_job_ids is not None:
+                        self._authorized_job_ids -= {claim.job_id}
         except asyncio.CancelledError:
             if self._active_cancellation is not None:
                 self._active_cancellation.cancel()
@@ -258,8 +315,7 @@ class BacktestJobCoordinator:
                 total_units=progress.total_units,
             )
 
-        loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(
+        future = asyncio.get_running_loop().run_in_executor(
             self._executor,
             partial(
                 self._operations.execute,
@@ -292,11 +348,11 @@ class BacktestJobCoordinator:
                 if not self._stopping and self._failure is None:
                     self._failure = coordination_error
                 token.cancel()
-                await asyncio.gather(future, return_exceptions=True)
+                await asyncio.gather(asyncio.shield(future), return_exceptions=True)
                 raise
 
             try:
-                result = await future
+                result = await asyncio.shield(future)
             except BacktestOperationCancelled:
                 await self._acknowledge_external_cancellation(claim, claim_token)
                 return
@@ -347,11 +403,10 @@ class BacktestJobCoordinator:
         /,
         *args: object,
     ) -> ResultT:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            self._repository_executor,
-            partial(function, *args),
+        future = asyncio.get_running_loop().run_in_executor(
+            self._repository_executor, partial(function, *args),
         )
+        return await asyncio.shield(future)
 
 
 def _job_phase(progress: BacktestProgress) -> BacktestJobPhase:

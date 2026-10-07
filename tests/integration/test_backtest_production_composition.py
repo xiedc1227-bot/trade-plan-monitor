@@ -7,6 +7,7 @@ import json
 import os
 import sqlite3
 from datetime import date
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from threading import Event, Thread
@@ -30,6 +31,7 @@ from trade_plan_monitor.backtest.cursor_key_security import (
 from trade_plan_monitor.backtest.dataset import DatasetManifest, DatasetScope
 from trade_plan_monitor.backtest.jobs import BacktestJobCoordinator
 from trade_plan_monitor.backtest.results import BacktestResultStore
+from trade_plan_monitor.backtest.service_lifecycle import BacktestServiceUnavailable
 from trade_plan_monitor.domain.plan_codec import (
     dump_plan_json,
     load_plan_json,
@@ -245,9 +247,12 @@ def test_composite_lifespan_installs_services_and_unwinds_in_reverse_order() -> 
         backtest_lifecycle_factory=lambda: composition,
     )
 
-    with TestClient(app):
-        assert app.state.backtest_read_service is read_service
-        assert app.state.backtest_operation_service is operation_service
+    with TestClient(app) as client:
+        assert events == ["runtime.start"]
+        assert not hasattr(app.state, "backtest_read_service")
+        prepared = client.portal.call(partial(app.state.backtest_lifecycle.ensure, execution=True))
+        assert prepared.read_service is read_service
+        assert prepared.operation_service is operation_service
         assert events == ["runtime.start", "backtest.start"]
 
     assert events == [
@@ -272,8 +277,12 @@ def test_composite_lifespan_cleans_both_components_after_backtest_start_failure(
         backtest_lifecycle_factory=lambda: composition,
     )
 
-    with pytest.raises(RuntimeError, match="backtest start failed"), TestClient(app):
-        pass
+    with TestClient(app) as client:
+        assert events == ["runtime.start"]
+        with pytest.raises(BacktestServiceUnavailable):
+            client.portal.call(partial(app.state.backtest_lifecycle.ensure, execution=True))
+        assert events == ["runtime.start", "backtest.start"]
+        assert client.get("/openapi.json").status_code == 200
 
     assert events == [
         "runtime.start",
@@ -306,8 +315,9 @@ def test_composite_lifespan_preserves_direct_services_and_original_validation_er
         runtime_factory=lambda: _Runtime(events),
         backtest_lifecycle_factory=_InvalidBacktestLifecycle,
     )
-    with pytest.raises(TypeError, match="must expose start and stop"), TestClient(invalid_app):
-        pass
+    with TestClient(invalid_app) as client:
+        assert client.get("/api/v1/backtest-datasets").status_code == 503
+        assert events[-1] == "runtime.start"
     assert events[-2:] == ["runtime.start", "runtime.stop"]
 
 
@@ -352,13 +362,18 @@ def test_real_production_composition_starts_and_stops_one_coordinator(
         backtest_lifecycle_factory=factory,
     )
 
-    with TestClient(app):
+    with TestClient(app) as client:
+        assert calls == {"start": 0, "shutdown": 0}
+        assert client.get("/api/v1/backtest-datasets").status_code == 200
         assert market_database.is_file()
         assert results_database.is_file()
         assert cursor_key_path.is_file()
         for database in (market_database, results_database):
             assert not Path(f"{database}-wal").exists()
             assert not Path(f"{database}-shm").exists()
+        assert calls == {"start": 0, "shutdown": 0}
+        client.portal.call(partial(app.state.backtest_lifecycle.ensure, execution=True))
+        assert calls == {"start": 1, "shutdown": 0}
 
     assert calls == {"start": 1, "shutdown": 1}
 
