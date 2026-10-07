@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta
+from threading import local
+from time import monotonic, sleep
 from typing import Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,6 +23,7 @@ from trade_plan_monitor.backtest.dataset import DatasetScope, exchange_for_symbo
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProvider
 from trade_plan_monitor.runtime.request_control import (
+    LIVE_TUSHARE_MIN_INTERVAL,
     RequestPriority,
     TushareOperation,
 )
@@ -100,6 +103,7 @@ class BacktestSyncService:
         self._store = store
         self._controller = request_controller
         self._today = today
+        self._last_request_started_at: float | None = None
 
     async def sync(
         self,
@@ -357,7 +361,17 @@ class BacktestSyncService:
         check_cancelled(cancellation_token, phase)
 
         def guarded_call() -> _T:
+            # The existing single worker serializes sync. Pace inside its callback
+            # so controller admission delays (or existing retries) cannot bunch starts.
+            if self._last_request_started_at is not None:
+                deadline = (
+                    self._last_request_started_at + LIVE_TUSHARE_MIN_INTERVAL.total_seconds()
+                )
+                while (remaining := deadline - monotonic()) > 0:
+                    check_cancelled(cancellation_token, phase)
+                    sleep(min(remaining, 0.05))
             check_cancelled(cancellation_token, phase)
+            self._last_request_started_at = monotonic()
             return call()
 
         return await self._controller.execute(
@@ -370,6 +384,8 @@ class BacktestSyncService:
 
 class BlockingBacktestSyncCore:
     """Blocking worker facade that owns no executor or request-controller thread."""
+
+    _worker_pacing = local()
 
     def __init__(
         self,
@@ -401,14 +417,22 @@ class BlockingBacktestSyncCore:
             pass
         else:
             raise RuntimeError("blocking historical sync cannot run in an event loop")
-        return asyncio.run(
-            self._service.sync(
-                scope,
-                refresh=refresh,
-                cancellation_token=cancellation_token,
-                progress_callback=progress_callback,
-            )
+        # Production creates a fresh core for each job on the same owned worker.
+        # Carry only its request-start time across jobs, including failed/cancelled syncs.
+        self._service._last_request_started_at = getattr(
+            self._worker_pacing, "last_request_started_at", None,
         )
+        try:
+            return asyncio.run(
+                self._service.sync(
+                    scope,
+                    refresh=refresh,
+                    cancellation_token=cancellation_token,
+                    progress_callback=progress_callback,
+                )
+            )
+        finally:
+            self._worker_pacing.last_request_started_at = self._service._last_request_started_at
 
 
 BacktestBlockingSyncService = BlockingBacktestSyncCore
