@@ -251,12 +251,16 @@ class ResearchSession:
     def apply_operation(self, operation, *, ended):
         from types import SimpleNamespace
 
-        from trade_plan_monitor.web.daily_service import _simulate, mutate_daily
+        from trade_plan_monitor.state.simulation import (
+            SimulationAuthorityError,
+            SimulationCommand,
+            simulate_inventory,
+        )
+        from trade_plan_monitor.web.daily_service import mutate_daily
         from trade_plan_monitor.web.errors import ApiError
         from trade_plan_monitor.web.idempotency import operation_hash
         from trade_plan_monitor.web.routers.daily_plans import (
             DailyRiskReassessmentCommand,
-            DailySimulationCommand,
         )
         from trade_plan_monitor.web.schemas import MutationContext
 
@@ -273,7 +277,7 @@ class ResearchSession:
             if operation.kind == "SIMULATE":
                 if ended and cause["kind"] == "SIGNAL":
                     raise ValueError("ORDINARY_AUTHORITY_ENDED")
-                command = DailySimulationCommand(
+                command = SimulationCommand(
                     plan_version_id=UUID(self.details.id),
                     cause_id=cause["id"],
                     expected_cause_revision=cause["revision"],
@@ -292,7 +296,9 @@ class ResearchSession:
                     )
                 )
                 with self.work() as work:
-                    receipt = _simulate(work, command, self.now, identity_factory=lambda: identity)
+                    receipt = simulate_inventory(
+                        work, command, self.now, identity_factory=lambda: identity,
+                    )
                     work.commit()
             else:
                 branch = next(
@@ -323,6 +329,8 @@ class ResearchSession:
                     context=context,
                     request_hash=operation_hash("REASSESSMENT", command),
                 )
+        except SimulationAuthorityError as error:
+            blockers = [error.reason]
         except ApiError as error:
             blockers = [detail.code for detail in error.details]
         except ValueError as error:
