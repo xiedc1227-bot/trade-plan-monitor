@@ -20,6 +20,12 @@ from trade_plan_monitor.backtest.preparation_models import (
     PreparationSource,
     PreparationWorkClaim,
 )
+from trade_plan_monitor.backtest.preparation_review import (
+    FrozenPreparedPlan,
+    PreparationReviewCommand,
+    PreparationSemanticError,
+    frozen_preparation,
+)
 from trade_plan_monitor.backtest.preparation_store import PreparationConflictError, PreparationStore
 from trade_plan_monitor.backtest.preparation_worker import (
     PreparationCallOutcome,
@@ -59,6 +65,59 @@ class PreparationService:
 
     async def get(self, preparation_id: str) -> PreparationRecord | None:
         return await self._metadata.run(self._store.get, preparation_id)
+
+    async def get_frozen(self, preparation_id: str) -> FrozenPreparedPlan:
+        return await self._metadata.run(self._read_frozen, preparation_id)
+
+    @staticmethod
+    def _frozen(record):
+        if record is None:
+            raise PreparationConflictError("PREPARATION_NOT_FOUND")
+        try:
+            return frozen_preparation(record)
+        except PreparationSemanticError as error:
+            raise PreparationConflictError(error.code) from None
+
+    def _read_frozen(self, preparation_id):
+        return self._frozen(self._store.get(preparation_id))
+
+    async def review_and_freeze(
+        self, preparation_id: str, *, command: PreparationReviewCommand, idempotency_key: str,
+    ) -> FrozenPreparedPlan:
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        if not isinstance(command, PreparationReviewCommand):
+            raise TypeError("command must be PreparationReviewCommand")
+        command = PreparationReviewCommand.model_validate(command.model_dump(mode="python"))
+        return await self._metadata.run(self._review, preparation_id, command, idempotency_key)
+
+    def _review(self, identity, command, key):
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        intent = canonical_json({
+            "domain": "single-source-review-v1", "preparation_id": identity,
+            "command_hash": sha256(canonical_json(command).encode()).hexdigest(),
+        })
+        admission_key = "prep-review-" + sha256(canonical_json({
+            "preparation_id": identity, "idempotency_key": key,
+        }).encode()).hexdigest()
+        replay = self._store.replay_review(identity, command=command, idempotency_key=key)
+        if replay is not None:
+            frozen = self._frozen(replay)
+            # The durable receipt proves completion if a crash preceded gate release.
+            reservation = self._jobs.get_run_submission_reservation(intent, admission_key)
+            if reservation is not None:
+                self._jobs.release_run_submission(reservation)
+            return frozen
+        reservation = self._jobs.claim_run_submission(intent, admission_key)
+        if not isinstance(reservation, BacktestRunSubmissionReservation):
+            raise JobAdmissionError("BACKTEST_BUSY")
+        try:
+            return self._frozen(self._store.review_and_freeze(
+                identity, command=command, idempotency_key=key,
+            ))
+        finally:
+            self._jobs.release_run_submission(reservation)
 
     async def submit_extraction(
         self,

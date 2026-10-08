@@ -25,6 +25,11 @@ from trade_plan_monitor.backtest.preparation_models import (
     PreparationWorkClaim,
     SinglePlanPreparationInput,
 )
+from trade_plan_monitor.backtest.preparation_review import (
+    PreparationReviewCommand,
+    PreparationSemanticError,
+    prepare_frozen_plan,
+)
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 from trade_plan_monitor.backtest.time import SHANGHAI
 
@@ -506,3 +511,56 @@ class PreparationStore:
             "candidate_revision": expected_candidate_revision, "candidate_hash": candidate_hash,
             "evidence_hash": evidence_hash, "confirmed": confirmed,
         }, idempotency_key, change)
+
+    def review_and_freeze(
+        self, preparation_id: str, *, command: PreparationReviewCommand, idempotency_key: str,
+    ) -> PreparationRecord:
+        """One atomic human mutation; legacy review declarations do not freeze semantic input."""
+        if not isinstance(command, PreparationReviewCommand):
+            raise TypeError("command must be PreparationReviewCommand")
+        command = PreparationReviewCommand.model_validate(command.model_dump(mode="python"))
+
+        def change(previous, now):
+            record = self._require_revision(previous, command.expected_revision)
+            try:
+                manifest = prepare_frozen_plan(record, command, now)
+            except PreparationSemanticError as error:
+                raise PreparationConflictError(error.code) from None
+            except ValueError:
+                raise PreparationConflictError("REVIEW_SEMANTIC_CONFLICT") from None
+            candidate = PreparationCandidate(
+                payload_json=canonical_json(manifest), validation="VALID", issues=(),
+                evidence_hash=manifest.version.evidence_hash,
+                source_revision=record.source_revision, source_hash=record.source.binding_hash,
+            )
+            declaration = PreparationReview(
+                source_revision=record.source_revision,
+                candidate_revision=record.candidate_revision + 1,
+                candidate_hash=candidate.candidate_hash, evidence_hash=candidate.evidence_hash,
+                confirmed=command.confirmed, reviewed_at=now,
+            )
+            return self._updated(
+                record, now, status="REVIEWED", candidate=candidate, review=declaration,
+                candidate_revision=record.candidate_revision + 1,
+                review_revision=record.review_revision + 1,
+            )
+
+        return self._operation(
+            "REVIEW_AND_FREEZE", preparation_id, command, idempotency_key, change,
+        )
+
+    def replay_review(self, preparation_id, *, command, idempotency_key):
+        """Read the immutable original review receipt after later edits or restarts."""
+        preparation_id = _IDENTIFIER.validate_python(preparation_id)
+        idempotency_key = _IDENTIFIER.validate_python(idempotency_key)
+        expected = _request_hash("REVIEW_AND_FREEZE", preparation_id, command)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT request_hash, response_json FROM backtest_preparation_idempotency "
+                "WHERE idempotency_key = ?", (idempotency_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row[0] != expected:
+            raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
+        return PreparationRecord.model_validate_json(row[1])
