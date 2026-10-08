@@ -59,6 +59,8 @@ from trade_plan_monitor.backtest.jobs.repository import (
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.pagination import HmacCursorSigner, InvalidCursorError
+from trade_plan_monitor.backtest.preparation_service import PreparationService
+from trade_plan_monitor.backtest.preparation_store import PreparationStore
 from trade_plan_monitor.backtest.reference_projection import (
     project_decision_reference_market,
 )
@@ -83,7 +85,10 @@ from trade_plan_monitor.backtest.run_input import (
     BacktestInitialLotInput,
     BacktestRunInput,
 )
-from trade_plan_monitor.backtest.service_lifecycle import BacktestServiceUnavailable
+from trade_plan_monitor.backtest.service_lifecycle import (
+    BacktestServiceUnavailable,
+    LazyBacktestLifecycle,
+)
 from trade_plan_monitor.backtest.thread_lifecycle import BacktestMetadataThread
 from trade_plan_monitor.backtest.time import (
     SHANGHAI,
@@ -165,6 +170,7 @@ from trade_plan_monitor.web.schemas import (
 DEFAULT_BACKTEST_MARKET_DATABASE = Path("data/backtest-market.sqlite3")
 DEFAULT_BACKTEST_RESULTS_DATABASE = Path("data/backtest-results.sqlite3")
 DEFAULT_BACKTEST_CURSOR_KEY = Path("data/backtest-cursor.key")
+DEFAULT_BACKTEST_PREPARATION_DATABASE = Path("data/backtest-preparation.sqlite3")
 _SQLITE_BUSY_TIMEOUT_MS = 2_000
 _SHUTDOWN_TIMEOUT_SECONDS = 5.0
 _RETRY_AFTER_SECONDS = 2
@@ -246,6 +252,27 @@ class _DeferredCoordinator:
             self._instance.raise_if_failed()
 
 
+class _PreparationLifecycle:
+    """Acquire only the existing tagged preparation store; AI remains unbound on reads."""
+
+    def __init__(self, path: Path, repository: BacktestJobRepository):
+        store = PreparationStore(path, busy_timeout_ms=_SQLITE_BUSY_TIMEOUT_MS)
+        self.read_service = self.operation_service = PreparationService(store, repository)
+
+    @property
+    def outstanding_work(self):
+        return self.read_service.outstanding_work
+
+    async def start(self):
+        pass  # PreparationService admits its own calls; there is no job coordinator here.
+
+    async def stop(self):
+        try:
+            await self.read_service.stop()
+        except BacktestServiceUnavailable:
+            await self.read_service.wait_for_drain()
+
+
 class BacktestComposition:
     """Own one service façade and exactly one coordinator lifecycle."""
 
@@ -255,6 +282,7 @@ class BacktestComposition:
         read_service: object,
         operation_service: object,
         coordinator: Coordinator,
+        preparation_factory: Callable[[], _PreparationLifecycle] | None = None,
     ) -> None:
         if not callable(getattr(coordinator, "start", None)) or not callable(
             getattr(coordinator, "shutdown", None)
@@ -265,6 +293,9 @@ class BacktestComposition:
         self._coordinator = coordinator
         self._started = False
         self._stopped = False
+        self._preparations = (
+            LazyBacktestLifecycle(preparation_factory) if preparation_factory is not None else None
+        )
 
     @property
     def read_service(self) -> object:
@@ -283,7 +314,14 @@ class BacktestComposition:
         return (
             int(not getattr(self._coordinator, "physically_drained", True))
             + getattr(self._read_service, "outstanding_work", 0)
+            + (self._preparations.snapshot.outstanding_work if self._preparations else 0)
         )
+
+    async def ensure_preparations(self) -> PreparationService:
+        if self._stopped or self._preparations is None:
+            raise BacktestServiceUnavailable()
+        capability = await self._preparations.ensure()
+        return capability.read_service
 
     async def resume_jobs(self, job_ids: frozenset[str]) -> None:
         await self._operation_service.resume_jobs(job_ids)
@@ -299,6 +337,12 @@ class BacktestComposition:
     async def stop(self) -> None:
         if self._stopped:
             return
+        if self._preparations is not None:
+            try:
+                await self._preparations.stop()
+            except BacktestServiceUnavailable:
+                # The outer lazy owner observes timeout; cleanup keeps physical ownership.
+                await self._preparations.wait_for_drain()
         await self._coordinator.shutdown()
         stop_metadata = getattr(self._read_service, "stop_metadata", None)
         if stop_metadata is not None:
@@ -314,6 +358,7 @@ def create_backtest_composition_factory(
     market_database: Path = DEFAULT_BACKTEST_MARKET_DATABASE,
     results_database: Path = DEFAULT_BACKTEST_RESULTS_DATABASE,
     cursor_key_path: Path = DEFAULT_BACKTEST_CURSOR_KEY,
+    preparation_database: Path = DEFAULT_BACKTEST_PREPARATION_DATABASE,
 ) -> Callable[[], BacktestComposition]:
     """Return an inert closure; stores, key material, and threads stay unopened."""
 
@@ -322,6 +367,7 @@ def create_backtest_composition_factory(
         ("market_database", market_database),
         ("results_database", results_database),
         ("cursor_key_path", cursor_key_path),
+        ("preparation_database", preparation_database),
     ):
         if not isinstance(value, Path):
             raise TypeError(f"{name} must be a Path")
@@ -337,6 +383,7 @@ def create_backtest_composition_factory(
             market_database=market_database,
             results_database=results_database,
             cursor_key_path=cursor_key_path,
+            preparation_database=preparation_database,
         )
 
     return factory
@@ -349,6 +396,7 @@ def create_backtest_composition(
     market_database: Path = DEFAULT_BACKTEST_MARKET_DATABASE,
     results_database: Path = DEFAULT_BACKTEST_RESULTS_DATABASE,
     cursor_key_path: Path = DEFAULT_BACKTEST_CURSOR_KEY,
+    preparation_database: Path = DEFAULT_BACKTEST_PREPARATION_DATABASE,
 ) -> BacktestComposition:
     """Prepare local metadata only after explicit use; execution stays dormant."""
 
@@ -397,6 +445,7 @@ def create_backtest_composition(
         read_service=service,
         operation_service=service,
         coordinator=coordinator,
+        preparation_factory=lambda: _PreparationLifecycle(preparation_database, repository),
     )
 
 

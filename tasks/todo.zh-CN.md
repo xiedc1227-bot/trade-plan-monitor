@@ -137,8 +137,8 @@
 - **依赖:** `ML-T10`, `ML-T11`, `ML-T33`
 - **验收:** 将恰好单原文的创建/读取/编辑/提取/取消/审核接入按需能力归属及已取得资源关闭。HTTP 测试证明拒绝第二原文、修订、幂等、有界投影和假 AI 进度，不变更在线计划。守住就绪门槛，准备库失败仅降级回测。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
-- **主要文件:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_plan_preparation_api.py`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A10, ML-A16, ML-A18.
+- **主要文件:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_api.py`
+- **范围:** 两个 M 切片，每个 4 个主要文件（含共用测试共 7 个不同文件）；**追溯:** ML-A10, ML-A16, ML-A18。先补齐创建准入/收据及能力归属，再挂载有界 HTTP 命令。模式发布暂存至 ML-T13，保留已批准契约/摘要。
 
 ### ML-C04. 检查点
 

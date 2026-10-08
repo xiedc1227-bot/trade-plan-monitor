@@ -199,6 +199,21 @@ class PreparationStore:
             raise PreparationConflictError("REVISION_CONFLICT")
         return record
 
+    def replay_create(self, command, *, idempotency_key):
+        """Read the original create receipt without changing the current source."""
+        key = _IDENTIFIER.validate_python(idempotency_key)
+        expected = _request_hash("CREATE", command.preparation_id, command)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT request_hash, response_json FROM backtest_preparation_idempotency "
+                "WHERE idempotency_key = ?", (key,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row[0] != expected:
+            raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
+        return PreparationRecord.model_validate_json(row[1])
+
     @staticmethod
     def _updated(record, now, **changes):
         return record.model_copy(update={

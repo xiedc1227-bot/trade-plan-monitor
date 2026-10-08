@@ -137,8 +137,8 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Dependencies:** `ML-T10`, `ML-T11`, `ML-T33`
 - **Acceptance:** Connect exactly-one-source create/read/edit/extract/cancel/review operations to on-demand capability ownership and acquired-resource shutdown. HTTP tests prove second-source rejection, revisions, idempotency, bounded projections and fake-AI progress without live-plan mutations. Guard readiness; preparation-store failure degrades backtest only.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
-- **Primary files:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `tests/integration/test_plan_preparation_api.py`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A10, ML-A16, ML-A18.
+- **Primary files:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_api.py`
+- **Scope:** Two M increments, 4 primary files each (7 unique including shared tests); **Trace:** ML-A10, ML-A16, ML-A18. First close create admission/receipt and capability ownership, then mount bounded HTTP commands. Stage schema publication until ML-T13; preserve approved contracts/digests.
 
 ### ML-C04. Checkpoint
 

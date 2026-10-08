@@ -1,6 +1,7 @@
 """Private single-source preparation orchestration using existing global admission."""
 
 import asyncio
+from collections.abc import Callable
 from functools import partial
 from hashlib import sha256
 from uuid import uuid4
@@ -19,6 +20,7 @@ from trade_plan_monitor.backtest.preparation_models import (
     PreparationRecord,
     PreparationSource,
     PreparationWorkClaim,
+    SinglePlanPreparationInput,
 )
 from trade_plan_monitor.backtest.preparation_review import (
     FrozenPreparedPlan,
@@ -45,11 +47,11 @@ class PreparationService:
         self,
         store: PreparationStore,
         jobs: BacktestJobRepository,
-        extractor: PreparationExtractor,
+        extractor: PreparationExtractor | None = None,
         *,
         config: BacktestServiceConfig | None = None,
     ) -> None:
-        if not isinstance(extractor, PreparationExtractor):
+        if extractor is not None and not isinstance(extractor, PreparationExtractor):
             raise TypeError("extractor must be PreparationExtractor")
         self._store, self._jobs, self._extractor = store, jobs, extractor
         self._owner_id = str(uuid4())
@@ -62,6 +64,44 @@ class PreparationService:
         self._cleanup: asyncio.Task[None] | None = None
         self._config = config or BacktestServiceConfig()
         self._closed = False
+
+    @property
+    def outstanding_work(self) -> int:
+        return (self._metadata.outstanding_work + self._owner.outstanding_work
+                + sum(not task.done() for task in self._tasks)
+                + int(self._worker is not None and not self._worker.done()))
+
+    async def create(
+        self, command: SinglePlanPreparationInput, *, idempotency_key: str,
+    ) -> PreparationRecord:
+        if not isinstance(command, SinglePlanPreparationInput):
+            raise TypeError("command must be SinglePlanPreparationInput")
+        command = SinglePlanPreparationInput.model_validate(command.model_dump(mode="python"))
+        return await self._metadata.run(self._create, command, idempotency_key)
+
+    def _create(self, command, key):
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        intent = canonical_json({
+            "domain": "single-source-create-v1", "preparation_id": command.preparation_id,
+            "command_hash": sha256(canonical_json(command).encode()).hexdigest(),
+        })
+        admission_key = "prep-create-" + sha256(canonical_json({
+            "preparation_id": command.preparation_id, "idempotency_key": key,
+        }).encode()).hexdigest()
+        replay = self._store.replay_create(command, idempotency_key=key)
+        if replay is not None:
+            reservation = self._jobs.get_run_submission_reservation(intent, admission_key)
+            if reservation is not None:
+                self._jobs.release_run_submission(reservation)
+            return replay
+        reservation = self._jobs.claim_run_submission(intent, admission_key)
+        if not isinstance(reservation, BacktestRunSubmissionReservation):
+            raise JobAdmissionError("BACKTEST_BUSY")
+        try:
+            return self._store.create(command, idempotency_key=key)
+        finally:
+            self._jobs.release_run_submission(reservation)
 
     async def get(self, preparation_id: str) -> PreparationRecord | None:
         return await self._metadata.run(self._store.get, preparation_id)
@@ -125,17 +165,20 @@ class PreparationService:
         *,
         expected_revision: int,
         idempotency_key: str,
+        extractor_factory: Callable[[], PreparationExtractor] | None = None,
     ) -> PreparationRecord:
         if self._closed:
             raise BacktestServiceUnavailable()
-        task = asyncio.create_task(self._submit(preparation_id, expected_revision, idempotency_key))
+        task = asyncio.create_task(self._submit(
+            preparation_id, expected_revision, idempotency_key, extractor_factory,
+        ))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return await asyncio.shield(task)
 
-    async def _submit(self, preparation_id, expected_revision, key):
+    async def _submit(self, preparation_id, expected_revision, key, extractor_factory=None):
         record, dispatch = await self._metadata.run(
-            self._admit, preparation_id, expected_revision, key
+            self._admit, preparation_id, expected_revision, key, extractor_factory,
         )
         if dispatch:
             self._preparation_id = preparation_id
@@ -143,7 +186,7 @@ class PreparationService:
             self._worker = asyncio.create_task(self._watch(record, self._token))
         return record
 
-    def _admit(self, preparation_id, expected_revision, key):
+    def _admit(self, preparation_id, expected_revision, key, extractor_factory=None):
         if self._closed:
             raise BacktestServiceUnavailable()
         replay = self._store.replay_start_attempt(
@@ -154,6 +197,11 @@ class PreparationService:
         if replay is not None:
             return replay, False
         record = self._store._require_revision(self._store.get(preparation_id), expected_revision)
+        extractor = extractor_factory() if extractor_factory is not None else self._extractor
+        if extractor is None:
+            raise BacktestServiceUnavailable()
+        if not isinstance(extractor, PreparationExtractor):
+            raise TypeError("extractor factory must return PreparationExtractor")
         intent = canonical_json(
             {
                 "domain": "single-source-preparation-v1",
@@ -198,6 +246,7 @@ class PreparationService:
                 idempotency_key=key,
                 work_claim=claim,
             )
+            self._extractor = extractor
             return started, started.work_claim == claim
         except Exception:
             if created:
