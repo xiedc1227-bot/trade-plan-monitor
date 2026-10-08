@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18–MV24：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12 与 ML-C01/ML-C02/ML-C03/ML-C04 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV23 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/生成契约/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV25：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13 与 ML-C01/ML-C02/ML-C03/ML-C04 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV24 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -473,3 +473,25 @@ ML-T10 已按计划的两个切片完成。可选归属/进度字段扩展既有
 | 文档/工作区 | 双语标题/ID/字面契约、原已完成任务尾部、MV01–MV23 历史及 `git diff --check` | PASS；完成 15 项、待完成活动任务 22 项，37 活动 / 保留 39 个 ID，13 个检查点。 |
 
 ML-T12 与 ML-C04 完成；下一项为 ML-T13。路由已挂载，模式发布仍以 `include_in_schema=False` 暂存；ML-T13 发布该标志并生成契约供具体审阅，不静默批准摘要。自审覆盖边界、类型化投影、全局准入、原回执、精确修订、晚到结果保护、实际归属、重启及明确人工权限。既有 Starlette/httpx 弃用提示保持。未发生付费/供应商/行情调用、真实通知、生产计划变更或部署。UI/运行/结果集成及整体负载验收仍待完成。
+
+## MV25. 发布准备契约并保留兼容性
+
+2026-10-08 继续 ML-T13 前，ML-T12 已推送至 GitHub main `0d5b603`。传输切片提交为 `abf20db`。范围在实施前扩展为三个切片、八个主要文件：`src/trade_plan_monitor/web/preparation_schemas.py`、`src/trade_plan_monitor/web/routers/backtest_preparations.py`、`scripts/generate_frontend_types.py`、`openapi.json`、`openapi.runtime-status.json`、`web/src/api/generated.ts`、`web/src/api/generated-runtime-status.ts` 和 `tests/integration/test_plan_preparation_contract.py`。发布和生成产物共同提交为 `fdf250d`。独立 runtime/overview-retry 修改及盛新文件继续排除。
+
+已挂载路由发布七项单原文操作，保留现有错误、变更键和修订要求。取消记录实际 200/202 结果；成功响应记录 no-store 及有界 Location，受理工作记录 Retry-After 2。公开候选为 EXTRACTION/FROZEN/UNAVAILABLE 可判别联合，各分支载荷互斥且必填。公开内嵌审核、尝试及冻结修订共用安全整数上限；成功字段名称/null 值不变。两种 profile 均检查单原文、最多三次尝试、明确确认恢复、未知/零现金区分和私有状态排除。TypeScript 示例编译验证穷尽候选收窄及有效命令，并拒绝 false 恢复确认和 null 冻结清单，没有使用抑制指令。
+
+发布审核请求后，Pydantic 起初将既有验证/序列化定义拆为含 -Input/-Output 的名称，现有生成器因此拒绝。三个回归用例首先失败。现有生成器现规范化组件名称及全部引用：输出保留原名称，独立输入追加 Input；重名明确失败。验证/序列化结构仍独立。此问题对应官方记录的 [Pydantic 模式行为](https://pydantic.dev/docs/validation/latest/api/pydantic/config/?query=alias_generator)。相对 `0d5b603` 的离线比较确认，全部 52 个旧路径项及 compatibility-v1 的 287 个 / canonical-v2 的 300 个旧模式语义完全相同；每个旧 TypeScript 别名及操作块字节一致。每种 profile 新增七条路径和 71 个模式。全部引用可解析，进度/冻结闭包不含持久化私有记录、归属/准入令牌、不透明载荷 JSON 或服务商诊断。
+
+| 检查 | 执行命令/证据 | 结果 |
+|---|---|---|
+| 本项门禁 | `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_contract.py -q --tb=short --basetemp=.pytest_cache/ml-t13-type-green` | 20 项通过，8.05 秒；包括两种 profile 及实际 TypeScript 编译。 |
+| 最终单元/契约及相关集成 | 单元/契约套件和 MV24 集成选择，另加准备契约及前端契约晋级测试；`-q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t13-final-regression` | 3509 项通过、2 项批准失败、1 项既有跳过、4 项 live 未选择，172.42 秒；包括全部 53 项准备 HTTP 用例。 |
+| 既有前端 | `npm --prefix web run test -- --run`; `npm --prefix web run type-check`; `npm --prefix web run build` | 807 项测试 / 57 个文件通过，12.18 秒；类型检查和构建 PASS。 |
+| 代码质量 | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe -m ruff format --check scripts/generate_frontend_types.py src/trade_plan_monitor/web/preparation_schemas.py src/trade_plan_monitor/web/routers/backtest_preparations.py tests/integration/test_plan_preparation_contract.py` | 恢复一致源码格式后 PASS。 |
+| 生成产物 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | canonical monitor v2 和 compatibility monitor v1 均 PASS。 |
+| 变异审阅 | 临时允许 FROZEN 清单为 null，运行 frozen-missing 候选拒绝用例，然后恢复精确原始字节。 | 1 项预期失败，19 项未选择；恢复后最终回归通过此用例。 |
+| 文档/工作树 | 双语标题/ID/字面契约、保留已完成 todo 尾部及 MV01–MV24 历史、无关文件摘要未变、`git diff --check` | PASS；完成 16 项、待完成活动任务 21 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
+
+批准仍待 ML-T29。未改动的 `test_openapi_change_requires_bilingual_spec_approval` 因候选 v1 快照摘要未在已批准双语规格中而失败；`test_openapi_contains_only_approved_paths_and_public_error_schemas` 因七条准备路径不在 APPROVED_PATHS 中而失败。测试/断言和已批准摘要均未修改、跳过或抑制。已批准基线仍为 `8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`。候选 SHA-256，待批准：compatibility v1 `1fd4eea69dbe1827c35ca2f19a0261296be5e447f293d7a2e52c4fc8a5c9e3a4`；canonical v2 `7e5f0a6ebec6ce3cefd440af7d9619e9332e22dd081f3f667b40a7c08473a367`。
+
+ML-T13 实现及生成完成；下一项为 ML-T14，ML-C05 仍待上传/进度/审核 UI。自审覆盖兼容性、模式/名称引用、可判别分支、边界、私有状态排除和实际成功/错误行为。既有 Starlette/httpx 弃用提示仍在。测试使用临时存储及假 AI，没有付费/服务商/行情调用、生产状态修改、通知或部署。最终 API 批准及完整交付验收仍待完成。
