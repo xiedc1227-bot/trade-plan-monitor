@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18–MV21：ML-T01–ML-T05、ML-T07/ML-T08 与 ML-C01/ML-C02/ML-C03 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV20 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。语义审核/冻结、准备全局准入、数据集/工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV22：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10 与 ML-C01/ML-C02/ML-C03 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV21 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。语义审核/冻结、数据集/回放工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -410,3 +410,22 @@ ML-T05/ML-C02 已实现并验证。冻结因果帧驱动共享监控及合格本
 | 文档/工作区 | `git diff --check`；双语标题/ID/字面契约及原始已完成任务尾部 | PASS；完成 12 项、活动待完成 25 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
 
 ML-T08 与 ML-C03 完成；ML-T06/ML-T09 保持取消，下一项为 ML-T10。自审覆盖来源保真、精确计算、时序、不得推断事实、传输/解析兼容、有界持久化及明确审核分离。现有 Starlette/httpx 弃用提示保持。检查使用虚拟供应商和临时隔离存储，未进行付费请求、行情下载、真实通知、修改生产状态或部署。该私有适配器无公开准备入口，不绕过既有单个未完成任务要求；后续工作线程/API 集成必须共用该准入规则。不声称完成额外负载验收。
+
+## MV22. 单原文自有提取与显式恢复
+
+ML-T10 已按计划的两个切片完成。可选归属/进度字段扩展既有准备文档，不新增表或数据库版本，旧文档保持可读。仓库只读接口读取精确的既有全局准入 token，包括过期 token。不新增任务类型、队列、数据库、公开路由、全局 AI 预算或通用锁。
+
+新请求在发起前原子绑定一份原文/修订/哈希、代次及服务所有者。自有工作线程在外部调用前持久化 CALLING，HTTP 期间不持有 SQLite 事务。读取与原始幂等回执不发起调用。准入未结束时，RUN/SYNC/VERIFY 及其他准备修改继续被拒绝。取消/原文修正保留准入并丢弃晚到结果；实际工作线程排空后才持久化完成并释放 token。关闭超时及取消等待者仍保留工作归属，直到清理完成。历史编辑回执不能向后来代次的取消 token 发出信号。
+
+配置适配器捕获不可变设置，在自有线程/事件循环中创建、调用并关闭独立 HTTP 客户端。普通提取与回测提取共用既有容量 1。每次持久化尝试禁用传输层重试；配置的已知重试在每原文最多三次持久化尝试内完成。TIMEOUT、不确定传输失败及意外异常保留 UNKNOWN 占位，租约过期/重启后也不释放。显式恢复要求 confirmed_ended true 且本地自有工作已无未结束调用，本身不重发。重启后调用者须明确确认旧工作已结束，因为丢失的付费结果无法证明远端完成。随后新的提取请求消耗剩余尝试额度。精确代次/原文/结果绑定拒绝其他来源或陈旧输出；候选不授予审核或生产启用权限。
+
+| 检查 | 已执行命令/证据 | 结果 |
+|---|---|---|
+| 本项门禁 | `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t10-release-final` | 29 项通过；覆盖存储兼容、提交前后崩溃、两个服务竞争、晚到原文/结果防护、取消/排空、历史回执重放、过期 UNKNOWN 恢复及三次尝试额度。 |
+| 最终单元/契约及相关集成 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract tests/integration/test_plan_preparation_store.py tests/integration/test_plan_preparation_worker.py tests/integration/test_backtest_single_task.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_configured_ai_web.py -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t10-final-regression` | 3000 项通过，排除 4 项 live 测试，34.40 秒。 |
+| 代码质量 | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe -m ruff format --check src/trade_plan_monitor/backtest/preparation_service.py src/trade_plan_monitor/backtest/preparation_worker.py tests/integration/test_plan_preparation_worker.py` | PASS。 |
+| 普通契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | canonical monitor v2 与 compatibility monitor v1 均 PASS；未修改快照/类型/批准摘要。 |
+| 变异审查 | 反转历史回执代次相等条件，运行 old-edit 场景，再恢复精确原始源码字节。 | 首次变异暴露缺少另一所有者已取消当前代次的场景；补充后变异导致 1 项失败 / 1 项通过，恢复后检查通过。 |
+| 文档/工作区 | 双语 ID/标题/字面契约、原始已完成 todo 历史及 `git diff --check` | PASS；完成 13 项，待完成活动任务 24 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
+
+下一项为 ML-T11；ML-C04 需 ML-T11/ML-T12 通过后完成。自查覆盖准入/实际工作归属、幂等、陈旧代次/原文/结果防护、已知与未知重试分类、客户端事件循环归属、有界解析及不产生审核权限。检查使用假提供者和临时库，没有付费请求、行情下载、真实通知、生产状态修改或部署。保留既有 Starlette/httpx 弃用提示。独立的概览重试/runtime 修改及盛新研究产物保留在这些提交之外。此私有应用接口没有公开准备入口；语义审核/冻结、API/UI 集成及整体负载验收仍待完成。

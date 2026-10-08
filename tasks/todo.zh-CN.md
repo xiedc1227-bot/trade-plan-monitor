@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 12 项、待完成活动任务 25 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV21。
+> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 13 项、待完成活动任务 24 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV22。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -109,16 +109,17 @@
 ### ML-C03. 检查点
 
 - [x] 单原文持久化、完整提取及原始证据绑定通过；ML-T09 已取消。
-- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁，下一项为 ML-T10。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁；ML-T10 现已通过 MV22，下一项为 ML-T11。
 
 ## ML-T10. 安全恢复单原文提取
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T07`, `ML-T08`, `ML-T34`
 - **验收:** 以代次/原文/修订防护认领一份原文，在调用外持久化进度。复用既有防护及有界可重试尝试，编辑/取消/重启拒绝晚到完成。使用自有回测线程。未知付费结果需明确恢复，不新增全局 AI 预算作为隔离门槛。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `tests/integration/test_plan_preparation_worker.py`
 - **范围:** 拆成两个 M 切片，每个 4 个主要文件（含共用测试共 7 个不同文件）；**追溯:** ML-A16, ML-A18。先持久化工作线程归属/进度并读取既有准入预留以恢复，再接入自有调用和配置 AI。不新增任务类型、队列、数据库或公开路由。
+- **证据:** MV22：29 项工作线程检查及 3000 项最终回归通过。自有调用在实际排空前保留既有全局准入；未知付费结果要求明确确认旧工作已结束。读取/旧回执重放不发起调用，已知重试仍限制在三次持久化尝试内。语义审核/冻结及公开准备集成仍属于 ML-T11/ML-T12。
 
 ## ML-T11. 审核并冻结一份完整准备计划
 

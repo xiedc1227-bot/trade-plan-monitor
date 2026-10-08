@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 12 completed, 25 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV21.
+> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 13 completed, 24 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV22.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -109,16 +109,17 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 ### ML-C03. Checkpoint
 
 - [x] Single-source persistence, complete extraction and original evidence bindings pass; ML-T09 is cancelled.
-- [x] Record executed evidence; resolve failures before dependent work without lowering the bar. MV20/MV21 record the private persistence/extraction gate; ML-T10 is next.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar. MV20/MV21 record the private persistence/extraction gate; ML-T10 now passes MV22 and ML-T11 is next.
 
 ## ML-T10. Resume single-source extraction safely
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T07`, `ML-T08`, `ML-T34`
 - **Acceptance:** Claim the one source with generation/source/revision fences and persist progress outside calls. Reuse existing guards and bounded retryable attempts; edit/cancel/restart rejects stale completion. Use owned backtest threads. Unknown paid outcomes require explicit recovery; no new global AI budget gates isolation.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `tests/integration/test_plan_preparation_worker.py`
 - **Scope:** Two M increments, 4 primary files each (7 unique including the shared test); **Trace:** ML-A16, ML-A18. First persist worker ownership/progress and read the existing admission reservation for recovery; then connect owned calls and configured AI. No new job kind, queue, database or public route.
+- **Evidence:** MV22: 29 worker cases and the 3000-case final regression pass. Owned calls retain existing global admission through physical drain; unknown paid outcomes require explicit ended confirmation. Reads/replayed receipts never dispatch, and known retries remain within three durable attempts. Semantic review/freeze and public preparation integration remain ML-T11/ML-T12.
 
 ## ML-T11. Review and freeze one complete prepared plan
 
