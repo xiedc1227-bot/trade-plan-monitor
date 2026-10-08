@@ -1,7 +1,10 @@
 """Explicit human review freezes one research snapshot, never a live activation."""
 
 import asyncio
+import json
+import sqlite3
 from datetime import datetime, timedelta
+from threading import Event
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -302,9 +305,12 @@ def test_unresolved_reservation_stays_occupied_before_review(tmp_path, expired):
 
 def test_review_receipt_survives_source_edit_restart_and_another_active_job(tmp_path):
     from tests.integration.test_backtest_single_task import request
+    from tests.unit.test_monitor_loop_input import costs
 
     from trade_plan_monitor.backtest.canonical import canonical_json
     from trade_plan_monitor.backtest.jobs import BacktestJobRepository
+    from trade_plan_monitor.backtest.loop_input import LoopResponsePolicy, MonitorLoopInput
+    from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary
     from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
 
     store, ready = ready_preparation(tmp_path)
@@ -319,6 +325,16 @@ def test_review_receipt_survives_source_edit_restart_and_another_active_job(tmp_
             )
             assert await service.get_frozen("one") == frozen
             original = canonical_json(frozen)
+            run_input = MonitorLoopInput(
+                schedule=frozen.schedule,
+                initial_account=frozen.account,
+                boundary=LoopEndBoundary.resolve(started_at=AVAILABLE, submitted_at=NOW),
+                dataset_hash="3" * 64,
+                response=LoopResponsePolicy(mode="FOLLOW_REMINDERS"),
+                costs=costs(),
+            )
+            submitted = canonical_json(run_input)
+            run_hash = run_input.input_hash
             reviewed = store.get("one")
             changed = await service.edit_source(
                 "one",
@@ -340,6 +356,7 @@ def test_review_receipt_survives_source_edit_restart_and_another_active_job(tmp_
             assert canonical_json(replay) == original
             assert replay.manifest_hash == frozen.manifest_hash
             assert store.get("one") == changed
+            assert canonical_json(run_input) == submitted and run_input.input_hash == run_hash
             with pytest.raises(PreparationConflictError, match="IDEMPOTENCY_CONFLICT"):
                 await restarted.review_and_freeze(
                     "one",
@@ -351,3 +368,295 @@ def test_review_receipt_survives_source_edit_restart_and_another_active_job(tmp_
             await restarted.stop()
 
     asyncio.run(scenario())
+
+
+def test_receipt_write_failure_rolls_back_review_and_does_not_consume_key(tmp_path):
+    store, ready = ready_preparation(tmp_path)
+    command = review_command(ready)
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute("""CREATE TRIGGER review_receipt_fault
+            BEFORE INSERT ON backtest_preparation_idempotency
+            WHEN NEW.idempotency_key = 'review'
+            BEGIN SELECT RAISE(ABORT, 'synthetic receipt fault'); END""")
+    with pytest.raises(sqlite3.IntegrityError, match="synthetic receipt fault"):
+        store.review_and_freeze("one", command=command, idempotency_key="review")
+    assert PreparationStore(store.database_path).get("one") == ready
+    assert store.replay_review("one", command=command, idempotency_key="review") is None
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute("DROP TRIGGER review_receipt_fault")
+    assert (
+        store.review_and_freeze("one", command=command, idempotency_key="review").status
+        == "REVIEWED"
+    )
+
+
+@pytest.mark.parametrize("tamper", ["opaque", "request", "source", "evidence", "human"])
+def test_valid_flag_cannot_authorize_forged_extraction_provenance(tmp_path, tamper):
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_preparation(tmp_path)
+    payload = json.loads(ready.candidate.payload_json)
+    if tamper == "opaque":
+        payload = {}
+    elif tamper == "request":
+        payload["request_id"] = "00000000-0000-0000-0000-000000000000"
+    elif tamper == "source":
+        payload["source_binding_hash"] = "f" * 64
+    elif tamper == "evidence":
+        payload["evidence_hash"] = "f" * 64
+    else:
+        payload["daily_mapping"] = review_command(ready).mapping.model_dump(mode="json")
+    forged = ready.model_copy(
+        update={
+            "candidate": ready.candidate.model_copy(
+                update={
+                    "payload_json": json.dumps(payload),
+                    "validation": "VALID",
+                    "issues": (),
+                }
+            )
+        }
+    )
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            "UPDATE backtest_preparation SET document_json = ? WHERE preparation_id = ?",
+            (forged.model_dump_json(), "one"),
+        )
+    with pytest.raises(PreparationConflictError, match="EXTRACTION_BINDING_CONFLICT"):
+        store.review_and_freeze("one", command=review_command(forged), idempotency_key="review")
+    assert store.get("one") == forged
+
+
+def test_legacy_review_declaration_is_not_a_frozen_manifest(tmp_path):
+    from trade_plan_monitor.backtest.preparation_review import (
+        PreparationSemanticError,
+        frozen_preparation,
+    )
+
+    store, ready = ready_preparation(tmp_path)
+    flagged = ready.model_copy(
+        update={
+            "candidate": ready.candidate.model_copy(update={"validation": "VALID", "issues": ()})
+        }
+    )
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            "UPDATE backtest_preparation SET document_json = ? WHERE preparation_id = ?",
+            (flagged.model_dump_json(), "one"),
+        )
+    declaration = store.record_review(
+        "one",
+        expected_revision=flagged.revision,
+        expected_source_revision=flagged.source_revision,
+        expected_candidate_revision=flagged.candidate_revision,
+        candidate_hash=flagged.candidate.candidate_hash,
+        evidence_hash=flagged.candidate.evidence_hash,
+        confirmed=True,
+        idempotency_key="legacy-review",
+    )
+    with pytest.raises(PreparationSemanticError, match="FROZEN_BINDING_CONFLICT"):
+        frozen_preparation(declaration)
+
+
+def test_cancelled_observer_keeps_review_admission_until_physical_end(tmp_path, monkeypatch):
+    from tests.integration.test_backtest_single_task import request
+
+    from trade_plan_monitor.backtest.jobs import BacktestJobRepository, JobAdmissionError
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+    from trade_plan_monitor.backtest.service_config import BacktestServiceConfig
+    from trade_plan_monitor.backtest.service_lifecycle import BacktestServiceUnavailable
+
+    store, ready = ready_preparation(tmp_path)
+    jobs = BacktestJobRepository(tmp_path / "jobs.sqlite3")
+    entered, release = Event(), Event()
+    original = store.review_and_freeze
+
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(store, "review_and_freeze", blocked)
+
+    async def scenario():
+        service = review_service(store, jobs)
+        service._config = BacktestServiceConfig(shutdown_wait_seconds=0.02)
+        observer = asyncio.create_task(
+            service.review_and_freeze(
+                "one", command=review_command(ready), idempotency_key="review"
+            )
+        )
+        try:
+            async with asyncio.timeout(2):
+                while not entered.is_set():
+                    await asyncio.sleep(0.005)
+            observer.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await observer
+            with pytest.raises(JobAdmissionError) as busy:
+                jobs.submit(request("VERIFY"), "other")
+            assert busy.value.code == "BACKTEST_BUSY"
+            with pytest.raises(BacktestServiceUnavailable):
+                await service.stop()
+            with pytest.raises(JobAdmissionError):
+                jobs.submit(request("VERIFY"), "other")
+        finally:
+            release.set()
+            await service.wait_for_drain()
+            await service.stop()
+        assert frozen_preparation(store.get("one")).version.review.confirmed is True
+        assert jobs.submit(request("VERIFY"), "other").status.value == "QUEUED"
+
+    asyncio.run(scenario())
+
+
+def test_restart_replays_durable_review_after_crash_before_admission_release(tmp_path, monkeypatch):
+    from tests.integration.test_backtest_single_task import request
+
+    from trade_plan_monitor.backtest.jobs import BacktestJobRepository, JobAdmissionError
+
+    store, ready = ready_preparation(tmp_path)
+    jobs = BacktestJobRepository(tmp_path / "jobs.sqlite3")
+    command = review_command(ready)
+
+    def fail_release(*args):
+        raise OSError("synthetic release crash")
+
+    async def scenario():
+        service = review_service(store, jobs)
+        try:
+            with monkeypatch.context() as patch:
+                patch.setattr(jobs, "release_run_submission", fail_release)
+                with pytest.raises(OSError, match="synthetic release crash"):
+                    await service.review_and_freeze(
+                        "one", command=command, idempotency_key="review"
+                    )
+            frozen = await service.get_frozen("one")
+            with pytest.raises(JobAdmissionError):
+                jobs.submit(request("VERIFY"), "other")
+        finally:
+            await service.stop()
+        restarted = review_service(
+            PreparationStore(store.database_path), BacktestJobRepository(jobs.database_path)
+        )
+        try:
+            assert (
+                await restarted.review_and_freeze("one", command=command, idempotency_key="review")
+                == frozen
+            )
+            assert jobs.submit(request("VERIFY"), "other").status.value == "QUEUED"
+        finally:
+            await restarted.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("future", ["snapshot", "mark"])
+def test_review_rejects_opening_account_information_after_historical_start(tmp_path, future):
+    from trade_plan_monitor.backtest.loop_input import LoopOpeningMark
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_preparation(tmp_path)
+    account = review_command(ready).account
+    later = AVAILABLE + timedelta(days=1)
+    if future == "snapshot":
+        account = account.model_copy(update={"snapshot_at": later})
+    else:
+        account = account.model_copy(
+            update={
+                "opening_mark": LoopOpeningMark(
+                    price_fen=4010,
+                    price_at=later,
+                    available_at=later,
+                    evidence="Synthetic future observation cannot mark the opening account.",
+                )
+            }
+        )
+    with pytest.raises(PreparationConflictError):
+        store.review_and_freeze(
+            "one", command=review_command(ready, account=account), idempotency_key="review"
+        )
+    assert store.get("one") == ready
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_same_review_key_without_receipt_cannot_reclaim_pending_admission(tmp_path, expired):
+    from hashlib import sha256
+
+    from tests.integration.test_backtest_jobs import _Clock
+
+    from trade_plan_monitor.backtest.canonical import canonical_json
+    from trade_plan_monitor.backtest.jobs import BacktestJobRepository, JobAdmissionError
+
+    store, ready = ready_preparation(tmp_path)
+    command = review_command(ready)
+    clock = _Clock(NOW)
+    jobs = BacktestJobRepository(tmp_path / "jobs.sqlite3", clock=clock)
+    intent = canonical_json(
+        {
+            "domain": "single-source-review-v1",
+            "preparation_id": "one",
+            "command_hash": sha256(canonical_json(command).encode()).hexdigest(),
+        }
+    )
+    key = (
+        "prep-review-"
+        + sha256(
+            canonical_json(
+                {
+                    "preparation_id": "one",
+                    "idempotency_key": "review",
+                }
+            ).encode()
+        ).hexdigest()
+    )
+    pending = jobs.claim_run_submission(intent, key)
+    if expired:
+        clock.advance(timedelta(seconds=31))
+
+    async def scenario():
+        service = review_service(store, jobs)
+        try:
+            with pytest.raises(JobAdmissionError) as busy:
+                await service.review_and_freeze("one", command=command, idempotency_key="review")
+            assert busy.value.code == "BACKTEST_BUSY"
+            assert store.get("one") == ready
+            assert jobs.get_run_submission_reservation(intent, key) == pending
+        finally:
+            await service.stop()
+
+    asyncio.run(scenario())
+
+
+def test_worker_completion_without_claim_cleanup_still_blocks_freezing(tmp_path):
+    from uuid import uuid4
+
+    from trade_plan_monitor.backtest.canonical import canonical_json
+    from trade_plan_monitor.backtest.jobs import BacktestJobRepository
+    from trade_plan_monitor.backtest.preparation_models import PreparationWorkClaim
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_preparation(tmp_path)
+    jobs = BacktestJobRepository(tmp_path / "jobs.sqlite3")
+    intent = canonical_json({"domain": "synthetic-ended-extraction"})
+    reservation = jobs.claim_run_submission(intent, "ended-extraction")
+    claim = PreparationWorkClaim(
+        generation=ready.attempts[-1].attempt_id,
+        owner_id=str(uuid4()),
+        source_revision=ready.source_revision,
+        source_hash=ready.source.binding_hash,
+        admission_key=reservation.idempotency_key,
+        intent_hash=reservation.intent_hash,
+        claimed_at=reservation.claimed_at,
+        intent_json=intent,
+        phase="ENDED",
+    )
+    pending = ready.model_copy(update={"work_claim": claim})
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            "UPDATE backtest_preparation SET document_json = ? WHERE preparation_id = ?",
+            (pending.model_dump_json(), "one"),
+        )
+    with pytest.raises(PreparationConflictError, match="WORKER_CLAIM_PENDING"):
+        store.review_and_freeze("one", command=review_command(pending), idempotency_key="review")
+    assert store.get("one") == pending

@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 13 项、待完成活动任务 24 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV22。
+> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 14 项、待完成活动任务 23 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV23。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -109,7 +109,7 @@
 ### ML-C03. 检查点
 
 - [x] 单原文持久化、完整提取及原始证据绑定通过；ML-T09 已取消。
-- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁；ML-T10 现已通过 MV22，下一项为 ML-T11。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁；ML-T10 通过 MV22，ML-T11 通过 MV23，下一项为 ML-T12。
 
 ## ML-T10. 安全恢复单原文提取
 
@@ -123,12 +123,13 @@
 
 ## ML-T11. 审核并冻结一份完整准备计划
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T08`, `ML-T10`
 - **验收:** 明确审核绑定精确原文/内容/账户/证据修订，冻结一份不可变清单。修正原文使其候选/审核失效，已提交运行保持冻结。校验不能产生批准或激活生产计划。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_review.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/preparation_review.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_review.py`
 - **范围:** M (4 个主要文件，含测试); **追溯:** ML-A17, ML-A18.
+- **证据:** MV23：51 项审核检查通过。已验证精确修订/原文/计划/账户/证据绑定、清单与声明原子写入、原始收据重放及实际准入保留。期初未知事实继续明确保留，伪造 AI/旧审核标记及未来期初行情不能产生权限。公开准备集成仍属于 ML-T12，ML-C04 仍待完成。
 
 ## ML-T12. 接通准备应用接口
 

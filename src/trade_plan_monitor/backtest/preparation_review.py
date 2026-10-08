@@ -163,6 +163,8 @@ class FrozenPreparedPlan(ResearchValue):
         )
         if self.schedule.select(start) is None or self.account.snapshot_at > start:
             raise ValueError("frozen account/plan chronology does not cover the historical start")
+        if self.account.opening_mark is not None and self.account.opening_mark.available_at > start:
+            raise ValueError("frozen opening mark was unavailable at the historical start")
         if sum(lot.quantity for lot in self.account.lots) > self.version.snapshot.position.max_qty:
             raise ValueError("reviewed inventory exceeds the plan maximum")
         return self

@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18–MV22：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10 与 ML-C01/ML-C02/ML-C03 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV21 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。语义审核/冻结、数据集/回放工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV23：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11 与 ML-C01/ML-C02/ML-C03 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV22 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -429,3 +429,24 @@ ML-T10 已按计划的两个切片完成。可选归属/进度字段扩展既有
 | 文档/工作区 | 双语 ID/标题/字面契约、原始已完成 todo 历史及 `git diff --check` | PASS；完成 13 项，待完成活动任务 24 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
 
 下一项为 ML-T11；ML-C04 需 ML-T11/ML-T12 通过后完成。自查覆盖准入/实际工作归属、幂等、陈旧代次/原文/结果防护、已知与未知重试分类、客户端事件循环归属、有界解析及不产生审核权限。检查使用假提供者和临时库，没有付费请求、行情下载、真实通知、生产状态修改或部署。保留既有 Starlette/httpx 弃用提示。独立的概览重试/runtime 修改及盛新研究产物保留在这些提交之外。此私有应用接口没有公开准备入口；语义审核/冻结、API/UI 集成及整体负载验收仍待完成。
+
+## MV23. 明确审核及单份冻结准备清单
+
+2026-10-08 执行 ML-T11，保持其四个主要文件范围。开始本项前，ML-T10 已推送至 GitHub main 的 `75b6c19`。未增加公开准备路由、新表/模式/任务类型/队列、生产激活或运行边界解析。
+
+一次明确确认的审核绑定准备/原文/候选修订及精确提取/证据哈希。AI 输出经过既有来源/字段/账户边界重新验证，VALID 标记、清空的问题列表或旧审核声明不能授予冻结输入权限。只有此人工操作能登记修正草稿/映射、限定补充及有证据的账户修正。缺失技术细节继续阻断，不支持的执行条款不能靠已阅放行。冻结清单同时保留原始期初事实、提取哈希及明确声明的人工账户修正。来源账户的现金、买入日期、可卖数量和期初行情未经明确证据继续未知。冻结前检查历史账户/行情可用时间和持仓上限。
+
+既有事务原子写入一份有界不可变清单、精确审核声明及原始幂等收据。收据写入失败会全部回滚且不占用键。修正原文使当前候选/审核失效，原始收据在重启及其他工作占位时仍可读。修改来源后，已构造的 MonitorLoopInput 保持相同规范字节/哈希。审核、读取及收据重放不产生付费请求或隐式重试。
+
+审核复用既有全局准入令牌和自有有界元数据线程。RUN/SYNC/VERIFY 的 QUEUED/RUNNING/CANCEL_REQUESTED/过期状态、未解决预留（包括同一审核键）及未完成提取清理都会阻止新审核。观察者取消/关闭超时在实际元数据工作结束前保留准入。耐久原始审核收据证明操作已完成，可在提交与释放之间崩溃后清理精确预留；无收据即便过期也不授权抢占。
+
+| 检查 | 已执行命令/证据 | 结果 |
+|---|---|---|
+| 本项门禁 | `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_review.py -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t11-gate-final` | 51 项通过；覆盖精确绑定、缺失确认/细节/时间、未知事实、不可变输入、伪造来源/旧标记、原文失效、回滚、全局占位、实际排空及提交/释放恢复。 |
+| 最终单元/契约及相关集成 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract tests/integration/test_plan_preparation_store.py tests/integration/test_plan_preparation_worker.py tests/integration/test_plan_preparation_review.py tests/integration/test_backtest_single_task.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_configured_ai_web.py -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t11-final-regression` | 3051 项通过，4 项 live 未选中，34.54 秒。 |
+| 代码质量 | `.venv/Scripts/python.exe -m ruff check src tests scripts`; `.venv/Scripts/python.exe -m ruff format --check src/trade_plan_monitor/backtest/preparation_review.py tests/integration/test_plan_preparation_review.py` | PASS。 |
+| 普通契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | canonical monitor v2 与 compatibility monitor v1 均 PASS；未修改快照/类型/批准摘要。 |
+| 变异审查 | 反转期初行情可用时间比较，运行 opening_account_information 场景，再恢复精确源码字节。 | 变异：1 项失败 / 1 项通过；恢复：2 项通过。此前失败用例暴露冻结阶段缺少未来期初行情防护，已在最终回归前修复。 |
+| 文档/工作区 | 双语 ID/标题/字面契约、原始已完成 todo 历史及 MV01–MV22 历史、`git diff --check` | PASS；完成 14 项，待完成活动任务 23 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
+
+下一项为 ML-T12；ML-C04 仍待以真实 HTTP 和假 AI 验证公开准备路径后完成。自查覆盖明确权限、规范哈希/修订绑定、原始证据及未知事实、原子存储、历史因果、单槽准入及实际工作归属。检查使用合成输入和临时库，没有付费请求、行情下载、真实通知、生产状态修改或部署。保留既有 Starlette/httpx 弃用提示。独立的概览重试/runtime 修改及盛新研究产物保留在这些提交之外。API/UI/报告集成及整体负载验收仍待完成。
