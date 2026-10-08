@@ -553,6 +553,29 @@ class BacktestJobRepository:
             connection.commit()
             return None
 
+    def get_run_submission_reservation(
+        self, canonical_intent_json: str, idempotency_key: str,
+    ) -> BacktestRunSubmissionReservation | None:
+        """Read the exact unresolved owner, including expired/unknown work; never reclaim."""
+        intent = _validate_canonical_run_intent(canonical_intent_json)
+        key = _validate_idempotency_key(idempotency_key)
+        intent_hash = sha256(_RUN_INTENT_HASH_DOMAIN + intent.encode("utf-8")).hexdigest()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT operation, request_hash, created_at, job_id, response_json "
+                "FROM backtest_job_idempotency WHERE idempotency_key = ?", (key,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row[0] != "SUBMIT" or row[1] != intent_hash:
+            raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+        if row[3] is not None or row[4] is not None:
+            raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+        return BacktestRunSubmissionReservation(
+            idempotency_key=key, intent_hash=intent_hash,
+            claimed_at=parse_shanghai_datetime(str(row[2])),
+        )
+
     def renew_run_submission(
         self,
         reservation: BacktestRunSubmissionReservation,

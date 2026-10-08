@@ -117,8 +117,8 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Dependencies:** `ML-T07`, `ML-T08`, `ML-T34`
 - **Acceptance:** Claim the one source with generation/source/revision fences and persist progress outside calls. Reuse existing guards and bounded retryable attempts; edit/cancel/restart rejects stale completion. Use owned backtest threads. Unknown paid outcomes require explicit recovery; no new global AI budget gates isolation.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m "not live"`
-- **Primary files:** `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_worker.py`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A16, ML-A18.
+- **Primary files:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `tests/integration/test_plan_preparation_worker.py`
+- **Scope:** Two M increments, 4 primary files each (7 unique including the shared test); **Trace:** ML-A16, ML-A18. First persist worker ownership/progress and read the existing admission reservation for recovery; then connect owned calls and configured AI. No new job kind, queue, database or public route.
 
 ## ML-T11. Review and freeze one complete prepared plan
 

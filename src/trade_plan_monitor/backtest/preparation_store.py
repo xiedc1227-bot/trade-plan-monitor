@@ -22,6 +22,7 @@ from trade_plan_monitor.backtest.preparation_models import (
     PreparationRecord,
     PreparationReview,
     PreparationSource,
+    PreparationWorkClaim,
     SinglePlanPreparationInput,
 )
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
@@ -48,6 +49,13 @@ class PreparationConflictError(ValueError):
     def __init__(self, code: str):
         self.code = code
         super().__init__(code)
+
+
+def _request_hash(name, preparation_id, payload):
+    return sha256(canonical_json({
+        "domain": PREPARATION_DOMAIN, "operation": name,
+        "preparation_id": preparation_id, "payload": payload,
+    }).encode()).hexdigest()
 
 
 class PreparationStore:
@@ -125,10 +133,7 @@ class PreparationStore:
     def _operation(self, name, preparation_id, payload, idempotency_key, change):
         preparation_id = _IDENTIFIER.validate_python(preparation_id)
         idempotency_key = _IDENTIFIER.validate_python(idempotency_key)
-        request_hash = sha256(canonical_json({
-            "domain": PREPARATION_DOMAIN, "operation": name,
-            "preparation_id": preparation_id, "payload": payload,
-        }).encode()).hexdigest()
+        request_hash = _request_hash(name, preparation_id, payload)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             previous = connection.execute(
@@ -227,11 +232,27 @@ class PreparationStore:
 
     def start_attempt(
         self, preparation_id: str, *, expected_revision: int, idempotency_key: str,
+        work_claim: PreparationWorkClaim | None = None,
     ) -> PreparationRecord:
         """Record explicit intent only; this method never invokes or resumes AI."""
+        if work_claim is not None:
+            work_claim = PreparationWorkClaim.model_validate(work_claim.model_dump(mode="python"))
 
         def change(previous, now):
             record = self._require_revision(previous, expected_revision)
+            if record.work_claim is not None and (
+                work_claim is None or record.work_claim.phase != "ENDED"
+                or (record.work_claim.admission_key, record.work_claim.intent_hash,
+                    record.work_claim.claimed_at, record.work_claim.owner_id) != (
+                    work_claim.admission_key, work_claim.intent_hash,
+                    work_claim.claimed_at, work_claim.owner_id)
+            ):
+                raise PreparationConflictError("WORKER_CLAIM_PENDING")
+            if work_claim is not None and (
+                work_claim.phase != "READY" or work_claim.source_revision != record.source_revision
+                or work_claim.source_hash != record.source.binding_hash
+            ):
+                raise PreparationConflictError("STALE_WORKER")
             if record.status in {"EXTRACTING", "CANCEL_REQUESTED"}:
                 raise PreparationConflictError("PREPARATION_BUSY")
             if record.status == "CANCELLED":
@@ -241,23 +262,115 @@ class PreparationStore:
             if len(record.attempts) >= MAX_EXTRACTION_ATTEMPTS:
                 raise PreparationConflictError("ATTEMPTS_EXHAUSTED")
             attempt = PreparationAttempt(
-                attempt_id=str(uuid4()), source_revision=record.source_revision,
+                attempt_id=work_claim.generation if work_claim else str(uuid4()),
+                source_revision=record.source_revision,
                 source_hash=record.source.binding_hash, status="RUNNING", started_at=now,
             )
             return self._updated(
                 record, now, status="EXTRACTING", attempts=(*record.attempts, attempt),
                 candidate=None, review=None, candidate_revision=record.candidate_revision + 1,
                 review_revision=record.review_revision + 1,
+                work_claim=work_claim,
             )
 
         return self._operation("START_ATTEMPT", preparation_id, {
             "expected_revision": expected_revision,
         }, idempotency_key, change)
 
+    def replay_start_attempt(self, preparation_id, *, expected_revision, idempotency_key):
+        """Read a matching original receipt; never restart the recorded attempt."""
+        preparation_id = _IDENTIFIER.validate_python(preparation_id)
+        idempotency_key = _IDENTIFIER.validate_python(idempotency_key)
+        expected = _request_hash("START_ATTEMPT", preparation_id, {
+            "expected_revision": expected_revision,
+        })
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT request_hash, response_json FROM backtest_preparation_idempotency "
+                "WHERE idempotency_key = ?", (idempotency_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row[0] != expected:
+            raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
+        return PreparationRecord.model_validate_json(row[1])
+
+    @staticmethod
+    def _owned_claim(record, generation, owner_id):
+        claim = record.work_claim
+        if claim is None or (claim.generation, claim.owner_id) != (generation, owner_id):
+            raise PreparationConflictError("STALE_WORKER")
+        return claim
+
+    def _work_phase(self, preparation_id, generation, owner_id, expected_revision, phase):
+        def change(previous, now):
+            record = self._require_revision(previous, expected_revision)
+            claim = self._owned_claim(record, generation, owner_id)
+            if claim.phase == "ENDED" or record.status not in {"EXTRACTING", "CANCEL_REQUESTED"}:
+                raise PreparationConflictError("STALE_WORKER")
+            if phase == "CALLING" and (record.status != "EXTRACTING" or claim.phase != "READY"):
+                raise PreparationConflictError("STALE_WORKER")
+            return self._updated(record, now, work_claim=claim.model_copy(update={"phase": phase}))
+
+        return self._operation("WORK_PHASE", preparation_id, {
+            "generation": generation, "owner_id": owner_id,
+            "expected_revision": expected_revision, "phase": phase,
+        }, str(uuid4()), change)  # A progress transition must never replay old call authority.
+
+    def begin_call(self, preparation_id, *, generation, owner_id, expected_revision):
+        return self._work_phase(preparation_id, generation, owner_id, expected_revision, "CALLING")
+
+    def mark_unknown(self, preparation_id, *, generation, owner_id, expected_revision):
+        return self._work_phase(preparation_id, generation, owner_id, expected_revision, "UNKNOWN")
+
+    def clear_work_claim(self, preparation_id, *, generation, expected_revision):
+        """Clear only a durably ended claim after its global reservation was released."""
+        def change(previous, now):
+            record = self._require_revision(previous, expected_revision)
+            if record.work_claim is None or record.work_claim.generation != generation:
+                raise PreparationConflictError("STALE_WORKER")
+            if record.work_claim.phase != "ENDED":
+                raise PreparationConflictError("WORKER_CLAIM_PENDING")
+            return self._updated(record, now, work_claim=None)
+
+        return self._operation("CLEAR_WORK", preparation_id, {
+            "generation": generation, "expected_revision": expected_revision,
+        }, f"{generation}.clear", change)
+
+    def recover_unknown(
+        self, preparation_id, *, generation, expected_revision, confirmed_ended, idempotency_key,
+    ):
+        """Explicit recovery only; the caller must prove/confirm prior physical work ended."""
+        if type(confirmed_ended) is not bool or not confirmed_ended:
+            raise PreparationConflictError("RECOVERY_CONFIRMATION_REQUIRED")
+
+        def change(previous, now):
+            record = self._require_revision(previous, expected_revision)
+            claim = record.work_claim
+            if claim is None or claim.generation != generation or claim.phase == "ENDED":
+                raise PreparationConflictError("STALE_WORKER")
+            if record.status == "CANCEL_REQUESTED":
+                return self._ended_cancellation(record, now)
+            if record.status != "EXTRACTING":
+                raise PreparationConflictError("STALE_WORKER")
+            ended = record.attempts[-1].model_copy(update={
+                "status": "FAILED", "finished_at": now,
+                "error_code": "UNKNOWN_PROVIDER_OUTCOME", "retryable": True,
+            })
+            return self._updated(record, now, status="FAILED",
+                                 attempts=(*record.attempts[:-1], ended),
+                                 work_claim=claim.model_copy(update={"phase": "ENDED"}))
+
+        return self._operation("RECOVER_WORK", preparation_id, {
+            "generation": generation, "expected_revision": expected_revision,
+            "confirmed_ended": confirmed_ended,
+        }, idempotency_key, change)
+
     def finish_attempt(
         self, preparation_id: str, *, attempt_id: str, expected_revision: int, idempotency_key: str,
         candidate: PreparationCandidateInput | None = None, error_code: str | None = None,
         retryable: bool = False,
+        worker_owner_id: str | None = None,
     ) -> PreparationRecord:
         if candidate is not None and not isinstance(candidate, PreparationCandidateInput):
             raise TypeError("candidate must be PreparationCandidateInput")
@@ -269,6 +382,10 @@ class PreparationStore:
 
         def change(previous, now):
             record = self._require_revision(previous, expected_revision)
+            if record.work_claim is not None:
+                claim = self._owned_claim(record, attempt_id, worker_owner_id)
+                if claim.phase != "CALLING":
+                    raise PreparationConflictError("STALE_WORKER")
             if record.status != "EXTRACTING" or record.attempts[-1].attempt_id != attempt_id:
                 raise PreparationConflictError("STALE_ATTEMPT")
             attempt = record.attempts[-1].model_copy(update={
@@ -283,12 +400,17 @@ class PreparationStore:
                 record, now, status="CANDIDATE" if bound is not None else "FAILED",
                 attempts=(*record.attempts[:-1], attempt), candidate=bound,
                 candidate_revision=record.candidate_revision + int(bound is not None),
+                work_claim=(record.work_claim.model_copy(update={"phase": "ENDED"})
+                            if record.work_claim else None),
             )
 
-        return self._operation("FINISH_ATTEMPT", preparation_id, {
+        payload = {
             "attempt_id": attempt_id, "expected_revision": expected_revision,
             "candidate": candidate, "error_code": error_code, "retryable": retryable,
-        }, idempotency_key, change)
+        }
+        if worker_owner_id is not None:
+            payload["worker_owner_id"] = worker_owner_id
+        return self._operation("FINISH_ATTEMPT", preparation_id, payload, idempotency_key, change)
 
     def cancel(
         self, preparation_id: str, *, expected_revision: int, idempotency_key: str,
@@ -319,27 +441,36 @@ class PreparationStore:
 
     def acknowledge_cancellation(
         self, preparation_id: str, *, attempt_id: str, expected_revision: int, idempotency_key: str,
+        worker_owner_id: str | None = None,
     ) -> PreparationRecord:
         """Record caller-confirmed end; ML-T10 must first drain its actual worker."""
         attempt_id = _IDENTIFIER.validate_python(attempt_id)
 
         def change(previous, now):
             record = self._require_revision(previous, expected_revision)
+            if record.work_claim is not None:
+                self._owned_claim(record, attempt_id, worker_owner_id)
             if record.status != "CANCEL_REQUESTED" or record.attempts[-1].attempt_id != attempt_id:
                 raise PreparationConflictError("STALE_ATTEMPT")
-            superseded = record.attempts[-1].source_revision != record.source_revision
-            ended = record.attempts[-1].model_copy(update={
-                "status": "CANCELLED", "finished_at": now,
-            })
-            return self._updated(
-                record, now, status="DRAFT" if record.source_edit_pending else "CANCELLED",
-                attempts=() if superseded else (*record.attempts[:-1], ended),
-                source_edit_pending=False,
-            )
+            return self._ended_cancellation(record, now)
 
-        return self._operation("ACK_CANCEL", preparation_id, {
+        payload = {
             "attempt_id": attempt_id, "expected_revision": expected_revision,
-        }, idempotency_key, change)
+        }
+        if worker_owner_id is not None:
+            payload["worker_owner_id"] = worker_owner_id
+        return self._operation("ACK_CANCEL", preparation_id, payload, idempotency_key, change)
+
+    def _ended_cancellation(self, record, now):
+        superseded = record.attempts[-1].source_revision != record.source_revision
+        ended = record.attempts[-1].model_copy(update={"status": "CANCELLED", "finished_at": now})
+        return self._updated(
+            record, now, status="DRAFT" if record.source_edit_pending else "CANCELLED",
+            attempts=() if superseded else (*record.attempts[:-1], ended),
+            source_edit_pending=False,
+            work_claim=(record.work_claim.model_copy(update={"phase": "ENDED"})
+                        if record.work_claim else None),
+        )
 
     def record_review(
         self, preparation_id: str, *, expected_revision: int, expected_source_revision: int,

@@ -156,6 +156,20 @@ class PreparationReview(ResearchValue):
         return value
 
 
+class PreparationWorkClaim(ResearchValue):
+    """Private generation and existing global reservation; never supplied by AI."""
+
+    generation: StableIdentifier
+    owner_id: StableIdentifier
+    source_revision: int = Field(ge=1)
+    source_hash: Sha256Hex
+    admission_key: StableIdentifier
+    intent_hash: Sha256Hex
+    claimed_at: LoopTimestamp
+    intent_json: str = Field(min_length=2, max_length=2048)
+    phase: Literal["READY", "CALLING", "UNKNOWN", "ENDED"]
+
+
 class PreparationRecord(ResearchValue):
     schema_version: Literal["backtest-preparation-v1"] = PREPARATION_DOMAIN
     preparation_id: StableIdentifier
@@ -173,6 +187,7 @@ class PreparationRecord(ResearchValue):
     review: PreparationReview | None = None
     created_at: LoopTimestamp
     updated_at: LoopTimestamp
+    work_claim: PreparationWorkClaim | None = None
 
     @model_validator(mode="after")
     def bindings_coherent(self) -> Self:
@@ -233,4 +248,10 @@ class PreparationRecord(ResearchValue):
             or self.review.reviewed_at > self.updated_at
         ):
             raise ValueError("review is not bound to the exact valid candidate")
+        if self.work_claim is not None and self.work_claim.phase != "ENDED":
+            claim = self.work_claim
+            if not running or (
+                claim.generation, claim.source_revision, claim.source_hash
+            ) != (running[0].attempt_id, running[0].source_revision, running[0].source_hash):
+                raise ValueError("worker generation differs from the pending source attempt")
         return self
