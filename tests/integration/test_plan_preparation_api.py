@@ -1,6 +1,7 @@
 """ML-T12 owns preparation resources on demand and serves one bounded HTTP workflow."""
 
 import asyncio
+import json
 import time
 from threading import Event
 
@@ -22,7 +23,7 @@ BASE = "/api/v1/backtest-preparations"
 ORIGIN = "http://127.0.0.1:8765"
 
 
-def api_app(tmp_path, *, ai=None, preparation_path=None):
+def api_app(tmp_path, *, ai=None, preparation_path=None, bind_port=8765):
     from tests.integration.test_backtest_startup_isolation import Runtime
 
     from trade_plan_monitor.web.app import create_app
@@ -40,6 +41,7 @@ def api_app(tmp_path, *, ai=None, preparation_path=None):
         runtime_factory=lambda: runtime,
         backtest_lifecycle_factory=factory,
         ai_lifecycle_factory=(lambda: ai) if ai is not None else None,
+        bind_port=bind_port,
     )
     return app, runtime
 
@@ -216,6 +218,7 @@ def test_unconfigured_extraction_returns_scoped_error_without_attempt(tmp_path):
 class FakeAI:
     def __init__(self, *, blocked=False, unknown=False):
         self.entered, self.release = Event(), Event()
+        self.ended = Event()
         self.calls, self.captures = [], 0
         self.unknown = unknown
         self.stopped = False
@@ -234,6 +237,7 @@ class FakeAI:
         return {"configured": True}
 
     async def stop(self):
+        assert not self.entered.is_set() or self.ended.is_set()
         self.stopped = True
 
     def backtest_extractor(self):
@@ -245,17 +249,20 @@ class FakeAI:
 
         self.calls.append(identity)
         self.entered.set()
-        assert self.release.wait(5)
-        if self.unknown:
-            return None
-        result = extract(
-            output_for({**CASES[0], "source": source.text}),
-            source.text,
-            authored_at=source.authored_at,
-            available_at=source.available_at,
-            effective_trade_date=source.effective_trade_date,
-        )
-        return result.model_copy(update={"request_id": identity})
+        try:
+            assert self.release.wait(5)
+            if self.unknown:
+                return None
+            result = extract(
+                output_for({**CASES[0], "source": source.text}),
+                source.text,
+                authored_at=source.authored_at,
+                available_at=source.available_at,
+                effective_trade_date=source.effective_trade_date,
+            )
+            return result.model_copy(update={"request_id": identity})
+        finally:
+            self.ended.set()
 
 
 def extracted_body():
@@ -424,6 +431,9 @@ def test_http_cancellation_and_source_edit_keep_admission_until_physical_end(tmp
             )
             assert initial.status_code == 202 and ai.entered.wait(2)
             current = wait_view(client, phase="CALLING")
+            claim = PreparationStore(tmp_path / "preparation.sqlite3").get("one").work_claim
+            for private in (claim.owner_id, claim.admission_key, claim.intent_json):
+                assert private not in str(current)
             body = {"expectedRevision": current["revision"]}
             path, method = BASE + "/one/cancellations", client.post
             if operation == "edit":
@@ -575,3 +585,353 @@ def test_frozen_http_manifest_and_original_review_receipt_survive_restart(tmp_pa
         )
         assert restarted_ai.calls == [] and restarted_ai.captures == 0
         assert not restarted.state.backtest_lifecycle._instance._started
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "path",
+        "long-id",
+        "query",
+        "origin",
+        "oversize",
+        "revision-bool",
+        "revision-string",
+        "revision-zero",
+        "revision-unsafe",
+        "bad-time",
+        "time-order",
+        "review-empty",
+        "source-too-long",
+    ],
+)
+def test_preparation_boundary_rejections_do_not_acquire_resources(tmp_path, case):
+    from fastapi.testclient import TestClient
+
+    app, _ = api_app(tmp_path)
+    method, path, body, expected = "POST", BASE + "/one/extractions", {"expectedRevision": 1}, 422
+    headers = {"Idempotency-Key": "command"}
+    if case in {"path", "long-id", "query"}:
+        method, body = "GET", None
+        path = (
+            BASE
+            + {"path": "/bad!", "long-id": "/" + "a" * 129, "query": "/one?source=second"}[case]
+        )
+    if case == "origin":
+        headers["Origin"], expected = "https://untrusted.example", 403
+    if case == "oversize":
+        headers["Content-Length"], expected = str(4 * 1024 * 1024 + 1), 413
+    if case.startswith("revision-"):
+        body["expectedRevision"] = {
+            "revision-bool": True,
+            "revision-string": "1",
+            "revision-zero": 0,
+            "revision-unsafe": 9_007_199_254_740_992,
+        }[case]
+    if case in {"bad-time", "time-order", "source-too-long"}:
+        method, path = "PUT", BASE + "/one/source"
+        source = command().sources[0].model_dump(mode="json")
+        if case == "bad-time":
+            source["available_at"] = "2026-08-20T09:00:00"
+        elif case == "time-order":
+            source.update(
+                authored_at="2026-08-21T09:00:00+08:00", available_at="2026-08-20T09:00:00+08:00"
+            )
+        else:
+            source["text"] = "中" * 150001
+        body["source"] = source
+    if case == "review-empty":
+        path, body = BASE + "/one/reviews", {"review": {}}
+    with TestClient(app, base_url=ORIGIN) as client:
+        result = client.request(method, path, json=body, headers=headers)
+        assert result.status_code == expected
+        assert app.state.backtest_lifecycle.snapshot.state.value == "NOT_INITIALIZED"
+        assert not any(tmp_path.iterdir())
+
+
+def test_maximum_source_is_bounded_and_private_claims_are_not_projected(tmp_path):
+    from fastapi.testclient import TestClient
+
+    app, _ = api_app(tmp_path)
+    body = {"input": command().model_dump(mode="json")}
+    body["input"]["sources"][0]["text"] = "中" * 150000
+    with TestClient(app, base_url=ORIGIN) as client:
+        result = client.post(BASE, json=body, headers={"Idempotency-Key": "create"})
+        assert result.status_code == 201 and len(result.content) < 2 * 1024 * 1024
+        assert result.json()["source"]["text"] == body["input"]["sources"][0]["text"]
+        for private in ("work_claim", "owner_id", "admission_key", "intent_json", "payload_json"):
+            assert private not in result.text
+
+
+def test_preparation_store_failure_is_cached_without_blocking_monitor_or_job_reads(
+    tmp_path, monkeypatch
+):
+    from fastapi.testclient import TestClient
+
+    import trade_plan_monitor.backtest.composition as module
+
+    path = tmp_path / "preparation.sqlite3"
+    path.write_bytes(b"corrupt private preparation store")
+    attempts = []
+    original = module.PreparationStore
+
+    def acquire(*args, **kwargs):
+        attempts.append(args[0])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module, "PreparationStore", acquire)
+    app, runtime = api_app(tmp_path)
+    with TestClient(app, base_url=ORIGIN) as client:
+        for _ in range(2):
+            response = client.get(BASE + "/one")
+            assert response.status_code == 503 and response.headers["Retry-After"] == "1"
+            assert "preparation.sqlite3" not in response.text and "corrupt" not in response.text
+        assert len(attempts) == 1 and runtime.started and not runtime.stopped
+        assert client.get("/api/v1/backtest-jobs").status_code == 200
+        path.write_bytes(b"")  # A controlled repair alone cannot restart failed acquisition.
+        assert client.get(BASE + "/one").status_code == 503 and len(attempts) == 1
+        capability = app.state.backtest_lifecycle._instance._preparations
+        client.portal.call(capability.retry)
+        assert client.get(BASE + "/one").status_code == 404 and len(attempts) == 2
+        assert not app.state.backtest_lifecycle._instance._started
+
+
+@pytest.mark.parametrize("state", ["QUEUED", "RUNNING", "CANCEL_REQUESTED", "EXPIRED"])
+@pytest.mark.parametrize("kind", ["RUN", "SYNC", "VERIFY"])
+def test_http_new_preparation_mutations_reject_all_unfinished_job_states(tmp_path, state, kind):
+    from datetime import datetime, timedelta
+
+    from fastapi.testclient import TestClient
+    from tests.integration.test_backtest_jobs import _SHANGHAI, _Clock
+    from tests.integration.test_plan_preparation_review import review_command
+
+    ai = FakeAI()
+    app, _ = api_app(tmp_path, ai=ai)
+    with TestClient(app, base_url=ORIGIN) as client:
+        client.post(BASE, json=extracted_body(), headers={"Idempotency-Key": "create"})
+        client.post(
+            BASE + "/one/extractions",
+            json={"expectedRevision": 1},
+            headers={"Idempotency-Key": "extract"},
+        )
+        current = wait_view(client, status="CANDIDATE", phase=None)
+        record = PreparationStore(tmp_path / "preparation.sqlite3").get("one")
+        declaration = {"review": review_command(record).model_dump(mode="json")}
+        clock = _Clock(datetime(2026, 8, 28, 10, tzinfo=_SHANGHAI))
+        jobs = BacktestJobRepository(tmp_path / "results.sqlite3", clock=clock)
+        job = jobs.submit(request(kind), "other-job", request_id="1" * 32)
+        if state != "QUEUED":
+            jobs.claim_next()
+        if state == "CANCEL_REQUESTED":
+            jobs.request_cancel(job.job_id, "cancel-job")
+        if state == "EXPIRED":
+            clock.advance(timedelta(seconds=31))
+        other = extracted_body()
+        other["input"]["preparation_id"] = "other"
+        edit = {
+            "expectedRevision": current["revision"],
+            "source": {**current["source"], "text": current["source"]["text"] + "\n"},
+        }
+        for method, route, body, key in (
+            ("POST", BASE, other, "other"),
+            ("PUT", BASE + "/one/source", edit, "edit"),
+            ("POST", BASE + "/one/extractions", {"expectedRevision": current["revision"]}, "new"),
+            ("POST", BASE + "/one/reviews", declaration, "review"),
+            (
+                "POST",
+                BASE + "/one/cancellations",
+                {"expectedRevision": current["revision"]},
+                "cancel",
+            ),
+        ):
+            response = client.request(method, route, json=body, headers={"Idempotency-Key": key})
+            assert response.status_code == 409
+            assert response.json()["error"]["details"][0]["code"] == "BACKTEST_BUSY"
+        assert client.get(BASE + "/one").json() == current and ai.captures == 1
+        assert len(ai.calls) == 1 and len(jobs.list_jobs()) == 1
+
+
+def test_acquired_preparation_shutdown_owns_drain_after_inner_observation_timeouts(tmp_path):
+    from threading import Timer
+
+    from fastapi.testclient import TestClient
+
+    from trade_plan_monitor.backtest.service_config import BacktestServiceConfig
+
+    ai = FakeAI(blocked=True)
+    app, runtime = api_app(tmp_path, ai=ai)
+    timer = Timer(0.2, ai.release.set)
+    try:
+        with TestClient(app, base_url=ORIGIN) as client:
+            client.post(BASE, json=extracted_body(), headers={"Idempotency-Key": "create"})
+            client.post(
+                BASE + "/one/extractions",
+                json={"expectedRevision": 1},
+                headers={"Idempotency-Key": "extract"},
+            )
+            assert ai.entered.wait(2)
+            manager = app.state.backtest_lifecycle
+            nested = manager._instance._preparations
+            service = nested._instance.read_service
+            nested._config = service._config = BacktestServiceConfig(shutdown_wait_seconds=0.01)
+            timer.start()
+    finally:
+        ai.release.set()
+        timer.join(1)
+    assert ai.ended.is_set() and ai.stopped and runtime.stopped
+    assert manager.snapshot.outstanding_work == 0 and service.outstanding_work == 0
+    assert PreparationStore(tmp_path / "preparation.sqlite3").get("one").status == "CANCELLED"
+
+
+def test_loopback_http_cancel_edit_review_and_restart_journey(tmp_path):
+    import socket
+    from contextlib import contextmanager
+    from threading import Thread
+
+    import httpx
+    import uvicorn
+    from tests.integration.test_plan_preparation_review import review_command
+
+    @contextmanager
+    def serve(ai):
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+        origin = f"http://127.0.0.1:{port}"
+        app, runtime = api_app(tmp_path, ai=ai, bind_port=port)
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app, host="127.0.0.1", port=port, log_config=None, access_log=False, ws="none"
+            )
+        )
+        thread = Thread(target=lambda: server.run(sockets=[listener]), name="preparation-http-test")
+        thread.start()
+        try:
+            deadline = time.monotonic() + 5
+            while not server.started and thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert server.started
+            with httpx.Client(
+                base_url=origin, headers={"Origin": origin}, timeout=5, trust_env=False
+            ) as client:
+                yield client
+        finally:
+            ai.release.set()
+            server.should_exit = True
+            thread.join(5)
+            listener.close()
+            assert not thread.is_alive() and runtime.stopped and ai.stopped
+
+    ai = FakeAI(blocked=True)
+    with serve(ai) as client:
+        assert (
+            client.post(
+                BASE, json=extracted_body(), headers={"Idempotency-Key": "create"}
+            ).status_code
+            == 201
+        )
+        assert (
+            client.post(
+                BASE + "/one/extractions",
+                json={"expectedRevision": 1},
+                headers={"Idempotency-Key": "extract"},
+            ).status_code
+            == 202
+        )
+        assert ai.entered.wait(2)
+        calling = wait_view(client, phase="CALLING")
+        cancelled = client.post(
+            BASE + "/one/cancellations",
+            json={"expectedRevision": calling["revision"]},
+            headers={"Idempotency-Key": "cancel"},
+        )
+        assert cancelled.status_code == 202
+        ai.release.set()
+        ended = wait_view(client, status="CANCELLED", phase=None)
+        edit = {
+            "expectedRevision": ended["revision"],
+            "source": {**ended["source"], "text": ended["source"]["text"] + "\n"},
+        }
+        changed = client.put(BASE + "/one/source", json=edit, headers={"Idempotency-Key": "edit"})
+        assert changed.status_code == 200 and changed.json()["status"] == "DRAFT"
+        assert (
+            client.post(
+                BASE + "/one/extractions",
+                json={"expectedRevision": changed.json()["revision"]},
+                headers={"Idempotency-Key": "new-extract"},
+            ).status_code
+            == 202
+        )
+        wait_view(client, status="CANDIDATE", phase=None)
+        record = PreparationStore(tmp_path / "preparation.sqlite3").get("one")
+        body = {"review": review_command(record).model_dump(mode="json")}
+        review = client.post(
+            BASE + "/one/reviews", json=body, headers={"Idempotency-Key": "review"}
+        )
+        assert review.status_code == 200
+        frozen, reviewed = review.json(), client.get(BASE + "/one").json()
+    restarted_ai = FakeAI()
+    with serve(restarted_ai) as client:
+        assert client.get(BASE + "/one").json() == reviewed
+        assert (
+            client.post(
+                BASE + "/one/reviews", json=body, headers={"Idempotency-Key": "review"}
+            ).json()
+            == frozen
+        )
+        assert restarted_ai.captures == 0 and restarted_ai.calls == []
+
+
+@pytest.mark.parametrize("legacy_review", [False, True])
+def test_opaque_legacy_candidates_cannot_expose_raw_payload_or_frozen_authority(
+    tmp_path, legacy_review
+):
+    from fastapi.testclient import TestClient
+    from tests.integration.test_plan_preparation_review import review_command
+
+    from trade_plan_monitor.backtest.preparation_models import PreparationCandidateInput
+
+    store = PreparationStore(tmp_path / "preparation.sqlite3")
+    created = store.create(
+        SinglePlanPreparationInput.model_validate_json(json.dumps(extracted_body()["input"])),
+        idempotency_key="create",
+    )
+    started = store.start_attempt(
+        "one", expected_revision=created.revision, idempotency_key="extract"
+    )
+    record = store.finish_attempt(
+        "one",
+        expected_revision=started.revision,
+        attempt_id=started.attempts[-1].attempt_id,
+        idempotency_key="finish",
+        candidate=PreparationCandidateInput(
+            payload_json='{"private_provider_detail":"hidden-value"}',
+            validation="VALID",
+            evidence_hash="a" * 64,
+        ),
+    )
+    if legacy_review:
+        record = store.record_review(
+            "one",
+            expected_revision=record.revision,
+            expected_source_revision=record.source_revision,
+            expected_candidate_revision=record.candidate_revision,
+            candidate_hash=record.candidate.candidate_hash,
+            evidence_hash=record.candidate.evidence_hash,
+            confirmed=True,
+            idempotency_key="legacy-review",
+        )
+    ai = FakeAI()
+    app, _ = api_app(tmp_path, ai=ai)
+    with TestClient(app, base_url=ORIGIN) as client:
+        result = client.get(BASE + "/one")
+        assert result.status_code == 200 and "hidden-value" not in result.text
+        assert result.json()["candidate"]["kind"] == "UNAVAILABLE"
+        assert result.json()["candidate"]["frozen"] is None
+        review = client.post(
+            BASE + "/one/reviews",
+            json={"review": review_command(record).model_dump(mode="json")},
+            headers={"Idempotency-Key": "new-review"},
+        )
+        assert review.status_code == 409 and store.get("one") == record
+        assert ai.captures == 0 and ai.calls == []

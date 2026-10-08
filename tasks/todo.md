@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 14 completed, 23 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV23.
+> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 15 completed, 22 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV24.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -109,7 +109,7 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 ### ML-C03. Checkpoint
 
 - [x] Single-source persistence, complete extraction and original evidence bindings pass; ML-T09 is cancelled.
-- [x] Record executed evidence; resolve failures before dependent work without lowering the bar. MV20/MV21 record the private persistence/extraction gate; ML-T10 passes MV22, ML-T11 passes MV23, and ML-T12 is next.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar. MV20/MV21 record the private persistence/extraction gate; ML-T10 passes MV22, ML-T11 passes MV23, ML-T12/ML-C04 pass MV24, and ML-T13 is next.
 
 ## ML-T10. Resume single-source extraction safely
 
@@ -119,7 +119,7 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `tests/integration/test_plan_preparation_worker.py`
 - **Scope:** Two M increments, 4 primary files each (7 unique including the shared test); **Trace:** ML-A16, ML-A18. First persist worker ownership/progress and read the existing admission reservation for recovery; then connect owned calls and configured AI. No new job kind, queue, database or public route.
-- **Evidence:** MV22: 29 worker cases and the 3000-case final regression pass. Owned calls retain existing global admission through physical drain; unknown paid outcomes require explicit ended confirmation. Reads/replayed receipts never dispatch, and known retries remain within three durable attempts. Semantic review/freeze and public preparation integration remain ML-T11/ML-T12.
+- **Evidence:** MV22: 29 worker cases and the 3000-case final regression pass. Owned calls retain existing global admission through physical drain; unknown paid outcomes require explicit ended confirmation. Reads/replayed receipts never dispatch, and known retries remain within three durable attempts. Semantic review/freeze and public preparation integration pass ML-T11/ML-T12 in MV23/MV24.
 
 ## ML-T11. Review and freeze one complete prepared plan
 
@@ -129,21 +129,22 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_review.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/preparation_review.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_review.py`
 - **Scope:** M (4 primary files including tests); **Trace:** ML-A17, ML-A18.
-- **Evidence:** MV23: 51 review cases pass. Exact revision/source/plan/account/evidence bindings, atomic manifest/declaration, original receipt replay and physical admission retention are verified. Unknown opening facts remain explicit; forged AI/legacy review flags and future opening marks cannot grant authority. Public preparation integration remains ML-T12; ML-C04 remains pending.
+- **Evidence:** MV23: 51 review cases pass. Exact revision/source/plan/account/evidence bindings, atomic manifest/declaration, original receipt replay and physical admission retention are verified. Unknown opening facts remain explicit; forged AI/legacy review flags and future opening marks cannot grant authority. Public preparation integration and ML-C04 pass MV24.
 
 ## ML-T12. Expose the preparation application path
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T10`, `ML-T11`, `ML-T33`
 - **Acceptance:** Connect exactly-one-source create/read/edit/extract/cancel/review operations to on-demand capability ownership and acquired-resource shutdown. HTTP tests prove second-source rejection, revisions, idempotency, bounded projections and fake-AI progress without live-plan mutations. Guard readiness; preparation-store failure degrades backtest only.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_api.py`
 - **Scope:** Two M increments, 4 primary files each (7 unique including shared tests); **Trace:** ML-A10, ML-A16, ML-A18. First close create admission/receipt and capability ownership, then mount bounded HTTP commands. Stage schema publication until ML-T13; preserve approved contracts/digests.
+- **Evidence:** MV24: 53 task cases pass, including a real loopback HTTP fake-AI cancel/edit/extract/review/restart journey. Invalid requests acquire no resources; preparation storage opens on demand, failure is cached, reads never activate the job coordinator, original receipts replay during unrelated work, and global admission lasts through physical drain. Unknown recovery never resubmits; legacy flags/raw payloads cannot grant frozen authority. ML-T13 is next.
 
 ### ML-C04. Checkpoint
 
-- [ ] Restart/cancel/edit/review works through real HTTP with fake AI.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Restart/cancel/edit/review works through real HTTP with fake AI.
+- [x] Record executed evidence in MV24; resolve failures before dependent work without lowering the bar.
 
 ## ML-T13. Generate preparation transport contracts
 

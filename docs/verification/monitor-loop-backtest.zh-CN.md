@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18–MV23：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11 与 ML-C01/ML-C02/ML-C03 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV22 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV24：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12 与 ML-C01/ML-C02/ML-C03/ML-C04 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV23 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/生成契约/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -450,3 +450,26 @@ ML-T10 已按计划的两个切片完成。可选归属/进度字段扩展既有
 | 文档/工作区 | 双语 ID/标题/字面契约、原始已完成 todo 历史及 MV01–MV22 历史、`git diff --check` | PASS；完成 14 项，待完成活动任务 23 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
 
 下一项为 ML-T12；ML-C04 仍待以真实 HTTP 和假 AI 验证公开准备路径后完成。自查覆盖明确权限、规范哈希/修订绑定、原始证据及未知事实、原子存储、历史因果、单槽准入及实际工作归属。检查使用合成输入和临时库，没有付费请求、行情下载、真实通知、生产状态修改或部署。保留既有 Starlette/httpx 弃用提示。独立的概览重试/runtime 修改及盛新研究产物保留在这些提交之外。API/UI/报告集成及整体负载验收仍待完成。
+
+## MV24. 单原文准备 HTTP 与按需归属
+
+2026-10-08 继续 ML-T12 前，ML-T11 已推送至 GitHub main 的 `d2edc5b`。两个既定切片保持在七个主要文件内：`backtest/preparation_store.py`、`backtest/preparation_service.py`、`backtest/composition.py`、`web/preparation_schemas.py`、`web/routers/backtest_preparations.py`、`web/app.py` 及 `tests/integration/test_plan_preparation_api.py`。中英文方案/任务/验证文档同步；独立概览重试/运行时修改及盛新产物继续排除。
+
+应用挂载恰好单原文的创建/读取/编辑/提取/取消/审核/恢复命令。封装字段使用 camel case，内嵌研究值保留既有字段名。原文继续限于 150000 字符，候选持久化限于 1 MiB，公开进度限于 2 MiB，输入传输沿用既有 4 MiB。修订遵守安全整数。投影包含类型化候选/账户/映射或冻结值，以及代次/阶段进度和有界尝试；排除原始候选 JSON、私有归属/准入令牌、供应商诊断及文件系统路径。格式错误的不透明候选和旧审核标记投影为 UNAVAILABLE，不能产生冻结权限。
+
+来源、命令、标识符、查询和变更键校验在能力取得前完成。准备库仅在明确且有效的准备请求时打开；未使用的启动/历史/关闭不打开该库。元数据操作保持任务协调器休眠，不捕获或调用 AI。新提取先检查旧回执和全局准入，再捕获既有配置适配器。缺少 AI 不建立尝试。准备库取得失败会缓存并保持局部影响；监控和普通任务读取仍可用。修复文件不重试取得，既有明确生命周期重试才会重试。
+
+新的创建/编辑/提取/取消/审核命令拒绝 QUEUED/RUNNING/CANCEL_REQUESTED/过期状态的 RUN/SYNC/VERIFY。原创建/编辑/取消/提取/审核回执在后续工作期间仍可读取，不恢复旧状态或分派新调用；GET 返回当前状态。取消/编辑原文在工作线程实际完成前保留全局准入，丢弃晚到结果并保持精确原文/代次保护。未知结果在重启后保留准入；明确绑定代次/修订并确认结束的恢复不重新提交，后续提取要求新的明确请求。已取得准备资源关闭在内部观察超时后继续保持实际归属，排空后才关闭 AI；未用能力关闭不取得资源。
+
+两项 HTTP 回归首先暴露旧编辑/取消回执被其他工作阻断，另一项暴露准入前捕获 AI 配置。修复将旧回执重放移至新工作准入前，将适配器捕获移至准入后。未弱化断言、边界或跳过项。真实本地 Uvicorn/httpx 流程使用假 AI 及临时数据库，验证取消 → 编辑 → 提取 → 审核 → 重启，以及不隐式调用的不可变回执重放。
+
+| 检查 | 实际执行命令/证据 | 结果 |
+|---|---|---|
+| 本项门禁 | `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q --tb=short -m 'not live' --basetemp=.pytest_cache/ml-t12-release-final` | 53 项通过，17.14 秒。 |
+| 最终单元/契约及相关集成 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract tests/integration/test_plan_preparation_api.py tests/integration/test_plan_preparation_store.py tests/integration/test_plan_preparation_worker.py tests/integration/test_plan_preparation_review.py tests/integration/test_backtest_single_task.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_production_composition.py tests/integration/test_backtest_startup_isolation.py tests/integration/test_configured_ai_web.py tests/integration/test_backtest_data_api.py tests/integration/test_backtest_job_api.py tests/integration/test_backtest_run_api.py tests/integration/test_backtest_result_api.py tests/integration/test_backtest_export_api.py tests/integration/test_backtest_index_api.py tests/integration/test_web_api.py tests/integration/test_openapi_snapshot.py -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t12-final-regression` | 3484 项通过、1 项既有跳过、4 项在线测试未选，113.21 秒；包含全部 53 项任务检查。 |
+| 代码质量 | `.venv/Scripts/python.exe -m ruff check src tests scripts`；`.venv/Scripts/python.exe -m ruff format --check src/trade_plan_monitor/web/preparation_schemas.py src/trade_plan_monitor/web/routers/backtest_preparations.py tests/integration/test_plan_preparation_api.py` | PASS。 |
+| 普通契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | 权威监控 v2 及兼容监控 v1 均 PASS；未修改快照/类型/批准摘要。 |
+| 变异审阅 | 临时反转新增的原变更回执条件，运行编辑/取消重放检查；最终回归前恢复原始文件精确字节。 | 变异下 2 项失败；恢复后最终回归通过。 |
+| 文档/工作区 | 双语标题/ID/字面契约、原已完成任务尾部、MV01–MV23 历史及 `git diff --check` | PASS；完成 15 项、待完成活动任务 22 项，37 活动 / 保留 39 个 ID，13 个检查点。 |
+
+ML-T12 与 ML-C04 完成；下一项为 ML-T13。路由已挂载，模式发布仍以 `include_in_schema=False` 暂存；ML-T13 发布该标志并生成契约供具体审阅，不静默批准摘要。自审覆盖边界、类型化投影、全局准入、原回执、精确修订、晚到结果保护、实际归属、重启及明确人工权限。既有 Starlette/httpx 弃用提示保持。未发生付费/供应商/行情调用、真实通知、生产计划变更或部署。UI/运行/结果集成及整体负载验收仍待完成。

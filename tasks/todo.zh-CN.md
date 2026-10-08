@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 14 项、待完成活动任务 23 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV23。
+> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 15 项、待完成活动任务 22 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV24。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -109,7 +109,7 @@
 ### ML-C03. 检查点
 
 - [x] 单原文持久化、完整提取及原始证据绑定通过；ML-T09 已取消。
-- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁；ML-T10 通过 MV22，ML-T11 通过 MV23，下一项为 ML-T12。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁；ML-T10 通过 MV22，ML-T11 通过 MV23，ML-T12/ML-C04 通过 MV24，下一项为 ML-T13。
 
 ## ML-T10. 安全恢复单原文提取
 
@@ -119,7 +119,7 @@
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_worker.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_worker.py`, `src/trade_plan_monitor/web/ai_service.py`, `tests/integration/test_plan_preparation_worker.py`
 - **范围:** 拆成两个 M 切片，每个 4 个主要文件（含共用测试共 7 个不同文件）；**追溯:** ML-A16, ML-A18。先持久化工作线程归属/进度并读取既有准入预留以恢复，再接入自有调用和配置 AI。不新增任务类型、队列、数据库或公开路由。
-- **证据:** MV22：29 项工作线程检查及 3000 项最终回归通过。自有调用在实际排空前保留既有全局准入；未知付费结果要求明确确认旧工作已结束。读取/旧回执重放不发起调用，已知重试仍限制在三次持久化尝试内。语义审核/冻结及公开准备集成仍属于 ML-T11/ML-T12。
+- **证据:** MV22：29 项工作线程检查及 3000 项最终回归通过。自有调用在实际排空前保留既有全局准入；未知付费结果要求明确确认旧工作已结束。读取/旧回执重放不发起调用，已知重试仍限制在三次持久化尝试内。语义审核/冻结及公开准备集成在 MV23/MV24 通过 ML-T11/ML-T12。
 
 ## ML-T11. 审核并冻结一份完整准备计划
 
@@ -129,21 +129,22 @@
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_review.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/preparation_review.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_review.py`
 - **范围:** M (4 个主要文件，含测试); **追溯:** ML-A17, ML-A18.
-- **证据:** MV23：51 项审核检查通过。已验证精确修订/原文/计划/账户/证据绑定、清单与声明原子写入、原始收据重放及实际准入保留。期初未知事实继续明确保留，伪造 AI/旧审核标记及未来期初行情不能产生权限。公开准备集成仍属于 ML-T12，ML-C04 仍待完成。
+- **证据:** MV23：51 项审核检查通过。已验证精确修订/原文/计划/账户/证据绑定、清单与声明原子写入、原始收据重放及实际准入保留。期初未知事实继续明确保留，伪造 AI/旧审核标记及未来期初行情不能产生权限。公开准备集成及 ML-C04 在 MV24 通过。
 
 ## ML-T12. 接通准备应用接口
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T10`, `ML-T11`, `ML-T33`
 - **验收:** 将恰好单原文的创建/读取/编辑/提取/取消/审核接入按需能力归属及已取得资源关闭。HTTP 测试证明拒绝第二原文、修订、幂等、有界投影和假 AI 进度，不变更在线计划。守住就绪门槛，准备库失败仅降级回测。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_api.py`
 - **范围:** 两个 M 切片，每个 4 个主要文件（含共用测试共 7 个不同文件）；**追溯:** ML-A10, ML-A16, ML-A18。先补齐创建准入/收据及能力归属，再挂载有界 HTTP 命令。模式发布暂存至 ML-T13，保留已批准契约/摘要。
+- **证据:** MV24：53 项任务检查通过，包括真实本地 HTTP 配假 AI 的取消/编辑/提取/审核/重启流程。非法请求不取得资源；准备库按需打开，失败会缓存，读取不激活任务协调器，旧回执在其他工作进行时仍可重放，全局准入持续到实际排空。未知结果恢复不重新提交，旧标记/原始载荷不能产生冻结权限。下一项为 ML-T13。
 
 ### ML-C04. 检查点
 
-- [ ] 真实 HTTP 配虚拟 AI 跑通重启/取消/编辑/审核。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] 真实 HTTP 配虚拟 AI 跑通重启/取消/编辑/审核。
+- [x] 在 MV24 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
 ## ML-T13. 生成准备传输契约
 
