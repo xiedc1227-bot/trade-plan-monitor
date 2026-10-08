@@ -163,7 +163,7 @@
 - **验收:** 恰好接受一份原文，显示提取状态/错误并支持稳定重试/取消。终态/卸载停止轮询，错误原文/服务错误保持可见可编辑。不含批次排序或多计划选择。
 - **验证:** `npm --prefix web run test -- --run tests/unit/PlanPreparation.spec.ts`
 - **主要文件:** `web/src/api/preparations.ts`, `web/src/composables/usePlanPreparation.ts`, `web/src/components/backtests/PlanPreparationSourceForm.vue`, `web/src/components/backtests/PlanPreparationProgress.vue`, `web/tests/unit/PlanPreparation.spec.ts`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A10, ML-A16, ML-A18.
+- **范围:** 三个切片（2 / 2 / 3 个主要文件，含共用测试共 5 个不同文件）；**追溯:** ML-A10, ML-A16, ML-A18。先增加有界同源传输及稳定请求回执；再实现单份准备控制器，保留修订安全重试、实际排空/未知状态保护并停止轮询；最后实现受控单份文本/文件输入及进度组件。明确结束确认仅恢复 UNKNOWN 工作，不重新提交。页面及审核预览在 ML-T15 接入。复用现有设计变量，通过临时界面验证真实浏览器行为；不改后端、生成契约或批准门禁。
 
 ## ML-T15. 预览并审核一份准备计划
 

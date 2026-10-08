@@ -163,7 +163,7 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Acceptance:** Accept exactly one source, show extraction state/errors and support stable retry/cancel. Polling stops on terminal state/unmount; malformed source/server errors remain visible and editable. No batch order or multi-plan selection.
 - **Verification:** `npm --prefix web run test -- --run tests/unit/PlanPreparation.spec.ts`
 - **Primary files:** `web/src/api/preparations.ts`, `web/src/composables/usePlanPreparation.ts`, `web/src/components/backtests/PlanPreparationSourceForm.vue`, `web/src/components/backtests/PlanPreparationProgress.vue`, `web/tests/unit/PlanPreparation.spec.ts`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A10, ML-A16, ML-A18.
+- **Scope:** Three increments (2 / 2 / 3 primary files; 5 unique including shared tests); **Trace:** ML-A10, ML-A16, ML-A18. First add bounded same-origin transport and stable request receipts; then one preparation controller with revision-safe retry, physical-drain/unknown fences and stopped polling; finally controlled single-text/file input and progress components. Explicit ended confirmation only recovers UNKNOWN work and never resubmits. Bind the route and review preview in ML-T15. Reuse existing design tokens and validate real browser behavior with a temporary harness; no backend, generated contract or approval-gate change.
 
 ## ML-T15. Preview and review one prepared plan
 

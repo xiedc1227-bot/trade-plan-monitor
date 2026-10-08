@@ -145,6 +145,8 @@ The Web/API builds one immutable reviewed-plan input and submits to the existing
 
 Keep route views as composition surfaces. Use Vue Composition API, TypeScript and `<script setup>`; props down/events up. Do not duplicate cash checks or reminder decisions in the browser.
 
+ML-T14 uses three increments (2 / 2 / 3 primary files, five unique including shared tests): preparation transport, one controller, then source/progress components. The source form accepts one UTF-8 text/Markdown file or pasted text with optional Shanghai chronology, keeps errors and edits visible, and emits controlled source/submit intents. Progress receives readonly authoritative state and emits extract/cancel/refresh/same-request-retry or explicit ended-confirmation intents. The controller retains one immutable mutation payload/key while its result is uncertain, ignores stale reads and original old receipts, and stops polling on idle/terminal drained states or unmount. CANCEL_REQUESTED/UNKNOWN/unended work keeps fresh actions blocked even when an apparent terminal status is present. Recovery never implies extraction. Use the existing tokens and accessible labels/status/errors. Temporary browser harnesses verify these components; production route composition and reviewed-plan preview remain ML-T15. No queue, shared lock, backend change or API approval is introduced.
+
 ## IP07. Task sequence and checkpoints
 
 The authoritative checkboxes and file lists are in [todo.md](todo.md). Each task is limited to about five primary files including tests; split further if additional independent behavior or contract artifacts expand that scope.
