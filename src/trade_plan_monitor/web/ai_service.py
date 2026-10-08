@@ -6,8 +6,10 @@ import asyncio
 import hashlib
 import json
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from threading import BoundedSemaphore
 from typing import Final, Protocol
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -20,13 +22,16 @@ from trade_plan_monitor.ai.composition import (
 )
 from trade_plan_monitor.ai.configured_secrets import create_configured_secret_store
 from trade_plan_monitor.ai.extraction import extract_plan
+from trade_plan_monitor.ai.loop_plan_extraction import extract_loop_plan
 from trade_plan_monitor.ai.models import (
     ExplicitPlanDraft,
     PlanExtractionResult,
     PlanExtractionStatus,
 )
+from trade_plan_monitor.ai.openai_compatible import OpenAICompatibleProvider
 from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json
 from trade_plan_monitor.ai.secrets import InMemorySecretStore
+from trade_plan_monitor.backtest.preparation_worker import PreparationExtractor
 from trade_plan_monitor.config import AIConfiguration, load_application_config
 from trade_plan_monitor.domain.plan_codec import dump_plan_json
 from trade_plan_monitor.web.ai_diagnostics import (
@@ -94,7 +99,7 @@ class ConfiguredAIWebLifecycle:
         self._operations: dict[UUID, PlanExtractionView] = {}
         self._receipts: dict[str, tuple[str, OperationReceipt]] = {}
         self._tasks: set[asyncio.Task[None]] = set()
-        self._extraction_slots = asyncio.Semaphore(_MAX_CONCURRENT_EXTRACTIONS)
+        self._extraction_slots = BoundedSemaphore(_MAX_CONCURRENT_EXTRACTIONS)
 
     @property
     def ai_operation_service(self) -> ConfiguredAIWebLifecycle:
@@ -242,10 +247,56 @@ class ConfiguredAIWebLifecycle:
             return None
         return self._operations.get(identity)
 
+    def backtest_extractor(self, provider_id: UUID | None = None) -> PreparationExtractor:
+        """Capture immutable settings; each owned call creates and closes its own transport."""
+        binding = self._require_binding(provider_id)
+        secret_store = self._secret_store
+        factory = self._client_factory
+        slots = self._extraction_slots
+        config = binding.config.model_copy(update={"max_retries": 0})
+
+        def call(identity, source, token):
+            while not slots.acquire(timeout=0.05):
+                if token.cancelled:
+                    return None
+            try:
+                if token.cancelled:
+                    return None
+                if self._client is None or self._secret_store is not secret_store:
+                    raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+
+                async def extract():
+                    client = factory()
+                    if not isinstance(client, httpx.AsyncClient):
+                        raise TypeError("client_factory must return an httpx.AsyncClient")
+                    async with client:
+                        provider = OpenAICompatibleProvider(
+                            client=client, secret_store=secret_store, profile=binding.profile,
+                        )
+                        return await extract_loop_plan(
+                            request_id=identity, source=source, config=config, provider=provider,
+                        )
+
+                return asyncio.run(extract())
+            finally:
+                slots.release()
+
+        return PreparationExtractor(call, max_retries=binding.config.max_retries)
+
+    @asynccontextmanager
+    async def _extraction_slot(self):
+        # The existing capacity of one is shared across the ordinary and owned event loops.
+        while not self._extraction_slots.acquire(blocking=False):
+            await asyncio.sleep(0.01)
+        try:
+            yield
+        finally:
+            self._extraction_slots.release()
+
     async def _run_extraction(self, *, operation_id: UUID, source_text: str) -> None:
         queued = self._operations[operation_id]
         try:
-            async with self._extraction_slots:
+            async with self._extraction_slot():
                 started_at = _now()
                 self._operations[operation_id] = PlanExtractionView(
                     id=operation_id,
