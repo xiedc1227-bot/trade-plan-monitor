@@ -1,8 +1,8 @@
 # 验证记录：监控闭环回测
 
-英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-07，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
+英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前任务准入纠正及私有单计划循环证据见 MV18/MV19：ML-T01–ML-T05 与 ML-C01/ML-C02 已实现并验证。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV17 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。准备、数据集/工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18/MV19/MV20：ML-T01–ML-T05、ML-T07 与 ML-C01/ML-C02 已实现并验证。MV20 记录私有准备持久化，MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV19 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。完整提取、语义审核/冻结、准备全局准入、数据集/工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -362,3 +362,28 @@ ML-T05/ML-C02 已实现并验证。冻结因果帧驱动共享监控及合格本
 两轮较广的既有验收调用在无关全年规模夹具中结束，均不把完整调用计为 PASS。第二轮按名称筛选仍包含全年用例，因此最终相关检查改为上表明确节点选择。容量阈值及测试定义不变，完整闭环负载验收仍待完成。
 
 自审覆盖事务准入/预留竞态、幂等重试、终态释放、单个恢复授权、分钟/报价/限价/日历绑定、精确数量/费用、共享风险权限、到期观察及有界反馈。既有 Starlette/httpx 弃用提示保留。此私有切片未实现准备、已记录动作导入、冻结数据集读取、工作线程/API/UI/报告集成或完整闭环负载验收。完成 10 项、待完成活动任务 27 项，37 活动 / 保留 39 个 ID；ML-T06/ML-T09 继续取消，下一项为 ML-T07。本切片未提交/推送，未使用付费请求、生产状态、真实通知或部署。
+
+## MV20. 单计划准备状态持久化
+
+2026-10-08，ML-T07 从 `main` `91eca25` 继续。三个主要文件为 `backtest/preparation_models.py`、`backtest/preparation_store.py` 和 `tests/integration/test_plan_preparation_store.py`，同步更新中英文方案/任务/验证记录。独立盛新研究继续保留在本次改动之外。
+
+独立 SQLite 文件包含 `backtest_preparation_metadata`、`backtest_preparation` 和 `backtest_preparation_idempotency`。元数据绑定 `backtest-preparation-v1` 和模式版本 1。复用既有路径规范化/存储防护，并检查标记与表集合，拒绝在线、行情、结果/任务、未知、混用及不支持版本的存储。反向以行情/结果仓库打开准备文件也会拒绝；拒绝测试验证文件字节不变。不增加生产迁移/配置或深度文件别名框架。
+
+严格不可变输入恰好包含一份原文。保留原文、SHA-256、已提供的编写/可用/生效日期及独立元数据绑定哈希；缺少历史日期时仍为未知。在持久化入口重新校验创建/编辑类型值，避免手工构造对象绕过原文数量或空白内容检查。每个原文修订最多保留 3 次尝试；未变化的编辑不会重置次数。读取/重启保留未确认尝试，不调用供应商、不自动重试，也不因租约到期释放。
+
+修改原文会提升修订并使候选/审核绑定失效。进行中的编辑或取消保存 `CANCEL_REQUESTED` 及未确认尝试身份，拒绝迟到候选完成。其他准备修改/启动仍被阻止，重启后同样保持。只有显式 `acknowledge_cancellation` 才记录已确认结束。修改后的原文随后可回到草稿；编辑后再明确取消则结束为已取消。这一存储确认不能证明物理工作线程已排空：ML-T10 必须先建立该事实再调用确认，ML-T10/ML-T12 必须将准备接入既有全局任务准入。本项不暴露工作线程或公开准备入口。
+
+候选持久化沿用既有 1 MiB 输出、10000 节点及 64 层深度提取边界，拒绝重复键、损坏/非有限 JSON 和非对象根节点。有界不透明载荷并未实现 ML-T08 的完整计划/期初账户输出。`VALID` 与批准分开。明确保存审核要求字面布尔真值，并绑定精确原文/候选修订、候选哈希和证据哈希。即使输出相同，重新提取也使审核失效。完整原文条款校验、语义审核及不可变提交冻结仍归 ML-T08/ML-T11/ML-T17。
+
+每次修改及其幂等响应在同一个 `BEGIN IMMEDIATE` 事务提交。同键重试在后续编辑之后仍返回原回执，不恢复旧状态；改变请求/操作会冲突。并发创建/编辑/启动测试证明唯一回执、修订保护及唯一未确认准备尝试。注入回执插入失败会回滚此前文档写入，并允许按原请求重试。取消/确认修订及尝试 ID 阻止陈旧完成。
+
+初始目标因模块尚不存在失败；下一切片有 16 项预期的缺少操作失败。空操作编辑及准入测试随后暴露两处真实边界缺口；取消测试暴露提前终态释放及编辑后取消仍重开草稿的问题。手工构造对象测试暴露原文校验绕过。均在最终门槛前修正，没有移除断言或跳过测试。首次默认临时目录运行出现权限错误，实际门槛使用工作区内独立忽略目录。大输入测试标识已缩短以避免 Windows 文件名长度限制。
+
+| 门槛 | 实际执行命令 | 结果 |
+|---|---|---|
+| 准备及相关集成 | `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_store.py tests/integration/test_backtest_single_task.py tests/integration/test_monitor_loop_cycle.py tests/integration/test_backtest_results.py::test_backtest_storage_domains_reject_aliases_and_live_tables tests/integration/test_backtest_results.py::test_backtest_stores_reject_each_plan_web_state_table tests/integration/test_backtest_market_store.py::test_market_store_reopens_with_stable_dataset_content -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t07-release` | 92 passed，7.75 秒，包含全部 53 项 ML-T07 案例。 |
+| 单元/契约回归 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t07-units-final` | 2809 passed，4 项 live deselected，23.95 秒；在最终两行私有创建/编辑重新校验之前，上方集成门槛覆盖该修改。 |
+| 代码质量 | `.venv/Scripts/python.exe -m ruff check src tests scripts` | 最终源码修改后 PASS。 |
+| 既有生成契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | canonical monitor v2 与 compatibility monitor v1 均 PASS，公开模式/类型未修改。 |
+
+自审覆盖原文/元数据权限、精确修订绑定、重启/未知结果、取消占位、显式确认、有界 JSON、幂等快照、回滚、路径分离及并发写入。既有 Starlette/httpx 弃用提示保留。ML-T07 完成；完成 11 项、待完成活动任务 26 项，37 活动 / 保留 39 个 ID，13 个检查点。ML-C03 仍待 ML-T08，ML-T06/ML-T09 继续取消。未调用供应商/付费请求、真实通知、生产状态修改、部署或额外负载夹具。本私有存储切片未增加提取工作线程、跨存储全局准入集成、API、UI 或回测提交入口。

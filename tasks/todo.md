@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-07. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T30–ML-T34, ML-C01/ML-C02 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07: ML-T06/ML-T09 are cancelled; 10 completed, 27 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV19.
+> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07, ML-T30–ML-T34, ML-C01/ML-C02 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 11 completed, 26 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV20.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -79,12 +79,13 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T07. Persist single-plan preparation and revision state
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T01`
 - **Acceptance:** Create a separately tagged preparation store with exactly one source, bounded attempts, candidate/review revisions and idempotency; reject cross-domain paths. Persist restart state while validation remains separate from approval.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_store.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_store.py`
 - **Scope:** M (3 primary files including tests); **Trace:** ML-A16, ML-A18.
+- **Evidence:** MV20: 53 preparation-store cases pass within the 92-case related integration gate. Private persistence only; ML-T08/ML-T10/ML-T11/ML-T12 retain extraction, worker drain/global admission, semantic review/freeze and API integration. ML-C03 remains pending ML-T08.
 
 ## ML-T08. Extract one complete plan and opening account
 
