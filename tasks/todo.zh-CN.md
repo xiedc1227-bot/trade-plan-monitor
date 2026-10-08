@@ -152,8 +152,8 @@
 - **依赖:** `ML-T12`
 - **验收:** 从挂载生产路由生成契约，测试新增区分载荷与错误结构。保留未受影响路由/类型，将 API 变化留给 ML-T29 审阅，不提前填批准摘要。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
-- **主要文件:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_plan_preparation_contract.py`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A10, ML-A16.
+- **主要文件:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_plan_preparation_contract.py`
+- **范围:** 三个切片（2 / 2 / 5 个主要文件，含共用测试共 7 个不同文件）；**追溯:** ML-A10, ML-A16。先收窄候选分支及公开修订边界，不改变成功响应值；再发布已挂载路由及实际成功/错误状态；最后生成两种 profile 并验证既有路由/类型不变。发布及生成产物切片在漂移检查通过后共同提交。旧批准摘要/路径门禁保持不动，留待 ML-T29，完整记录实际结果而不抑制。
 
 ## ML-T14. 构建单原文上传及进度 UI
 

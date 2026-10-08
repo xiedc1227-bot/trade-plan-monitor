@@ -152,8 +152,8 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Dependencies:** `ML-T12`
 - **Acceptance:** Generate contracts from mounted production routes and test the new discriminated payloads and error shapes. Preserve unaffected routes/types; document API changes for ML-T29 approval rather than stamping a digest early.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
-- **Primary files:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_plan_preparation_contract.py`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A10, ML-A16.
+- **Primary files:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_plan_preparation_contract.py`
+- **Scope:** Three increments (2 / 2 / 5 primary files; 7 unique including shared tests); **Trace:** ML-A10, ML-A16. First narrow candidate variants and public revision bounds without changing successful wire values; then publish the mounted router and its actual success/error statuses; finally generate both profiles and verify unchanged existing routes/types. The publication and generated-output increments are committed together after drift checks pass. Old approval digest/path gates remain untouched and pending ML-T29; record their exact results without suppressing them.
 
 ## ML-T14. Build one-source upload and progress UI
 

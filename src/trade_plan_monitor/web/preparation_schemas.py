@@ -29,6 +29,8 @@ Revision = Annotated[int, Field(strict=True, ge=1, le=9_007_199_254_740_991)]
 def _embedded[T: BaseModel](model: type[T], value: object) -> T:
     if isinstance(value, model):
         return value
+    if isinstance(value, BaseModel):
+        return model.model_validate_json(value.model_dump_json())
     return model.model_validate_json(json.dumps(value, ensure_ascii=False, allow_nan=False))
 
 
@@ -54,13 +56,19 @@ class PreparationSourceCommand(PreparationRevisionCommand):
         return _embedded(PreparationSource, value)
 
 
+class PreparationReviewDeclaration(PreparationReviewCommand):
+    expected_revision: Revision
+    expected_source_revision: Revision
+    expected_candidate_revision: Revision
+
+
 class PreparationReviewInput(ApiValue):
-    review: PreparationReviewCommand
+    review: PreparationReviewDeclaration
 
     @field_validator("review", mode="before")
     @classmethod
     def parse_review(cls, value):
-        return _embedded(PreparationReviewCommand, value)
+        return _embedded(PreparationReviewDeclaration, value)
 
 
 class PreparationRecoveryCommand(PreparationRevisionCommand):
@@ -68,8 +76,16 @@ class PreparationRecoveryCommand(PreparationRevisionCommand):
     confirmed_ended: Annotated[Literal[True], BeforeValidator(_confirmed)]
 
 
-class PreparationCandidateView(ApiValue):
-    kind: Literal["EXTRACTION", "FROZEN", "UNAVAILABLE"]
+class PreparationAttemptView(PreparationAttempt):
+    source_revision: Revision
+
+
+class PreparationFrozenManifest(FrozenPreparedPlan):
+    source_revision: Revision
+    extraction_candidate_revision: Revision
+
+
+class _PreparationCandidateBase(ApiValue):
     candidate_hash: Sha256Hex
     evidence_hash: Sha256Hex
     validation: Literal["VALID", "INVALID", "UNRESOLVED"]
@@ -77,7 +93,43 @@ class PreparationCandidateView(ApiValue):
     draft: UnifiedPlanDraft | None = None
     mapping: DailyMapping | None = None
     opening_account: OpeningAccountFacts | None = None
-    frozen: FrozenPreparedPlan | None = None
+    frozen: PreparationFrozenManifest | None = None
+
+    @field_validator("frozen", mode="before")
+    @classmethod
+    def parse_frozen(cls, value):
+        return None if value is None else _embedded(PreparationFrozenManifest, value)
+
+
+class PreparationExtractionCandidate(_PreparationCandidateBase):
+    kind: Literal["EXTRACTION"]
+    draft: UnifiedPlanDraft
+    mapping: DailyMapping
+    opening_account: OpeningAccountFacts
+    frozen: None = None
+
+
+class PreparationFrozenCandidate(_PreparationCandidateBase):
+    kind: Literal["FROZEN"]
+    draft: None = None
+    mapping: None = None
+    opening_account: None = None
+    frozen: PreparationFrozenManifest
+
+
+class PreparationUnavailableCandidate(_PreparationCandidateBase):
+    kind: Literal["UNAVAILABLE"]
+    validation: Literal["INVALID"]
+    draft: None = None
+    mapping: None = None
+    opening_account: None = None
+    frozen: None = None
+
+
+PreparationCandidateView = Annotated[
+    PreparationExtractionCandidate | PreparationFrozenCandidate | PreparationUnavailableCandidate,
+    Field(discriminator="kind"),
+]
 
 
 class PreparationView(ApiValue):
@@ -91,10 +143,15 @@ class PreparationView(ApiValue):
     ]
     source: PreparationSource
     source_edit_pending: bool
-    attempts: tuple[PreparationAttempt, ...] = Field(max_length=3)
+    attempts: tuple[PreparationAttemptView, ...] = Field(max_length=3)
     work_phase: Literal["READY", "CALLING", "UNKNOWN", "ENDED"] | None
     generation: StableIdentifier | None
     candidate: PreparationCandidateView | None
+
+    @field_validator("attempts", mode="before")
+    @classmethod
+    def parse_attempts(cls, value):
+        return tuple(_embedded(PreparationAttemptView, attempt) for attempt in value)
 
     @model_validator(mode="after")
     def bounded(self):
@@ -106,7 +163,12 @@ class PreparationView(ApiValue):
 class PreparationFrozenView(ApiValue):
     preparation_id: StableIdentifier
     manifest_hash: Sha256Hex
-    frozen: FrozenPreparedPlan
+    frozen: PreparationFrozenManifest
+
+    @field_validator("frozen", mode="before")
+    @classmethod
+    def parse_frozen(cls, value):
+        return _embedded(PreparationFrozenManifest, value)
 
 
 def project_preparation(record: PreparationRecord) -> PreparationView:
@@ -121,12 +183,12 @@ def project_preparation(record: PreparationRecord) -> PreparationView:
         )
         try:
             if record.status == "REVIEWED":
-                candidate = PreparationCandidateView(
+                candidate = PreparationFrozenCandidate(
                     kind="FROZEN", frozen=frozen_preparation(record), **values
                 )
             else:
                 extracted = LoopPlanExtractionResult.model_validate_json(stored.payload_json)
-                candidate = PreparationCandidateView(
+                candidate = PreparationExtractionCandidate(
                     kind="EXTRACTION",
                     draft=extracted.draft,
                     mapping=extracted.daily_mapping,
@@ -134,7 +196,7 @@ def project_preparation(record: PreparationRecord) -> PreparationView:
                     **values,
                 )
         except ValueError:
-            candidate = PreparationCandidateView(
+            candidate = PreparationUnavailableCandidate(
                 kind="UNAVAILABLE",
                 **{
                     **values,
