@@ -23,11 +23,51 @@ from trade_plan_monitor.web.preparation_schemas import (
     PreparationView,
     project_preparation,
 )
-from trade_plan_monitor.web.schemas import ApiErrorCode, ErrorDetail, MutationContextDependency
+from trade_plan_monitor.web.schemas import (
+    ApiErrorCode,
+    ErrorDetail,
+    ErrorResponse,
+    MutationContextDependency,
+)
 
-# ML-T13 publishes schemas/contracts after this mounted HTTP application path is verified.
+_CACHE_HEADERS = {"Cache-Control": {"schema": {"type": "string", "const": "no-store"}}}
+_PROGRESS_HEADERS = {
+    **_CACHE_HEADERS,
+    "Location": {
+        "schema": {
+            "type": "string",
+            "maxLength": len("/api/v1/backtest-preparations/") + 128,
+            "pattern": r"^/api/v1/backtest-preparations/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        }
+    },
+}
+_ACCEPTED_HEADERS = {
+    **_PROGRESS_HEADERS,
+    "Retry-After": {"schema": {"type": "integer", "const": 2}},
+}
+
+
+def _progress_responses(*statuses: int) -> dict[int, dict[str, object]]:
+    return {
+        status: {
+            "model": PreparationView,
+            "headers": _ACCEPTED_HEADERS if status == 202 else _PROGRESS_HEADERS,
+        }
+        for status in statuses
+    }
+
+
 router = APIRouter(
-    prefix="/api/v1/backtest-preparations", tags=["backtest-preparations"], include_in_schema=False
+    prefix="/api/v1/backtest-preparations",
+    tags=["backtest-preparations"],
+    responses={
+        503: {
+            "model": ErrorResponse,
+            "headers": {
+                "Retry-After": {"schema": {"type": "integer", "minimum": 1, "maximum": 1}},
+            },
+        }
+    },
 )
 _IDENTIFIER = TypeAdapter(StableIdentifier)
 PreparationId = Annotated[
@@ -90,7 +130,9 @@ def _view(
     return project_preparation(record)
 
 
-@router.post("", response_model=PreparationView, status_code=201)
+@router.post(
+    "", response_model=PreparationView, status_code=201, responses=_progress_responses(201)
+)
 async def create_preparation(
     command: PreparationCreateCommand,
     context: MutationContextDependency,
@@ -103,7 +145,7 @@ async def create_preparation(
     )
 
 
-@router.get("/{preparation_id}", response_model=PreparationView)
+@router.get("/{preparation_id}", response_model=PreparationView, responses=_progress_responses(200))
 async def get_preparation(preparation_id: PreparationId, service: Service, response: Response):
     record = await _invoke(service.get(preparation_id))
     if record is None:
@@ -111,7 +153,9 @@ async def get_preparation(preparation_id: PreparationId, service: Service, respo
     return _view(record, response)
 
 
-@router.put("/{preparation_id}/source", response_model=PreparationView)
+@router.put(
+    "/{preparation_id}/source", response_model=PreparationView, responses=_progress_responses(200)
+)
 async def edit_preparation(
     preparation_id: PreparationId,
     command: PreparationSourceCommand,
@@ -132,7 +176,12 @@ async def edit_preparation(
     )
 
 
-@router.post("/{preparation_id}/extractions", response_model=PreparationView, status_code=202)
+@router.post(
+    "/{preparation_id}/extractions",
+    response_model=PreparationView,
+    status_code=202,
+    responses=_progress_responses(202),
+)
 async def extract_preparation(
     preparation_id: PreparationId,
     command: PreparationRevisionCommand,
@@ -159,7 +208,11 @@ async def extract_preparation(
     return _view(record, response, accepted=True)
 
 
-@router.post("/{preparation_id}/cancellations", response_model=PreparationView)
+@router.post(
+    "/{preparation_id}/cancellations",
+    response_model=PreparationView,
+    responses=_progress_responses(200, 202),
+)
 async def cancel_preparation(
     preparation_id: PreparationId,
     command: PreparationRevisionCommand,
@@ -177,7 +230,11 @@ async def cancel_preparation(
     return _view(record, response, accepted=record.status == "CANCEL_REQUESTED")
 
 
-@router.post("/{preparation_id}/reviews", response_model=PreparationFrozenView)
+@router.post(
+    "/{preparation_id}/reviews",
+    response_model=PreparationFrozenView,
+    responses={200: {"headers": _CACHE_HEADERS}},
+)
 async def review_preparation(
     preparation_id: PreparationId,
     command: PreparationReviewInput,
@@ -196,7 +253,11 @@ async def review_preparation(
     )
 
 
-@router.post("/{preparation_id}/recoveries", response_model=PreparationView)
+@router.post(
+    "/{preparation_id}/recoveries",
+    response_model=PreparationView,
+    responses=_progress_responses(200),
+)
 async def recover_preparation(
     preparation_id: PreparationId,
     command: PreparationRecoveryCommand,

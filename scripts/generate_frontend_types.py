@@ -141,7 +141,43 @@ def build_openapi_document(*, monitor_contract_version: int = 1) -> dict[str, ob
             document["components"]["schemas"].setdefault(name, schema)
     else:
         raise ValueError("unsupported monitor contract version")
-    return json.loads(json.dumps(document, ensure_ascii=False))
+    return _normalize_mode_schema_names(json.loads(json.dumps(document, ensure_ascii=False)))
+
+
+def _normalize_mode_schema_names(document: dict[str, object]) -> dict[str, object]:
+    """Keep existing response names when Pydantic adds distinct request definitions.
+
+    Only component names and their references change; validation/serialization
+    shapes stay distinct. Never silently overwrite a conflicting definition.
+    """
+
+    schemas = document["components"]["schemas"]
+    names = {}
+    for name in schemas:
+        if name.endswith("-Output"):
+            names[name] = name.removesuffix("-Output")
+        elif name.endswith("-Input"):
+            names[name] = name.removesuffix("-Input") + "Input"
+        else:
+            names[name] = name
+    if len(set(names.values())) != len(names):
+        raise ValueError("OpenAPI schema name collision after input/output normalization")
+    references = {_SCHEMA_REF_PREFIX + old: _SCHEMA_REF_PREFIX + new for old, new in names.items()}
+
+    def rewrite(value):
+        if isinstance(value, dict):
+            return {key: rewrite(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [rewrite(item) for item in value]
+        if isinstance(value, str):
+            return references.get(value, value)
+        return value
+
+    normalized = rewrite(document)
+    normalized["components"]["schemas"] = {
+        names[name]: schema for name, schema in normalized["components"]["schemas"].items()
+    }
+    return normalized
 
 
 def render_openapi_snapshot(document: Mapping[str, object]) -> str:

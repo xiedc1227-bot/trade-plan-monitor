@@ -780,6 +780,11 @@ export type CertifiedDailyBar = {
 
 export type ClauseDisposition = "MAPPED" | "UNRESOLVED" | "UNSUPPORTED";
 
+export type CompletedMinuteConfirmation = {
+  kind: "COMPLETED_BAR_CLOSE";
+  timeframe_minutes: 5;
+};
+
 export type ConditionOutcome = "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
 
 export type ConfiguredAIProviderRuntimeView = {
@@ -865,6 +870,14 @@ export type DailyCandleRatio = {
   type: "DAILY_CANDLE_RATIO";
 };
 
+export type DailyCandleRatioInput = {
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  component: "LOWER_WICK" | "UPPER_WICK" | "BODY";
+  offset: number;
+  ratio: (number) | (string);
+  type: "DAILY_CANDLE_RATIO";
+};
+
 export type DailyClause = {
   clause_id: string;
   disposition: "POLICY" | "INVENTORY_ASSERTION" | "BACKGROUND" | "UNRESOLVED" | "UNSUPPORTED";
@@ -886,6 +899,15 @@ export type DailyCloseSequence = {
   type: "DAILY_CLOSE_SEQUENCE";
 };
 
+export type DailyCloseSequenceInput = {
+  comparator: ("LT" | "LTE" | "EQ" | "GTE" | "GT") | (null);
+  mode: "PAIRWISE_NONDECREASING" | "COMPARE_REFERENCE";
+  offset: number;
+  reference: ((components["schemas"]["FixedDailyReferenceInput"]) | (components["schemas"]["DynamicDailyReference"])) | (null);
+  sessions: number;
+  type: "DAILY_CLOSE_SEQUENCE";
+};
+
 export type DailyConditionEvidence = {
   bar_ids?: Array<string>;
   basis_id?: (string) | (null);
@@ -896,6 +918,25 @@ export type DailyConditionEvidence = {
   outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
   reason?: (string) | (null);
   session_dates?: Array<string>;
+};
+
+export type DailyDayActivation = {
+  mode: "TRADING_DAY";
+  trading_day: string;
+};
+
+export type DailyDraftLevels = {
+  low_buy: components["schemas"]["DailyDraftZone"];
+  pressure: components["schemas"]["DailyDraftZone"];
+  risk_comparison: ("LT" | "LTE") | (null);
+  risk_line_fen: (number) | (null);
+};
+
+export type DailyDraftZone = {
+  high_fen: (number) | (null);
+  include_high: (boolean) | (null);
+  include_low: (boolean) | (null);
+  low_fen: (number) | (null);
 };
 
 export type DailyEditorSchemaView = {
@@ -972,6 +1013,11 @@ export type DailyFieldBinding = {
   value: components["schemas"]["JsonValue"];
 };
 
+export type DailyIndependentEvent = {
+  evidence_requirement: string;
+  mode: "REVIEWED_INDEPENDENT_EVENT";
+};
+
 export type DailyIndicatorCompare = {
   comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
   formula_version: "daily-ta-v2";
@@ -981,6 +1027,18 @@ export type DailyIndicatorCompare = {
     [key: string]: number;
   };
   reference: (components["schemas"]["FixedDailyReference"]) | (components["schemas"]["DynamicDailyReference"]);
+  type: "DAILY_INDICATOR_COMPARE";
+};
+
+export type DailyIndicatorCompareInput = {
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  formula_version: "daily-ta-v2";
+  indicator: "MA20" | "MA60" | "MACD_DIF" | "MACD_DEA" | "MACD_HIST" | "RSI14" | "ATR14" | "BOLL_LOWER" | "BOLL_MIDDLE" | "BOLL_UPPER" | "BOLL_BANDWIDTH";
+  offset: number;
+  parameters: {
+    [key: string]: number;
+  };
+  reference: (components["schemas"]["FixedDailyReferenceInput"]) | (components["schemas"]["DynamicDailyReference"]);
   type: "DAILY_INDICATOR_COMPARE";
 };
 
@@ -1014,12 +1072,28 @@ export type DailyInventoryView = {
   total_qty: (number) | (null);
 };
 
+export type DailyLevels = {
+  low_buy: components["schemas"]["DailyZone"];
+  pressure: components["schemas"]["DailyZone"];
+  risk_comparison: "LT" | "LTE";
+  risk_line_fen: number;
+};
+
+export type DailyManualActivation = {
+  mode: "MANUAL";
+};
+
 export type DailyMapping = {
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   candidate_content_hash: string;
   clauses: Array<components["schemas"]["DailyClause"]>;
   mapping_version: "daily-mapping-v1";
   supplements: Array<components["schemas"]["DailySupplement"]>;
+};
+
+export type DailyMetadata = {
+  reference_price_fen?: (number) | (null);
+  report_at?: (string) | (null);
 };
 
 export type DailyMutationReceipt = {
@@ -1069,11 +1143,25 @@ export type DailyPriceCompare = {
   type: "DAILY_PRICE_COMPARE";
 };
 
+export type DailyPriceCompareInput = {
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  field: "open" | "high" | "low" | "close";
+  offset: number;
+  reference: (components["schemas"]["FixedDailyReferenceInput"]) | (components["schemas"]["DynamicDailyReference"]);
+  type: "DAILY_PRICE_COMPARE";
+};
+
 export type DailyPriceInRange = {
   field: "open" | "high" | "low" | "close";
   offset: number;
   range: components["schemas"]["DailyZone"];
   type: "DAILY_PRICE_IN_RANGE";
+};
+
+export type DailyRangeActivation = {
+  end_date: string;
+  mode: "DATE_RANGE";
+  start_date: string;
 };
 
 export type DailyReviewIssue = {
@@ -1341,11 +1429,32 @@ export type DailyTechnicalRemainder = {
   start: number;
 };
 
+export type DailyTradingRules = {
+  settlement?: "NEXT_EXCHANGE_SESSION";
+  special_state_restrictions?: "BLOCK_UNVERIFIED";
+  tick_size_fen?: 1;
+};
+
+export type DailyValidity = {
+  end_date: string;
+  mode?: "DATE_RANGE";
+  start_date: string;
+};
+
 export type DailyVolumeRatio = {
   baseline: "PREVIOUS" | "MEAN";
   comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
   offset: number;
   ratio: string;
+  type: "DAILY_VOLUME_RATIO";
+  window: number;
+};
+
+export type DailyVolumeRatioInput = {
+  baseline: "PREVIOUS" | "MEAN";
+  comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
+  offset: number;
+  ratio: (number) | (string);
   type: "DAILY_VOLUME_RATIO";
   window: number;
 };
@@ -1589,6 +1698,14 @@ export type FixedDailyReference = {
   value: string;
 };
 
+export type FixedDailyReferenceInput = {
+  as_of: string;
+  mode: "FIXED";
+  source: string;
+  unit: "FEN" | "INDICATOR";
+  value: (number) | (string);
+};
+
 export type IndexConditionEvidenceView = {
   actualValue: (string) | (null);
   comparisonValue: (string) | (null);
@@ -1638,6 +1755,11 @@ export type InventorySourceTreatmentView = {
 
 export type JsonValue = unknown;
 
+export type KnownLoopCash = {
+  balance_fen: number;
+  kind?: "KNOWN";
+};
+
 export type LegacyPlanInvalidateCommand = {
   confirmation: "INVALIDATE_LEGACY_PLANS";
   fingerprint: string;
@@ -1658,6 +1780,54 @@ export type LegacyPlanPreviewResponse = {
   available: boolean;
   fingerprint?: (string) | (null);
   plans?: Array<components["schemas"]["LegacyPlanItemView"]>;
+};
+
+export type LoopAccountInput = {
+  cash: (components["schemas"]["KnownLoopCash"]) | (components["schemas"]["UnknownLoopCash"]);
+  evidence: string;
+  inventory_known: boolean;
+  lots: Array<components["schemas"]["LoopInitialLot"]>;
+  opening_mark: (components["schemas"]["LoopOpeningMark"]) | (null);
+  snapshot_at: string;
+};
+
+export type LoopInitialLot = {
+  acquired_trade_date: (string) | (null);
+  bucket: "CORE" | "TACTICAL";
+  cost_basis_fen: (number) | (null);
+  evidence: string;
+  lot_key: string;
+  quantity: number;
+  sellable_quantity: (number) | (null);
+};
+
+export type LoopOpeningMark = {
+  available_at: string;
+  evidence: string;
+  price_at: string;
+  price_fen: number;
+};
+
+export type LoopPlanReview = {
+  confirmed: true;
+  content_hash: string;
+  evidence: string;
+  evidence_hash: string;
+  reviewed_at: string;
+  source_hashes: Array<string>;
+};
+
+export type LoopPlanVersion = {
+  authored_at?: (string) | (null);
+  authored_date?: (string) | (null);
+  available_at: string;
+  evidence_hash: string;
+  information_cutoff: string;
+  plan_hash: string;
+  review: components["schemas"]["LoopPlanReview"];
+  snapshot: components["schemas"]["UnifiedTradePlan"];
+  source_hashes: Array<string>;
+  version_id: string;
 };
 
 export type ManualEventRiskUnknownReason = "NO_ACTIVE_PLAN" | "MISSING_CONFIRMATION" | "PLAN_CHANGED" | "EXPIRED";
@@ -1774,6 +1944,14 @@ export type MinuteVolumeToMeanGte = {
   window_bars: number;
 };
 
+export type MinuteVolumeToMeanGteInput = {
+  history_scope: "CONTIGUOUS_TRADING_BARS";
+  minimum_ratio: (number) | (string);
+  timeframe_minutes: 5;
+  type: "MINUTE_VOLUME_TO_MEAN_GTE";
+  window_bars: number;
+};
+
 export type MissingInputCode = "COMPLETE_MINUTE_BAR" | "PREVIOUS_MINUTE_BAR" | "COMPLETE_5M_BAR" | "PREVIOUS_5M_BAR" | "COMPLETE_5M_BAR_WINDOW" | "ROLLING_VOLUME_WINDOW" | "SESSION_BARS" | "DAILY_INDICATORS" | "PROVISIONAL_DAILY_BAR" | "FIVE_MINUTE_INDICATORS" | "INDICATOR_VALUE" | "OFFICIAL_DAILY_CLOSE" | "TRADING_CALENDAR" | "DAILY_LIMIT" | "MANUAL_EVENT_RISK" | "INDEX_SNAPSHOT" | "INDEX_IDENTITY" | "INDEX_CUTOFF" | "INDEX_HEALTH" | "INDEX_FACT" | "INDEX_HISTORY" | "INDEX_FORMULA";
 
 export type NextStepCode = "WAIT_FOR_COMPLETE_BAR" | "WAIT_FOR_REQUIRED_DATA" | "WATCH_LOW_ZONE" | "WATCH_PRESSURE" | "REVIEW_BLOCKER" | "WAIT_FOR_OFFICIAL_CLOSE" | "WAIT_FOR_NEXT_TRADING_DAY" | "WAIT_FOR_SETTLEMENT" | "RECORD_CONFIRMED_FILL";
@@ -1814,6 +1992,75 @@ export type OfficialCloseDiagnosticIdentityView = {
   symbol: string;
 };
 
+export type OfficialDailyConfirmation = {
+  kind: "OFFICIAL_DAILY_CLOSE";
+};
+
+export type OpeningAccountFacts = {
+  cash_fen: (components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991_____"]) | (null);
+  inventory_quantity: (components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"]) | (null);
+  lots: Array<components["schemas"]["OpeningLotFacts"]>;
+  snapshot_at: (components["schemas"]["OpeningFact_Annotated_datetime__BeforeValidator__AfterValidator__"]) | (null);
+};
+
+export type OpeningFact_Annotated_Decimal__BeforeValidator__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991____PydanticGeneralMetadata_allow_inf_nan_False_____ = {
+  end: number;
+  excerpt: string;
+  start: number;
+  value: string;
+};
+
+export type OpeningFact_Annotated_datetime__BeforeValidator__AfterValidator__ = {
+  end: number;
+  excerpt: string;
+  start: number;
+  value: string;
+};
+
+export type OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____ = {
+  end: number;
+  excerpt: string;
+  start: number;
+  value: number;
+};
+
+export type OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991_____ = {
+  end: number;
+  excerpt: string;
+  start: number;
+  value: number;
+};
+
+export type OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____ = {
+  end: number;
+  excerpt: string;
+  start: number;
+  value: number;
+};
+
+export type OpeningFact_Literal__CORE____TACTICAL___ = {
+  end: number;
+  excerpt: string;
+  start: number;
+  value: "CORE" | "TACTICAL";
+};
+
+export type OpeningFact_date_ = {
+  end: number;
+  excerpt: string;
+  start: number;
+  value: string;
+};
+
+export type OpeningLotFacts = {
+  acquired_trade_date: (components["schemas"]["OpeningFact_date_"]) | (null);
+  bucket: (components["schemas"]["OpeningFact_Literal__CORE____TACTICAL___"]) | (null);
+  lot_key: string;
+  quantity: components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"];
+  sellable_quantity: (components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"]) | (null);
+  unit_cost_yuan: (components["schemas"]["OpeningFact_Annotated_Decimal__BeforeValidator__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991____PydanticGeneralMetadata_allow_inf_nan_False_____"]) | (null);
+};
+
 export type OperationKind = "PLAN_EXTRACTION" | "AI_PROVIDER_TEST";
 
 export type OperationReceipt = {
@@ -1831,6 +2078,10 @@ export type PlanActivationCommand = {
   reviewId?: (string) | (null);
   reviewRevision?: (number) | (null);
   sourceHash?: (string) | (null);
+};
+
+export type PlanActiveValidity = {
+  mode: "PLAN_ACTIVE";
 };
 
 export type PlanDeactivationCommand = {
@@ -2025,6 +2276,133 @@ export type PositionSummaryView = {
   sellableTacticalQuantity: number;
   tacticalQuantity: number;
   totalQuantity: number;
+};
+
+export type PreparationAttemptView = {
+  attempt_id: string;
+  error_code?: (string) | (null);
+  finished_at?: (string) | (null);
+  retryable?: boolean;
+  source_hash: string;
+  source_revision: number;
+  started_at: string;
+  status: "RUNNING" | "CANCEL_REQUESTED" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+};
+
+export type PreparationCreateCommand = {
+  input: components["schemas"]["SinglePlanPreparationInput"];
+};
+
+export type PreparationExtractionCandidate = {
+  candidateHash: string;
+  draft: components["schemas"]["UnifiedPlanDraft"];
+  evidenceHash: string;
+  frozen?: null;
+  issues: Array<string>;
+  kind: "EXTRACTION";
+  mapping: components["schemas"]["DailyMapping"];
+  openingAccount: components["schemas"]["OpeningAccountFacts"];
+  validation: "VALID" | "INVALID" | "UNRESOLVED";
+};
+
+export type PreparationFrozenCandidate = {
+  candidateHash: string;
+  draft?: null;
+  evidenceHash: string;
+  frozen: components["schemas"]["PreparationFrozenManifest"];
+  issues: Array<string>;
+  kind: "FROZEN";
+  mapping?: null;
+  openingAccount?: null;
+  validation: "VALID" | "INVALID" | "UNRESOLVED";
+};
+
+export type PreparationFrozenManifest = {
+  account: components["schemas"]["LoopAccountInput"];
+  account_origin: "SOURCE" | "HUMAN_REVIEW";
+  extraction_candidate_hash: string;
+  extraction_candidate_revision: number;
+  extraction_evidence_hash: string;
+  mapping: components["schemas"]["DailyMapping"];
+  opening_evidence: components["schemas"]["OpeningAccountFacts"];
+  preparation_id: string;
+  schema_version?: "prepared-loop-plan-v1";
+  source: components["schemas"]["PreparationSource"];
+  source_revision: number;
+  version: components["schemas"]["LoopPlanVersion"];
+};
+
+export type PreparationFrozenView = {
+  frozen: components["schemas"]["PreparationFrozenManifest"];
+  manifestHash: string;
+  preparationId: string;
+};
+
+export type PreparationRecoveryCommand = {
+  confirmedEnded: true;
+  expectedRevision: number;
+  generation: string;
+};
+
+export type PreparationReviewDeclaration = {
+  account?: (components["schemas"]["LoopAccountInput"]) | (null);
+  candidate_hash: string;
+  confirmed: true;
+  draft?: (components["schemas"]["UnifiedPlanDraftInput"]) | (null);
+  evidence: string;
+  evidence_hash: string;
+  expected_candidate_revision: number;
+  expected_revision: number;
+  expected_source_revision: number;
+  mapping?: (components["schemas"]["DailyMapping"]) | (null);
+};
+
+export type PreparationReviewInput = {
+  review: components["schemas"]["PreparationReviewDeclaration"];
+};
+
+export type PreparationRevisionCommand = {
+  expectedRevision: number;
+};
+
+export type PreparationSource = {
+  authored_at?: (string) | (null);
+  available_at?: (string) | (null);
+  effective_trade_date?: (string) | (null);
+  source_id: string;
+  text: string;
+};
+
+export type PreparationSourceCommand = {
+  expectedRevision: number;
+  source: components["schemas"]["PreparationSource"];
+};
+
+export type PreparationUnavailableCandidate = {
+  candidateHash: string;
+  draft?: null;
+  evidenceHash: string;
+  frozen?: null;
+  issues: Array<string>;
+  kind: "UNAVAILABLE";
+  mapping?: null;
+  openingAccount?: null;
+  validation: "INVALID";
+};
+
+export type PreparationView = {
+  attempts: Array<components["schemas"]["PreparationAttemptView"]>;
+  candidate: ((components["schemas"]["PreparationExtractionCandidate"]) | (components["schemas"]["PreparationFrozenCandidate"]) | (components["schemas"]["PreparationUnavailableCandidate"])) | (null);
+  candidateRevision: number;
+  generation: (string) | (null);
+  preparationId: string;
+  reviewRevision: number;
+  revision: number;
+  source: components["schemas"]["PreparationSource"];
+  sourceEditPending: boolean;
+  sourceRevision: number;
+  status: "DRAFT" | "EXTRACTING" | "CANCEL_REQUESTED" | "CANDIDATE" | "REVIEWED" | "FAILED" | "CANCELLED";
+  workPhase: ("READY" | "CALLING" | "UNKNOWN" | "ENDED") | (null);
 };
 
 export type ProductSourceTreatmentView = {
@@ -2329,6 +2707,11 @@ export type SecretStatusView = {
 
 export type SignalType = "WAIT" | "LOW_ZONE_WATCH" | "BLOCKED_DATA" | "BLOCKED_RISK" | "BUY_CORE_READY" | "BUY_TACTICAL_READY" | "PRESSURE_REDUCE_READY" | "RISK_BREACH" | "RISK_RECOVERED" | "RISK_EXIT_READY" | "RISK_EXIT_PENDING_SETTLEMENT";
 
+export type SinglePlanPreparationInput = {
+  preparation_id: string;
+  sources: Array<components["schemas"]["PreparationSource"]>;
+};
+
 export type SmaIndicatorFactView = {
   formulaDefinitionHash: string;
   formulaId: "SMA";
@@ -2472,13 +2855,30 @@ export type TradingDay = {
 
 export type UnfilledReason = "NON_EXECUTABLE_SIGNAL" | "SUSPENDED" | "MISSING_NEXT_MINUTE" | "NO_NEXT_MINUTE" | "LIMIT_UP_LOCKED" | "LIMIT_DOWN_LOCKED" | "INSUFFICIENT_CASH" | "MAX_POSITION_REACHED" | "TARGET_POSITION_REACHED" | "TARGET_LOT_NOT_FOUND" | "T_PLUS_ONE";
 
+export type UnifiedAlertRule = {
+  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+  confirmation: (components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"]);
+  kind: "RISK_ALERT";
+  rule_id: string;
+};
+
 export type UnifiedAll = {
   conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])>;
   type: "ALL";
 };
 
+export type UnifiedAllInput = {
+  conditions: Array<(components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])>;
+  type: "ALL";
+};
+
 export type UnifiedAny = {
   conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])>;
+  type: "ANY";
+};
+
+export type UnifiedAnyInput = {
+  conditions: Array<(components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])>;
   type: "ANY";
 };
 
@@ -2494,6 +2894,146 @@ export type UnifiedConditionEvidence = {
   session_dates?: Array<unknown>;
 };
 
+export type UnifiedDraftAlertRule = {
+  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  kind: ("RISK_ALERT") | (null);
+  rule_id: (string) | (null);
+};
+
+export type UnifiedDraftAlertRuleInput = {
+  condition: ((components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  kind: ("RISK_ALERT") | (null);
+  rule_id: (string) | (null);
+};
+
+export type UnifiedDraftPosition = {
+  allocation_evidence?: (string) | (null);
+  allocation_provenance?: ("EXISTING_CONFIRMED" | "PROPOSED") | (null);
+  core_target_qty?: (number) | (null);
+  max_qty: (number) | (null);
+  tactical_target_qty?: (number) | (null);
+};
+
+export type UnifiedDraftRisk = {
+  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
+  evidence_mode: ("TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION") | (null);
+  involves_core: (boolean) | (null);
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  priority: (number) | (null);
+  scope_evidence: (string) | (null);
+  suspension_confirmation_policy: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
+  target_core_qty: (number) | (null);
+  target_tactical_qty: (number) | (null);
+};
+
+export type UnifiedDraftRiskInput = {
+  condition: ((components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])) | (null);
+  evidence_mode: ("TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION") | (null);
+  involves_core: (boolean) | (null);
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  priority: (number) | (null);
+  scope_evidence: (string) | (null);
+  suspension_confirmation_policy: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
+  target_core_qty: (number) | (null);
+  target_tactical_qty: (number) | (null);
+};
+
+export type UnifiedDraftRule = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"]) | (components["schemas"]["UnifiedResetPolicy"])) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  quantity: (number) | (null);
+  rule_id: (string) | (null);
+  side: "BUY" | "SELL";
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY" | "PRESSURE") | (null);
+};
+
+export type UnifiedDraftRuleInput = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"]) | (components["schemas"]["UnifiedResetPolicyInput"])) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  quantity: (number) | (null);
+  rule_id: (string) | (null);
+  side: "BUY" | "SELL";
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY" | "PRESSURE") | (null);
+};
+
+export type UnifiedExecutionPolicy = {
+  ordinary_conflict: "BLOCK_BOTH";
+  risk_priority: "SEVERE_THEN_ORDINARY";
+  same_signal: "ONE_PLANNED_QUANTITY";
+};
+
+export type UnifiedMonitoring = {
+  comparability_requirement: "CURRENT_QUOTE_BASIS";
+  indicator_formula_version: "daily-ta-v2";
+  macd_min_observations: number;
+  price_basis: "QFQ";
+  source_requirement: "ONE_VERIFIED_PROVIDER";
+};
+
+export type UnifiedPlanDraft = {
+  activation: ((components["schemas"]["DailyManualActivation"]) | (components["schemas"]["DailyDayActivation"]) | (components["schemas"]["DailyRangeActivation"])) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v1";
+  levels: (components["schemas"]["DailyDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<components["schemas"]["UnifiedDraftRule"]>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  risk_branches: Array<components["schemas"]["UnifiedDraftRisk"]>;
+  schema_version?: 5;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type UnifiedPlanDraftInput = {
+  activation: ((components["schemas"]["DailyManualActivation"]) | (components["schemas"]["DailyDayActivation"]) | (components["schemas"]["DailyRangeActivation"])) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRuleInput"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v1";
+  levels: (components["schemas"]["DailyDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<components["schemas"]["UnifiedDraftRuleInput"]>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  risk_branches: Array<components["schemas"]["UnifiedDraftRiskInput"]>;
+  schema_version?: 5;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type UnifiedPositionPolicy = {
+  allocation_evidence?: (string) | (null);
+  allocation_provenance?: ("EXISTING_CONFIRMED" | "PROPOSED") | (null);
+  core_target_qty?: (number) | (null);
+  max_qty: number;
+  tactical_target_qty?: (number) | (null);
+};
+
 export type UnifiedResearchInput = {
   adjustment_proofs?: Array<components["schemas"]["ResearchAdjustmentProof"]>;
   calendar_extension?: Array<components["schemas"]["TradingDay"]>;
@@ -2502,6 +3042,68 @@ export type UnifiedResearchInput = {
   review: components["schemas"]["ResearchReview"];
   schema_version?: "unified-research-input-v1";
   started_at: string;
+};
+
+export type UnifiedResetPolicy = {
+  mode: "LATER_CLOSE_RESET_THEN_CONFIRM";
+  reset_condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+};
+
+export type UnifiedResetPolicyInput = {
+  mode: "LATER_CLOSE_RESET_THEN_CONFIRM";
+  reset_condition: (components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"]);
+};
+
+export type UnifiedRiskBranch = {
+  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
+  evidence_mode: "TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION";
+  involves_core: boolean;
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  priority: number;
+  scope_evidence: string;
+  suspension_confirmation_policy?: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
+  target_core_qty: number;
+  target_tactical_qty: number;
+};
+
+export type UnifiedRule = {
+  bucket: "TACTICAL";
+  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+  confirmation: (components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"]);
+  execution_window: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
+  independent_signal: (components["schemas"]["DailyIndependentEvent"]) | (components["schemas"]["UnifiedResetPolicy"]);
+  invalidation: "RISK_OR_REVIEWED_INVALIDATION";
+  quantity: number;
+  rule_id: string;
+  side: "BUY" | "SELL";
+  status: "ENABLED";
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]);
+  zone: ("LOW_BUY" | "PRESSURE") | (null);
+};
+
+export type UnifiedTradePlan = {
+  activation: (components["schemas"]["DailyManualActivation"]) | (components["schemas"]["DailyDayActivation"]) | (components["schemas"]["DailyRangeActivation"]);
+  alert_rules?: Array<components["schemas"]["UnifiedAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: components["schemas"]["UnifiedExecutionPolicy"];
+  execution_version?: "condition-plan-v1";
+  levels: (components["schemas"]["DailyLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<components["schemas"]["UnifiedRule"]>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedPositionPolicy"];
+  risk_branches: Array<components["schemas"]["UnifiedRiskBranch"]>;
+  schema_version?: 5;
+  symbol: string;
+  trading_rules: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type UnknownLoopCash = {
+  kind?: "UNKNOWN";
 };
 
 export type UnmappedText = {
@@ -2643,6 +3245,7 @@ export interface components {
     Board: Board;
     CertifiedDailyBar: CertifiedDailyBar;
     ClauseDisposition: ClauseDisposition;
+    CompletedMinuteConfirmation: CompletedMinuteConfirmation;
     ConditionOutcome: ConditionOutcome;
     ConfiguredAIProviderRuntimeView: ConfiguredAIProviderRuntimeView;
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
@@ -2651,27 +3254,39 @@ export interface components {
     DailyAll: DailyAll;
     DailyAny: DailyAny;
     DailyCandleRatio: DailyCandleRatio;
+    DailyCandleRatioInput: DailyCandleRatioInput;
     DailyClause: DailyClause;
     DailyCloseSequence: DailyCloseSequence;
+    DailyCloseSequenceInput: DailyCloseSequenceInput;
     DailyConditionEvidence: DailyConditionEvidence;
+    DailyDayActivation: DailyDayActivation;
+    DailyDraftLevels: DailyDraftLevels;
+    DailyDraftZone: DailyDraftZone;
     DailyEditorSchemaView: DailyEditorSchemaView;
     DailyEvaluationApiView: DailyEvaluationApiView;
     DailyExecutionQuote: DailyExecutionQuote;
     DailyFactCommand: DailyFactCommand;
     DailyFactRevision: DailyFactRevision;
     DailyFieldBinding: DailyFieldBinding;
+    DailyIndependentEvent: DailyIndependentEvent;
     DailyIndicatorCompare: DailyIndicatorCompare;
+    DailyIndicatorCompareInput: DailyIndicatorCompareInput;
     DailyInventoryApiView: DailyInventoryApiView;
     DailyInventoryResource: DailyInventoryResource;
     DailyInventoryView: DailyInventoryView;
+    DailyLevels: DailyLevels;
+    DailyManualActivation: DailyManualActivation;
     DailyMapping: DailyMapping;
+    DailyMetadata: DailyMetadata;
     DailyMutationReceipt: DailyMutationReceipt;
     DailyObsoleteRiskApiView: DailyObsoleteRiskApiView;
     DailyOfficialEvidence: DailyOfficialEvidence;
     DailyOfficialProof: DailyOfficialProof;
     DailyPositionCommand: DailyPositionCommand;
     DailyPriceCompare: DailyPriceCompare;
+    DailyPriceCompareInput: DailyPriceCompareInput;
     DailyPriceInRange: DailyPriceInRange;
+    DailyRangeActivation: DailyRangeActivation;
     DailyReviewIssue: DailyReviewIssue;
     DailyReviewPreview: DailyReviewPreview;
     DailyReviewPreviewCommand: DailyReviewPreviewCommand;
@@ -2692,7 +3307,10 @@ export interface components {
     DailySupplement: DailySupplement;
     DailySupplementCommand: DailySupplementCommand;
     DailyTechnicalRemainder: DailyTechnicalRemainder;
+    DailyTradingRules: DailyTradingRules;
+    DailyValidity: DailyValidity;
     DailyVolumeRatio: DailyVolumeRatio;
+    DailyVolumeRatioInput: DailyVolumeRatioInput;
     DailyZone: DailyZone;
     DashboardCounts: DashboardCounts;
     DashboardProjectionUnavailableResponse: DashboardProjectionUnavailableResponse;
@@ -2725,15 +3343,22 @@ export interface components {
     FieldEvidence: FieldEvidence;
     FiveMinuteBar: FiveMinuteBar;
     FixedDailyReference: FixedDailyReference;
+    FixedDailyReferenceInput: FixedDailyReferenceInput;
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
     IntradayDiagnosticIdentityView: IntradayDiagnosticIdentityView;
     InventorySourceTreatmentView: InventorySourceTreatmentView;
     JsonValue: JsonValue;
+    KnownLoopCash: KnownLoopCash;
     LegacyPlanInvalidateCommand: LegacyPlanInvalidateCommand;
     LegacyPlanInvalidateResult: LegacyPlanInvalidateResult;
     LegacyPlanItemView: LegacyPlanItemView;
     LegacyPlanPreviewResponse: LegacyPlanPreviewResponse;
+    LoopAccountInput: LoopAccountInput;
+    LoopInitialLot: LoopInitialLot;
+    LoopOpeningMark: LoopOpeningMark;
+    LoopPlanReview: LoopPlanReview;
+    LoopPlanVersion: LoopPlanVersion;
     ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
     ManualEventRiskView: ManualEventRiskView;
     ManualEventRiskViewStatus: ManualEventRiskViewStatus;
@@ -2751,14 +3376,26 @@ export interface components {
     MinuteCloseBelow: MinuteCloseBelow;
     MinuteCloseInRange: MinuteCloseInRange;
     MinuteVolumeToMeanGte: MinuteVolumeToMeanGte;
+    MinuteVolumeToMeanGteInput: MinuteVolumeToMeanGteInput;
     MissingInputCode: MissingInputCode;
     NextStepCode: NextStepCode;
     NextStepView: NextStepView;
     ObsoleteDailyAlertView: ObsoleteDailyAlertView;
     OfficialCloseDiagnosticIdentityView: OfficialCloseDiagnosticIdentityView;
+    OfficialDailyConfirmation: OfficialDailyConfirmation;
+    OpeningAccountFacts: OpeningAccountFacts;
+    OpeningFact_Annotated_Decimal__BeforeValidator__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991____PydanticGeneralMetadata_allow_inf_nan_False_____: OpeningFact_Annotated_Decimal__BeforeValidator__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991____PydanticGeneralMetadata_allow_inf_nan_False_____;
+    OpeningFact_Annotated_datetime__BeforeValidator__AfterValidator__: OpeningFact_Annotated_datetime__BeforeValidator__AfterValidator__;
+    OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____: OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____;
+    OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991_____: OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991_____;
+    OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____: OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____;
+    OpeningFact_Literal__CORE____TACTICAL___: OpeningFact_Literal__CORE____TACTICAL___;
+    OpeningFact_date_: OpeningFact_date_;
+    OpeningLotFacts: OpeningLotFacts;
     OperationKind: OperationKind;
     OperationReceipt: OperationReceipt;
     PlanActivationCommand: PlanActivationCommand;
+    PlanActiveValidity: PlanActiveValidity;
     PlanDeactivationCommand: PlanDeactivationCommand;
     PlanDocumentFormat: PlanDocumentFormat;
     PlanDraftCommand: PlanDraftCommand;
@@ -2780,6 +3417,20 @@ export interface components {
     PositionPrefillAction: PositionPrefillAction;
     PositionPrefillView: PositionPrefillView;
     PositionSummaryView: PositionSummaryView;
+    PreparationAttemptView: PreparationAttemptView;
+    PreparationCreateCommand: PreparationCreateCommand;
+    PreparationExtractionCandidate: PreparationExtractionCandidate;
+    PreparationFrozenCandidate: PreparationFrozenCandidate;
+    PreparationFrozenManifest: PreparationFrozenManifest;
+    PreparationFrozenView: PreparationFrozenView;
+    PreparationRecoveryCommand: PreparationRecoveryCommand;
+    PreparationReviewDeclaration: PreparationReviewDeclaration;
+    PreparationReviewInput: PreparationReviewInput;
+    PreparationRevisionCommand: PreparationRevisionCommand;
+    PreparationSource: PreparationSource;
+    PreparationSourceCommand: PreparationSourceCommand;
+    PreparationUnavailableCandidate: PreparationUnavailableCandidate;
+    PreparationView: PreparationView;
     ProductSourceTreatmentView: ProductSourceTreatmentView;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
@@ -2817,6 +3468,7 @@ export interface components {
     SecretSource: SecretSource;
     SecretStatusView: SecretStatusView;
     SignalType: SignalType;
+    SinglePlanPreparationInput: SinglePlanPreparationInput;
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
     SourceClauseView: SourceClauseView;
@@ -2835,10 +3487,31 @@ export interface components {
     SymbolSummaryView: SymbolSummaryView;
     TradingDay: TradingDay;
     UnfilledReason: UnfilledReason;
+    UnifiedAlertRule: UnifiedAlertRule;
     UnifiedAll: UnifiedAll;
+    UnifiedAllInput: UnifiedAllInput;
     UnifiedAny: UnifiedAny;
+    UnifiedAnyInput: UnifiedAnyInput;
     UnifiedConditionEvidence: UnifiedConditionEvidence;
+    UnifiedDraftAlertRule: UnifiedDraftAlertRule;
+    UnifiedDraftAlertRuleInput: UnifiedDraftAlertRuleInput;
+    UnifiedDraftPosition: UnifiedDraftPosition;
+    UnifiedDraftRisk: UnifiedDraftRisk;
+    UnifiedDraftRiskInput: UnifiedDraftRiskInput;
+    UnifiedDraftRule: UnifiedDraftRule;
+    UnifiedDraftRuleInput: UnifiedDraftRuleInput;
+    UnifiedExecutionPolicy: UnifiedExecutionPolicy;
+    UnifiedMonitoring: UnifiedMonitoring;
+    UnifiedPlanDraft: UnifiedPlanDraft;
+    UnifiedPlanDraftInput: UnifiedPlanDraftInput;
+    UnifiedPositionPolicy: UnifiedPositionPolicy;
     UnifiedResearchInput: UnifiedResearchInput;
+    UnifiedResetPolicy: UnifiedResetPolicy;
+    UnifiedResetPolicyInput: UnifiedResetPolicyInput;
+    UnifiedRiskBranch: UnifiedRiskBranch;
+    UnifiedRule: UnifiedRule;
+    UnifiedTradePlan: UnifiedTradePlan;
+    UnknownLoopCash: UnknownLoopCash;
     UnmappedText: UnmappedText;
     UserSupplementView: UserSupplementView;
     ValidationIssue: ValidationIssue;
@@ -3730,6 +4403,570 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["BacktestJobView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PreparationCreateCommand"];
+        };
+      };
+      responses: {
+        "201": {
+          content: {
+            "application/json": components["schemas"]["PreparationView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations/{preparation_id}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          preparation_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PreparationView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations/{preparation_id}/cancellations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path: {
+          preparation_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PreparationRevisionCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PreparationView"];
+          };
+        };
+        "202": {
+          content: {
+            "application/json": components["schemas"]["PreparationView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations/{preparation_id}/extractions": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path: {
+          preparation_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PreparationRevisionCommand"];
+        };
+      };
+      responses: {
+        "202": {
+          content: {
+            "application/json": components["schemas"]["PreparationView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations/{preparation_id}/recoveries": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path: {
+          preparation_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PreparationRecoveryCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PreparationView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations/{preparation_id}/reviews": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path: {
+          preparation_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PreparationReviewInput"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PreparationFrozenView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations/{preparation_id}/source": {
+    put: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path: {
+          preparation_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PreparationSourceCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PreparationView"];
           };
         };
         "400": {

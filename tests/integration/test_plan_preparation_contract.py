@@ -1,9 +1,13 @@
 """ML-T13 publishes typed one-source contracts without approving a new digest."""
 
 import json
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from scripts import generate_frontend_types as generator
 from tests.integration.test_plan_preparation_review import ready_preparation, review_command
 
 from trade_plan_monitor.web.preparation_schemas import (
@@ -14,6 +18,224 @@ from trade_plan_monitor.web.preparation_schemas import (
 )
 
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
+BASE = "/api/v1/backtest-preparations"
+OPERATIONS = {
+    BASE: ("post", {"201"}),
+    BASE + "/{preparation_id}": ("get", {"200"}),
+    BASE + "/{preparation_id}/source": ("put", {"200"}),
+    BASE + "/{preparation_id}/extractions": ("post", {"202"}),
+    BASE + "/{preparation_id}/cancellations": ("post", {"200", "202"}),
+    BASE + "/{preparation_id}/reviews": ("post", {"200"}),
+    BASE + "/{preparation_id}/recoveries": ("post", {"200"}),
+}
+
+
+@pytest.fixture(scope="module", params=[1, 2], ids=["compatibility-v1", "canonical-v2"])
+def document(request):
+    return generator.build_openapi_document(monitor_contract_version=request.param)
+
+
+def resolved(document, schema):
+    if "$ref" in schema:
+        return document["components"]["schemas"][schema["$ref"].rsplit("/", 1)[1]]
+    return schema
+
+
+def test_generated_contracts_preserve_legacy_response_schema_names(document):
+    schemas = document["components"]["schemas"]
+    assert {"DailyCandleRatio", "DailyPriceCompare", "UnifiedAll", "UnifiedAny"} <= set(schemas)
+    assert not any(name.endswith(("-Input", "-Output")) for name in schemas)
+    assert schemas["DailyCandleRatio"]["properties"]["ratio"]["type"] == "string"
+    assert "anyOf" in schemas["DailyCandleRatioInput"]["properties"]["ratio"]
+    generator.render_typescript_contracts(document)
+
+
+def test_mode_schema_name_collision_is_rejected():
+    with pytest.raises(ValueError, match="schema name collision"):
+        generator._normalize_mode_schema_names(
+            {"components": {"schemas": {"Probe": {}, "Probe-Output": {}}}, "paths": {}}
+        )
+
+
+def test_published_references_resolve_and_progress_excludes_private_state(document):
+    schemas = document["components"]["schemas"]
+    private = {
+        "owner_token",
+        "ownerToken",
+        "owner_pid",
+        "ownerPid",
+        "admission_key",
+        "admissionKey",
+        "payload_json",
+        "payloadJson",
+        "review_json",
+        "reviewJson",
+        "work_claim",
+        "workClaim",
+        "provider_diagnostics",
+        "providerDiagnostics",
+        "filesystem_path",
+        "filesystemPath",
+    }
+    visited = set()
+
+    def walk(value, *, public=False):
+        if isinstance(value, dict):
+            if public:
+                assert private.isdisjoint(value.get("properties", {}))
+            if "$ref" in value:
+                reference = value["$ref"]
+                assert reference.startswith("#/components/schemas/")
+                name = reference.rsplit("/", 1)[1]
+                assert name in schemas
+                if public and name not in visited:
+                    visited.add(name)
+                    walk(schemas[name], public=True)
+            for item in value.values():
+                walk(item, public=public)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item, public=public)
+
+    walk(document)
+    for name in ("PreparationView", "PreparationFrozenView"):
+        walk(schemas[name], public=True)
+    assert {"PreparationRecord", "PreparationWorkClaim", "PreparationCandidateInput"}.isdisjoint(
+        visited | set(schemas)
+    )
+
+
+def test_generated_types_narrow_candidates_and_reject_invalid_commands(document, tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    node = shutil.which("node")
+    compiler = root / "web/node_modules/typescript/bin/tsc"
+    assert node is not None and compiler.is_file(), "installed TypeScript compiler is required"
+    contracts = tmp_path / "generated.ts"
+    contracts.write_text(generator.render_typescript_contracts(document), encoding="utf-8")
+    imports = 'import type { components, paths } from "./generated";\n'
+    positive = (
+        imports
+        + """
+type Read = paths["/api/v1/backtest-preparations/{preparation_id}"]["get"];
+type Progress = Read["responses"][200]["content"]["application/json"];
+export function inspect(value: Progress): string {
+  const candidate = value.candidate;
+  if (!candidate) return value.status;
+  switch (candidate.kind) {
+    case "EXTRACTION": return candidate.draft.plan_id + candidate.mapping.clauses.length;
+    case "FROZEN": return candidate.frozen.version.version_id;
+    case "UNAVAILABLE": {
+      const invalid: "INVALID" = candidate.validation;
+      return invalid;
+    }
+    default: { const exhaustive: never = candidate; return exhaustive; }
+  }
+}
+type Recover = paths["/api/v1/backtest-preparations/{preparation_id}/recoveries"]["post"];
+type Recovery = Recover["requestBody"]["content"]["application/json"];
+export const recovery: Recovery = { expectedRevision: 1, generation: "g1", confirmedEnded: true };
+export const cash: components["schemas"]["KnownLoopCash"] = { kind: "KNOWN", balance_fen: 0 };
+export const unknownCash: components["schemas"]["UnknownLoopCash"] = { kind: "UNKNOWN" };
+export const create: components["schemas"]["PreparationCreateCommand"] = {
+  input: { preparation_id: "p1", sources: [{ source_id: "s1", text: "original" }] }
+};
+"""
+    )
+    source = tmp_path / "probe.ts"
+
+    def compile_text(value):
+        source.write_text(value, encoding="utf-8")
+        return subprocess.run(
+            [
+                node,
+                str(compiler),
+                "--strict",
+                "--noEmit",
+                "--skipLibCheck",
+                "--target",
+                "ES2022",
+                "--types",
+                "node",
+                "--typeRoots",
+                str(root / "web/node_modules/@types"),
+                str(source),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=30,
+        )
+
+    valid = compile_text(positive)
+    assert valid.returncode == 0, valid.stdout + valid.stderr
+    for invalid in (
+        'const command: components["schemas"]["PreparationRecoveryCommand"] = '
+        '{ expectedRevision: 1, generation: "g1", confirmedEnded: false };',
+        'const candidate: components["schemas"]["PreparationFrozenCandidate"] = '
+        '{ kind: "FROZEN", candidateHash: "h", evidenceHash: "e", issues: [], '
+        'validation: "VALID", frozen: null };',
+    ):
+        result = compile_text(imports + invalid)
+        assert result.returncode != 0
+        assert "error TS2322" in result.stdout, result.stdout + result.stderr
+
+
+def test_preparation_operations_publish_actual_success_and_existing_errors(document):
+    from tests.integration.test_openapi_snapshot import PUBLIC_ERROR_STATUSES
+
+    assert {path for path in document["paths"] if path.startswith(BASE)} == set(OPERATIONS)
+    identities = set()
+    for path, (method, success) in OPERATIONS.items():
+        item = document["paths"][path]
+        assert set(item) == {method}
+        operation = item[method]
+        assert operation["operationId"] not in identities
+        identities.add(operation["operationId"])
+        responses = operation["responses"]
+        assert set(responses) == success | PUBLIC_ERROR_STATUSES
+        for status in success:
+            reference = responses[status]["content"]["application/json"]["schema"]["$ref"]
+            expected = "PreparationFrozenView" if path.endswith("/reviews") else "PreparationView"
+            assert reference == "#/components/schemas/" + expected
+            assert responses[status]["headers"]["Cache-Control"]["schema"]["const"] == "no-store"
+            if status == "202":
+                assert responses[status]["headers"]["Retry-After"]["schema"]["const"] == 2
+        for status in PUBLIC_ERROR_STATUSES:
+            assert responses[status]["content"]["application/json"]["schema"] == {
+                "$ref": "#/components/schemas/ErrorResponse"
+            }
+        retry = responses["503"]["headers"]["Retry-After"]["schema"]
+        assert retry["minimum"] == retry["maximum"] == 1
+        parameters = operation["parameters"]
+        assert not any(parameter["in"] == "query" for parameter in parameters)
+        if method != "get":
+            key = next(
+                parameter for parameter in parameters if parameter["name"] == "Idempotency-Key"
+            )
+            assert key["required"] is True
+
+
+def test_published_create_and_progress_are_single_source_and_bounded(document):
+    operation = document["paths"][BASE]["post"]
+    command = resolved(document, operation["requestBody"]["content"]["application/json"]["schema"])
+    original = resolved(document, command["properties"]["input"])
+    sources = original["properties"]["sources"]
+    assert sources["minItems"] == sources["maxItems"] == 1
+    source = resolved(document, sources["items"])
+    assert source["properties"]["text"]["maxLength"] == 150000
+    assert "source_id" in source["properties"] and "sourceId" not in source["properties"]
+    view = document["components"]["schemas"]["PreparationView"]
+    assert view["additionalProperties"] is False
+    assert view["properties"]["attempts"]["maxItems"] == 3
+    for name in ("revision", "sourceRevision", "candidateRevision", "reviewRevision"):
+        assert view["properties"][name]["maximum"] == MAX_SAFE_INTEGER
+    candidate = view["properties"]["candidate"]["anyOf"][0]
+    assert candidate["discriminator"]["propertyName"] == "kind"
+    assert set(candidate["discriminator"]["mapping"]) == {"EXTRACTION", "FROZEN", "UNAVAILABLE"}
+    recovery = document["components"]["schemas"]["PreparationRecoveryCommand"]
+    assert recovery["properties"]["confirmedEnded"]["const"] is True
+    assert set(recovery["required"]) == {"expectedRevision", "generation", "confirmedEnded"}
 
 
 def test_candidate_schema_discriminates_extraction_frozen_and_unavailable():
