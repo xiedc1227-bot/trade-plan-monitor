@@ -13,7 +13,7 @@ from hashlib import sha256
 from typing import Final
 from uuid import UUID
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from trade_plan_monitor.ai.models import (
     DIAGNOSTIC_SCHEMA_FIELDS,
@@ -66,6 +66,31 @@ async def extract_plan(
         source_text,
         prompt_version=config.prompt_version,
     )
+    result = await _extract_output(
+        request_id=request_id,
+        source_text=source_text,
+        config=config,
+        provider=provider,
+        prompt=prompt,
+        output_model=CurrentPlanExtractionOutput,
+    )
+    if isinstance(result, PlanExtractionResult):
+        return result
+    output, raw = result
+    return _review_current_output(output, source_text, request_id, config, raw)
+
+
+async def _extract_output[OutputT: BaseModel](
+    *,
+    request_id: UUID,
+    source_text: str,
+    config: AIProviderConfig,
+    provider: AIProvider,
+    prompt: str,
+    output_model: type[OutputT],
+) -> tuple[OutputT, RawAIResponse] | PlanExtractionResult:
+    """Shared transport, envelope and bounded parsing boundary for private adapters."""
+
     source_text_bytes: bytes | None = None
     try:
         source_text_bytes = source_text.encode("utf-8")
@@ -149,7 +174,9 @@ async def extract_plan(
         )
 
     try:
-        output = _parse_untrusted_output(raw.content, prompt_version=config.prompt_version)
+        output = _parse_untrusted_output(
+            raw.content, prompt_version=config.prompt_version, output_model=output_model
+        )
     except _UntrustedOutputError as error:
         return _failure_result(
             request_id=request_id,
@@ -231,6 +258,11 @@ async def extract_plan(
             reason="JSON_OTHER",
         )
 
+    return output, raw
+
+
+def _review_current_output(output, source_text, request_id, config, raw):
+    source_text_sha256 = sha256(source_text.encode("utf-8")).hexdigest()
     from trade_plan_monitor.ai.plan_extraction import (
         CurrentPlanExtractionOutput,
         CurrentPlanExtractionResult,
@@ -276,11 +308,12 @@ async def extract_plan(
         )
 
 
-def _parse_untrusted_output(
+def _parse_untrusted_output[OutputT: BaseModel](
     content: str,
     *,
     prompt_version: str,
-) -> CurrentPlanExtractionOutput:
+    output_model: type[OutputT] = CurrentPlanExtractionOutput,
+) -> OutputT:
     if len(content.encode("utf-8")) > MAX_EXTRACTION_OUTPUT_BYTES:
         raise _UntrustedOutputError("JSON_BUDGET")
 
@@ -307,9 +340,7 @@ def _parse_untrusted_output(
         allow_nan=False,
         separators=(",", ":"),
     )
-    from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
-
-    return CurrentPlanExtractionOutput.model_validate_json(normalized)
+    return output_model.model_validate_json(normalized)
 
 
 def _enforce_json_budget(value: object) -> None:
