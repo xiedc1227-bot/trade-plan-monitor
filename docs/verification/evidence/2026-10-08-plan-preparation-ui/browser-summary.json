@@ -1,0 +1,162 @@
+{
+  "profile": "isolated Chrome component harness",
+  "viewportChecks": [
+    {
+      "width": 320,
+      "horizontalOverflow": false,
+      "axeViolations": []
+    },
+    {
+      "width": 768,
+      "horizontalOverflow": false,
+      "axeViolations": []
+    },
+    {
+      "width": 1024,
+      "horizontalOverflow": false,
+      "axeViolations": []
+    },
+    {
+      "width": 1440,
+      "horizontalOverflow": false,
+      "axeViolations": []
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "journeys": [
+    "save/edit-save/extract/cancel/physical-drain",
+    "uncertain-edit/same-key-body-replay",
+    "UNKNOWN/explicit-ended-confirmation/recover-without-extraction",
+    "invalid-UTF8/preserved-edit/final-candidate",
+    "keyboard-tab/native-file-control",
+    "drained-poll-stop/unmount-active-poll-stop"
+  ],
+  "metrics": {
+    "create": 1,
+    "get": 4,
+    "edit": 4,
+    "extract": 4,
+    "cancel": 1,
+    "recover": 1,
+    "replay": 1,
+    "mutations": [
+      {
+        "path": "/api/v1/backtest-preparations",
+        "key": "240d8e4c-b7f6-4761-b0ec-970843fd0b68",
+        "body": {
+          "input": {
+            "preparation_id": "0335367f-c50e-4ab7-8e47-7c8ddfea631c",
+            "sources": [
+              {
+                "source_id": "14a3093f-509d-4716-ad7e-7b0950000f22",
+                "text": "  计划原文：上海时间，条件买入与风险退出。\n保留全部证据。  "
+              }
+            ]
+          }
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/source",
+        "key": "a31dbbc8-a6b1-4c93-9987-4e6aa0834b31",
+        "body": {
+          "expectedRevision": 1,
+          "source": {
+            "source_id": "14a3093f-509d-4716-ad7e-7b0950000f22",
+            "text": "更正后的原文"
+          }
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/extractions",
+        "key": "13b335c4-15b2-438b-833d-719b897bd5e6",
+        "body": {
+          "expectedRevision": 2
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/cancellations",
+        "key": "bbf1a840-6116-41aa-b796-2b6b62599af3",
+        "body": {
+          "expectedRevision": 3
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/source",
+        "key": "7158943e-7c5a-46bd-8a88-99dc74eec6df",
+        "body": {
+          "expectedRevision": 5,
+          "source": {
+            "source_id": "14a3093f-509d-4716-ad7e-7b0950000f22",
+            "text": "第二次提取原文"
+          }
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/source",
+        "key": "7158943e-7c5a-46bd-8a88-99dc74eec6df",
+        "body": {
+          "expectedRevision": 5,
+          "source": {
+            "source_id": "14a3093f-509d-4716-ad7e-7b0950000f22",
+            "text": "第二次提取原文"
+          }
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/extractions",
+        "key": "a1a8b792-9a98-4031-b506-9aa05c31cbf5",
+        "body": {
+          "expectedRevision": 6
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/recoveries",
+        "key": "47994297-fcdb-4696-941e-60d862d13dc7",
+        "body": {
+          "expectedRevision": 8,
+          "generation": "g2",
+          "confirmedEnded": true
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/source",
+        "key": "04a5a5b4-9d79-44e7-bb84-49b2bb918189",
+        "body": {
+          "expectedRevision": 9,
+          "source": {
+            "source_id": "14a3093f-509d-4716-ad7e-7b0950000f22",
+            "text": "最终完整原文"
+          }
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/extractions",
+        "key": "97fb437b-2e88-4960-a72c-66f1225e09c6",
+        "body": {
+          "expectedRevision": 10
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/source",
+        "key": "981b23e1-d6eb-49b0-b38d-7a4e18b789d5",
+        "body": {
+          "expectedRevision": 12,
+          "source": {
+            "source_id": "14a3093f-509d-4716-ad7e-7b0950000f22",
+            "text": "离开前的新修正"
+          }
+        }
+      },
+      {
+        "path": "/api/v1/backtest-preparations/0335367f-c50e-4ab7-8e47-7c8ddfea631c/extractions",
+        "key": "3c844f17-6ab3-45ee-b3bd-1c0046b355c0",
+        "body": {
+          "expectedRevision": 13
+        }
+      }
+    ]
+  },
+  "passed": true
+}

@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18–MV25：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13 与 ML-C01/ML-C02/ML-C03/ML-C04 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV24 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV26：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14 与 ML-C01/ML-C02/ML-C03/ML-C04 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV26 通过隔离真实 Chrome 界面验证单原文输入/进度组件及请求/轮询保护。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV25 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -495,3 +495,30 @@ ML-T12 与 ML-C04 完成；下一项为 ML-T13。路由已挂载，模式发布�
 批准仍待 ML-T29。未改动的 `test_openapi_change_requires_bilingual_spec_approval` 因候选 v1 快照摘要未在已批准双语规格中而失败；`test_openapi_contains_only_approved_paths_and_public_error_schemas` 因七条准备路径不在 APPROVED_PATHS 中而失败。测试/断言和已批准摘要均未修改、跳过或抑制。已批准基线仍为 `8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`。候选 SHA-256，待批准：compatibility v1 `1fd4eea69dbe1827c35ca2f19a0261296be5e447f293d7a2e52c4fc8a5c9e3a4`；canonical v2 `7e5f0a6ebec6ce3cefd440af7d9619e9332e22dd081f3f667b40a7c08473a367`。
 
 ML-T13 实现及生成完成；下一项为 ML-T14，ML-C05 仍待上传/进度/审核 UI。自审覆盖兼容性、模式/名称引用、可判别分支、边界、私有状态排除和实际成功/错误行为。既有 Starlette/httpx 弃用提示仍在。测试使用临时存储及假 AI，没有付费/服务商/行情调用、生产状态修改、通知或部署。最终 API 批准及完整交付验收仍待完成。
+
+## MV26. 单原文输入、进度与稳定请求控制
+
+ML-T13 于 2026-10-08 继续 ML-T14 前推送至 GitHub main，提交为 `c31904d`。三个切片使用五个不同主要文件：`web/src/api/preparations.ts`、`web/src/composables/usePlanPreparation.ts`、`web/src/components/backtests/PlanPreparationSourceForm.vue`、`web/src/components/backtests/PlanPreparationProgress.vue` 及 `web/tests/unit/PlanPreparation.spec.ts`。前两个切片分别提交为 `9f61cdd` 和 `c5018f1`。最后组件切片同时修复同一控制器的未保存原文及旧读取刷新处理（2 / 2 / 4 个文件，共 5 个不同文件）。中英文计划/任务/验证记录及浏览器证据随窄范围代码同步；其他运行时/概览重试修改及盛新研究文件保持排除。
+
+传输复用现有有界、冻结、脱敏的同源 JSON 层，接受一份内嵌原文，校验标识符/安全修订/上海时间顺序、进度信封及候选区分边界，并检查实际成功状态、no-store、Location 和 Retry-After 2。候选语义审核继续由后端负责，审核 UI 接入属于 ML-T15。不修改生成快照/类型/已批准规格或后端。
+
+单份控制器拥有一份草稿/准备及一份不可变的未结束变更意图。重复点击合并；结果未确认时保留原请求键、修订和载荷，供明确重放原回执。读取不会隐含重放变更。旧原始回执及过时读取不能降低当前状态修订。读取失败保留原文编辑；修改原文后须先保存才能提取。明确拒绝的新建恢复可编辑状态。取消等待、UNKNOWN、原文编辑清理及其他未结束实际工作继续阻止新操作，包括表面已处于 FAILED/CANCELLED 的状态。代次/修订绑定的 UNKNOWN 恢复要求明确结束确认，不自动提取。读取不重叠，在空闲/实际排空时停止，页面隐藏时暂停，卸载时停止；取消/晚到读取及变更响应不能更新已销毁状态。
+
+受控表单接受粘贴文本或恰好一份 UTF-8 .txt/.md 文件，上限 600000 字节及 150000 Unicode 字符。可选上海时间戳/日期不补造。无效/多份/超大文件保留此前证据，显示转义错误；手动编辑、原文/禁用状态变化及卸载使晚到文件读取失效。复用原生标签、焦点、状态/错误宣告及现有设计变量。进度组件显示取消等待、尝试次数及明确提取/取消/刷新、同请求安全重试和确认恢复。观察到修订/代次变化时清除恢复确认。生产页面组合及审核计划预览留待 ML-T15，ML-C05 仍待完成。
+
+新增三项回归先暴露新建被拒后编辑仍锁定、未保存原文仍可提取、旧读取使刷新永久忙碌；各项在修复前失败，最终测试全部通过。浏览器夹具采用真实本地 HTTP 与合成候选信封值，只验证进度，不作语义审核或生产路由验收。当前没有 Chrome DevTools MCP，因此使用已安装 Playwright/Chrome 进行真实浏览器验证。临时界面/服务在证据记录后关闭并移除。
+
+| 检查 | 已执行命令/证据 | 结果 |
+|---|---|---|
+| 本项门禁 | `npm --prefix web run test -- --run tests/unit/PlanPreparation.spec.ts` | 50 项通过，覆盖传输、单份控制器、原文/进度组件及失败/生命周期边界。 |
+| 全部前端 | `npm --prefix web run test -- --run`; `npm --prefix web run type-check`; `npm --prefix web run build` | 857 项 / 58 文件通过，8.60 秒；类型检查及构建 PASS。 |
+| 相关后端/API 契约 | `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py tests/integration/test_plan_preparation_contract.py tests/integration/test_frontend_contract_promotion.py tests/integration/test_openapi_snapshot.py -q --tb=short -m 'not live' --basetemp=.pytest_cache/ml-t14-contract-regression` | 92 项通过，恰有 2 项原有批准门禁失败，73.19 秒；全部 53 项准备 HTTP 及 20 项准备契约检查通过。 |
+| 生成产物 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | 权威 monitor v2 及兼容 monitor v1 均 PASS；快照/类型保持一致。 |
+| 真实浏览器 | [机器可读流程证据](evidence/2026-10-08-plan-preparation-ui/browser-summary.json) | 一次新建、4 次明确提取、一次取消、一次确认恢复及一次原回执重放。先保存才提取、实际结束等待、同键/载荷重放、无效 UTF-8 保留、键盘 Tab 及停止轮询均 PASS。320 / 768 / 1024 / 1440 宽度无横向溢出或 axe 违规；控制台/页面错误及外部请求均为零。 |
+| 视觉证据 | [320 宽候选](evidence/2026-10-08-plan-preparation-ui/candidate-320.png)、[1440 宽候选](evidence/2026-10-08-plan-preparation-ui/candidate-1440.png)、[取消等待](evidence/2026-10-08-plan-preparation-ui/cancel-wait-1440.png)、[确认 UNKNOWN 恢复](evidence/2026-10-08-plan-preparation-ui/unknown-confirmation-1440.png) | 已检查响应布局、展开的可选日期、操作控件及恢复确认。 |
+| 变异审查 | 反转未结束工作条件，执行实际排空用例后恢复原始字节。 | 变异时 2 失败 / 2 通过（检测 FAILED/CANCELLED 保护），其他测试被筛选；恢复后最终 50 项全部通过。 |
+| 文档/工作区 | 成对标题/ID/字面契约、保留既有已完成 todo 尾部及 MV01–MV25、无关文件哈希、`git diff --check` | PASS；完成 17 项、待完成活动任务 20 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
+
+首次后端检查采用无法访问的 Windows 系统 pytest 临时目录（70 项 setup 错误）；改用以上明确的工作区 basetemp 重跑后全部消除，不改测试。临时浏览器夹具起初将模拟 HTTP 处理器注册在 Vite fallback 之后，导致 404；提前注册后最终流程通过。这两项均是验证环境修正。两项未改动批准失败为 `test_openapi_change_requires_bilingual_spec_approval` 和 `test_openapi_contains_only_approved_paths_and_public_error_schemas`，已在 MV25 记录并待 ML-T29。不改变任何断言/skip/已批准摘要。保留既有 Starlette/httpx 弃用提示。
+
+ML-T14 已完成，下一项为 ML-T15。自审覆盖不可变意图及权威修订处理、未保存原文、原文/文件竞态、单个未结束工作、实际排空、生命周期归属、有界轮询、安全渲染及无障碍。不新增批次/队列/通用锁、付费/供应商/行情调用、生产状态修改、通知或部署。最终 API 批准及整体验收仍待完成。
