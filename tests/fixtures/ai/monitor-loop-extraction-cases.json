@@ -1,0 +1,25 @@
+{
+  "fixture_version": "monitor-loop-extraction-cases-v1",
+  "cases": [
+    {
+      "id": "existing-core",
+      "source": "002240.SZ。实际持仓100股。CORE持仓100股。TACTICAL持仓0股。每股成本40.105元/股。持仓上限300股。参考行情28.98元。假想买入100股，价格28.70元；假想卖出100股，价格29.30元。普通买卖数量0股。观察区28.50至29.00元。技术风险25.99元需要连续收盘确认。部分成交及挂单容量待支持。基本面信息退出待支持。",
+      "inventory_quantity": 100,
+      "lot_quantity": 100,
+      "bucket": "CORE",
+      "unit_cost_yuan": "40.105",
+      "cost_basis_fen": 401050,
+      "position_max_qty": 300
+    },
+    {
+      "id": "targets-only",
+      "source": "002240.SZ。持仓上限300股。CORE目标100股。TACTICAL目标200股。假设买入100股，每股成本28.70元/股。参考行情28.45元。",
+      "inventory_quantity": null,
+      "lot_quantity": null,
+      "bucket": null,
+      "unit_cost_yuan": null,
+      "cost_basis_fen": null,
+      "position_max_qty": 300
+    }
+  ]
+}
