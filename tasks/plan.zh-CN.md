@@ -115,19 +115,20 @@ ML-T12 在扩展前拆成两个切片，每个四个主要文件，含共用测�
 
 ## IP06. 应用接口与页面边界
 
-建议新增准备资源，在模式/API 任务中冻结后再编写 UI：
+ML-T12 挂载下列单原文准备资源。ML-T13 发布其模式及生成契约后再编写 UI；闭环运行提交仍待完成：
 
-| 操作 | 建议路径/用途 |
+| 操作 | 路径/用途 |
 |---|---|
 | 创建准备 | `POST /api/v1/backtest-preparations` — 恰好一份原文；持久身份/状态。 |
-| 读取进度/条目 | `GET /api/v1/backtest-preparations/{id}` 和 `GET /api/v1/backtest-preparations/{id}/items` — 单份原文的有界投影。 |
-| 修正原文/初始绑定 | `PATCH /api/v1/backtest-preparations/{id}/items/{itemId}` — 预期修订；使本候选/审核失效。 |
-| 开始/恢复/重试提取 | `POST /api/v1/backtest-preparations/{id}/extraction-requests` — 预期准备修订；稳定幂等。 |
-| 取消准备工作 | `POST /api/v1/backtest-preparations/{id}/cancellations` — 停止新调用，阻止晚到响应提交。 |
-| 审核/冻结 | `POST /api/v1/backtest-preparations/{id}/review-confirmations` — 精确单原文/内容/账户/证据/修订绑定。 |
+| 读取进度 | `GET /api/v1/backtest-preparations/{preparation_id}` — 包含单份原文及候选的有界投影。 |
+| 修正原文/初始绑定 | `PUT /api/v1/backtest-preparations/{preparation_id}/source` — 预期修订；使本候选/审核失效。 |
+| 开始/重试提取 | `POST /api/v1/backtest-preparations/{preparation_id}/extractions` — 预期准备修订；稳定幂等。 |
+| 取消准备工作 | `POST /api/v1/backtest-preparations/{preparation_id}/cancellations` — 停止新调用，阻止晚到响应提交。 |
+| 审核/冻结 | `POST /api/v1/backtest-preparations/{preparation_id}/reviews` — 精确单原文/内容/账户/证据/修订绑定。 |
+| 确认工作结束 | `POST /api/v1/backtest-preparations/{preparation_id}/recoveries` — 精确代次/修订及字面值 `confirmedEnded: true`；不重新提交。 |
 | 提交回放 | 既有 `POST /api/v1/backtest-runs` 增量接受有区分值的闭环命令，引用已审核准备修订、可选 `endDate`、数据集和响应设置。 |
 
-这些路径为建议，尚非现有端点。服务端负责资格、期初事实、审核及解析日期，复用同源/变更防护、请求幂等和既有错误封装。请求体/模式/语义校验沿用既有约定；缺失资源为 404，过时/冲突修订或载荷复用为 409，配置服务不可用为 503。HTTP 输入不接受文件系统路径，不泄露供应商秘密、原始异常或任意生成 HTML。
+准备命令封装字段使用 camel-case，内嵌研究字段保留原名。创建接受 `input`，编辑接受 `source` 及 `expectedRevision`，提取/取消接受 `expectedRevision`，审核接受 `review`，恢复接受 `generation`、`expectedRevision` 及 `confirmedEnded`。进度公开有界状态、原文、尝试及类型化候选/冻结值，不公开私有归属/准入/供应商诊断。服务端负责资格、期初事实、审核及解析日期，复用同源/变更防护、请求幂等和既有错误封装。请求体/模式/语义校验沿用既有约定；缺失资源为 404，过时/冲突修订或载荷复用为 409，配置服务不可用为 503。HTTP 输入不接受文件系统路径，不泄露供应商秘密、原始异常或任意生成 HTML。
 
 Web/API 构造一份不可变已审核计划输入并提交既有后台协调器，由 ML-T19 分派执行器。移除回测 CLI 命令/专用兼容逻辑，不新增 CLI 或独立命令所属协调器。
 

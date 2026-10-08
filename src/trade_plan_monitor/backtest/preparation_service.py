@@ -197,11 +197,6 @@ class PreparationService:
         if replay is not None:
             return replay, False
         record = self._store._require_revision(self._store.get(preparation_id), expected_revision)
-        extractor = extractor_factory() if extractor_factory is not None else self._extractor
-        if extractor is None:
-            raise BacktestServiceUnavailable()
-        if not isinstance(extractor, PreparationExtractor):
-            raise TypeError("extractor factory must return PreparationExtractor")
         intent = canonical_json(
             {
                 "domain": "single-source-preparation-v1",
@@ -240,6 +235,11 @@ class PreparationService:
             phase="READY",
         )
         try:
+            extractor = extractor_factory() if extractor_factory is not None else self._extractor
+            if extractor is None:
+                raise BacktestServiceUnavailable()
+            if not isinstance(extractor, PreparationExtractor):
+                raise TypeError("extractor factory must return PreparationExtractor")
             started = self._store.start_attempt(
                 preparation_id,
                 expected_revision=expected_revision,
@@ -398,22 +398,26 @@ class PreparationService:
     def _mutate(self, operation, identity, revision, key, source):
         if self._closed:
             raise BacktestServiceUnavailable()
+        intent = canonical_json({
+            "domain": "single-source-mutation-v1", "operation": operation,
+            "preparation_id": identity, "expected_revision": revision,
+            "source_hash": source.binding_hash if source else None,
+        })
+        admission_key = "prep-mutate-" + sha256(key.encode()).hexdigest()
+        replay = self._store.replay_mutation(operation, identity, expected_revision=revision,
+            idempotency_key=key, source=source)
+        if replay is not None:
+            if replay.work_claim is None:
+                reservation = self._jobs.get_run_submission_reservation(intent, admission_key)
+                if reservation is not None:
+                    self._jobs.release_run_submission(reservation)
+            return replay
         record = self._store.get(identity)
         claim = record.work_claim if record else None
         if claim and claim.phase == "ENDED":
             raise PreparationConflictError("WORKER_CLAIM_PENDING")
         reservation = None
         if claim is None:
-            intent = canonical_json(
-                {
-                    "domain": "single-source-mutation-v1",
-                    "operation": operation,
-                    "preparation_id": identity,
-                    "expected_revision": revision,
-                    "source_hash": source.binding_hash if source else None,
-                }
-            )
-            admission_key = "prep-mutate-" + sha256(key.encode()).hexdigest()
             reservation = self._jobs.get_run_submission_reservation(intent, admission_key)
             if reservation is None:
                 reservation = self._jobs.claim_run_submission(intent, admission_key)

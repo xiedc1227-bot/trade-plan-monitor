@@ -45,6 +45,10 @@ from trade_plan_monitor.web.routers.alerts import router as alerts_router
 from trade_plan_monitor.web.routers.backtest_data import router as backtest_data_router
 from trade_plan_monitor.web.routers.backtest_exports import router as backtest_exports_router
 from trade_plan_monitor.web.routers.backtest_jobs import router as backtest_jobs_router
+from trade_plan_monitor.web.routers.backtest_preparations import require_preparation_request
+from trade_plan_monitor.web.routers.backtest_preparations import (
+    router as backtest_preparations_router,
+)
 from trade_plan_monitor.web.routers.backtest_results import router as backtest_results_router
 from trade_plan_monitor.web.routers.backtest_runs import router as backtest_runs_router
 from trade_plan_monitor.web.routers.daily_plans import router as daily_plans_router
@@ -98,6 +102,9 @@ async def _prepare_backtest_request(request: Request) -> None:
 
     if not request.url.path.startswith("/api/v1/backtest-"):
         return
+    preparation_request = request.url.path.startswith("/api/v1/backtest-preparations")
+    if preparation_request:
+        require_preparation_request(request)
     manager = getattr(request.app.state, "backtest_lifecycle", None)
     if manager is None:
         return
@@ -106,7 +113,7 @@ async def _prepare_backtest_request(request: Request) -> None:
         "/api/v1/backtest-dataset-verifications",
         "/api/v1/backtest-runs",
     }
-    if request.method == "POST":
+    if request.method == "POST" or (preparation_request and request.method == "PUT"):
         # FastAPI resolves router dependencies before validating the endpoint body.
         # Reuse its mounted command model so rejected input cannot acquire resources.
         body_field = getattr(request.scope.get("route"), "body_field", None)
@@ -136,6 +143,11 @@ async def _prepare_backtest_request(request: Request) -> None:
         raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=retry_after) from None
     request.app.state.backtest_read_service = composition.read_service
     request.app.state.backtest_operation_service = composition.operation_service
+    if preparation_request:
+        try:
+            request.state.preparation_service = await composition.ensure_preparations()
+        except BacktestServiceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
 
 
 @contextmanager
@@ -386,7 +398,7 @@ def create_app(
     app.include_router(market_indexes_router)
     for backtest_router in (
         backtest_data_router, backtest_jobs_router, backtest_runs_router,
-        backtest_results_router, backtest_exports_router,
+        backtest_results_router, backtest_exports_router, backtest_preparations_router,
     ):
         app.include_router(backtest_router, dependencies=[Depends(_prepare_backtest_request)])
     if static_files is not None:

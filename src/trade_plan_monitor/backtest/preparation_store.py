@@ -250,6 +250,31 @@ class PreparationStore:
             "source": source, "expected_revision": expected_revision,
         }, idempotency_key, change)
 
+    def replay_mutation(
+        self, operation, preparation_id, *, expected_revision, idempotency_key, source=None,
+    ):
+        """Return an original edit/cancel receipt before consulting new-work admission."""
+        if operation not in {"EDIT", "CANCEL"}:
+            raise ValueError("mutation must be EDIT or CANCEL")
+        identity = _IDENTIFIER.validate_python(preparation_id)
+        key = _IDENTIFIER.validate_python(idempotency_key)
+        payload = {"expected_revision": expected_revision}
+        if operation == "EDIT":
+            if not isinstance(source, PreparationSource):
+                raise TypeError("source must be PreparationSource")
+            payload["source"] = PreparationSource.model_validate(source.model_dump(mode="python"))
+        expected = _request_hash(operation, identity, payload)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT request_hash, response_json FROM backtest_preparation_idempotency "
+                "WHERE idempotency_key = ?", (key,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row[0] != expected:
+            raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
+        return PreparationRecord.model_validate_json(row[1])
+
     def start_attempt(
         self, preparation_id: str, *, expected_revision: int, idempotency_key: str,
         work_claim: PreparationWorkClaim | None = None,

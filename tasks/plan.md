@@ -115,19 +115,20 @@ At submission, resolve the default end/cutoff once after the idempotency reserva
 
 ## IP06. Application interfaces and page boundaries
 
-Proposed new preparation resources, to be frozen in schema/API tasks before UI coding:
+ML-T12 mounts the following single-source preparation resources. ML-T13 publishes their schema and generated contracts before UI coding; loop-run submission remains pending:
 
-| Operation | Proposed path / purpose |
+| Operation | Path / purpose |
 |---|---|
 | Create preparation | `POST /api/v1/backtest-preparations` — exactly one source; durable identity/status. |
-| Read progress/items | `GET /api/v1/backtest-preparations/{id}` and `GET /api/v1/backtest-preparations/{id}/items` — bounded projection of the single source. |
-| Correct source/initial binding | `PATCH /api/v1/backtest-preparations/{id}/items/{itemId}` — expected revision; invalidate this candidate/review. |
-| Start/resume/retry extraction | `POST /api/v1/backtest-preparations/{id}/extraction-requests` — expected preparation revision; stable idempotency. |
-| Cancel preparation work | `POST /api/v1/backtest-preparations/{id}/cancellations` — stop new calls and fence late responses. |
-| Review/freeze | `POST /api/v1/backtest-preparations/{id}/review-confirmations` — exact single-source/content/account/evidence/revision bindings. |
+| Read progress | `GET /api/v1/backtest-preparations/{preparation_id}` — bounded projection containing the single source and candidate. |
+| Correct source/initial binding | `PUT /api/v1/backtest-preparations/{preparation_id}/source` — expected revision; invalidate this candidate/review. |
+| Start/retry extraction | `POST /api/v1/backtest-preparations/{preparation_id}/extractions` — expected preparation revision; stable idempotency. |
+| Cancel preparation work | `POST /api/v1/backtest-preparations/{preparation_id}/cancellations` — stop new calls and fence late responses. |
+| Review/freeze | `POST /api/v1/backtest-preparations/{preparation_id}/reviews` — exact single-source/content/account/evidence/revision bindings. |
+| Confirm ended work | `POST /api/v1/backtest-preparations/{preparation_id}/recoveries` — exact generation/revision and literal `confirmedEnded: true`; never resubmit. |
 | Submit replay | Existing `POST /api/v1/backtest-runs` with an additive discriminated loop command referencing the reviewed preparation revision, optional `endDate`, dataset and response settings. |
 
-These paths are proposed, not current endpoints. The server owns eligibility, initial facts, review and resolved dates. Reuse same-origin/mutation guards, request idempotency and existing error envelopes. Body/schema/semantic validation follows existing conventions; missing resources are 404, stale/conflicting revisions/payload reuse 409, unavailable configured services 503. No HTTP input accepts filesystem paths. Do not leak provider secrets, raw exceptions or arbitrary generated HTML.
+Preparation commands use camel-case envelope fields and retain embedded research field names. Create accepts `input`, edits accept `source` and `expectedRevision`, extraction/cancellation accept `expectedRevision`, review accepts `review`, and recovery accepts `generation`, `expectedRevision` and `confirmedEnded`. Progress exposes bounded state, source, attempts and typed candidate/frozen values without private ownership/admission/provider diagnostics. The server owns eligibility, initial facts, review and resolved dates. Reuse same-origin/mutation guards, request idempotency and existing error envelopes. Body/schema/semantic validation follows existing conventions; missing resources are 404, stale/conflicting revisions/payload reuse 409, unavailable configured services 503. No HTTP input accepts filesystem paths. Do not leak provider secrets, raw exceptions or arbitrary generated HTML.
 
 The Web/API builds one immutable reviewed-plan input and submits to the existing background coordinator. ML-T19 dispatches workers. Backtest CLI commands/dedicated compatibility logic are removed; no new CLI or standalone command-owned coordinator.
 
