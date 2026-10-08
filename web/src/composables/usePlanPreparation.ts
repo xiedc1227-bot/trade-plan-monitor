@@ -38,7 +38,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let mounted = false;
   let readGeneration = 0;
-  let draftDirty = false;
+  const draftDirty = shallowRef(false);
 
   const workPending = computed(() => {
     const value = preparation.value;
@@ -51,7 +51,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     ["READY", "REFRESHING"].includes(requestState.value) && mutationState.value === "IDLE");
   const canSubmitSource = computed(() => !isBusy.value &&
     (preparationId.value === null || current.value));
-  const canExtract = computed(() => current.value && !workPending.value &&
+  const canExtract = computed(() => current.value && !workPending.value && !draftDirty.value &&
     preparation.value!.attempts.length < 3 && (preparation.value!.status === "DRAFT" ||
       preparation.value!.status === "FAILED" && preparation.value!.attempts.at(-1)?.retryable === true));
   const canCancel = computed(() => current.value && preparation.value!.status === "EXTRACTING");
@@ -79,7 +79,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   function apply(response: PreparationReceipt): boolean {
     if (preparation.value !== null && response.body.revision < preparation.value.revision) return false;
     preparation.value = response.body;
-    if (!draftDirty) draft.value = { ...response.body.source };
+    if (!draftDirty.value) draft.value = { ...response.body.source };
     requestState.value = "READY";
     readError.value = null;
     return true;
@@ -97,7 +97,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
       try {
         const response = await api.get(preparationId.value!, { signal: controller.signal });
         if (!mounted || generation !== readGeneration || controller.signal.aborted) return;
-        apply(response);
+        if (!apply(response)) { requestState.value = "READY"; readError.value = null; }
       } catch {
         if (!mounted || generation !== readGeneration || controller.signal.aborted) return;
         requestState.value = "FAILED";
@@ -125,9 +125,9 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
       try {
         const response = await saved.send(saved.key, controller.signal);
         if (!mounted || controller.signal.aborted) return;
-        if (saved.kind === "CREATE" || saved.kind === "EDIT") draftDirty = false;
+        if (saved.kind === "CREATE" || saved.kind === "EDIT") draftDirty.value = false;
         needsRefresh = !apply(response);
-        if (needsRefresh && !draftDirty && preparation.value !== null) draft.value = { ...preparation.value.source };
+        if (needsRefresh && !draftDirty.value && preparation.value !== null) draft.value = { ...preparation.value.source };
         intent = null;
         mutationState.value = "IDLE";
       } catch (error) {
@@ -165,7 +165,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   function updateSource(source: PreparationSource): void {
     if (isBusy.value) return;
     draft.value = { ...source, source_id: draft.value.source_id };
-    draftDirty = true;
+    draftDirty.value = true;
   }
   function submitSource(): Promise<void> {
     if (!canSubmitSource.value) return mutationPromise ?? Promise.resolve();

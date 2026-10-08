@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 16 项、待完成活动任务 21 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV25。
+> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 17 项、待完成活动任务 20 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV26。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -109,7 +109,7 @@
 ### ML-C03. 检查点
 
 - [x] 单原文持久化、完整提取及原始证据绑定通过；ML-T09 已取消。
-- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁；ML-T10 通过 MV22，ML-T11 通过 MV23，ML-T12/ML-C04 通过 MV24，ML-T13 通过 MV25，下一项为 ML-T14。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁；ML-T10 通过 MV22，ML-T11 通过 MV23，ML-T12/ML-C04 通过 MV24，ML-T13 通过 MV25，ML-T14 通过 MV26，下一项为 ML-T15。
 
 ## ML-T10. 安全恢复单原文提取
 
@@ -139,7 +139,7 @@
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_api.py`
 - **范围:** 两个 M 切片，每个 4 个主要文件（含共用测试共 7 个不同文件）；**追溯:** ML-A10, ML-A16, ML-A18。先补齐创建准入/收据及能力归属，再挂载有界 HTTP 命令。模式发布暂存至 ML-T13，保留已批准契约/摘要。
-- **证据:** MV24：53 项任务检查通过，包括真实本地 HTTP 配假 AI 的取消/编辑/提取/审核/重启流程。非法请求不取得资源；准备库按需打开，失败会缓存，读取不激活任务协调器，旧回执在其他工作进行时仍可重放，全局准入持续到实际排空。未知结果恢复不重新提交，旧标记/原始载荷不能产生冻结权限。ML-T13 通过 MV25，下一项为 ML-T14。
+- **证据:** MV24：53 项任务检查通过，包括真实本地 HTTP 配假 AI 的取消/编辑/提取/审核/重启流程。非法请求不取得资源；准备库按需打开，失败会缓存，读取不激活任务协调器，旧回执在其他工作进行时仍可重放，全局准入持续到实际排空。未知结果恢复不重新提交，旧标记/原始载荷不能产生冻结权限。ML-T13 通过 MV25，ML-T14 通过 MV26，下一项为 ML-T15。
 
 ### ML-C04. 检查点
 
@@ -154,16 +154,17 @@
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
 - **主要文件:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `scripts/generate_frontend_types.py`, `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_plan_preparation_contract.py`
 - **范围:** 三个切片（2 / 2 / 6 个主要文件，含共用测试共 8 个不同文件）；**追溯:** ML-A10, ML-A16。先收窄候选分支及公开修订边界，不改变成功响应值；再发布已挂载路由及实际成功/错误状态；最后规范化新出现的输入/输出模式名称，保留旧响应名称，再生成两种 profile 并验证既有路由/类型不变。发布及生成产物切片在漂移检查通过后共同提交。旧批准摘要/路径门禁保持不动，留待 ML-T29，完整记录实际结果而不抑制。
-- **证据:** MV25：20 项准备契约用例通过；两种 profile 新增七项操作，全部旧路径/模式/类型保持一致。候选分支收窄及命令拒绝编译验证通过。最终回归 3509 项通过，恰有两项未改动批准门禁待 ML-T29；前端 807 项测试、类型检查和构建通过。下一项为 ML-T14，ML-C05 仍需 UI。
+- **证据:** MV25：20 项准备契约用例通过；两种 profile 新增七项操作，全部旧路径/模式/类型保持一致。候选分支收窄及命令拒绝编译验证通过。最终回归 3509 项通过，恰有两项未改动批准门禁待 ML-T29；前端 807 项测试、类型检查和构建通过。ML-T14 通过 MV26，下一项为 ML-T15，ML-C05 仍需页面/审核 UI。
 
 ## ML-T14. 构建单原文上传及进度 UI
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T13`
-- **验收:** 恰好接受一份原文，显示提取状态/错误并支持稳定重试/取消。终态/卸载停止轮询，错误原文/服务错误保持可见可编辑。不含批次排序或多计划选择。
+- **验收:** 恰好接受一份原文，显示提取状态/错误并支持稳定重试/取消。空闲或终态且实际排空、隐藏页面及卸载停止轮询；未保存原文先保存才可提取。取消等待、UNKNOWN 及其他未结束工作继续阻止新操作；错误原文/服务错误保持可见可编辑。不含批次排序或多计划选择。
 - **验证:** `npm --prefix web run test -- --run tests/unit/PlanPreparation.spec.ts`
 - **主要文件:** `web/src/api/preparations.ts`, `web/src/composables/usePlanPreparation.ts`, `web/src/components/backtests/PlanPreparationSourceForm.vue`, `web/src/components/backtests/PlanPreparationProgress.vue`, `web/tests/unit/PlanPreparation.spec.ts`
-- **范围:** 三个切片（2 / 2 / 3 个主要文件，含共用测试共 5 个不同文件）；**追溯:** ML-A10, ML-A16, ML-A18。先增加有界同源传输及稳定请求回执；再实现单份准备控制器，保留修订安全重试、实际排空/未知状态保护并停止轮询；最后实现受控单份文本/文件输入及进度组件。明确结束确认仅恢复 UNKNOWN 工作，不重新提交。页面及审核预览在 ML-T15 接入。复用现有设计变量，通过临时界面验证真实浏览器行为；不改后端、生成契约或批准门禁。
+- **范围:** 三个切片（2 / 2 / 4 个主要文件，含共用测试共 5 个不同文件）；**追溯:** ML-A10, ML-A16, ML-A18。先增加有界同源传输及稳定请求回执；再实现单份准备控制器，保留修订安全重试、实际排空/未知状态保护并停止轮询；最后实现受控单份文本/文件输入及进度组件，并补齐同一控制器的未保存原文/旧读取刷新保护；不同主要文件总数仍为 5。明确结束确认仅恢复 UNKNOWN 工作，不重新提交。页面及审核预览在 ML-T15 接入。复用现有设计变量，通过临时界面验证真实浏览器行为；不改后端、生成契约或批准门禁。
+- **证据:** MV26：50 项针对性测试通过，全部前端 857 项 / 58 文件通过，类型检查及构建通过。真实隔离 Chrome 界面验证取消实际结束等待、同请求重试、明确 UNKNOWN 恢复、无效 UTF-8 原文保留及停止轮询；320 / 768 / 1024 / 1440 宽度无溢出、axe 违规或浏览器错误。相关后端检查 92 项通过；原有两项 API 批准门禁仍待 ML-T29。下一项为 ML-T15，ML-C05 仍待页面组合及审核 UI。
 
 ## ML-T15. 预览并审核一份准备计划
 

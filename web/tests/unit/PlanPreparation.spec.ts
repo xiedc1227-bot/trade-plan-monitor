@@ -6,6 +6,8 @@ import type { PreparationView } from "../../src/api/generated-runtime-status";
 import { createPreparationApi, type PreparationApi, type PreparationReceipt } from "../../src/api/preparations";
 import { ApiClientError } from "../../src/api/transport";
 import { usePlanPreparation } from "../../src/composables/usePlanPreparation";
+import PlanPreparationSourceForm from "../../src/components/backtests/PlanPreparationSourceForm.vue";
+import PlanPreparationProgress from "../../src/components/backtests/PlanPreparationProgress.vue";
 
 const BASE = "/api/v1/backtest-preparations";
 const SOURCE = { source_id: "source-1", text: "完整计划原文" };
@@ -262,5 +264,166 @@ describe("one preparation controller", () => {
     const { state } = controller(api); await flushPromises(); await state.extract();
     expect(api.extract).toHaveBeenCalledTimes(1); expect(api.get).toHaveBeenCalledTimes(2);
     expect(state.preparation.value?.revision).toBe(4); expect(state.errorMessage.value).toContain("状态已变化");
+  });
+
+  it("requires saving edited evidence before extracting and uses the saved revision", async () => {
+    const api = mockApi(); const { state } = controller(api); await flushPromises();
+    state.updateSource({ ...SOURCE, text: "更正后的原文" });
+    expect(state.canExtract.value).toBe(false); await state.extract(); expect(api.extract).not.toHaveBeenCalled();
+    vi.mocked(api.edit).mockResolvedValue(result(preparation({ revision: 2, source: { ...SOURCE, text: "更正后的原文" } })));
+    await state.submitSource(); expect(state.canExtract.value).toBe(true); await state.extract();
+    expect(vi.mocked(api.extract).mock.calls[0]?.[1]).toEqual({ expectedRevision: 2 });
+  });
+
+  it("pauses reads while hidden and resumes unfinished work without automatic mutation", async () => {
+    vi.useFakeTimers(); const api = mockApi();
+    vi.mocked(api.get).mockResolvedValue(result(preparation({ status: "EXTRACTING", workPhase: "CALLING", generation: "g1" })));
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+    controller(api); await flushPromises();
+    hidden.mockReturnValue(true); document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(10_000); expect(api.get).toHaveBeenCalledTimes(1);
+    hidden.mockReturnValue(false); document.dispatchEvent(new Event("visibilitychange")); await flushPromises();
+    expect(api.get).toHaveBeenCalledTimes(2); expect(api.extract).not.toHaveBeenCalled();
+  });
+
+  it("preserves current evidence after a failed read and ignores a late unmounted mutation", async () => {
+    const api = mockApi(); const { state, wrapper } = controller(api); await flushPromises();
+    state.updateSource({ ...SOURCE, text: "本地修正" });
+    vi.mocked(api.get).mockRejectedValue(new Error("private detail")); await state.refresh();
+    expect(state.preparation.value?.revision).toBe(1); expect(state.draft.value.text).toBe("本地修正");
+    expect(state.errorMessage.value).not.toContain("private detail");
+    vi.mocked(api.get).mockResolvedValue(result()); await state.refresh();
+    const pending = deferred<PreparationReceipt>(); vi.mocked(api.edit).mockReturnValue(pending.promise);
+    const operation = state.submitSource(); const signal = vi.mocked(api.edit).mock.calls[0]?.[3]?.signal;
+    wrapper.unmount(); expect(signal?.aborted).toBe(true);
+    pending.resolve(result(preparation({ revision: 2 }))); await operation;
+    expect(state.preparation.value?.revision).toBe(1);
+  });
+
+  it("finishes refreshing without downgrading a newer authoritative revision", async () => {
+    const api = mockApi();
+    vi.mocked(api.get).mockResolvedValueOnce(result(preparation({ revision: 5 }))).mockResolvedValueOnce(result(preparation({ revision: 2 })));
+    const { state } = controller(api); await flushPromises(); await state.refresh();
+    expect(state.preparation.value?.revision).toBe(5); expect(state.requestState.value).toBe("READY");
+  });
+});
+
+function sourceForm() {
+  const wrapper = mount(PlanPreparationSourceForm, { props: { source: SOURCE, disabled: false, errorMessage: null } });
+  wrappers.push(wrapper); return wrapper;
+}
+function fileWithBytes(bytes: Uint8Array, name = "plan.txt") {
+  const file = new File([bytes.slice().buffer], name);
+  Object.defineProperty(file, "arrayBuffer", { value: async () => bytes.slice().buffer });
+  return file;
+}
+async function chooseFile(wrapper: VueWrapper, files: File[]) {
+  const input = wrapper.get('input[type="file"]');
+  Object.defineProperty(input.element, "files", { value: files, configurable: true });
+  await input.trigger("change"); await flushPromises();
+}
+function progressProps(overrides: Record<string, unknown> = {}) {
+  return { preparation: preparation(), requestState: "READY" as const, mutationState: "IDLE" as const,
+    canExtract: true, canCancel: false, canRecover: false, canRetryMutation: false,
+    errorMessage: null, ...overrides };
+}
+
+describe("one-source input and progress components", () => {
+  it("emits controlled source changes and validates before submitting", async () => {
+    const wrapper = sourceForm();
+    await wrapper.get("textarea").setValue("新的完整原文");
+    expect(wrapper.emitted("update:source")?.[0]?.[0]).toEqual({ ...SOURCE, text: "新的完整原文" });
+    await wrapper.setProps({ source: { ...SOURCE, text: "   " } });
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("submit")).toBeUndefined(); expect(wrapper.get('[role="alert"]').text()).toContain("原文");
+    await wrapper.setProps({ source: SOURCE }); await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("submit")).toHaveLength(1);
+    expect(wrapper.find('input[type="file"]').attributes("multiple")).toBeUndefined();
+  });
+
+  it("reads exactly one UTF-8 Markdown file without changing its evidence whitespace", async () => {
+    const wrapper = sourceForm();
+    await chooseFile(wrapper, [fileWithBytes(new TextEncoder().encode("  原文\n完整计划  "), "plan.md")]);
+    expect(wrapper.emitted("update:source")?.at(-1)?.[0]).toEqual({ ...SOURCE, text: "  原文\n完整计划  " });
+  });
+
+  it.each(["multiple", "encoding", "extension", "oversize"])("preserves pasted text after invalid file %s", async kind => {
+    const wrapper = sourceForm();
+    const good = fileWithBytes(new TextEncoder().encode("file"));
+    const files = kind === "multiple" ? [good, good] : kind === "encoding" ? [fileWithBytes(new Uint8Array([0xc3, 0x28]))] :
+      kind === "extension" ? [fileWithBytes(new TextEncoder().encode("file"), "plan.html")] : [fileWithBytes(new Uint8Array(600_001))];
+    await chooseFile(wrapper, files);
+    expect(wrapper.emitted("update:source")).toBeUndefined();
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(SOURCE.text);
+    expect(wrapper.get('[role="alert"]').text()).toBeTruthy();
+  });
+
+  it("ignores a file read that finishes after a manual edit or unmount", async () => {
+    const wrapper = sourceForm(); const pending = deferred<ArrayBuffer>();
+    const changes = vi.fn(); await wrapper.setProps({ "onUpdate:source": changes });
+    const file = new File(["old"], "old.txt"); Object.defineProperty(file, "arrayBuffer", { value: () => pending.promise, configurable: true });
+    await chooseFile(wrapper, [file]); await wrapper.get("textarea").setValue("手动更正");
+    pending.resolve(new TextEncoder().encode("过时文件").buffer); await flushPromises();
+    expect(wrapper.emitted("update:source")).toEqual([[{ ...SOURCE, text: "手动更正" }]]);
+    const another = deferred<ArrayBuffer>(); Object.defineProperty(file, "arrayBuffer", { value: () => another.promise, configurable: true });
+    await chooseFile(wrapper, [file]); wrapper.unmount(); another.resolve(new TextEncoder().encode("晚到").buffer); await flushPromises();
+    expect(changes).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps server errors as escaped text and disables source changes during pending work", async () => {
+    const wrapper = sourceForm(); await wrapper.setProps({ disabled: true, errorMessage: '<img src=x onerror="alert(1)">' });
+    expect(wrapper.find("img").exists()).toBe(false); expect(wrapper.get('[role="alert"]').text()).toContain("<img");
+    expect(wrapper.get("fieldset").attributes("disabled")).toBeDefined();
+    await wrapper.get("form").trigger("submit"); expect(wrapper.emitted("submit")).toBeUndefined();
+  });
+
+  it("keeps cancellation waiting visible and emits only permitted progress actions", async () => {
+    const wrapper = mount(PlanPreparationProgress, { props: progressProps({ preparation: preparation({ status: "CANCEL_REQUESTED", workPhase: "CALLING", generation: "g1" }), canExtract: false }) });
+    wrappers.push(wrapper);
+    expect(wrapper.text()).toContain("等待提取结束"); expect(wrapper.text()).toContain("完成前");
+    expect(wrapper.find('[data-testid="extract-preparation"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="refresh-preparation"]').trigger("click"); expect(wrapper.emitted("refresh")).toHaveLength(1);
+  });
+
+  it("requires a checked ended confirmation and shows a safe retry for uncertain results", async () => {
+    const wrapper = mount(PlanPreparationProgress, { props: progressProps({ preparation: preparation({ status: "EXTRACTING", workPhase: "UNKNOWN", generation: "g1" }), canExtract: false, canRecover: true }) });
+    wrappers.push(wrapper);
+    expect(wrapper.get('[data-testid="recover-preparation"]').attributes("disabled")).toBeDefined();
+    await wrapper.get('input[type="checkbox"]').setValue(true); await wrapper.get('[data-testid="recover-preparation"]').trigger("click");
+    expect(wrapper.emitted("recover")).toEqual([[true]]);
+    await wrapper.setProps({ mutationState: "UNCERTAIN", canRecover: false, canRetryMutation: true });
+    await wrapper.get('[data-testid="retry-preparation-mutation"]').trigger("click");
+    expect(wrapper.emitted("retryMutation")).toHaveLength(1);
+  });
+
+  it("records optional times in Shanghai and rejects reversed chronology", async () => {
+    const wrapper = sourceForm();
+    await wrapper.get('input[type="datetime-local"]').setValue("2026-10-08T09:30:00");
+    expect(wrapper.emitted("update:source")?.at(-1)?.[0]).toEqual({ ...SOURCE, authored_at: "2026-10-08T09:30:00.000000+08:00" });
+    await wrapper.setProps({ source: { ...SOURCE, authored_at: "2026-10-08T09:30:00+08:00", available_at: "2026-10-08T09:00:00+08:00" } });
+    await wrapper.get("form").trigger("submit"); expect(wrapper.emitted("submit")).toBeUndefined();
+    expect(wrapper.get('[role="alert"]').text()).toContain("不能晚于");
+  });
+
+  it("counts Unicode characters and preserves input when a decoded file exceeds the limit", async () => {
+    const wrapper = sourceForm(); await wrapper.setProps({ source: { ...SOURCE, text: "🙂计划" } });
+    expect(wrapper.text()).toContain("3 / 150000");
+    await chooseFile(wrapper, [fileWithBytes(new TextEncoder().encode("a".repeat(150_001)))]);
+    expect(wrapper.emitted("update:source")).toBeUndefined(); expect(wrapper.get('[role="alert"]').text()).toContain("150000");
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("🙂计划");
+  });
+
+  it("invalidates a file read when pending work disables the source form", async () => {
+    const wrapper = sourceForm(); const pending = deferred<ArrayBuffer>(); const file = new File(["old"], "old.txt");
+    Object.defineProperty(file, "arrayBuffer", { value: () => pending.promise }); await chooseFile(wrapper, [file]);
+    await wrapper.setProps({ disabled: true }); pending.resolve(new TextEncoder().encode("旧文件").buffer); await flushPromises();
+    expect(wrapper.emitted("update:source")).toBeUndefined();
+  });
+
+  it("clears an ended confirmation when the observed generation changes", async () => {
+    const wrapper = mount(PlanPreparationProgress, { props: progressProps({ preparation: preparation({ status: "EXTRACTING", workPhase: "UNKNOWN", generation: "g1" }), canExtract: false, canRecover: true }) });
+    wrappers.push(wrapper); await wrapper.get('input[type="checkbox"]').setValue(true);
+    await wrapper.setProps({ preparation: preparation({ status: "EXTRACTING", workPhase: "UNKNOWN", generation: "g2", revision: 2 }) });
+    expect(wrapper.get('[data-testid="recover-preparation"]').attributes("disabled")).toBeDefined();
   });
 });

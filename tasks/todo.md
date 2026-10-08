@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 16 completed, 21 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV25.
+> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 17 completed, 20 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV26.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -109,7 +109,7 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 ### ML-C03. Checkpoint
 
 - [x] Single-source persistence, complete extraction and original evidence bindings pass; ML-T09 is cancelled.
-- [x] Record executed evidence; resolve failures before dependent work without lowering the bar. MV20/MV21 record the private persistence/extraction gate; ML-T10 passes MV22, ML-T11 passes MV23, ML-T12/ML-C04 pass MV24, ML-T13 passes MV25, and ML-T14 is next.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar. MV20/MV21 record the private persistence/extraction gate; ML-T10 passes MV22, ML-T11 passes MV23, ML-T12/ML-C04 pass MV24, ML-T13 passes MV25, ML-T14 passes MV26, and ML-T15 is next.
 
 ## ML-T10. Resume single-source extraction safely
 
@@ -139,7 +139,7 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/preparation_service.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_api.py`
 - **Scope:** Two M increments, 4 primary files each (7 unique including shared tests); **Trace:** ML-A10, ML-A16, ML-A18. First close create admission/receipt and capability ownership, then mount bounded HTTP commands. Stage schema publication until ML-T13; preserve approved contracts/digests.
-- **Evidence:** MV24: 53 task cases pass, including a real loopback HTTP fake-AI cancel/edit/extract/review/restart journey. Invalid requests acquire no resources; preparation storage opens on demand, failure is cached, reads never activate the job coordinator, original receipts replay during unrelated work, and global admission lasts through physical drain. Unknown recovery never resubmits; legacy flags/raw payloads cannot grant frozen authority. ML-T13 passes MV25; ML-T14 is next.
+- **Evidence:** MV24: 53 task cases pass, including a real loopback HTTP fake-AI cancel/edit/extract/review/restart journey. Invalid requests acquire no resources; preparation storage opens on demand, failure is cached, reads never activate the job coordinator, original receipts replay during unrelated work, and global admission lasts through physical drain. Unknown recovery never resubmits; legacy flags/raw payloads cannot grant frozen authority. ML-T13 passes MV25, ML-T14 passes MV26; ML-T15 is next.
 
 ### ML-C04. Checkpoint
 
@@ -154,16 +154,17 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
 - **Primary files:** `src/trade_plan_monitor/web/preparation_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_preparations.py`, `scripts/generate_frontend_types.py`, `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_plan_preparation_contract.py`
 - **Scope:** Three increments (2 / 2 / 6 primary files; 8 unique including shared tests); **Trace:** ML-A10, ML-A16. First narrow candidate variants and public revision bounds without changing successful wire values; then publish the mounted router and its actual success/error statuses; finally normalize newly split input/output schema names while retaining old response names, generate both profiles and verify unchanged existing routes/types. The publication and generated-output increments are committed together after drift checks pass. Old approval digest/path gates remain untouched and pending ML-T29; record their exact results without suppressing them.
-- **Evidence:** MV25: 20 preparation-contract cases pass; both profiles add seven operations while all old paths/schemas/types remain unchanged. Candidate narrowing and command rejection compile correctly. The final regression has 3509 passed and exactly two unchanged approval gates pending ML-T29; frontend 807 tests, type checking and build pass. ML-T14 is next; ML-C05 still requires UI.
+- **Evidence:** MV25: 20 preparation-contract cases pass; both profiles add seven operations while all old paths/schemas/types remain unchanged. Candidate narrowing and command rejection compile correctly. The final regression has 3509 passed and exactly two unchanged approval gates pending ML-T29; frontend 807 tests, type checking and build pass. ML-T14 passes MV26; ML-T15 is next and ML-C05 still requires route/review UI.
 
 ## ML-T14. Build one-source upload and progress UI
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T13`
-- **Acceptance:** Accept exactly one source, show extraction state/errors and support stable retry/cancel. Polling stops on terminal state/unmount; malformed source/server errors remain visible and editable. No batch order or multi-plan selection.
+- **Acceptance:** Accept exactly one source, show extraction state/errors and support stable retry/cancel. Polling stops on idle or terminal drained states, hidden tabs and unmount; edited evidence must be saved before extraction. Cancellation waiting, UNKNOWN and other unfinished work continue blocking fresh actions; malformed source/server errors remain visible and editable. No batch order or multi-plan selection.
 - **Verification:** `npm --prefix web run test -- --run tests/unit/PlanPreparation.spec.ts`
 - **Primary files:** `web/src/api/preparations.ts`, `web/src/composables/usePlanPreparation.ts`, `web/src/components/backtests/PlanPreparationSourceForm.vue`, `web/src/components/backtests/PlanPreparationProgress.vue`, `web/tests/unit/PlanPreparation.spec.ts`
-- **Scope:** Three increments (2 / 2 / 3 primary files; 5 unique including shared tests); **Trace:** ML-A10, ML-A16, ML-A18. First add bounded same-origin transport and stable request receipts; then one preparation controller with revision-safe retry, physical-drain/unknown fences and stopped polling; finally controlled single-text/file input and progress components. Explicit ended confirmation only recovers UNKNOWN work and never resubmits. Bind the route and review preview in ML-T15. Reuse existing design tokens and validate real browser behavior with a temporary harness; no backend, generated contract or approval-gate change.
+- **Scope:** Three increments (2 / 2 / 4 primary files; 5 unique including shared tests); **Trace:** ML-A10, ML-A16, ML-A18. First add bounded same-origin transport and stable request receipts; then one preparation controller with revision-safe retry, physical-drain/unknown fences and stopped polling; finally controlled single-text/file input and progress components, with unsaved-evidence/stale-read refresh fences in the same controller; the total remains 5 unique primary files. Explicit ended confirmation only recovers UNKNOWN work and never resubmits. Bind the route and review preview in ML-T15. Reuse existing design tokens and validate real browser behavior with a temporary harness; no backend, generated contract or approval-gate change.
+- **Evidence:** MV26: 50 focused tests pass; all frontend 857 tests / 58 files, type checking and build pass. A real isolated Chrome harness verifies cancellation physical-drain waiting, same-intent replay, explicit UNKNOWN recovery, invalid UTF-8 preservation and polling disposal. Widths 320 / 768 / 1024 / 1440 have no overflow, axe violations or browser errors. Related backend checks have 92 passed; the two existing API approval gates remain pending ML-T29. ML-T15 is next; ML-C05 still awaits route composition and review UI.
 
 ## ML-T15. Preview and review one prepared plan
 
