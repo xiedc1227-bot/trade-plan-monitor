@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18/MV19/MV20：ML-T01–ML-T05、ML-T07 与 ML-C01/ML-C02 已实现并验证。MV20 记录私有准备持久化，MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV19 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。完整提取、语义审核/冻结、准备全局准入、数据集/工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV21：ML-T01–ML-T05、ML-T07/ML-T08 与 ML-C01/ML-C02/ML-C03 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV20 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。语义审核/冻结、准备全局准入、数据集/工作线程/API/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -387,3 +387,26 @@ ML-T05/ML-C02 已实现并验证。冻结因果帧驱动共享监控及合格本
 | 既有生成契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | canonical monitor v2 与 compatibility monitor v1 均 PASS，公开模式/类型未修改。 |
 
 自审覆盖原文/元数据权限、精确修订绑定、重启/未知结果、取消占位、显式确认、有界 JSON、幂等快照、回滚、路径分离及并发写入。既有 Starlette/httpx 弃用提示保留。ML-T07 完成；完成 11 项、待完成活动任务 26 项，37 活动 / 保留 39 个 ID，13 个检查点。ML-C03 仍待 ML-T08，ML-T06/ML-T09 继续取消。未调用供应商/付费请求、真实通知、生产状态修改、部署或额外负载夹具。本私有存储切片未增加提取工作线程、跨存储全局准入集成、API、UI 或回测提交入口。
+
+## MV21. 单原文完整计划及期初账户提取
+
+2026-10-08，ML-T08 从 `main` `b3a466c` 继续。修改限定在本项四个主要文件：`ai/loop_plan_extraction.py`、`ai/extraction.py` 的共享接口、`tests/unit/test_monitor_loop_extraction.py` 及 `tests/fixtures/ai/monitor-loop-extraction-cases.json`。同步更新双语方案/任务/验证记录，独立盛新研究不纳入本项。
+
+私有 `monitor-loop-extraction-v1` 输出包含一份完整 Schema 5 候选及强类型期初账户事实。适配器选择 `monitor-loop-extract-v1`；普通提取仍选择 `plan-extract-v9`。两者共用供应商请求限额、响应身份、结束原因检查、脱敏诊断、重复/非有限 JSON 拒绝及既有 1 MiB / 10000 节点 / 64 层深度防护。生成证据和问题后，候选持久化再次应用相同边界。未改变公开结构、路由、工作线程或供应商传输层。
+
+每个经济事实保留精确 Unicode 范围/摘录。有界标签数值及周围语境校验拒绝目标、上限、假想交易、参考行情、否定、建议及原文重叠的重复批次；仓位分组证据必须对应同一个实际数量声明。这些防护不独立验证自然语言真实性，也不授予人工权限。不支持的表述保留供明确审核。原文夹具保留实际 CORE 100、TACTICAL 0 及上限 300；每股 `40.105` 元精确换算总成本 `401050` 分，不先舍入单价，不生成期初 BUY 或取得费用。即使刻意降低 Decimal 精度，不足整分的总成本仍为待解决。参考行情不自动初始化期初估值。
+
+未知现金、分组、取得日期、可卖数量及账户时点保持 null 并阻断；明确零现金和零持仓保持已知。日期证据使用明确标签的精确 ISO 日期/时间戳；取得日期/可卖数量不一致时拒绝。保留可信输入的原文编写/可用/生效元数据并纳入证据摘要，不从导入时间推断，也不用于填充账户日期。原文条款及混合日线/五分钟 ALL/ANY 条件树完整保留，规则数量缺失保持 null。部分成交、挂单容量及基本面退出增加可见的不支持阻断。不接受前版/更新/继承/合并或批准字段。
+
+语义候选可经 ML-T07 持久化/重启往返恢复，保留精确原文及证据摘要、未知可卖数量和完整条款覆盖，不创建审核。不同请求下，相同证据生成相同证据摘要，原文时间修正及账户事实变更会改变摘要。后续工作线程准入/取消排空属于 ML-T10；完整语义审核及冻结属于 ML-T11。
+
+| 检查 | 实际命令/证据 | 结果 |
+|---|---|---|
+| 本项门禁 | `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_extraction.py tests/unit/test_current_plan_extraction_security.py tests/unit/test_ai_plan_extraction_v4.py -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t08-release-final` | 93 项通过，2.26 秒；含 70 项新增案例。最终输入类型防护也被以下完整门禁覆盖。 |
+| 最终单元/契约及相关集成 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract tests/integration/test_plan_preparation_store.py tests/integration/test_backtest_single_task.py tests/integration/test_monitor_loop_cycle.py -q -m 'not live' --tb=short --basetemp=.pytest_cache/ml-t08-final-gate` | 2967 项通过，4 项 live 测试排除，30.04 秒；包括全部 70 项新增案例及 88 项相关集成。 |
+| 普通输出/契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | 规范 monitor v2 及兼容 monitor v1 均 PASS。 |
+| 代码质量 | `.venv/Scripts/python.exe -m ruff check src tests scripts --output-format concise`；`.venv/Scripts/python.exe -m ruff format --check src/trade_plan_monitor/ai/loop_plan_extraction.py tests/unit/test_monitor_loop_extraction.py` | PASS。 |
+| 变异审查 | 临时反转非实际语境条件，运行 13 项非实际语境案例，在最终门禁前恢复精确原始文件字节。 | 变异下 13 项全部失败；恢复后的最终门禁通过。 |
+| 文档/工作区 | `git diff --check`；双语标题/ID/字面契约及原始已完成任务尾部 | PASS；完成 12 项、活动待完成 25 项，37 项活动 / 保留 39 个 ID，13 个检查点。 |
+
+ML-T08 与 ML-C03 完成；ML-T06/ML-T09 保持取消，下一项为 ML-T10。自审覆盖来源保真、精确计算、时序、不得推断事实、传输/解析兼容、有界持久化及明确审核分离。现有 Starlette/httpx 弃用提示保持。检查使用虚拟供应商和临时隔离存储，未进行付费请求、行情下载、真实通知、修改生产状态或部署。该私有适配器无公开准备入口，不绕过既有单个未完成任务要求；后续工作线程/API 集成必须共用该准入规则。不声称完成额外负载验收。

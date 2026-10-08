@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07、ML-T30–ML-T34、ML-C01/ML-C02 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 11 项、待完成活动任务 26 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV20。
+> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 12 项、待完成活动任务 25 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV21。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -85,16 +85,17 @@
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_store.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_store.py`
 - **范围:** M (3 个主要文件，含测试); **追溯:** ML-A16, ML-A18.
-- **证据:** MV20：53 项准备库案例在 92 项相关集成回归中通过。仅完成私有持久化；ML-T08/ML-T10/ML-T11/ML-T12 分别保留提取、工作线程排空/全局准入、语义审核/冻结及 API 集成。ML-C03 仍待 ML-T08。
+- **证据:** MV20：53 项准备库案例在 92 项相关集成回归中通过。仅完成私有持久化；MV21 完成 ML-T08 提取及 ML-C03。ML-T10/ML-T11/ML-T12 分别保留工作线程排空/全局准入、语义审核/冻结及 API 集成。
 
 ## ML-T08. 提取一份完整计划及期初账户
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T07`
 - **验收:** 版本化完整计划/期初账户输出，复用供应商/解析防护并保留原文范围。单份原文不含前版上下文/更新操作，缺失事实/不支持语义保持待解决。保留普通提取回归。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_extraction.py tests/unit/test_current_plan_extraction_security.py tests/unit/test_ai_plan_extraction_v4.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/ai/loop_plan_extraction.py`, `src/trade_plan_monitor/ai/extraction.py`, `tests/unit/test_monitor_loop_extraction.py`, `tests/fixtures/ai/monitor-loop-extraction-cases.json`
 - **范围:** M (4 个主要文件，含测试); **追溯:** ML-A12, ML-A14, ML-A16, ML-A17.
+- **证据:** MV21：70 项新增提取案例，93 项本项门禁及完整相关回归通过。一份版本化 Schema 5 候选保留精确期初事实/原文范围及未知输入，拒绝目标/假想/伪造事实，可通过 ML-T07 存储往返恢复。未增加工作线程、公开入口或批准。
 
 ## ML-T09. 已取消：后继继承与合并
 
@@ -107,8 +108,8 @@
 
 ### ML-C03. 检查点
 
-- [ ] 单原文持久化、完整提取及原始证据绑定通过；ML-T09 已取消。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] 单原文持久化、完整提取及原始证据绑定通过；ML-T09 已取消。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。MV20/MV21 记录私有持久化/提取门禁，下一项为 ML-T10。
 
 ## ML-T10. 安全恢复单原文提取
 

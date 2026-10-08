@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07, ML-T30–ML-T34, ML-C01/ML-C02 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 11 completed, 26 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV20.
+> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 12 completed, 25 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV21.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -85,16 +85,17 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_store.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/preparation_models.py`, `src/trade_plan_monitor/backtest/preparation_store.py`, `tests/integration/test_plan_preparation_store.py`
 - **Scope:** M (3 primary files including tests); **Trace:** ML-A16, ML-A18.
-- **Evidence:** MV20: 53 preparation-store cases pass within the 92-case related integration gate. Private persistence only; ML-T08/ML-T10/ML-T11/ML-T12 retain extraction, worker drain/global admission, semantic review/freeze and API integration. ML-C03 remains pending ML-T08.
+- **Evidence:** MV20: 53 preparation-store cases pass within the 92-case related integration gate. Private persistence only; MV21 completes ML-T08 extraction and ML-C03. ML-T10/ML-T11/ML-T12 retain worker drain/global admission, semantic review/freeze and API integration.
 
 ## ML-T08. Extract one complete plan and opening account
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T07`
 - **Acceptance:** Version the complete-plan/opening-account output, reuse provider/parsing guards and retain source spans. One source contains no predecessor context/update operations; missing facts/unsupported semantics stay unresolved. Preserve ordinary extraction regressions.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_extraction.py tests/unit/test_current_plan_extraction_security.py tests/unit/test_ai_plan_extraction_v4.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/ai/loop_plan_extraction.py`, `src/trade_plan_monitor/ai/extraction.py`, `tests/unit/test_monitor_loop_extraction.py`, `tests/fixtures/ai/monitor-loop-extraction-cases.json`
 - **Scope:** M (4 primary files including tests); **Trace:** ML-A12, ML-A14, ML-A16, ML-A17.
+- **Evidence:** MV21: 70 new extraction cases; the 93-case task gate and full related regression pass. One versioned Schema 5 candidate retains exact opening facts/spans and unknown inputs, rejects target/hypothetical/forged facts, and round-trips through ML-T07 storage. No worker, public entry or approval is added.
 
 ## ML-T09. Cancelled: successor inheritance and merge
 
@@ -107,8 +108,8 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ### ML-C03. Checkpoint
 
-- [ ] Single-source persistence, complete extraction and original evidence bindings pass; ML-T09 is cancelled.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Single-source persistence, complete extraction and original evidence bindings pass; ML-T09 is cancelled.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar. MV20/MV21 record the private persistence/extraction gate; ML-T10 is next.
 
 ## ML-T10. Resume single-source extraction safely
 
