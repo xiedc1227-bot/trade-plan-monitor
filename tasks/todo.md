@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 32 completed, 5 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV41.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 33 completed, 4 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV42.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -327,17 +327,23 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T27. Verify the complete browser journey
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T24`, `ML-T25`, `ML-T26`, `ML-T36`
 - **Acceptance:** Use real mounted API/composition with fake external services for upload → retry/edit → review → run → results. Prove the fixture supplies no future trade script and tests neither mocked result-only screens nor live user databases. Include service-down/unknown-cancel/recovery navigation while monitor pages remain usable.
 - **Verification:** `npm --prefix web run test:e2e -- tests/e2e/monitor-loop-backtest.spec.ts`; `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_production_composition.py -q -m "not live"`
-- **Primary files:** `web/tests/e2e/monitor-loop-backtest.spec.ts`, `web/tests/fixtures/monitor-loop.json`, `tests/integration/test_monitor_loop_production_composition.py`
-- **Scope:** M (3 primary files including tests); **Trace:** ML-A10, ML-A16, ML-A18.
+- **Primary files:** `web/tests/e2e/monitor-loop-backtest.spec.ts`, `web/tests/fixtures/monitor-loop.json`, `tests/integration/test_monitor_loop_production_composition.py`, `web/src/router.ts`, `web/src/views/BacktestNewView.vue`, `src/trade_plan_monitor/web/preparation_schemas.py`, `web/tests/fixtures/plan-preparation-review.json`
+- **Scope:** M (7 primary files; verified navigation and frozen identity corrections); **Trace:** ML-A10, ML-A16, ML-A18.
+
+- **Verification-driven correction:** Real browser testing proves accepted source creation leaves no preparation identity in the URL, losing the target on reload/return. Add only accepted-record URL identity and initial route loading; preserve shared caption edits.
+
+Frozen identity correction: The browser proves the FROZEN progress projection publishes the storage candidate digest instead of the authoritative prepared manifest digest used by run submission. Project the existing candidateHash from the validated frozen manifest, preserve extraction/storage bindings, and refresh the typed fixture. No API field/path or schema change.
 
 ### ML-C09. Checkpoint
 
-- [ ] Independent fault/parity and full browser journey pass.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Independent fault/parity and full browser journey pass.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- **Evidence:** MV42: Two real Chrome journeys, 75 backend checks, 96 frontend checks and type checking pass. The browser found and verified narrow navigation and authoritative frozen identity corrections. Removing the frozen identity projection produces one expected failure; exact bytes restored. C09 passes; ML-T37 follows.
+
 
 ## ML-T28. Record operation guidance and executed evidence
 

@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。已实施并验证：ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36. 证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 32 项、待完成活动任务 5 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV41。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。已实施并验证：ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36. 证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 33 项、待完成活动任务 4 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV42。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -327,17 +327,23 @@
 
 ## ML-T27. 验证完整浏览器流程
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T24`, `ML-T25`, `ML-T26`, `ML-T36`
 - **验收:** 真实挂载 API/组合配虚拟外部服务，贯通上传→重试/编辑→审核→运行→结果。证明夹具未预写未来交易，不只测假结果页，不访问真实用户库。 加入服务停止/未知取消/恢复导航，监控页面保持可用。
 - **验证:** `npm --prefix web run test:e2e -- tests/e2e/monitor-loop-backtest.spec.ts`; `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_production_composition.py -q -m "not live"`
-- **主要文件:** `web/tests/e2e/monitor-loop-backtest.spec.ts`, `web/tests/fixtures/monitor-loop.json`, `tests/integration/test_monitor_loop_production_composition.py`
-- **范围:** M (3 个主要文件，含测试); **追溯:** ML-A10, ML-A16, ML-A18.
+- **主要文件:** `web/tests/e2e/monitor-loop-backtest.spec.ts`, `web/tests/fixtures/monitor-loop.json`, `tests/integration/test_monitor_loop_production_composition.py`, `web/src/router.ts`, `web/src/views/BacktestNewView.vue`, `src/trade_plan_monitor/web/preparation_schemas.py`, `web/tests/fixtures/plan-preparation-review.json`
+- **范围:** M (7 个主要文件，含已验证的导航与冻结身份修正); **追溯:** ML-A10, ML-A16, ML-A18.
+
+- **验证驱动修正:** 真实浏览器证明保存原文后 URL 未绑定准备记录，刷新/返回会丢失目标。仅补充已接受记录的 URL 身份及路由初始载入；共享页面标题修改保留。
+
+冻结身份修正：浏览器证明 FROZEN 进度投影公开了存储候选摘要，而非运行提交要求的权威准备清单摘要。现有 candidateHash 改为由已验证冻结清单投影，保留提取/存储绑定并刷新类型夹具。不改变 API 字段/路径或 Schema。
 
 ### ML-C09. 检查点
 
-- [ ] 独立故障/一致性与完整浏览器流程通过。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] 独立故障/一致性与完整浏览器流程通过。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- **证据:** MV42：2 条真实 Chrome 流程、75 项后端检查、96 项前端检查和类型检查通过。浏览器发现并验证了局部导航与权威冻结身份修正。移除冻结身份投影产生 1 个预期失败，已精确恢复。C09 通过；接续 ML-T37。
+
 
 ## ML-T28. 记录操作指南与实际验证证据
 

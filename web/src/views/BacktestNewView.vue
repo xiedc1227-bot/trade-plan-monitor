@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, type DeepReadonly } from "vue";
-import { isNavigationFailure, useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch, type DeepReadonly } from "vue";
+import { isNavigationFailure, useRoute, useRouter } from "vue-router";
 
 import type { BacktestJobReceipt, PreparationFrozenView } from "../api/generated";
 import type { BacktestApi } from "../api/backtests";
@@ -26,6 +26,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const router = useRouter();
+const route = useRoute();
 const pageTitle = useTemplateRef<HTMLHeadingElement>("pageTitle");
 const previousTitle = document.title;
 
@@ -43,6 +44,11 @@ const preparation = usePlanPreparation({
   ...(props.initialPreparationId === undefined ? {} : { initialPreparationId: props.initialPreparationId }),
 });
 const mode = ref<"LEGACY" | "PREPARED">(props.initialPreparationId ? "PREPARED" : "LEGACY");
+watch(() => preparation.preparation.value?.preparationId, (identity) => {
+  if (identity && route.path === "/backtests/new" && route.query.preparationId !== identity) {
+    void router.replace({ path: route.path, query: { ...route.query, preparationId: identity } });
+  }
+});
 const reviewedPrepared = computed<DeepReadonly<PreparationFrozenView> | null>(() => {
   const value = preparation.preparation.value;
   if (!preparation.canUsePrepared.value || value?.candidate?.kind !== "FROZEN") return null;

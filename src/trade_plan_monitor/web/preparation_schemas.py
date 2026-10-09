@@ -183,8 +183,10 @@ def project_preparation(record: PreparationRecord) -> PreparationView:
         )
         try:
             if record.status == "REVIEWED":
+                manifest = frozen_preparation(record)
                 candidate = PreparationFrozenCandidate(
-                    kind="FROZEN", frozen=frozen_preparation(record), **values
+                    kind="FROZEN", frozen=manifest,
+                    **{**values, "candidate_hash": manifest.manifest_hash},
                 )
             else:
                 extracted = LoopPlanExtractionResult.model_validate_json(stored.payload_json)

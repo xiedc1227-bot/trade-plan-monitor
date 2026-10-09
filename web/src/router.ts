@@ -59,6 +59,7 @@ export const routes: RouteRecordRaw[] = [
     path: "/backtests/new",
     name: "backtest-new",
     component: () => import("./views/BacktestNewView.vue"),
+    props: (route) => ({ initialPreparationId: typeof route.query.preparationId === "string" ? route.query.preparationId : undefined }),
     meta: { section: "backtests", title: "创建回测 · Trade Plan Monitor" },
   },
   {

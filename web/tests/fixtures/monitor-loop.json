@@ -1,0 +1,589 @@
+{
+  "fixture_version": "monitor-loop-browser-v1",
+  "source": {
+    "source_id": "source-1",
+    "text": "实际持仓100股。CORE持仓100股。每股成本40.105元/股。持仓账户现金余额5000元。持仓取得日期2026-08-19。持仓可卖100股。持仓账户快照2026-08-20T09:00:00+08:00。\nsymbol=002240.SZ\nmarket=SZSE\nposition.max_qty=1000\nordinary_rules[0].status=ENABLED\nordinary_rules[0].side=BUY\nordinary_rules[0].rule_id=low-buy\nordinary_rules[0].quantity=100\nordinary_rules[0].bucket=TACTICAL\nordinary_rules[0].condition.type=MINUTE_CLOSE_BELOW\nordinary_rules[0].condition.timeframe_minutes=5\nordinary_rules[0].condition.price_fen=4000\nordinary_rules[0].confirmation.kind=COMPLETED_BAR_CLOSE\nordinary_rules[0].confirmation.timeframe_minutes=5\nordinary_rules[0].execution_window=CURRENT_SESSION\nordinary_rules[0].invalidation=RISK_OR_REVIEWED_INVALIDATION\nordinary_rules[0].independent_signal.mode=REVIEWED_INDEPENDENT_EVENT\nordinary_rules[0].independent_signal.evidence_requirement=New structure linked to prior signal\nrisk_branches=[]\nalert_rules=[]",
+    "authored_at": "2026-08-20T09:00:00+08:00",
+    "available_at": "2026-08-20T09:00:00+08:00",
+    "effective_trade_date": "2026-08-20"
+  },
+  "ai_output": {
+    "schema_version": "monitor-loop-extraction-v1",
+    "draft": {
+      "schema_version": 5,
+      "execution_mode": "CONDITION_PLAN",
+      "execution_version": "condition-plan-v1",
+      "plan_id": "synthetic-daily",
+      "version": 1,
+      "symbol": "002240.SZ",
+      "name": "Synthetic reviewed plan",
+      "market": "SZSE",
+      "metadata": {
+        "report_at": null,
+        "reference_price_fen": null
+      },
+      "activation": {
+        "mode": "MANUAL"
+      },
+      "levels": null,
+      "position": {
+        "max_qty": 1000,
+        "core_target_qty": null,
+        "tactical_target_qty": null,
+        "allocation_provenance": null,
+        "allocation_evidence": null
+      },
+      "trading_rules": {
+        "settlement": "NEXT_EXCHANGE_SESSION",
+        "tick_size_fen": 1,
+        "special_state_restrictions": "BLOCK_UNVERIFIED"
+      },
+      "monitoring": null,
+      "ordinary_rules": [
+        {
+          "status": "ENABLED",
+          "side": "BUY",
+          "rule_id": "low-buy",
+          "quantity": 100,
+          "bucket": "TACTICAL",
+          "condition": {
+            "type": "MINUTE_CLOSE_BELOW",
+            "timeframe_minutes": 5,
+            "price_fen": 4000
+          },
+          "confirmation": {
+            "kind": "COMPLETED_BAR_CLOSE",
+            "timeframe_minutes": 5
+          },
+          "execution_window": "CURRENT_SESSION",
+          "zone": null,
+          "validity": {
+            "mode": "PLAN_ACTIVE"
+          },
+          "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+          "independent_signal": {
+            "mode": "REVIEWED_INDEPENDENT_EVENT",
+            "evidence_requirement": "New structure linked to prior signal"
+          }
+        }
+      ],
+      "risk_branches": [],
+      "execution_policy": {
+        "same_signal": "ONE_PLANNED_QUANTITY",
+        "risk_priority": "SEVERE_THEN_ORDINARY",
+        "ordinary_conflict": "BLOCK_BOTH"
+      },
+      "alert_rules": []
+    },
+    "clauses": [
+      {
+        "clause_id": "clause-84a5e5e56929fb74",
+        "start": 0,
+        "end": 9,
+        "excerpt": "实际持仓100股。",
+        "disposition": "INVENTORY_ASSERTION",
+        "paths": [],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-6f96ed6fc739e6c7",
+        "start": 9,
+        "end": 20,
+        "excerpt": "CORE持仓100股。",
+        "disposition": "INVENTORY_ASSERTION",
+        "paths": [],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-74b01e1efb90ba10",
+        "start": 20,
+        "end": 34,
+        "excerpt": "每股成本40.105元/股。",
+        "disposition": "INVENTORY_ASSERTION",
+        "paths": [],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-653ad7c4322a8a3d",
+        "start": 34,
+        "end": 48,
+        "excerpt": "持仓账户现金余额5000元。",
+        "disposition": "INVENTORY_ASSERTION",
+        "paths": [],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-fe9a410e15c39e29",
+        "start": 48,
+        "end": 65,
+        "excerpt": "持仓取得日期2026-08-19。",
+        "disposition": "INVENTORY_ASSERTION",
+        "paths": [],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-92b1ae410d9e4dbe",
+        "start": 65,
+        "end": 74,
+        "excerpt": "持仓可卖100股。",
+        "disposition": "INVENTORY_ASSERTION",
+        "paths": [],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-8a8bc84e9ea6857f",
+        "start": 74,
+        "end": 106,
+        "excerpt": "持仓账户快照2026-08-20T09:00:00+08:00。",
+        "disposition": "INVENTORY_ASSERTION",
+        "paths": [],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-0ec9f000a72a6b6c",
+        "start": 107,
+        "end": 123,
+        "excerpt": "symbol=002240.SZ",
+        "disposition": "POLICY",
+        "paths": [
+          "symbol"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-429c3d86dced29ac",
+        "start": 124,
+        "end": 135,
+        "excerpt": "market=SZSE",
+        "disposition": "POLICY",
+        "paths": [
+          "market"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-f31226ad817e0e4c",
+        "start": 136,
+        "end": 157,
+        "excerpt": "position.max_qty=1000",
+        "disposition": "POLICY",
+        "paths": [
+          "position.max_qty"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-04707933ff9af9aa",
+        "start": 158,
+        "end": 190,
+        "excerpt": "ordinary_rules[0].status=ENABLED",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].status"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-cc2f1730c48c567e",
+        "start": 191,
+        "end": 217,
+        "excerpt": "ordinary_rules[0].side=BUY",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].side"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-0513c015873ab7b4",
+        "start": 218,
+        "end": 251,
+        "excerpt": "ordinary_rules[0].rule_id=low-buy",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].rule_id"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-850c7a0ffcfee83a",
+        "start": 252,
+        "end": 282,
+        "excerpt": "ordinary_rules[0].quantity=100",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].quantity"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-3c09c622b6861944",
+        "start": 283,
+        "end": 316,
+        "excerpt": "ordinary_rules[0].bucket=TACTICAL",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].bucket"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-34736ab1b7a5bcfe",
+        "start": 317,
+        "end": 368,
+        "excerpt": "ordinary_rules[0].condition.type=MINUTE_CLOSE_BELOW",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].condition.type"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-dcc805a609c4980e",
+        "start": 369,
+        "end": 416,
+        "excerpt": "ordinary_rules[0].condition.timeframe_minutes=5",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].condition.timeframe_minutes"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-b24b322f8081a3e6",
+        "start": 417,
+        "end": 459,
+        "excerpt": "ordinary_rules[0].condition.price_fen=4000",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].condition.price_fen"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-2d2c82c2c028c1d9",
+        "start": 460,
+        "end": 515,
+        "excerpt": "ordinary_rules[0].confirmation.kind=COMPLETED_BAR_CLOSE",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].confirmation.kind"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-d1c5ade033b9222b",
+        "start": 516,
+        "end": 566,
+        "excerpt": "ordinary_rules[0].confirmation.timeframe_minutes=5",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].confirmation.timeframe_minutes"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-e9c00cee94ac6cbb",
+        "start": 567,
+        "end": 617,
+        "excerpt": "ordinary_rules[0].execution_window=CURRENT_SESSION",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].execution_window"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-355b7200519faede",
+        "start": 618,
+        "end": 678,
+        "excerpt": "ordinary_rules[0].invalidation=RISK_OR_REVIEWED_INVALIDATION",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].invalidation"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-b01ebdeda140bc80",
+        "start": 679,
+        "end": 747,
+        "excerpt": "ordinary_rules[0].independent_signal.mode=REVIEWED_INDEPENDENT_EVENT",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].independent_signal.mode"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-46ae42d7f08f2969",
+        "start": 748,
+        "end": 842,
+        "excerpt": "ordinary_rules[0].independent_signal.evidence_requirement=New structure linked to prior signal",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules[0].independent_signal.evidence_requirement"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-39560fc628e610d4",
+        "start": 843,
+        "end": 859,
+        "excerpt": "risk_branches=[]",
+        "disposition": "POLICY",
+        "paths": [
+          "risk_branches"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      },
+      {
+        "clause_id": "clause-fb8371ac12c01c01",
+        "start": 860,
+        "end": 874,
+        "excerpt": "alert_rules=[]",
+        "disposition": "POLICY",
+        "paths": [
+          "alert_rules"
+        ],
+        "reason": "Synthetic explicit source policy or actual opening account fact."
+      }
+    ],
+    "bindings": [
+      {
+        "path": "symbol",
+        "value": "002240.SZ",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-0ec9f000a72a6b6c"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "market",
+        "value": "SZSE",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-429c3d86dced29ac"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "position.max_qty",
+        "value": 1000,
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-f31226ad817e0e4c"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].status",
+        "value": "ENABLED",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-04707933ff9af9aa"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].side",
+        "value": "BUY",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-cc2f1730c48c567e"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].rule_id",
+        "value": "low-buy",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-0513c015873ab7b4"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].quantity",
+        "value": 100,
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-850c7a0ffcfee83a"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].bucket",
+        "value": "TACTICAL",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-3c09c622b6861944"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].condition.type",
+        "value": "MINUTE_CLOSE_BELOW",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-34736ab1b7a5bcfe"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].condition.timeframe_minutes",
+        "value": 5,
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-dcc805a609c4980e"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].condition.price_fen",
+        "value": 4000,
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-b24b322f8081a3e6"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].confirmation.kind",
+        "value": "COMPLETED_BAR_CLOSE",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-2d2c82c2c028c1d9"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].confirmation.timeframe_minutes",
+        "value": 5,
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-d1c5ade033b9222b"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].execution_window",
+        "value": "CURRENT_SESSION",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-e9c00cee94ac6cbb"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].invalidation",
+        "value": "RISK_OR_REVIEWED_INVALIDATION",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-355b7200519faede"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].independent_signal.mode",
+        "value": "REVIEWED_INDEPENDENT_EVENT",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-b01ebdeda140bc80"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules[0].independent_signal.evidence_requirement",
+        "value": "New structure linked to prior signal",
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-46ae42d7f08f2969"
+        ],
+        "supplement_id": null
+      }
+    ],
+    "assumptions": [],
+    "warnings": [],
+    "opening_account": {
+      "inventory_quantity": {
+        "value": 100,
+        "start": 0,
+        "end": 8,
+        "excerpt": "实际持仓100股"
+      },
+      "cash_fen": {
+        "value": 500000,
+        "start": 38,
+        "end": 47,
+        "excerpt": "现金余额5000元"
+      },
+      "snapshot_at": {
+        "value": "2026-08-20T09:00:00+08:00",
+        "start": 76,
+        "end": 105,
+        "excerpt": "账户快照2026-08-20T09:00:00+08:00"
+      },
+      "lots": [
+        {
+          "lot_key": "opening-core",
+          "quantity": {
+            "value": 100,
+            "start": 9,
+            "end": 19,
+            "excerpt": "CORE持仓100股"
+          },
+          "bucket": {
+            "value": "CORE",
+            "start": 9,
+            "end": 19,
+            "excerpt": "CORE持仓100股"
+          },
+          "unit_cost_yuan": {
+            "value": "40.105",
+            "start": 20,
+            "end": 33,
+            "excerpt": "每股成本40.105元/股"
+          },
+          "acquired_trade_date": {
+            "value": "2026-08-19",
+            "start": 50,
+            "end": 64,
+            "excerpt": "取得日期2026-08-19"
+          },
+          "sellable_quantity": {
+            "value": 100,
+            "start": 67,
+            "end": 73,
+            "excerpt": "可卖100股"
+          }
+        }
+      ]
+    }
+  },
+  "cutoff": "2026-08-20T09:43:12+08:00",
+  "expected": {
+    "fills": 1,
+    "cash_fen": 102396,
+    "inventory_qty": 200,
+    "paid_fees_fen": 504
+  }
+}
