@@ -14,9 +14,8 @@ import type {
   BacktestEquitySeries,
   BacktestFillPage,
   BacktestResultAvailabilityView,
-  BacktestRunView,
 } from "../api/generated";
-import { createBacktestApi, type BacktestApi } from "../api/backtests";
+import { createBacktestApi, type BacktestApi, type BacktestRunResult } from "../api/backtests";
 
 export type BacktestSummaryRequestState = "IDLE" | "LOADING" | "READY" | "FAILED";
 export type BacktestResultRequestState =
@@ -43,7 +42,7 @@ const EQUITY_POINT_LIMIT = 2_000;
 
 export function useBacktestResults(options: UseBacktestResultsOptions) {
   const api = options.api ?? createBacktestApi();
-  const summary = shallowRef<BacktestRunView | null>(null);
+  const summary = shallowRef<BacktestRunResult | null>(null);
   const summaryState = shallowRef<BacktestSummaryRequestState>("IDLE");
   const summaryError = shallowRef<string | null>(null);
   const fillsPage = shallowRef<BacktestFillPage | null>(null);
@@ -162,7 +161,7 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
         { signal: controller.signal },
       );
       if (!currentFillsRequest(controller, activeGeneration)) return;
-      if (response.items.some((item) => item.runId !== runId)) {
+      if (response.items.some((item) => item.runId !== runId || (summary.value !== null && "report" in summary.value) !== ("receipt" in item))) {
         throw new Error("fill identity mismatch");
       }
       fillsPage.value = response;
@@ -208,7 +207,7 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
       if (
         response.kind !== kind ||
         response.filters.kind !== kind ||
-        response.items.some((item) => item.runId !== runId || item.kind !== kind)
+        response.items.some((item) => item.runId !== runId || item.kind !== kind || (summary.value !== null && "report" in summary.value) !== ("event" in item))
       ) {
         throw new Error("detail identity mismatch");
       }
@@ -392,7 +391,7 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
 }
 
 export function detailAvailability(
-  summary: DeepReadonly<BacktestRunView> | null,
+  summary: DeepReadonly<BacktestRunResult> | null,
   kind: BacktestDetailKind,
 ): BacktestResultAvailabilityView[keyof BacktestResultAvailabilityView] | null {
   if (summary === null) return null;

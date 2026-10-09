@@ -1094,7 +1094,7 @@ describe("backtest API runs results and export", () => {
     expect(submitted.body.kind).toBe("BACKTEST_RUN");
     expect(pinned.body.pinned).toBe(true);
     expect(Object.isFrozen(runs.items[0]?.metrics)).toBe(true);
-    expect(Object.isFrozen(oneRun.assumptions.executionConfig)).toBe(true);
+    expect("assumptions" in oneRun && Object.isFrozen(oneRun.assumptions.executionConfig)).toBe(true);
     const fill = fills.items[0];
     expect(fill && "fees" in fill && Object.isFrozen(fill.fees)).toBe(true);
     expect(Object.isFrozen(details.items[0])).toBe(true);

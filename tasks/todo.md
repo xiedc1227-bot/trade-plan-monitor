@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 27 completed, 10 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV36.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24/ML-T25, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07/ML-C08 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 28 completed, 9 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV37.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -303,12 +303,15 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T25. Explain plan and execution history in results
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T22`, `ML-T23`
 - **Acceptance:** Connect paginated causal events and frozen single-plan provenance to the result page; distinguish holds, blocked/unfilled intents and fills. Show account evolution, valid metrics and actual cutoff without client trading logic or version-switch timeline.
 - **Verification:** `npm --prefix web run test -- --run tests/unit/MonitorLoopResults.spec.ts`
-- **Primary files:** `web/src/components/backtests/MonitorLoopTimeline.vue`, `web/src/views/BacktestRunDetailView.vue`, `web/src/composables/useBacktestResults.ts`, `web/tests/unit/MonitorLoopResults.spec.ts`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A01, ML-A10, ML-A13, ML-A15.
+- **Primary files:** `web/src/components/backtests/MonitorLoopTimeline.vue`, `web/src/components/backtests/MonitorLoopSummary.vue`, `web/src/views/BacktestRunDetailView.vue`, `web/src/composables/useBacktestResults.ts`, `web/src/api/backtests.ts`, `web/src/api/monitorLoopValues.ts`, `web/src/components/backtests/BacktestResultActions.vue`, `web/tests/unit/MonitorLoopResults.spec.ts`, `web/tests/fixtures/monitor-loop-results.json`, `web/tests/unit/backtestsApi.spec.ts`
+- **Scope:** M (10 primary files; three implementation slices); **Trace:** ML-A01, ML-A10, ML-A13, ML-A15.
+- **Fixture compatibility:** Narrow one existing legacy API assertion before accessing its legacy-only assumptions; retain the assertion and all old behavior checks.
+- **Implementation slices:** ML-T25.1 validates the existing native HTTP variants using actual backend fixture responses (API/validator/fixture/tests, 4 files); ML-T25.2 adds readonly summary/timeline presentation to the existing page (components/page/tests, 4 files); ML-T25.3 extends the existing result composable and pin actions, hiding unsupported native exports (3 files including shared tests). Preserve unrelated page-caption edits. No new route, export, replay, trading calculation or plan-switch support.
+- **Evidence:** MV37: 17 native-result checks and 157 frontend checks in total pass; type-check passes. Real Chrome verifies 1440/390 pixels, 32 causal events and 2 selected-resource requests with no runtime error or horizontal overflow. Input/provenance binding mutation produces one expected failure; exact bytes restored. Actual HTTP fixtures, pagination, pinning, expiration and unknown/zero rendering are verified; unrelated caption edits preserved. ML-T26 follows; final approval remains ML-T29.
 
 ## ML-T26. Prove parity, causality and failure atomicity
 

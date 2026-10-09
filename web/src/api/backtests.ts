@@ -1,4 +1,5 @@
 import { isResearchDetail, isResearchInput } from "./researchValues";
+import { validLoopRun, validLoopRunSummary, validLoopEvent, validLoopFill } from "./monitorLoopValues";
 import type { ResearchMetricsView, ResearchEquityView } from "./generated";
 import type {
   BacktestAssumptionsView,
@@ -40,6 +41,7 @@ import type {
   BacktestRunPinCommand,
   BacktestRunSummaryView,
   BacktestRunView,
+  BacktestLoopRunView,
   BacktestExecutionConfigInput,
   BacktestExecutionConfigView,
   BacktestExecutionOutcomeView,
@@ -90,6 +92,7 @@ export type BacktestMarketIndexSeriesQuery = NonNullable<
 export interface BacktestRequestOptions {
   readonly signal?: AbortSignal;
 }
+export type BacktestRunResult = BacktestRunView | BacktestLoopRunView;
 
 export interface BacktestMutationResponse<T> {
   readonly body: T;
@@ -122,7 +125,7 @@ export interface BacktestApi {
     query?: BacktestJobListQuery,
     options?: BacktestRequestOptions,
   ): Promise<BacktestJobPage>;
-  getRun(runId: string, options?: BacktestRequestOptions): Promise<BacktestRunView>;
+  getRun(runId: string, options?: BacktestRequestOptions): Promise<BacktestRunResult>;
   getEquitySeries(
     runId: string,
     options?: BacktestRequestOptions,
@@ -151,7 +154,7 @@ export interface BacktestApi {
     command: BacktestRunPinCommand,
     idempotencyKey: string,
     options?: BacktestRequestOptions,
-  ): Promise<BacktestMutationResponse<BacktestRunView>>;
+  ): Promise<BacktestMutationResponse<BacktestRunResult>>;
   submitRun(
     command: BacktestRunCommand | PreparedBacktestRunCommand,
     idempotencyKey: string,
@@ -1262,7 +1265,7 @@ function validatePin(
   headers: Headers,
   expectedRunId: string,
   command: BacktestRunPinCommand,
-): BacktestMutationResponse<BacktestRunView> {
+): BacktestMutationResponse<BacktestRunResult> {
   if (
     status !== 200 ||
     !isRun(body) ||
@@ -2050,7 +2053,8 @@ function datasetMatchesFilters(
   );
 }
 
-function isRun(value: unknown): value is BacktestRunView {
+function isRun(value: unknown): value is BacktestRunResult {
+  if (isRecord(value) && value.schemaVersion === "monitor-loop-result-v1") return validLoopRun(value);
   if (!isRecord(value) || !hasExactKeys(value, runViewKeys)) return false;
   if (
     !isPositiveFenText(value.initialCashFen) ||
@@ -2224,7 +2228,7 @@ function isRunPage(value: unknown): value is BacktestRunPage {
     value.items.length > MAX_PAGE_ITEMS ||
     !value.items.every(
       (item) =>
-        isRecord(item) && hasExactKeys(item, runSummaryKeys) && isRunSummary(item),
+        validLoopRunSummary(item) || isRecord(item) && hasExactKeys(item, runSummaryKeys) && isRunSummary(item),
     ) ||
     !isPageFrame(value)
   ) {
@@ -2257,7 +2261,7 @@ function isRunFilters(value: unknown): value is BacktestRunFiltersView {
 }
 
 function runMatchesFilters(
-  run: BacktestRunSummaryView,
+  run: BacktestRunPage["items"][number],
   filters: BacktestRunFiltersView,
 ): boolean {
   return (
@@ -2354,7 +2358,8 @@ function isFeeBreakdown(value: unknown): value is BacktestFeeBreakdownView {
   );
 }
 
-function isFill(value: unknown): value is BacktestFillView {
+function isFill(value: unknown): value is BacktestFillPage["items"][number] {
+  if (isRecord(value) && value.schemaVersion === "monitor-loop-fill-v1") return validLoopFill(value);
   if (
     !isRecord(value) ||
     !hasExactKeys(value, fillKeys) ||
@@ -2450,6 +2455,7 @@ function isDetailPage(value: unknown): value is BacktestDetailPage {
 }
 
 function isDetail(value: unknown): value is BacktestDetailView {
+  if (isRecord(value) && value.schemaVersion === "monitor-loop-event-v1") return validLoopEvent(value);
   if (!isRecord(value)) return false;
   if (isResearchDetail(value)) return isDetailBase(value) && isBoundedItem(value);
   if (value.kind === "SIGNAL") return isSignal(value);

@@ -1,0 +1,2996 @@
+{
+  "run": {
+    "schemaVersion": "monitor-loop-result-v1",
+    "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+    "reportHash": "5fc9fcd8b0aa54323b0fbf89cdbb0de87fc3c1c7c7eef2abe1c0e4c7c0bf8fdc",
+    "planVersionId": null,
+    "planHash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
+    "datasetHash": "4325c31bedf3f4d26c64e017652476d480fb687ec27d66cc9aff9b62dbe40b7d",
+    "symbol": "002240.SZ",
+    "status": "COMPLETED",
+    "eventStart": "2026-08-24",
+    "eventEnd": "2026-08-24",
+    "completedAt": "2026-08-24T09:43:12.000000+08:00",
+    "pinned": false,
+    "revision": 0,
+    "fillCount": 1,
+    "metrics": {
+      "initial_equity_fen": 500000,
+      "final_equity_fen": 504396,
+      "equity_change_fen": 4396,
+      "interval_return": "0.008792",
+      "maximum_drawdown": "0.001208",
+      "turnover": "0.7942",
+      "cost_pnl_fen": 4396,
+      "realized_pnl_fen": 0,
+      "unrealized_pnl_fen": 4396,
+      "paid_fees_fen": 504,
+      "slippage_fen": 100,
+      "valuation_valid": true,
+      "blockers": []
+    },
+    "availability": {
+      "decisionDetails": "AVAILABLE",
+      "signalDetails": "NOT_RECORDED",
+      "executionOutcomeDetails": "NOT_RECORDED",
+      "equitySeries": "NOT_RECORDED"
+    },
+    "provenance": {
+      "preparationId": "one",
+      "manifestHash": "d97a8552daa3075ff490d9714380f94b8fceb737f6543ac7a2f811ed651d0a80",
+      "sourceRevision": 1,
+      "candidateRevision": 2,
+      "candidateHash": "578a6b3dfff9f6bab311b0356c12fc11bea2c26ee0405160e85311145567594c",
+      "inputHash": "701bf4ceb12fe6b001dfcc63730181f418d4d57254d1ca9f2b1cd2d401543acc"
+    },
+    "frozenPlan": {
+      "version_id": "prepared-14d50b5ce15299df240510dae9b929bbc94debb0ed81503bd122e9df582e9e40",
+      "plan_hash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
+      "snapshot": {
+        "schema_version": 5,
+        "execution_mode": "CONDITION_PLAN",
+        "execution_version": "condition-plan-v1",
+        "plan_id": "synthetic-daily",
+        "version": 1,
+        "symbol": "002240.SZ",
+        "name": "Synthetic reviewed plan",
+        "market": "SZSE",
+        "metadata": {
+          "report_at": null,
+          "reference_price_fen": null
+        },
+        "activation": {
+          "mode": "MANUAL"
+        },
+        "levels": null,
+        "position": {
+          "max_qty": 1000,
+          "core_target_qty": null,
+          "tactical_target_qty": null,
+          "allocation_provenance": null,
+          "allocation_evidence": null
+        },
+        "trading_rules": {
+          "settlement": "NEXT_EXCHANGE_SESSION",
+          "tick_size_fen": 1,
+          "special_state_restrictions": "BLOCK_UNVERIFIED"
+        },
+        "monitoring": null,
+        "ordinary_rules": [
+          {
+            "status": "ENABLED",
+            "side": "BUY",
+            "rule_id": "low-buy",
+            "quantity": 100,
+            "bucket": "TACTICAL",
+            "condition": {
+              "type": "MINUTE_CLOSE_BELOW",
+              "timeframe_minutes": 5,
+              "price_fen": 4000
+            },
+            "confirmation": {
+              "kind": "COMPLETED_BAR_CLOSE",
+              "timeframe_minutes": 5
+            },
+            "execution_window": "CURRENT_SESSION",
+            "zone": null,
+            "validity": {
+              "mode": "PLAN_ACTIVE"
+            },
+            "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+            "independent_signal": {
+              "mode": "REVIEWED_INDEPENDENT_EVENT",
+              "evidence_requirement": "New structure linked to prior signal"
+            }
+          }
+        ],
+        "risk_branches": [],
+        "execution_policy": {
+          "same_signal": "ONE_PLANNED_QUANTITY",
+          "risk_priority": "SEVERE_THEN_ORDINARY",
+          "ordinary_conflict": "BLOCK_BOTH"
+        },
+        "alert_rules": []
+      },
+      "source_hashes": [
+        "d7f87edbdf3647ee2aee5d529a44573b7eaf0caca44f43f1686693a67c03f458"
+      ],
+      "evidence_hash": "14d50b5ce15299df240510dae9b929bbc94debb0ed81503bd122e9df582e9e40",
+      "authored_at": "2026-08-24T09:00:00+08:00",
+      "authored_date": null,
+      "available_at": "2026-08-24T09:00:00+08:00",
+      "information_cutoff": "2026-08-24T09:00:00+08:00",
+      "review": {
+        "content_hash": "14c36500fb8423278cfe0f20fe717ed4f358d4f66c9103078973fe275893b174",
+        "reviewed_at": "2026-08-24T09:43:12+08:00",
+        "confirmed": true,
+        "evidence": "Explicit synthetic human review of this source, plan and account.",
+        "source_hashes": [
+          "d7f87edbdf3647ee2aee5d529a44573b7eaf0caca44f43f1686693a67c03f458"
+        ],
+        "evidence_hash": "14d50b5ce15299df240510dae9b929bbc94debb0ed81503bd122e9df582e9e40"
+      }
+    },
+    "openingAccount": {
+      "snapshot_at": "2026-08-20T09:00:00+08:00",
+      "inventory_known": true,
+      "cash": {
+        "kind": "KNOWN",
+        "balance_fen": 500000
+      },
+      "lots": [],
+      "opening_mark": null,
+      "evidence": "Synthetic human account override: no opening lots, cash 500000 fen."
+    },
+    "response": {
+      "mode": "FOLLOW_REMINDERS",
+      "response_delay_seconds": 0,
+      "fill_model": "NEXT_ELIGIBLE_MINUTE_CLOSE"
+    },
+    "costs": {
+      "formula_version": "monitor-loop-costs-v1",
+      "commission_rate": "0.0003",
+      "minimum_commission_fen": 500,
+      "stamp_duty_rate": "0.0005",
+      "transfer_fee_rate": "0.00001",
+      "buy_slippage_fen": 1,
+      "sell_slippage_fen": 1
+    },
+    "report": {
+      "schema_version": "backtest-report-v4",
+      "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+      "input_hash": "701bf4ceb12fe6b001dfcc63730181f418d4d57254d1ca9f2b1cd2d401543acc",
+      "plan_hash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
+      "dataset_hash": "4325c31bedf3f4d26c64e017652476d480fb687ec27d66cc9aff9b62dbe40b7d",
+      "authority_id": "b3e5352dbaa946b30af77f0f335b39787d2697bed97d1ed1de1007ba18014d32",
+      "symbol": "002240.SZ",
+      "boundary": {
+        "started_at": "2026-08-24T09:00:00+08:00",
+        "submitted_at": "2026-08-24T09:43:12+08:00",
+        "requested_end_date": null,
+        "resolved_end_date": "2026-08-24",
+        "origin": "DEFAULTED",
+        "evidence_cutoff": "2026-08-24T09:43:12+08:00"
+      },
+      "cycle": {
+        "evaluations": 14,
+        "intents": 1,
+        "attempts": 1,
+        "fills": 1,
+        "unfilled_intents": 0
+      },
+      "event_count": 32,
+      "event_set_hash": "a273bc1972aa8bdadaea5999a21876f885f1d89164f0d19a78e54d89862f2b27",
+      "opening_valuation": {
+        "at": "2026-08-24T09:00:00+08:00",
+        "account_revision": 1,
+        "price_fen": null,
+        "price_at": null,
+        "available_at": null,
+        "cash_fen": 500000,
+        "position_quantity": 0,
+        "market_value_fen": 0,
+        "equity_fen": 500000,
+        "accounting_cost_fen": 0,
+        "realized_pnl_fen": 0,
+        "unrealized_pnl_fen": 0,
+        "cost_pnl_fen": 0,
+        "valuation_valid": true,
+        "blockers": []
+      },
+      "final_valuation": {
+        "at": "2026-08-24T09:43:12+08:00",
+        "account_revision": 2,
+        "price_fen": 4020,
+        "price_at": "2026-08-24T09:43:00+08:00",
+        "available_at": "2026-08-24T09:43:12+08:00",
+        "cash_fen": 102396,
+        "position_quantity": 100,
+        "market_value_fen": 402000,
+        "equity_fen": 504396,
+        "accounting_cost_fen": 397604,
+        "realized_pnl_fen": 0,
+        "unrealized_pnl_fen": 4396,
+        "cost_pnl_fen": 4396,
+        "valuation_valid": true,
+        "blockers": []
+      },
+      "final_account": {
+        "revision": 2,
+        "cash": {
+          "kind": "KNOWN",
+          "balance_fen": 102396
+        },
+        "inventory_known": true,
+        "lots": [
+          {
+            "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+            "bucket": "TACTICAL",
+            "quantity": 100,
+            "cost_basis_fen": 397604,
+            "acquired_trade_date": "2026-08-24"
+          }
+        ],
+        "realized_pnl_fen": 0,
+        "paid_fees_fen": 504
+      },
+      "final_inventory": {
+        "symbol": "002240.SZ",
+        "revision": 2,
+        "known": true,
+        "total_qty": 100,
+        "core_qty": 0,
+        "tactical_qty": 100,
+        "sellable_core": 0,
+        "sellable_tactical": 0
+      },
+      "last_evidence_at": "2026-08-24T09:43:12+08:00",
+      "last_valuation_at": "2026-08-24T09:43:12+08:00",
+      "metrics": {
+        "initial_equity_fen": 500000,
+        "final_equity_fen": 504396,
+        "equity_change_fen": 4396,
+        "interval_return": "0.008792",
+        "maximum_drawdown": "0.001208",
+        "turnover": "0.7942",
+        "cost_pnl_fen": 4396,
+        "realized_pnl_fen": 0,
+        "unrealized_pnl_fen": 4396,
+        "paid_fees_fen": 504,
+        "slippage_fen": 100,
+        "valuation_valid": true,
+        "blockers": []
+      },
+      "report_hash": "5fc9fcd8b0aa54323b0fbf89cdbb0de87fc3c1c7c7eef2abe1c0e4c7c0bf8fdc"
+    }
+  },
+  "runs": {
+    "filters": {
+      "symbol": null,
+      "planVersionId": null,
+      "datasetHash": null,
+      "completedFrom": null,
+      "completedTo": null,
+      "pinned": null
+    },
+    "items": [
+      {
+        "schemaVersion": "monitor-loop-result-v1",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "reportHash": "5fc9fcd8b0aa54323b0fbf89cdbb0de87fc3c1c7c7eef2abe1c0e4c7c0bf8fdc",
+        "planVersionId": null,
+        "planHash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
+        "datasetHash": "4325c31bedf3f4d26c64e017652476d480fb687ec27d66cc9aff9b62dbe40b7d",
+        "symbol": "002240.SZ",
+        "status": "COMPLETED",
+        "eventStart": "2026-08-24",
+        "eventEnd": "2026-08-24",
+        "completedAt": "2026-08-24T09:43:12.000000+08:00",
+        "pinned": false,
+        "revision": 0,
+        "fillCount": 1,
+        "metrics": {
+          "initial_equity_fen": 500000,
+          "final_equity_fen": 504396,
+          "equity_change_fen": 4396,
+          "interval_return": "0.008792",
+          "maximum_drawdown": "0.001208",
+          "turnover": "0.7942",
+          "cost_pnl_fen": 4396,
+          "realized_pnl_fen": 0,
+          "unrealized_pnl_fen": 4396,
+          "paid_fees_fen": 504,
+          "slippage_fen": 100,
+          "valuation_valid": true,
+          "blockers": []
+        },
+        "availability": {
+          "decisionDetails": "AVAILABLE",
+          "signalDetails": "NOT_RECORDED",
+          "executionOutcomeDetails": "NOT_RECORDED",
+          "equitySeries": "NOT_RECORDED"
+        }
+      }
+    ],
+    "limit": 20,
+    "nextCursor": null,
+    "hasMore": false,
+    "highWatermark": "eyJmIjoiZXMwN2lQMy16cnVUMHpuc284eWNHbWhfOXRqbTBvMTZvdllSTWx2YjEwbyIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCI1NjFiMDgzNGE4NDgwYzQyNmRjNmZhZmEwMGI4NDdhYTRjM2I5YTFlNTU1NWQwZjJjNmE4MTkxMzdlODk2OGUxIl0sImwiOm51bGwsIm8iOiJjb21wbGV0ZWRBdDpkZXNjLHJ1bklkOmRlc2MiLCJyIjoicnVucyIsInMiOlsxXSwidiI6ImN1cnNvci12MSJ9.4OwmGLaMZGVxabJU_ILoLGXUvtbF6Xy4BqfWemtCrUQ"
+  },
+  "details": {
+    "kind": "DECISION",
+    "availability": "AVAILABLE",
+    "filters": {
+      "kind": "DECISION"
+    },
+    "items": [
+      {
+        "detailId": "loop-000001-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:00:00.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 1,
+          "at": "2026-08-24T09:00:00+08:00",
+          "event_id": "67ae89b5c4a6eb5209bd41c0cf173f9940965ed49055f3ed6f90484d72f2a6e8",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:00:00+08:00",
+              "account_revision": 1,
+              "price_fen": null,
+              "price_at": null,
+              "available_at": null,
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000002-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:31:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 2,
+          "at": "2026-08-24T09:31:12+08:00",
+          "event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "51abd7df5f1aa0f50a666248908edc72af1c31ab031a83f4dc7279021d231d6a",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": null,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "MISSING_INPUT",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [],
+                  "fact_ids": [],
+                  "reason": "COMPLETE_5M_BAR_WINDOW",
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000003-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:31:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 3,
+          "at": "2026-08-24T09:31:12+08:00",
+          "event_id": "0b0a8285b5f1f7207b355ec22469fef834746e613689ae4e9f15c3bd8b72f1d2",
+          "cause_event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:31:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:31:00+08:00",
+              "available_at": "2026-08-24T09:31:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000004-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:32:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 4,
+          "at": "2026-08-24T09:32:12+08:00",
+          "event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "742d04cb6e647674ad3fc984f29fbc50c3989261293cb7df73997ff5a20f71bd",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": null,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "MISSING_INPUT",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [],
+                  "fact_ids": [],
+                  "reason": "COMPLETE_5M_BAR_WINDOW",
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000005-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:32:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 5,
+          "at": "2026-08-24T09:32:12+08:00",
+          "event_id": "863f8aa1eca1dc4e8c95f7fcea4a450bcbfabb516cd670f73ddcb410098aeade",
+          "cause_event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:32:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:32:00+08:00",
+              "available_at": "2026-08-24T09:32:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000006-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:33:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 6,
+          "at": "2026-08-24T09:33:12+08:00",
+          "event_id": "6a703227545a8a284e93387f34241d53a4a0c1b4ea1936d1f147d556f43e7f1b",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "f592f89390f3f17e5bc9dd9efc8bda52bf4aa1507f54679fad617bf3bda80116",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": null,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "MISSING_INPUT",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [],
+                  "fact_ids": [],
+                  "reason": "COMPLETE_5M_BAR_WINDOW",
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000007-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:33:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 7,
+          "at": "2026-08-24T09:33:12+08:00",
+          "event_id": "9df4e32f14cebb509bb3b85b187e276adfee13cd67446e00f3d77c236b920308",
+          "cause_event_id": "6a703227545a8a284e93387f34241d53a4a0c1b4ea1936d1f147d556f43e7f1b",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:33:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:33:00+08:00",
+              "available_at": "2026-08-24T09:33:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000008-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:34:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 8,
+          "at": "2026-08-24T09:34:12+08:00",
+          "event_id": "31934a891bd893ca7d4084f44f9df43b8ace48e840d7290cf1bf86e00e284c3b",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "fa904dbed8872c3a0c79b36bd3c374638fd3fceb1474362b4300730a8292e5dd",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": null,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "MISSING_INPUT",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [],
+                  "fact_ids": [],
+                  "reason": "COMPLETE_5M_BAR_WINDOW",
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000009-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:34:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 9,
+          "at": "2026-08-24T09:34:12+08:00",
+          "event_id": "932c22c74db311d444b981871ceee609d2e9da05aa8dc8be583dc4dbd6016168",
+          "cause_event_id": "31934a891bd893ca7d4084f44f9df43b8ace48e840d7290cf1bf86e00e284c3b",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:34:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:34:00+08:00",
+              "available_at": "2026-08-24T09:34:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000010-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:35:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 10,
+          "at": "2026-08-24T09:35:12+08:00",
+          "event_id": "9e798707feaff47874d3d95574f871aafa8575606bdd47533551223f80ab3144",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "48e6bd5a26a147645490638b9ab97f10302f62850605e1a035e25bc0cbf2703b",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:35:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "READY",
+                "planned_qty": 100,
+                "simulated_qty": 0,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 100,
+                "blockers": [],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 2
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "SATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:35:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "3970",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000011-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:35:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 11,
+          "at": "2026-08-24T09:35:12+08:00",
+          "event_id": "44dc5e00d3899461dd15af32e375c9cf291c7183ac72d8e0c94fdbc5506115be",
+          "cause_event_id": "9e798707feaff47874d3d95574f871aafa8575606bdd47533551223f80ab3144",
+          "payload": {
+            "kind": "REMINDED",
+            "reminder": {
+              "sequence": 1,
+              "event": {
+                "payload_schema_version": "daily-simulation-alert-v1",
+                "event_id": "93d97f4d-1758-4009-a785-cb84d5d76a6a",
+                "dedup_key": "28dca114b663aa769aa1b4f2b0707d1381ea6817ea51dd602673470f335ba6c9",
+                "plan_id": "synthetic-daily",
+                "plan_version": 1,
+                "plan_hash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "activation_revision": 1,
+                "symbol": "002240.SZ",
+                "name": "Synthetic reviewed plan",
+                "signal_type": "BUY",
+                "severity": "ACTION",
+                "trading_date": "2026-08-24",
+                "evaluated_at": "2026-08-24T09:35:12+08:00",
+                "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": null,
+                "alert_kind": null,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "quantity": 100,
+                "simulated_qty": 0,
+                "risk_scope": null,
+                "evidence": [
+                  {
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "basis_id": null,
+                    "children": [],
+                    "condition": {
+                      "price_fen": 4000,
+                      "timeframe_minutes": 5,
+                      "type": "MINUTE_CLOSE_BELOW"
+                    },
+                    "fact_ids": [],
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "outcome": "SATISFIED",
+                    "reason": null,
+                    "session_dates": []
+                  }
+                ],
+                "next_step": "CONFIRM_SIMULATED_TRADE",
+                "sequence": 1,
+                "message_text": "Synthetic reviewed plan 002240.SZ BUY 提醒：原收盘确认 2026-08-24，仅 2026-08-24 收盘前有效，完整数量 100 股。信号 b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8；当前仍须在区间并核验可交易条件。提醒不会修改模拟仓位；模拟交易需要独立确认。",
+                "created_at": "2026-08-24T09:35:12+08:00",
+                "acknowledged_at": null
+              },
+              "captured_at": "2026-08-24T09:35:12+08:00",
+              "status": "CAPTURED",
+              "cause_revision": 2,
+              "inventory_revision": 1
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000012-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:35:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 12,
+          "at": "2026-08-24T09:35:12+08:00",
+          "event_id": "03d9ad88299b4c783c3bc20b539c32f587c11445492319f2744a0d76fa7066a9",
+          "cause_event_id": "44dc5e00d3899461dd15af32e375c9cf291c7183ac72d8e0c94fdbc5506115be",
+          "payload": {
+            "kind": "REQUESTED",
+            "intent_id": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+            "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+            "ready_at": "2026-08-24T09:35:12+08:00"
+          }
+        }
+      },
+      {
+        "detailId": "loop-000013-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:35:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 13,
+          "at": "2026-08-24T09:35:12+08:00",
+          "event_id": "28f8085cd8d55975f6abfe10400e01e6540cb122a9014f4df1d94b334ba8a9aa",
+          "cause_event_id": "03d9ad88299b4c783c3bc20b539c32f587c11445492319f2744a0d76fa7066a9",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:35:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:35:00+08:00",
+              "available_at": "2026-08-24T09:35:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000014-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:36:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 14,
+          "at": "2026-08-24T09:36:12+08:00",
+          "event_id": "7f8dc07bf462c43448a8df72294736304823e47cb2c4c8e8cf35b4eb050cff74",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "7981787161779eee721697a75a3900a462bc4364a81c8e23c605547a8ef43c83",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:35:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "READY",
+                "planned_qty": 100,
+                "simulated_qty": 0,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 100,
+                "blockers": [],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 2
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "SATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:35:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "3970",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000015-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:36:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 15,
+          "at": "2026-08-24T09:36:12+08:00",
+          "event_id": "931476a6132e5b9e78081bc20c965c5fe89bcd3dac0a1cb7db854fc995ebd3ea",
+          "cause_event_id": "7f8dc07bf462c43448a8df72294736304823e47cb2c4c8e8cf35b4eb050cff74",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:36:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:36:00+08:00",
+              "available_at": "2026-08-24T09:36:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000016-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:37:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 16,
+          "at": "2026-08-24T09:37:12+08:00",
+          "event_id": "6dccdfa40d9e269d20657e20fdf8e59c496133ba1a5166b3712e41bb31ed5189",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "68b0843d402da49a6cf1703e2a13999c329b5a721275a0b8053ff682d0efa437",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:35:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "READY",
+                "planned_qty": 100,
+                "simulated_qty": 0,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 100,
+                "blockers": [],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 2
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "SATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:35:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "3970",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000017-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:37:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 17,
+          "at": "2026-08-24T09:37:12+08:00",
+          "event_id": "7bde47376457473a309823e22eb7fc17ab0147862931c0d19e34199e3951696f",
+          "cause_event_id": "03d9ad88299b4c783c3bc20b539c32f587c11445492319f2744a0d76fa7066a9",
+          "payload": {
+            "kind": "EXECUTED",
+            "attempt": {
+              "intent_id": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+              "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+              "at": "2026-08-24T09:37:12+08:00",
+              "minute": {
+                "open_fen": 3970,
+                "high_fen": 3980,
+                "low_fen": 3960,
+                "close_fen": 3970,
+                "symbol": "002240.SZ",
+                "bar_end": "2026-08-24T09:37:00+08:00",
+                "volume_shares": 1000,
+                "amount_yuan": "39700",
+                "received_at": "2026-08-24T09:37:12+08:00"
+              },
+              "status": "FILLED",
+              "reason": null,
+              "receipt": {
+                "request_key": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+                "command": {
+                  "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                  "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                  "expected_cause_revision": 2,
+                  "expected_inventory_revision": 1,
+                  "quantity": 100
+                },
+                "costs": {
+                  "formula_version": "monitor-loop-costs-v1",
+                  "commission_rate": "0.0003",
+                  "minimum_commission_fen": 500,
+                  "stamp_duty_rate": "0.0005",
+                  "transfer_fee_rate": "0.00001",
+                  "buy_slippage_fen": 1,
+                  "sell_slippage_fen": 1
+                },
+                "authority_receipt": {
+                  "simulation_id": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                  "side": "BUY",
+                  "quantity": 100,
+                  "price_fen": 3970,
+                  "simulated_at": "2026-08-24T09:37:12+08:00",
+                  "inventory_revision": 2,
+                  "inventory": {
+                    "symbol": "002240.SZ",
+                    "revision": 2,
+                    "known": true,
+                    "total_qty": 100,
+                    "core_qty": 0,
+                    "tactical_qty": 100,
+                    "sellable_core": 0,
+                    "sellable_tactical": 0
+                  },
+                  "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8"
+                },
+                "settlement": {
+                  "side": "BUY",
+                  "quote_fen": 3970,
+                  "quantity": 100,
+                  "fill_price_fen": 3971,
+                  "notional_fen": 397100,
+                  "commission_fen": 500,
+                  "stamp_duty_fen": 0,
+                  "transfer_fee_fen": 4,
+                  "total_fees_fen": 504
+                },
+                "released_cost_fen": 0,
+                "account": {
+                  "revision": 2,
+                  "cash": {
+                    "kind": "KNOWN",
+                    "balance_fen": 102396
+                  },
+                  "inventory_known": true,
+                  "lots": [
+                    {
+                      "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                      "bucket": "TACTICAL",
+                      "quantity": 100,
+                      "cost_basis_fen": 397604,
+                      "acquired_trade_date": "2026-08-24"
+                    }
+                  ],
+                  "realized_pnl_fen": 0,
+                  "paid_fees_fen": 504
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000018-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:37:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 18,
+          "at": "2026-08-24T09:37:12+08:00",
+          "event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "cause_event_id": "7bde47376457473a309823e22eb7fc17ab0147862931c0d19e34199e3951696f",
+          "payload": {
+            "kind": "STATE",
+            "account": {
+              "revision": 2,
+              "cash": {
+                "kind": "KNOWN",
+                "balance_fen": 102396
+              },
+              "inventory_known": true,
+              "lots": [
+                {
+                  "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                  "bucket": "TACTICAL",
+                  "quantity": 100,
+                  "cost_basis_fen": 397604,
+                  "acquired_trade_date": "2026-08-24"
+                }
+              ],
+              "realized_pnl_fen": 0,
+              "paid_fees_fen": 504
+            },
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000019-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:37:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 19,
+          "at": "2026-08-24T09:37:12+08:00",
+          "event_id": "e6f22ad2ce2d268e59904efcb89463548db7921d068bcc42f010b9919e611e7e",
+          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "c921592bf63067475ac098cee2aab1ec9c2cb80c59d1db3668281221700750f4",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:35:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "SIMULATED",
+                "planned_qty": 100,
+                "simulated_qty": 100,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 0,
+                "blockers": [
+                  "SIMULATED"
+                ],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 4
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "SATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:35:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "3970",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000020-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:37:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 20,
+          "at": "2026-08-24T09:37:12+08:00",
+          "event_id": "088d30177c0ed9b800ea60865e1eb9451cc4a1f26ff16ae89b272fd61b349351",
+          "cause_event_id": "e6f22ad2ce2d268e59904efcb89463548db7921d068bcc42f010b9919e611e7e",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:37:12+08:00",
+              "account_revision": 2,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:37:00+08:00",
+              "available_at": "2026-08-24T09:37:12+08:00",
+              "cash_fen": 102396,
+              "position_quantity": 100,
+              "market_value_fen": 397000,
+              "equity_fen": 499396,
+              "accounting_cost_fen": 397604,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": -604,
+              "cost_pnl_fen": -604,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000021-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:38:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 21,
+          "at": "2026-08-24T09:38:12+08:00",
+          "event_id": "7c205365448e210f5d1c3563062810e1e0b39f5585d2b76bf624e452a8992ec8",
+          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "70e84479fb71eb9ac6416e4d0da981e4a42399b41c1a3c6122e9652b07a27aa6",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:35:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "SIMULATED",
+                "planned_qty": 100,
+                "simulated_qty": 100,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 0,
+                "blockers": [
+                  "SIMULATED"
+                ],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 4
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "SATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:35:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "3970",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000022-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:38:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 22,
+          "at": "2026-08-24T09:38:12+08:00",
+          "event_id": "59aa14a01bd9cd6e51735c3a28152456a31a6e57219f3122422bc9af049e2648",
+          "cause_event_id": "7c205365448e210f5d1c3563062810e1e0b39f5585d2b76bf624e452a8992ec8",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:38:12+08:00",
+              "account_revision": 2,
+              "price_fen": 4020,
+              "price_at": "2026-08-24T09:38:00+08:00",
+              "available_at": "2026-08-24T09:38:12+08:00",
+              "cash_fen": 102396,
+              "position_quantity": 100,
+              "market_value_fen": 402000,
+              "equity_fen": 504396,
+              "accounting_cost_fen": 397604,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 4396,
+              "cost_pnl_fen": 4396,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000023-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:39:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 23,
+          "at": "2026-08-24T09:39:12+08:00",
+          "event_id": "1e895dfe0b22b4c4b53db1de75f70869a112206dfe3022a1fe8733fe329ce1b0",
+          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "fd4e04f063a4443038e9d08048280e2dcd070ede9268b82ba5fd5e3d9c260766",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:35:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "SIMULATED",
+                "planned_qty": 100,
+                "simulated_qty": 100,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 0,
+                "blockers": [
+                  "SIMULATED"
+                ],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 4
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "SATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:35:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "3970",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000024-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:39:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 24,
+          "at": "2026-08-24T09:39:12+08:00",
+          "event_id": "22f8366f219fba002ae86a5c7bd5e2b326df402a0103b64b45dc9104aa2a68c9",
+          "cause_event_id": "1e895dfe0b22b4c4b53db1de75f70869a112206dfe3022a1fe8733fe329ce1b0",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:39:12+08:00",
+              "account_revision": 2,
+              "price_fen": 4020,
+              "price_at": "2026-08-24T09:39:00+08:00",
+              "available_at": "2026-08-24T09:39:12+08:00",
+              "cash_fen": 102396,
+              "position_quantity": 100,
+              "market_value_fen": 402000,
+              "equity_fen": 504396,
+              "accounting_cost_fen": 397604,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 4396,
+              "cost_pnl_fen": 4396,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000025-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:40:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 25,
+          "at": "2026-08-24T09:40:12+08:00",
+          "event_id": "d3da7b6d76b70e02c6c5733353e0e0c3f1cfca5da0a21f4a8d3563a338a46cb7",
+          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "2f63b7d0a1e5529269e2966e12078eacbc182b790538bd12deb4ae5da0432b5c",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:40:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "SIMULATED",
+                "planned_qty": 100,
+                "simulated_qty": 100,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 0,
+                "blockers": [
+                  "SIMULATED"
+                ],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 4
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "UNSATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:40:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "4020",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000026-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:40:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 26,
+          "at": "2026-08-24T09:40:12+08:00",
+          "event_id": "b799ba1c89ed0872f22cf8a92b27b557e3b39bb9351d2151e662e9a9aa57c2ac",
+          "cause_event_id": "d3da7b6d76b70e02c6c5733353e0e0c3f1cfca5da0a21f4a8d3563a338a46cb7",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:40:12+08:00",
+              "account_revision": 2,
+              "price_fen": 4020,
+              "price_at": "2026-08-24T09:40:00+08:00",
+              "available_at": "2026-08-24T09:40:12+08:00",
+              "cash_fen": 102396,
+              "position_quantity": 100,
+              "market_value_fen": 402000,
+              "equity_fen": 504396,
+              "accounting_cost_fen": 397604,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 4396,
+              "cost_pnl_fen": 4396,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000027-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:41:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 27,
+          "at": "2026-08-24T09:41:12+08:00",
+          "event_id": "bffedb7506fec9de831d8d495d4ea4654ffe853103978ffa02a07de297b36609",
+          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "aa70f30e2c72e60ae9e6cd979f85bda33a179bb65dc1d1a5ef988307059fd565",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:40:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "SIMULATED",
+                "planned_qty": 100,
+                "simulated_qty": 100,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 0,
+                "blockers": [
+                  "SIMULATED"
+                ],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 4
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "UNSATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:40:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "4020",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000028-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:41:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 28,
+          "at": "2026-08-24T09:41:12+08:00",
+          "event_id": "aeaccdc2ebc9686e14a20b9d7a06a4a2bd5b90dcfbc1176d0ac3e4e0c74fe2c0",
+          "cause_event_id": "bffedb7506fec9de831d8d495d4ea4654ffe853103978ffa02a07de297b36609",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:41:12+08:00",
+              "account_revision": 2,
+              "price_fen": 4020,
+              "price_at": "2026-08-24T09:41:00+08:00",
+              "available_at": "2026-08-24T09:41:12+08:00",
+              "cash_fen": 102396,
+              "position_quantity": 100,
+              "market_value_fen": 402000,
+              "equity_fen": 504396,
+              "accounting_cost_fen": 397604,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 4396,
+              "cost_pnl_fen": 4396,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000029-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:42:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 29,
+          "at": "2026-08-24T09:42:12+08:00",
+          "event_id": "5d4182debd9b5a02aa95be0d3ff7d573f9831a3ae057834ca682b4d4f9c499f1",
+          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "b2bc24298640fec9deb6b04fe8b4e028cc424733b382722cde15015d171d2587",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:40:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "SIMULATED",
+                "planned_qty": 100,
+                "simulated_qty": 100,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 0,
+                "blockers": [
+                  "SIMULATED"
+                ],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 4
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "UNSATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:40:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "4020",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000030-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:42:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 30,
+          "at": "2026-08-24T09:42:12+08:00",
+          "event_id": "ac5f9b7cf9be6384853f61a326ca336a8b0b3c29bf3243cc779b2e614664492c",
+          "cause_event_id": "5d4182debd9b5a02aa95be0d3ff7d573f9831a3ae057834ca682b4d4f9c499f1",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:42:12+08:00",
+              "account_revision": 2,
+              "price_fen": 4020,
+              "price_at": "2026-08-24T09:42:00+08:00",
+              "available_at": "2026-08-24T09:42:12+08:00",
+              "cash_fen": 102396,
+              "position_quantity": 100,
+              "market_value_fen": 402000,
+              "equity_fen": 504396,
+              "accounting_cost_fen": 397604,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 4396,
+              "cost_pnl_fen": 4396,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000031-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:43:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 31,
+          "at": "2026-08-24T09:43:12+08:00",
+          "event_id": "00e1de062ba52b656e715606947fec2b42a3d0a08106ddffbeb462337c471f6d",
+          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "ea25decd0d5e8f266af3ace120ec050b3908d99e84f4a9d162e83ad58038da92",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": "2026-08-24T09:40:00+08:00",
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [
+              {
+                "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+                "rule_id": "low-buy",
+                "side": "BUY",
+                "bucket": "TACTICAL",
+                "lineage": "synthetic-daily",
+                "state": "SIMULATED",
+                "planned_qty": 100,
+                "simulated_qty": 100,
+                "confirmed_trade_date": "2026-08-24",
+                "execution_date": "2026-08-24",
+                "evidence_fingerprint": "8a7dc3380381a3aaecb15f115b7fead2aba86456302f215eda54ec53b9aa8504",
+                "evidence": [
+                  {
+                    "outcome": "SATISFIED",
+                    "condition": {
+                      "type": "MINUTE_CLOSE_BELOW",
+                      "timeframe_minutes": 5,
+                      "price_fen": 4000
+                    },
+                    "bar_ids": [
+                      "2026-08-24T09:35:00+08:00"
+                    ],
+                    "session_dates": [],
+                    "basis_id": null,
+                    "operands": [
+                      "3970",
+                      "4000"
+                    ],
+                    "fact_ids": [],
+                    "reason": null,
+                    "children": []
+                  }
+                ],
+                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "basis_id": "minute-ta-v1",
+                "executable_qty": 0,
+                "blockers": [
+                  "SIMULATED"
+                ],
+                "reset_trade_date": null,
+                "risk_invalidated": false,
+                "confirmation_kind": "COMPLETED_BAR_CLOSE",
+                "execution_window": "CURRENT_SESSION",
+                "confirmed_at": "2026-08-24T09:35:00+08:00",
+                "revision": 4
+              }
+            ],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "UNSATISFIED",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [
+                    "2026-08-24T09:40:00+08:00"
+                  ],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [
+                    "4020",
+                    "4000"
+                  ],
+                  "fact_ids": [],
+                  "reason": null,
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000032-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:43:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 32,
+          "at": "2026-08-24T09:43:12+08:00",
+          "event_id": "19a4fcdd20a4dde93f3402175a3e1a5b37bbbbeff9a5dab5ee6a1cff33a70f05",
+          "cause_event_id": "00e1de062ba52b656e715606947fec2b42a3d0a08106ddffbeb462337c471f6d",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:43:12+08:00",
+              "account_revision": 2,
+              "price_fen": 4020,
+              "price_at": "2026-08-24T09:43:00+08:00",
+              "available_at": "2026-08-24T09:43:12+08:00",
+              "cash_fen": 102396,
+              "position_quantity": 100,
+              "market_value_fen": 402000,
+              "equity_fen": 504396,
+              "accounting_cost_fen": 397604,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 4396,
+              "cost_pnl_fen": 4396,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      }
+    ],
+    "limit": 100,
+    "nextCursor": null,
+    "hasMore": false,
+    "highWatermark": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.3689sDf9PcE0zQgW3UERA1of9Xn_FgivfId0ipwJMwg"
+  },
+  "first": {
+    "kind": "DECISION",
+    "availability": "AVAILABLE",
+    "filters": {
+      "kind": "DECISION"
+    },
+    "items": [
+      {
+        "detailId": "loop-000001-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:00:00.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 1,
+          "at": "2026-08-24T09:00:00+08:00",
+          "event_id": "67ae89b5c4a6eb5209bd41c0cf173f9940965ed49055f3ed6f90484d72f2a6e8",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:00:00+08:00",
+              "account_revision": 1,
+              "price_fen": null,
+              "price_at": null,
+              "available_at": null,
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000002-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:31:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 2,
+          "at": "2026-08-24T09:31:12+08:00",
+          "event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "51abd7df5f1aa0f50a666248908edc72af1c31ab031a83f4dc7279021d231d6a",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": null,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "MISSING_INPUT",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [],
+                  "fact_ids": [],
+                  "reason": "COMPLETE_5M_BAR_WINDOW",
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000003-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:31:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 3,
+          "at": "2026-08-24T09:31:12+08:00",
+          "event_id": "0b0a8285b5f1f7207b355ec22469fef834746e613689ae4e9f15c3bd8b72f1d2",
+          "cause_event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:31:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:31:00+08:00",
+              "available_at": "2026-08-24T09:31:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      }
+    ],
+    "limit": 3,
+    "nextCursor": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOlsiMjAyNi0wOC0yNFQwOTozMToxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAwMy01NjFiMDgzNGE4NDgwYzQyIl0sIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.Tg4m0WUhTT5a-sDXxDjj6M6faScNPuT3rTqhqFPDGKI",
+    "hasMore": true,
+    "highWatermark": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.3689sDf9PcE0zQgW3UERA1of9Xn_FgivfId0ipwJMwg"
+  },
+  "second": {
+    "kind": "DECISION",
+    "availability": "AVAILABLE",
+    "filters": {
+      "kind": "DECISION"
+    },
+    "items": [
+      {
+        "detailId": "loop-000004-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:32:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 4,
+          "at": "2026-08-24T09:32:12+08:00",
+          "event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "742d04cb6e647674ad3fc984f29fbc50c3989261293cb7df73997ff5a20f71bd",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": null,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "MISSING_INPUT",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [],
+                  "fact_ids": [],
+                  "reason": "COMPLETE_5M_BAR_WINDOW",
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      },
+      {
+        "detailId": "loop-000005-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:32:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 5,
+          "at": "2026-08-24T09:32:12+08:00",
+          "event_id": "863f8aa1eca1dc4e8c95f7fcea4a450bcbfabb516cd670f73ddcb410098aeade",
+          "cause_event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "payload": {
+            "kind": "VALUATION",
+            "valuation": {
+              "at": "2026-08-24T09:32:12+08:00",
+              "account_revision": 1,
+              "price_fen": 3970,
+              "price_at": "2026-08-24T09:32:00+08:00",
+              "available_at": "2026-08-24T09:32:12+08:00",
+              "cash_fen": 500000,
+              "position_quantity": 0,
+              "market_value_fen": 0,
+              "equity_fen": 500000,
+              "accounting_cost_fen": 0,
+              "realized_pnl_fen": 0,
+              "unrealized_pnl_fen": 0,
+              "cost_pnl_fen": 0,
+              "valuation_valid": true,
+              "blockers": []
+            }
+          }
+        }
+      },
+      {
+        "detailId": "loop-000006-561b0834a8480c42",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "eventAt": "2026-08-24T09:33:12.000000+08:00",
+        "kind": "DECISION",
+        "schemaVersion": "monitor-loop-event-v1",
+        "event": {
+          "schema_version": "monitor-loop-event-v1",
+          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "sequence": 6,
+          "at": "2026-08-24T09:33:12+08:00",
+          "event_id": "6a703227545a8a284e93387f34241d53a4a0c1b4ea1936d1f147d556f43e7f1b",
+          "cause_event_id": null,
+          "payload": {
+            "kind": "EVALUATED",
+            "evaluation_id": "f592f89390f3f17e5bc9dd9efc8bda52bf4aa1507f54679fad617bf3bda80116",
+            "duplicate": false,
+            "official_trade_date": null,
+            "minute_target": null,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 1,
+              "known": true,
+              "total_qty": 0,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signals": [],
+            "risks": [],
+            "alerts": [],
+            "risk_action": {
+              "status": "NONE",
+              "branch": null,
+              "cause_id": null,
+              "cause_revision": null,
+              "core_qty": 0,
+              "tactical_qty": 0,
+              "unavailable_core_qty": 0,
+              "unavailable_tactical_qty": 0,
+              "target_core_qty": null,
+              "target_tactical_qty": null,
+              "blockers": []
+            },
+            "conditions": [
+              {
+                "rule_id": "low-buy",
+                "evidence": {
+                  "outcome": "MISSING_INPUT",
+                  "condition": {
+                    "type": "MINUTE_CLOSE_BELOW",
+                    "timeframe_minutes": 5,
+                    "price_fen": 4000
+                  },
+                  "bar_ids": [],
+                  "session_dates": [],
+                  "basis_id": null,
+                  "operands": [],
+                  "fact_ids": [],
+                  "reason": "COMPLETE_5M_BAR_WINDOW",
+                  "children": []
+                }
+              }
+            ],
+            "blockers": []
+          }
+        }
+      }
+    ],
+    "limit": 3,
+    "nextCursor": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOlsiMjAyNi0wOC0yNFQwOTozMzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAwNi01NjFiMDgzNGE4NDgwYzQyIl0sIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9._39514BqgQNMQTFolPeRNdFIUQbO8G3E3pGc__Uc9CY",
+    "hasMore": true,
+    "highWatermark": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.3689sDf9PcE0zQgW3UERA1of9Xn_FgivfId0ipwJMwg"
+  },
+  "fills": {
+    "filters": {},
+    "items": [
+      {
+        "schemaVersion": "monitor-loop-fill-v1",
+        "fillId": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "filledAt": "2026-08-24T09:37:12.000000+08:00",
+        "eventId": "7bde47376457473a309823e22eb7fc17ab0147862931c0d19e34199e3951696f",
+        "receipt": {
+          "request_key": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+          "command": {
+            "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+            "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
+            "expected_cause_revision": 2,
+            "expected_inventory_revision": 1,
+            "quantity": 100
+          },
+          "costs": {
+            "formula_version": "monitor-loop-costs-v1",
+            "commission_rate": "0.0003",
+            "minimum_commission_fen": 500,
+            "stamp_duty_rate": "0.0005",
+            "transfer_fee_rate": "0.00001",
+            "buy_slippage_fen": 1,
+            "sell_slippage_fen": 1
+          },
+          "authority_receipt": {
+            "simulation_id": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+            "side": "BUY",
+            "quantity": 100,
+            "price_fen": 3970,
+            "simulated_at": "2026-08-24T09:37:12+08:00",
+            "inventory_revision": 2,
+            "inventory": {
+              "symbol": "002240.SZ",
+              "revision": 2,
+              "known": true,
+              "total_qty": 100,
+              "core_qty": 0,
+              "tactical_qty": 100,
+              "sellable_core": 0,
+              "sellable_tactical": 0
+            },
+            "signal_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8"
+          },
+          "settlement": {
+            "side": "BUY",
+            "quote_fen": 3970,
+            "quantity": 100,
+            "fill_price_fen": 3971,
+            "notional_fen": 397100,
+            "commission_fen": 500,
+            "stamp_duty_fen": 0,
+            "transfer_fee_fen": 4,
+            "total_fees_fen": 504
+          },
+          "released_cost_fen": 0,
+          "account": {
+            "revision": 2,
+            "cash": {
+              "kind": "KNOWN",
+              "balance_fen": 102396
+            },
+            "inventory_known": true,
+            "lots": [
+              {
+                "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                "bucket": "TACTICAL",
+                "quantity": 100,
+                "cost_basis_fen": 397604,
+                "acquired_trade_date": "2026-08-24"
+              }
+            ],
+            "realized_pnl_fen": 0,
+            "paid_fees_fen": 504
+          }
+        }
+      }
+    ],
+    "limit": 100,
+    "nextCursor": null,
+    "hasMore": false,
+    "highWatermark": "eyJmIjoiWV9RdElQU0N3YzBwZ1pNQWFTY0NUbXZyR0lnaWh2dHlFeUpyOWpzd1QxZyIsImgiOlsiMjAyNi0wOC0yNFQwOTozNzoxMi4wMDAwMDArMDg6MDAiLCI1ZGY3YmY2MS05NmZjLTRiYTYtYjM2NS1kMzA3NTg4Y2I1YzciXSwibCI6bnVsbCwibyI6ImZpbGxlZEF0OmFzYyxmaWxsSWQ6YXNjIiwiciI6ImJhY2t0ZXN0LXJlc3VsdHM6ZmlsbHMiLCJ2IjoiY3Vyc29yLXYxIn0.BYElpcJJ52PY_nHzQXt6_hjfDh01cobQo4vsIWA5NOg"
+  }
+}

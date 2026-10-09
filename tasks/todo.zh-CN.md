@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 27 项、待完成活动任务 10 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV36。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24/ML-T25、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07/ML-C08 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 28 项、待完成活动任务 9 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV37。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -303,12 +303,15 @@
 
 ## ML-T25. 在结果中解释计划与执行历史
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T22`, `ML-T23`
 - **验收:** 将分页因果事件及冻结单计划来源接入结果页，区分持仓、阻断/未成交意图与成交。展示账户演进、有效指标及实际截止，无客户端交易逻辑或版本切换时间线。
 - **验证:** `npm --prefix web run test -- --run tests/unit/MonitorLoopResults.spec.ts`
-- **主要文件:** `web/src/components/backtests/MonitorLoopTimeline.vue`, `web/src/views/BacktestRunDetailView.vue`, `web/src/composables/useBacktestResults.ts`, `web/tests/unit/MonitorLoopResults.spec.ts`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A01, ML-A10, ML-A13, ML-A15.
+- **主要文件:** `web/src/components/backtests/MonitorLoopTimeline.vue`, `web/src/components/backtests/MonitorLoopSummary.vue`, `web/src/views/BacktestRunDetailView.vue`, `web/src/composables/useBacktestResults.ts`, `web/src/api/backtests.ts`, `web/src/api/monitorLoopValues.ts`, `web/src/components/backtests/BacktestResultActions.vue`, `web/tests/unit/MonitorLoopResults.spec.ts`, `web/tests/fixtures/monitor-loop-results.json`, `web/tests/unit/backtestsApi.spec.ts`
+- **范围:** M (10 个主要文件，分三片实施); **追溯:** ML-A01, ML-A10, ML-A13, ML-A15.
+- **夹具兼容:** 先收窄一处既有旧 API 断言，再读取旧类型独有的假设；保留该断言及全部旧行为检查。
+- **实施分片:** ML-T25.1 用真实后端响应夹具验证既有原生 HTTP 类型（API/校验器/夹具/测试，4 个文件）；ML-T25.2 在既有页面接入只读汇总和时间线（组件/页面/测试，4 个文件）；ML-T25.3 扩展既有结果组合函数及固定操作，隐藏不支持的原生导出（含共享测试共 3 个文件）。保留无关页面标题修改。不增加路由、导出、重放、交易计算或计划切换支持。
+- **证据:** MV37：原生结果专项 17 项、相关前端共 157 项通过，类型检查通过。真实 Chrome 验证 1440/390 像素、32 条因果事件及当前资源的 2 次请求，无运行错误或横向溢出。输入/来源绑定变异产生 1 项预期失败并恢复精确字节。实际 HTTP 夹具、分页、固定、过期与未知/零展示已验证；无关页面标题修改保留。下一项 ML-T26，最终批准仍为 ML-T29。
 
 ## ML-T26. 证明一致性、因果性与故障原子性
 

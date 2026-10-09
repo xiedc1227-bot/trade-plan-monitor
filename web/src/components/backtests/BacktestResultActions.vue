@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, shallowRef, watch, type DeepReadonly } from "vue";
 
-import type { BacktestRunView } from "../../api/generated";
 import {
   buildBacktestExportHref,
   createBacktestApi,
   type BacktestApi,
+  type BacktestRunResult,
 } from "../../api/backtests";
 import { ApiClientError } from "../../api/transport";
 
@@ -14,7 +14,7 @@ type PinState = "IDLE" | "SUBMITTING" | "UNCERTAIN" | "REFRESHING" | "FAILED";
 interface Props {
   api?: BacktestApi | undefined;
   createIdempotencyKey?: (() => string) | undefined;
-  run: DeepReadonly<BacktestRunView>;
+  run: DeepReadonly<BacktestRunResult>;
 }
 
 interface PinIntent {
@@ -139,7 +139,8 @@ onBeforeUnmount(() => {
   <section class="result-actions" aria-labelledby="result-actions-title">
     <div>
       <h3 id="result-actions-title">结果操作</h3>
-      <p>固定操作只改变保留元数据；导出由浏览器直接接收服务端流式文件。</p>
+      <p v-if="'report' in run">固定仅更新结果标记，已完成的报告保持冻结。</p>
+      <p v-else>固定操作只改变保留元数据；导出由浏览器直接接收服务端流式文件。</p>
     </div>
 
     <div class="result-actions__controls">
@@ -160,10 +161,10 @@ onBeforeUnmount(() => {
       >
         安全重试同一请求
       </button>
-      <a data-testid="export-summary-json" :href="summaryExportHref">
+      <a v-if="!('report' in run)" data-testid="export-summary-json" :href="summaryExportHref">
         导出汇总 JSON
       </a>
-      <a data-testid="export-fills-csv" :href="fillsExportHref">
+      <a v-if="!('report' in run)" data-testid="export-fills-csv" :href="fillsExportHref">
         导出模拟成交 CSV
       </a>
     </div>
@@ -186,7 +187,7 @@ onBeforeUnmount(() => {
       正在提交固定状态…
     </p>
 
-    <p class="result-actions__boundary">
+    <p v-if="!('report' in run)" class="result-actions__boundary">
       导出仅接受当前运行 ID 与固定格式；页面不读取完整文件、不创建 Blob，也不接收或显示文件路径。
     </p>
   </section>

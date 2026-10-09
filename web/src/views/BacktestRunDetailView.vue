@@ -24,6 +24,8 @@ import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
 import BacktestMarketIndexPanel from "../components/backtests/BacktestMarketIndexPanel.vue";
 import BacktestMetricsSummary from "../components/backtests/BacktestMetricsSummary.vue";
 import BacktestResultActions from "../components/backtests/BacktestResultActions.vue";
+import MonitorLoopSummary from "../components/backtests/MonitorLoopSummary.vue";
+import MonitorLoopTimeline from "../components/backtests/MonitorLoopTimeline.vue";
 import { useBacktestJob } from "../composables/useBacktestJob";
 import { useBacktestMarketIndexSeries } from "../composables/useMarketIndexSeries";
 import {
@@ -203,9 +205,13 @@ const results = useBacktestResults({
   runId,
   selectedTab,
 });
+const loopRun = computed(() => results.summary.value !== null && "report" in results.summary.value ? results.summary.value : null);
+const legacyRun = computed(() => results.summary.value !== null && !("report" in results.summary.value) ? results.summary.value : null);
+const loopDetails = computed(() => results.detailPage.value?.items.filter(item => "event" in item) ?? []);
 const marketIndexRequest = computed(() =>
   resultsEnabled.value &&
   results.summaryState.value === "READY" &&
+  legacyRun.value !== null &&
   selectedTab.value === "market-index" &&
   runId.value !== null
     ? { limit: 512, runId: runId.value }
@@ -531,6 +537,7 @@ onBeforeUnmount(() => {
         </RouterLink>
         <RouterLink
           data-testid="result-tab-market-index"
+          v-if="legacyRun !== null"
           :to="{ path: route.path, query: resultQuery('market-index') }"
           :aria-current="selectedTab === 'market-index' ? 'page' : undefined"
         >
@@ -538,9 +545,10 @@ onBeforeUnmount(() => {
         </RouterLink>
       </nav>
 
+      <MonitorLoopSummary v-if="selectedTab === 'summary' && loopRun !== null" :run="loopRun" />
       <BacktestMetricsSummary
-        v-if="selectedTab === 'summary'"
-        :run="results.summary.value"
+        v-else-if="selectedTab === 'summary' && legacyRun !== null"
+        :run="legacyRun"
       />
 
       <section
@@ -607,7 +615,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <nav class="run-detail-view__detail-kinds" aria-label="结果明细类型">
+        <nav v-if="legacyRun !== null" class="run-detail-view__detail-kinds" aria-label="结果明细类型">
           <RouterLink
             v-for="kind in DETAIL_KIND_OPTIONS"
             :key="kind"
@@ -653,6 +661,10 @@ onBeforeUnmount(() => {
           <p>{{ results.detailError.value }}</p>
           <button type="button" @click="results.refreshSelected">重新读取当前页</button>
         </div>
+        <MonitorLoopTimeline
+          v-else-if="results.detailState.value === 'READY' && loopRun !== null"
+          :items="loopDetails"
+        />
         <BacktestDetailTable
           v-else-if="results.detailState.value === 'READY' && results.detailPage.value !== null"
           :items="results.detailPage.value.items"
@@ -671,6 +683,7 @@ onBeforeUnmount(() => {
             <p>共用指数数据与本计划条件结果分区展示；不提供整次运行的大盘强弱结论。</p>
           </div>
         </div>
+        <p v-if="loopRun !== null">本次闭环运行未记录参考指数序列，不会补造。</p>
         <p
           v-if="marketIndexSeries.status.value === 'LOADING'"
           class="run-detail-view__state"
