@@ -5,6 +5,7 @@ import {
   type PreparationReceipt, type PreparationSource, type PreparationView,
 } from "../api/preparations";
 import { ApiClientError } from "../api/transport";
+import { buildPreparationReview, inspectPreparationReview, isReviewedPreparation, type ReviewChoice } from "../api/preparationReview";
 
 export type PreparationMutationState = "IDLE" | "SUBMITTING" | "UNCERTAIN";
 export interface UsePlanPreparationOptions {
@@ -12,7 +13,7 @@ export interface UsePlanPreparationOptions {
   readonly initialPreparationId?: string | null;
   readonly createId?: () => string;
 }
-type IntentKind = "CREATE" | "EDIT" | "EXTRACT" | "CANCEL" | "RECOVER";
+type IntentKind = "CREATE" | "EDIT" | "EXTRACT" | "CANCEL" | "RECOVER" | "REVIEW";
 interface MutationIntent {
   readonly kind: IntentKind;
   readonly key: string;
@@ -58,6 +59,10 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   const canRecover = computed(() => current.value && preparation.value!.workPhase === "UNKNOWN");
   const canRetryMutation = computed(() => mutationState.value === "UNCERTAIN");
   const errorMessage = computed(() => commandError.value ?? readError.value);
+  const canReview = computed(() => current.value && !workPending.value && !draftDirty.value &&
+    inspectPreparationReview(preparation.value!).blockers.length === 0);
+  const canUsePrepared = computed(() => current.value && !workPending.value && !draftDirty.value &&
+    isReviewedPreparation(preparation.value));
 
   function clearTimer(): void {
     if (timer !== null) clearTimeout(timer);
@@ -203,7 +208,19 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     return start("RECOVER", (key, signal) => api.recover(id, command, key, { signal }));
   }
   function retryMutation(): Promise<void> {
+    if (mutationPromise !== null) return mutationPromise;
     return canRetryMutation.value ? perform() : Promise.resolve();
+  }
+  function review(evidence: string, choices: readonly ReviewChoice[], unknownConfirmed: boolean): Promise<void> {
+    if (!canReview.value) return mutationPromise ?? Promise.resolve();
+    try {
+      const command = buildPreparationReview(preparation.value!, evidence, choices, unknownConfirmed);
+      const id = preparationId.value!;
+      return start("REVIEW", (key, signal) => api.review(id, command, key, { signal }));
+    } catch {
+      commandError.value = "请核对当前候选，补齐逐项说明并确认未知事实后再审核。";
+      return Promise.resolve();
+    }
   }
   function visibilityChanged(): void {
     if (document.hidden) stopRead();
@@ -223,7 +240,8 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   return {
     preparation: readonly(preparation), preparationId: readonly(preparationId), draft: readonly(draft),
     requestState: readonly(requestState), mutationState: readonly(mutationState), errorMessage, isBusy,
-    canSubmitSource, canExtract, canCancel, canRecover, canRetryMutation,
-    updateSource, submitSource, extract, cancel, recover, retryMutation, refresh,
+    canSubmitSource, canExtract, canCancel, canRecover, canRetryMutation, canReview, canUsePrepared,
+    sourceDirty: readonly(draftDirty),
+    updateSource, submitSource, extract, cancel, recover, retryMutation, refresh, review,
   } as const;
 }

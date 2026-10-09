@@ -1,14 +1,43 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { defineComponent, h } from "vue";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import type { PreparationView } from "../../src/api/generated-runtime-status";
-import { createPreparationApi } from "../../src/api/preparations";
+import { createPreparationApi, type PreparationApi, type PreparationReceipt } from "../../src/api/preparations";
 import { buildPreparationReview, inspectPreparationReview, validReviewCandidate } from "../../src/api/preparationReview";
+import { usePlanPreparation } from "../../src/composables/usePlanPreparation";
+import PlanPreparationReview from "../../src/components/backtests/PlanPreparationReview.vue";
 
 const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.json", "utf8")) as {
   candidate: PreparationView; reviewed: PreparationView; choices: { path: string; reason: string }[];
 };
 const evidence = "逐项核对原文、完整规则、期初实际账户及可用时间，明确确认当前候选。";
 const fresh = () => structuredClone(fixture.candidate);
+const wrappers: VueWrapper[] = [];
+afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); vi.restoreAllMocks(); });
+function controller() {
+  const api: PreparationApi = { ...createPreparationApi(vi.fn<typeof fetch>()),
+    get: vi.fn<PreparationApi["get"]>().mockResolvedValue({ body: fresh(), status: 200, retryAfterSeconds: null }),
+    review: vi.fn<PreparationApi["review"]>().mockResolvedValue({ body: fixture.reviewed, status: 200, retryAfterSeconds: null }),
+  };
+  let state!: ReturnType<typeof usePlanPreparation>;
+  const wrapper = mount(defineComponent({ setup() {
+    state = usePlanPreparation({ api, initialPreparationId: fixture.candidate.preparationId, createId: () => "review-key" });
+    return () => h("div");
+  } }));
+  wrappers.push(wrapper);
+  return { state, api, wrapper };
+}
+function preview(preparation = fresh()) {
+  const wrapper = mount(PlanPreparationReview, { props: { preparation, canReview: true, sourceDirty: false, reviewed: false } });
+  wrappers.push(wrapper);
+  return wrapper;
+}
+async function confirmPreview(wrapper: VueWrapper) {
+  await wrapper.get('[data-testid="review-evidence"]').setValue(evidence);
+  for (const [index, choice] of fixture.choices.entries()) await wrapper.get(`[data-testid="review-supplement-${index}"]`).setValue(choice.reason);
+  await wrapper.get('[data-testid="review-confirmation"]').setValue(true);
+}
 function receipt(body = fixture.reviewed) {
   return new Response(JSON.stringify(body), { headers: {
     Location: `/api/v1/backtest-preparations/${body.preparationId}`, "Cache-Control": "no-store",
@@ -91,5 +120,86 @@ describe("exact single preparation review", () => {
     const malformed = { review: { ...command.review, expected_revision: Number.MAX_SAFE_INTEGER + 1 } };
     await expect(createPreparationApi(fetcher).review(fixture.candidate.preparationId, malformed, "review-one")).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("explicit current preparation review controller", () => {
+  it("never reviews on read and accepts only explicit current review; source edits invalidate approval immediately", async () => {
+    const { state, api } = controller(); await flushPromises();
+    expect(api.review).not.toHaveBeenCalled(); expect(state.canReview.value).toBe(true);
+    await state.review(evidence, fixture.choices, true);
+    expect(api.review).toHaveBeenCalledTimes(1); expect(state.canUsePrepared.value).toBe(true);
+    state.updateSource({ ...state.draft.value, text: "修正原文" });
+    expect(state.sourceDirty.value).toBe(true); expect(state.canUsePrepared.value).toBe(false);
+    expect(state.canReview.value).toBe(false);
+    await state.review(evidence, fixture.choices, true); expect(api.review).toHaveBeenCalledTimes(1);
+  });
+  it.each(["CALLING", "UNKNOWN"] as const)("blocks review throughout unended %s work", async workPhase => {
+    const { state, api } = controller();
+    await flushPromises();
+    vi.mocked(api.get).mockResolvedValue({ body: { ...fresh(), workPhase, generation: "unfinished" }, status: 200, retryAfterSeconds: null });
+    await state.refresh(); await state.review(evidence, fixture.choices, true);
+    expect(state.canReview.value).toBe(false); expect(api.review).not.toHaveBeenCalled();
+  });
+  it("coalesces explicit review and retries the same immutable payload/key after an unknown outcome", async () => {
+    const { state, api } = controller(); await flushPromises();
+    let resolve!: (value: PreparationReceipt) => void;
+    const pending = new Promise<PreparationReceipt>(accept => { resolve = accept; });
+    vi.mocked(api.review).mockRejectedValueOnce(new TypeError("network")).mockReturnValueOnce(pending);
+    await state.review(evidence, fixture.choices, true);
+    const first = vi.mocked(api.review).mock.calls[0]!;
+    expect(state.mutationState.value).toBe("UNCERTAIN");
+    await state.review("其他说明", [], false); expect(api.review).toHaveBeenCalledTimes(1);
+    const retry = state.retryMutation(); const duplicate = state.retryMutation();
+    expect(duplicate).toBe(retry); expect(api.review).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.review).mock.calls[1]!.slice(0, 3)).toEqual(first.slice(0, 3));
+    resolve({ body: fixture.reviewed, status: 200, retryAfterSeconds: null }); await retry;
+    expect(state.canUsePrepared.value).toBe(true);
+  });
+  it("fences late review completion after unmount", async () => {
+    const { state, api, wrapper } = controller(); await flushPromises();
+    let resolve!: (value: PreparationReceipt) => void;
+    vi.mocked(api.review).mockReturnValue(new Promise(accept => { resolve = accept; }));
+    const pending = state.review(evidence, fixture.choices, true);
+    wrapper.unmount();
+    expect(vi.mocked(api.review).mock.calls[0]![3]!.signal!.aborted).toBe(true);
+    resolve({ body: fixture.reviewed, status: 200, retryAfterSeconds: null }); await pending;
+    expect(state.preparation.value!.status).toBe("CANDIDATE");
+  });
+});
+
+describe("readable complete prepared plan review", () => {
+  it("shows complete rules, exact cost, original source evidence and historical chronology", () => {
+    const wrapper = preview();
+    expect(wrapper.text()).toContain("40.105"); expect(wrapper.text()).toContain("500000");
+    expect(wrapper.text()).toContain("2026-08-20T09:00:00+08:00"); expect(wrapper.text()).toContain("4000");
+    expect(wrapper.text()).toContain("New structure linked to prior signal");
+    expect(wrapper.text()).toContain("每股成本40.105元/股");
+    expect(wrapper.find('[data-testid="review-submit"]').attributes("disabled")).toBeDefined();
+  });
+  it("requires explicit whole review and per-field reasons and resets confirmation after revision or source edits", async () => {
+    const wrapper = preview(); await confirmPreview(wrapper);
+    expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeUndefined();
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("review")![0]![0]).toEqual({ evidence, choices: fixture.choices, unknownConfirmed: false });
+    await wrapper.setProps({ preparation: { ...fresh(), revision: fixture.candidate.revision + 1 } });
+    expect((wrapper.get('[data-testid="review-confirmation"]').element as HTMLInputElement).checked).toBe(false);
+    await confirmPreview(wrapper); await wrapper.setProps({ sourceDirty: true });
+    expect(wrapper.text()).toContain("原文已修改");
+    expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeDefined();
+    expect((wrapper.get('[data-testid="review-confirmation"]').element as HTMLInputElement).checked).toBe(false);
+  });
+  it("preserves unknown facts visibly and requires acknowledging their consequences", async () => {
+    const value = fresh(); if (value.candidate?.kind !== "EXTRACTION") throw new Error("fixture variant");
+    value.candidate.openingAccount.cash_fen = null;
+    const wrapper = preview(value); await confirmPreview(wrapper);
+    expect(wrapper.text()).toContain("未知"); expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeDefined();
+    await wrapper.get('[data-testid="review-unknown-confirmation"]').setValue(true);
+    expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeUndefined();
+  });
+  it("renders the exact server-reviewed result and removes further review actions", async () => {
+    const wrapper = preview(); await wrapper.setProps({ preparation: fixture.reviewed, canReview: false, reviewed: true });
+    expect(wrapper.text()).toContain("401050"); expect(wrapper.text()).toContain("已审核并冻结");
+    expect(wrapper.find('[data-testid="review-submit"]').exists()).toBe(false);
   });
 });
