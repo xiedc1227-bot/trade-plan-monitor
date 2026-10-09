@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
 > 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 26 项、待完成活动任务 11 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV35。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 27 项、待完成活动任务 10 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV36。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -286,17 +286,20 @@
 
 ## ML-T24. 从既有运行表单提交一份准备计划
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T15`, `ML-T23`
 - **验收:** 使用一份已审核快照及提取的期初账户，无需原始操作 JSON。结束在服务端默认解析。展示截止、缺失事实及不支持条款，接入既有任务/结果导航，不含多计划选择。
 - **验证:** `npm --prefix web run test -- --run tests/unit/MonitorLoopRunForm.spec.ts`
-- **主要文件:** `web/src/components/backtests/BacktestRunForm.vue`, `web/src/composables/useBacktestRunForm.ts`, `web/src/api/backtests.ts`, `web/src/views/BacktestNewView.vue`, `web/tests/unit/MonitorLoopRunForm.spec.ts`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A10, ML-A12, ML-A14, ML-A15.
+- **主要文件:** `web/src/components/backtests/BacktestRunForm.vue`, `web/src/composables/useBacktestRunForm.ts`, `web/src/api/backtests.ts`, `web/src/views/BacktestNewView.vue`, `web/tests/unit/MonitorLoopRunForm.spec.ts`, `web/tests/unit/BacktestNewView.spec.ts`, `web/tests/unit/BacktestAccessibility.spec.ts`
+- **范围:** M (7 个主要文件，分两片实施); **追溯:** ML-A10, ML-A12, ML-A14, ML-A15.
+- **夹具兼容:** 类型检查要求既有无障碍表单夹具包含新增字段。仅补齐其值，保留全部既有无障碍断言。
+- **实施分片:** ML-T24.1 扩展既有 API/组合函数及聚焦测试（3 个文件）；ML-T24.2 接入既有表单/页面并修正过时的未知结果替换断言（含共享测试共 4 个文件）。提交待确认时冻结原文/运行控件，保留精确重试身份。表单说明服务端结束时间解析；完成后的既有已验证结果边界提供精确截止时间，完整展示由 ML-T25 接入。提交时保留无关页面标题修改。
+- **证据:** MV36：准备提交专项 11 项及相关前端回归共 195 项通过，类型检查通过。待确认结果改写请求的变异检查产生 1 项预期失败，精确字节已恢复。单份冻结计划/账户、服务端默认结束、原请求重试、准备互斥及既有导航已验证；无关页面标题修改保留。ML-C08 完成，下一项 ML-T25，最终批准仍为 ML-T29。
 
 ### ML-C08. 检查点
 
-- [ ] 结果 API 和运行创建兼容新旧契约，既有导出保持兼容，不新增开发。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] 结果 API 和运行创建兼容新旧契约，既有导出保持兼容，不新增开发。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
 ## ML-T25. 在结果中解释计划与执行历史
 

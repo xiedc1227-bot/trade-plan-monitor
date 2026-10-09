@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, type DeepReadonly } from "vue";
 import { isNavigationFailure, useRouter } from "vue-router";
 
-import type { BacktestJobReceipt } from "../api/generated";
+import type { BacktestJobReceipt, PreparationFrozenView } from "../api/generated";
 import type { BacktestApi } from "../api/backtests";
 import type { PlanApi } from "../api/plans";
 import BacktestRunForm from "../components/backtests/BacktestRunForm.vue";
@@ -38,27 +38,36 @@ async function navigateToAcceptedRun(receipt: BacktestJobReceipt): Promise<void>
   if (isNavigationFailure(failure)) throw new Error("accepted run navigation failed");
 }
 
+const preparation = usePlanPreparation({
+  ...(props.preparationApi === undefined ? {} : { api: props.preparationApi }),
+  ...(props.initialPreparationId === undefined ? {} : { initialPreparationId: props.initialPreparationId }),
+});
+const mode = ref<"LEGACY" | "PREPARED">(props.initialPreparationId ? "PREPARED" : "LEGACY");
+const reviewedPrepared = computed<DeepReadonly<PreparationFrozenView> | null>(() => {
+  const value = preparation.preparation.value;
+  if (!preparation.canUsePrepared.value || value?.candidate?.kind !== "FROZEN") return null;
+  return { preparationId: value.preparationId, manifestHash: value.candidate.candidateHash,
+    frozen: value.candidate.frozen };
+});
 const form = useBacktestRunForm({
   ...(props.api === undefined ? {} : { api: props.api }),
   ...(props.createIdempotencyKey === undefined
     ? {}
     : { createIdempotencyKey: props.createIdempotencyKey }),
   onAccepted: navigateToAcceptedRun,
+  prepared: () => reviewedPrepared.value,
+  preparedMode: () => mode.value === "PREPARED",
 });
 const plans = useBacktestPlanVersions({
   ...(props.planApi === undefined ? {} : { api: props.planApi }),
 });
-const preparation = usePlanPreparation({
-  ...(props.preparationApi === undefined ? {} : { api: props.preparationApi }),
-  ...(props.initialPreparationId === undefined ? {} : { initialPreparationId: props.initialPreparationId }),
-});
-const mode = ref<"LEGACY" | "PREPARED">(props.initialPreparationId ? "PREPARED" : "LEGACY");
-const modeLocked = computed(() => preparation.isBusy.value || ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(form.submissionState.value));
+const runLocked = computed(() => ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(form.submissionState.value));
+const modeLocked = computed(() => preparation.isBusy.value || runLocked.value);
 function chooseMode(value: "LEGACY" | "PREPARED"): void {
   if (!modeLocked.value) mode.value = value;
 }
 function reviewPrepared(value: { evidence: string; choices: ReviewChoice[]; unknownConfirmed: boolean }): void {
-  void preparation.review(value.evidence, value.choices, value.unknownConfirmed);
+  if (!runLocked.value) void preparation.review(value.evidence, value.choices, value.unknownConfirmed);
 }
 
 function selectPlanVersion(versionId: string): void {
@@ -98,21 +107,23 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-if="mode === 'PREPARED'" class="backtest-new-view__preparation" aria-label="单份计划准备">
-      <PlanPreparationSourceForm :source="preparation.draft.value" :disabled="!preparation.canSubmitSource.value"
+      <PlanPreparationSourceForm :source="preparation.draft.value" :disabled="runLocked || !preparation.canSubmitSource.value"
         @update:source="preparation.updateSource" @submit="preparation.submitSource" />
       <PlanPreparationProgress :preparation="preparation.preparation.value" :request-state="preparation.requestState.value"
-        :mutation-state="preparation.mutationState.value" :can-extract="preparation.canExtract.value"
-        :can-cancel="preparation.canCancel.value" :can-recover="preparation.canRecover.value"
-        :can-retry-mutation="preparation.canRetryMutation.value" :error-message="preparation.errorMessage.value"
+        :mutation-state="preparation.mutationState.value" :can-extract="!runLocked && preparation.canExtract.value"
+        :can-cancel="!runLocked && preparation.canCancel.value" :can-recover="!runLocked && preparation.canRecover.value"
+        :can-retry-mutation="!runLocked && preparation.canRetryMutation.value" :error-message="preparation.errorMessage.value"
         @extract="preparation.extract" @cancel="preparation.cancel" @recover="preparation.recover"
         @retry-mutation="preparation.retryMutation" @refresh="preparation.refresh" />
       <PlanPreparationReview v-if="preparation.preparation.value?.candidate" :preparation="preparation.preparation.value"
-        :can-review="preparation.canReview.value" :source-dirty="preparation.sourceDirty.value"
+        :can-review="!runLocked && preparation.canReview.value" :source-dirty="preparation.sourceDirty.value"
         :reviewed="preparation.canUsePrepared.value" @review="reviewPrepared" />
     </section>
 
     <BacktestRunForm
-      v-if="mode === 'LEGACY'"
+      v-if="mode === 'LEGACY' || reviewedPrepared !== null"
+      :prepared-mode="mode === 'PREPARED'"
+      :prepared="reviewedPrepared"
       :draft="form.draft.value"
       :error-revision="form.errorRevision.value"
       :errors="form.errors.value"

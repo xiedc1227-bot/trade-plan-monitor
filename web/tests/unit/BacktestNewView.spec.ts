@@ -516,7 +516,7 @@ describe("BacktestNewView", () => {
     },
   );
 
-  it("creates a new semantic intent after an uncertain draft changes", async () => {
+  it("keeps an uncertain intent frozen until its original request is retried", async () => {
     const submitRun = vi
       .fn<BacktestApi["submitRun"]>()
       .mockRejectedValueOnce(
@@ -532,12 +532,17 @@ describe("BacktestNewView", () => {
     await fillValidBase(wrapper);
     await submit(wrapper);
 
+    expect(wrapper.get("#initial-cash-fen").attributes("disabled")).toBeDefined();
     await wrapper.get<HTMLInputElement>("#initial-cash-fen").setValue("10000100");
     await submit(wrapper);
+    expect(submitRun).toHaveBeenCalledTimes(1);
+    await wrapper.get('[data-testid="retry-run-submission"]').trigger("click");
+    await flushPromises();
     expect(submitRun.mock.calls[0]?.[1]).toBe("old-run-intent");
-    expect(submitRun.mock.calls[1]?.[1]).toBe("new-run-intent");
-    expect(submitRun.mock.calls[1]?.[0].initialCashFen).toBe(10_000_100);
-    expect(createIdempotencyKey).toHaveBeenCalledTimes(2);
+    expect(submitRun.mock.calls[1]?.[1]).toBe("old-run-intent");
+    expect(submitRun.mock.calls[1]?.[0]).toEqual(submitRun.mock.calls[0]?.[0]);
+    expect(submitRun.mock.calls[1]?.[0]).toMatchObject({ initialCashFen: 10_000_000 });
+    expect(createIdempotencyKey).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 

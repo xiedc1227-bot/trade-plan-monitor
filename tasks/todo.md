@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 26 completed, 11 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV35.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 27 completed, 10 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV36.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -286,17 +286,20 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T24. Submit one prepared plan from the existing run form
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T15`, `ML-T23`
 - **Acceptance:** Use one reviewed snapshot and its extracted opening account without raw operations JSON. End defaults server-side. Show resolved cutoff, missing facts and unsupported clauses, then existing job/result navigation. No multi-plan selectors.
 - **Verification:** `npm --prefix web run test -- --run tests/unit/MonitorLoopRunForm.spec.ts`
-- **Primary files:** `web/src/components/backtests/BacktestRunForm.vue`, `web/src/composables/useBacktestRunForm.ts`, `web/src/api/backtests.ts`, `web/src/views/BacktestNewView.vue`, `web/tests/unit/MonitorLoopRunForm.spec.ts`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A10, ML-A12, ML-A14, ML-A15.
+- **Primary files:** `web/src/components/backtests/BacktestRunForm.vue`, `web/src/composables/useBacktestRunForm.ts`, `web/src/api/backtests.ts`, `web/src/views/BacktestNewView.vue`, `web/tests/unit/MonitorLoopRunForm.spec.ts`, `web/tests/unit/BacktestNewView.spec.ts`, `web/tests/unit/BacktestAccessibility.spec.ts`
+- **Scope:** M (7 primary files; two implementation slices); **Trace:** ML-A10, ML-A12, ML-A14, ML-A15.
+- **Fixture compatibility:** Type-check requires the existing accessibility draft fixture to include the new fields. Update its values only; retain every existing accessibility assertion.
+- **Implementation slices:** ML-T24.1 extends the existing API/composable and focused tests (3 files); ML-T24.2 connects the existing form/page and updates the obsolete unknown-outcome replacement assertion (4 files including shared tests). A pending submission freezes source/run controls and preserves its exact retry identity. The form explains server end resolution; the existing verified result boundary supplies the exact cutoff after completion, with its full presentation in ML-T25. Preserve unrelated page-caption edits when committing.
+- **Evidence:** MV36: 11 prepared submission checks and 195 frontend regressions in total pass; type-check passes. Removing the unknown-outcome edit guard produces one expected failure; exact bytes restored. One frozen plan/account, server-default end, exact retry, preparation exclusion and existing navigation are verified; unrelated caption edits preserved. ML-C08 completes; ML-T25 follows, final approval remains ML-T29.
 
 ### ML-C08. Checkpoint
 
-- [ ] Result APIs and run creation work with old/new contracts; existing exports remain compatible without new development.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Result APIs and run creation work with old/new contracts; existing exports remain compatible without new development.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
 
 ## ML-T25. Explain plan and execution history in results
 

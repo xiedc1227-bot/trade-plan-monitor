@@ -26,6 +26,11 @@ const EMPTY_PLAN_PAGE: PlanVersionPage = {
 
 function draft(): BacktestRunDraft {
   return Object.freeze({
+    endDate: "",
+    responseMode: "FOLLOW_REMINDERS",
+    responseDelaySeconds: "0",
+    buySlippageFen: "0",
+    sellSlippageFen: "0",
     researchInputJson: "",
     buySlippageBps: "1",
     commissionRate: "0.0003",

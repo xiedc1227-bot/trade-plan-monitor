@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { nextTick, useTemplateRef, watch } from "vue";
+import { computed, nextTick, useTemplateRef, watch } from "vue";
 
 import type { PlanVersionPage, PlanVersionSummary } from "../../api/generated";
+import { formatFenAsYuan } from "../../api/backtestValues";
+import { formatDisplayDateTime } from "../../formatters/dateTime";
 import type { BacktestPlanVersionState } from "../../composables/useBacktestPlanVersions";
 import type {
   BacktestInitialLotDraftField,
   BacktestRunDraft,
   BacktestRunDraftField,
+  RunDraftField,
+  PreparedRunSnapshot,
   BacktestRunFormErrors,
   BacktestRunSubmissionState,
 } from "../../composables/useBacktestRunForm";
@@ -14,6 +18,8 @@ import BacktestInitialLotsEditor from "./BacktestInitialLotsEditor.vue";
 import BacktestPlanVersionSelector from "./BacktestPlanVersionSelector.vue";
 
 interface Props {
+  preparedMode?: boolean;
+  prepared?: PreparedRunSnapshot | null;
   draft: BacktestRunDraft;
   errorRevision: number;
   errors: BacktestRunFormErrors;
@@ -32,11 +38,11 @@ interface Emits {
   retryPlanVersions: [];
   selectPlanVersion: [versionId: string];
   submit: [];
-  updateField: [field: BacktestRunDraftField, value: string];
+  updateField: [field: RunDraftField, value: string];
   updateLot: [draftId: string, field: BacktestInitialLotDraftField, value: string];
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), { preparedMode: false, prepared: null });
 const emit = defineEmits<Emits>();
 const errorSummary = useTemplateRef<HTMLDivElement>("errorSummary");
 
@@ -57,11 +63,20 @@ const fieldDefinitions = [
   readonly label: string;
 }[];
 
+const preparedFieldDefinitions = [
+  ...fieldDefinitions.slice(2, 6),
+  { id: "buy-slippage-fen", field: "buySlippageFen", label: "买入滑点（每股分）", help: "非负整数分", inputmode: "numeric" },
+  { id: "sell-slippage-fen", field: "sellSlippageFen", label: "卖出滑点（每股分）", help: "非负整数分", inputmode: "numeric" },
+  { id: "response-delay-seconds", field: "responseDelaySeconds", label: "响应延迟（秒）", help: "提醒之后的最短等待时间，0 表示不额外等待", inputmode: "numeric" },
+  { id: "end-date", field: "endDate", label: "结束日期（可选）", help: "留空由服务端按提交时的上海日期确定，并冻结当时可用证据；精确截止时间在完成后的结果中展示", inputmode: "text" },
+] as const;
+const visibleFieldDefinitions = computed(() => props.preparedMode ? preparedFieldDefinitions : fieldDefinitions);
 const editingDisabled = () =>
-  props.submissionState === "SUBMITTING" || props.submissionState === "ACCEPTED";
+  ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(props.submissionState);
 const submissionDisabled = () =>
   props.submissionState === "SUBMITTING" ||
   props.submissionState === "UNCERTAIN" ||
+  props.preparedMode && props.prepared === null ||
   props.submissionState === "ACCEPTED";
 
 watch(
@@ -79,7 +94,7 @@ function inputValue(event: Event): string {
 
 function errorTargetId(field: string): string {
   if (field === "planVersionId") return "plan-version-id";
-  const definition = fieldDefinitions.find((candidate) => candidate.field === field);
+  const definition = [...fieldDefinitions, ...preparedFieldDefinitions].find((candidate) => candidate.field === field);
   if (definition !== undefined) return definition.id;
   if (field === "eventRiskAssumption") return "event-risk-assumption";
   if (field === "researchInputJson") return "research-input-json";
@@ -139,6 +154,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
 
     <form class="run-form__grid" @submit.prevent="emit('submit')">
       <BacktestPlanVersionSelector
+        v-if="!preparedMode"
         :disabled="editingDisabled()"
         :error="planVersionError"
         :field-error="errors.planVersionId"
@@ -152,12 +168,27 @@ function focusErrorField(field: string, event: MouseEvent): void {
         @select="emit('selectPlanVersion', $event)"
       />
 
-      <div v-for="definition in fieldDefinitions" :key="definition.field" class="run-form__field">
+      <div v-else-if="prepared" class="run-form__field" data-testid="prepared-run-account">
+        <h3>一份已审核计划 · {{ prepared.frozen.version.snapshot.symbol }}</h3>
+        <p>初始账户快照：{{ formatDisplayDateTime(prepared.frozen.account.snapshot_at) }}</p>
+        <p>现金：{{ prepared.frozen.account.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(prepared.frozen.account.cash.balance_fen))} 元` : '未知；不会推断为零' }}</p>
+        <p>库存：{{ prepared.frozen.account.inventory_known ? '已知' : '未知；不会推断为空仓' }}</p>
+        <ul>
+          <li v-for="lot in prepared.frozen.account.lots" :key="lot.lot_key">
+            {{ lot.bucket }} · {{ lot.quantity }} 股；总成本 {{ lot.cost_basis_fen === null ? '未知' : `${formatFenAsYuan(String(lot.cost_basis_fen))} 元` }}；可卖 {{ lot.sellable_quantity ?? '未知' }} 股
+          </li>
+        </ul>
+        <p>计划和初始账户由已审核原文冻结；此处只设置回放响应及费用。</p>
+      </div>
+      <p v-else role="status">请先完成当前计划的审核，之后才能提交回测。</p>
+
+      <div v-for="definition in visibleFieldDefinitions" :key="definition.field" class="run-form__field">
         <label :for="definition.id">
           {{ definition.label }}
         </label>
         <input
           :id="definition.id"
+          :type="definition.field === 'endDate' ? 'date' : 'text'"
           :value="draft[definition.field]"
           :disabled="editingDisabled()"
           :aria-invalid="errors[definition.field] === undefined ? undefined : 'true'"
@@ -172,7 +203,15 @@ function focusErrorField(field: string, event: MouseEvent): void {
         </p>
       </div>
 
-      <div class="run-form__field">
+      <div v-if="preparedMode" class="run-form__field">
+        <label for="response-mode">回放响应</label>
+        <select id="response-mode" :value="draft.responseMode" :disabled="editingDisabled()"
+          @change="emit('updateField', 'responseMode', inputValue($event))">
+          <option value="FOLLOW_REMINDERS">跟随有效提醒进行完整数量模拟</option>
+          <option value="OBSERVE_ONLY">仅观察提醒，不模拟成交</option>
+        </select>
+      </div>
+      <div v-else class="run-form__field">
         <label for="event-risk-assumption">
           事件风险假设
         </label>
@@ -189,7 +228,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
         <p id="event-risk-assumption-help" class="run-form__help">显式选择生成契约枚举</p>
       </div>
 
-      <div class="run-form__field">
+      <div v-if="!preparedMode" class="run-form__field">
         <label for="research-input-json">统一计划研究输入 JSON</label>
         <textarea id="research-input-json" :value="draft.researchInputJson" rows="10"
           :disabled="editingDisabled()" aria-describedby="research-input-help"
@@ -199,6 +238,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
         <p v-if="errors.researchInputJson" role="alert">{{ errors.researchInputJson }}</p>
       </div>
       <BacktestInitialLotsEditor
+        v-if="!preparedMode"
         :disabled="editingDisabled()"
         :errors="errors"
         :lots="draft.initialLots"

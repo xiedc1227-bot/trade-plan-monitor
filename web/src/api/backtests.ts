@@ -32,6 +32,7 @@ import type {
   BacktestMetricsView,
   BacktestResultAvailabilityView,
   BacktestRunCommand,
+  PreparedBacktestRunCommand,
   BacktestRunCoverageView,
   BacktestRunFiltersView,
   BacktestRunJobResultView,
@@ -152,7 +153,7 @@ export interface BacktestApi {
     options?: BacktestRequestOptions,
   ): Promise<BacktestMutationResponse<BacktestRunView>>;
   submitRun(
-    command: BacktestRunCommand,
+    command: BacktestRunCommand | PreparedBacktestRunCommand,
     idempotencyKey: string,
     options?: BacktestRequestOptions,
   ): Promise<BacktestMutationResponse<BacktestJobReceipt>>;
@@ -1139,7 +1140,7 @@ export function createBacktestApi(
     },
 
     async submitRun(
-      command: BacktestRunCommand,
+      command: BacktestRunCommand | PreparedBacktestRunCommand,
       idempotencyKey: string,
       options?: BacktestRequestOptions,
     ) {
@@ -1155,7 +1156,7 @@ export function createBacktestApi(
             body,
             status,
             headers,
-            normalizedCommand.datasetHash,
+            "datasetHash" in normalizedCommand ? normalizedCommand.datasetHash : undefined,
           ),
       );
     },
@@ -1246,10 +1247,12 @@ function validateRunSubmission(
   body: unknown,
   status: number,
   headers: Headers,
-  expectedDatasetHash: string,
+  expectedDatasetHash: string | undefined,
 ): BacktestMutationResponse<BacktestJobReceipt> {
   const response = validateSubmission(body, status, headers, "BACKTEST_RUN");
-  if (response.body.datasetHash !== expectedDatasetHash) throw invalidResponse(status);
+  if (expectedDatasetHash !== undefined && response.body.datasetHash !== expectedDatasetHash) {
+    throw invalidResponse(status);
+  }
   return response;
 }
 
@@ -2948,7 +2951,8 @@ function marketIndexSeriesSearch(query: BacktestMarketIndexSeriesQuery): URLSear
   return search;
 }
 
-function normalizeRunCommand(value: unknown): BacktestRunCommand {
+function normalizeRunCommand(value: unknown): BacktestRunCommand | PreparedBacktestRunCommand {
+  if (isRecord(value) && "preparationId" in value) return normalizePreparedRunCommand(value);
   if (
     !isRecord(value) ||
     !hasExactKeys(value, value.researchInput === undefined ? runCommandKeys.filter((key) => key !== "researchInput") : runCommandKeys) ||
@@ -2986,6 +2990,38 @@ function normalizeRunCommand(value: unknown): BacktestRunCommand {
     initialCashFen: value.initialCashFen,
     initialLots,
     planVersionId,
+  };
+}
+
+function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBacktestRunCommand {
+  const keys = ["preparationId", "manifestHash", "response", "costs"];
+  if (value.endDate !== undefined) keys.push("endDate");
+  const response = value.response;
+  const costs = value.costs;
+  const responseDelaySeconds = isRecord(response) ? response.responseDelaySeconds ?? 0 : null;
+  if (!hasExactKeys(value, keys) || !isJobId(value.preparationId) || !isSha256(value.manifestHash) ||
+      value.endDate !== undefined && !isCalendarDate(value.endDate) ||
+      !isRecord(response) || !hasExactKeys(response, response.responseDelaySeconds === undefined
+        ? ["mode"] : ["mode", "responseDelaySeconds"]) ||
+      !(response.mode === "FOLLOW_REMINDERS" || response.mode === "OBSERVE_ONLY") ||
+      !isNonnegativeSafeInteger(responseDelaySeconds) ||
+      !isRecord(costs) || !hasExactKeys(costs, ["commissionRate", "minimumCommissionFen",
+        "stampDutyRate", "transferFeeRate", "buySlippageFen", "sellSlippageFen"]) ||
+      !isDecimalBetween(costs.commissionRate, "0", "1") ||
+      !isDecimalBetween(costs.stampDutyRate, "0", "1") ||
+      !isDecimalBetween(costs.transferFeeRate, "0", "1") ||
+      !isNonnegativeSafeInteger(costs.minimumCommissionFen) ||
+      !isNonnegativeSafeInteger(costs.buySlippageFen) || !isNonnegativeSafeInteger(costs.sellSlippageFen)) {
+    throw invalidRequest();
+  }
+  return {
+    preparationId: value.preparationId,
+    manifestHash: value.manifestHash,
+    response: { mode: response.mode, responseDelaySeconds },
+    costs: { commissionRate: costs.commissionRate, minimumCommissionFen: costs.minimumCommissionFen,
+      stampDutyRate: costs.stampDutyRate, transferFeeRate: costs.transferFeeRate,
+      buySlippageFen: costs.buySlippageFen, sellSlippageFen: costs.sellSlippageFen },
+    ...(value.endDate === undefined ? {} : { endDate: value.endDate }),
   };
 }
 

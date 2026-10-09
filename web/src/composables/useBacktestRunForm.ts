@@ -1,10 +1,12 @@
-import { onBeforeUnmount, onMounted, readonly, shallowRef, watch } from "vue";
+import { onBeforeUnmount, onMounted, readonly, shallowRef, watch, type DeepReadonly } from "vue";
 
 import type {
   BacktestInitialLotInput,
   BacktestJobReceipt,
   BacktestReferenceMarketCoverageView,
   BacktestRunCommand,
+  PreparedBacktestRunCommand,
+  PreparationFrozenView,
 } from "../api/generated";
 import { isResearchInput } from "../api/researchValues";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
@@ -43,6 +45,8 @@ export type BacktestRunDraftField =
   | "sellSlippageBps"
   | "stampDutyRate"
   | "transferFeeRate";
+type PreparedRunDraftField = "endDate" | "responseMode" | "responseDelaySeconds" | "buySlippageFen" | "sellSlippageFen";
+export type RunDraftField = BacktestRunDraftField | PreparedRunDraftField;
 
 export type BacktestInitialLotDraftField =
   | "acquiredTradeDate"
@@ -61,6 +65,11 @@ export interface BacktestInitialLotDraft {
 }
 
 export interface BacktestRunDraft {
+  readonly endDate: string;
+  readonly responseMode: "FOLLOW_REMINDERS" | "OBSERVE_ONLY";
+  readonly responseDelaySeconds: string;
+  readonly buySlippageFen: string;
+  readonly sellSlippageFen: string;
   readonly researchInputJson: string;
   readonly buySlippageBps: string;
   readonly commissionRate: string;
@@ -76,15 +85,18 @@ export interface BacktestRunDraft {
 }
 
 export type BacktestRunFormErrors = Readonly<Record<string, string>>;
+export type PreparedRunSnapshot = PreparationFrozenView | DeepReadonly<PreparationFrozenView>;
 
 export interface UseBacktestRunFormOptions {
+  readonly prepared?: () => PreparedRunSnapshot | null;
+  readonly preparedMode?: () => boolean;
   readonly api?: BacktestApi;
   readonly createIdempotencyKey?: () => string;
   readonly onAccepted: (receipt: BacktestJobReceipt) => Promise<unknown> | unknown;
 }
 
 interface SubmissionIntent {
-  readonly command: BacktestRunCommand;
+  readonly command: BacktestRunCommand | PreparedBacktestRunCommand;
   readonly key: string;
 }
 
@@ -100,6 +112,11 @@ function defaultIdempotencyKey(): string {
 
 function emptyDraft(): BacktestRunDraft {
   return Object.freeze({
+    endDate: "",
+    responseMode: "FOLLOW_REMINDERS",
+    responseDelaySeconds: "0",
+    buySlippageFen: "0",
+    sellSlippageFen: "0",
     researchInputJson: "",
     buySlippageBps: "",
     commissionRate: "",
@@ -221,9 +238,10 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     submissionErrorMessage.value = null;
   }
 
-  function updateField(field: BacktestRunDraftField, value: string): void {
+  function updateField(field: RunDraftField, value: string): void {
     if (
       submissionState.value === "SUBMITTING" ||
+      submissionState.value === "UNCERTAIN" ||
       submissionState.value === "ACCEPTED"
     ) {
       return;
@@ -233,7 +251,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
         ? value === "MANUAL_EVENT_RISK"
           ? "MANUAL_EVENT_RISK"
           : "NO_EVENT_RISK"
-        : value;
+        : field === "responseMode" ? value === "OBSERVE_ONLY" ? "OBSERVE_ONLY" : "FOLLOW_REMINDERS" : value;
     if (draft.value[field] === normalizedValue) return;
     draft.value = Object.freeze({ ...draft.value, [field]: normalizedValue });
     clearErrors();
@@ -243,6 +261,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   function addLot(): void {
     if (
       submissionState.value === "SUBMITTING" ||
+      submissionState.value === "UNCERTAIN" ||
       submissionState.value === "ACCEPTED" ||
       draft.value.initialLots.length >= MAX_INITIAL_LOTS
     ) {
@@ -268,6 +287,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   function removeLot(draftId: string): void {
     if (
       submissionState.value === "SUBMITTING" ||
+      submissionState.value === "UNCERTAIN" ||
       submissionState.value === "ACCEPTED"
     ) {
       return;
@@ -286,6 +306,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   ): void {
     if (
       submissionState.value === "SUBMITTING" ||
+      submissionState.value === "UNCERTAIN" ||
       submissionState.value === "ACCEPTED"
     ) {
       return;
@@ -431,6 +452,41 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     });
   }
 
+  function validatePreparedDraft(): PreparedBacktestRunCommand | null {
+    const prepared = options.prepared?.() ?? null;
+    const current = draft.value;
+    const nextErrors: Record<string, string> = {};
+    if (prepared === null) nextErrors.preparation = "请先完成当前原文的审核，使用已冻结计划";
+    for (const field of ["commissionRate", "stampDutyRate", "transferFeeRate"] as const) {
+      if (!isRateText(current[field])) nextErrors[field] = "请输入 0 到 1 的精确费率";
+    }
+    const minimumCommissionFen = safeIntegerDraft(current.minimumCommissionFen, false);
+    const buySlippageFen = safeIntegerDraft(current.buySlippageFen, false);
+    const sellSlippageFen = safeIntegerDraft(current.sellSlippageFen, false);
+    const responseDelaySeconds = safeIntegerDraft(current.responseDelaySeconds, false);
+    for (const [field, value] of Object.entries({ minimumCommissionFen, buySlippageFen,
+      sellSlippageFen, responseDelaySeconds })) {
+      if (value === null) nextErrors[field] = "请输入范围内的非负整数";
+    }
+    if (current.endDate !== "" && !isCalendarDate(current.endDate)) {
+      nextErrors.endDate = "请输入有效的结束日期，或留空使用服务端默认值";
+    }
+    errors.value = Object.freeze(nextErrors);
+    if (Object.keys(nextErrors).length || prepared === null || minimumCommissionFen === null ||
+        buySlippageFen === null || sellSlippageFen === null || responseDelaySeconds === null) {
+      errorRevision.value += 1;
+      return null;
+    }
+    return deepFreeze({
+      preparationId: prepared.preparationId, manifestHash: prepared.manifestHash,
+      response: { mode: current.responseMode, responseDelaySeconds },
+      costs: { commissionRate: current.commissionRate, minimumCommissionFen,
+        stampDutyRate: current.stampDutyRate, transferFeeRate: current.transferFeeRate,
+        buySlippageFen, sellSlippageFen },
+      ...(current.endDate === "" ? {} : { endDate: current.endDate }),
+    });
+  }
+
   async function performSubmission(intent: SubmissionIntent): Promise<void> {
     const controller = new AbortController();
     submissionController = controller;
@@ -487,7 +543,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     ) {
       return Promise.resolve();
     }
-    const command = validateDraft();
+    const command = options.preparedMode?.() ? validatePreparedDraft() : validateDraft();
     if (command === null) return Promise.resolve();
     const intent: SubmissionIntent = Object.freeze({
       command,
