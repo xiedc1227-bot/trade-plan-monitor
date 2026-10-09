@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-08. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-08: ML-T06/ML-T09 are cancelled; 17 completed, 20 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV26.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 18 completed, 19 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV27.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -168,19 +168,21 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T15. Preview and review one prepared plan
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T14`
 - **Acceptance:** Show initial account, complete rules, source evidence, historical start/availability and unresolved clauses. Proceed only with the exact reviewed revision; source edits visibly invalidate approval. No rule diffs, successor calendar or descendants.
 - **Verification:** `npm --prefix web run test -- --run tests/unit/PlanPreparationReview.spec.ts`
 - **Primary files:** `web/src/api/preparations.ts`, `web/src/api/preparationReview.ts`, `web/src/components/backtests/PlanPreparationReview.vue`, `web/src/views/BacktestNewView.vue`, `web/src/composables/usePlanPreparation.ts`, `web/tests/unit/PlanPreparationReview.spec.ts`, `web/tests/unit/PlanPreparation.spec.ts`, `web/tests/fixtures/plan-preparation-review.json`
-- **Scope:** Three increments (5 / 3 / 2 primary files; 8 unique including shared tests); **Trace:** ML-A10, ML-A12, ML-A17, ML-A18. The first increment includes the real backend-generated candidate/frozen fixture and extends the existing API test double for the required review command.
+- **Scope:** Four increments (5 / 3 / 2 / 5 primary files; 8 unique including shared tests); **Trace:** ML-A10, ML-A12, ML-A17, ML-A18. The first increment includes the real backend-generated candidate/frozen fixture and extends the existing API test double for the required review command. Real HTTP verification exposed the distinct `PreparationFrozenView` review receipt; the fourth increment corrects transport/controller and test doubles before final verification, without changing server contracts.
 
 - **Implementation boundary:** First add review transport and bounded candidate/source/account shape checks for readonly previews; then explicit controller review and a readable complete preview; finally compose source/progress/review in the existing creation page after an explicit mode choice. Unsaved evidence, unfinished work and uncertain mutations block review and mode switching; confirmation clears when source/candidate/review revisions change. Missing facts remain visible; incomplete required chronology/lot attribution and unresolved rules block freezing, while preservable unknown account facts require explicit acknowledgement. Never invent prices/times/cash. Submit explicit review of current extracted contents only; source corrections require re-extraction and complex semantics remain server-owned. New loop submission remains ML-T24. No backend, generated contract or approval-gate change.
 
+- **Evidence:** MV27: 27 review/page cases and 96 related frontend cases pass; all frontend 884 tests / 59 files, type checking, build, 124 preparation API/review/contract cases and both generated profiles pass. Real loopback HTTP with fake AI verifies upload, extraction, per-field confirmation, freezing and source-edit invalidation; four widths have no overflow, axe violations or browser errors. ML-C05 is complete; ML-T16 is next and API approval remains pending ML-T29.
+
 ### ML-C05. Checkpoint
 
-- [ ] Upload, progress and review UI uses generated contracts.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Upload, progress and review UI uses generated contracts.
+- [x] Record executed evidence in MV27; resolve failures before dependent work without lowering the bar.
 
 ## ML-T16. Freeze evidence through an explicit cutoff
 

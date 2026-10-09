@@ -1,8 +1,8 @@
 # 验证记录：监控闭环回测
 
-英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-08，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
+英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-09，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18–MV26：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14 与 ML-C01/ML-C02/ML-C03/ML-C04 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV26 通过隔离真实 Chrome 界面验证单原文输入/进度组件及请求/轮询保护。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV25 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV27：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15 与 ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV26 通过隔离真实 Chrome 界面验证单原文输入/进度组件及请求/轮询保护。MV27 通过真实挂载 HTTP 配假 AI 验证精确准备审核、冻结凭据及创建页面。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV26 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。数据集/回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -522,3 +522,28 @@ ML-T13 于 2026-10-08 继续 ML-T14 前推送至 GitHub main，提交为 `c31904
 首次后端检查采用无法访问的 Windows 系统 pytest 临时目录（70 项 setup 错误）；改用以上明确的工作区 basetemp 重跑后全部消除，不改测试。临时浏览器夹具起初将模拟 HTTP 处理器注册在 Vite fallback 之后，导致 404；提前注册后最终流程通过。这两项均是验证环境修正。两项未改动批准失败为 `test_openapi_change_requires_bilingual_spec_approval` 和 `test_openapi_contains_only_approved_paths_and_public_error_schemas`，已在 MV25 记录并待 ML-T29。不改变任何断言/skip/已批准摘要。保留既有 Starlette/httpx 弃用提示。
 
 ML-T14 已完成，下一项为 ML-T15。自审覆盖不可变意图及权威修订处理、未保存原文、原文/文件竞态、单个未结束工作、实际排空、生命周期归属、有界轮询、安全渲染及无障碍。不新增批次/队列/通用锁、付费/供应商/行情调用、生产状态修改、通知或部署。最终 API 批准及整体验收仍待完成。
+
+## MV27. 精确准备审核与创建页面
+
+2026-10-09 开始 ML-T15 前，ML-T14 已推送 GitHub main 的 `9d08083`。ML-T15 使用四个限定切片（5 / 3 / 2 / 5 个主要文件，含共用测试及后端生成样例共八个不同文件）。初始传输/预览和控制器/组件提交为 `f887b7c` 与 `efc6df0`；页面组合和真实 HTTP 凭据修正在最终验证后共同提交。配套更新中英文方案/清单/证据和浏览器产物，已有无关运行时/概览重试及盛新文件均排除。
+
+可读预览保留全部完整规则、原始账户事实/片段、精确 40.105 元每股成本、原文编写/可用/生效日期、全部条款和待解决项。已知但缺少绑定的值要求逐项明确说明；必要技术参数、时间、持仓归属缺失及未解决/不支持条款阻止审核。可保留的未知账户事实保持未知并单独确认。零现金与未知区分，不补造价格、时间、持仓或成本。审核只提交当前原始内容和明确人工补充，不提供操作 JSON 或启用生产计划。
+
+审核使用生成的 `PreparationReviewInput` 和实际 `PreparationFrozenView` 凭据，精确绑定准备/原文/候选修订及摘要。确认凭据后再有界读取最新状态；失败/旧读取不能解锁编辑、再次审核或可用权限，直至观察到审核后的最低修订。不确定操作保留同一不可变命令/请求键。未结束工作、取消等待及 UNKNOWN 保持互斥。确认随原文/候选/审核修订或本地原文变化清除，原文编辑即时使冻结权限失效。迟到完成不能更新已卸载状态。形状校验有界，每次校验仅展开一次原文 Unicode 码点；语义批准仍归后端。
+
+既有创建页面默认显示旧回测表单，明确选择方式后组合单份原文、进度和审核；明确指定准备 ID 可恢复只读/当前状态。仅打开页面不获取准备资源。未结束/不确定准备或旧运行提交阻止切换方式。新闭环回测提交留在 ML-T24，本项不代表完整运行验收。
+
+| 检查 | 已执行命令/证据 | 结果 |
+|---|---|---|
+| 本项及相关 UI | `npm --prefix web run test -- --run tests/unit/PlanPreparationReview.spec.ts tests/unit/PlanPreparation.spec.ts tests/unit/BacktestNewView.spec.ts` | 96 项通过，其中本项 27 项，3.29 秒。覆盖真实候选/冻结样例、旧凭据、未知事实、精确重试、最低修订下的失败/旧读取、原文失效、卸载及旧表单。 |
+| 全部前端 | `npm --prefix web run test -- --run --maxWorkers=4`; `npm --prefix web run type-check`; `npm --prefix web run build` | 884 项 / 59 文件通过，22.59 秒；类型检查与构建 PASS。 |
+| 准备服务端回归 | `.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py tests/integration/test_plan_preparation_review.py tests/integration/test_plan_preparation_contract.py -q -m 'not live' --basetemp=.pytest_cache/ml-t15-api-review --tb=short` | 124 项通过，42.69 秒，一项已有 Starlette/httpx 弃用提示。 |
+| 生成契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --monitor-contract-version 2 --check` | 权威 v2 与兼容 v1 PASS，快照/类型未变化。 |
+| 真实挂载 HTTP 与浏览器 | [机器可读流程](evidence/2026-10-09-plan-preparation-review/browser-summary.json) | 真实 `BacktestNewView`、生产准备路由、临时存储及假 AI，仅旧计划查询为替身。一次新提取、明确逐项审核/冻结、精确 401050 分成本及编辑/保存失效 PASS。320 / 768 / 1024 / 1440 宽度：溢出 0，axe 违规 0；控制台/页面错误和外部请求 0。用键盘 Space 确认已标注审核复选框。 |
+| 可视证据 | [320 宽候选](evidence/2026-10-09-plan-preparation-review/candidate-320.png)、[1440 宽候选](evidence/2026-10-09-plan-preparation-review/candidate-1440.png)、[已审核](evidence/2026-10-09-plan-preparation-review/reviewed-1440.png)、[编辑原文](evidence/2026-10-09-plan-preparation-review/source-edited-1440.png) | 记录完整规则/账户证据的响应式显示、完整审核及即时原文失效。 |
+| 变异审查 | 移除可用准备权限中的原文脏值保护，运行原文编辑用例，再恢复精确字节。 | 变异后 1 项失败，其余筛除；验证精确恢复，最终 96 项门禁通过。 |
+| 文档/工作区 | 中英文标题/ID/字面量、历史 todo 尾部和 MV01–MV26 保留、无关文件摘要及 `git diff --check` | PASS；完成 18 项、待完成 19 项、37 项活动 / 保留 39 个 ID、13 个检查点，ML-C05 完成。 |
+
+首次真实浏览器审核暴露前端传输格式错误：接口返回冻结凭据，与其他命令的进度投影不同。后端已审核成功，但客户端对未识别响应保持不确定状态。测试改为实际生成凭据后，在修正传输/控制器前失败；最终真实挂载流程通过。首次前后端并行验证发生两个未改动的 5 秒惰性页面测试超时（880 项通过、2 项超时）；单独限制四个 worker 后完整前端通过，未提高超时或弱化断言。临时浏览器中的日期填入格式也已修正。Chrome DevTools MCP 不可用，使用已安装 Playwright/Chrome 验证；临时服务和界面已关闭并移除。
+
+API 批准仍待 ML-T29。此前两项批准门禁与已批准规格未改变，本项 124 项准备门禁未重复执行它们。已批准摘要：`8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`；未变化候选 v1：`1fd4eea69dbe1827c35ca2f19a0261296be5e447f293d7a2e52c4fc8a5c9e3a4`；v2：`7e5f0a6ebec6ce3cefd440af7d9619e9332e22dd081f3f667b40a7c08473a367`。不改后端/契约/批准，不调用真实或付费服务，不写生产状态、不通知或部署。ML-T15/ML-C05 完成，下一项为 ML-T16。

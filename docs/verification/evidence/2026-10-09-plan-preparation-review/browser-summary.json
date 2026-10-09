@@ -1,0 +1,101 @@
+{
+  "scope": "Real BacktestNewView and mounted production preparation HTTP with temporary stores and fake AI; legacy plan lookup stubbed.",
+  "widths": [
+    {
+      "width": 320,
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "width": 768,
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "width": 1024,
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "width": 1440,
+      "overflow": false,
+      "violations": []
+    }
+  ],
+  "errors": [],
+  "external": [],
+  "requests": [
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations",
+      "key": "5f62a50e-d0bb-4ced-8d9c-d42b35326c45"
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4/extractions",
+      "key": "41df3057-5c6e-4b50-834d-3e2a549a4bfc"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4",
+      "key": null
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4/reviews",
+      "key": "93776fe5-9071-4f50-8178-35f5c9daa49e"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4",
+      "key": null
+    },
+    {
+      "method": "PUT",
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4/source",
+      "key": "3ae1d8f9-04e3-4ee3-a6ea-4d7a399c1bdd"
+    }
+  ],
+  "responses": [
+    {
+      "status": 201,
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations",
+      "cache": "no-store"
+    },
+    {
+      "status": 202,
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4/extractions",
+      "cache": "no-store"
+    },
+    {
+      "status": 200,
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4",
+      "cache": "no-store"
+    },
+    {
+      "status": 200,
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4/reviews",
+      "cache": "no-store"
+    },
+    {
+      "status": 200,
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4",
+      "cache": "no-store"
+    },
+    {
+      "status": 200,
+      "url": "http://127.0.0.1:5127/api/v1/backtest-preparations/292f4192-c9d5-4fb3-9e23-8862d163a3b4/source",
+      "cache": "no-store"
+    }
+  ],
+  "countersBefore": {
+    "extractions": 1,
+    "captures": 1
+  },
+  "counters": {
+    "extractions": 2,
+    "captures": 2
+  },
+  "extractionDelta": 1,
+  "passed": true
+}

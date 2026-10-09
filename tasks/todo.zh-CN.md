@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-08。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-08 进度：ML-T06/ML-T09 已取消；完成 17 项、待完成活动任务 20 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV26。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 18 项、待完成活动任务 19 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV27。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -168,19 +168,21 @@
 
 ## ML-T15. 预览并审核一份准备计划
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T14`
 - **验收:** 展示期初账户、完整规则、来源证据、历史起点/可用时间及未解决条款。仅精确已审核修订可继续，原文编辑明确使批准失效。不含规则差异、后继日历或后代。
 - **验证:** `npm --prefix web run test -- --run tests/unit/PlanPreparationReview.spec.ts`
 - **主要文件:** `web/src/api/preparations.ts`, `web/src/api/preparationReview.ts`, `web/src/components/backtests/PlanPreparationReview.vue`, `web/src/views/BacktestNewView.vue`, `web/src/composables/usePlanPreparation.ts`, `web/tests/unit/PlanPreparationReview.spec.ts`, `web/tests/unit/PlanPreparation.spec.ts`, `web/tests/fixtures/plan-preparation-review.json`
-- **范围:** 三个切片（5 / 3 / 2 个主要文件，含共用测试共 8 个不同文件）； **追溯:** ML-A10, ML-A12, ML-A17, ML-A18. 第一个切片包含后端实际生成的候选/冻结样例，并为既有 API 测试替身补齐必需的审核命令。
+- **范围:** 四个切片（5 / 3 / 2 / 5 个主要文件，含共用测试共 8 个不同文件）； **追溯:** ML-A10, ML-A12, ML-A17, ML-A18. 第一个切片包含后端实际生成的候选/冻结样例，并为既有 API 测试替身补齐必需的审核命令。真实 HTTP 验证发现审核凭据使用独立的 `PreparationFrozenView`；第四个切片在最终验证前修正传输、控制器及测试替身，不改服务端契约。
 
 - **实施边界:** 先补齐审核传输与只读预览所需的有界候选/来源/账户形状校验；再增加单份控制器的明确审核及可读完整预览；最后在既有创建页面按明确选择接入原文/进度/审核。未保存原文、未结束工作及不确定操作阻止审核与模式切换；确认随原文/候选/审核修订变化清除。缺失事实保持可见；必需时间/仓位归属缺失及未解决规则阻止冻结，可保留的未知账户事实须明确确认。不补造价格/时间/现金。只提交当前提取内容的明确审核；原文修正后重新提取，复杂语义仍由后端判定。新闭环运行提交留在 ML-T24；不改后端、生成契约或批准门禁。
 
+- **证据:** MV27：27 项审核/页面测试及 96 项相关前端测试通过；全部前端 884 项 / 59 文件、类型检查、构建、124 项准备 API/审核/契约检查及两种生成 profile 通过。真实本地 HTTP 配假 AI 验证上传、提取、逐项确认、冻结与原文编辑失效；四种宽度无溢出、axe 违规或浏览器错误。ML-C05 完成，下一项为 ML-T16；API 批准仍待 ML-T29。
+
 ### ML-C05. 检查点
 
-- [ ] 上传、进度和审核 UI 使用生成契约。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] 上传、进度和审核 UI 使用生成契约。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
 ## ML-T16. 冻结截至明确时点的证据
 
