@@ -26,6 +26,8 @@ from trade_plan_monitor.backtest.jobs import (
     DatasetVerifyJobRequest,
     DataSyncJobRequest,
 )
+from trade_plan_monitor.backtest.jobs.models import MonitorLoopJobRequest
+from trade_plan_monitor.backtest.loop_replay import run_frozen_loop
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.reporting import (
     _chunks,
@@ -76,6 +78,7 @@ def create_backtest_job_operations(
         data_sync=owner.data_sync,
         dataset_verify=owner.dataset_verify,
         backtest_run=owner.backtest_run,
+        after_completion=owner.after_completion,
     )
 
 
@@ -175,6 +178,20 @@ class _BacktestWorkerOperationOwner:
         cancellation_token: CancellationToken,
         progress_callback,
     ) -> BacktestJobResult:
+        if isinstance(request, MonitorLoopJobRequest):
+            cancellation_token.raise_if_cancelled("RUN_DAY_TRANSITION")
+            report = self._results.get_loop_report(request.input_reference.run_id)
+            reused = report is not None
+            if report is None:
+                report = run_frozen_loop(
+                    self._results,
+                    request.input_reference,
+                    cancellation_token=cancellation_token,
+                    progress_callback=progress_callback,
+                )
+            return BacktestRunJobResult(
+                run_id=report.run_id, report_hash=report.report_hash, reused=reused
+            )
         if not isinstance(request, BacktestRunJobRequest):
             raise TypeError("run operation requires BacktestRunJobRequest")
         run_input = request.run_input
@@ -229,6 +246,25 @@ class _BacktestWorkerOperationOwner:
             report_hash=report.report_hash,
             reused=False,
         )
+
+    def after_completion(
+        self, result, *, repository, cancellation_token: CancellationToken
+    ) -> None:
+        """Existing bounded maintenance on the same owned worker, after publication."""
+        if not isinstance(result, BacktestRunJobResult):
+            return
+        from datetime import datetime
+
+        from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
+        from trade_plan_monitor.backtest.time import SHANGHAI
+
+        maintenance = BacktestJobMaintenance(
+            repository=repository,
+            results=self._results,
+        )
+        while not cancellation_token.cancelled:
+            if not maintenance.prune(as_of=datetime.now(SHANGHAI)).has_more:
+                break
 
 
 def _dataset_scope(scope: BacktestDatasetScopeRequest) -> DatasetScope:

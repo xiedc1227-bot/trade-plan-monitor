@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20/ML-T21、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 23 项、待完成活动任务 14 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV32。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 24 项、待完成活动任务 13 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV33。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -225,12 +225,14 @@
 
 ## ML-T19. 通过后台工作者执行冻结闭环输入
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T05`, `ML-T17`, `ML-T18`, `ML-T20`, `ML-T21`, `ML-T34`
 - **验收:** 按输入区分值分发，沿用租约/取消所有权，只读取冻结产物。不保留回测 CLI 入口、兼容适配器或命令专用协调器。 生命周期/准入门槛后在专用线程分派，保留单槽和原子发布语义。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_worker.py tests/integration/test_backtest_job_coordinator.py -q -m "not live"`
-- **主要文件:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/runner.py`, `tests/integration/test_monitor_loop_worker.py`
-- **范围:** M (3 个主要文件，含测试); **追溯:** ML-A01, ML-A09, ML-A10.
+- **主要文件:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/loop_replay.py`, `src/trade_plan_monitor/backtest/jobs/operations.py`, `src/trade_plan_monitor/backtest/jobs/coordinator.py`, `tests/integration/test_monitor_loop_worker.py`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A01, ML-A09, ML-A10.
+- **实施边界:** 新增 `loop_replay.py` 直接从自有冻结副本生成按可用时间排序的市场/日历帧，在临时私有会话及流式审计文件中驱动既有 `LoopRunner`。预热不授予权限；缺少冻结复权证明时，日线技术条件保持明确未知，不伪造认证序列。扩展既有工作请求判别/分派，在同一受生命周期和授权约束的工作线程执行；完成后在该自有线程调用既有有界维护，每段间响应停止。既有 `runner.py` 兼容回放不改，不增加命令入口、队列或调度器。
+- **证据:** MV33：最终任务/生产组合门禁 46 项通过、1 项既有环境跳过，相关回归 192 项通过。工作/维护同线程、明确授权、冻结副本独立执行、声明身份绑定、单槽、取消排空及精确回放验证；身份保护变异产生 1 项预期失败、恢复精确字节。ML-T19/ML-C07 完成，下一项 ML-T22。
 
 ## ML-T20. 投影因果事件与有效估值
 
@@ -257,8 +259,8 @@
 
 ### ML-C07. 检查点
 
-- [ ] 工作者只发布完整且依赖保留正确的结果。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] 工作者只发布完整且依赖保留正确的结果。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
 ## ML-T22. 提供分页闭环结果，保留导出兼容
 

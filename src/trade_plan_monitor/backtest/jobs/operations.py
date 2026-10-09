@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Protocol
 
 from trade_plan_monitor.backtest.canonical import canonical_json
@@ -23,6 +24,8 @@ from trade_plan_monitor.backtest.jobs.models import (
     BacktestRunJobResult,
     DatasetVerifyJobRequest,
     DataSyncJobRequest,
+    LoopInputReference,
+    MonitorLoopJobRequest,
 )
 from trade_plan_monitor.backtest.run_input import BacktestRunInput
 
@@ -48,6 +51,7 @@ class BacktestJobOperations:
         data_sync: BacktestJobOperation,
         dataset_verify: BacktestJobOperation,
         backtest_run: BacktestJobOperation,
+        after_completion: Callable | None = None,
     ) -> None:
         operations = {
             BacktestJobKind.DATA_SYNC: data_sync,
@@ -57,6 +61,17 @@ class BacktestJobOperations:
         if any(not callable(operation) for operation in operations.values()):
             raise TypeError("every backtest job operation must be callable")
         self._operations = operations
+        if after_completion is not None and not callable(after_completion):
+            raise TypeError("after_completion must be callable")
+        self._after_completion = after_completion
+
+    def after_completion(
+        self, result, *, repository, cancellation_token: CancellationToken
+    ) -> None:
+        if self._after_completion is not None:
+            self._after_completion(
+                result, repository=repository, cancellation_token=cancellation_token
+            )
 
     def execute(
         self,
@@ -144,6 +159,13 @@ def _request_from_claim(claim: BacktestJobClaim) -> BacktestJobRequest:
         )
 
     if claim.kind is BacktestJobKind.BACKTEST_RUN:
+        if set(payload) == {"kind", "inputReference"}:
+            reference = LoopInputReference.model_validate_json(
+                canonical_json(payload["inputReference"])
+            )
+            if reference.run_id != claim.run_id or reference.dataset_hash != claim.dataset_hash:
+                raise ValueError("persisted loop reference does not match its claim")
+            return MonitorLoopJobRequest(input_reference=reference)
         if set(payload) != {"kind", "runInput"} or type(payload.get("runInput")) is not dict:
             raise ValueError("persisted run job request has an invalid shape")
         run_input = BacktestRunInput.model_validate_json(canonical_json(payload["runInput"]))

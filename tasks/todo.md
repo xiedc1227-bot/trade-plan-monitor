@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20/ML-T21, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 23 completed, 14 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV32.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 24 completed, 13 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV33.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -225,12 +225,14 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T19. Run frozen loop inputs through the background worker
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T05`, `ML-T17`, `ML-T18`, `ML-T20`, `ML-T21`, `ML-T34`
 - **Acceptance:** Dispatch by input discriminator with existing lease/cancel ownership; load frozen artifacts only. No backtest CLI entry, compatibility adapter, or command-owned coordinator remains. Dispatch in the dedicated thread after lifecycle/admission gates; preserve single-slot and atomic-publication semantics.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_worker.py tests/integration/test_backtest_job_coordinator.py -q -m "not live"`
-- **Primary files:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/runner.py`, `tests/integration/test_monitor_loop_worker.py`
-- **Scope:** M (3 primary files including tests); **Trace:** ML-A01, ML-A09, ML-A10.
+- **Primary files:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/loop_replay.py`, `src/trade_plan_monitor/backtest/jobs/operations.py`, `src/trade_plan_monitor/backtest/jobs/coordinator.py`, `tests/integration/test_monitor_loop_worker.py`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A01, ML-A09, ML-A10.
+- **Implementation boundary:** New `loop_replay.py` builds availability-ordered market/calendar frames directly from owned frozen copies, driving existing `LoopRunner` in a temporary private session with streamed audit. Warm-up grants no authority; daily technical conditions stay explicitly unknown without frozen adjustment proof, never a fabricated certified series. Extend existing request discrimination/dispatch and execute on the same lifecycle/authorization-owned worker thread. After completion call existing bounded maintenance on that owned thread, honoring stop between passes. Existing `runner.py` compatibility replay stays unchanged; no command entry, queue or scheduler is added.
+- **Evidence:** MV33: final task/production gate passes 46 checks with one existing environment skip; related regression passes 192. Same worker/maintenance thread, explicit authorization, copied-input independence, claim identity, single slot, cancellation drain and exact replay are verified; identity-guard mutation produces one expected failure and exact bytes are restored. ML-T19/ML-C07 complete; ML-T22 follows.
 
 ## ML-T20. Project causal events and valid valuations
 
@@ -257,8 +259,8 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ### ML-C07. Checkpoint
 
-- [ ] Worker publishes only complete retained results.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Worker publishes only complete retained results.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
 
 ## ML-T22. Expose paginated loop results; retain export compatibility
 

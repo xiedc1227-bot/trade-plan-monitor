@@ -380,12 +380,26 @@ class BacktestJobCoordinator:
             return
         if await self._acknowledge_external_cancellation(claim, claim_token):
             return
-        await self._repository_call(
+        completed = await self._repository_call(
             self._repository.complete,
             claim.job_id,
             claim_token,
             result,
         )
+        cleanup = getattr(self._operations, "after_completion", None)
+        if completed and callable(cleanup):
+            self._active_cancellation = token
+            try:
+                await asyncio.shield(
+                    asyncio.get_running_loop().run_in_executor(
+                        self._executor,
+                        partial(
+                            cleanup, result, repository=self._repository, cancellation_token=token,
+                        ),
+                    )
+                )
+            finally:
+                self._active_cancellation = None
 
     async def _acknowledge_external_cancellation(
         self,
