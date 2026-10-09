@@ -2,7 +2,7 @@ import { computed, onBeforeUnmount, onMounted, readonly, shallowRef } from "vue"
 
 import {
   createPreparationApi, validPreparationSource, type PreparationApi,
-  type PreparationReceipt, type PreparationSource, type PreparationView,
+  type PreparationReceipt, type PreparationFrozenReceipt, type PreparationSource, type PreparationView,
 } from "../api/preparations";
 import { ApiClientError } from "../api/transport";
 import { buildPreparationReview, inspectPreparationReview, isReviewedPreparation, type ReviewChoice } from "../api/preparationReview";
@@ -17,7 +17,8 @@ type IntentKind = "CREATE" | "EDIT" | "EXTRACT" | "CANCEL" | "RECOVER" | "REVIEW
 interface MutationIntent {
   readonly kind: IntentKind;
   readonly key: string;
-  readonly send: (key: string, signal: AbortSignal) => Promise<PreparationReceipt>;
+  readonly reviewRevisionFloor: number | null;
+  readonly send: (key: string, signal: AbortSignal) => Promise<PreparationReceipt | PreparationFrozenReceipt>;
 }
 
 /** One server preparation; a pending intent is retained until its original receipt is known. */
@@ -40,13 +41,14 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   let mounted = false;
   let readGeneration = 0;
   const draftDirty = shallowRef(false);
+  const reviewRevisionFloor = shallowRef<number | null>(null);
 
   const workPending = computed(() => {
     const value = preparation.value;
     return value !== null && (value.sourceEditPending || value.status === "EXTRACTING" ||
       value.status === "CANCEL_REQUESTED" || value.workPhase !== null && value.workPhase !== "ENDED");
   });
-  const isBusy = computed(() => workPending.value || mutationState.value !== "IDLE" ||
+  const isBusy = computed(() => workPending.value || reviewRevisionFloor.value !== null || mutationState.value !== "IDLE" ||
     preparationId.value !== null && preparation.value === null);
   const current = computed(() => preparation.value !== null &&
     ["READY", "REFRESHING"].includes(requestState.value) && mutationState.value === "IDLE");
@@ -59,9 +61,9 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   const canRecover = computed(() => current.value && preparation.value!.workPhase === "UNKNOWN");
   const canRetryMutation = computed(() => mutationState.value === "UNCERTAIN");
   const errorMessage = computed(() => commandError.value ?? readError.value);
-  const canReview = computed(() => current.value && !workPending.value && !draftDirty.value &&
+  const canReview = computed(() => current.value && !isBusy.value && !draftDirty.value &&
     inspectPreparationReview(preparation.value!).blockers.length === 0);
-  const canUsePrepared = computed(() => current.value && !workPending.value && !draftDirty.value &&
+  const canUsePrepared = computed(() => current.value && !isBusy.value && !draftDirty.value &&
     isReviewedPreparation(preparation.value));
 
   function clearTimer(): void {
@@ -82,8 +84,10 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     timer = setTimeout(() => { timer = null; void refresh(); }, 2000);
   }
   function apply(response: PreparationReceipt): boolean {
-    if (preparation.value !== null && response.body.revision < preparation.value.revision) return false;
+    if (preparation.value !== null && response.body.revision < preparation.value.revision ||
+        reviewRevisionFloor.value !== null && response.body.revision < reviewRevisionFloor.value) return false;
     preparation.value = response.body;
+    reviewRevisionFloor.value = null;
     if (!draftDirty.value) draft.value = { ...response.body.source };
     requestState.value = "READY";
     readError.value = null;
@@ -131,7 +135,12 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
         const response = await saved.send(saved.key, controller.signal);
         if (!mounted || controller.signal.aborted) return;
         if (saved.kind === "CREATE" || saved.kind === "EDIT") draftDirty.value = false;
-        needsRefresh = !apply(response);
+        if ("candidate" in response.body) {
+          needsRefresh = !apply({ body: response.body, status: response.status, retryAfterSeconds: "retryAfterSeconds" in response ? response.retryAfterSeconds : null });
+        } else {
+          reviewRevisionFloor.value = saved.reviewRevisionFloor;
+          needsRefresh = true;
+        }
         if (needsRefresh && !draftDirty.value && preparation.value !== null) draft.value = { ...preparation.value.source };
         intent = null;
         mutationState.value = "IDLE";
@@ -162,9 +171,9 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     mutationPromise = operation;
     return operation;
   }
-  function start(kind: IntentKind, send: MutationIntent["send"]): Promise<void> {
+  function start(kind: IntentKind, send: MutationIntent["send"], minimumReviewRevision: number | null = null): Promise<void> {
     if (intent !== null) return mutationPromise ?? Promise.resolve();
-    intent = Object.freeze({ kind, key: createId(), send });
+    intent = Object.freeze({ kind, key: createId(), send, reviewRevisionFloor: minimumReviewRevision });
     return perform();
   }
   function updateSource(source: PreparationSource): void {
@@ -216,7 +225,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     try {
       const command = buildPreparationReview(preparation.value!, evidence, choices, unknownConfirmed);
       const id = preparationId.value!;
-      return start("REVIEW", (key, signal) => api.review(id, command, key, { signal }));
+      return start("REVIEW", (key, signal) => api.review(id, command, key, { signal }), command.review.expected_revision + 1);
     } catch {
       commandError.value = "请核对当前候选，补齐逐项说明并确认未知事实后再审核。";
       return Promise.resolve();

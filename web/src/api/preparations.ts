@@ -1,11 +1,11 @@
 import type {
   PreparationCreateCommand, PreparationRecoveryCommand, PreparationRevisionCommand,
-  PreparationSource, PreparationSourceCommand, PreparationView, PreparationReviewInput,
+  PreparationSource, PreparationSourceCommand, PreparationView, PreparationReviewInput, PreparationFrozenView,
 } from "./generated-runtime-status";
 import { resolveApiFetch } from "./context";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
-import { validReviewCandidate, validPreparationReviewInput } from "./preparationReview";
+import { validReviewCandidate, validPreparationReviewInput, validPreparationFrozenView } from "./preparationReview";
 
 export type { PreparationSource, PreparationView } from "./generated-runtime-status";
 export interface PreparationRequestOptions { readonly signal?: AbortSignal; }
@@ -14,6 +14,10 @@ export interface PreparationReceipt {
   readonly status: 200 | 201 | 202;
   readonly retryAfterSeconds: number | null;
 }
+export interface PreparationFrozenReceipt {
+  readonly body: PreparationFrozenView;
+  readonly status: 200;
+}
 export interface PreparationApi {
   create(command: PreparationCreateCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   get(id: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
@@ -21,7 +25,7 @@ export interface PreparationApi {
   extract(id: string, command: PreparationRevisionCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   cancel(id: string, command: PreparationRevisionCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   recover(id: string, command: PreparationRecoveryCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
-  review(id: string, command: PreparationReviewInput, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
+  review(id: string, command: PreparationReviewInput, key: string, options?: PreparationRequestOptions): Promise<PreparationFrozenReceipt>;
 }
 const BASE = "/api/v1/backtest-preparations";
 export const MAX_PREPARATION_SOURCE_CHARACTERS = 150_000;
@@ -137,8 +141,20 @@ export function createPreparationApi(fetcher: typeof fetch = resolveApiFetch()):
       return request(id, "/recoveries", "POST", [200], command, key, options);
     },
     async review(id, command, key, options) {
-      if (!validPreparationReviewInput(command)) throw invalidRequest();
-      return request(id, "/reviews", "POST", [200], command, key, options);
+      if (!identifier(id) || !identifier(key) || !validPreparationReviewInput(command)) throw invalidRequest();
+      const init: RequestInit = { method: "POST", cache: "no-store", credentials: "same-origin", redirect: "error",
+        headers: { Accept: "application/json", "Content-Type": "application/json", "Idempotency-Key": key }, body: JSON.stringify(command) };
+      if (options?.signal !== undefined) init.signal = options.signal;
+      const response = await requestJson(fetcher, `${BASE}/${encodeURIComponent(id)}/reviews`, init);
+      const { body, status, headers } = response;
+      if (status !== 200 || headers.get("Cache-Control") !== "no-store" || headers.get("Retry-After") !== null ||
+          !validPreparationFrozenView(body) || !validPreparationSource(body.frozen.source) || body.preparationId !== id ||
+          body.frozen.source_revision !== command.review.expected_source_revision ||
+          body.frozen.extraction_candidate_revision !== command.review.expected_candidate_revision ||
+          body.frozen.extraction_candidate_hash !== command.review.candidate_hash ||
+          body.frozen.extraction_evidence_hash !== command.review.evidence_hash ||
+          new TextEncoder().encode(JSON.stringify(body)).byteLength > 2 * 1024 * 1024) throw invalidResponse(status);
+      return Object.freeze({ body, status: 200 as const });
     },
   });
 }

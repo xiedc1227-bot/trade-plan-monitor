@@ -19,7 +19,7 @@ function result(body = preparation(), status: 200 | 201 | 202 = 200): Preparatio
 }
 function mockApi(): PreparationApi {
   return {
-    review: vi.fn<PreparationApi["review"]>().mockResolvedValue(result()),
+    review: vi.fn<PreparationApi["review"]>(),
     create: vi.fn<PreparationApi["create"]>().mockResolvedValue(result(preparation(), 201)),
     get: vi.fn<PreparationApi["get"]>().mockResolvedValue(result()),
     edit: vi.fn<PreparationApi["edit"]>().mockResolvedValue(result()),

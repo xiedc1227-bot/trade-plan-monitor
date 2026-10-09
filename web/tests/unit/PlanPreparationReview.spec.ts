@@ -2,23 +2,33 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
-import type { PreparationView } from "../../src/api/generated-runtime-status";
-import { createPreparationApi, type PreparationApi, type PreparationReceipt } from "../../src/api/preparations";
+import type { PreparationView, PreparationFrozenView } from "../../src/api/generated-runtime-status";
+import { createPreparationApi, type PreparationApi, type PreparationFrozenReceipt } from "../../src/api/preparations";
 import { buildPreparationReview, inspectPreparationReview, validReviewCandidate } from "../../src/api/preparationReview";
 import { usePlanPreparation } from "../../src/composables/usePlanPreparation";
 import PlanPreparationReview from "../../src/components/backtests/PlanPreparationReview.vue";
+import BacktestNewView from "../../src/views/BacktestNewView.vue";
+import { createRouter, createMemoryHistory } from "vue-router";
+import { createPlanApi } from "../../src/api/plans";
 
 const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.json", "utf8")) as {
   candidate: PreparationView; reviewed: PreparationView; choices: { path: string; reason: string }[];
 };
 const evidence = "逐项核对原文、完整规则、期初实际账户及可用时间，明确确认当前候选。";
 const fresh = () => structuredClone(fixture.candidate);
+function frozenView(): PreparationFrozenView {
+  if (fixture.reviewed.candidate?.kind !== "FROZEN") throw new Error("fixture variant");
+  return { preparationId: fixture.reviewed.preparationId, manifestHash: fixture.reviewed.candidate.candidateHash, frozen: fixture.reviewed.candidate.frozen };
+}
 const wrappers: VueWrapper[] = [];
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); vi.restoreAllMocks(); });
 function controller() {
   const api: PreparationApi = { ...createPreparationApi(vi.fn<typeof fetch>()),
     get: vi.fn<PreparationApi["get"]>().mockResolvedValue({ body: fresh(), status: 200, retryAfterSeconds: null }),
-    review: vi.fn<PreparationApi["review"]>().mockResolvedValue({ body: fixture.reviewed, status: 200, retryAfterSeconds: null }),
+    review: vi.fn<PreparationApi["review"]>().mockImplementation(async () => {
+      vi.mocked(api.get).mockResolvedValue({ body: fixture.reviewed, status: 200, retryAfterSeconds: null });
+      return { body: frozenView(), status: 200 };
+    }),
   };
   let state!: ReturnType<typeof usePlanPreparation>;
   const wrapper = mount(defineComponent({ setup() {
@@ -38,9 +48,9 @@ async function confirmPreview(wrapper: VueWrapper) {
   for (const [index, choice] of fixture.choices.entries()) await wrapper.get(`[data-testid="review-supplement-${index}"]`).setValue(choice.reason);
   await wrapper.get('[data-testid="review-confirmation"]').setValue(true);
 }
-function receipt(body = fixture.reviewed) {
+function receipt(body = frozenView()) {
   return new Response(JSON.stringify(body), { headers: {
-    Location: `/api/v1/backtest-preparations/${body.preparationId}`, "Cache-Control": "no-store",
+    "Cache-Control": "no-store",
   } });
 }
 
@@ -107,7 +117,7 @@ describe("exact single preparation review", () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(receipt());
     const command = buildPreparationReview(fixture.candidate, evidence, fixture.choices, true);
     const result = await createPreparationApi(fetcher).review(fixture.candidate.preparationId, command, "review-one");
-    expect(result.body).toEqual(fixture.reviewed);
+    expect(result.body).toEqual(frozenView());
     expect(fetcher.mock.calls[0]![0]).toBe(`/api/v1/backtest-preparations/${fixture.candidate.preparationId}/reviews`);
     const init = fetcher.mock.calls[0]![1]!;
     expect(init.method).toBe("POST");
@@ -121,9 +131,60 @@ describe("exact single preparation review", () => {
     await expect(createPreparationApi(fetcher).review(fixture.candidate.preparationId, malformed, "review-one")).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("rejects a frozen receipt for a stale extraction rather than promoting its authority", async () => {
+    const stale = structuredClone(frozenView()); stale.frozen.extraction_candidate_hash = "0".repeat(64);
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(receipt(stale)));
+    await expect(api.review(fixture.candidate.preparationId, buildPreparationReview(fixture.candidate, evidence, fixture.choices, true), "review-one")).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+});
+
+describe("preparation creation page composition", () => {
+  async function page(initialPreparationId?: string) {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/backtests/new", component: BacktestNewView }] });
+    await router.push("/backtests/new"); await router.isReady();
+    const api: PreparationApi = { ...createPreparationApi(vi.fn<typeof fetch>()),
+      get: vi.fn<PreparationApi["get"]>().mockResolvedValue({ body: fresh(), status: 200, retryAfterSeconds: null }),
+    };
+    const planApi = { ...createPlanApi(vi.fn<typeof fetch>()),
+      listPlanVersions: vi.fn().mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 }) };
+    const wrapper = mount(BacktestNewView, { props: { preparationApi: api, planApi,
+      ...(initialPreparationId === undefined ? {} : { initialPreparationId }) },
+      global: { plugins: [router], stubs: { BacktestRunForm: true, BacktestReferenceMarketCoveragePanel: true } } });
+    wrappers.push(wrapper); await flushPromises(); return { wrapper, api };
+  }
+  it("keeps default legacy creation and preparation acquisition inert until an explicit choice", async () => {
+    const { wrapper, api } = await page();
+    expect(wrapper.findComponent({ name: "BacktestRunForm" }).exists()).toBe(true);
+    expect(api.get).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="choose-prepared-plan"]').trigger("click");
+    expect(wrapper.findComponent({ name: "PlanPreparationSourceForm" }).exists()).toBe(true);
+    expect(api.get).not.toHaveBeenCalled();
+    expect(wrapper.findComponent({ name: "BacktestRunForm" }).exists()).toBe(false);
+  });
+  it("composes explicit resumed review and blocks mutually exclusive mode switching while the task is unfinished", async () => {
+    const { wrapper, api } = await page(fixture.candidate.preparationId);
+    expect(wrapper.findComponent(PlanPreparationReview).exists()).toBe(true);
+    vi.mocked(api.get).mockResolvedValue({ body: { ...fresh(), workPhase: "UNKNOWN", generation: "g1" }, status: 200, retryAfterSeconds: null });
+    await wrapper.get('[data-testid="refresh-preparation"]').trigger("click"); await flushPromises();
+    expect(wrapper.get('[data-testid="choose-legacy-plan"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("完成前不能切换");
+  });
 });
 
 describe("explicit current preparation review controller", () => {
+  it("retains the known review revision floor through failed or stale reads until the current state is confirmed", async () => {
+    const { state, api } = controller(); await flushPromises();
+    vi.mocked(api.review).mockResolvedValue({ body: frozenView(), status: 200 });
+    vi.mocked(api.get).mockRejectedValue(new TypeError("read failed"));
+    await state.review(evidence, fixture.choices, true);
+    expect(state.mutationState.value).toBe("IDLE"); expect(state.isBusy.value).toBe(true);
+    expect(state.canUsePrepared.value).toBe(false); expect(state.canSubmitSource.value).toBe(false);
+    vi.mocked(api.get).mockResolvedValue({ body: fresh(), status: 200, retryAfterSeconds: null });
+    await state.refresh(); expect(state.isBusy.value).toBe(true);
+    await state.review(evidence, fixture.choices, true); expect(api.review).toHaveBeenCalledTimes(1);
+    vi.mocked(api.get).mockResolvedValue({ body: fixture.reviewed, status: 200, retryAfterSeconds: null });
+    await state.refresh(); expect(state.isBusy.value).toBe(false); expect(state.canUsePrepared.value).toBe(true);
+  });
   it("never reviews on read and accepts only explicit current review; source edits invalidate approval immediately", async () => {
     const { state, api } = controller(); await flushPromises();
     expect(api.review).not.toHaveBeenCalled(); expect(state.canReview.value).toBe(true);
@@ -143,8 +204,8 @@ describe("explicit current preparation review controller", () => {
   });
   it("coalesces explicit review and retries the same immutable payload/key after an unknown outcome", async () => {
     const { state, api } = controller(); await flushPromises();
-    let resolve!: (value: PreparationReceipt) => void;
-    const pending = new Promise<PreparationReceipt>(accept => { resolve = accept; });
+    let resolve!: (value: PreparationFrozenReceipt) => void;
+    const pending = new Promise<PreparationFrozenReceipt>(accept => { resolve = accept; });
     vi.mocked(api.review).mockRejectedValueOnce(new TypeError("network")).mockReturnValueOnce(pending);
     await state.review(evidence, fixture.choices, true);
     const first = vi.mocked(api.review).mock.calls[0]!;
@@ -153,17 +214,18 @@ describe("explicit current preparation review controller", () => {
     const retry = state.retryMutation(); const duplicate = state.retryMutation();
     expect(duplicate).toBe(retry); expect(api.review).toHaveBeenCalledTimes(2);
     expect(vi.mocked(api.review).mock.calls[1]!.slice(0, 3)).toEqual(first.slice(0, 3));
-    resolve({ body: fixture.reviewed, status: 200, retryAfterSeconds: null }); await retry;
+    vi.mocked(api.get).mockResolvedValue({ body: fixture.reviewed, status: 200, retryAfterSeconds: null });
+    resolve({ body: frozenView(), status: 200 }); await retry;
     expect(state.canUsePrepared.value).toBe(true);
   });
   it("fences late review completion after unmount", async () => {
     const { state, api, wrapper } = controller(); await flushPromises();
-    let resolve!: (value: PreparationReceipt) => void;
+    let resolve!: (value: PreparationFrozenReceipt) => void;
     vi.mocked(api.review).mockReturnValue(new Promise(accept => { resolve = accept; }));
     const pending = state.review(evidence, fixture.choices, true);
     wrapper.unmount();
     expect(vi.mocked(api.review).mock.calls[0]![3]!.signal!.aborted).toBe(true);
-    resolve({ body: fixture.reviewed, status: 200, retryAfterSeconds: null }); await pending;
+    resolve({ body: frozenView(), status: 200 }); await pending;
     expect(state.preparation.value!.status).toBe("CANDIDATE");
   });
 });

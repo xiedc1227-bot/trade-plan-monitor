@@ -1,4 +1,4 @@
-import type { DailyMapping, PreparationReviewInput, PreparationSource, PreparationView } from "./generated-runtime-status";
+import type { DailyMapping, PreparationFrozenView, PreparationReviewInput, PreparationSource, PreparationView } from "./generated-runtime-status";
 import { isCalendarDate, isShanghaiDateTime } from "./shanghaiTime";
 
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -17,14 +17,14 @@ function bounded(value: unknown, depth = 0, budget = { remaining: 30_000 }): boo
   return record(value) && Object.entries(value).every(([key, item]) =>
     !["__proto__", "prototype", "constructor"].includes(key) && bounded(item, depth + 1, budget));
 }
-function span(value: unknown, source: string): boolean {
+function span(value: unknown, source: readonly string[]): boolean {
   return record(value) && integer(value.start) && integer(value.end, value.start + 1) &&
-    text(value.excerpt, 512) && Array.from(source).slice(value.start, value.end).join("") === value.excerpt;
+    text(value.excerpt, 512) && source.slice(value.start, value.end).join("") === value.excerpt;
 }
-function fact(value: unknown, source: string, check: (value: unknown) => boolean): boolean {
+function fact(value: unknown, source: readonly string[], check: (value: unknown) => boolean): boolean {
   return value === null || record(value) && span(value, source) && check(value.value);
 }
-function opening(value: unknown, source: string): boolean {
+function opening(value: unknown, source: readonly string[]): boolean {
   return record(value) && fact(value.inventory_quantity, source, integer) && fact(value.cash_fen, source, integer) &&
     fact(value.snapshot_at, source, isShanghaiDateTime) && Array.isArray(value.lots) && value.lots.length <= 200 &&
     value.lots.every(lot => record(lot) && text(lot.lot_key, 128) && lot.quantity !== null &&
@@ -42,7 +42,7 @@ function draft(value: unknown): boolean {
     Array.isArray(value.risk_branches) && value.risk_branches.length <= 2 && value.risk_branches.every(record) &&
     (value.alert_rules === undefined || Array.isArray(value.alert_rules) && value.alert_rules.length <= 10 && value.alert_rules.every(record));
 }
-function mapping(value: unknown, source?: string): boolean {
+function mapping(value: unknown, source?: readonly string[]): boolean {
   return record(value) && value.mapping_version === "daily-mapping-v1" && hash(value.candidate_content_hash) &&
     Array.isArray(value.clauses) && value.clauses.length <= 512 && value.clauses.every(clause => record(clause) &&
       text(clause.clause_id, 128) && (source === undefined || span(clause, source)) &&
@@ -64,10 +64,12 @@ function account(value: unknown): boolean {
       isShanghaiDateTime(value.opening_mark.price_at) && isShanghaiDateTime(value.opening_mark.available_at));
 }
 export function validReviewCandidate(value: unknown, source: string): value is NonNullable<PreparationView["candidate"]> {
-  if (!record(value) || !bounded(value) || !hash(value.candidateHash) || !hash(value.evidenceHash) ||
+  if (source.length > 300_000 || !record(value) || !bounded(value) || !hash(value.candidateHash) || !hash(value.evidenceHash) ||
       !["VALID", "INVALID", "UNRESOLVED"].includes(String(value.validation)) || !Array.isArray(value.issues) ||
       value.issues.length > 128 || !value.issues.every(issue => typeof issue === "string" && Array.from(issue).length <= 512)) return false;
-  if (value.kind === "EXTRACTION") return value.frozen === null && draft(value.draft) && mapping(value.mapping, source) && opening(value.openingAccount, source);
+  const points = Array.from(source);
+  if (points.length > 150_000) return false;
+  if (value.kind === "EXTRACTION") return value.frozen === null && draft(value.draft) && mapping(value.mapping, points) && opening(value.openingAccount, points);
   if (value.kind === "UNAVAILABLE") return value.validation === "INVALID" && [value.draft, value.mapping, value.openingAccount, value.frozen].every(item => item === null);
   if (value.kind !== "FROZEN" || value.draft !== null || value.mapping !== null || value.openingAccount !== null || !record(value.frozen)) return false;
   const frozen = value.frozen;
@@ -76,7 +78,7 @@ export function validReviewCandidate(value: unknown, source: string): value is N
     hash(frozen.extraction_candidate_hash) && hash(frozen.extraction_evidence_hash) &&
     record(frozen.source) && frozen.source.text === source && isShanghaiDateTime(frozen.source.authored_at) &&
     isShanghaiDateTime(frozen.source.available_at) && isCalendarDate(frozen.source.effective_trade_date) &&
-    opening(frozen.opening_evidence, source) && mapping(frozen.mapping, source) && account(frozen.account) &&
+    opening(frozen.opening_evidence, points) && mapping(frozen.mapping, points) && account(frozen.account) &&
     ["SOURCE", "HUMAN_REVIEW"].includes(String(frozen.account_origin)) && record(frozen.version) && draft(frozen.version.snapshot) &&
     text(frozen.version.version_id, 128) && hash(frozen.version.plan_hash);
 }
@@ -86,6 +88,13 @@ export function validPreparationReviewInput(value: unknown): value is Preparatio
   return review.confirmed === true && text(review.evidence) && hash(review.candidate_hash) && hash(review.evidence_hash) &&
     integer(review.expected_revision, 1) && integer(review.expected_source_revision, 1) && integer(review.expected_candidate_revision, 1) &&
     nullable(review.mapping, mapping) && nullable(review.draft, draft) && nullable(review.account, account);
+}
+export function validPreparationFrozenView(value: unknown): value is PreparationFrozenView {
+  if (!record(value) || Object.keys(value).length !== 3 || !text(value.preparationId, 128) || !hash(value.manifestHash) ||
+      !record(value.frozen) || !record(value.frozen.source) || typeof value.frozen.source.text !== "string" ||
+      value.frozen.preparation_id !== value.preparationId) return false;
+  return validReviewCandidate({ kind: "FROZEN", candidateHash: value.manifestHash, evidenceHash: value.frozen.extraction_evidence_hash,
+    validation: "VALID", issues: [], draft: null, mapping: null, openingAccount: null, frozen: value.frozen }, value.frozen.source.text);
 }
 export interface ReviewPreparation {
   readonly preparationId: string;
