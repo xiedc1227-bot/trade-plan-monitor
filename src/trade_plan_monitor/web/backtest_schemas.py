@@ -25,8 +25,12 @@ from pydantic import (
 )
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
+from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt
+from trade_plan_monitor.backtest.loop_input import LoopAccountInput, LoopCosts, LoopResponsePolicy
+from trade_plan_monitor.backtest.loop_report import LoopAuditEvent, LoopMetrics, MonitorLoopReport
 from trade_plan_monitor.backtest.models import ExecutionStatus, UnfilledReason
 from trade_plan_monitor.backtest.models import StableIdentifier as PreparedIdentifier
+from trade_plan_monitor.backtest.plan_schedule import LoopPlanVersion
 from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
 from trade_plan_monitor.backtest.research_report import (
     ResearchDecisionEvent,
@@ -1848,12 +1852,169 @@ class ResearchOperationView(_BacktestDetailBase):
         return self
 
 
+class BacktestLoopProvenanceView(_BacktestApiInput):
+    preparation_id: PreparedIdentifier
+    manifest_hash: Sha256Hex
+    source_revision: JavaScriptSafeInteger
+    candidate_revision: JavaScriptSafeInteger
+    candidate_hash: Sha256Hex
+    input_hash: Sha256Hex
+
+
+class BacktestLoopRunSummaryView(_BacktestApiInput):
+    """Separate loop metrics; legacy cash/return assumptions are never synthesized."""
+
+    schema_version: Literal["monitor-loop-result-v1"]
+    run_id: Sha256Hex
+    report_hash: Sha256Hex
+    plan_version_id: None
+    plan_hash: Sha256Hex
+    dataset_hash: Sha256Hex
+    symbol: AShareSymbolText
+    status: Literal["COMPLETED"]
+    event_start: ApiDate
+    event_end: ApiDate
+    completed_at: ShanghaiDatetime
+    pinned: bool = Field(strict=True)
+    revision: JavaScriptSafeInteger
+    fill_count: JavaScriptSafeInteger
+    metrics: LoopMetrics
+    availability: BacktestResultAvailabilityView
+
+    @field_validator("metrics", mode="before")
+    @classmethod
+    def native_metrics(cls, value):
+        return _native_loop_value(value, LoopMetrics)
+
+    @model_validator(mode="after")
+    def bounded_summary(self) -> Self:
+        if self.event_end < self.event_start:
+            raise ValueError("eventEnd cannot precede eventStart")
+        # Full headers have a distinct bounded response, while list items keep 32 KiB.
+        summary = self.model_dump(
+            mode="json", by_alias=True, include=set(BacktestLoopRunSummaryView.model_fields)
+        )
+        if (
+            len(
+                json.dumps(
+                    summary,
+                    ensure_ascii=False,
+                ).encode()
+            )
+            > MAX_RESULT_ITEM_BYTES
+        ):
+            raise ValueError("encoded loop summary must not exceed 32 KiB")
+        return self
+
+
+class BacktestLoopRunView(BacktestLoopRunSummaryView):
+    """Verified native header and one reviewed plan, without the raw source text."""
+
+    provenance: BacktestLoopProvenanceView
+    frozen_plan: LoopPlanVersion
+    opening_account: LoopAccountInput
+    response: LoopResponsePolicy
+    costs: LoopCosts
+    report: MonitorLoopReport
+
+    @field_validator("frozen_plan", "opening_account", "response", "costs", "report", mode="before")
+    @classmethod
+    def native_values(cls, value, info: ValidationInfo):
+        model = {
+            "frozen_plan": LoopPlanVersion,
+            "opening_account": LoopAccountInput,
+            "response": LoopResponsePolicy,
+            "costs": LoopCosts,
+            "report": MonitorLoopReport,
+        }[info.field_name]
+        return _native_loop_value(value, model)
+
+    @model_validator(mode="after")
+    def bind_header(self) -> Self:
+        report = self.report
+        if (
+            (
+                report.run_id,
+                report.report_hash,
+                report.plan_hash,
+                report.dataset_hash,
+                report.symbol,
+            )
+            != (self.run_id, self.report_hash, self.plan_hash, self.dataset_hash, self.symbol)
+            or report.input_hash != self.provenance.input_hash
+            or report.metrics != self.metrics
+            or report.cycle.fills != self.fill_count
+            or report.boundary.started_at.date() != self.event_start
+            or report.boundary.resolved_end_date != self.event_end
+            or report.boundary.evidence_cutoff != self.completed_at
+            or self.frozen_plan.plan_hash != self.plan_hash
+            or self.frozen_plan.snapshot.symbol != self.symbol
+        ):
+            raise ValueError("loop result must bind its native header and frozen plan")
+        if len(self.model_dump_json().encode()) >= MAX_RESULT_PAGE_BYTES:
+            raise ValueError("encoded loop result must be below 4 MiB")
+        return self
+
+
+def _native_loop_value(value, model):
+    if isinstance(value, model):
+        return value
+    return model.model_validate_json(json.dumps(value, ensure_ascii=False))
+
+
+class BacktestLoopEventView(_BacktestDetailBase):
+    kind: Literal["DECISION"]
+    schema_version: Literal["monitor-loop-event-v1"]
+    event: LoopAuditEvent
+
+    @field_validator("event", mode="before")
+    @classmethod
+    def native_event(cls, value):
+        return _native_loop_value(value, LoopAuditEvent)
+
+    @model_validator(mode="after")
+    def bind_event(self) -> Self:
+        if (
+            self.event.run_id != self.run_id
+            or self.event.at != self.event_at
+            or self.detail_id != f"loop-{self.event.sequence:06d}-{self.run_id[:16]}"
+        ):
+            raise ValueError("loop event must match its public row identity")
+        _require_max_item_bytes(self)
+        return self
+
+
+class BacktestLoopFillView(_BacktestApiInput):
+    schema_version: Literal["monitor-loop-fill-v1"]
+    fill_id: StableIdentifier
+    run_id: Sha256Hex
+    filled_at: ShanghaiDatetime
+    event_id: Sha256Hex
+    receipt: LoopAccountReceipt
+
+    @field_validator("receipt", mode="before")
+    @classmethod
+    def native_receipt(cls, value):
+        return _native_loop_value(value, LoopAccountReceipt)
+
+    @model_validator(mode="after")
+    def bind_receipt(self) -> Self:
+        if (
+            self.fill_id != self.receipt.authority_receipt.simulation_id
+            or self.filled_at != self.receipt.authority_receipt.simulated_at
+        ):
+            raise ValueError("loop fill must match its simulation receipt")
+        _require_max_item_bytes(self)
+        return self
+
+
 type BacktestDetailView = (
     BacktestDecisionView
     | BacktestSignalView
     | BacktestExecutionOutcomeView
     | ResearchDecisionView
     | ResearchOperationView
+    | BacktestLoopEventView
 )
 
 
@@ -2067,7 +2228,9 @@ class BacktestJobPage(_BacktestApiInput):
 
 class BacktestRunPage(_BacktestApiInput):
     filters: BacktestRunFiltersView
-    items: Annotated[tuple[BacktestRunSummaryView, ...], Field(max_length=100)]
+    items: Annotated[
+        tuple[BacktestRunSummaryView | BacktestLoopRunSummaryView, ...], Field(max_length=100)
+    ]
     limit: Annotated[int, Field(strict=True, ge=1, le=100)]
     next_cursor: CursorToken | None
     has_more: bool = Field(strict=True)
@@ -2113,7 +2276,7 @@ class BacktestRunPage(_BacktestApiInput):
 
 class BacktestFillPage(_BacktestApiInput):
     filters: BacktestFillFiltersView
-    items: Annotated[tuple[BacktestFillView, ...], Field(max_length=100)]
+    items: Annotated[tuple[BacktestFillView | BacktestLoopFillView, ...], Field(max_length=100)]
     limit: Annotated[int, Field(strict=True, ge=1, le=100)]
     next_cursor: CursorToken | None
     has_more: bool = Field(strict=True)

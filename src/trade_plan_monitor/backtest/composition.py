@@ -142,6 +142,10 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestJobPage,
     BacktestJobReceipt,
     BacktestJobView,
+    BacktestLoopEventView,
+    BacktestLoopFillView,
+    BacktestLoopRunSummaryView,
+    BacktestLoopRunView,
     BacktestMarketIndexPointView,
     BacktestMarketIndexSeriesView,
     BacktestReferenceMarketCoverageView,
@@ -882,7 +886,7 @@ class _ProductionBacktestService:
         run_id: str,
         command: BacktestRunPinCommand,
         context: MutationContext,
-    ) -> BacktestRunView:
+    ) -> BacktestRunView | BacktestLoopRunView:
         try:
             record = await self._run_sync(
                 self._results.set_pinned,
@@ -1178,18 +1182,22 @@ class _ProductionBacktestService:
             last_seen=None,
             snapshot=page.snapshot,
         )
-        return BacktestRunPage.model_validate(
-            {
-                "filters": filters.canonical_payload(),
-                "items": [self._run_summary_view(item).canonical_payload() for item in page.items],
-                "limit": page.limit,
-                "nextCursor": page.next_cursor,
-                "hasMore": page.has_more,
-                "highWatermark": high_watermark,
-            }
+        return await self._run_sync(
+            lambda: BacktestRunPage.model_validate(
+                {
+                    "filters": filters.canonical_payload(),
+                    "items": [
+                        self._run_summary_view(item).canonical_payload() for item in page.items
+                    ],
+                    "limit": page.limit,
+                    "nextCursor": page.next_cursor,
+                    "hasMore": page.has_more,
+                    "highWatermark": high_watermark,
+                }
+            )
         )
 
-    async def get_run(self, *, run_id: str) -> BacktestRunView | None:
+    async def get_run(self, *, run_id: str) -> BacktestRunView | BacktestLoopRunView | None:
         try:
             record = await self._run_sync(self._results.get_run, run_id)
         except BacktestResultNotFoundError:
@@ -1222,15 +1230,17 @@ class _ProductionBacktestService:
             high_water=high_water,
             last_seen=None,
         )
-        return BacktestFillPage.model_validate(
-            {
-                "filters": BacktestFillFiltersView().canonical_payload(),
-                "items": [_fill_view(item).canonical_payload() for item in page.items],
-                "limit": page.limit,
-                "nextCursor": page.next_cursor,
-                "hasMore": page.has_more,
-                "highWatermark": high_watermark,
-            }
+        return await self._run_sync(
+            lambda: BacktestFillPage.model_validate(
+                {
+                    "filters": BacktestFillFiltersView().canonical_payload(),
+                    "items": [_fill_view(item).canonical_payload() for item in page.items],
+                    "limit": page.limit,
+                    "nextCursor": page.next_cursor,
+                    "hasMore": page.has_more,
+                    "highWatermark": high_watermark,
+                }
+            )
         )
 
     async def list_details(
@@ -1263,17 +1273,19 @@ class _ProductionBacktestService:
             high_water=high_water,
             last_seen=None,
         )
-        return BacktestDetailPage.model_validate(
-            {
-                "kind": filters.kind,
-                "availability": page.availability.value,
-                "filters": filters.canonical_payload(),
-                "items": [_detail_view(item).canonical_payload() for item in page.items],
-                "limit": page.limit,
-                "nextCursor": page.next_cursor,
-                "hasMore": page.has_more,
-                "highWatermark": high_watermark,
-            }
+        return await self._run_sync(
+            lambda: BacktestDetailPage.model_validate(
+                {
+                    "kind": filters.kind,
+                    "availability": page.availability.value,
+                    "filters": filters.canonical_payload(),
+                    "items": [_detail_view(item).canonical_payload() for item in page.items],
+                    "limit": page.limit,
+                    "nextCursor": page.next_cursor,
+                    "hasMore": page.has_more,
+                    "highWatermark": high_watermark,
+                }
+            )
         )
 
     async def get_equity_series(self, *, run_id: str) -> BacktestEquitySeries:
@@ -1387,21 +1399,24 @@ class _ProductionBacktestService:
         record = await self._run_sync(self._result_store.get_result_run, run_id)
         if record is None:
             return None
+        if record.summary.formula_versions.get("report") == "backtest-report-v4":
+            raise ApiError(ApiErrorCode.CONFLICT)
         if export_kind == "SUMMARY_JSON":
             chunks = iter_export_summary(self._result_store, run_id, cancelled)
             schema_version = (
                 "backtest-report-summary-v4"
                 if record.summary.formula_versions.get("report") == "backtest-report-v3"
-                else
-                "backtest-report-summary-v3"
+                else "backtest-report-summary-v3"
                 if _reference_market_view(record) is not None
                 else "backtest-report-summary-v2"
             )
         else:
             chunks = iter_export_fills(self._result_store, run_id, cancelled)
-            schema_version = ("explicit-simulation-valuation-v1"
+            schema_version = (
+                "explicit-simulation-valuation-v1"
                 if record.summary.formula_versions.get("report") == "backtest-report-v3"
-                else "backtest-simulated-fills-v2")
+                else "backtest-simulated-fills-v2"
+            )
         return PreparedBacktestExport(
             run_id=run_id,
             export_kind=export_kind,
@@ -1409,16 +1424,42 @@ class _ProductionBacktestService:
             chunks=chunks,
         )
 
-    def _run_summary_view(self, record: BacktestRunRecord) -> BacktestRunSummaryView:
+    def _run_summary_view(
+        self, record: BacktestRunRecord
+    ) -> BacktestRunSummaryView | BacktestLoopRunSummaryView:
         return _run_summary_view(record)
 
-    async def _run_view(self, record: BacktestRunRecord) -> BacktestRunView:
-        run_input = await self._run_sync(
-            self._result_store.get_run_input,
-            record.summary.run_id,
-        )
+    async def _run_view(self, record: BacktestRunRecord) -> BacktestRunView | BacktestLoopRunView:
+        return await self._run_sync(self._project_run, record)
+
+    def _project_run(self, record: BacktestRunRecord) -> BacktestRunView | BacktestLoopRunView:
+        run_input = self._result_store.get_run_input(record.summary.run_id)
         if run_input is None:
             raise RuntimeError("verified result is missing its immutable run input")
+        if isinstance(run_input, LoopInputReference):
+            stored = self._result_store.get_loop_input(run_input)
+            report = self._result_store.get_loop_report(record.summary.run_id)
+            if report is None:
+                raise RuntimeError("verified loop result is missing its immutable report")
+            prepared = stored.prepared
+            return BacktestLoopRunView.model_validate(
+                _run_summary_view(record).canonical_payload()
+                | {
+                    "provenance": {
+                        "preparationId": prepared.preparation_id,
+                        "manifestHash": prepared.manifest_hash,
+                        "sourceRevision": prepared.source_revision,
+                        "candidateRevision": prepared.extraction_candidate_revision,
+                        "candidateHash": prepared.extraction_candidate_hash,
+                        "inputHash": run_input.input_hash,
+                    },
+                    "frozenPlan": prepared.version,
+                    "openingAccount": stored.run_input.initial_account,
+                    "response": stored.run_input.response,
+                    "costs": stored.run_input.costs,
+                    "report": report,
+                }
+            )
         return _run_view(record, run_input)
 
 
@@ -1664,32 +1705,41 @@ def _market_index_fact_view(fact: MarketIndexIndicatorFact) -> dict[str, object]
     return payload
 
 
-def _run_summary_view(record: BacktestRunRecord) -> BacktestRunSummaryView:
+def _run_summary_view(
+    record: BacktestRunRecord,
+) -> BacktestRunSummaryView | BacktestLoopRunSummaryView:
     summary = record.summary
     if len(summary.symbols) != 1:
         raise RuntimeError("public backtest runs require exactly one symbol")
     report_hash = summary.assumptions.get("reportHash")
     if not isinstance(report_hash, str):
         raise RuntimeError("verified backtest run is missing reportHash")
-    return BacktestRunSummaryView.model_validate(
-        {
-            "runId": summary.run_id,
-            "reportHash": report_hash,
-            "planVersionId": record.plan_version_id,
-            "planHash": summary.plan_sha256,
-            "datasetHash": summary.dataset_hash,
-            "symbol": summary.symbols[0],
-            "status": summary.status.value,
-            "eventStart": summary.event_start.isoformat(),
-            "eventEnd": summary.event_end.isoformat(),
-            "completedAt": format_shanghai_datetime(summary.completed_at.astimezone(SHANGHAI)),
-            "pinned": summary.pinned,
-            "revision": record.revision,
-            "fillCount": record.fill_count,
-            "metrics": _public_value(summary.final_metrics),
-            "availability": _availability(record),
-        }
-    )
+    payload = {
+        "runId": summary.run_id,
+        "reportHash": report_hash,
+        "planVersionId": record.plan_version_id,
+        "planHash": summary.plan_sha256,
+        "datasetHash": summary.dataset_hash,
+        "symbol": summary.symbols[0],
+        "status": summary.status.value,
+        "eventStart": summary.event_start.isoformat(),
+        "eventEnd": summary.event_end.isoformat(),
+        "completedAt": format_shanghai_datetime(summary.completed_at.astimezone(SHANGHAI)),
+        "pinned": summary.pinned,
+        "revision": record.revision,
+        "fillCount": record.fill_count,
+        "metrics": _public_value(summary.final_metrics),
+        "availability": _availability(record),
+    }
+    if summary.formula_versions.get("report") == "backtest-report-v4":
+        return BacktestLoopRunSummaryView.model_validate(
+            payload
+            | {
+                "schemaVersion": "monitor-loop-result-v1",
+                "metrics": json.loads(canonical_json(summary.final_metrics)),
+            }
+        )
+    return BacktestRunSummaryView.model_validate(payload)
 
 
 def _run_view(record: BacktestRunRecord, run_input: BacktestRunInput) -> BacktestRunView:
@@ -1780,7 +1830,18 @@ def _availability(record: BacktestRunRecord) -> dict[str, str]:
     }
 
 
-def _fill_view(record: BacktestFillRecord) -> BacktestFillView:
+def _fill_view(record: BacktestFillRecord) -> BacktestFillView | BacktestLoopFillView:
+    if record.payload.get("schema_version") == "monitor-loop-fill-v1":
+        return BacktestLoopFillView.model_validate(
+            {
+                "schemaVersion": "monitor-loop-fill-v1",
+                "fillId": record.fill_id,
+                "runId": record.run_id,
+                "filledAt": format_shanghai_datetime(record.filled_at.astimezone(SHANGHAI)),
+                "eventId": record.payload["event_id"],
+                "receipt": record.payload["receipt"],
+            }
+        )
     payload = _public_value(record.payload)
     if not isinstance(payload, dict):
         raise TypeError("fill payload must be an object")
@@ -1794,16 +1855,39 @@ def _fill_view(record: BacktestFillRecord) -> BacktestFillView:
 
 def _detail_view(
     record: BacktestDetailRecord,
-) -> BacktestDecisionView | BacktestSignalView | BacktestExecutionOutcomeView:
+) -> (
+    BacktestDecisionView | BacktestSignalView | BacktestExecutionOutcomeView | BacktestLoopEventView
+):
     event_at = format_shanghai_datetime(record.event_at.astimezone(SHANGHAI))
     payload = record.payload
+    if payload.get("schema_version") == "monitor-loop-event-v1":
+        return BacktestLoopEventView.model_validate(
+            {
+                "schemaVersion": "monitor-loop-event-v1",
+                "detailId": record.detail_id,
+                "runId": record.run_id,
+                "kind": record.kind.value,
+                "eventAt": event_at,
+                "event": payload,
+            }
+        )
     from trade_plan_monitor.web.backtest_schemas import ResearchDecisionView, ResearchOperationView
-    current_types = {"unified-research-decision-v1": (ResearchDecisionView, "researchDecision"),
-                     "unified-research-operation-v1": (ResearchOperationView, "researchOperation")}
+
+    current_types = {
+        "unified-research-decision-v1": (ResearchDecisionView, "researchDecision"),
+        "unified-research-operation-v1": (ResearchOperationView, "researchOperation"),
+    }
     if payload.get("schema_version") in current_types:
         model, key = current_types[payload["schema_version"]]
-        return model.model_validate({"detailId": record.detail_id, "runId": record.run_id,
-            "kind": record.kind.value, "eventAt": event_at, key: payload})
+        return model.model_validate(
+            {
+                "detailId": record.detail_id,
+                "runId": record.run_id,
+                "kind": record.kind.value,
+                "eventAt": event_at,
+                key: payload,
+            }
+        )
     if record.kind is BacktestDetailKind.DECISION:
         result = EvaluationResult.model_validate_json(
             json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

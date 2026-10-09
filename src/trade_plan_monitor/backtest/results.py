@@ -2476,7 +2476,9 @@ def _load_run_query_row(
         record=BacktestRunRecord(
             summary=summary,
             plan_version_id=(
-                None if run_input.plan_version_id is None else str(run_input.plan_version_id)
+                str(run_input.plan_version_id)
+                if isinstance(run_input, BacktestRunInput) and run_input.plan_version_id is not None
+                else None
             ),
             revision=int(row[9]),
             fill_count=int(row[10]),
@@ -2635,7 +2637,7 @@ def _load_run_input_row(
     row: tuple[object, ...],
     *,
     expected_run_id: str,
-) -> BacktestRunInput:
+) -> BacktestRunInput | LoopInputReference:
     if len(row) != 5:
         raise RuntimeError("stored backtest run input row shape is invalid")
     try:
@@ -2648,6 +2650,17 @@ def _load_run_input_row(
         payload = json.loads(input_json)
         if not isinstance(payload, dict):
             raise RuntimeError("stored backtest run input payload is invalid")
+        if payload.get("schema_version") == "monitor-loop-input-reference-v1":
+            from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+
+            reference = LoopInputReference.model_validate_json(input_json)
+            if (
+                reference.run_id != expected_run_id
+                or reference.run_id != str(row[0])
+                or canonical_json(reference) != input_json
+            ):
+                raise RuntimeError("stored loop input reference identity is invalid")
+            return reference
         run_input = BacktestRunInput.model_validate(
             {**payload, "plan_snapshot": snapshot},
             strict=False,

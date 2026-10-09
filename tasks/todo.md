@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 24 completed, 13 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV33.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 25 completed, 12 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV34.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -264,12 +264,14 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T22. Expose paginated loop results; retain export compatibility
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T21`
 - **Acceptance:** Result/detail paths expose typed loop events, frozen plan provenance and cutoff coverage with stable paging/schema identification. Preserve old summaries and supported-mode CSV/JSON bytes. No new loop export format/route/UI/jobs/mutex. Heavy projection uses owned threads and bounded paging; backpressure affects backtest admission only.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_backtest_exports.py -q -m "not live"`
-- **Primary files:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `tests/integration/test_monitor_loop_result_api.py`
-- **Scope:** M (3 primary files including tests); **Trace:** ML-A09, ML-A10, ML-A15.
+- **Primary files:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `tests/integration/test_monitor_loop_result_api.py`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A10, ML-A15.
+- **Implementation boundary:** Extend the existing result-row decoder and existing run response union, alongside owned-thread projection, typed bounded result schemas and focused HTTP tests. Keep existing routes/cursors/export formats and legacy bytes; no scheduler, queue, lock or approval update.
+- **Evidence:** MV34: 12 loop-result checks; final task/export/production gate passes 44 with one existing environment skip, and related regression passes 189. Paging, native causal hashes, frozen provenance/cutoff, unknown/zero values, expired details, pinning and thread backpressure are verified; identity-guard mutation produces one expected failure and exact bytes are restored. Legacy exports remain compatible; loop exports reject before streaming. ML-T23 follows; approval remains pending ML-T29.
 
 ## ML-T23. Generate final run and result contracts
 

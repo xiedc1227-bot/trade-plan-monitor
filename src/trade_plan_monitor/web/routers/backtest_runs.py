@@ -11,6 +11,7 @@ from pydantic import Field, ValidationError
 
 from trade_plan_monitor.web.backtest_schemas import (
     BacktestJobReceipt,
+    BacktestLoopRunView,
     BacktestRunCommand,
     BacktestRunFiltersView,
     BacktestRunPage,
@@ -116,7 +117,7 @@ class BacktestRunReadService(Protocol):
         cursor: str | None,
     ) -> BacktestRunPage: ...
 
-    async def get_run(self, *, run_id: str) -> BacktestRunView | None: ...
+    async def get_run(self, *, run_id: str) -> BacktestRunView | BacktestLoopRunView | None: ...
 
 
 class BacktestRunOperationService(Protocol):
@@ -135,7 +136,7 @@ class BacktestRunOperationService(Protocol):
         run_id: str,
         command: BacktestRunPinCommand,
         context: MutationContext,
-    ) -> BacktestRunView: ...
+    ) -> BacktestRunView | BacktestLoopRunView: ...
 
 
 def get_backtest_run_read_service(request: Request) -> BacktestRunReadService:
@@ -207,15 +208,15 @@ async def list_backtest_runs(
     return page
 
 
-@router.get("/backtest-runs/{run_id}", response_model=BacktestRunView)
+@router.get("/backtest-runs/{run_id}", response_model=BacktestRunView | BacktestLoopRunView)
 async def get_backtest_run(
     run_id: RunIdPath,
     service: BacktestRunReadServiceDependency,
-) -> BacktestRunView:
+) -> BacktestRunView | BacktestLoopRunView:
     value = await service.get_run(run_id=run_id)
     if value is None:
         raise ApiError(ApiErrorCode.NOT_FOUND)
-    run = validate_api_response(value, BacktestRunView)
+    run = _validated_run(value)
     if run.run_id != run_id:
         raise RuntimeError("backtest run service returned a mismatched run")
     return run
@@ -254,20 +255,27 @@ async def submit_backtest_run(
     return receipt
 
 
-@router.patch("/backtest-runs/{run_id}", response_model=BacktestRunView)
+@router.patch("/backtest-runs/{run_id}", response_model=BacktestRunView | BacktestLoopRunView)
 async def pin_backtest_run(
     run_id: RunIdPath,
     command: BacktestRunPinCommand,
     context: MutationContextDependency,
     service: BacktestRunOperationServiceDependency,
-) -> BacktestRunView:
-    run = validate_api_response(
+) -> BacktestRunView | BacktestLoopRunView:
+    run = _validated_run(
         await service.pin_run(run_id=run_id, command=command, context=context),
-        BacktestRunView,
     )
     if run.run_id != run_id or run.pinned != command.pinned:
         raise RuntimeError("backtest operation service returned a mismatched pinned run")
     return run
+
+
+def _validated_run(value: object) -> BacktestRunView | BacktestLoopRunView:
+    if isinstance(value, BacktestLoopRunView) or (
+        isinstance(value, dict) and value.get("schemaVersion") == "monitor-loop-result-v1"
+    ):
+        return validate_api_response(value, BacktestLoopRunView)
+    return validate_api_response(value, BacktestRunView)
 
 
 def _run_filters(

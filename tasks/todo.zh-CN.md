@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
 > 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 24 项、待完成活动任务 13 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV33。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 25 项、待完成活动任务 12 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV34。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -264,12 +264,14 @@
 
 ## ML-T22. 提供分页闭环结果，保留导出兼容
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T21`
 - **验收:** 结果/详情以稳定分页/模式标识暴露类型化闭环事件、冻结计划来源及截止覆盖。保留旧摘要及支持模式 CSV/JSON 字节。不新增闭环导出格式/路由/UI/任务/互斥。重投影使用自有线程和有界分页，背压仅影响回测准入。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_backtest_exports.py -q -m "not live"`
-- **主要文件:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `tests/integration/test_monitor_loop_result_api.py`
-- **范围:** M (3 个主要文件，含测试); **追溯:** ML-A09, ML-A10, ML-A15.
+- **主要文件:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `tests/integration/test_monitor_loop_result_api.py`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A10, ML-A15.
+- **实现边界：** 补齐既有结果行读取和既有运行响应联合类型，同时实现专属线程投影、有界结果类型及聚焦 HTTP 测试。保留既有路由、游标、导出格式和旧模式字节；不增加调度器、队列、锁或批准更新。
+- **证据:** MV34：12 项闭环结果检查，最终任务/导出/生产组合门禁 44 项通过、1 项既有环境跳过，相关回归 189 项通过。分页、原生因果哈希、冻结来源、截止时间、未知/零值、详情过期、固定标记及线程背压验证；身份保护变异产生 1 项预期失败并恢复精确字节。旧导出兼容，闭环导出在响应流之前拒绝。下一项 ML-T23，批准保持待 ML-T29。
 
 ## ML-T23. 生成最终运行与结果契约
 
