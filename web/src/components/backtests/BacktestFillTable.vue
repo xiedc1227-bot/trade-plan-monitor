@@ -1,16 +1,40 @@
 <script setup lang="ts">
 import { computed, type DeepReadonly } from "vue";
 
-import type { BacktestFillView } from "../../api/generated";
+import type { BacktestFillPage } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
-  items: DeepReadonly<BacktestFillView[]>;
+  items: DeepReadonly<BacktestFillPage["items"]>;
 }
 
 const props = defineProps<Props>();
-const visibleItems = computed(() => props.items.slice(0, 100));
+const visibleItems = computed(() => props.items.slice(0, 100).map((item) => {
+  if (!("receipt" in item)) return item;
+  const receipt = item.receipt;
+  const settlement = receipt.settlement;
+  return {
+    fillId: item.fillId,
+    filledAt: item.filledAt,
+    symbol: receipt.authority_receipt.inventory.symbol,
+    side: receipt.authority_receipt.side,
+    bucket: "—",
+    quantity: receipt.authority_receipt.quantity,
+    requestedQuantity: receipt.command.quantity,
+    priceFen: String(settlement.fill_price_fen),
+    notionalFen: String(settlement.notional_fen),
+    fees: {
+      commissionFen: String(settlement.commission_fen),
+      stampDutyFen: String(settlement.stamp_duty_fen),
+      transferFeeFen: String(settlement.transfer_fee_fen),
+      totalFen: String(settlement.total_fees_fen),
+    },
+    cashDeltaFen: null,
+    costBasisReleasedFen: receipt.released_cost_fen === null ? null : String(receipt.released_cost_fen),
+    realizedPnlFen: null,
+  };
+}));
 
 function visibleFen(value: string | null): string {
   return value === null ? "—" : formatFenAsYuan(value);
@@ -67,8 +91,8 @@ function visibleFen(value: string | null): string {
           <td>{{ formatFenAsYuan(item.fees.stampDutyFen) }}</td>
           <td>{{ formatFenAsYuan(item.fees.transferFeeFen) }}</td>
           <td>{{ formatFenAsYuan(item.fees.totalFen) }}</td>
-          <td>{{ formatFenAsYuan(item.cashDeltaFen) }}</td>
-          <td>{{ formatFenAsYuan(item.costBasisReleasedFen) }}</td>
+          <td>{{ visibleFen(item.cashDeltaFen) }}</td>
+          <td>{{ visibleFen(item.costBasisReleasedFen) }}</td>
           <td>{{ visibleFen(item.realizedPnlFen) }}</td>
         </tr>
       </tbody>

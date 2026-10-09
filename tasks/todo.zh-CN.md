@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
 > 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 25 项、待完成活动任务 12 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV34。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 26 项、待完成活动任务 11 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV35。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -275,12 +275,14 @@
 
 ## ML-T23. 生成最终运行与结果契约
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T18`, `ML-T22`
 - **验收:** 在真实运行/结果 API 变化后重新生成，校验新旧区分载荷、上限和安全整数。批准摘要留待 ML-T29 审阅，不消除基线批准失败断言。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
-- **主要文件:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_monitor_loop_contract.py`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A10.
+- **主要文件:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_monitor_loop_contract.py`, `scripts/generate_frontend_types.py`, `web/src/components/backtests/BacktestDetailTable.vue`, `web/src/components/backtests/BacktestFillTable.vue`, `web/src/components/backtests/BacktestRunTable.vue`, `web/tests/unit/backtestsApi.spec.ts`
+- **范围:** M (10 个主要文件，分三片实施); **追溯:** ML-A09, ML-A10.
+- **实施分片:** ML-T23.1 修正判别标签生成并增加聚焦契约测试（2 个文件）；ML-T23.2 生成既有两套配置（4 个文件）；ML-T23.3 使既有表格及 API 测试夹具准确处理新类型（4 个文件）。不增加完整闭环时间线、新路由/导出、生命周期或批准更新；ML-T25 负责完整结果体验。
+- **证据:** MV35：两套真实运行/结果契约生成并保持最新。专项 11 项、相关契约 50 项、前端回归 114 项通过，前端类型检查通过。标签生成变异产生 1 项预期失败并恢复精确字节；2 项既有批准门禁独立验证仍未批准，未改摘要或路径许可。下一项 ML-T24，最终批准保持 ML-T29。
 
 ## ML-T24. 从既有运行表单提交一份准备计划
 

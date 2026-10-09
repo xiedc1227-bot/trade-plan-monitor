@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 25 completed, 12 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV34.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 26 completed, 11 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV35.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -275,12 +275,14 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T23. Generate final run and result contracts
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T18`, `ML-T22`
 - **Acceptance:** Regenerate after the actual run/result API change and verify discriminated old/new payloads, bounds and safe numbers. Keep the approved-digest review pending ML-T29; do not silence baseline approval failures.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_contract.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`
-- **Primary files:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_monitor_loop_contract.py`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A10.
+- **Primary files:** `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, `tests/integration/test_monitor_loop_contract.py`, `scripts/generate_frontend_types.py`, `web/src/components/backtests/BacktestDetailTable.vue`, `web/src/components/backtests/BacktestFillTable.vue`, `web/src/components/backtests/BacktestRunTable.vue`, `web/tests/unit/backtestsApi.spec.ts`
+- **Scope:** M (10 primary files; three implementation slices); **Trace:** ML-A09, ML-A10.
+- **Implementation slices:** ML-T23.1 fixes discriminator-aware generation with focused contract tests (2 files); ML-T23.2 generates both existing profiles (4 files); ML-T23.3 makes existing tables and their API fixture handle the new variants honestly (4 files). No complete loop timeline, new route/export, lifecycle or approval change; ML-T25 owns the full result experience.
+- **Evidence:** MV35: both actual run/result profiles are generated and current. 11 focused, 50 related contract and 114 frontend checks pass; frontend type-check passes. Discriminator generation mutation produces one expected failure and exact bytes are restored. Both existing approval gates independently remain unapproved; no digest or path allowance changes. ML-T24 follows; final approval remains ML-T29.
 
 ## ML-T24. Submit one prepared plan from the existing run form
 

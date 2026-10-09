@@ -337,6 +337,24 @@ class _TypeScriptRenderer:
                 variants = _sequence(schema[keyword], f"schema.{keyword}")
                 if not variants:
                     raise ValueError(f"OpenAPI {keyword} must not be empty")
+                discriminator = schema.get("discriminator")
+                if keyword in {"oneOf", "anyOf"} and isinstance(discriminator, Mapping):
+                    name = discriminator.get("propertyName")
+                    mapping = _mapping(discriminator.get("mapping"), "discriminator.mapping")
+                    if not isinstance(name, str):
+                        raise ValueError("OpenAPI discriminator property must be a string")
+                    rendered = []
+                    for variant in variants:
+                        reference = _mapping(variant, "discriminator.variant").get("$ref")
+                        tags = [tag for tag, target in mapping.items() if target == reference]
+                        if not tags:
+                            raise ValueError("OpenAPI discriminator variant has no mapped tag")
+                        tag_type = " | ".join(_typescript_literal(tag) for tag in tags)
+                        rendered.append(
+                            f"({self._schema_type(variant, level=level)} & "
+                            f"{{ {_typescript_key(name)}: {tag_type} }})"
+                        )
+                    return separator.join(rendered)
                 return separator.join(
                     f"({self._schema_type(variant, level=level)})" for variant in variants
                 )

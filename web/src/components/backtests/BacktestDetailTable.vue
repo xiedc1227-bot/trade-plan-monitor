@@ -108,6 +108,13 @@ function optional(value: string | number | null): string | number {
             </td>
           </tr>
           <tr
+            v-else-if="'event' in item"
+            data-testid="backtest-detail-row"
+          >
+            <td>{{ formatDisplayDateTime(item.eventAt) }}</td>
+            <td colspan="8">监控闭环事件 · 第 {{ item.event.sequence }} 条</td>
+          </tr>
+          <tr
             v-else-if="item.kind === 'DECISION'"
             data-testid="backtest-detail-row"
           >

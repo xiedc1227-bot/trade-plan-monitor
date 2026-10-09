@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BacktestRunSummaryView } from "../../api/generated";
+import type { BacktestRunPage } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import type { BacktestRunsQueryState } from "../../composables/useBacktestRuns";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
@@ -7,7 +7,7 @@ import { formatDisplayDateTime } from "../../formatters/dateTime";
 interface Props {
   errorMessage: string | null;
   hasMore: boolean;
-  items: readonly BacktestRunSummaryView[];
+  items: readonly BacktestRunPage["items"][number][];
   pageNumber: number;
   queryState: BacktestRunsQueryState;
 }
@@ -21,6 +21,17 @@ interface Emits {
 defineProps<Props>();
 const emit = defineEmits<Emits>();
 
+function finalEquity(run: BacktestRunPage["items"][number]): string {
+  const value = "schemaVersion" in run
+    ? run.metrics.final_equity_fen
+    : run.metrics.finalEquityFen;
+  return value === null ? "不可用" : formatFenAsYuan(String(value));
+}
+
+function intervalReturn(run: BacktestRunPage["items"][number]): string {
+  const value = "schemaVersion" in run ? run.metrics.interval_return : run.metrics.totalReturn;
+  return value ?? "不可用";
+}
 </script>
 
 <template>
@@ -98,8 +109,8 @@ const emit = defineEmits<Emits>();
               </a>
             </td>
             <td>{{ run.eventStart }} 至 {{ run.eventEnd }}</td>
-            <td class="run-table__number">{{ run.metrics.finalEquityFen === null ? '不可用' : formatFenAsYuan(run.metrics.finalEquityFen) }}</td>
-            <td class="run-table__number">{{ run.metrics.totalReturn }}</td>
+            <td class="run-table__number">{{ finalEquity(run) }}</td>
+            <td class="run-table__number">{{ intervalReturn(run) }}</td>
             <td class="run-table__number">{{ run.fillCount }}</td>
             <td>{{ run.pinned ? "已固定" : "未固定" }}</td>
           </tr>

@@ -301,7 +301,7 @@ export type BacktestDetailPage = {
   nextCursor: (string) | (null);
 };
 
-export type BacktestDetailView = (components["schemas"]["BacktestDecisionView"]) | (components["schemas"]["BacktestSignalView"]) | (components["schemas"]["BacktestExecutionOutcomeView"]) | (components["schemas"]["ResearchDecisionView"]) | (components["schemas"]["ResearchOperationView"]);
+export type BacktestDetailView = (components["schemas"]["BacktestDecisionView"]) | (components["schemas"]["BacktestSignalView"]) | (components["schemas"]["BacktestExecutionOutcomeView"]) | (components["schemas"]["ResearchDecisionView"]) | (components["schemas"]["ResearchOperationView"]) | (components["schemas"]["BacktestLoopEventView"]);
 
 export type BacktestEquityPointView = {
   cashFen: string;
@@ -378,7 +378,7 @@ export type BacktestFillPage = {
   filters: components["schemas"]["BacktestFillFiltersView"];
   hasMore: boolean;
   highWatermark: string;
-  items: Array<components["schemas"]["BacktestFillView"]>;
+  items: Array<(components["schemas"]["BacktestFillView"]) | (components["schemas"]["BacktestLoopFillView"])>;
   limit: number;
   nextCursor: (string) | (null);
 };
@@ -491,7 +491,7 @@ export type BacktestJobReceipt = {
   submittedAt: string;
 };
 
-export type BacktestJobResultView = (components["schemas"]["BacktestDataSyncJobResultView"]) | (components["schemas"]["BacktestDatasetVerificationJobResultView"]) | (components["schemas"]["BacktestRunJobResultView"]);
+export type BacktestJobResultView = (components["schemas"]["BacktestDataSyncJobResultView"] & { kind: "DATA_SYNC" }) | (components["schemas"]["BacktestDatasetVerificationJobResultView"] & { kind: "DATASET_VERIFY" }) | (components["schemas"]["BacktestRunJobResultView"] & { kind: "BACKTEST_RUN" });
 
 export type BacktestJobView = {
   attempt: number;
@@ -514,6 +514,91 @@ export type BacktestJobView = {
   updatedAt: string;
 };
 
+export type BacktestLoopCostsInput = {
+  buySlippageFen: number;
+  commissionRate: string;
+  minimumCommissionFen: number;
+  sellSlippageFen: number;
+  stampDutyRate: string;
+  transferFeeRate: string;
+};
+
+export type BacktestLoopEventView = {
+  detailId: string;
+  event: components["schemas"]["LoopAuditEvent"];
+  eventAt: string;
+  kind: "DECISION";
+  runId: string;
+  schemaVersion: "monitor-loop-event-v1";
+};
+
+export type BacktestLoopFillView = {
+  eventId: string;
+  fillId: string;
+  filledAt: string;
+  receipt: components["schemas"]["LoopAccountReceipt"];
+  runId: string;
+  schemaVersion: "monitor-loop-fill-v1";
+};
+
+export type BacktestLoopProvenanceView = {
+  candidateHash: string;
+  candidateRevision: number;
+  inputHash: string;
+  manifestHash: string;
+  preparationId: string;
+  sourceRevision: number;
+};
+
+export type BacktestLoopResponseInput = {
+  mode: "FOLLOW_REMINDERS" | "OBSERVE_ONLY";
+  responseDelaySeconds?: number;
+};
+
+export type BacktestLoopRunSummaryView = {
+  availability: components["schemas"]["BacktestResultAvailabilityView"];
+  completedAt: string;
+  datasetHash: string;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  metrics: components["schemas"]["LoopMetrics"];
+  pinned: boolean;
+  planHash: string;
+  planVersionId: null;
+  reportHash: string;
+  revision: number;
+  runId: string;
+  schemaVersion: "monitor-loop-result-v1";
+  status: "COMPLETED";
+  symbol: string;
+};
+
+export type BacktestLoopRunView = {
+  availability: components["schemas"]["BacktestResultAvailabilityView"];
+  completedAt: string;
+  costs: components["schemas"]["LoopCosts"];
+  datasetHash: string;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  frozenPlan: components["schemas"]["LoopPlanVersion"];
+  metrics: components["schemas"]["LoopMetrics"];
+  openingAccount: components["schemas"]["LoopAccountInput"];
+  pinned: boolean;
+  planHash: string;
+  planVersionId: null;
+  provenance: components["schemas"]["BacktestLoopProvenanceView"];
+  report: components["schemas"]["MonitorLoopReport"];
+  reportHash: string;
+  response: components["schemas"]["LoopResponsePolicy"];
+  revision: number;
+  runId: string;
+  schemaVersion: "monitor-loop-result-v1";
+  status: "COMPLETED";
+  symbol: string;
+};
+
 export type BacktestMarketIndexHealthPointView = {
   dataAt: string;
   health: components["schemas"]["MarketIndexHealth"];
@@ -524,7 +609,7 @@ export type BacktestMarketIndexPointView = {
   closePoints: string;
   dataAt: string;
   health: components["schemas"]["MarketIndexHealth"];
-  indicatorFacts: Array<(components["schemas"]["SmaIndicatorFactView"]) | (components["schemas"]["SmaLookbackIndicatorFactView"]) | (components["schemas"]["ReturnIndicatorFactView"])>;
+  indicatorFacts: Array<(components["schemas"]["SmaIndicatorFactView"] & { formulaId: "SMA" }) | (components["schemas"]["SmaLookbackIndicatorFactView"] & { formulaId: "SMA_LOOKBACK" }) | (components["schemas"]["ReturnIndicatorFactView"] & { formulaId: "RETURN" })>;
   issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
   snapshotHash: string;
   tradeDate: string;
@@ -660,7 +745,7 @@ export type BacktestRunPage = {
   filters: components["schemas"]["BacktestRunFiltersView"];
   hasMore: boolean;
   highWatermark: string;
-  items: Array<components["schemas"]["BacktestRunSummaryView"]>;
+  items: Array<(components["schemas"]["BacktestRunSummaryView"]) | (components["schemas"]["BacktestLoopRunSummaryView"])>;
   limit: number;
   nextCursor: (string) | (null);
 };
@@ -766,9 +851,18 @@ export type CalendarScopeView = {
   nextRetryAt: (string) | (null);
   progress: components["schemas"]["ScopeProgressView"];
   reasonCode: ("RUNTIME_STARTING" | "RUNTIME_STOPPING" | "RUNTIME_STOPPED" | "RUNTIME_FAULT" | "COORDINATOR_STALLED" | "STORAGE_UNAVAILABLE" | "BEFORE_FIRST_MINUTE" | "SESSION_BREAK" | "SESSION_CLOSED" | "NO_ACTIVE_PLANS" | "AWAITING_FIRST_EVALUATION" | "CALENDAR_UNKNOWN" | "REFERENCE_PENDING" | "COVERAGE_INCOMPLETE" | "CLOSE_PENDING" | "PUBLICATION_PENDING" | "PROVIDER_UNAVAILABLE" | "RATE_LIMITED" | "CREDENTIAL_MISSING" | "PERMISSION_DENIED" | "SEMANTICS_INCOMPATIBLE" | "CONFIGURATION_INVALID" | "HISTORY_UNAVAILABLE" | "STATE_UNAVAILABLE" | "GENERATION_CHANGED" | "NEEDS_RESTART" | "LEGACY_PLANS_REQUIRE_REVIEW" | "SCOPED_DEPENDENCY_FAILURE") | (null);
-  requiredTarget: ((components["schemas"]["IntradayTargetView"]) | (components["schemas"]["OfficialCloseTargetView"])) | (null);
+  requiredTarget: ((components["schemas"]["IntradayTargetView"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseTargetView"] & { kind: "OFFICIAL_CLOSE" })) | (null);
   scopeKey: string;
   status: "WAITING" | "RECOVERING" | "READY" | "BLOCKED";
+};
+
+export type CapturedReminder = {
+  captured_at: string;
+  cause_revision: (number) | (null);
+  event: components["schemas"]["DailyAlertEvent"];
+  inventory_revision: number;
+  sequence: number;
+  status: "CAPTURED" | "SUPPRESSED";
 };
 
 export type CertifiedDailyBar = {
@@ -880,13 +974,49 @@ export type DailyAlertCenterView = {
   tradingDate: string;
 };
 
+export type DailyAlertEvent = {
+  acknowledged_at?: (string) | (null);
+  activation_revision: number;
+  alert_kind?: ("RISK_ALERT") | (null);
+  cause_id: string;
+  confirmed_trade_date: (string) | (null);
+  created_at: string;
+  dedup_key: string;
+  evaluated_at: string;
+  event_id: string;
+  evidence: Array<{
+      [key: string]: unknown;
+    }>;
+  execution_date: (string) | (null);
+  message_text: string;
+  name: string;
+  next_step: "CONFIRM_SIMULATED_TRADE" | "REVIEW_RISK_EXIT" | "REVIEW_ALERT";
+  payload_schema_version?: "daily-simulation-alert-v1";
+  plan_hash: string;
+  plan_id: string;
+  plan_version: number;
+  plan_version_id: string;
+  quantity: (number) | (null);
+  review_id: string;
+  risk_scope: ({
+    [key: string]: unknown;
+  }) | (null);
+  rule_id?: (string) | (null);
+  sequence: number;
+  severity: "ACTION" | "RISK" | "INFO";
+  signal_type: "BUY" | "SELL" | "RISK_EXIT" | "REMINDER";
+  simulated_qty: number;
+  symbol: string;
+  trading_date: string;
+};
+
 export type DailyAll = {
-  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["DailyAll"]) | (components["schemas"]["DailyAny"])>;
+  conditions: Array<(components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["DailyAll"] & { type: "ALL" }) | (components["schemas"]["DailyAny"] & { type: "ANY" })>;
   type: "ALL";
 };
 
 export type DailyAny = {
-  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["DailyAll"]) | (components["schemas"]["DailyAny"])>;
+  conditions: Array<(components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["DailyAll"] & { type: "ALL" }) | (components["schemas"]["DailyAny"] & { type: "ANY" })>;
   type: "ANY";
 };
 
@@ -922,7 +1052,7 @@ export type DailyCloseSequence = {
   comparator: ("LT" | "LTE" | "EQ" | "GTE" | "GT") | (null);
   mode: "PAIRWISE_NONDECREASING" | "COMPARE_REFERENCE";
   offset: number;
-  reference: ((components["schemas"]["FixedDailyReference"]) | (components["schemas"]["DynamicDailyReference"])) | (null);
+  reference: ((components["schemas"]["FixedDailyReference"] & { mode: "FIXED" }) | (components["schemas"]["DynamicDailyReference"] & { mode: "DYNAMIC" })) | (null);
   sessions: number;
   type: "DAILY_CLOSE_SEQUENCE";
 };
@@ -931,7 +1061,7 @@ export type DailyCloseSequenceInput = {
   comparator: ("LT" | "LTE" | "EQ" | "GTE" | "GT") | (null);
   mode: "PAIRWISE_NONDECREASING" | "COMPARE_REFERENCE";
   offset: number;
-  reference: ((components["schemas"]["FixedDailyReferenceInput"]) | (components["schemas"]["DynamicDailyReference"])) | (null);
+  reference: ((components["schemas"]["FixedDailyReferenceInput"] & { mode: "FIXED" }) | (components["schemas"]["DynamicDailyReference"] & { mode: "DYNAMIC" })) | (null);
   sessions: number;
   type: "DAILY_CLOSE_SEQUENCE";
 };
@@ -940,7 +1070,7 @@ export type DailyConditionEvidence = {
   bar_ids?: Array<string>;
   basis_id?: (string) | (null);
   children?: Array<components["schemas"]["DailyConditionEvidence"]>;
-  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["DailyAll"]) | (components["schemas"]["DailyAny"]);
+  condition: (components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["DailyAll"] & { type: "ALL" }) | (components["schemas"]["DailyAny"] & { type: "ANY" });
   fact_ids?: Array<string>;
   operands?: Array<string>;
   outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
@@ -1054,7 +1184,7 @@ export type DailyIndicatorCompare = {
   parameters: {
     [key: string]: number;
   };
-  reference: (components["schemas"]["FixedDailyReference"]) | (components["schemas"]["DynamicDailyReference"]);
+  reference: (components["schemas"]["FixedDailyReference"] & { mode: "FIXED" }) | (components["schemas"]["DynamicDailyReference"] & { mode: "DYNAMIC" });
   type: "DAILY_INDICATOR_COMPARE";
 };
 
@@ -1066,7 +1196,7 @@ export type DailyIndicatorCompareInput = {
   parameters: {
     [key: string]: number;
   };
-  reference: (components["schemas"]["FixedDailyReferenceInput"]) | (components["schemas"]["DynamicDailyReference"]);
+  reference: (components["schemas"]["FixedDailyReferenceInput"] & { mode: "FIXED" }) | (components["schemas"]["DynamicDailyReference"] & { mode: "DYNAMIC" });
   type: "DAILY_INDICATOR_COMPARE";
 };
 
@@ -1167,7 +1297,7 @@ export type DailyPriceCompare = {
   comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
   field: "open" | "high" | "low" | "close";
   offset: number;
-  reference: (components["schemas"]["FixedDailyReference"]) | (components["schemas"]["DynamicDailyReference"]);
+  reference: (components["schemas"]["FixedDailyReference"] & { mode: "FIXED" }) | (components["schemas"]["DynamicDailyReference"] & { mode: "DYNAMIC" });
   type: "DAILY_PRICE_COMPARE";
 };
 
@@ -1175,7 +1305,7 @@ export type DailyPriceCompareInput = {
   comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
   field: "open" | "high" | "low" | "close";
   offset: number;
-  reference: (components["schemas"]["FixedDailyReferenceInput"]) | (components["schemas"]["DynamicDailyReference"]);
+  reference: (components["schemas"]["FixedDailyReferenceInput"] & { mode: "FIXED" }) | (components["schemas"]["DynamicDailyReference"] & { mode: "DYNAMIC" });
   type: "DAILY_PRICE_COMPARE";
 };
 
@@ -1553,7 +1683,7 @@ export type DiagnosticEvaluationView = {
   alertEnqueued: false;
   audited: boolean;
   decision: components["schemas"]["AuthoritativeDecisionView"];
-  evaluationIdentity: (components["schemas"]["IntradayDiagnosticIdentityView"]) | (components["schemas"]["OfficialCloseDiagnosticIdentityView"]);
+  evaluationIdentity: (components["schemas"]["IntradayDiagnosticIdentityView"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseDiagnosticIdentityView"] & { kind: "OFFICIAL_CLOSE" });
   positionChanged: false;
   sourceRevision: number;
   stateMutationApplied: false;
@@ -1787,7 +1917,7 @@ export type IndexScopeView = {
   nextRetryAt: (string) | (null);
   progress: components["schemas"]["ScopeProgressView"];
   reasonCode: ("RUNTIME_STARTING" | "RUNTIME_STOPPING" | "RUNTIME_STOPPED" | "RUNTIME_FAULT" | "COORDINATOR_STALLED" | "STORAGE_UNAVAILABLE" | "BEFORE_FIRST_MINUTE" | "SESSION_BREAK" | "SESSION_CLOSED" | "NO_ACTIVE_PLANS" | "AWAITING_FIRST_EVALUATION" | "CALENDAR_UNKNOWN" | "REFERENCE_PENDING" | "COVERAGE_INCOMPLETE" | "CLOSE_PENDING" | "PUBLICATION_PENDING" | "PROVIDER_UNAVAILABLE" | "RATE_LIMITED" | "CREDENTIAL_MISSING" | "PERMISSION_DENIED" | "SEMANTICS_INCOMPATIBLE" | "CONFIGURATION_INVALID" | "HISTORY_UNAVAILABLE" | "STATE_UNAVAILABLE" | "GENERATION_CHANGED" | "NEEDS_RESTART" | "LEGACY_PLANS_REQUIRE_REVIEW" | "SCOPED_DEPENDENCY_FAILURE") | (null);
-  requiredTarget: ((components["schemas"]["IntradayTargetView"]) | (components["schemas"]["OfficialCloseTargetView"])) | (null);
+  requiredTarget: ((components["schemas"]["IntradayTargetView"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseTargetView"] & { kind: "OFFICIAL_CLOSE" })) | (null);
   scopeKey: string;
   status: "WAITING" | "RECOVERING" | "READY" | "BLOCKED";
 };
@@ -1868,12 +1998,112 @@ export type LegacyPlanPreviewResponse = {
 };
 
 export type LoopAccountInput = {
-  cash: (components["schemas"]["KnownLoopCash"]) | (components["schemas"]["UnknownLoopCash"]);
+  cash: (components["schemas"]["KnownLoopCash"] & { kind: "KNOWN" }) | (components["schemas"]["UnknownLoopCash"] & { kind: "UNKNOWN" });
   evidence: string;
   inventory_known: boolean;
   lots: Array<components["schemas"]["LoopInitialLot"]>;
   opening_mark: (components["schemas"]["LoopOpeningMark"]) | (null);
   snapshot_at: string;
+};
+
+export type LoopAccountReceipt = {
+  account: components["schemas"]["LoopAccountState"];
+  authority_receipt: components["schemas"]["SimulationReceipt"];
+  command: components["schemas"]["SimulationCommand"];
+  costs: components["schemas"]["LoopCosts"];
+  released_cost_fen: (number) | (null);
+  request_key: string;
+  settlement: components["schemas"]["LoopFillCosts"];
+};
+
+export type LoopAccountState = {
+  cash: (components["schemas"]["KnownLoopCash"]) | (components["schemas"]["UnknownLoopCash"]);
+  inventory_known: boolean;
+  lots: Array<components["schemas"]["LoopLedgerLot"]>;
+  paid_fees_fen: number;
+  realized_pnl_fen: (number) | (null);
+  revision: number;
+};
+
+export type LoopAttempt = {
+  at: string;
+  cause_id: string;
+  intent_id: string;
+  minute: components["schemas"]["MinuteBar"];
+  reason: (string) | (null);
+  receipt?: (components["schemas"]["LoopAccountReceipt"]) | (null);
+  status: "FILLED" | "BLOCKED" | "CLOSED";
+};
+
+export type LoopAuditEvent = {
+  at: string;
+  cause_event_id: (string) | (null);
+  event_id: string;
+  payload: components["schemas"]["LoopAuditPayload"];
+  run_id: string;
+  schema_version?: "monitor-loop-event-v1";
+  sequence: number;
+};
+
+export type LoopAuditPayload = (components["schemas"]["LoopEvaluation"] & { kind: "EVALUATED" }) | (components["schemas"]["LoopReminder"] & { kind: "REMINDED" }) | (components["schemas"]["LoopRequest"] & { kind: "REQUESTED" }) | (components["schemas"]["LoopExecution"] & { kind: "EXECUTED" }) | (components["schemas"]["LoopResultingState"] & { kind: "STATE" }) | (components["schemas"]["LoopValuationEvent"] & { kind: "VALUATION" });
+
+export type LoopCosts = {
+  buy_slippage_fen: number;
+  commission_rate: string;
+  formula_version?: "monitor-loop-costs-v1";
+  minimum_commission_fen: number;
+  sell_slippage_fen: number;
+  stamp_duty_rate: string;
+  transfer_fee_rate: string;
+};
+
+export type LoopCycleSummary = {
+  attempts: number;
+  evaluations: number;
+  fills: number;
+  intents: number;
+  unfilled_intents: number;
+};
+
+export type LoopEndBoundary = {
+  evidence_cutoff: string;
+  origin: "EXPLICIT" | "DEFAULTED";
+  requested_end_date: (string) | (null);
+  resolved_end_date: string;
+  started_at: string;
+  submitted_at: string;
+};
+
+export type LoopEvaluation = {
+  alerts: Array<components["schemas"]["ResearchReminder"]>;
+  blockers: Array<string>;
+  conditions: Array<components["schemas"]["ResearchRuleEvidence"]>;
+  duplicate: boolean;
+  evaluation_id: (string) | (null);
+  inventory: components["schemas"]["DailyInventoryView"];
+  kind?: "EVALUATED";
+  minute_target: (string) | (null);
+  official_trade_date: (string) | (null);
+  risk_action: components["schemas"]["DailyRiskAction"];
+  risks: Array<components["schemas"]["DailyRiskState"]>;
+  signals: Array<components["schemas"]["DailySignalState"]>;
+};
+
+export type LoopExecution = {
+  attempt: components["schemas"]["LoopAttempt"];
+  kind?: "EXECUTED";
+};
+
+export type LoopFillCosts = {
+  commission_fen: number;
+  fill_price_fen: number;
+  notional_fen: number;
+  quantity: number;
+  quote_fen: number;
+  side: "BUY" | "SELL";
+  stamp_duty_fen: number;
+  total_fees_fen: number;
+  transfer_fee_fen: number;
 };
 
 export type LoopInitialLot = {
@@ -1884,6 +2114,30 @@ export type LoopInitialLot = {
   lot_key: string;
   quantity: number;
   sellable_quantity: (number) | (null);
+};
+
+export type LoopLedgerLot = {
+  acquired_trade_date: (string) | (null);
+  bucket: "CORE" | "TACTICAL";
+  cost_basis_fen: (number) | (null);
+  lot_key: string;
+  quantity: number;
+};
+
+export type LoopMetrics = {
+  blockers: Array<string>;
+  cost_pnl_fen: (number) | (null);
+  equity_change_fen: (number) | (null);
+  final_equity_fen: (number) | (null);
+  initial_equity_fen: (number) | (null);
+  interval_return: (string) | (null);
+  maximum_drawdown: (string) | (null);
+  paid_fees_fen: number;
+  realized_pnl_fen: (number) | (null);
+  slippage_fen: number;
+  turnover: (string) | (null);
+  unrealized_pnl_fen: (number) | (null);
+  valuation_valid: boolean;
 };
 
 export type LoopOpeningMark = {
@@ -1913,6 +2167,53 @@ export type LoopPlanVersion = {
   snapshot: components["schemas"]["UnifiedTradePlan"];
   source_hashes: Array<string>;
   version_id: string;
+};
+
+export type LoopReminder = {
+  kind?: "REMINDED";
+  reminder: components["schemas"]["CapturedReminder"];
+};
+
+export type LoopRequest = {
+  cause_id: string;
+  intent_id: string;
+  kind?: "REQUESTED";
+  ready_at: string;
+};
+
+export type LoopResponsePolicy = {
+  fill_model?: "NEXT_ELIGIBLE_MINUTE_CLOSE";
+  mode: "FOLLOW_REMINDERS" | "OBSERVE_ONLY" | "RECORDED_ACTIONS";
+  response_delay_seconds?: number;
+};
+
+export type LoopResultingState = {
+  account: components["schemas"]["LoopAccountState"];
+  inventory: components["schemas"]["DailyInventoryView"];
+  kind?: "STATE";
+};
+
+export type LoopValuation = {
+  account_revision: number;
+  accounting_cost_fen: (number) | (null);
+  at: string;
+  available_at: (string) | (null);
+  blockers: Array<string>;
+  cash_fen: (number) | (null);
+  cost_pnl_fen: (number) | (null);
+  equity_fen: (number) | (null);
+  market_value_fen: (number) | (null);
+  position_quantity: (number) | (null);
+  price_at: (string) | (null);
+  price_fen: (number) | (null);
+  realized_pnl_fen: (number) | (null);
+  unrealized_pnl_fen: (number) | (null);
+  valuation_valid: boolean;
+};
+
+export type LoopValuationEvent = {
+  kind?: "VALUATION";
+  valuation: components["schemas"]["LoopValuation"];
 };
 
 export type ManualEventRiskUnknownReason = "NO_ACTIVE_PLAN" | "MISSING_CONFIRMATION" | "PLAN_CHANGED" | "EXPIRED";
@@ -1969,7 +2270,7 @@ export type MarketIndexSnapshotView = {
   displayName: string;
   health: components["schemas"]["MarketIndexHealth"];
   indexCode: components["schemas"]["MarketIndexCode"];
-  indicatorFacts: Array<(components["schemas"]["SmaIndicatorFactView"]) | (components["schemas"]["SmaLookbackIndicatorFactView"]) | (components["schemas"]["ReturnIndicatorFactView"])>;
+  indicatorFacts: Array<(components["schemas"]["SmaIndicatorFactView"] & { formulaId: "SMA" }) | (components["schemas"]["SmaLookbackIndicatorFactView"] & { formulaId: "SMA_LOOKBACK" }) | (components["schemas"]["ReturnIndicatorFactView"] & { formulaId: "RETURN" })>;
   issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
   mappedSymbolCount: number;
   mappingVersion: "board-index-map-v1";
@@ -2038,6 +2339,28 @@ export type MinuteVolumeToMeanGteInput = {
 };
 
 export type MissingInputCode = "COMPLETE_MINUTE_BAR" | "PREVIOUS_MINUTE_BAR" | "COMPLETE_5M_BAR" | "PREVIOUS_5M_BAR" | "COMPLETE_5M_BAR_WINDOW" | "ROLLING_VOLUME_WINDOW" | "SESSION_BARS" | "DAILY_INDICATORS" | "PROVISIONAL_DAILY_BAR" | "FIVE_MINUTE_INDICATORS" | "INDICATOR_VALUE" | "OFFICIAL_DAILY_CLOSE" | "TRADING_CALENDAR" | "DAILY_LIMIT" | "MANUAL_EVENT_RISK" | "INDEX_SNAPSHOT" | "INDEX_IDENTITY" | "INDEX_CUTOFF" | "INDEX_HEALTH" | "INDEX_FACT" | "INDEX_HISTORY" | "INDEX_FORMULA";
+
+export type MonitorLoopReport = {
+  authority_id: string;
+  boundary: components["schemas"]["LoopEndBoundary"];
+  cycle: components["schemas"]["LoopCycleSummary"];
+  dataset_hash: string;
+  event_count: number;
+  event_set_hash: string;
+  final_account: components["schemas"]["LoopAccountState"];
+  final_inventory: components["schemas"]["DailyInventoryView"];
+  final_valuation: components["schemas"]["LoopValuation"];
+  input_hash: string;
+  last_evidence_at: (string) | (null);
+  last_valuation_at: string;
+  metrics: components["schemas"]["LoopMetrics"];
+  opening_valuation: components["schemas"]["LoopValuation"];
+  plan_hash: string;
+  report_hash: string;
+  run_id: string;
+  schema_version?: "backtest-report-v4";
+  symbol: string;
+};
 
 export type NextStepCode = "WAIT_FOR_COMPLETE_BAR" | "WAIT_FOR_REQUIRED_DATA" | "WATCH_LOW_ZONE" | "WATCH_PRESSURE" | "REVIEW_BLOCKER" | "WAIT_FOR_OFFICIAL_CLOSE" | "WAIT_FOR_NEXT_TRADING_DAY" | "WAIT_FOR_SETTLEMENT" | "RECORD_CONFIRMED_FILL";
 
@@ -2276,7 +2599,7 @@ export type PlanScopeView = {
   progress: components["schemas"]["ScopeProgressView"];
   readOnly: boolean;
   reasonCode: ("RUNTIME_STARTING" | "RUNTIME_STOPPING" | "RUNTIME_STOPPED" | "RUNTIME_FAULT" | "COORDINATOR_STALLED" | "STORAGE_UNAVAILABLE" | "BEFORE_FIRST_MINUTE" | "SESSION_BREAK" | "SESSION_CLOSED" | "NO_ACTIVE_PLANS" | "AWAITING_FIRST_EVALUATION" | "CALENDAR_UNKNOWN" | "REFERENCE_PENDING" | "COVERAGE_INCOMPLETE" | "CLOSE_PENDING" | "PUBLICATION_PENDING" | "PROVIDER_UNAVAILABLE" | "RATE_LIMITED" | "CREDENTIAL_MISSING" | "PERMISSION_DENIED" | "SEMANTICS_INCOMPATIBLE" | "CONFIGURATION_INVALID" | "HISTORY_UNAVAILABLE" | "STATE_UNAVAILABLE" | "GENERATION_CHANGED" | "NEEDS_RESTART" | "LEGACY_PLANS_REQUIRE_REVIEW" | "SCOPED_DEPENDENCY_FAILURE") | (null);
-  requiredTarget: ((components["schemas"]["IntradayTargetView"]) | (components["schemas"]["OfficialCloseTargetView"])) | (null);
+  requiredTarget: ((components["schemas"]["IntradayTargetView"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseTargetView"] & { kind: "OFFICIAL_CLOSE" })) | (null);
   scopeKey: string;
   status: "WAITING" | "RECOVERING" | "READY" | "BLOCKED";
   symbol: string;
@@ -2499,7 +2822,7 @@ export type PreparationUnavailableCandidate = {
 
 export type PreparationView = {
   attempts: Array<components["schemas"]["PreparationAttemptView"]>;
-  candidate: ((components["schemas"]["PreparationExtractionCandidate"]) | (components["schemas"]["PreparationFrozenCandidate"]) | (components["schemas"]["PreparationUnavailableCandidate"])) | (null);
+  candidate: ((components["schemas"]["PreparationExtractionCandidate"] & { kind: "EXTRACTION" }) | (components["schemas"]["PreparationFrozenCandidate"] & { kind: "FROZEN" }) | (components["schemas"]["PreparationUnavailableCandidate"] & { kind: "UNAVAILABLE" })) | (null);
   candidateRevision: number;
   generation: (string) | (null);
   preparationId: string;
@@ -2510,6 +2833,14 @@ export type PreparationView = {
   sourceRevision: number;
   status: "DRAFT" | "EXTRACTING" | "CANCEL_REQUESTED" | "CANDIDATE" | "REVIEWED" | "FAILED" | "CANCELLED";
   workPhase: ("READY" | "CALLING" | "UNKNOWN" | "ENDED") | (null);
+};
+
+export type PreparedBacktestRunCommand = {
+  costs: components["schemas"]["BacktestLoopCostsInput"];
+  endDate?: (string) | (null);
+  manifestHash: string;
+  preparationId: string;
+  response: components["schemas"]["BacktestLoopResponseInput"];
 };
 
 export type ProductSourceTreatmentView = {
@@ -2537,7 +2868,7 @@ export type ProviderScopeView = {
   nextRetryAt: (string) | (null);
   progress: components["schemas"]["ScopeProgressView"];
   reasonCode: ("RUNTIME_STARTING" | "RUNTIME_STOPPING" | "RUNTIME_STOPPED" | "RUNTIME_FAULT" | "COORDINATOR_STALLED" | "STORAGE_UNAVAILABLE" | "BEFORE_FIRST_MINUTE" | "SESSION_BREAK" | "SESSION_CLOSED" | "NO_ACTIVE_PLANS" | "AWAITING_FIRST_EVALUATION" | "CALENDAR_UNKNOWN" | "REFERENCE_PENDING" | "COVERAGE_INCOMPLETE" | "CLOSE_PENDING" | "PUBLICATION_PENDING" | "PROVIDER_UNAVAILABLE" | "RATE_LIMITED" | "CREDENTIAL_MISSING" | "PERMISSION_DENIED" | "SEMANTICS_INCOMPATIBLE" | "CONFIGURATION_INVALID" | "HISTORY_UNAVAILABLE" | "STATE_UNAVAILABLE" | "GENERATION_CHANGED" | "NEEDS_RESTART" | "LEGACY_PLANS_REQUIRE_REVIEW" | "SCOPED_DEPENDENCY_FAILURE") | (null);
-  requiredTarget: ((components["schemas"]["IntradayTargetView"]) | (components["schemas"]["OfficialCloseTargetView"])) | (null);
+  requiredTarget: ((components["schemas"]["IntradayTargetView"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseTargetView"] & { kind: "OFFICIAL_CLOSE" })) | (null);
   scopeKey: string;
   status: "WAITING" | "RECOVERING" | "READY" | "BLOCKED";
 };
@@ -2569,7 +2900,7 @@ export type ResearchConditionEvidence = {
   bar_ids?: Array<string>;
   basis_id?: (string) | (null);
   children?: Array<components["schemas"]["ResearchConditionEvidence"]>;
-  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+  condition: (components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
   fact_ids?: Array<string>;
   operands?: Array<string>;
   outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
@@ -2860,7 +3191,7 @@ export type RuntimeStatusView = {
   nextRetryAt: (string) | (null);
   nextWakeAt: (string) | (null);
   reasonCode: ("RUNTIME_STARTING" | "RUNTIME_STOPPING" | "RUNTIME_STOPPED" | "RUNTIME_FAULT" | "COORDINATOR_STALLED" | "STORAGE_UNAVAILABLE" | "BEFORE_FIRST_MINUTE" | "SESSION_BREAK" | "SESSION_CLOSED" | "NO_ACTIVE_PLANS" | "AWAITING_FIRST_EVALUATION" | "CALENDAR_UNKNOWN" | "REFERENCE_PENDING" | "COVERAGE_INCOMPLETE" | "CLOSE_PENDING" | "PUBLICATION_PENDING" | "PROVIDER_UNAVAILABLE" | "RATE_LIMITED" | "CREDENTIAL_MISSING" | "PERMISSION_DENIED" | "SEMANTICS_INCOMPATIBLE" | "CONFIGURATION_INVALID" | "HISTORY_UNAVAILABLE" | "STATE_UNAVAILABLE" | "GENERATION_CHANGED" | "NEEDS_RESTART" | "LEGACY_PLANS_REQUIRE_REVIEW" | "SCOPED_DEPENDENCY_FAILURE") | (null);
-  scopes: Array<(components["schemas"]["PlanScopeView"]) | (components["schemas"]["IndexScopeView"]) | (components["schemas"]["ProviderScopeView"]) | (components["schemas"]["CalendarScopeView"])>;
+  scopes: Array<(components["schemas"]["PlanScopeView"] & { kind: "PLAN" }) | (components["schemas"]["IndexScopeView"] & { kind: "INDEX" }) | (components["schemas"]["ProviderScopeView"] & { kind: "PROVIDER" }) | (components["schemas"]["CalendarScopeView"] & { kind: "CALENDAR" })>;
 };
 
 export type RuntimeSymbolCollectionResponse = {
@@ -2913,6 +3244,25 @@ export type SecretStatusView = {
 
 export type SignalType = "WAIT" | "LOW_ZONE_WATCH" | "BLOCKED_DATA" | "BLOCKED_RISK" | "BUY_CORE_READY" | "BUY_TACTICAL_READY" | "PRESSURE_REDUCE_READY" | "RISK_BREACH" | "RISK_RECOVERED" | "RISK_EXIT_READY" | "RISK_EXIT_PENDING_SETTLEMENT";
 
+export type SimulationCommand = {
+  cause_id: string;
+  expected_cause_revision: number;
+  expected_inventory_revision: number;
+  plan_version_id: string;
+  quantity: number;
+};
+
+export type SimulationReceipt = {
+  inventory: components["schemas"]["DailyInventoryView"];
+  inventory_revision: number;
+  price_fen: number;
+  quantity: number;
+  side: "BUY" | "SELL";
+  signal_id: (string) | (null);
+  simulated_at: string;
+  simulation_id: string;
+};
+
 export type SinglePlanPreparationInput = {
   preparation_id: string;
   sources: Array<components["schemas"]["PreparationSource"]>;
@@ -2955,7 +3305,7 @@ export type SourceClauseView = {
 };
 
 export type SourceProcessingView = {
-  treatments: Array<(components["schemas"]["InventorySourceTreatmentView"]) | (components["schemas"]["ProductSourceTreatmentView"])>;
+  treatments: Array<(components["schemas"]["InventorySourceTreatmentView"] & { kind: "INVENTORY_ASSERTION" }) | (components["schemas"]["ProductSourceTreatmentView"] & { kind: "PRODUCT_GUARANTEE" })>;
   version: "source-processing-v1";
 };
 
@@ -3025,29 +3375,29 @@ export type UnavailablePlanEntryView = {
 export type UnfilledReason = "NON_EXECUTABLE_SIGNAL" | "SUSPENDED" | "MISSING_NEXT_MINUTE" | "NO_NEXT_MINUTE" | "LIMIT_UP_LOCKED" | "LIMIT_DOWN_LOCKED" | "INSUFFICIENT_CASH" | "MAX_POSITION_REACHED" | "TARGET_POSITION_REACHED" | "TARGET_LOT_NOT_FOUND" | "T_PLUS_ONE";
 
 export type UnifiedAlertRule = {
-  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
-  confirmation: (components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"]);
+  condition: (components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
+  confirmation: (components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" });
   kind: "RISK_ALERT";
   rule_id: string;
 };
 
 export type UnifiedAll = {
-  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])>;
+  conditions: Array<(components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })>;
   type: "ALL";
 };
 
 export type UnifiedAllInput = {
-  conditions: Array<(components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])>;
+  conditions: Array<(components["schemas"]["DailyPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })>;
   type: "ALL";
 };
 
 export type UnifiedAny = {
-  conditions: Array<(components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])>;
+  conditions: Array<(components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })>;
   type: "ANY";
 };
 
 export type UnifiedAnyInput = {
-  conditions: Array<(components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])>;
+  conditions: Array<(components["schemas"]["DailyPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })>;
   type: "ANY";
 };
 
@@ -3055,7 +3405,7 @@ export type UnifiedConditionEvidence = {
   bar_ids?: Array<string>;
   basis_id?: (string) | (null);
   children?: Array<components["schemas"]["UnifiedConditionEvidence"]>;
-  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+  condition: (components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
   fact_ids?: Array<string>;
   operands?: Array<string>;
   outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
@@ -3064,15 +3414,15 @@ export type UnifiedConditionEvidence = {
 };
 
 export type UnifiedDraftAlertRule = {
-  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
-  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  condition: ((components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
   kind: ("RISK_ALERT") | (null);
   rule_id: (string) | (null);
 };
 
 export type UnifiedDraftAlertRuleInput = {
-  condition: ((components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])) | (null);
-  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  condition: ((components["schemas"]["DailyPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
   kind: ("RISK_ALERT") | (null);
   rule_id: (string) | (null);
 };
@@ -3086,7 +3436,7 @@ export type UnifiedDraftPosition = {
 };
 
 export type UnifiedDraftRisk = {
-  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
+  condition: ((components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
   evidence_mode: ("TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION") | (null);
   involves_core: (boolean) | (null);
   kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
@@ -3098,7 +3448,7 @@ export type UnifiedDraftRisk = {
 };
 
 export type UnifiedDraftRiskInput = {
-  condition: ((components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])) | (null);
+  condition: ((components["schemas"]["DailyPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })) | (null);
   evidence_mode: ("TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION") | (null);
   involves_core: (boolean) | (null);
   kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
@@ -3111,10 +3461,10 @@ export type UnifiedDraftRiskInput = {
 
 export type UnifiedDraftRule = {
   bucket: ("TACTICAL") | (null);
-  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
-  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  condition: ((components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
   execution_window: ("NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION") | (null);
-  independent_signal: ((components["schemas"]["DailyIndependentEvent"]) | (components["schemas"]["UnifiedResetPolicy"])) | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" })) | (null);
   invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
   quantity: (number) | (null);
   rule_id: (string) | (null);
@@ -3126,10 +3476,10 @@ export type UnifiedDraftRule = {
 
 export type UnifiedDraftRuleInput = {
   bucket: ("TACTICAL") | (null);
-  condition: ((components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"])) | (null);
-  confirmation: ((components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"])) | (null);
+  condition: ((components["schemas"]["DailyPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
   execution_window: ("NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION") | (null);
-  independent_signal: ((components["schemas"]["DailyIndependentEvent"]) | (components["schemas"]["UnifiedResetPolicyInput"])) | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicyInput"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" })) | (null);
   invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
   quantity: (number) | (null);
   rule_id: (string) | (null);
@@ -3154,7 +3504,7 @@ export type UnifiedMonitoring = {
 };
 
 export type UnifiedPlanDraft = {
-  activation: ((components["schemas"]["DailyManualActivation"]) | (components["schemas"]["DailyDayActivation"]) | (components["schemas"]["DailyRangeActivation"])) | (null);
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
   alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRule"]>;
   execution_mode?: "CONDITION_PLAN";
   execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
@@ -3175,7 +3525,7 @@ export type UnifiedPlanDraft = {
 };
 
 export type UnifiedPlanDraftInput = {
-  activation: ((components["schemas"]["DailyManualActivation"]) | (components["schemas"]["DailyDayActivation"]) | (components["schemas"]["DailyRangeActivation"])) | (null);
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
   alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRuleInput"]>;
   execution_mode?: "CONDITION_PLAN";
   execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
@@ -3207,7 +3557,7 @@ export type UnifiedResearchInput = {
   adjustment_proofs?: Array<components["schemas"]["ResearchAdjustmentProof"]>;
   calendar_extension?: Array<components["schemas"]["TradingDay"]>;
   inventory_known: boolean;
-  operations?: Array<(components["schemas"]["ResearchFact"]) | (components["schemas"]["ResearchDeactivate"]) | (components["schemas"]["ResearchReplace"]) | (components["schemas"]["ResearchSimulation"]) | (components["schemas"]["ResearchReassessment"])>;
+  operations?: Array<(components["schemas"]["ResearchFact"] & { kind: "FACT" }) | (components["schemas"]["ResearchDeactivate"] & { kind: "DEACTIVATE" }) | (components["schemas"]["ResearchReplace"] & { kind: "REPLACE" }) | (components["schemas"]["ResearchSimulation"] & { kind: "SIMULATE" }) | (components["schemas"]["ResearchReassessment"] & { kind: "REASSESS" })>;
   review: components["schemas"]["ResearchReview"];
   schema_version?: "unified-research-input-v1";
   started_at: string;
@@ -3215,16 +3565,16 @@ export type UnifiedResearchInput = {
 
 export type UnifiedResetPolicy = {
   mode: "LATER_CLOSE_RESET_THEN_CONFIRM";
-  reset_condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
+  reset_condition: (components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
 };
 
 export type UnifiedResetPolicyInput = {
   mode: "LATER_CLOSE_RESET_THEN_CONFIRM";
-  reset_condition: (components["schemas"]["DailyPriceCompareInput"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatioInput"]) | (components["schemas"]["DailyCandleRatioInput"]) | (components["schemas"]["DailyIndicatorCompareInput"]) | (components["schemas"]["DailyCloseSequenceInput"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGteInput"]) | (components["schemas"]["UnifiedAllInput"]) | (components["schemas"]["UnifiedAnyInput"]);
+  reset_condition: (components["schemas"]["DailyPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" });
 };
 
 export type UnifiedRiskBranch = {
-  condition: ((components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"])) | (null);
+  condition: ((components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
   evidence_mode: "TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION";
   involves_core: boolean;
   kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
@@ -3237,10 +3587,10 @@ export type UnifiedRiskBranch = {
 
 export type UnifiedRule = {
   bucket: "TACTICAL";
-  condition: (components["schemas"]["DailyPriceCompare"]) | (components["schemas"]["DailyPriceInRange"]) | (components["schemas"]["DailyVolumeRatio"]) | (components["schemas"]["DailyCandleRatio"]) | (components["schemas"]["DailyIndicatorCompare"]) | (components["schemas"]["DailyCloseSequence"]) | (components["schemas"]["ReviewedDailyFact"]) | (components["schemas"]["MinuteCloseInRange"]) | (components["schemas"]["MinuteCloseBelow"]) | (components["schemas"]["MinuteVolumeToMeanGte"]) | (components["schemas"]["UnifiedAll"]) | (components["schemas"]["UnifiedAny"]);
-  confirmation: (components["schemas"]["OfficialDailyConfirmation"]) | (components["schemas"]["CompletedMinuteConfirmation"]);
+  condition: (components["schemas"]["DailyPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
+  confirmation: (components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" });
   execution_window: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
-  independent_signal: (components["schemas"]["DailyIndependentEvent"]) | (components["schemas"]["UnifiedResetPolicy"]);
+  independent_signal: (components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" });
   invalidation: "RISK_OR_REVIEWED_INVALIDATION";
   quantity: number;
   rule_id: string;
@@ -3251,7 +3601,7 @@ export type UnifiedRule = {
 };
 
 export type UnifiedTradePlan = {
-  activation: (components["schemas"]["DailyManualActivation"]) | (components["schemas"]["DailyDayActivation"]) | (components["schemas"]["DailyRangeActivation"]);
+  activation: (components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" });
   alert_rules?: Array<components["schemas"]["UnifiedAlertRule"]>;
   execution_mode?: "CONDITION_PLAN";
   execution_policy: components["schemas"]["UnifiedExecutionPolicy"];
@@ -3386,6 +3736,13 @@ export interface components {
     BacktestJobReceipt: BacktestJobReceipt;
     BacktestJobResultView: BacktestJobResultView;
     BacktestJobView: BacktestJobView;
+    BacktestLoopCostsInput: BacktestLoopCostsInput;
+    BacktestLoopEventView: BacktestLoopEventView;
+    BacktestLoopFillView: BacktestLoopFillView;
+    BacktestLoopProvenanceView: BacktestLoopProvenanceView;
+    BacktestLoopResponseInput: BacktestLoopResponseInput;
+    BacktestLoopRunSummaryView: BacktestLoopRunSummaryView;
+    BacktestLoopRunView: BacktestLoopRunView;
     BacktestMarketIndexHealthPointView: BacktestMarketIndexHealthPointView;
     BacktestMarketIndexPointView: BacktestMarketIndexPointView;
     BacktestMarketIndexSeriesView: BacktestMarketIndexSeriesView;
@@ -3413,6 +3770,7 @@ export interface components {
     BindingUnit: BindingUnit;
     Board: Board;
     CalendarScopeView: CalendarScopeView;
+    CapturedReminder: CapturedReminder;
     CertifiedDailyBar: CertifiedDailyBar;
     ClauseDisposition: ClauseDisposition;
     CompletedMinuteConfirmation: CompletedMinuteConfirmation;
@@ -3422,6 +3780,7 @@ export interface components {
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
     CoordinatorStatusView: CoordinatorStatusView;
     DailyAlertCenterView: DailyAlertCenterView;
+    DailyAlertEvent: DailyAlertEvent;
     DailyAll: DailyAll;
     DailyAny: DailyAny;
     DailyCandleRatio: DailyCandleRatio;
@@ -3530,10 +3889,29 @@ export interface components {
     LegacyPlanItemView: LegacyPlanItemView;
     LegacyPlanPreviewResponse: LegacyPlanPreviewResponse;
     LoopAccountInput: LoopAccountInput;
+    LoopAccountReceipt: LoopAccountReceipt;
+    LoopAccountState: LoopAccountState;
+    LoopAttempt: LoopAttempt;
+    LoopAuditEvent: LoopAuditEvent;
+    LoopAuditPayload: LoopAuditPayload;
+    LoopCosts: LoopCosts;
+    LoopCycleSummary: LoopCycleSummary;
+    LoopEndBoundary: LoopEndBoundary;
+    LoopEvaluation: LoopEvaluation;
+    LoopExecution: LoopExecution;
+    LoopFillCosts: LoopFillCosts;
     LoopInitialLot: LoopInitialLot;
+    LoopLedgerLot: LoopLedgerLot;
+    LoopMetrics: LoopMetrics;
     LoopOpeningMark: LoopOpeningMark;
     LoopPlanReview: LoopPlanReview;
     LoopPlanVersion: LoopPlanVersion;
+    LoopReminder: LoopReminder;
+    LoopRequest: LoopRequest;
+    LoopResponsePolicy: LoopResponsePolicy;
+    LoopResultingState: LoopResultingState;
+    LoopValuation: LoopValuation;
+    LoopValuationEvent: LoopValuationEvent;
     ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
     ManualEventRiskView: ManualEventRiskView;
     ManualEventRiskViewStatus: ManualEventRiskViewStatus;
@@ -3553,6 +3931,7 @@ export interface components {
     MinuteVolumeToMeanGte: MinuteVolumeToMeanGte;
     MinuteVolumeToMeanGteInput: MinuteVolumeToMeanGteInput;
     MissingInputCode: MissingInputCode;
+    MonitorLoopReport: MonitorLoopReport;
     NextStepCode: NextStepCode;
     NextStepView: NextStepView;
     ObsoleteDailyAlertView: ObsoleteDailyAlertView;
@@ -3608,6 +3987,7 @@ export interface components {
     PreparationSourceCommand: PreparationSourceCommand;
     PreparationUnavailableCandidate: PreparationUnavailableCandidate;
     PreparationView: PreparationView;
+    PreparedBacktestRunCommand: PreparedBacktestRunCommand;
     ProductSourceTreatmentView: ProductSourceTreatmentView;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
@@ -3655,6 +4035,8 @@ export interface components {
     SecretSource: SecretSource;
     SecretStatusView: SecretStatusView;
     SignalType: SignalType;
+    SimulationCommand: SimulationCommand;
+    SimulationReceipt: SimulationReceipt;
     SinglePlanPreparationInput: SinglePlanPreparationInput;
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
@@ -5302,7 +5684,7 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": components["schemas"]["BacktestRunCommand"];
+          "application/json": (components["schemas"]["BacktestRunCommand"]) | (components["schemas"]["PreparedBacktestRunCommand"]);
         };
       };
       responses: {
@@ -5383,7 +5765,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["BacktestRunView"];
+            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]);
           };
         };
         "400": {
@@ -5462,7 +5844,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["BacktestRunView"];
+            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]);
           };
         };
         "400": {
