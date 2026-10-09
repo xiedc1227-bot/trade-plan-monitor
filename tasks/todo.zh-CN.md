@@ -172,8 +172,10 @@
 - **依赖:** `ML-T14`
 - **验收:** 展示期初账户、完整规则、来源证据、历史起点/可用时间及未解决条款。仅精确已审核修订可继续，原文编辑明确使批准失效。不含规则差异、后继日历或后代。
 - **验证:** `npm --prefix web run test -- --run tests/unit/PlanPreparationReview.spec.ts`
-- **主要文件:** `web/src/components/backtests/PlanPreparationReview.vue`, `web/src/views/BacktestNewView.vue`, `web/src/composables/usePlanPreparation.ts`, `web/tests/unit/PlanPreparationReview.spec.ts`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A10, ML-A12, ML-A17, ML-A18.
+- **主要文件:** `web/src/api/preparations.ts`, `web/src/api/preparationReview.ts`, `web/src/components/backtests/PlanPreparationReview.vue`, `web/src/views/BacktestNewView.vue`, `web/src/composables/usePlanPreparation.ts`, `web/tests/unit/PlanPreparationReview.spec.ts`, `web/tests/unit/PlanPreparation.spec.ts`, `web/tests/fixtures/plan-preparation-review.json`
+- **范围:** 三个切片（5 / 3 / 2 个主要文件，含共用测试共 8 个不同文件）； **追溯:** ML-A10, ML-A12, ML-A17, ML-A18. 第一个切片包含后端实际生成的候选/冻结样例，并为既有 API 测试替身补齐必需的审核命令。
+
+- **实施边界:** 先补齐审核传输与只读预览所需的有界候选/来源/账户形状校验；再增加单份控制器的明确审核及可读完整预览；最后在既有创建页面按明确选择接入原文/进度/审核。未保存原文、未结束工作及不确定操作阻止审核与模式切换；确认随原文/候选/审核修订变化清除。缺失事实保持可见；必需时间/仓位归属缺失及未解决规则阻止冻结，可保留的未知账户事实须明确确认。不补造价格/时间/现金。只提交当前提取内容的明确审核；原文修正后重新提取，复杂语义仍由后端判定。新闭环运行提交留在 ML-T24；不改后端、生成契约或批准门禁。
 
 ### ML-C05. 检查点
 

@@ -1,10 +1,11 @@
 import type {
   PreparationCreateCommand, PreparationRecoveryCommand, PreparationRevisionCommand,
-  PreparationSource, PreparationSourceCommand, PreparationView,
+  PreparationSource, PreparationSourceCommand, PreparationView, PreparationReviewInput,
 } from "./generated-runtime-status";
 import { resolveApiFetch } from "./context";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
+import { validReviewCandidate, validPreparationReviewInput } from "./preparationReview";
 
 export type { PreparationSource, PreparationView } from "./generated-runtime-status";
 export interface PreparationRequestOptions { readonly signal?: AbortSignal; }
@@ -20,6 +21,7 @@ export interface PreparationApi {
   extract(id: string, command: PreparationRevisionCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   cancel(id: string, command: PreparationRevisionCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   recover(id: string, command: PreparationRecoveryCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
+  review(id: string, command: PreparationReviewInput, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
 }
 const BASE = "/api/v1/backtest-preparations";
 export const MAX_PREPARATION_SOURCE_CHARACTERS = 150_000;
@@ -79,7 +81,8 @@ function validProgress(value: unknown): value is PreparationView {
     Array.isArray(value.attempts) && value.attempts.length <= 3 && value.attempts.every(validAttempt) &&
     (value.workPhase === null ? value.generation === null :
       ["READY", "CALLING", "UNKNOWN", "ENDED"].includes(String(value.workPhase)) && identifier(value.generation)) &&
-    validCandidate(value.candidate) && new TextEncoder().encode(JSON.stringify(value)).byteLength <= 2 * 1024 * 1024;
+    validCandidate(value.candidate) && (value.candidate === null || validReviewCandidate(value.candidate, value.source.text)) &&
+    new TextEncoder().encode(JSON.stringify(value)).byteLength <= 2 * 1024 * 1024;
 }
 
 function invalidRequest(): ApiClientError {
@@ -132,6 +135,10 @@ export function createPreparationApi(fetcher: typeof fetch = resolveApiFetch()):
       revisionCommand(command);
       if (command.confirmedEnded !== true || !identifier(command.generation)) throw invalidRequest();
       return request(id, "/recoveries", "POST", [200], command, key, options);
+    },
+    async review(id, command, key, options) {
+      if (!validPreparationReviewInput(command)) throw invalidRequest();
+      return request(id, "/reviews", "POST", [200], command, key, options);
     },
   });
 }

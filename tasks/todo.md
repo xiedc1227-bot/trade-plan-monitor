@@ -172,8 +172,10 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 - **Dependencies:** `ML-T14`
 - **Acceptance:** Show initial account, complete rules, source evidence, historical start/availability and unresolved clauses. Proceed only with the exact reviewed revision; source edits visibly invalidate approval. No rule diffs, successor calendar or descendants.
 - **Verification:** `npm --prefix web run test -- --run tests/unit/PlanPreparationReview.spec.ts`
-- **Primary files:** `web/src/components/backtests/PlanPreparationReview.vue`, `web/src/views/BacktestNewView.vue`, `web/src/composables/usePlanPreparation.ts`, `web/tests/unit/PlanPreparationReview.spec.ts`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A10, ML-A12, ML-A17, ML-A18.
+- **Primary files:** `web/src/api/preparations.ts`, `web/src/api/preparationReview.ts`, `web/src/components/backtests/PlanPreparationReview.vue`, `web/src/views/BacktestNewView.vue`, `web/src/composables/usePlanPreparation.ts`, `web/tests/unit/PlanPreparationReview.spec.ts`, `web/tests/unit/PlanPreparation.spec.ts`, `web/tests/fixtures/plan-preparation-review.json`
+- **Scope:** Three increments (5 / 3 / 2 primary files; 8 unique including shared tests); **Trace:** ML-A10, ML-A12, ML-A17, ML-A18. The first increment includes the real backend-generated candidate/frozen fixture and extends the existing API test double for the required review command.
+
+- **Implementation boundary:** First add review transport and bounded candidate/source/account shape checks for readonly previews; then explicit controller review and a readable complete preview; finally compose source/progress/review in the existing creation page after an explicit mode choice. Unsaved evidence, unfinished work and uncertain mutations block review and mode switching; confirmation clears when source/candidate/review revisions change. Missing facts remain visible; incomplete required chronology/lot attribution and unresolved rules block freezing, while preservable unknown account facts require explicit acknowledgement. Never invent prices/times/cash. Submit explicit review of current extracted contents only; source corrections require re-extraction and complex semantics remain server-owned. New loop submission remains ML-T24. No backend, generated contract or approval-gate change.
 
 ### ML-C05. Checkpoint
 
