@@ -17,6 +17,7 @@ import type {
   BacktestRunPage,
   BacktestRunSummaryView,
   BacktestRunView,
+  BacktestServiceView,
   DashboardResponse,
   PlanVersionPage,
 } from "../../src/api/generated";
@@ -29,6 +30,11 @@ const JOB_ID = "e2e-run-job-001";
 const PLAN_VERSION_ID = "123e4567-e89b-42d3-a456-426614174000";
 const TIME = "2026-08-30T10:00:00.000000+08:00";
 const INDEX_TIME = "2026-08-28T15:00:00.000000+08:00";
+const serviceStatus: BacktestServiceView = {
+  epoch: "f".repeat(32), revision: 1, generation: 1, state: "READY",
+  canRead: true, canSubmit: true, canCancel: true, canExport: true,
+  physicallyDrained: true, authorizedJobIds: [], reason: null,
+};
 const ROUTES = [
   { heading: "回测运行记录", path: "/backtests", readyTestId: "run-detail-link", viewSelector: ".backtest-runs-view" },
   { heading: "创建回测", path: "/backtests/new", readyTestId: "submit-backtest-run", viewSelector: ".backtest-new-view" },
@@ -568,6 +574,8 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
     try {
       if (key === "GET /api/v1/dashboard") {
         await fulfillJson(route, dashboard);
+      } else if (key === "GET /api/v1/backtest-service") {
+        await fulfillJson(route, serviceStatus);
       } else if (key === "GET /api/v1/plan-versions") {
         expect(url.searchParams.get("canActivate")).toBe("true");
         await fulfillJson(route, planVersionPage);

@@ -1,8 +1,8 @@
 # 验证记录：监控闭环回测
 
-英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-09，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
+英文规范：[monitor-loop-backtest.md](monitor-loop-backtest.md)。更新于 2026-10-09，Asia/Shanghai。本文件保留历史验收与失败，并区分当前结果。用户授权实施及逐项提交、推送；无付费请求、生产迁移或部署。
 
-当前证据见 MV18–MV43：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24/ML-T25 与 ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07/ML-C08 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV26 通过隔离真实 Chrome 界面验证单原文输入/进度组件及请求/轮询保护。MV27 通过真实挂载 HTTP 配假 AI 验证精确准备审核、冻结凭据及创建页面。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV26 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据为 MV18–MV44：单计划来源准备、完整审核冻结、一次截止时间、私有监测闭环、原子结算、原生结果、最新 30 次保留、惰性线程生命周期/服务 API/UI 均已实现并验证。MV42 覆盖真实原生浏览器流程，MV43 覆盖原门槛的 Windows 600/600 秒负载、209 项相关回归及 131 项共享账本/运行时检查，并保留四次长测失败及修正。MV44 交付操作说明并执行下列最终相关门禁。37 个活动任务中完成 35 项，ML-T38 生命周期说明及 ML-T29 最终接口审阅仍待完成。两项精确审批检查保持失败至 ML-T29 具体审阅；不视为通过或删除断言。以下历史记录不是当前阻塞状态。
 
 ## MV01. 已实现边界
 
@@ -785,3 +785,23 @@ ML-T21 完成存储参与者及维护调用本身；ML-T19 再连接后台消费
 ```
 
 最终相关 Python 命令 209 项通过 / 一项既有环境条件跳过，耗时 108.57 秒，含一项既有 Starlette/httpx 弃用提示。可控真实 SQLite 锁首次产生一项原始错误失败 / 六项未选，随后验证精确原意图重试、零部分准入、监测继续服务及其他 SQL 故障保持。移除绑定运行的存储成交键产生第四次运行一项预期失败 / 四项未选；精确恢复后最终 209 项门禁通过。Ruff 检查主要 Python 文件、JSON 夹具精确解析及空白检查通过。三秒有节奏短测只作为开发试跑通过。最终原始输出保留于忽略的 `.pytest_cache/backtest-thread-load.json`，原失败运行保留于忽略的 `.pytest_cache/ml-t37-failed-long-load.json`。最终接口批准仍为 ML-T29。
+
+
+## MV44. 操作说明及最终可执行检查
+
+2026-10-09: ML-T28 / `62324ed`. 双语操作说明覆盖已实现单计划来源/审核/运行/结果、精确账户/截止语义、单个未完成任务、取消/未知恢复、导出兼容及实测负载边界。最终相关检查通过：58 项后端、935 项前端、类型检查、构建、34 项真实 Chrome 流程、Ruff 及两份生成接口。两项不变的精确接口审批门禁仍待 ML-T29，保留其真实失败。ML-T28 完成，接续 ML-T38。
+
+五个主要文件新增双语操作说明、实际执行记录及已验证的旧浏览器夹具修正，本项不修改运行时/API/UI 实现。首次完整 Chrome 运行在 100.76 秒内产生 6 项失败 / 28 项通过：五项严格审计拒绝此前未处理的服务状态 GET，一项原 200% 布局检查观察到 16px 而非 32px。仅补充明确状态夹具，全部原错误/请求/缩放/溢出断言和界面字节保持。随后原键盘/无障碍及 200% 布局两项在 6.6 秒通过。完整失败日志保留于忽略的 `.pytest_cache/ml-t28-initial-failed-e2e-0.log`，下列最终完整运行才是验收结果。全部检查使用本地虚拟提供方及一次性存储，完整浏览器套件包含既有监测和回测兼容流程。下列两项失败为已知双语批准身份与 52 路径白名单，只在 ML-T29 最终范围审阅后解决，不削弱或跳过断言。耗时包含命令启动。
+
+| 命令 | 实际结果 | 总耗时（秒） |
+|---|---|---|
+| `.venv/Scripts/python.exe -m pytest tests/unit/test_unified_replay_input.py tests/integration/test_unified_replay.py tests/integration/test_unified_replay_parity.py tests/integration/test_unified_runtime.py tests/integration/test_unified_simulation_transactions.py -q -m 'not live' --basetemp=.pytest_cache/ml-t28-final-backend --tb=short` | 58 passed; one existing deprecation notice | 98.75 |
+| `.venv/Scripts/python.exe -m ruff check src tests scripts` | Passed | 0.22 |
+| `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | Passed | 11.60 |
+| `npm --prefix web run test -- --run` | 935 checks passed | 13.68 |
+| `npm --prefix web run type-check` | Passed | 5.59 |
+| `npm --prefix web run build` | Passed | 1.72 |
+| `npm --prefix web run test:e2e` | 34 real Chrome journeys passed | 86.96 |
+| `.venv/Scripts/python.exe -m pytest tests/integration/test_openapi_snapshot.py -q -m 'not live' --basetemp=.pytest_cache/ml-t28-pending-api-approval --tb=short` | 2 failed, 12 passed; pending ML-T29 | 24.72 |
+
+不声称真实 AI/行情提供方认证。原 600/600 秒负载门槛及四次失败保留于 MV43，本项文档不重跑或重分类这些结果。既有无关工作区修改保留并不加入本项提交。相关后端有一项既有 Starlette/httpx 弃用提示，不属于失败。
