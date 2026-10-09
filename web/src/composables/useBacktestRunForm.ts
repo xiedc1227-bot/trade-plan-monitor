@@ -504,7 +504,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
       if (!mounted || controller.signal.aborted || submissionIntent !== intent) return;
       if (
         error instanceof ApiClientError &&
-        (error.code === "NETWORK_ERROR" || error.code === "INVALID_RESPONSE")
+        (error.code === "NETWORK_ERROR" || error.code === "INVALID_RESPONSE" || error.code === "SERVICE_UNAVAILABLE")
       ) {
         submissionState.value = "UNCERTAIN";
         submissionErrorMessage.value = "提交结果尚未确认，请使用同一请求安全重试";

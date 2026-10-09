@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   computed,
+  defineAsyncComponent,
   inject,
   nextTick,
   onBeforeUnmount,
@@ -13,6 +14,8 @@ import { RouterLink, RouterView, useRoute } from "vue-router";
 import { useMonitorStream } from "../composables/useMonitorStream";
 import type { MonitorStreamConnectionState } from "../composables/useMonitorStream";
 import { shellConnectionKey } from "./connection";
+
+const BacktestServiceState = defineAsyncComponent(() => import("../components/backtests/BacktestServiceState.vue"));
 
 defineSlots<{
   connectionBanner?(props: { state: MonitorStreamConnectionState }): unknown;
@@ -222,6 +225,7 @@ onBeforeUnmount(() => {
     </section>
 
     <main id="main-content" ref="mainContent" class="app-shell__main" tabindex="-1">
+      <BacktestServiceState v-if="isBacktestRoute" />
       <RouterView />
     </main>
     <footer class="app-shell__footer">
