@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 21 completed, 16 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV30.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 22 completed, 15 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV31.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -226,7 +226,7 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 ## ML-T19. Run frozen loop inputs through the background worker
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T05`, `ML-T17`, `ML-T18`, `ML-T34`
+- **Dependencies:** `ML-T05`, `ML-T17`, `ML-T18`, `ML-T20`, `ML-T21`, `ML-T34`
 - **Acceptance:** Dispatch by input discriminator with existing lease/cancel ownership; load frozen artifacts only. No backtest CLI entry, compatibility adapter, or command-owned coordinator remains. Dispatch in the dedicated thread after lifecycle/admission gates; preserve single-slot and atomic-publication semantics.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_worker.py tests/integration/test_backtest_job_coordinator.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/runner.py`, `tests/integration/test_monitor_loop_worker.py`
@@ -234,17 +234,19 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T20. Project causal events and valid valuations
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T04`, `ML-T05`
 - **Acceptance:** Separate evaluated/reminded/requested/filled/resulting states and preserve causal links. Report cost-based P/L separately from interval return; unknown prices/cash and zero denominators do not fabricate metrics or liquidation.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_report.py tests/integration/test_monitor_loop_valuation.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/loop_report.py`, `src/trade_plan_monitor/backtest/loop_runner.py`, `tests/unit/test_monitor_loop_report.py`, `tests/integration/test_monitor_loop_valuation.py`
 - **Scope:** M (4 primary files including tests); **Trace:** ML-A01, ML-A03, ML-A09, ML-A12, ML-A13, ML-A15.
+- **Implementation boundary:** Define separate `backtest-report-v4` and typed `monitor-loop-event-v1` envelopes for evaluation, captured reminder, response request, execution, resulting state and valuation. Stream a canonical ordered event digest through an optional report writer on `LoopRunner`; retain the existing attempt callback and private cycle behavior. Opening market equity uses only explicitly valid opening marks, never lot cost or a later quote. Keep cost P/L, interval return, paid fees and absolute slippage separate; unknown holdings/cash/prices and zero denominators preserve null metrics. Include original boundary and actual evidence/valuation times, without end liquidation. Report materialization/retention and worker dispatch remain ML-T21/ML-T19.
+- **Evidence:** MV31: 24 focused report checks and 137 final related regressions pass; zero-denominator mutation produces one expected failure and exact bytes are restored. Full causal ancestry, risk/expiry/observation, cost versus market value, unknown/zero facts, canonical digest, identical replay, write failure and cancellation without a completed report are verified. ML-T20 completes; ML-T21 then ML-T19 follow, without changing deliverable count or acceptance.
 
 ## ML-T21. Publish and retain loop results atomically
 
 - [ ] Complete implementation and task verification.
-- **Dependencies:** `ML-T19`, `ML-T20`
+- **Dependencies:** `ML-T17`, `ML-T20`
 - **Acceptance:** Stream typed events, verify stored input/report hashes and publish only complete runs. Failure/cancel/overflow leaves no completed partial report. Retain latest 30 materialized historical runs total by publication/retention time descending and run_id tie-breaks. Existing bounded maintenance deletes oldest excess summaries/fills/details after publication; pins do not bypass the cap. Protect queued/running references, shared datasets/snapshots and retained frozen single-plan inputs. Existing exports remain byte-compatible; no new cleanup scheduler or resource-budget framework.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py tests/integration/test_backtest_publication.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`

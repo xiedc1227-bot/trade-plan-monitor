@@ -1,13 +1,13 @@
 """Offline single-plan response cycle over frozen, causally available monitoring frames."""
 
 from datetime import time, timedelta
-from typing import Literal, Self
+from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from trade_plan_monitor.backtest.control import check_cancelled
-from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt, calculate_loop_costs
-from trade_plan_monitor.backtest.plan_schedule import LoopTimestamp
+from trade_plan_monitor.backtest.loop_account import calculate_loop_costs
+from trade_plan_monitor.backtest.loop_report import LoopAttempt, LoopCycleSummary, LoopReportWriter
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.backtest.response_policy import ReminderResponsePolicy
 from trade_plan_monitor.market_data.models import DailyLimit, MinuteBar
@@ -45,27 +45,12 @@ class LoopFrame(ResearchValue):
         return self
 
 
-class LoopAttempt(ResearchValue):
-    intent_id: str
-    cause_id: str
-    at: LoopTimestamp
-    minute: MinuteBar
-    status: Literal["FILLED", "BLOCKED", "CLOSED"]
-    reason: str | None
-    receipt: LoopAccountReceipt | None = None
-
-
-class LoopCycleSummary(ResearchValue):
-    evaluations: int = Field(ge=0, le=70000)
-    intents: int = Field(ge=0, le=70000)
-    attempts: int = Field(ge=0, le=70000)
-    fills: int = Field(ge=0, le=70000)
-    unfilled_intents: int = Field(ge=0, le=70000)
-
-
 class LoopRunner:
-    def __init__(self, session, *, emit=None):
+    def __init__(self, session, *, emit=None, report_writer: LoopReportWriter | None = None):
         self.session, self.emit = session, emit
+        if report_writer is not None and report_writer.session is not session:
+            raise ValueError("LOOP_REPORT_SESSION_BINDING_MISMATCH")
+        self.report_writer = report_writer
         self.policy = ReminderResponsePolicy(
             session.run_input.response,
             authority_id=session.selection.authority_id,
@@ -78,8 +63,17 @@ class LoopRunner:
             raise ValueError("LOOP_EVALUATION_LIMIT_EXCEEDED")
         self.evaluations += 1
         evaluated = self.session.evaluate(inputs)
+        if self.report_writer is not None:
+            self.report_writer.evaluated(inputs, evaluated)
         for reminder in self.session.capture(evaluated.event_ids):
+            if self.report_writer is not None:
+                self.report_writer.reminded(reminder)
+            previous = len(self.policy.intents)
             self.policy.register(reminder)
+            if self.report_writer is not None and len(self.policy.intents) > previous:
+                self.report_writer.requested(
+                    self.policy.intents[next(reversed(self.policy.intents))]
+                )
 
     def run(self, frames, *, cancellation_token=None) -> LoopCycleSummary:
         previous = None
@@ -98,6 +92,8 @@ class LoopRunner:
                 raise ValueError("LOOP_FRAME_SYMBOL_MISMATCH")
             self._evaluate(frame.runtime)
             if frame.minute is None:
+                if self.report_writer is not None:
+                    self.report_writer.observed(frame.runtime)
                 continue
             for intent in self.policy.pending():
                 check_cancelled(cancellation_token, "RUN_EVALUATION")
@@ -152,15 +148,22 @@ class LoopRunner:
                 )
                 if self.emit is not None:
                     self.emit(event)
+                if self.report_writer is not None:
+                    self.report_writer.executed(event)
                 if receipt is not None:
                     self._evaluate(frame.runtime)
-        return LoopCycleSummary(
+            if self.report_writer is not None:
+                self.report_writer.observed(frame.runtime)
+        result = LoopCycleSummary(
             evaluations=self.evaluations,
             intents=len(self.policy.intents),
             attempts=self.attempts,
             fills=self.fills,
             unfilled_intents=sum(i.status == "PENDING" for i in self.policy.intents.values()),
         )
+        if self.report_writer is not None:
+            self.report_writer.complete_cycle(result)
+        return result
 
     def _command(self, intent):
         event = intent.reminder.event

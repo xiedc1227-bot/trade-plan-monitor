@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 21 项、待完成活动任务 16 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV30。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 22 项、待完成活动任务 15 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV31。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -226,7 +226,7 @@
 ## ML-T19. 通过后台工作者执行冻结闭环输入
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T05`, `ML-T17`, `ML-T18`, `ML-T34`
+- **依赖:** `ML-T05`, `ML-T17`, `ML-T18`, `ML-T20`, `ML-T21`, `ML-T34`
 - **验收:** 按输入区分值分发，沿用租约/取消所有权，只读取冻结产物。不保留回测 CLI 入口、兼容适配器或命令专用协调器。 生命周期/准入门槛后在专用线程分派，保留单槽和原子发布语义。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_worker.py tests/integration/test_backtest_job_coordinator.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/runner.py`, `tests/integration/test_monitor_loop_worker.py`
@@ -234,17 +234,19 @@
 
 ## ML-T20. 投影因果事件与有效估值
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T04`, `ML-T05`
 - **验收:** 区分评估/提醒/请求/成交/结果状态并保留因果关联。历史成本盈亏与区间收益分开，未知价格/现金、零分母不编造指标或清仓。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_report.py tests/integration/test_monitor_loop_valuation.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/loop_report.py`, `src/trade_plan_monitor/backtest/loop_runner.py`, `tests/unit/test_monitor_loop_report.py`, `tests/integration/test_monitor_loop_valuation.py`
 - **范围:** M (4 个主要文件，含测试); **追溯:** ML-A01, ML-A03, ML-A09, ML-A12, ML-A13, ML-A15.
+- **实施边界:** 为评估、捕获提醒、响应请求、执行、结果状态和估值定义独立的 `backtest-report-v4` 及类型化 `monitor-loop-event-v1` 信封。在 `LoopRunner` 通过可选报告写入者流式计算规范有序事件摘要，保留既有尝试回调和私有循环行为。初始市值权益只用明确有效的初始估值，绝不使用批次成本或稍后报价。分别保留成本损益、区间收益、已付费用和绝对滑点；未知持仓/现金/价格及零分母保留空指标。记录原始边界及实际证据/估值时间，不在结束时清仓。报告物化/留存和工作线程接入仍由 ML-T21/ML-T19 完成。
+- **证据:** MV31：24 项报告专项检查及 137 项最终相关回归通过；零分母变异产生 1 项预期失败、恢复精确字节。完整因果链、风险/到期/观察、成本与市值差异、未知/零值、规范摘要、相同回放、写入故障及取消不产生完成报告均验证。ML-T20 完成，下一项 ML-T21，随后 ML-T19；不改变交付数量或验收标准。
 
 ## ML-T21. 原子发布与保留闭环结果
 
 - [ ] 完成实现和本项验证.
-- **依赖:** `ML-T19`, `ML-T20`
+- **依赖:** `ML-T17`, `ML-T20`
 - **验收:** 流式类型化事件，验证存储输入/报告哈希，仅发布完整运行。失败/取消/超限不留下已完成部分报告。总共保留最新 30 条已物化历史运行，按发布/保留时间降序、run_id 破同序。发布后既有有界维护删除最旧超额摘要/成交/详情，置顶不绕过上限。保护排队/运行引用、共享数据集/快照及保留冻结单计划输入。既有导出保持字节兼容，不新增清理调度器或资源预算框架。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py tests/integration/test_backtest_publication.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`
