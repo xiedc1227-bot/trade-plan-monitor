@@ -32,7 +32,7 @@
 
 当前正式 API 操作使用 `/api/v1/plan-extractions`、`/api/v1/plan-drafts`、`/api/v1/plan-imports`、`/api/v1/plan-review-previews`、`/api/v1/plan-review-supplements`、`/api/v1/plan-review-confirmations`、`/api/v1/plan-activations`、`/api/v1/plan-deactivations`、`/api/v1/plan-facts`、`/api/v1/simulation-position-confirmations`、`/api/v1/simulation-position-inventory`、`/api/v1/plan-risk-reassessments`、`/api/v1/simulated-trades` 和 `/api/v1/plan-runtime/{symbol}`。当前路由没有独立 `/daily-*` 操作族。AI 供应商配置在 API 中只读，并从项目文件一次加载。旧 `dailyMapping` 传输字段和内部 `Daily*` 名称作为共用审核/记账兼容细节保留，不能构成第二套当前流程。
 
-OpenAPI 快照 SHA-256：`8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`。于 2026-10-07（Asia/Shanghai）依据 [SPEC-unified-replay](../backtesting/SPEC-unified-replay.zh-CN.md) UR01/UR03/UR04/UR05/UR06/UR08 审阅，覆盖已在 `7a92f75` 提交的既有统一研究扩展：增量 `researchInput`、强类型研究决策/操作详情、指标/权益投影及其有界支持结构。路由、操作参数/响应和其他全部既有监测/错误/任务结构不变，生成物与实际路由一致。[MV12](../../verification/monitor-loop-backtest.zh-CN.md#mv12-隔离收尾与契约审阅) 记录全部 37 处 schema 差异及实际检查。原批准 `4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255` 保留为 `a0915f7` 的历史身份，不再视为当前批准。此次纠正仅批准既有统一研究契约；未来监控闭环准备/服务 API 及 ML-T29/ML-C10 最终验收仍待完成。
+历史审阅 OpenAPI 快照 SHA-256：`8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`。于 2026-10-07（Asia/Shanghai）依据 [SPEC-unified-replay](../backtesting/SPEC-unified-replay.zh-CN.md) UR01/UR03/UR04/UR05/UR06/UR08 审阅，覆盖已在 `7a92f75` 提交的既有统一研究扩展：增量 `researchInput`、强类型研究决策/操作详情、指标/权益投影及其有界支持结构。路由、操作参数/响应和其他全部既有监测/错误/任务结构不变，生成物与实际路由一致。[MV12](../../verification/monitor-loop-backtest.zh-CN.md#mv12-隔离收尾与契约审阅) 记录全部 37 处 schema 差异及实际检查。原批准 `4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255` 保留为 `a0915f7` 的历史身份，不再视为当前批准。此次纠正仅批准当时既有统一研究契约，保留其历史范围；现有监控闭环准备/服务 API 的最终审阅和批准见 U09。
 
 模拟交易必须明确操作，与登记的真实持仓和离线研究成交隔离，一次完整应用正数 100 股整数倍数量。初始模拟库存、持有/可卖数量及计划目标也必须为 100 股整数倍。服务端在单股票事务内复核激活身份、审核、信号/风险依据、库存修订、报价、日历、T+1、CORE 保护、最大持仓和幂等。完整授权数量不可执行时不得替代为部分交易。
 
@@ -54,7 +54,7 @@ OpenAPI 快照 SHA-256：`8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08
 
 ## U07. 文档一致性
 
-两种语言保持 U01–U08、字段名、格式号、API 路径、时序、边界与验收标准一致。当前索引指向本文。保留有用的冻结兼容约束及必要验收证据；从维护目录删除被替代规格与已完成过程记录。历史 Git 证据不授权当前行为。
+两种语言保持 U01–U09、字段名、格式号、API 路径、时序、边界与验收标准一致。当前索引指向本文。保留有用的冻结兼容约束及必要验收证据；从维护目录删除被替代规格与已完成过程记录。历史 Git 证据不授权当前行为。
 
 ## U08. 普通规则持续有效（2026-10-03 限范围方案）
 
@@ -69,3 +69,33 @@ OpenAPI 快照 SHA-256：`8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08
 **验收。** 无规则日期的原文产生可审核候选，不编造日期，其余参数/证据完整后可启用。后续交易日可发现新独立信号，旧信号仍过期且不可重复使用。停用/替换阻断旧规则/信号/排队普通提醒；仅保存无影响；内容修改必须重新审核。覆盖风险锁存与明确解除、T+1、CORE、最大数量、完整正数 100 股模拟与幂等。旧含日期的规范字节/哈希及授权边界完全不变。明确和含糊期限保持可见，不能被新默认值隐藏。正式 API 与单一 `/plans` 浏览器流程一致。中文生成模板不再把缺截止日期视为遗漏，同时保留单次信号窗口与其他参数缺失语义。
 
 **验证与排除项。** 仅用确定性的临时数据库/虚拟供应商：`.venv/Scripts/python.exe -m pytest <affected tests> -q -m 'not live'`、`.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`、受影响 Ruff 检查、`npm run test -- --run`、`npm run type-check`、`npm run build` 及当前 Playwright 流程。复用未受影响验收，不重复高成本回测容量测试。其他策略、指标、供应商、恢复架构、指数功能、基本面边界、记账设计、券商执行、生产配置/数据库、提交、推送与部署均不在范围。
+
+
+## U09. 单计划监控闭环最终 API 审阅（2026-10-09）
+
+OpenAPI 快照 SHA-256：`dde2866b81a9710a51bf7817eeeb30513cfb4e844437adba7a2ef202fd52caa0`。本次限范围最终批准依据已实施的[监控闭环提案](../backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md)、[操作指南](../../operations/monitor-loop-backtest.zh-CN.md)及 MV46 证据。用户授权完成剩余 20 项并逐项推送 GitHub；此处在门禁通过后记录具体已审阅实现，不将授权本身当作验证。
+
+当前监测 v2 快照 SHA-256：`d34ffd622021a50127a6f92cbf81be8323884f1f5b2dc36e529a7ca2c0b9c807`。上方批准身份对应兼容监测 v1；两种 profile 的已审阅回测差异一致，各自原监测接口保持精确。
+
+与此前已审阅的 `7a92f75` 统一研究快照相比，挂载契约共有 62 条路径：52 条原路径全部保留，新增下列 10 条。七条准备路径覆盖创建/读取/原文/提取/审核/取消/明确恢复，三条服务路径覆盖惰性状态及明确修复/恢复/停止。不增加第二种计划类型、每日后继、批量运行、同时任务、监测控制或原生导出路径。
+
+| 新增路径 | 已审阅操作 |
+|---|---|
+| `/api/v1/backtest-preparations` | POST：201 耐久单原文准备 |
+| `/api/v1/backtest-preparations/{preparation_id}` | GET：200 耐久进度 |
+| `/api/v1/backtest-preparations/{preparation_id}/source` | PUT：200 绑定修订的编辑 |
+| `/api/v1/backtest-preparations/{preparation_id}/extractions` | POST：202 明确自有提取 |
+| `/api/v1/backtest-preparations/{preparation_id}/reviews` | POST：200 已审核不可变清单 |
+| `/api/v1/backtest-preparations/{preparation_id}/cancellations` | POST：200 / 202 已结束或等待排空的取消 |
+| `/api/v1/backtest-preparations/{preparation_id}/recoveries` | POST：200 明确确认已结束的恢复 |
+| `/api/v1/backtest-service` | GET：200 惰性状态/能力 |
+| `/api/v1/backtest-service/recovery-requests` | POST：202 局部修复或恰好一个所选任务恢复 |
+| `/api/v1/backtest-service/stop-requests` | POST：202 接受自有停止 |
+
+既有操作差异仅限 `POST /api/v1/backtest-runs` 接受增量 `PreparedBacktestRunCommand`，以及 `/api/v1/backtest-runs/{run_id}` 的 GET/PATCH 接受增量 `BacktestLoopRunView` 响应。原请求参数、收据/状态/错误结构、PATCH 命令及旧分支保持精确一致。三个改动的原模式为 `BacktestDetailView`、`BacktestFillPage` 和 `BacktestRunPage`，仅增加原生事件/成交/汇总分支，其他属性及 100 项上限保持一致。新增 108 个可达模式，涵盖有界准备/原文审核、共用 Schema 5 条件、期初账户/已知未知事实、原生因果报告及封闭服务命令。没有原模式被删除或发生其他修改。两套生成 profile 均对照挂载路由检查。
+
+准备变更沿用本地来源/幂等保护、严格修订绑定、单原文输入、3 次尝试、封闭候选分支及未知/取消调用排空保护。提交冻结一份已审核计划/账户及一次确定的截止，回放消费复制证据，不新增提供方/AI 工作。原生结果保留精确金额、来源、因果收据身份及有序分页。内部成交存储键绑定运行，公开收据标识及精确旧记录验证保持稳定。原生闭环导出继续在流响应前返回 409，既有支持模式冻结导出保持兼容。
+
+服务状态保持惰性，控制绑定启动 `epoch`、`expectedRevision`、原始请求体/键及最多一个所选 `resumeJobIds` 条目。接受 202 控制收据不代表清理完成。READ_READY/READY 均不自动授权待恢复任务。一个未完成任务会阻止新建及互斥操作，直至最终状态或明确有证据的恢复。取消中及未知工作保留槽位，自有晚完成工作实际排空前阻止替换。真实有界 SQLite BUSY/LOCKED 元数据冲突使用既有 503/Retry-After 错误结构，保留原始请求重试，不改变其他 SQL 故障。服务/线程上限及每十分钟五次实验的实测负载边界保持 ML15–ML17/ML-O08/ML-O09 的说明。
+
+U04/MV12 保留历史 `a0915f7` 批准不一致及针对 `7a92f75` 单独审阅的纠正。此 U09 批准仅在 MV46 记录的最终接口检查通过后替代当前契约身份，不抹去先前失败、不认证真实 AI/行情提供方、不批准生产迁移/部署，也不扩展已接受的同进程限制。

@@ -1,8 +1,8 @@
 # 验证记录：监控闭环回测
 
-英文规范：[monitor-loop-backtest.md](monitor-loop-backtest.md)。更新于 2026-10-09，Asia/Shanghai。本文件保留历史验收与失败，并区分当前结果。用户授权实施及逐项提交、推送；无付费请求、生产迁移或部署。
+英文规范：[monitor-loop-backtest.md](monitor-loop-backtest.md)。更新于 2026-10-09，Asia/Shanghai。用户要求的本轮 20 项逐项验证、提交并推送；全部 37 个活动任务和 13 个检查点完成，取消的 ML-T06/ML-T09 与 ML-A07 保留历史编号。单计划、单个未完成任务及互斥操作要求保持。
 
-当前证据为 MV18–MV45：单计划来源准备、完整审核冻结、一次截止时间、私有监测闭环、原子结算、原生结果、最新 30 次保留、惰性线程生命周期/服务 API/UI 均已实现并验证。MV42 覆盖真实原生浏览器流程，MV43 覆盖原门槛的 Windows 600/600 秒负载、209 项相关回归及 131 项共享账本/运行时检查，并保留四次长测失败及修正。MV44 交付操作说明并执行下列最终相关门禁。37 个活动任务中完成 36 项，ML-T29 最终接口审阅仍待完成；MV45 补充服务生命周期与已接受线程边界说明。两项精确审批检查保持失败至 ML-T29 具体审阅；不视为通过或删除断言。以下历史记录不是当前阻塞状态。
+当前验收为 MV18–MV46：来源准备与完整审核冻结、一次截止时间、私有监测闭环、原子结算、原生因果结果、最新 30 次保留、惰性生命周期/服务控制及前端流程均已实现。MV43 保留四次负载失败、局部修正与通过原门槛的 Windows 600/600 秒实测；MV44 记录 58 项最终相关后端、935 项前端及 34 项真实 Chrome 流程通过，MV45 记录操作边界。MV46 按已提交源码隔离审阅两份接口、保留历史批准、完成 69 项契约检查与精确白名单破坏/恢复验证；此前两项审批失败已解决。共同进程和实测有节奏负载边界保持，不认证真实 AI/行情提供方、生产迁移或部署。以下历史原文和失败证据保留，不代表当前阻塞。
 
 ## MV01. 已实现边界
 
@@ -812,3 +812,21 @@ ML-T21 完成存储参与者及维护调用本身；ML-T19 再连接后台消费
 2026-10-09: ML-T38 / `32921ee`. 双语说明记录休眠启动、明确元数据/执行权限、只恢复一个明确选择的任务、局部修复、控制确认与实际排空、启动/修订/幂等防护及已接受共同进程限制。引用实际 MV43 负载及 MV44 最终/浏览器证据，不重跑或扩大其结论。C13 完成，仅余 ML-T29/C10 最终审阅批准。
 
 四个主要操作/验证文档记录 ML-O08/ML-O09。状态保持惰性，READ_READY/READY 不自动授权积压任务。停止/恢复使用原 epoch/修订/请求体/键返回 202 确认；STOPPED 要求物理排空，未知持久任务仍需明确确认恢复。恢复明确选择一个任务。七个有界自有线程共享进程 CPU/内存/磁盘，不承诺强停、资源硬上限或必经进程阶段。保留历史 U04/MV12 批准不一致与范围内纠正。本项仅文档，检查双语章节/字段/路径/限制等价及空白；已执行故障/负载/UI 结果仍见 MV39–MV44。不包含运行时、生成接口或无关工作区修改。
+
+
+## MV46. 最终契约审阅及精确接口批准
+
+2026-10-09: ML-T29 / `e7d36e7`. 最终审阅保留全部 52 条原路径，仅批准 10 条新增路径及已记录原生增量分支，并保留历史身份。两份已审阅快照/类型与已提交源码一致。精确白名单、双语批准、公共错误及生成 TypeScript 门禁通过：51 项集成与 18 项服务值检查。删除一条批准路径会失败，精确恢复字节后通过。C10 完成，全部 37 个活动任务及用户要求本轮 20 项完成。
+
+五个主要文件在双语方案/U09 记录具体最终契约审阅，仅将 10 条已审阅路径字面量加入 APPROVED_PATHS。原精确路径相等、摘要、公共错误及其他全部断言保持字节等价。与 7a92f75 比较，两份接口保留 52 条路径，新增 10 条，仅以已审阅分支修改两个既有路径项和三个既有结构，增加 108 个可达结构，不删除既有结构。U04 保留早期 a0915f7 不一致及其 7a92f75 范围内纠正。最终 LF 快照身份为 dde2866b81a9710a51bf7817eeeb30513cfb4e844437adba7a2ef202fd52caa0 / d34ffd622021a50127a6f92cbf81be8323884f1f5b2dc36e529a7ca2c0b9c807。
+
+检查使用隔离的 e7d36e7 检出及五个已审阅文件，并断言 Python 包来自该检出。其他正在进行的指数展示修改，包括共享白名单新增加的路径，不进入本次审阅/提交。只暂存已审阅测试版本，工作区修改保留。首次准备检查拒绝同名集成/单元测试合并收集及 CRLF 检出文件；后续准备检查拒绝入口 LF 不一致、缺少 TypeScript 编译器及 Node 声明。直接从已提交 Git blob 读取标准字节，私有复制已安装 TypeScript/Node/undici 声明；不削弱源码、生成器或断言。准备阶段日志保留于忽略的 .pytest_cache/ml-t29-initial-isolation-gates.json、.pytest_cache/ml-t29-dependency-isolation-gates.json 及 .pytest_cache/ml-t29-node-types-isolation-gates.json。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_openapi_snapshot.py tests/integration/test_backtest_service_contract.py tests/integration/test_monitor_loop_contract.py tests/integration/test_plan_preparation_contract.py -q -m "not live"
+.venv/Scripts/python.exe -m pytest tests/unit/test_backtest_service_contract.py -q -m "not live"
+.venv/Scripts/python.exe scripts/generate_frontend_types.py --check
+.venv/Scripts/python.exe -m ruff check tests/integration/test_openapi_snapshot.py
+```
+
+最终结果：51 项集成在 38.05 秒通过，18 项服务值在 0.44 秒通过，两份接口生成验证在 4.63 秒通过，Ruff 通过。从隔离精确白名单移除 /api/v1/backtest-service 后，一项预期失败 / 13 项未选，耗时 2.76 秒；精确恢复原字节后，一项通过 / 13 项未选，耗时 2.51 秒。已将主要已审阅字面量及全部原断言与此前提交独立比较。双语章节/字段/路径/限制及空白检查通过。更广后端/前端/构建/浏览器及原负载结果仍为 MV43/MV44，本项规范不重跑或扩大这些结果。

@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。已实施并验证：ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37, ML-T38. 证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 36 项、待完成活动任务 1 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV45。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。已实施并验证：ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T29, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37, ML-T38. 证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 37 项、待完成活动任务 0 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV46。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -360,17 +360,19 @@
 
 ## ML-T29. 对齐已审阅规格与API批准
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T23`, `ML-T28`, `ML-T38`, `ML-T39`
 - **验收:** 结合双语契约审阅最终 API/行为差异，仅记录由此批准的快照身份和最终实现范围。保留旧批准历史，明确区分此前已知基线不一致。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_openapi_snapshot.py -q -m "not live"`
-- **主要文件:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`, `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`, `docs/specifications/monitoring/SPEC-unified-plan.md`, `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A09, ML-A10.
+- **主要文件:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`, `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`, `docs/specifications/monitoring/SPEC-unified-plan.md`, `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`, `tests/integration/test_openapi_snapshot.py`
+- **范围:** M (5 个主要文件，含审阅规范及精确批准路径白名单); **追溯:** ML-A09, ML-A10.
 
 ### ML-C10. 检查点
 
-- [ ] ML-A01–ML-A24 中活动证据（排除已取消 ML-A07）及双语审核契约完整。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] ML-A01–ML-A24 中活动证据（排除已取消 ML-A07）及双语审核契约完整。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- **证据:** MV46：最终审阅保留全部 52 条原路径，仅批准 10 条新增路径及已记录原生增量分支，并保留历史身份。两份已审阅快照/类型与已提交源码一致。精确白名单、双语批准、公共错误及生成 TypeScript 门禁通过：51 项集成与 18 项服务值检查。删除一条批准路径会失败，精确恢复字节后通过。C10 完成，全部 37 个活动任务及用户要求本轮 20 项完成。
+
 
 ## ML-T30. 冻结按需生命周期与能力契约
 

@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37, ML-T38. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 36 completed, 1 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV45.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T29, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37, ML-T38. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 37 completed, 0 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV46.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -360,17 +360,19 @@ Final-check correction: The full real Chrome suite exposes an outdated legacy br
 
 ## ML-T29. Align reviewed specifications and API approval
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T23`, `ML-T28`, `ML-T38`, `ML-T39`
 - **Acceptance:** Review the final API/behavior diff with its bilingual contract; record only the resulting approved snapshot identity and final implementation scope. Preserve old approval history and explicitly distinguish the previously known baseline mismatch.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_openapi_snapshot.py -q -m "not live"`
-- **Primary files:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`, `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`, `docs/specifications/monitoring/SPEC-unified-plan.md`, `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A09, ML-A10.
+- **Primary files:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`, `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`, `docs/specifications/monitoring/SPEC-unified-plan.md`, `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`, `tests/integration/test_openapi_snapshot.py`
+- **Scope:** M (5 primary files; reviewed specifications and exact approved-path allowlist); **Trace:** ML-A09, ML-A10.
 
 ### ML-C10. Checkpoint
 
-- [ ] Active ML-A01–ML-A24 evidence (excluding cancelled ML-A07) and reviewed bilingual contracts are complete.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Active ML-A01–ML-A24 evidence (excluding cancelled ML-A07) and reviewed bilingual contracts are complete.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- **Evidence:** MV46: Final review retains all 52 original paths, approves exactly 10 additions and the documented additive native branches, preserving historical identities. Both reviewed snapshots/types match committed source. The exact allowlist, bilingual approval, public-error and generated TypeScript gates pass: 51 integration plus 18 service-value checks. Removing one approved path fails; exact bytes restored and the gate passes. C10 completes; all 37 active tasks and the user-requested 20-task sequence are complete.
+
 
 ## ML-T30. Freeze on-demand lifecycle and capability contracts
 
