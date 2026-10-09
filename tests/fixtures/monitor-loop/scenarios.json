@@ -1,0 +1,13 @@
+{
+  "buy_sell": {
+    "fills": [
+      {"side": "BUY", "at": "2026-08-20T09:37:12+08:00", "quote_fen": 3970, "fill_price_fen": 3971, "quantity": 100, "fees_fen": 504, "cash_fen": 102396, "inventory_qty": 300},
+      {"side": "SELL", "at": "2026-08-20T09:42:12+08:00", "quote_fen": 4020, "fill_price_fen": 4019, "quantity": 100, "fees_fen": 706, "cash_fen": 503590, "inventory_qty": 200}
+    ],
+    "final_cash_fen": 503590, "paid_fees_fen": 1210, "realized_pnl_fen": 4194,
+    "accounting_cost_fen": 798654, "core_qty": 100, "tactical_qty": 100,
+    "sellable_core": 100, "sellable_tactical": 0
+  },
+  "observe": {"fills": 0, "intents": 0, "cash_fen": 500000, "inventory_qty": 200},
+  "delayed": {"fills": 0, "intents": 1, "unfilled_intents": 1, "cash_fen": 500000}
+}

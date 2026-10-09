@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24/ML-T25, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07/ML-C08 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 28 completed, 9 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV37.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-C01, ML-C02, ML-C03, ML-C04, ML-C05, ML-C06, ML-C07, ML-C08, ML-C11, ML-C12. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 29 completed, 8 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV38.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -315,12 +315,15 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T26. Prove parity, causality and failure atomicity
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T05`, `ML-T11`, `ML-T16`, `ML-T21`, `ML-T34`
 - **Acceptance:** Compare online application participants with loop state using independent expected outputs; mutate future evidence and inject transaction/worker faults. Include one deliberate invariant mutation check; fake AI/provider/sink counters prove isolation.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_parity.py tests/integration/test_monitor_loop_faults.py tests/integration/test_plan_preparation_worker.py -q -m "not live"`
-- **Primary files:** `tests/integration/test_monitor_loop_parity.py`, `tests/integration/test_monitor_loop_faults.py`, `tests/fixtures/monitor-loop/scenarios.json`, `tests/integration/test_plan_preparation_worker.py`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A01–ML-A24 excluding cancelled ML-A07.
+- **Primary files:** `tests/integration/test_monitor_loop_parity.py`, `tests/integration/test_monitor_loop_faults.py`, `tests/fixtures/monitor-loop/scenarios.json`, `tests/integration/test_plan_preparation_worker.py`, `src/trade_plan_monitor/backtest/loop_report.py`, `web/tests/fixtures/monitor-loop-results.json`
+- **Scope:** M (6 primary files; two implementation slices); **Trace:** ML-A01–ML-A24 excluding cancelled ML-A07.
+- **Implementation slices:** ML-T26.1 adds independent online/expected-value and future-evidence checks plus a minimal causal event identity correction if proven necessary (3 files). ML-T26.2 covers transaction/worker/preparation faults and refreshes the real HTTP fixture after any identity correction (3 files). The full stream digest and separate run binding must still detect cross-run substitution; no new schema fields, scheduler or execution policy.
+- **Evidence:** MV38: 89 backend checks pass, including independent 15-evaluation online parity, two literal expected fills and account/publication/worker/preparation faults. Causal identity mutation fails as expected; exact bytes restored. Actual HTTP fixture refreshed. ML-T35 follows; final approval remains ML-T29.
+
 
 ## ML-T27. Verify the complete browser journey
 
@@ -466,6 +469,7 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 - [ ] Service API/UI and recorded Windows thread fault/load acceptance pass; ML-C10 remains the final combined gate.
 - [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+
 ---
 
 The following original completed historical record is preserved; it does not imply completion of the current implementation.

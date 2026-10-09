@@ -1,11 +1,11 @@
 {
   "run": {
     "schemaVersion": "monitor-loop-result-v1",
-    "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
-    "reportHash": "5fc9fcd8b0aa54323b0fbf89cdbb0de87fc3c1c7c7eef2abe1c0e4c7c0bf8fdc",
+    "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
+    "reportHash": "3be1a3c484f34d8d2628db784258da0ce361d3282f99387da18c0f7044d2f406",
     "planVersionId": null,
     "planHash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
-    "datasetHash": "4325c31bedf3f4d26c64e017652476d480fb687ec27d66cc9aff9b62dbe40b7d",
+    "datasetHash": "a0760953e450d7b9705c9eea361aa35e60c7cf6446b2519505b4d1ffbef6b5f2",
     "symbol": "002240.SZ",
     "status": "COMPLETED",
     "eventStart": "2026-08-24",
@@ -37,14 +37,14 @@
     },
     "provenance": {
       "preparationId": "one",
-      "manifestHash": "d97a8552daa3075ff490d9714380f94b8fceb737f6543ac7a2f811ed651d0a80",
+      "manifestHash": "9e4a53664e425f3471dc1c4dfb647048a801de8689a7f421a8068b540e445c7c",
       "sourceRevision": 1,
       "candidateRevision": 2,
-      "candidateHash": "578a6b3dfff9f6bab311b0356c12fc11bea2c26ee0405160e85311145567594c",
-      "inputHash": "701bf4ceb12fe6b001dfcc63730181f418d4d57254d1ca9f2b1cd2d401543acc"
+      "candidateHash": "d2db7b7951c520445092cd7f96868fdf8daed8a24a4341eea1ebba20c41fee42",
+      "inputHash": "c20b6bafa01409c8833517a7c9d4d1b92a69523727a3ed5b25a0c8aca32fc584"
     },
     "frozenPlan": {
-      "version_id": "prepared-14d50b5ce15299df240510dae9b929bbc94debb0ed81503bd122e9df582e9e40",
+      "version_id": "prepared-fb18cfb593cc50c21f8ce7b4b7b5486fbebcc7e8075dc8ae82894ff948bb9315",
       "plan_hash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
       "snapshot": {
         "schema_version": 5,
@@ -115,7 +115,7 @@
       "source_hashes": [
         "d7f87edbdf3647ee2aee5d529a44573b7eaf0caca44f43f1686693a67c03f458"
       ],
-      "evidence_hash": "14d50b5ce15299df240510dae9b929bbc94debb0ed81503bd122e9df582e9e40",
+      "evidence_hash": "fb18cfb593cc50c21f8ce7b4b7b5486fbebcc7e8075dc8ae82894ff948bb9315",
       "authored_at": "2026-08-24T09:00:00+08:00",
       "authored_date": null,
       "available_at": "2026-08-24T09:00:00+08:00",
@@ -128,7 +128,7 @@
         "source_hashes": [
           "d7f87edbdf3647ee2aee5d529a44573b7eaf0caca44f43f1686693a67c03f458"
         ],
-        "evidence_hash": "14d50b5ce15299df240510dae9b929bbc94debb0ed81503bd122e9df582e9e40"
+        "evidence_hash": "fb18cfb593cc50c21f8ce7b4b7b5486fbebcc7e8075dc8ae82894ff948bb9315"
       }
     },
     "openingAccount": {
@@ -158,11 +158,11 @@
     },
     "report": {
       "schema_version": "backtest-report-v4",
-      "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
-      "input_hash": "701bf4ceb12fe6b001dfcc63730181f418d4d57254d1ca9f2b1cd2d401543acc",
+      "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
+      "input_hash": "c20b6bafa01409c8833517a7c9d4d1b92a69523727a3ed5b25a0c8aca32fc584",
       "plan_hash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
-      "dataset_hash": "4325c31bedf3f4d26c64e017652476d480fb687ec27d66cc9aff9b62dbe40b7d",
-      "authority_id": "b3e5352dbaa946b30af77f0f335b39787d2697bed97d1ed1de1007ba18014d32",
+      "dataset_hash": "a0760953e450d7b9705c9eea361aa35e60c7cf6446b2519505b4d1ffbef6b5f2",
+      "authority_id": "fc3dc390071ad39a9de85f84e21c983d6bd75a2ef72ae13eb2b2228052aca60c",
       "symbol": "002240.SZ",
       "boundary": {
         "started_at": "2026-08-24T09:00:00+08:00",
@@ -180,7 +180,7 @@
         "unfilled_intents": 0
       },
       "event_count": 32,
-      "event_set_hash": "a273bc1972aa8bdadaea5999a21876f885f1d89164f0d19a78e54d89862f2b27",
+      "event_set_hash": "97eaf787ad113b63d698aa948b83a93893b1d7c75bb8141d3d208df372ced14c",
       "opening_valuation": {
         "at": "2026-08-24T09:00:00+08:00",
         "account_revision": 1,
@@ -224,7 +224,7 @@
         "inventory_known": true,
         "lots": [
           {
-            "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+            "lot_key": "ca33c0fe-4123-09d3-1c93-10886325d92a",
             "bucket": "TACTICAL",
             "quantity": 100,
             "cost_basis_fen": 397604,
@@ -261,7 +261,7 @@
         "valuation_valid": true,
         "blockers": []
       },
-      "report_hash": "5fc9fcd8b0aa54323b0fbf89cdbb0de87fc3c1c7c7eef2abe1c0e4c7c0bf8fdc"
+      "report_hash": "3be1a3c484f34d8d2628db784258da0ce361d3282f99387da18c0f7044d2f406"
     }
   },
   "runs": {
@@ -276,11 +276,11 @@
     "items": [
       {
         "schemaVersion": "monitor-loop-result-v1",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
-        "reportHash": "5fc9fcd8b0aa54323b0fbf89cdbb0de87fc3c1c7c7eef2abe1c0e4c7c0bf8fdc",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
+        "reportHash": "3be1a3c484f34d8d2628db784258da0ce361d3282f99387da18c0f7044d2f406",
         "planVersionId": null,
         "planHash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
-        "datasetHash": "4325c31bedf3f4d26c64e017652476d480fb687ec27d66cc9aff9b62dbe40b7d",
+        "datasetHash": "a0760953e450d7b9705c9eea361aa35e60c7cf6446b2519505b4d1ffbef6b5f2",
         "symbol": "002240.SZ",
         "status": "COMPLETED",
         "eventStart": "2026-08-24",
@@ -315,7 +315,7 @@
     "limit": 20,
     "nextCursor": null,
     "hasMore": false,
-    "highWatermark": "eyJmIjoiZXMwN2lQMy16cnVUMHpuc284eWNHbWhfOXRqbTBvMTZvdllSTWx2YjEwbyIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCI1NjFiMDgzNGE4NDgwYzQyNmRjNmZhZmEwMGI4NDdhYTRjM2I5YTFlNTU1NWQwZjJjNmE4MTkxMzdlODk2OGUxIl0sImwiOm51bGwsIm8iOiJjb21wbGV0ZWRBdDpkZXNjLHJ1bklkOmRlc2MiLCJyIjoicnVucyIsInMiOlsxXSwidiI6ImN1cnNvci12MSJ9.4OwmGLaMZGVxabJU_ILoLGXUvtbF6Xy4BqfWemtCrUQ"
+    "highWatermark": "eyJmIjoiZXMwN2lQMy16cnVUMHpuc284eWNHbWhfOXRqbTBvMTZvdllSTWx2YjEwbyIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJkY2RiYzQ0NzQ2YjQxZTA3ODY3ODdlYzIzOGFlYWM5MDVjOTFjMTdiZWUyZTI1M2EyOTcxNGYxNTBiZTc2Mjg1Il0sImwiOm51bGwsIm8iOiJjb21wbGV0ZWRBdDpkZXNjLHJ1bklkOmRlc2MiLCJyIjoicnVucyIsInMiOlsxXSwidiI6ImN1cnNvci12MSJ9.lva3BwLcnKahO8Z24FhmN7IY4QVVzj8hoTYsTkTvZc0"
   },
   "details": {
     "kind": "DECISION",
@@ -325,17 +325,17 @@
     },
     "items": [
       {
-        "detailId": "loop-000001-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000001-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:00:00.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 1,
           "at": "2026-08-24T09:00:00+08:00",
-          "event_id": "67ae89b5c4a6eb5209bd41c0cf173f9940965ed49055f3ed6f90484d72f2a6e8",
+          "event_id": "3757b6e079b45d64888af0e59650de24070778896939373592124b669b83790f",
           "cause_event_id": null,
           "payload": {
             "kind": "VALUATION",
@@ -360,21 +360,21 @@
         }
       },
       {
-        "detailId": "loop-000002-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000002-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:31:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 2,
           "at": "2026-08-24T09:31:12+08:00",
-          "event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "event_id": "c78fd1e4be20e179ebb3ce16a191ca71646f7dc0cca2022e167c524f53cc34ea",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "51abd7df5f1aa0f50a666248908edc72af1c31ab031a83f4dc7279021d231d6a",
+            "evaluation_id": "4c06b18089280c6995bfe016a8cad0319bbb25a250bc63c5935e8b399e6d4daa",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": null,
@@ -429,18 +429,18 @@
         }
       },
       {
-        "detailId": "loop-000003-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000003-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:31:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 3,
           "at": "2026-08-24T09:31:12+08:00",
-          "event_id": "0b0a8285b5f1f7207b355ec22469fef834746e613689ae4e9f15c3bd8b72f1d2",
-          "cause_event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "event_id": "8f3619f331b16242fb582f7fee61e3e0745221ee602d733db64bf73b1880106b",
+          "cause_event_id": "c78fd1e4be20e179ebb3ce16a191ca71646f7dc0cca2022e167c524f53cc34ea",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -464,21 +464,21 @@
         }
       },
       {
-        "detailId": "loop-000004-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000004-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:32:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 4,
           "at": "2026-08-24T09:32:12+08:00",
-          "event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "event_id": "060989ddc4618ec8d6f2882f1a21f7480148a02e29eb1a34826b61f5212d67fb",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "742d04cb6e647674ad3fc984f29fbc50c3989261293cb7df73997ff5a20f71bd",
+            "evaluation_id": "cf1a8cb96ffd58c8a1e8ffb32d2619a9d530e586c2caa4daa5761039c6267ea7",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": null,
@@ -533,18 +533,18 @@
         }
       },
       {
-        "detailId": "loop-000005-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000005-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:32:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 5,
           "at": "2026-08-24T09:32:12+08:00",
-          "event_id": "863f8aa1eca1dc4e8c95f7fcea4a450bcbfabb516cd670f73ddcb410098aeade",
-          "cause_event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "event_id": "3711924b845e82e0e3aa7d31d67c5381a38c5c8779e79670907d6926346bec0e",
+          "cause_event_id": "060989ddc4618ec8d6f2882f1a21f7480148a02e29eb1a34826b61f5212d67fb",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -568,21 +568,21 @@
         }
       },
       {
-        "detailId": "loop-000006-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000006-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:33:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 6,
           "at": "2026-08-24T09:33:12+08:00",
-          "event_id": "6a703227545a8a284e93387f34241d53a4a0c1b4ea1936d1f147d556f43e7f1b",
+          "event_id": "ced96b6369a407063d69e14d8bc6855415cdabdd1496200beb695f32427837e6",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "f592f89390f3f17e5bc9dd9efc8bda52bf4aa1507f54679fad617bf3bda80116",
+            "evaluation_id": "5b32811a939eacf8378fab4ee36304c5518d06f4c90bc2cfc321d67e0ceb8a03",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": null,
@@ -637,18 +637,18 @@
         }
       },
       {
-        "detailId": "loop-000007-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000007-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:33:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 7,
           "at": "2026-08-24T09:33:12+08:00",
-          "event_id": "9df4e32f14cebb509bb3b85b187e276adfee13cd67446e00f3d77c236b920308",
-          "cause_event_id": "6a703227545a8a284e93387f34241d53a4a0c1b4ea1936d1f147d556f43e7f1b",
+          "event_id": "749dfa93726dd54c5ab980c8e5ec3b51065ce589567f001e579a13d0e18eabc8",
+          "cause_event_id": "ced96b6369a407063d69e14d8bc6855415cdabdd1496200beb695f32427837e6",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -672,21 +672,21 @@
         }
       },
       {
-        "detailId": "loop-000008-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000008-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:34:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 8,
           "at": "2026-08-24T09:34:12+08:00",
-          "event_id": "31934a891bd893ca7d4084f44f9df43b8ace48e840d7290cf1bf86e00e284c3b",
+          "event_id": "8d166f5eac2b14d5b517f9af16d8ec99e7cc47c2b7aa74137c5469b58b0ca2af",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "fa904dbed8872c3a0c79b36bd3c374638fd3fceb1474362b4300730a8292e5dd",
+            "evaluation_id": "2f2917c2b966485125b1673d45a00b142c70b6dee5c226ddbcaa0cc5c3d4bc51",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": null,
@@ -741,18 +741,18 @@
         }
       },
       {
-        "detailId": "loop-000009-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000009-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:34:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 9,
           "at": "2026-08-24T09:34:12+08:00",
-          "event_id": "932c22c74db311d444b981871ceee609d2e9da05aa8dc8be583dc4dbd6016168",
-          "cause_event_id": "31934a891bd893ca7d4084f44f9df43b8ace48e840d7290cf1bf86e00e284c3b",
+          "event_id": "c1b055a6d2db5e91be2cefb9548036213457f0c84c80446a5ee746a3497b0047",
+          "cause_event_id": "8d166f5eac2b14d5b517f9af16d8ec99e7cc47c2b7aa74137c5469b58b0ca2af",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -776,21 +776,21 @@
         }
       },
       {
-        "detailId": "loop-000010-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000010-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:35:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 10,
           "at": "2026-08-24T09:35:12+08:00",
-          "event_id": "9e798707feaff47874d3d95574f871aafa8575606bdd47533551223f80ab3144",
+          "event_id": "a09df27809c4f5646e1588b660408b48ec893a50292ec931c383ccce8712e44c",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "48e6bd5a26a147645490638b9ab97f10302f62850605e1a035e25bc0cbf2703b",
+            "evaluation_id": "2e552ed4a1348f2c4f9d0783ae671849f4d593a12e7cc3994f4daaff5be462fe",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:35:00+08:00",
@@ -839,8 +839,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 100,
                 "blockers": [],
@@ -897,31 +897,31 @@
         }
       },
       {
-        "detailId": "loop-000011-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000011-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:35:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 11,
           "at": "2026-08-24T09:35:12+08:00",
-          "event_id": "44dc5e00d3899461dd15af32e375c9cf291c7183ac72d8e0c94fdbc5506115be",
-          "cause_event_id": "9e798707feaff47874d3d95574f871aafa8575606bdd47533551223f80ab3144",
+          "event_id": "d644280c400fe6cdba7dd517792710a49b5c229b459f6dcf5432fce14e790384",
+          "cause_event_id": "a09df27809c4f5646e1588b660408b48ec893a50292ec931c383ccce8712e44c",
           "payload": {
             "kind": "REMINDED",
             "reminder": {
               "sequence": 1,
               "event": {
                 "payload_schema_version": "daily-simulation-alert-v1",
-                "event_id": "93d97f4d-1758-4009-a785-cb84d5d76a6a",
+                "event_id": "e241c8b9-c212-4c1e-fc29-4fd6eb59e5f0",
                 "dedup_key": "28dca114b663aa769aa1b4f2b0707d1381ea6817ea51dd602673470f335ba6c9",
                 "plan_id": "synthetic-daily",
                 "plan_version": 1,
                 "plan_hash": "fb10ece555aabef88b0a8527cb0b534ffc14f9906e7e99680eec6287cca47aa8",
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "activation_revision": 1,
                 "symbol": "002240.SZ",
                 "name": "Synthetic reviewed plan",
@@ -974,39 +974,39 @@
         }
       },
       {
-        "detailId": "loop-000012-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000012-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:35:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 12,
           "at": "2026-08-24T09:35:12+08:00",
-          "event_id": "03d9ad88299b4c783c3bc20b539c32f587c11445492319f2744a0d76fa7066a9",
-          "cause_event_id": "44dc5e00d3899461dd15af32e375c9cf291c7183ac72d8e0c94fdbc5506115be",
+          "event_id": "2a4f02e8fb8509828ebf9d4235f6ccc378207b1724fa1d40bbb0d89c131337c8",
+          "cause_event_id": "d644280c400fe6cdba7dd517792710a49b5c229b459f6dcf5432fce14e790384",
           "payload": {
             "kind": "REQUESTED",
-            "intent_id": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+            "intent_id": "30b73566073bfc4b7af76e2d06f3244e1b5ee970530a5a6f5d7871177a922f82",
             "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
             "ready_at": "2026-08-24T09:35:12+08:00"
           }
         }
       },
       {
-        "detailId": "loop-000013-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000013-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:35:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 13,
           "at": "2026-08-24T09:35:12+08:00",
-          "event_id": "28f8085cd8d55975f6abfe10400e01e6540cb122a9014f4df1d94b334ba8a9aa",
-          "cause_event_id": "03d9ad88299b4c783c3bc20b539c32f587c11445492319f2744a0d76fa7066a9",
+          "event_id": "72f85284eb688ecceed452bd8d3f84095466c6548d5f860952aea0512fa734b7",
+          "cause_event_id": "2a4f02e8fb8509828ebf9d4235f6ccc378207b1724fa1d40bbb0d89c131337c8",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -1030,21 +1030,21 @@
         }
       },
       {
-        "detailId": "loop-000014-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000014-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:36:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 14,
           "at": "2026-08-24T09:36:12+08:00",
-          "event_id": "7f8dc07bf462c43448a8df72294736304823e47cb2c4c8e8cf35b4eb050cff74",
+          "event_id": "4fda96291d3f38554b4be11d8ddc1c7e8bcf382c51dd468638cdf1a93ad89646",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "7981787161779eee721697a75a3900a462bc4364a81c8e23c605547a8ef43c83",
+            "evaluation_id": "a300cfe2380bd51f83cda77f5a4f8213916ed7fec6987fe46da91d6de669de3d",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:35:00+08:00",
@@ -1093,8 +1093,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 100,
                 "blockers": [],
@@ -1151,18 +1151,18 @@
         }
       },
       {
-        "detailId": "loop-000015-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000015-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:36:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 15,
           "at": "2026-08-24T09:36:12+08:00",
-          "event_id": "931476a6132e5b9e78081bc20c965c5fe89bcd3dac0a1cb7db854fc995ebd3ea",
-          "cause_event_id": "7f8dc07bf462c43448a8df72294736304823e47cb2c4c8e8cf35b4eb050cff74",
+          "event_id": "56bb7d8fee4dac7eaa561b8567496d3c9d018337de119818ea59a31b1db6aa50",
+          "cause_event_id": "4fda96291d3f38554b4be11d8ddc1c7e8bcf382c51dd468638cdf1a93ad89646",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -1186,21 +1186,21 @@
         }
       },
       {
-        "detailId": "loop-000016-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000016-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:37:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 16,
           "at": "2026-08-24T09:37:12+08:00",
-          "event_id": "6dccdfa40d9e269d20657e20fdf8e59c496133ba1a5166b3712e41bb31ed5189",
+          "event_id": "3a8a67a9eb224b7a3597dffb2eb5b8ec19e5ab21ef727f853ae87ca6ebcc6efc",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "68b0843d402da49a6cf1703e2a13999c329b5a721275a0b8053ff682d0efa437",
+            "evaluation_id": "ac44cb5e9458d1e76c5beab7f89efe08aa92b2ee2d0170305eb5ec83dd076dc7",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:35:00+08:00",
@@ -1249,8 +1249,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 100,
                 "blockers": [],
@@ -1307,22 +1307,22 @@
         }
       },
       {
-        "detailId": "loop-000017-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000017-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:37:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 17,
           "at": "2026-08-24T09:37:12+08:00",
-          "event_id": "7bde47376457473a309823e22eb7fc17ab0147862931c0d19e34199e3951696f",
-          "cause_event_id": "03d9ad88299b4c783c3bc20b539c32f587c11445492319f2744a0d76fa7066a9",
+          "event_id": "1dd3be786d5e531316476fcef4361df14e0a6856c8f50b66bfc86cb4dcb74fa3",
+          "cause_event_id": "2a4f02e8fb8509828ebf9d4235f6ccc378207b1724fa1d40bbb0d89c131337c8",
           "payload": {
             "kind": "EXECUTED",
             "attempt": {
-              "intent_id": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+              "intent_id": "30b73566073bfc4b7af76e2d06f3244e1b5ee970530a5a6f5d7871177a922f82",
               "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
               "at": "2026-08-24T09:37:12+08:00",
               "minute": {
@@ -1339,9 +1339,9 @@
               "status": "FILLED",
               "reason": null,
               "receipt": {
-                "request_key": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+                "request_key": "30b73566073bfc4b7af76e2d06f3244e1b5ee970530a5a6f5d7871177a922f82",
                 "command": {
-                  "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+                  "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
                   "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
                   "expected_cause_revision": 2,
                   "expected_inventory_revision": 1,
@@ -1357,7 +1357,7 @@
                   "sell_slippage_fen": 1
                 },
                 "authority_receipt": {
-                  "simulation_id": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                  "simulation_id": "ca33c0fe-4123-09d3-1c93-10886325d92a",
                   "side": "BUY",
                   "quantity": 100,
                   "price_fen": 3970,
@@ -1396,7 +1396,7 @@
                   "inventory_known": true,
                   "lots": [
                     {
-                      "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                      "lot_key": "ca33c0fe-4123-09d3-1c93-10886325d92a",
                       "bucket": "TACTICAL",
                       "quantity": 100,
                       "cost_basis_fen": 397604,
@@ -1412,18 +1412,18 @@
         }
       },
       {
-        "detailId": "loop-000018-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000018-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:37:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 18,
           "at": "2026-08-24T09:37:12+08:00",
-          "event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
-          "cause_event_id": "7bde47376457473a309823e22eb7fc17ab0147862931c0d19e34199e3951696f",
+          "event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
+          "cause_event_id": "1dd3be786d5e531316476fcef4361df14e0a6856c8f50b66bfc86cb4dcb74fa3",
           "payload": {
             "kind": "STATE",
             "account": {
@@ -1435,7 +1435,7 @@
               "inventory_known": true,
               "lots": [
                 {
-                  "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                  "lot_key": "ca33c0fe-4123-09d3-1c93-10886325d92a",
                   "bucket": "TACTICAL",
                   "quantity": 100,
                   "cost_basis_fen": 397604,
@@ -1459,21 +1459,21 @@
         }
       },
       {
-        "detailId": "loop-000019-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000019-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:37:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 19,
           "at": "2026-08-24T09:37:12+08:00",
-          "event_id": "e6f22ad2ce2d268e59904efcb89463548db7921d068bcc42f010b9919e611e7e",
-          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "event_id": "6dc7b58ce587ce549674cd0c46be992085cc48e2fb5ad39066b010a5bca47ece",
+          "cause_event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "c921592bf63067475ac098cee2aab1ec9c2cb80c59d1db3668281221700750f4",
+            "evaluation_id": "32e76f048822d03df61837ccac09b701e846c746f4c43bbec11dda25111d224f",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:35:00+08:00",
@@ -1522,8 +1522,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 0,
                 "blockers": [
@@ -1582,18 +1582,18 @@
         }
       },
       {
-        "detailId": "loop-000020-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000020-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:37:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 20,
           "at": "2026-08-24T09:37:12+08:00",
-          "event_id": "088d30177c0ed9b800ea60865e1eb9451cc4a1f26ff16ae89b272fd61b349351",
-          "cause_event_id": "e6f22ad2ce2d268e59904efcb89463548db7921d068bcc42f010b9919e611e7e",
+          "event_id": "e359f126d47b4ee837b7f4aac1679a7f086e8aa1536ecff74f2978795f73497d",
+          "cause_event_id": "6dc7b58ce587ce549674cd0c46be992085cc48e2fb5ad39066b010a5bca47ece",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -1617,21 +1617,21 @@
         }
       },
       {
-        "detailId": "loop-000021-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000021-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:38:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 21,
           "at": "2026-08-24T09:38:12+08:00",
-          "event_id": "7c205365448e210f5d1c3563062810e1e0b39f5585d2b76bf624e452a8992ec8",
-          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "event_id": "6815e34611a52f68ab3613ee23c692a817c992776a8b3c0df7284b8c8ab3b194",
+          "cause_event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "70e84479fb71eb9ac6416e4d0da981e4a42399b41c1a3c6122e9652b07a27aa6",
+            "evaluation_id": "e7a757ecbab52a9fe96c925d6b64d78f1f763001502808d9e3e579cc8546af27",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:35:00+08:00",
@@ -1680,8 +1680,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 0,
                 "blockers": [
@@ -1740,18 +1740,18 @@
         }
       },
       {
-        "detailId": "loop-000022-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000022-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:38:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 22,
           "at": "2026-08-24T09:38:12+08:00",
-          "event_id": "59aa14a01bd9cd6e51735c3a28152456a31a6e57219f3122422bc9af049e2648",
-          "cause_event_id": "7c205365448e210f5d1c3563062810e1e0b39f5585d2b76bf624e452a8992ec8",
+          "event_id": "d955b67144f80fd71a6aec149e1023f8a4a8c519a15434333eedc6cb75ebd49c",
+          "cause_event_id": "6815e34611a52f68ab3613ee23c692a817c992776a8b3c0df7284b8c8ab3b194",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -1775,21 +1775,21 @@
         }
       },
       {
-        "detailId": "loop-000023-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000023-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:39:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 23,
           "at": "2026-08-24T09:39:12+08:00",
-          "event_id": "1e895dfe0b22b4c4b53db1de75f70869a112206dfe3022a1fe8733fe329ce1b0",
-          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "event_id": "09d6c9621b17a066476308bf610cf02bf8c9e6bbf7469b5b5a7d757c85f95feb",
+          "cause_event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "fd4e04f063a4443038e9d08048280e2dcd070ede9268b82ba5fd5e3d9c260766",
+            "evaluation_id": "edbe3eb6c9e5b85f69d0817f2188905b954f4a26610727f9e363a0f22051f6e4",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:35:00+08:00",
@@ -1838,8 +1838,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 0,
                 "blockers": [
@@ -1898,18 +1898,18 @@
         }
       },
       {
-        "detailId": "loop-000024-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000024-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:39:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 24,
           "at": "2026-08-24T09:39:12+08:00",
-          "event_id": "22f8366f219fba002ae86a5c7bd5e2b326df402a0103b64b45dc9104aa2a68c9",
-          "cause_event_id": "1e895dfe0b22b4c4b53db1de75f70869a112206dfe3022a1fe8733fe329ce1b0",
+          "event_id": "bd463f7f1519443ef488bd11da092e981a4bfa09aebf61b33513f9c454463e50",
+          "cause_event_id": "09d6c9621b17a066476308bf610cf02bf8c9e6bbf7469b5b5a7d757c85f95feb",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -1933,21 +1933,21 @@
         }
       },
       {
-        "detailId": "loop-000025-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000025-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:40:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 25,
           "at": "2026-08-24T09:40:12+08:00",
-          "event_id": "d3da7b6d76b70e02c6c5733353e0e0c3f1cfca5da0a21f4a8d3563a338a46cb7",
-          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "event_id": "330bac08d98dd01a55dc2fd2456345225a40c89643edd6d31ced86bf1fc2c29c",
+          "cause_event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "2f63b7d0a1e5529269e2966e12078eacbc182b790538bd12deb4ae5da0432b5c",
+            "evaluation_id": "9040a4a541e721a7f09a2ba9e7c70088b336995456c30ba346cae2730f9ed04c",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:40:00+08:00",
@@ -1996,8 +1996,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 0,
                 "blockers": [
@@ -2056,18 +2056,18 @@
         }
       },
       {
-        "detailId": "loop-000026-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000026-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:40:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 26,
           "at": "2026-08-24T09:40:12+08:00",
-          "event_id": "b799ba1c89ed0872f22cf8a92b27b557e3b39bb9351d2151e662e9a9aa57c2ac",
-          "cause_event_id": "d3da7b6d76b70e02c6c5733353e0e0c3f1cfca5da0a21f4a8d3563a338a46cb7",
+          "event_id": "828b78e77079c0e55a14c5f2a28c012756f947242cdd6b2c991b10f64254e4e7",
+          "cause_event_id": "330bac08d98dd01a55dc2fd2456345225a40c89643edd6d31ced86bf1fc2c29c",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -2091,21 +2091,21 @@
         }
       },
       {
-        "detailId": "loop-000027-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000027-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:41:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 27,
           "at": "2026-08-24T09:41:12+08:00",
-          "event_id": "bffedb7506fec9de831d8d495d4ea4654ffe853103978ffa02a07de297b36609",
-          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "event_id": "6060862221547c1e7c90e4816cada3666ceb67f20c1eead2a65de4cf6cec6c0a",
+          "cause_event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "aa70f30e2c72e60ae9e6cd979f85bda33a179bb65dc1d1a5ef988307059fd565",
+            "evaluation_id": "67926d5033c77341c2de49868994d60e19cd601ef36dc66bbd3f8d112c96d3d7",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:40:00+08:00",
@@ -2154,8 +2154,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 0,
                 "blockers": [
@@ -2214,18 +2214,18 @@
         }
       },
       {
-        "detailId": "loop-000028-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000028-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:41:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 28,
           "at": "2026-08-24T09:41:12+08:00",
-          "event_id": "aeaccdc2ebc9686e14a20b9d7a06a4a2bd5b90dcfbc1176d0ac3e4e0c74fe2c0",
-          "cause_event_id": "bffedb7506fec9de831d8d495d4ea4654ffe853103978ffa02a07de297b36609",
+          "event_id": "65340e4343e13243b800e66e32960fbccadce7ae1cd2da2fdb422f71a2040438",
+          "cause_event_id": "6060862221547c1e7c90e4816cada3666ceb67f20c1eead2a65de4cf6cec6c0a",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -2249,21 +2249,21 @@
         }
       },
       {
-        "detailId": "loop-000029-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000029-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:42:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 29,
           "at": "2026-08-24T09:42:12+08:00",
-          "event_id": "5d4182debd9b5a02aa95be0d3ff7d573f9831a3ae057834ca682b4d4f9c499f1",
-          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "event_id": "ac0046ea92719ba5c9122a1df3b9073646702317e00a36bca18ce4a3bff6cc39",
+          "cause_event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "b2bc24298640fec9deb6b04fe8b4e028cc424733b382722cde15015d171d2587",
+            "evaluation_id": "1d6e05fb520dfc827d48d94d92652cab72ded7f33497a0ae518d2ea3b757a40b",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:40:00+08:00",
@@ -2312,8 +2312,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 0,
                 "blockers": [
@@ -2372,18 +2372,18 @@
         }
       },
       {
-        "detailId": "loop-000030-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000030-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:42:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 30,
           "at": "2026-08-24T09:42:12+08:00",
-          "event_id": "ac5f9b7cf9be6384853f61a326ca336a8b0b3c29bf3243cc779b2e614664492c",
-          "cause_event_id": "5d4182debd9b5a02aa95be0d3ff7d573f9831a3ae057834ca682b4d4f9c499f1",
+          "event_id": "c0931fdf83b0d4157ffeaf44b53b05dbee54b4c67b7ebcc6808d491c038f9ccc",
+          "cause_event_id": "ac0046ea92719ba5c9122a1df3b9073646702317e00a36bca18ce4a3bff6cc39",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -2407,21 +2407,21 @@
         }
       },
       {
-        "detailId": "loop-000031-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000031-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:43:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 31,
           "at": "2026-08-24T09:43:12+08:00",
-          "event_id": "00e1de062ba52b656e715606947fec2b42a3d0a08106ddffbeb462337c471f6d",
-          "cause_event_id": "19b3cf52922a756025b8c0944977d2b042b87587842dd2da1498ae8281e37b22",
+          "event_id": "c776901e12c52d6f7984464b63832b2e88591a42292c3e59867c3350653b6aab",
+          "cause_event_id": "a2b46cf434f4590b8d938836c6f8365055595d5a66349ee1cfabfec618083b84",
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "ea25decd0d5e8f266af3ace120ec050b3908d99e84f4a9d162e83ad58038da92",
+            "evaluation_id": "14b5b1c18be504dadd1a264f3fb4b4e92b86a3833b62349b95b216ecea56c45c",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": "2026-08-24T09:40:00+08:00",
@@ -2470,8 +2470,8 @@
                     "children": []
                   }
                 ],
-                "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
-                "review_id": "d668ffeb-b794-af63-7239-fa4fbf8054bc",
+                "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
+                "review_id": "9bf0e106-481d-7443-827c-10cd77a45a59",
                 "basis_id": "minute-ta-v1",
                 "executable_qty": 0,
                 "blockers": [
@@ -2530,18 +2530,18 @@
         }
       },
       {
-        "detailId": "loop-000032-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000032-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:43:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 32,
           "at": "2026-08-24T09:43:12+08:00",
-          "event_id": "19a4fcdd20a4dde93f3402175a3e1a5b37bbbbeff9a5dab5ee6a1cff33a70f05",
-          "cause_event_id": "00e1de062ba52b656e715606947fec2b42a3d0a08106ddffbeb462337c471f6d",
+          "event_id": "99b45c6da74e1366cd4091fca4511c093d6bb25263c45581f39372842960681b",
+          "cause_event_id": "c776901e12c52d6f7984464b63832b2e88591a42292c3e59867c3350653b6aab",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -2568,7 +2568,7 @@
     "limit": 100,
     "nextCursor": null,
     "hasMore": false,
-    "highWatermark": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.3689sDf9PcE0zQgW3UERA1of9Xn_FgivfId0ipwJMwg"
+    "highWatermark": "eyJmIjoibXB3WHZmTnJUbEJZOHdFYUE4RTJ4YmhhTmx1SkFUVHJrRzFPUDZ0R2luUSIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi1kY2RiYzQ0NzQ2YjQxZTA3Il0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.nDa2KF4oHIpN5MVYU7bxifRgOs5chIpVqyVJiySn1UQ"
   },
   "first": {
     "kind": "DECISION",
@@ -2578,17 +2578,17 @@
     },
     "items": [
       {
-        "detailId": "loop-000001-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000001-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:00:00.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 1,
           "at": "2026-08-24T09:00:00+08:00",
-          "event_id": "67ae89b5c4a6eb5209bd41c0cf173f9940965ed49055f3ed6f90484d72f2a6e8",
+          "event_id": "3757b6e079b45d64888af0e59650de24070778896939373592124b669b83790f",
           "cause_event_id": null,
           "payload": {
             "kind": "VALUATION",
@@ -2613,21 +2613,21 @@
         }
       },
       {
-        "detailId": "loop-000002-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000002-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:31:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 2,
           "at": "2026-08-24T09:31:12+08:00",
-          "event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "event_id": "c78fd1e4be20e179ebb3ce16a191ca71646f7dc0cca2022e167c524f53cc34ea",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "51abd7df5f1aa0f50a666248908edc72af1c31ab031a83f4dc7279021d231d6a",
+            "evaluation_id": "4c06b18089280c6995bfe016a8cad0319bbb25a250bc63c5935e8b399e6d4daa",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": null,
@@ -2682,18 +2682,18 @@
         }
       },
       {
-        "detailId": "loop-000003-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000003-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:31:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 3,
           "at": "2026-08-24T09:31:12+08:00",
-          "event_id": "0b0a8285b5f1f7207b355ec22469fef834746e613689ae4e9f15c3bd8b72f1d2",
-          "cause_event_id": "0597c5a264c73fc2974c8d1e85a7e90049e2bff5e785926a5315f8e30b44ce75",
+          "event_id": "8f3619f331b16242fb582f7fee61e3e0745221ee602d733db64bf73b1880106b",
+          "cause_event_id": "c78fd1e4be20e179ebb3ce16a191ca71646f7dc0cca2022e167c524f53cc34ea",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -2718,9 +2718,9 @@
       }
     ],
     "limit": 3,
-    "nextCursor": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOlsiMjAyNi0wOC0yNFQwOTozMToxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAwMy01NjFiMDgzNGE4NDgwYzQyIl0sIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.Tg4m0WUhTT5a-sDXxDjj6M6faScNPuT3rTqhqFPDGKI",
+    "nextCursor": "eyJmIjoibXB3WHZmTnJUbEJZOHdFYUE4RTJ4YmhhTmx1SkFUVHJrRzFPUDZ0R2luUSIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi1kY2RiYzQ0NzQ2YjQxZTA3Il0sImwiOlsiMjAyNi0wOC0yNFQwOTozMToxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAwMy1kY2RiYzQ0NzQ2YjQxZTA3Il0sIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.fM_6EDS2lgA1qEBzluyTYcU3nJrEgKgqWZ3wWWAj3X0",
     "hasMore": true,
-    "highWatermark": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.3689sDf9PcE0zQgW3UERA1of9Xn_FgivfId0ipwJMwg"
+    "highWatermark": "eyJmIjoibXB3WHZmTnJUbEJZOHdFYUE4RTJ4YmhhTmx1SkFUVHJrRzFPUDZ0R2luUSIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi1kY2RiYzQ0NzQ2YjQxZTA3Il0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.nDa2KF4oHIpN5MVYU7bxifRgOs5chIpVqyVJiySn1UQ"
   },
   "second": {
     "kind": "DECISION",
@@ -2730,21 +2730,21 @@
     },
     "items": [
       {
-        "detailId": "loop-000004-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000004-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:32:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 4,
           "at": "2026-08-24T09:32:12+08:00",
-          "event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "event_id": "060989ddc4618ec8d6f2882f1a21f7480148a02e29eb1a34826b61f5212d67fb",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "742d04cb6e647674ad3fc984f29fbc50c3989261293cb7df73997ff5a20f71bd",
+            "evaluation_id": "cf1a8cb96ffd58c8a1e8ffb32d2619a9d530e586c2caa4daa5761039c6267ea7",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": null,
@@ -2799,18 +2799,18 @@
         }
       },
       {
-        "detailId": "loop-000005-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000005-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:32:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 5,
           "at": "2026-08-24T09:32:12+08:00",
-          "event_id": "863f8aa1eca1dc4e8c95f7fcea4a450bcbfabb516cd670f73ddcb410098aeade",
-          "cause_event_id": "f8b7e6a02792ccf94745664c556bc3b9dfaad8e1a35ac6c09e6f6eb45b190098",
+          "event_id": "3711924b845e82e0e3aa7d31d67c5381a38c5c8779e79670907d6926346bec0e",
+          "cause_event_id": "060989ddc4618ec8d6f2882f1a21f7480148a02e29eb1a34826b61f5212d67fb",
           "payload": {
             "kind": "VALUATION",
             "valuation": {
@@ -2834,21 +2834,21 @@
         }
       },
       {
-        "detailId": "loop-000006-561b0834a8480c42",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "detailId": "loop-000006-dcdbc44746b41e07",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "eventAt": "2026-08-24T09:33:12.000000+08:00",
         "kind": "DECISION",
         "schemaVersion": "monitor-loop-event-v1",
         "event": {
           "schema_version": "monitor-loop-event-v1",
-          "run_id": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+          "run_id": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
           "sequence": 6,
           "at": "2026-08-24T09:33:12+08:00",
-          "event_id": "6a703227545a8a284e93387f34241d53a4a0c1b4ea1936d1f147d556f43e7f1b",
+          "event_id": "ced96b6369a407063d69e14d8bc6855415cdabdd1496200beb695f32427837e6",
           "cause_event_id": null,
           "payload": {
             "kind": "EVALUATED",
-            "evaluation_id": "f592f89390f3f17e5bc9dd9efc8bda52bf4aa1507f54679fad617bf3bda80116",
+            "evaluation_id": "5b32811a939eacf8378fab4ee36304c5518d06f4c90bc2cfc321d67e0ceb8a03",
             "duplicate": false,
             "official_trade_date": null,
             "minute_target": null,
@@ -2904,23 +2904,23 @@
       }
     ],
     "limit": 3,
-    "nextCursor": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOlsiMjAyNi0wOC0yNFQwOTozMzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAwNi01NjFiMDgzNGE4NDgwYzQyIl0sIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9._39514BqgQNMQTFolPeRNdFIUQbO8G3E3pGc__Uc9CY",
+    "nextCursor": "eyJmIjoibXB3WHZmTnJUbEJZOHdFYUE4RTJ4YmhhTmx1SkFUVHJrRzFPUDZ0R2luUSIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi1kY2RiYzQ0NzQ2YjQxZTA3Il0sImwiOlsiMjAyNi0wOC0yNFQwOTozMzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAwNi1kY2RiYzQ0NzQ2YjQxZTA3Il0sIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.OdCCNk49oWrFgvFiyOlT_L6rOHt9kZcw9LcmXQJ5WC4",
     "hasMore": true,
-    "highWatermark": "eyJmIjoiekNldUtzaG5Sa0tsR3ZIcUpFNUE0cFFudV9vckdxNVZSd1JnVFpBdFZuOCIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi01NjFiMDgzNGE4NDgwYzQyIl0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.3689sDf9PcE0zQgW3UERA1of9Xn_FgivfId0ipwJMwg"
+    "highWatermark": "eyJmIjoibXB3WHZmTnJUbEJZOHdFYUE4RTJ4YmhhTmx1SkFUVHJrRzFPUDZ0R2luUSIsImgiOlsiMjAyNi0wOC0yNFQwOTo0MzoxMi4wMDAwMDArMDg6MDAiLCJsb29wLTAwMDAzMi1kY2RiYzQ0NzQ2YjQxZTA3Il0sImwiOm51bGwsIm8iOiJldmVudEF0OmFzYyxkZXRhaWxJZDphc2MiLCJyIjoiYmFja3Rlc3QtcmVzdWx0czpkZXRhaWxzIiwidiI6ImN1cnNvci12MSJ9.nDa2KF4oHIpN5MVYU7bxifRgOs5chIpVqyVJiySn1UQ"
   },
   "fills": {
     "filters": {},
     "items": [
       {
         "schemaVersion": "monitor-loop-fill-v1",
-        "fillId": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
-        "runId": "561b0834a8480c426dc6fafa00b847aa4c3b9a1e5555d0f2c6a819137e8968e1",
+        "fillId": "ca33c0fe-4123-09d3-1c93-10886325d92a",
+        "runId": "dcdbc44746b41e0786787ec238aeac905c91c17bee2e253a29714f150be76285",
         "filledAt": "2026-08-24T09:37:12.000000+08:00",
-        "eventId": "7bde47376457473a309823e22eb7fc17ab0147862931c0d19e34199e3951696f",
+        "eventId": "1dd3be786d5e531316476fcef4361df14e0a6856c8f50b66bfc86cb4dcb74fa3",
         "receipt": {
-          "request_key": "4beed3888eb96a58b5a25c3a6e6e408bc8f23ab9b924f35837c545dd65e8df95",
+          "request_key": "30b73566073bfc4b7af76e2d06f3244e1b5ee970530a5a6f5d7871177a922f82",
           "command": {
-            "plan_version_id": "7d1f6486-2c19-a3ec-68e5-06ff02aafb39",
+            "plan_version_id": "2f53358d-3036-37db-3855-9ec2b6dba417",
             "cause_id": "b7d5abcdf55d7f0cb7a95e066146593813bba0b54b5795a6268577a2dffa10e8",
             "expected_cause_revision": 2,
             "expected_inventory_revision": 1,
@@ -2936,7 +2936,7 @@
             "sell_slippage_fen": 1
           },
           "authority_receipt": {
-            "simulation_id": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+            "simulation_id": "ca33c0fe-4123-09d3-1c93-10886325d92a",
             "side": "BUY",
             "quantity": 100,
             "price_fen": 3970,
@@ -2975,7 +2975,7 @@
             "inventory_known": true,
             "lots": [
               {
-                "lot_key": "5df7bf61-96fc-4ba6-b365-d307588cb5c7",
+                "lot_key": "ca33c0fe-4123-09d3-1c93-10886325d92a",
                 "bucket": "TACTICAL",
                 "quantity": 100,
                 "cost_basis_fen": 397604,
@@ -2991,6 +2991,6 @@
     "limit": 100,
     "nextCursor": null,
     "hasMore": false,
-    "highWatermark": "eyJmIjoiWV9RdElQU0N3YzBwZ1pNQWFTY0NUbXZyR0lnaWh2dHlFeUpyOWpzd1QxZyIsImgiOlsiMjAyNi0wOC0yNFQwOTozNzoxMi4wMDAwMDArMDg6MDAiLCI1ZGY3YmY2MS05NmZjLTRiYTYtYjM2NS1kMzA3NTg4Y2I1YzciXSwibCI6bnVsbCwibyI6ImZpbGxlZEF0OmFzYyxmaWxsSWQ6YXNjIiwiciI6ImJhY2t0ZXN0LXJlc3VsdHM6ZmlsbHMiLCJ2IjoiY3Vyc29yLXYxIn0.BYElpcJJ52PY_nHzQXt6_hjfDh01cobQo4vsIWA5NOg"
+    "highWatermark": "eyJmIjoiTDVWZzRGM1ItV1lkcV9SU0xudWtXS0g5NlB1dHVRTGt5UTlZeUFEOWo4RSIsImgiOlsiMjAyNi0wOC0yNFQwOTozNzoxMi4wMDAwMDArMDg6MDAiLCJjYTMzYzBmZS00MTIzLTA5ZDMtMWM5My0xMDg4NjMyNWQ5MmEiXSwibCI6bnVsbCwibyI6ImZpbGxlZEF0OmFzYyxmaWxsSWQ6YXNjIiwiciI6ImJhY2t0ZXN0LXJlc3VsdHM6ZmlsbHMiLCJ2IjoiY3Vyc29yLXYxIn0.VJCKIEERZWQlE9hU_ChlQvgzeQBfIdiL0dGkICyQBn8"
   }
 }

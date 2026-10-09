@@ -251,7 +251,10 @@ class LoopAuditEvent(ResearchValue):
 
 
 def _event_hash(value):
-    return sha256((LOOP_EVENT_VERSION + "\0" + canonical_json(value)).encode()).hexdigest()
+    # The run binds the whole dataset; semantic event identity binds causal past.
+    # Run membership remains checked separately and included in the stream digest.
+    causal_value = {key: item for key, item in value.items() if key != "run_id"}
+    return sha256((LOOP_EVENT_VERSION + "\0" + canonical_json(causal_value)).encode()).hexdigest()
 
 
 def _digest_event(digest, event):

@@ -353,6 +353,49 @@ def service_setup(tmp_path, **options):
     return PreparationService(store, jobs, extractor), store, jobs, initial, calls
 
 
+def test_actual_extraction_release_failure_keeps_admission_until_explicit_recovery(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        service, store, jobs, initial, calls = service_setup(tmp_path)
+        original = jobs.release_run_submission
+
+        def fail(*args, **kwargs):
+            raise RuntimeError("injected preparation release failure")
+
+        monkeypatch.setattr(jobs, "release_run_submission", fail)
+        try:
+            await service.submit_extraction(
+                "one", expected_revision=initial.revision, idempotency_key="extract"
+            )
+            with pytest.raises(RuntimeError, match="preparation release failure"):
+                await service.wait_for_drain()
+            ended = store.get("one")
+            assert ended.status == "CANDIDATE" and ended.work_claim.phase == "ENDED"
+            assert len(calls) == 1
+            with pytest.raises(JobAdmissionError):
+                jobs.submit(request("VERIFY"), "other")
+            monkeypatch.setattr(jobs, "release_run_submission", original)
+            restored = PreparationService(store, jobs, service._extractor)
+            try:
+                await restored.recover(
+                    "one", generation=ended.work_claim.generation,
+                    expected_revision=ended.revision, confirmed_ended=True,
+                    idempotency_key="recover-release",
+                )
+                assert store.get("one").candidate == ended.candidate
+                assert store.get("one").work_claim is None and len(calls) == 1
+                assert jobs.submit(request("VERIFY"), "other").job_id
+            finally:
+                await restored.stop()
+        finally:
+            monkeypatch.setattr(jobs, "release_run_submission", original)
+            with pytest.raises(RuntimeError, match="preparation release failure"):
+                await service.stop()
+
+    asyncio.run(scenario())
+
+
 def test_service_runs_one_owned_call_and_idempotency_never_redispatches(tmp_path):
 
     async def scenario():
