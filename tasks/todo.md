@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 35 completed, 2 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV44.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37, ML-T38. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 36 completed, 1 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV45.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -491,7 +491,7 @@ Transaction-local scan correction: Profiling actual accumulated history proves d
 
 ## ML-T38. Record on-demand thread operation guidance
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T37`
 - **Acceptance:** Paired guidance explains dormant startup, first-use preparation, metadata versus execution, explicit backlog resume, scoped repair and drain-aware stop. Document shared-process risks without mandatory process upgrade; preserve identities and the historical baseline approval mismatch with its reviewed correction.
 - **Verification:** `git diff --check`
@@ -500,8 +500,10 @@ Transaction-local scan correction: Profiling actual accumulated history proves d
 
 ### ML-C13. Checkpoint
 
-- [ ] Service API/UI and recorded Windows thread fault/load acceptance pass; ML-C10 remains the final combined gate.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Service API/UI and recorded Windows thread fault/load acceptance pass; ML-C10 remains the final combined gate.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- **Evidence:** MV45: Paired guidance records dormant startup, explicit metadata/execution authority, one selected resume, scoped repair, accepted controls versus physical drain, boot/revision/idempotency fences and accepted shared-process limits. Actual MV43 load and MV44 final/browser evidence are referenced without rerunning or broadening them. C13 completes; only ML-T29/C10 final reviewed approval remains.
+
 
 ---
 
