@@ -2,7 +2,7 @@
 
 英文权威版；中文审阅副本：[monitor-loop-backtest.zh-CN.md](monitor-loop-backtest.zh-CN.md)。更新于 2026-10-09，Asia/Shanghai。本记录为已执行的部分证据，不是最终验收。基线：`main` `e95de03`，保留已有未提交设计与盛新研究文件。实施已获授权；用户随后于 2026-10-07 授权清理、提交并推送至 GitHub。付费请求、生产迁移和部署仍在范围外。
 
-当前证据见 MV18–MV42：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24/ML-T25 与 ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07/ML-C08 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV26 通过隔离真实 Chrome 界面验证单原文输入/进度组件及请求/轮询保护。MV27 通过真实挂载 HTTP 配假 AI 验证精确准备审核、冻结凭据及创建页面。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV26 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
+当前证据见 MV18–MV43：ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T19/ML-T20/ML-T21/ML-T22/ML-T23/ML-T24/ML-T25 与 ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06/ML-C07/ML-C08 已实现并验证。MV20/MV21 记录私有准备持久化及完整提取，MV22 增加自有提取及实际排空前保留全局准备准入，MV23 验证明确语义审核及单份不可变清单，MV24 验证配假 AI 的准备 HTTP/能力集成；MV25 发布两种准备契约 profile，保留旧契约并记录待批准门禁。MV26 通过隔离真实 Chrome 界面验证单原文输入/进度组件及请求/轮询保护。MV27 通过真实挂载 HTTP 配假 AI 验证精确准备审核、冻结凭据及创建页面。MV18/MV19 记录任务准入及单计划循环。MV17 记录单计划范围，MV16 原子结算，MV15 私有提醒，MV14 输入/共用模拟。MV18 覆盖此前租约过期释放任务槽及准备并发选择。MV01–MV26 保留为历史证据；MV11 启动解耦 PASS，以及已验证 ML-T30–ML-T34/ML-C12 保持。回放工作线程/UI/报告集成及最终验收仍待完成，以下历史不表示当前阻断状态。
 
 ## MV01. 已实现边界
 
@@ -754,3 +754,34 @@ ML-T21 完成存储参与者及维护调用本身；ML-T19 再连接后台消费
 2026-10-09: ML-T27 / `6c1c630`. 2 条真实 Chrome 流程、75 项后端检查、96 项前端检查和类型检查通过。浏览器发现并验证了局部导航与权威冻结身份修正。移除冻结身份投影产生 1 个预期失败，已精确恢复。C09 通过；接续 ML-T37。
 
 一次性回环服务挂载生产组合、存储、协调器和原生 Worker。仅外部 AI/行情事实为虚拟，不预写准备记录、交易或结果脚本。原 503 的 Body/Key 经明确局部修复后保持。原文修订 2 必须重新提取/审核；真实回放在冻结截止产生 1 次因果成交、现金 102396 分、200 股。未知取消跨监控导航/刷新保留准入，必须明确确认结束。真实优雅关闭在停止监控前排空自有工作。测试时钟同时约束实际保留期清理，防止历史模拟任务按现实时间过期。API 路径/字段和快照字节不变。用户共享页面标题/主题修改保持未暂存。
+
+
+## MV43. Windows 惰性归属及准入线程负载
+
+2026-10-09: ML-T37 / `e1b19f5`. Windows 600/600 秒十股票负载通过，完成 5 次顺序原生运行及精确 12000 次评估，无重复/缺失语义提醒。最终 209 项相关回归及 131 项共享运行时/账本检查通过，1 项既有环境条件跳过；Ruff 通过。公开成交身份稳定，内部存储绑定运行，旧记录精确重试通过。保留首次无节奏失败，全部原有门槛保持。ML-T37 完成，接续 ML-T28。
+
+已记录的十一个主要文件覆盖真实惰性激活/并发首次使用/待恢复任务/晚完成/排空故障、十股票 BACKGROUND 同步节奏及真实准入回放。第四种顺序响应延迟暴露因果收据 ID 在全局 SQLite 成交主键中的冲突。仅内部成交存储 ID 绑定运行身份，权威/公开收据和审计身份保持精确。发布每个收据仅验证一次精确新记录或旧记录；重试旧暂存行不新增重复。没有模式、路由、监测规则或资源控制器变化。
+
+首次无节奏 600/600 秒压力未满足固定监测节奏：基线完成 6000 次评估，负载只完成要求 6000 / 600 中的 5790 次 / 579 轮。末次时间为 2026-09-22T10:19:38+08:00。阶段断言阻止返回负载百分位，因此不声称失败负载百分位。在累计临时历史上无回放执行五轮监测，每轮十股票耗时为 0.798 / 0.761 / 0.770 / 0.770 / 0.769 秒。依据 ML17 明确允许降低准入负载的规则，仅离线控制器调整为原生准入起点间隔 >=120 秒；门槛、600 秒阶段、1 秒监测节奏及全部完整性断言保持精确。第二次有节奏长测因 SQLite 合法删除已列出的 WAL 文件而触发测量侧 FileNotFoundError，中断运行。采样现仅将已消失文件视为零，权限/其他 stat 错误仍抛出；可控竞态/故障用例及当时六项矩阵在 13.56 秒通过。中断基线/失败保留于忽略的 `.pytest_cache/ml-t37-failed-wal-probe.json`。第三次五秒运行完成两阶段各 6000 次评估，但严格保留输入维护导致真实提交 SQLITE_BUSY 失败；负载调度 p99 为 7340.370 ms，超过原门槛。报告保留于忽略的 `.pytest_cache/ml-t37-failed-maintenance-load.json`。仅真实 SQLITE_BUSY/SQLITE_LOCKED 元数据错误现转为既有 503/Retry-After，原意图重试及其他 SQL 故障保持。最终 profile 每十分钟最多准入五次原生实验，保留原监测负载和全部门禁，不认证高频保留历史压力。第四次 120 秒 profile 在 603.366 秒内只完成 596 轮 / 5960 次评估及 1074 个状态样本；负载状态 p95/p99 为 81.603/108.270 ms，调度 p99 为 7003.955 ms。报告保留于忽略的 `.pytest_cache/ml-t37-failed-monitor-cost.json`。剖析该真实累计历史，每轮十股票耗时 0.9644695 秒，其中 20 次重复旧数据扫描占 0.631 秒，并解码 24390 次 JSON。SQL 候选过滤使同一轮降低到 0.6655926 秒及 310 次解码；事务内一次旧数据结果现替代第二次相同扫描。损坏/非对象/重复键/转义键/非有限数值保留原 Python 行为，不引入持久缓存或历史修改。修正后共享账本/运行时/等价回归 131 项在 74.43 秒通过。新有界运行控制器在名义阶段截止后拒绝准入，包括末轮监测仍在排空时。四次长测失败全部保留，均不重分类为通过。下列最终有节奏运行是验收负载。
+
+主机：Windows 11 10.0.26200、Python 3.14.7、24 个逻辑 CPU、33751425024 bytes RAM（31.43 GiB），本地 SSD 临时存储。只读硬件清单为 Samsung SSD 990 PRO 1TB（1000204886016 bytes）及 YMTC YMSS2ED08D25MC（1024209543168 bytes）。一次性根目录：`C:\Users\xiedc\AppData\Local\Temp\backtest-thread-load-h9yriuba`。无真实提供方、付费 AI、通知或用户数据库访问。
+
+| 测量 | 基线 | 已准入回放负载 |
+|---|---|---|
+| 时长 / 实际耗时（秒） | 600 / 600.001 | 600 / 600.000 |
+| 状态样本 | 1200 | 1200 |
+| 状态 p95 / p99（ms） | 18.683 / 21.382 | 27.385 / 41.381 |
+| 监测调度 p99（ms） | 1.973 | 2.158 |
+| 评估 / 稳态新增提醒 | 6000 / 10 | 6000 / 0 |
+| RSS 起点 / 峰值 / 终点（bytes） | 254697472 / 255651840 / 212119552 | 222093312 / 499605504 / 233811968 |
+| WAL 峰值（bytes） | 4194192 | 5665096 |
+| 回测线程峰值 | 0 | 7 |
+
+状态 p95 增量：8.702 ms <=100 ms；监测调度 p99 增量：0.185 ms <=250 ms。两阶段状态 p95 <=250 ms / p99 <=1000 ms 且样本 >=1000 通过。每阶段精确 6000 次评估，初始十条提醒及 READY 稳态零新增提醒。原生完成运行：5 次，准入 p95：784.769 ms（观察值，不新增门禁）。一次监测启动/停止及自有线程完全排空通过。RSS/WAL 是观察值，不引入生产内存/磁盘阈值，也不保证无泄漏。仅认证实测有节奏夹具，不认证无限压力或真实生产流量。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_isolation_fault_matrix.py tests/integration/test_backtest_sync_pacing.py tests/integration/test_monitor_loop_parity.py tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_worker.py tests/integration/test_monitor_loop_result_api.py tests/integration/test_monitor_loop_retention.py tests/integration/test_backtest_run_api.py tests/integration/test_backtest_job_api.py tests/integration/test_backtest_data_api.py tests/integration/test_backtest_production_composition.py -q -m "not live" --basetemp=.pytest_cache/ml-t37-final-after-history --tb=short
+.venv/Scripts/python.exe scripts/verify_backtest_thread_load.py --profile windows-threads --offline
+```
+
+最终相关 Python 命令 209 项通过 / 一项既有环境条件跳过，耗时 108.57 秒，含一项既有 Starlette/httpx 弃用提示。可控真实 SQLite 锁首次产生一项原始错误失败 / 六项未选，随后验证精确原意图重试、零部分准入、监测继续服务及其他 SQL 故障保持。移除绑定运行的存储成交键产生第四次运行一项预期失败 / 四项未选；精确恢复后最终 209 项门禁通过。Ruff 检查主要 Python 文件、JSON 夹具精确解析及空白检查通过。三秒有节奏短测只作为开发试跑通过。最终原始输出保留于忽略的 `.pytest_cache/backtest-thread-load.json`，原失败运行保留于忽略的 `.pytest_cache/ml-t37-failed-long-load.json`。最终接口批准仍为 ML-T29。

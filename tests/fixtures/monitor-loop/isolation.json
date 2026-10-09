@@ -1,0 +1,26 @@
+{
+  "fixture_version": "windows-thread-isolation-v1",
+  "symbols": [
+    "600001.SH",
+    "600002.SH",
+    "600003.SH",
+    "600004.SH",
+    "600005.SH",
+    "600006.SH",
+    "600007.SH",
+    "600008.SH",
+    "600009.SH",
+    "600010.SH"
+  ],
+  "phase_seconds": 600,
+  "status_interval_seconds": 0.5,
+  "monitor_interval_seconds": 1,
+  "minimum_status_samples": 1000,
+  "status_p95_ms": 250,
+  "status_p99_ms": 1000,
+  "status_p95_added_ms": 100,
+  "monitor_p99_added_ms": 250,
+  "maximum_backtest_threads": 7,
+  "phase_timeout_seconds": 30,
+  "backtest_start_interval_seconds": 120
+}

@@ -169,3 +169,41 @@ def test_fresh_cores_on_one_worker_keep_spacing_between_jobs(tmp_path, clock):
         )
         assert core.sync(_scope()).network_calls == 4
         assert clock.now == pytest.approx(3.75 if index == 0 else 8.75)
+
+
+def test_ten_stock_offline_sync_retains_global_worker_spacing_and_frozen_coverage(
+    tmp_path, clock,
+):
+    from tests.integration.test_backtest_isolation_fault_matrix import FIXTURE
+
+    symbols = tuple(FIXTURE["symbols"])
+    starts = []
+
+    class Provider(_Provider):
+        def daily_limits(self, trade_date):
+            first = super().daily_limits(trade_date)[0]
+            return tuple(first.model_copy(update={"symbol": symbol}) for symbol in symbols)
+
+    provider = Provider()
+    for name in ("trading_calendar", "daily_bars", "historical_minute_batch", "daily_limits"):
+        original = getattr(provider, name)
+
+        def recorded(*args, original=original):
+            starts.append(clock.now)
+            return original(*args)
+
+        setattr(provider, name, recorded)
+    store = BacktestMarketStore(tmp_path / "market.sqlite3")
+    controller = _Controller()
+    sync = BacktestSyncService(
+        provider=provider, store=store, request_controller=controller,
+        today=lambda: date(2026, 8, 25),
+    )
+    scope = _scope().model_copy(update={"symbols": symbols})
+    result = asyncio.run(sync.sync(scope))
+    assert result.network_calls == 22
+    assert starts == pytest.approx([index * 1.25 for index in range(22)])
+    assert set(controller.priorities) == {RequestPriority.BACKGROUND}
+    assert store.freeze_dataset(scope).ready
+    assert asyncio.run(sync.sync(scope)).network_calls == 0
+    assert len(starts) == 22

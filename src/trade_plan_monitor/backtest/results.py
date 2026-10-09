@@ -2182,6 +2182,15 @@ class BacktestResultStore:
             content_domain = _domain(_FILL_DOMAINS, version)
             now = _now_text(version)
             for record in records:
+                if record.payload.get("schema_version") == "monitor-loop-fill-v1":
+                    legacy_id = record.payload["receipt"]["authority_receipt"]["simulation_id"]
+                    legacy = connection.execute(
+                        "SELECT 1 FROM backtest_fill WHERE fill_id = ? AND run_id = ?",
+                        (legacy_id, run_id),
+                    ).fetchone()
+                    if legacy is not None:
+                        # Recover a pre-upgrade staged row under its original exact identity.
+                        record = record.model_copy(update={"fill_id": legacy_id})
                 payload_json = _canonical_json(
                     record.model_dump(mode="python", round_trip=True),
                     version=version,

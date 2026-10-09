@@ -128,7 +128,8 @@ def fill_record(event: LoopAuditEvent) -> BacktestFillRecord | None:
         return None
     receipt = event.payload.attempt.receipt
     return BacktestFillRecord(
-        fill_id=receipt.authority_receipt.simulation_id,
+        fill_id=sha256(("monitor-loop-stored-fill-v1\0" + event.run_id + "\0"
+                        + receipt.authority_receipt.simulation_id).encode()).hexdigest(),
         run_id=event.run_id,
         filled_at=event.at,
         payload={
@@ -231,11 +232,15 @@ def verify_loop_publication(store, connection, summary, reference, *, materializ
                     if receipt is not None:
                         account = _verify_settlement(account, receipt, stored.run_input.costs)
                         fill = fill_record(event)
-                        if fill.fill_id in expected_fills:
+                        simulation_id = receipt.authority_receipt.simulation_id
+                        if simulation_id in expected_fills:
                             raise ValueError("loop fill identity is repeated")
-                        expected_fills[fill.fill_id] = sha256(
-                            _canonical_json(fill, version="v2").encode()
-                        ).hexdigest()
+                        legacy = fill.model_copy(update={"fill_id": simulation_id})
+                        expected_fills[simulation_id] = {
+                            candidate.fill_id: sha256(
+                                _canonical_json(candidate, version="v2").encode()
+                            ).hexdigest() for candidate in (fill, legacy)
+                        }
                 elif payload.kind == "STATE" and payload.account != account:
                     raise ValueError("loop state does not match preceding settlement")
                 elif payload.kind == "VALUATION":
@@ -261,8 +266,12 @@ def verify_loop_publication(store, connection, summary, reference, *, materializ
     while rows := cursor.fetchmany(1000):
         for row in rows:
             fill = _load_fill_row(tuple(row), expected_run_id=reference.run_id)
+            simulation_id = fill.payload.get("receipt", {}).get("authority_receipt", {}).get(
+                "simulation_id"
+            )
+            expected = expected_fills.pop(simulation_id, {})
             if (
-                expected_fills.pop(fill.fill_id, None)
+                expected.get(fill.fill_id)
                 != sha256(_canonical_json(fill, version="v2").encode()).hexdigest()
             ):
                 raise ValueError("loop fill ledger does not match audit trail")

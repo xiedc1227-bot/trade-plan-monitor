@@ -413,10 +413,12 @@ class DailyRuntimeEvaluationService:
             ):
                 raise DailyActivationChangedError("daily activation changed during acquisition")
             ordinary_eligible = _eligible(plan, now.date()) and not ordinary_authority_ended
+            accounting = DailyAccounting(work.daily)
+            legacy_reason = None if _alert_only(plan) else accounting.legacy_reason(plan.symbol)
             historical_risks = (
                 work.daily.list(symbol=plan.symbol, kind="RISK")
                 if not _alert_only(plan)
-                and not DailyAccounting(work.daily).legacy_reason(plan.symbol)
+                and not legacy_reason
                 else ()
             )
             maintain_risk = any(
@@ -429,8 +431,7 @@ class DailyRuntimeEvaluationService:
                 self._admission is not None and not self._admission()
             ):
                 raise ValueError("daily runtime commit admission is closed")
-            accounting = DailyAccounting(work.daily)
-            if not _alert_only(plan) and accounting.legacy_reason(plan.symbol):
+            if legacy_reason:
                 return DailyRuntimeCycleResult(
                     symbol=plan.symbol,
                     plan_hash=plan_sha256(plan),

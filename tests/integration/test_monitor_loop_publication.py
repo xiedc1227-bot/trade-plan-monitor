@@ -196,3 +196,29 @@ def test_rehashed_fill_payload_still_has_to_match_typed_audit(tmp_path):
     with pytest.raises(ValueError, match="fill ledger"):
         store.verify_job_publication(reference.run_id, expected_report_hash=report.report_hash)
     assert store.get_run(reference.run_id) is None
+
+
+def test_legacy_staged_fill_is_exactly_verified_and_replayed_without_duplicate(tmp_path):
+    from trade_plan_monitor.backtest import loop_publication as publication
+
+    store, reference, report, events = publication_case(tmp_path)
+    original = publication.fill_record
+
+    def legacy_fill(event):
+        fill = original(event)
+        if fill is None:
+            return None
+        return fill.model_copy(update={
+            "fill_id": event.payload.attempt.receipt.authority_receipt.simulation_id,
+        })
+
+    with patch.object(publication, "fill_record", legacy_fill):
+        stage_loop_report(store, reference=reference, report=report, events=events)
+    stage_loop_report(store, reference=reference, report=report, events=events)
+    proof = store.verify_job_publication(reference.run_id, expected_report_hash=report.report_hash)
+    store.publish_verified_publication(proof)
+    assert len(store.list_fills(reference.run_id)) == 1
+    assert store.list_fills(reference.run_id)[0].fill_id == next(
+        event.payload.attempt.receipt.authority_receipt.simulation_id for event in events
+        if event.payload.kind == "EXECUTED" and event.payload.attempt.receipt is not None
+    )

@@ -422,3 +422,79 @@ def test_risk_aggregate_offer_preserves_core_and_tplusone_unavailable():
     assert result["tactical_qty"] == 200
     assert result["unavailable_tactical_qty"] == 100
     assert "allocations" not in result
+
+
+def _raw_compatibility_row(identity, payload):
+    from trade_plan_monitor.state.daily_models import DailyRecord
+
+    return DailyRecord(id=identity, kind="EVALUATION", symbol=SYMBOL, lineage="synthetic",
+                       revision=1, payload_json=payload, created_at=NOW.isoformat(),
+                       updated_at=NOW.isoformat())
+
+
+def test_legacy_detection_finds_tail_without_decoding_current_history(inventory_work, monkeypatch):
+    import json
+
+    from trade_plan_monitor.state.daily_accounting import LEGACY_UNSUPPORTED
+
+    valid = json.dumps({"inventory": {}, "evidence": "synthetic" * 1000})
+    inventory_work.daily.session.add_all(
+        _raw_compatibility_row(f"current-{index:05d}", valid) for index in range(1500)
+    )
+    legacy = _raw_compatibility_row("tail-legacy", '{"inventory":{"orders":[]}}')
+    inventory_work.daily.session.add(legacy)
+    inventory_work.daily.session.flush()
+    original = json.loads
+    decoded = []
+
+    def observed(value, *args, **kwargs):
+        decoded.append(value)
+        return original(value, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(json, "loads", observed)
+        assert DailyAccounting(inventory_work.daily).legacy_reason(SYMBOL) == LEGACY_UNSUPPORTED
+    assert decoded == [legacy.payload_json]
+    inventory_work.daily.session.delete(legacy)
+    inventory_work.daily.session.flush()
+    with monkeypatch.context() as patch:
+        patch.setattr(json, "loads", observed)
+        assert DailyAccounting(inventory_work.daily).legacy_reason(SYMBOL) is None
+    assert decoded == [legacy.payload_json]
+
+
+@pytest.mark.parametrize(("payload", "reason", "error"), [
+    ('{}', None, None),
+    ('{"inventory":{}}', None, None),
+    ('{"inventory":{"orders":null}}', "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+    ('{"inventory":{"orders":[]}}', "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+    ('{"inventory":["orders"]}', "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+    ('{"inventory":"orders"}', "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+    ('{"inventory":[]}', None, None),
+    ('{"inventory":"empty"}', None, None),
+    ('{"inventory":null}', None, TypeError),
+    ('{"inventory":2}', None, TypeError),
+    ('[]', None, AttributeError),
+    ('null', None, AttributeError),
+    ('not-json', None, ValueError),
+    ('{"inventory":{},"inventory":{"orders":[]}}',
+     "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+    ('{"inventory":{"orders":[]},"inventory":{}}', None, None),
+    ('{"inventory":null,"inventory":{}}', None, None),
+    ('{"inventory":{},"inventory":null}', None, TypeError),
+    (r'{"invento\u0072y":{"orders":[]}}', "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+    (r'{"inventory":{"ord\u0065rs":[]}}', "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+    ('{"inventory":NaN}', None, TypeError),
+    ('{"inventory":{"orders":NaN}}', "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", None),
+])
+def test_legacy_evaluation_filter_preserves_original_marker_and_corruption_semantics(
+    inventory_work, payload, reason, error,
+):
+    inventory_work.daily.session.add(_raw_compatibility_row("edge", payload))
+    inventory_work.daily.session.flush()
+    accounting = DailyAccounting(inventory_work.daily)
+    if error is not None:
+        with pytest.raises(error):
+            accounting.legacy_reason(SYMBOL)
+    else:
+        assert accounting.legacy_reason(SYMBOL) == reason

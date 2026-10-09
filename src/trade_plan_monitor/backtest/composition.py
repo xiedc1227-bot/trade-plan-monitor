@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -511,6 +512,12 @@ class _ProductionBacktestService:
         try:
             return await self._metadata_thread.run(function, *args, **kwargs)
         except BacktestServiceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+        except sqlite3.OperationalError as error:
+            if getattr(error, "sqlite_errorcode", None) not in {
+                sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED,
+            }:
+                raise
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
 
     async def submit_data_sync(
@@ -1835,7 +1842,7 @@ def _fill_view(record: BacktestFillRecord) -> BacktestFillView | BacktestLoopFil
         return BacktestLoopFillView.model_validate(
             {
                 "schemaVersion": "monitor-loop-fill-v1",
-                "fillId": record.fill_id,
+                "fillId": record.payload["receipt"]["authority_receipt"]["simulation_id"],
                 "runId": record.run_id,
                 "filledAt": format_shanghai_datetime(record.filled_at.astimezone(SHANGHAI)),
                 "eventId": record.payload["event_id"],

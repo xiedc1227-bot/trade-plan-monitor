@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。已实施并验证：ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36. 证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 33 项、待完成活动任务 4 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV42。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。已实施并验证：ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37. 证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 34 项、待完成活动任务 3 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV43。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -463,12 +463,27 @@
 
 ## ML-T37. 验证 Windows 惰性激活与线程边界
 
-- [ ] 完成实现和本项验证。
+- [x] 完成实现和本项验证。
 - **依赖:** `ML-T26`, `ML-T27`, `ML-T34`, `ML-T36`
 - **验收:** 证明应用启动/监控导航/状态/预取/关闭零回测工作、并发首次使用只初始化一次、只读历史不执行积压、明确选择恢复。可控夹具注入首次使用错误/晚到 future/取消竞态，保留 ML17 10 只股票负载门槛及已接受线程限制。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_isolation_fault_matrix.py tests/integration/test_monitor_loop_parity.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/verify_backtest_thread_load.py --profile windows-threads --offline`
-- **主要文件:** `tests/integration/test_backtest_isolation_fault_matrix.py`, `tests/fixtures/monitor-loop/isolation.json`, `scripts/verify_backtest_thread_load.py`, `tests/integration/test_backtest_sync_pacing.py`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A08, ML-A19–ML-A24.
+- **主要文件:** `tests/integration/test_backtest_isolation_fault_matrix.py`, `tests/fixtures/monitor-loop/isolation.json`, `scripts/verify_backtest_thread_load.py`, `tests/integration/test_backtest_sync_pacing.py`, `src/trade_plan_monitor/backtest/loop_publication.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/results.py`, `tests/integration/test_monitor_loop_publication.py`, `src/trade_plan_monitor/state/daily_accounting.py`, `tests/unit/test_daily_safety_boundaries.py`, `src/trade_plan_monitor/runtime/daily_service.py`
+- **范围:** M (11 个主要文件，含已验证的发布、繁忙重试及事务内旧数据扫描修正); **追溯:** ML-A08, ML-A19–ML-A24.
+
+验证驱动修正：真实准入负载证明，不同响应延迟的顺序原生运行会在全局回执成交键上碰撞。仅将内部存储成交键绑定 run_id，保留公开回执标识，并严格验证/重放既有旧行。不改变 Schema/API 路径或权限/事件身份。
+
+
+负载夹具纠正：首次 600/600 秒无节奏回放压力在阶段末超过固定监测节奏。保留失败、全部原有时长/延迟/完整性门禁和完全相同的真实监测负载；仅将离线回放准入起点间隔调整为至少 120 秒，遵循 ML17 允许降低已准入负载的约定。最终断言前记录阶段轮次与耗时，使失败门禁仍保留实际测量。不修改生产监测或资源控制器。
+
+
+进一步实测纠正：5 秒夹具完成全部评估，但暴露至少 30 份输入维护争用、原始 SQLite 繁忙异常及 7340.370 ms 调度 p99。保留失败报告及严格清理验证。仅将真实 SQLITE_BUSY/SQLITE_LOCKED 元数据调用错误转换为既有 503/Retry-After，保留原意图重试，其他 SQL 故障继续抛出。离线验收 profile 每十分钟最多准入五次原生实验（起点间隔 >=120 秒），全部原监测节奏/延迟/完整性门禁保持。不增加生产节奏、锁或通用资源系统。
+
+
+实测监测纠正：即使每十分钟五次回放，历史增长仍导致失败。可控十股票单轮耗时 0.964 秒，legacy_reason 占 0.631 秒 / 24,390 次 JSON 解析，每股票扫描两次；写锁仅占 0.119 秒，保持不变。仅利用既有 SQLite JSON 支持筛选 EVALUATION 兼容候选，保留原 Python 判定及损坏/非对象错误语义，增加有界解析/末尾旧记录/损坏数据安全用例。不新增缓存、模式、监测规则、任务框架或质量门槛变化。
+
+事务内扫描修正：真实累计历史剖析证明同一评估事务重复解析历史占据主要耗时。仅在 SQL 中筛去无旧订单标记的当前 EVALUATION 行，保留损坏/非对象/重复键的原 Python 检查，并在同一事务内复用一次旧数据判定；不增加持久缓存、修改历史数据或改变监测规则。准入脚本显式遵守名义阶段截止时间，结束后的排空不再启动额外实验。
+- **证据:** MV43：Windows 600/600 秒十股票负载通过，完成 5 次顺序原生运行及精确 12000 次评估，无重复/缺失语义提醒。最终 209 项相关回归及 131 项共享运行时/账本检查通过，1 项既有环境条件跳过；Ruff 通过。公开成交身份稳定，内部存储绑定运行，旧记录精确重试通过。保留首次无节奏失败，全部原有门槛保持。ML-T37 完成，接续 ML-T28。
+
 
 ## ML-T38. 记录按需线程操作指导
 

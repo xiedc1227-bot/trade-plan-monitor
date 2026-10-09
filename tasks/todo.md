@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 33 completed, 4 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV42.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 34 completed, 3 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV43.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -463,12 +463,27 @@ Frozen identity correction: The browser proves the FROZEN progress projection pu
 
 ## ML-T37. Verify Windows lazy activation and thread boundaries
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T26`, `ML-T27`, `ML-T34`, `ML-T36`
 - **Acceptance:** Prove zero backtest work across app startup/monitor navigation/status/prefetch/shutdown, concurrent first-use single initialization, read-only history without backlog execution and explicit selected resume. Inject first-use errors/late futures/cancel races with controllable fixtures; retain ML17 10-stock load gates and accepted thread limits.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_isolation_fault_matrix.py tests/integration/test_monitor_loop_parity.py -q -m "not live"`; `.venv/Scripts/python.exe scripts/verify_backtest_thread_load.py --profile windows-threads --offline`
-- **Primary files:** `tests/integration/test_backtest_isolation_fault_matrix.py`, `tests/fixtures/monitor-loop/isolation.json`, `scripts/verify_backtest_thread_load.py`, `tests/integration/test_backtest_sync_pacing.py`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A08, ML-A19–ML-A24.
+- **Primary files:** `tests/integration/test_backtest_isolation_fault_matrix.py`, `tests/fixtures/monitor-loop/isolation.json`, `scripts/verify_backtest_thread_load.py`, `tests/integration/test_backtest_sync_pacing.py`, `src/trade_plan_monitor/backtest/loop_publication.py`, `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/backtest/results.py`, `tests/integration/test_monitor_loop_publication.py`, `src/trade_plan_monitor/state/daily_accounting.py`, `tests/unit/test_daily_safety_boundaries.py`, `src/trade_plan_monitor/runtime/daily_service.py`
+- **Scope:** M (11 primary files; verified publication, busy retry and transaction-local legacy-scan correction); **Trace:** ML-A08, ML-A19–ML-A24.
+
+Verification-driven correction: Real admitted load proves sequential native runs with differing response delays collide on a global receipt fill key. Bind only the internal stored fill key to run_id, preserve public receipt identifiers, and strictly verify/replay existing legacy rows. No schema/API path or authority/event identity change.
+
+
+Load-fixture correction: The initial 600/600-second unpaced replay stress exceeded the fixed monitoring cadence near phase end. Retain that failure, all original time/latency/completeness gates and the exact real monitoring workload; pace only the offline replay admissions to at least 120 seconds between starts, as ML17 permits reducing admitted load. Record phase counts and elapsed time before final assertions so a failed gate retains actual measurements. No production monitor or resource controller change.
+
+
+Further measured-load correction: The 5-second fixture completed all evaluations but exposed >=30-input maintenance contention, a raw SQLite busy exception and a 7340.370 ms scheduling p99. Preserve that failed report and strict cleanup validation. Translate only actual SQLITE_BUSY/SQLITE_LOCKED metadata-call errors into the existing 503/Retry-After response, retaining original-intent retry and propagating other SQL faults. The offline accepted profile admits at most five native experiments per ten minutes (>=120 seconds between starts); all original monitor cadence/latency/completeness gates remain. No production pacing, new lock or generic resource system.
+
+
+Measured monitor correction: Even five-per-ten-minute replay fails as history grows. A controlled ten-stock cycle profiles 0.964 seconds, with legacy_reason taking 0.631 seconds / 24,390 JSON loads across two scans per stock; the write lock takes only 0.119 seconds and stays unchanged. Filter only EVALUATION compatibility candidates using existing SQLite JSON support, retain the original Python predicate and malformed/non-object error semantics, and add bounded-decoding/legacy-tail/corruption safety cases. No cache, schema, monitor rule, task framework or quality-threshold change.
+
+Transaction-local scan correction: Profiling actual accumulated history proves duplicate historical JSON scanning dominates evaluation cost. SQL filters only current EVALUATION rows without old order markers, preserving malformed/non-object/duplicate-key Python checks; reuse one legacy decision within the same transaction. No persistent cache, historical rewrite or monitor rule change. The admission script explicitly obeys the nominal phase deadline; post-phase drain cannot start another experiment.
+- **Evidence:** MV43: Windows 600/600-second ten-stock load passes with 5 completed sequential native runs, 12000 exact evaluations and no duplicated/missing semantic reminders. The final 209-case affected regression and 131 shared runtime/accounting checks pass with one existing environment skip; Ruff passes. Public fill identities remain stable with run-bound internal storage; legacy exact retry passes. Initial unpaced failure is retained; all original gates remain. ML-T37 completes; ML-T28 follows.
+
 
 ## ML-T38. Record on-demand thread operation guidance
 

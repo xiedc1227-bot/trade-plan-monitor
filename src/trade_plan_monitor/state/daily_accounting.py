@@ -3,7 +3,7 @@
 import json
 from datetime import date, datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import case, func, or_, select, text
 
 from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.models import TradingCalendar
@@ -24,10 +24,26 @@ class DailyAccounting:
         )).scalar_one_or_none()
         if layout is not None and "'SIMULATION'" not in layout:
             return LEGACY_UNSUPPORTED
+        # Keep malformed/non-object values for the original Python checks below.
+        # Current evaluation history needs no Python JSON decoding just to find an old marker.
+        payload = DailyRecord.payload_json
+        fields = func.json_each(payload).table_valued("key")
+        inventory_keys = select(func.count()).select_from(fields).where(
+            fields.c.key == "inventory",
+        ).scalar_subquery()
+        evaluation_candidate = case(
+            (func.json_valid(payload).is_not(1), True),
+            (func.json_type(payload) != "object", True),
+            (inventory_keys > 1, True),  # Python resolves duplicate keys to the last value.
+            (func.json_type(payload, "$.inventory").is_(None), False),
+            (func.json_type(payload, "$.inventory") != "object", True),
+            else_=func.json_type(payload, "$.inventory.orders").is_not(None),
+        )
         rows = self.repo.session.execute(
             select(DailyRecord.kind, DailyRecord.payload_json).where(
                 DailyRecord.symbol == symbol,
                 DailyRecord.kind.in_(("REPORT", "POSITION", "SIGNAL", "EVALUATION", "RISK")),
+                or_(DailyRecord.kind != "EVALUATION", evaluation_candidate),
             )
         ).yield_per(100)
         for kind, serialized in rows:
