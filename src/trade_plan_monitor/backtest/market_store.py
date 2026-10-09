@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, time, timedelta
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
@@ -50,7 +50,10 @@ from trade_plan_monitor.backtest.migration import (
 )
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 from trade_plan_monitor.backtest.time import shanghai_now_text
-from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteBatch
+from trade_plan_monitor.market_data.historical_provider import (
+    HistoricalMinuteBatch,
+    HistoricalMinuteProfile,
+)
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
 from trade_plan_monitor.market_index.canonical import market_index_bar_set_hash
 from trade_plan_monitor.market_index.identity import (
@@ -58,6 +61,14 @@ from trade_plan_monitor.market_index.identity import (
     resolve_board_reference,
 )
 from trade_plan_monitor.market_index.models import MarketIndexBar, MarketIndexInterval
+
+if TYPE_CHECKING:
+    from trade_plan_monitor.backtest.dataset import LoopFrozenSymbolDay
+    from trade_plan_monitor.backtest.loop_dataset import (
+        LoopDatasetFreezeResult,
+        LoopDatasetManifest,
+        LoopDatasetRequest,
+    )
 
 _ArtifactKind = Literal["CALENDAR", "MINUTE", "LIMIT", "DAILY"]
 _MarketValue = TypeVar("_MarketValue", bound=BaseModel)
@@ -383,18 +394,9 @@ class BacktestMarketStore:
         minute_rows: list[tuple[str, str, str, str]] = []
         minute_references: list[dict[str, str]] = []
         for bar in batch.bars:
-            content_json = _canonical_json(bar.model_dump(mode="python", round_trip=True))
-            artifact_hash = _content_hash(
-                {
-                    "kind": "MINUTE_BAR",
-                    "provider": "TUSHARE",
-                    "contract_version": batch.contract_version.value,
-                    "symbol": bar.symbol,
-                    "bar_end": bar.bar_end.isoformat(),
-                    "content": json.loads(content_json),
-                }
-            )
-            minute_rows.append((artifact_hash, bar.symbol, bar.bar_end.isoformat(), content_json))
+            row = _minute_artifact_row(bar, batch.contract_version)
+            artifact_hash = row[0]
+            minute_rows.append(row)
             minute_references.append(
                 {"artifactHash": artifact_hash, "barEnd": bar.bar_end.isoformat()}
             )
@@ -421,43 +423,7 @@ class BacktestMarketStore:
         now = shanghai_now_text()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            for artifact_hash, symbol, bar_end, content_json in minute_rows:
-                connection.execute(
-                    """
-                    INSERT OR IGNORE INTO market_minute_artifact (
-                        artifact_hash, symbol, bar_end, content_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        artifact_hash,
-                        symbol,
-                        bar_end,
-                        _encode_minute_payload(content_json),
-                        now,
-                    ),
-                )
-                head = connection.execute(
-                    """
-                    SELECT artifact_hash, revision FROM market_minute_head
-                    WHERE symbol = ? AND bar_end = ?
-                    """,
-                    (symbol, bar_end),
-                ).fetchone()
-                if head is not None and str(head[0]) == artifact_hash:
-                    continue
-                revision = 1 if head is None else int(head[1]) + 1
-                connection.execute(
-                    """
-                    INSERT INTO market_minute_head (
-                        symbol, bar_end, artifact_hash, revision, updated_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(symbol, bar_end) DO UPDATE SET
-                        artifact_hash = excluded.artifact_hash,
-                        revision = excluded.revision,
-                        updated_at = excluded.updated_at
-                    """,
-                    (symbol, bar_end, artifact_hash, revision, now),
-                )
+            _record_minute_rows(connection, minute_rows, now)
             existing = connection.execute(
                 "SELECT artifact_hash, revision FROM market_head WHERE natural_key = ?",
                 (natural_key,),
@@ -504,6 +470,41 @@ class BacktestMarketStore:
                 )
             connection.commit()
         return day_hash
+
+    def record_completed_loop_minutes(
+        self,
+        values: tuple[MinuteBar, ...],
+        *,
+        historical_profile: HistoricalMinuteProfile,
+    ) -> tuple[str, ...]:
+        """Record verified completed intervals without creating a full-day batch."""
+        from trade_plan_monitor.market_data.sessions import expected_minute_ends
+
+        if (
+            not isinstance(historical_profile, HistoricalMinuteProfile)
+            or historical_profile is HistoricalMinuteProfile.UNVERIFIED
+        ):
+            raise ValueError("loop minute time-label profile must be verified")
+        if (
+            type(values) is not tuple
+            or not 1 <= len(values) <= 240
+            or any(type(bar) is not MinuteBar for bar in values)
+        ):
+            raise ValueError("loop minutes must be one bounded tuple of MinuteBar")
+        symbol, day = values[0].symbol, values[0].bar_end.date()
+        expected = set(expected_minute_ends(day, is_open=True))
+        if len({bar.bar_end for bar in values}) != len(values) or any(
+            bar.symbol != symbol or bar.bar_end not in expected for bar in values
+        ):
+            raise ValueError(
+                "loop minutes must identify distinct canonical intervals of one symbol-day"
+            )
+        rows = tuple(_minute_artifact_row(bar, historical_profile) for bar in values)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            _record_minute_rows(connection, rows, shanghai_now_text())
+            connection.commit()
+        return tuple(row[0] for row in rows)
 
     def record_trading_days(self, values: Iterable[TradingDay]) -> tuple[str, ...]:
         return self._record_many("CALENDAR", values)
@@ -711,6 +712,46 @@ class BacktestMarketStore:
         if value.exchange != exchange or value.cal_date != cal_date:
             raise RuntimeError("current calendar artifact identity is invalid")
         return value
+
+    def freeze_loop_dataset(
+        self,
+        request: LoopDatasetRequest,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        progress_callback: BacktestProgressCallback | None = None,
+    ) -> LoopDatasetFreezeResult:
+        """Freeze a cutoff selection without changing the legacy dataset catalog."""
+        from trade_plan_monitor.backtest.loop_dataset import LoopDatasetRequest, select_loop_dataset
+
+        if not isinstance(request, LoopDatasetRequest):
+            raise TypeError("request must be a LoopDatasetRequest")
+        request = LoopDatasetRequest.model_validate(request.model_dump(mode="python"))
+        validate_operation_controls(cancellation_token, progress_callback)
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            result = select_loop_dataset(
+                connection,
+                request,
+                cancellation_token=cancellation_token,
+                progress_callback=progress_callback,
+            )
+            check_cancelled(cancellation_token, "FREEZE_VERIFY")
+            connection.commit()
+        return result
+
+    @contextmanager
+    def open_frozen_loop_dataset(
+        self, manifest: LoopDatasetManifest
+    ) -> Iterator[Iterator[LoopFrozenSymbolDay]]:
+        """One-shot bounded day stream over immutable selected artifact hashes."""
+        from trade_plan_monitor.backtest.loop_dataset import LoopDatasetManifest, read_loop_day
+
+        if not isinstance(manifest, LoopDatasetManifest):
+            raise TypeError("manifest must be a LoopDatasetManifest")
+        manifest = LoopDatasetManifest.model_validate(manifest.model_dump(mode="python"))
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            yield (read_loop_day(connection, manifest, day) for day in manifest.days)
 
     def freeze_dataset(
         self,
@@ -2223,3 +2264,58 @@ def _validate_hash(value: str, name: str) -> str:
 
 
 __all__ = ["BacktestMarketStore"]
+
+
+def _record_minute_rows(connection, minute_rows, now):
+    for artifact_hash, symbol, bar_end, content_json in minute_rows:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO market_minute_artifact (
+                artifact_hash, symbol, bar_end, content_json, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                artifact_hash,
+                symbol,
+                bar_end,
+                _encode_minute_payload(content_json),
+                now,
+            ),
+        )
+        head = connection.execute(
+            """
+            SELECT artifact_hash, revision FROM market_minute_head
+            WHERE symbol = ? AND bar_end = ?
+            """,
+            (symbol, bar_end),
+        ).fetchone()
+        if head is not None and str(head[0]) == artifact_hash:
+            continue
+        revision = 1 if head is None else int(head[1]) + 1
+        connection.execute(
+            """
+            INSERT INTO market_minute_head (
+                symbol, bar_end, artifact_hash, revision, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, bar_end) DO UPDATE SET
+                artifact_hash = excluded.artifact_hash,
+                revision = excluded.revision,
+                updated_at = excluded.updated_at
+            """,
+            (symbol, bar_end, artifact_hash, revision, now),
+        )
+
+
+def _minute_artifact_row(bar: MinuteBar, profile: HistoricalMinuteProfile):
+    content_json = _canonical_json(bar.model_dump(mode="python", round_trip=True))
+    artifact_hash = _content_hash(
+        {
+            "kind": "MINUTE_BAR",
+            "provider": "TUSHARE",
+            "contract_version": profile.value,
+            "symbol": bar.symbol,
+            "bar_end": bar.bar_end.isoformat(),
+            "content": json.loads(content_json),
+        }
+    )
+    return artifact_hash, bar.symbol, bar.bar_end.isoformat(), content_json

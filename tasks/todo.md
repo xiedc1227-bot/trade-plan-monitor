@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 18 completed, 19 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV27.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 19 completed, 18 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV28.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -186,12 +186,14 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T16. Freeze evidence through an explicit cutoff
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T01`, `ML-T05`
 - **Acceptance:** Represent a partial terminal session without relabeling it complete; validate required closed intervals and this one plan's warm-up. Today/holiday/delayed data remains explicit; legacy manifest bytes/readiness stay unchanged.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py tests/integration/test_backtest_compatibility.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/loop_dataset.py`, `src/trade_plan_monitor/backtest/dataset.py`, `src/trade_plan_monitor/backtest/market_store.py`, `tests/integration/test_monitor_loop_dataset.py`, `tests/unit/test_monitor_loop_cutoff.py`
 - **Scope:** M (5 primary files including tests); **Trace:** ML-A04, ML-A09, ML-A11, ML-A15.
+- **Implementation boundary:** Add a separately versioned immutable selection and cutoff-aware day model; do not relax `FrozenSymbolDay`, historical batch validation or legacy catalog/manifest bytes. Read existing immutable calendar/minute/limit/daily revisions in one SQLite snapshot, exclude future availability and retain eligible corrections as later evidence. Derive requirements from the one reviewed snapshot, report missing closed intervals and initial warm-up, and keep a partial terminal day explicit. Opening a frozen selection reads referenced artifacts only, never mutable heads or providers. ML-T17 persists/copies the selection and its needed artifacts with the run input; no new database/table/migration or live ingestion is introduced here.
+- **Evidence:** MV28: 30 task cases and 159 related regressions pass, covering lunch/close/holidays, missing minutes/limits/official close, minute corrections, complete five-minute warm-up, corrupt references, cancellation and legacy manifest/catalog compatibility. Initial minute warm-up shortages remain explicit and affected rules await sufficient completed intervals; insufficient daily warm-up rejects freezing. Mutation review detects missing constituent minutes. ML-T16 is complete; ML-T17 is next. No HTTP contract or approval change occurs.
 
 ## ML-T17. Persist frozen run references within job limits
 

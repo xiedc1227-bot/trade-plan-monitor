@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 18 项、待完成活动任务 19 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV27。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 19 项、待完成活动任务 18 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV28。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -186,12 +186,14 @@
 
 ## ML-T16. 冻结截至明确时点的证据
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T01`, `ML-T05`
 - **验收:** 表示部分终端时段而不标为完整，校验所需已结束区间和该单份计划预热。明确当天/节假日/延迟数据，旧清单字节/就绪语义不变。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py tests/integration/test_backtest_compatibility.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/loop_dataset.py`, `src/trade_plan_monitor/backtest/dataset.py`, `src/trade_plan_monitor/backtest/market_store.py`, `tests/integration/test_monitor_loop_dataset.py`, `tests/unit/test_monitor_loop_cutoff.py`
 - **范围:** M (5 个主要文件，含测试); **追溯:** ML-A04, ML-A09, ML-A11, ML-A15.
+- **实施边界:** 增加独立版本的不可变选择和支持截止点的单日模型；不放松 `FrozenSymbolDay`、历史批次校验或旧目录/清单字节。在同一 SQLite 快照读取既有不可变日历/分钟/涨跌停/日线修订，排除未来可用证据，并保留已可用修正作为后续证据。根据单份已审核快照推导需求，明确缺失闭合区间及初始预热，不把末日部分时段标成完整日。打开冻结选择只读引用产物，不查询可变头部或服务商。ML-T17 随运行输入持久化/复制选择及所需产物；本项不新增数据库/表/迁移或真实采集。
+- **证据:** MV28：30 项任务检查及 159 项相关回归通过，覆盖午休/收盘/节假日、缺失分钟/限价/官方收盘、逐分钟修订、完整五分钟预热、引用损坏、取消与旧清单/目录兼容。初始分钟预热不足保持可见，受影响规则等待足够完成区间；日线预热不足拒绝冻结。变异审阅识别少一条组成分钟的错误。ML-T16 完成，下一项为 ML-T17；本项不改变 HTTP 契约或批准。
 
 ## ML-T17. 在任务上限内保存冻结运行引用
 

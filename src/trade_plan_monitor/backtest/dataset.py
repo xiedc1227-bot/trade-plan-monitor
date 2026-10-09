@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import AbstractContextManager
-from datetime import date, datetime
+from datetime import date, datetime, time
 from hashlib import sha256
 from typing import Literal, Protocol, Self, runtime_checkable
 
@@ -25,6 +25,7 @@ from trade_plan_monitor.market_data.models import (
     MinuteBar,
     TradingDay,
 )
+from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.market_index.canonical import (
     FORMULA_DEFINITION_HASH,
 )
@@ -367,6 +368,66 @@ class FrozenSymbolDay(_DatasetValue):
                 or self.daily_limit.trade_date != self.trade_date
             ):
                 raise ValueError("daily_limit must match symbol-day")
+        return self
+
+
+class LoopFrozenSymbolDay(_DatasetValue):
+    """Cutoff-safe evidence, including corrections, without full-day assertions."""
+
+    symbol: AShareSymbol
+    trade_date: date
+    trading_day: TradingDay
+    evidence_cutoff: datetime
+    state: Literal["COMPLETE", "PARTIAL", "CLOSED", "WARMUP"]
+    minutes: tuple[MinuteBar, ...] = Field(max_length=70000)
+    daily_limits: tuple[DailyLimit, ...] = Field(max_length=70000)
+    daily_bars: tuple[DailyBar, ...] = Field(max_length=70000)
+
+    @model_validator(mode="after")
+    def cutoff_safe(self) -> Self:
+        if (
+            self.evidence_cutoff.tzinfo is None
+            or self.evidence_cutoff.utcoffset() != SHANGHAI.utcoffset(self.evidence_cutoff)
+        ):
+            raise ValueError("loop evidence cutoff must be explicit Shanghai time")
+        if (
+            self.trading_day.cal_date != self.trade_date
+            or self.trading_day.exchange != exchange_for_symbol(self.symbol)
+        ):
+            raise ValueError("loop calendar does not match symbol-day")
+        if not self.trading_day.is_open:
+            if self.state != "CLOSED" or self.minutes or self.daily_limits or self.daily_bars:
+                raise ValueError("closed loop day cannot contain market evidence")
+            return self
+        if self.state == "CLOSED":
+            raise ValueError("open loop day cannot be labelled closed")
+        expected = set(expected_minute_ends(self.trade_date, is_open=True))
+        for bar in self.minutes:
+            if (
+                bar.symbol != self.symbol
+                or bar.bar_end.date() != self.trade_date
+                or bar.bar_end not in expected
+                or bar.bar_end > self.evidence_cutoff
+                or bar.received_at > self.evidence_cutoff
+            ):
+                raise ValueError("minute is outside frozen loop evidence")
+        for value in (*self.daily_limits, *self.daily_bars):
+            if (
+                value.symbol != self.symbol
+                or value.trade_date != self.trade_date
+                or value.received_at > self.evidence_cutoff
+            ):
+                raise ValueError("daily evidence is outside frozen loop evidence")
+        if any(
+            not bar.is_official
+            or bar.received_at < datetime.combine(self.trade_date, time(15), SHANGHAI)
+            for bar in self.daily_bars
+        ):
+            raise ValueError("loop official daily evidence is provisional")
+        if self.state == "COMPLETE" and (
+            len({bar.bar_end for bar in self.minutes}) != 240 or not self.daily_bars
+        ):
+            raise ValueError("complete loop day needs full minutes and official close")
         return self
 
 
