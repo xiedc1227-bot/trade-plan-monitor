@@ -17,7 +17,7 @@ from enum import Enum, StrEnum
 from hashlib import sha256
 from itertools import islice
 from pathlib import Path
-from typing import Annotated, Protocol, Self
+from typing import TYPE_CHECKING, Annotated, Protocol, Self
 from weakref import WeakSet
 from zoneinfo import ZoneInfo
 
@@ -42,6 +42,14 @@ from trade_plan_monitor.backtest.storage_guard import reject_incompatible_databa
 from trade_plan_monitor.backtest.time import format_shanghai_datetime
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
+
+if TYPE_CHECKING:
+    from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+    from trade_plan_monitor.backtest.loop_dataset import LoopDatasetManifest
+    from trade_plan_monitor.backtest.loop_input import MonitorLoopInput
+    from trade_plan_monitor.backtest.loop_input_store import LoopInputStore, StoredLoopInput
+    from trade_plan_monitor.backtest.market_store import BacktestMarketStore
+    from trade_plan_monitor.backtest.preparation_review import FrozenPreparedPlan
 
 Sha256Hex = Annotated[
     str,
@@ -637,6 +645,127 @@ class BacktestResultStore:
             created = self._record_run_input_participant(connection, run_input)
             connection.commit()
         return created
+
+    @property
+    def loop_input_store(self) -> LoopInputStore:
+        """Return an inert result-owned file handle without initializing its directory."""
+        from trade_plan_monitor.backtest.loop_input_store import LoopInputStore
+
+        return LoopInputStore(self.database_path)
+
+    def record_loop_input(
+        self,
+        *,
+        prepared: FrozenPreparedPlan,
+        run_input: MonitorLoopInput,
+        dataset: LoopDatasetManifest,
+        market_source: BacktestMarketStore,
+    ) -> LoopInputReference:
+        """Copy verified dependencies before atomically binding this canonical input."""
+        existing = self.get_loop_input_reference(run_input.run_id)
+        if existing is not None:
+            stored = self.get_loop_input(existing)
+            if (
+                stored.prepared != prepared
+                or stored.run_input != run_input
+                or stored.dataset != dataset
+            ):
+                raise ResultConflictError("loop run conflicts with its immutable reviewed input")
+            return existing
+        stored = self.loop_input_store.persist(
+            prepared=prepared,
+            run_input=run_input,
+            dataset=dataset,
+            market_source=market_source,
+        )
+        reference = stored.reference
+        snapshot = stored.prepared.version.snapshot
+        snapshot_json = dump_plan_json(snapshot)
+        digest = plan_sha256(snapshot)
+        input_json = canonical_json(reference)
+        input_hash = _content_hash(_RUN_INPUT_HASH_DOMAIN, input_json)
+        now = _datetime_text(datetime.now(_SHANGHAI), version="v2")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT snapshot_json FROM backtest_plan_snapshot WHERE plan_sha256 = ?",
+                (digest,),
+            ).fetchone()
+            if row is None:
+                connection.execute(
+                    "INSERT INTO backtest_plan_snapshot (plan_sha256, snapshot_json, created_at) "
+                    "VALUES (?, ?, ?)",
+                    (digest, snapshot_json, now),
+                )
+            elif str(row[0]) != snapshot_json:
+                raise ResultConflictError("loop plan snapshot conflicts with stored content")
+            row = connection.execute(
+                "SELECT plan_sha256, input_hash, input_json FROM backtest_run_input "
+                "WHERE run_id = ?",
+                (reference.run_id,),
+            ).fetchone()
+            if row is None:
+                connection.execute(
+                    "INSERT INTO backtest_run_input "
+                    "(run_id, plan_sha256, input_hash, input_json, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (reference.run_id, digest, input_hash, input_json, now),
+                )
+            elif tuple(map(str, row)) != (digest, input_hash, input_json):
+                raise ResultConflictError("loop run reference conflicts with stored content")
+            self._get_loop_input_participant(connection, reference)
+            connection.commit()
+        return reference
+
+    def get_loop_input_reference(self, run_id: str) -> LoopInputReference | None:
+        """Read an existing verified reference; never reconstruct input from mutable heads."""
+        from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+
+        run_id = _validate_hash(run_id, "run_id")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT input_json FROM backtest_run_input WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            reference = LoopInputReference.model_validate_json(str(row[0]))
+            if reference.run_id != run_id:
+                raise RuntimeError("stored loop reference has the wrong run identity")
+            self._get_loop_input_participant(connection, reference)
+        return reference
+
+    def get_loop_input(self, reference: LoopInputReference) -> StoredLoopInput:
+        """Verify the durable binding and copied dependencies without mutable-store access."""
+        with self._connect() as connection:
+            return self._get_loop_input_participant(connection, reference)
+
+    def _get_loop_input_participant(
+        self,
+        connection: sqlite3.Connection,
+        reference: LoopInputReference,
+    ) -> StoredLoopInput:
+        from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+
+        reference = LoopInputReference.model_validate(reference.model_dump(mode="python"))
+        row = connection.execute(
+            "SELECT input.plan_sha256, input.input_hash, input.input_json, snapshot.snapshot_json "
+            "FROM backtest_run_input AS input JOIN backtest_plan_snapshot AS snapshot "
+            "ON snapshot.plan_sha256 = input.plan_sha256 WHERE input.run_id = ?",
+            (reference.run_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("durable loop input binding is missing")
+        input_json = canonical_json(reference)
+        if str(row[2]) != input_json or str(row[1]) != _content_hash(
+            _RUN_INPUT_HASH_DOMAIN, input_json
+        ):
+            raise RuntimeError("durable loop input binding is damaged")
+        stored = self.loop_input_store.load(reference)
+        snapshot = stored.prepared.version.snapshot
+        if str(row[0]) != plan_sha256(snapshot) or str(row[3]) != dump_plan_json(snapshot):
+            raise RuntimeError("durable loop plan snapshot is damaged")
+        return stored
 
     def _record_run_input_participant(
         self,

@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 19 completed, 18 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV28.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 20 completed, 17 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV29.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -197,12 +197,14 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T17. Persist frozen run references within job limits
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T01`, `ML-T07`, `ML-T11`, `ML-T16`
 - **Acceptance:** Store complete reviewed inputs durably and queue only verified immutable references within 256 KiB. Copy needed artifacts before admission; retries, missing/corrupt inputs and preparation pruning cannot silently change a run.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_backtest_jobs.py -q -m "not live"`
 - **Primary files:** `src/trade_plan_monitor/backtest/loop_input_store.py`, `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/jobs/models.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `tests/integration/test_monitor_loop_input_store.py`
 - **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A18.
+- **Implementation boundary:** Persist complete reviewed source/account/plan, canonical loop input and cutoff manifest in an immutable content-addressed directory owned by the configured result store; copy each verified day before binding its reference in existing result-input tables. Keep the directory inert until explicit persistence/read, use atomic non-overwriting publication and reject damaged files. Queue a path-free reference under the unchanged 256 KiB limit; verify it before first admission through the existing single-task transaction. No new database/table/migration, provider call, retention policy or worker dispatch is introduced here; ML-T19 consumes the reference and ML-T21 handles retained/dependent artifacts.
+- **Evidence:** MV29: 28 task checks and 199 related regressions pass. Complete reviewed inputs and required market evidence are durably copied; more than 256 KiB of market data queues only a small reference. Source removal, restart, repeat persistence, missing/corrupt inputs, atomic publication faults, canonical binding and single-task admission are verified. Both generated profiles stay current; dependency-verification mutation is detected. ML-T17 is complete; ML-T18 connects submission, ML-T19 worker dispatch and ML-T21 retention. API approval remains pending ML-T29.
 
 ## ML-T18. Submit a loop run with one resolved time boundary
 

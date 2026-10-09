@@ -137,7 +137,24 @@ class BacktestRunJobRequest(_JobValue):
     run_input: BacktestRunInput
 
 
-type BacktestJobRequest = DataSyncJobRequest | DatasetVerifyJobRequest | BacktestRunJobRequest
+class LoopInputReference(_JobValue):
+    """Path-free durable identity; content is verified by its owning result store."""
+
+    schema_version: Literal["monitor-loop-input-reference-v1"] = "monitor-loop-input-reference-v1"
+    run_id: Sha256Hex
+    input_hash: Sha256Hex
+    dataset_hash: Sha256Hex
+    bundle_hash: Sha256Hex
+
+
+class MonitorLoopJobRequest(_JobValue):
+    kind: Literal[BacktestJobKind.BACKTEST_RUN] = BacktestJobKind.BACKTEST_RUN
+    input_reference: LoopInputReference
+
+
+type BacktestJobRequest = (
+    DataSyncJobRequest | DatasetVerifyJobRequest | BacktestRunJobRequest | MonitorLoopJobRequest
+)
 
 
 def _canonical_business_time(value: datetime) -> datetime:

@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 19 项、待完成活动任务 18 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV28。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 20 项、待完成活动任务 17 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV29。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -197,12 +197,14 @@
 
 ## ML-T17. 在任务上限内保存冻结运行引用
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T01`, `ML-T07`, `ML-T11`, `ML-T16`
 - **验收:** 完整已审核输入耐久保存，队列仅传 256 KiB 内已验证不可变引用。准入前复制所需产物，重试、输入缺失/损坏和准备清理不能静默改变运行。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_backtest_jobs.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/backtest/loop_input_store.py`, `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/jobs/models.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `tests/integration/test_monitor_loop_input_store.py`
 - **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A18.
+- **实施边界:** 在配置结果存储拥有的不可变内容寻址目录保存完整已审核原文/账户/计划、规范闭环输入及截止清单；复制每个已验证单日后，在既有结果输入表绑定引用。目录在明确持久化/读取前保持惰性，采用原子且不覆盖的发布，损坏文件明确拒绝。在不变的 256 KiB 上限内排入不含路径的引用；首次准入前，通过现有单任务事务验证。此处不新增数据库/表/迁移、服务商调用、留存政策或工作线程分派；ML-T19 消费引用，ML-T21 处理留存及依赖工件。
+- **证据:** MV29：28 项任务检查和 199 项相关回归通过；完整审核输入与所需行情耐久复制，超过 256 KiB 的行情仅以小引用排入任务。源记录清理、重启、重复保存、缺失/损坏、原子发布故障、规范绑定及单任务准入均验证。两种生成契约保持一致，依赖校验变异被识别。ML-T17 完成，ML-T18 接入提交，ML-T19 接入工作线程，ML-T21 完成留存；API 批准仍待 ML-T29。
 
 ## ML-T18. 以一次确定的时间边界提交闭环运行
 

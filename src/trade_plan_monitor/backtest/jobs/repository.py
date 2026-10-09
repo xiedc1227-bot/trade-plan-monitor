@@ -38,6 +38,7 @@ from trade_plan_monitor.backtest.jobs.models import (
     BacktestRunJobResult,
     DatasetVerifyJobRequest,
     DataSyncJobRequest,
+    MonitorLoopJobRequest,
 )
 from trade_plan_monitor.backtest.migration import (
     DatabaseState,
@@ -228,15 +229,15 @@ class BacktestJobRepository:
 
     def finalize_run_submission(
         self,
-        request: BacktestRunJobRequest,
+        request: BacktestRunJobRequest | MonitorLoopJobRequest,
         reservation: BacktestRunSubmissionReservation,
         *,
         on_admitted: Callable[[str], None] | None = None,
     ) -> BacktestJobReceipt:
         """Admit one resolved run only while its durable public-intent claim is owned."""
 
-        if not isinstance(request, BacktestRunJobRequest):
-            raise TypeError("request must be a BacktestRunJobRequest")
+        if not isinstance(request, (BacktestRunJobRequest, MonitorLoopJobRequest)):
+            raise TypeError("request must be a strict run job request")
         if not isinstance(reservation, BacktestRunSubmissionReservation):
             raise TypeError("reservation must be a BacktestRunSubmissionReservation")
         return self._submit(
@@ -259,7 +260,12 @@ class BacktestJobRepository:
 
         if not isinstance(
             request,
-            (DataSyncJobRequest, DatasetVerifyJobRequest, BacktestRunJobRequest),
+            (
+                DataSyncJobRequest,
+                DatasetVerifyJobRequest,
+                BacktestRunJobRequest,
+                MonitorLoopJobRequest,
+            ),
         ):
             raise TypeError("request must be a strict backtest job request")
         normalized_key = _validate_idempotency_key(idempotency_key)
@@ -327,6 +333,8 @@ class BacktestJobRepository:
                 return receipt
 
             _require_free_submission_slot(connection, exclude_key=normalized_key)
+            if isinstance(request, MonitorLoopJobRequest):
+                self._result_store._get_loop_input_participant(connection, request.input_reference)
             reused_result = (
                 _verified_materialized_run(connection, request.run_input)
                 if isinstance(request, BacktestRunJobRequest)
@@ -1886,12 +1894,16 @@ def _expire_job_idempotency(
 
 
 def _request_identities(request: BacktestJobRequest) -> tuple[str | None, str | None]:
+    if isinstance(request, MonitorLoopJobRequest):
+        return request.input_reference.run_id, request.input_reference.dataset_hash
     if isinstance(request, BacktestRunJobRequest):
         return request.run_input.run_id, request.run_input.dataset_hash
     return None, None
 
 
 def _canonical_request_json(request: BacktestJobRequest) -> str:
+    if isinstance(request, MonitorLoopJobRequest):
+        return canonical_json({"kind": request.kind, "inputReference": request.input_reference})
     if isinstance(request, (DataSyncJobRequest, DatasetVerifyJobRequest)):
         scope = request.scope
         payload: dict[str, object] = {
