@@ -797,6 +797,41 @@ export type BacktestRunView = {
   symbol: string;
 };
 
+export type BacktestServiceControlReceipt = {
+  accepted?: true;
+  action: "STOP" | "RETRY_PREPARATION" | "RESUME_JOBS";
+  epoch: string;
+  revision: number;
+};
+
+export type BacktestServiceRecoveryCommand = {
+  action: "RETRY_PREPARATION" | "RESUME_JOBS";
+  epoch: string;
+  expectedRevision: number;
+  resumeJobIds: Array<string>;
+};
+
+export type BacktestServiceState = "DISABLED" | "NOT_INITIALIZED" | "STARTING" | "READ_READY" | "READY" | "RECOVERING" | "DEGRADED" | "STOPPING" | "STOPPED";
+
+export type BacktestServiceStopCommand = {
+  epoch: string;
+  expectedRevision: number;
+};
+
+export type BacktestServiceView = {
+  authorizedJobIds: Array<string>;
+  canCancel: boolean;
+  canExport: boolean;
+  canRead: boolean;
+  canSubmit: boolean;
+  epoch: (string) | (null);
+  generation: number;
+  physicallyDrained: boolean;
+  reason: ("SERVICE_REPAIR_REQUIRED") | (null);
+  revision: number;
+  state: components["schemas"]["BacktestServiceState"];
+};
+
 export type BacktestSignalView = {
   bucket: ("CORE" | "TACTICAL") | (null);
   causeId: string;
@@ -3592,6 +3627,11 @@ export interface components {
     BacktestRunPinCommand: BacktestRunPinCommand;
     BacktestRunSummaryView: BacktestRunSummaryView;
     BacktestRunView: BacktestRunView;
+    BacktestServiceControlReceipt: BacktestServiceControlReceipt;
+    BacktestServiceRecoveryCommand: BacktestServiceRecoveryCommand;
+    BacktestServiceState: BacktestServiceState;
+    BacktestServiceStopCommand: BacktestServiceStopCommand;
+    BacktestServiceView: BacktestServiceView;
     BacktestSignalView: BacktestSignalView;
     BarInterval: BarInterval;
     BarPage: BarPage;
@@ -6050,6 +6090,237 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["BacktestMarketIndexSeriesView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-service": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestServiceView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-service/recovery-requests": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["BacktestServiceRecoveryCommand"];
+        };
+      };
+      responses: {
+        "202": {
+          content: {
+            "application/json": components["schemas"]["BacktestServiceControlReceipt"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-service/stop-requests": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["BacktestServiceStopCommand"];
+        };
+      };
+      responses: {
+        "202": {
+          content: {
+            "application/json": components["schemas"]["BacktestServiceControlReceipt"];
           };
         };
         "400": {
