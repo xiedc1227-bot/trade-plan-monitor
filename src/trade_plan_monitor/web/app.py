@@ -51,6 +51,7 @@ from trade_plan_monitor.web.routers.backtest_preparations import (
 )
 from trade_plan_monitor.web.routers.backtest_results import router as backtest_results_router
 from trade_plan_monitor.web.routers.backtest_runs import router as backtest_runs_router
+from trade_plan_monitor.web.routers.backtest_service import router as backtest_service_router
 from trade_plan_monitor.web.routers.daily_plans import router as daily_plans_router
 from trade_plan_monitor.web.routers.dashboard import MonitorReadService
 from trade_plan_monitor.web.routers.dashboard import router as dashboard_router
@@ -396,6 +397,7 @@ def create_app(
     app.include_router(alerts_router)
     app.include_router(websocket_router)
     app.include_router(market_indexes_router)
+    app.include_router(backtest_service_router)
     for backtest_router in (
         backtest_data_router, backtest_jobs_router, backtest_runs_router,
         backtest_results_router, backtest_exports_router, backtest_preparations_router,

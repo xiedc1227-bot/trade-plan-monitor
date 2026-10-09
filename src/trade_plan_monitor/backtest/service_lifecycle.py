@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from typing import Protocol
+from uuid import uuid4
 
 from trade_plan_monitor.backtest.service_config import BacktestServiceConfig
 from trade_plan_monitor.backtest.service_contract import (
@@ -16,6 +17,10 @@ from trade_plan_monitor.backtest.thread_ownership import BacktestThreadOwner
 
 class BacktestServiceUnavailable(RuntimeError):
     """A capability is unavailable; no operation has been admitted by this gate."""
+
+
+class BacktestControlConflict(ValueError):
+    """A control targets a stale epoch/revision or undrained physical work."""
 
 
 class BacktestLifecycle(Protocol):
@@ -48,6 +53,50 @@ class LazyBacktestLifecycle:
         self._generation = 0
         self._stopping = False
         self._metadata_ready = False
+        self.epoch = uuid4().hex
+        self.control_revision = 0
+        self._control_task: asyncio.Task[None] | None = None
+        self._control_receipts: dict[str, tuple[tuple, int]] = {}
+
+    def request_control(self, *, epoch, revision, key, action, job_ids=()):
+        """Acknowledge one explicit control without waiting for physical completion."""
+        intent = (epoch, revision, action, tuple(job_ids))
+        if epoch != self.epoch:
+            raise BacktestControlConflict()
+        previous = self._control_receipts.get(key)
+        if previous is not None:
+            if previous[0] != intent:
+                raise BacktestControlConflict()
+            return previous[1]
+        if revision != self.control_revision or (
+            self._control_task is not None and not self._control_task.done()
+        ):
+            raise BacktestControlConflict()
+        if action not in {"STOP", "RETRY_PREPARATION", "RESUME_JOBS"} or (
+            action == "RESUME_JOBS" and len(job_ids) != 1
+        ) or (action != "RESUME_JOBS" and job_ids):
+            raise BacktestControlConflict()
+        if action == "RETRY_PREPARATION" and not self.snapshot.physically_drained:
+            raise BacktestControlConflict()
+        self.control_revision += 1
+        if len(self._control_receipts) == 1000:
+            del self._control_receipts[next(iter(self._control_receipts))]
+        self._control_receipts[key] = (intent, self.control_revision)
+        self._control_task = asyncio.create_task(self._run_control(action, frozenset(job_ids)))
+        return self.control_revision
+
+    async def _run_control(self, action, job_ids):
+        try:
+            if action == "STOP":
+                await self.stop()
+            elif action == "RETRY_PREPARATION":
+                await self.retry()
+                await self.ensure()
+            else:
+                await self.resume_jobs(job_ids)
+        except Exception:
+            # Safe status only; store/provider diagnostics never cross this boundary.
+            self._state = BacktestServiceState.DEGRADED
 
     @property
     def snapshot(self) -> BacktestServiceSnapshot:
@@ -125,6 +174,8 @@ class LazyBacktestLifecycle:
             raise BacktestServiceUnavailable() from None
 
     async def stop(self) -> None:
+        if self._control_task is not None and self._control_task is not asyncio.current_task():
+            await asyncio.shield(self._control_task)
         self._stopping = True
         self._metadata_ready = False
         if self._cleanup is not None and self._cleanup.done() and self._cleanup.exception():
