@@ -74,7 +74,7 @@ class _HashDigest(Protocol):
 _MAX_BATCH_SIZE = 1_000
 _MAX_ITEM_BYTES = 32 * 1_024
 _SUCCESS_DETAIL_DAYS = 90
-_SUCCESS_DETAIL_RUNS = 100
+_SUCCESS_DETAIL_RUNS = 30
 _DIAGNOSTIC_DETAIL_DAYS = 14
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _VERSIONS = frozenset({"v1", "v2"})
@@ -823,7 +823,7 @@ class BacktestResultStore:
         )
         return True
 
-    def get_run_input(self, run_id: str) -> BacktestRunInput | None:
+    def get_run_input(self, run_id: str) -> BacktestRunInput | LoopInputReference | None:
         """Return a hash-verified canonical input, or ``None`` for compatibility rows."""
 
         normalized_run_id = _validate_hash(run_id, "run_id")
@@ -833,6 +833,56 @@ class BacktestResultStore:
                 normalized_run_id,
             )
         return run_input
+
+    def record_loop_run(
+        self,
+        summary: BacktestRunSummary,
+        *,
+        reference: LoopInputReference,
+        report,
+        retention_at: datetime | None = None,
+    ) -> bool:
+        """Stage a v2 envelope against an existing immutable loop input binding."""
+        _validate_summary_input(summary, reference)
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._get_loop_input_participant(connection, reference)
+            self.loop_input_store.persist_report(report)
+            created = self._record_run_participant(
+                connection,
+                summary,
+                version="v2",
+                retention_at=retention_at,
+            )
+            connection.commit()
+        return created
+
+    def get_loop_report(self, run_id: str):
+        """Read a materialized typed header from its owned immutable artifact."""
+        from trade_plan_monitor.backtest.loop_publication import verify_loop_publication
+
+        run_id = _validate_hash(run_id, "run_id")
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            row = connection.execute(
+                "SELECT run_id, plan_sha256, dataset_hash, status, completed_at, "
+                "summary_domain, summary_hash, summary_json, pinned FROM backtest_run "
+                "WHERE run_id = ? AND materialized = 1",
+                (run_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            summary = _load_summary_row(row, expected_run_id=run_id)
+            if summary.assumptions.get("reportSchemaVersion") != "backtest-report-v4":
+                return None
+            reference, _ = _publication_run_input(connection, run_id)
+            return verify_loop_publication(
+                self,
+                connection,
+                summary,
+                reference,
+                materialized=True,
+            )
 
     def record_verified_run(
         self,
@@ -1714,6 +1764,9 @@ class BacktestResultStore:
         normalized_as_of = _normalize_datetime(as_of, "as_of")
         if type(remaining_budget) is not int or not 0 <= remaining_budget <= _MAX_BATCH_SIZE:
             raise ValueError("remaining_budget must be between 0 and 1000")
+        if _unfinished_backtest_work(connection):
+            # Submission copy/drain and an unfinished task own the exclusive operation slot.
+            return RetentionPruneResult(deleted_count=0, has_more=False)
         parameters = _retention_parameters(normalized_as_of)
         staged_cutoffs = parameters[:2]
         retention_parameters = parameters[2:]
@@ -1726,8 +1779,8 @@ class BacktestResultStore:
                 stale_input_query=stale_input_query,
             )
             return RetentionPruneResult(deleted_count=0, has_more=has_more)
-        deleted_count = 0
-        remaining = remaining_budget
+        deleted_count = _prune_excess_runs(connection, remaining_budget)
+        remaining = remaining_budget - deleted_count
         staged_detail_ids = _candidate_ids(
             connection,
             _STALE_STAGED_DETAIL_SQL,
@@ -1811,6 +1864,39 @@ class BacktestResultStore:
             stale_input_query=stale_input_query,
         )
         return RetentionPruneResult(deleted_count=deleted_count, has_more=has_more)
+
+    def prune_loop_files_participant(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        remaining_budget: int,
+    ) -> RetentionPruneResult:
+        """Use the same exclusive transaction and leftover budget for owned files."""
+        from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+
+        _require_store_connection(connection, self._path)
+        if not connection.in_transaction:
+            raise RuntimeError("loop file cleanup requires an active transaction")
+        if _unfinished_backtest_work(connection):
+            return RetentionPruneResult(deleted_count=0, has_more=False)
+        references = (
+            LoopInputReference.model_validate_json(str(row[0]))
+            for row in connection.execute("SELECT input_json FROM backtest_run_input")
+            if json.loads(str(row[0])).get("schema_version") == "monitor-loop-input-reference-v1"
+        )
+        stored = (self.loop_input_store.load(ref, verify_days=False) for ref in references)
+        reports = (
+            str(payload["reportHash"])
+            for row in connection.execute("SELECT summary_json FROM backtest_run")
+            if (payload := json.loads(str(row[0]))["assumptions"]).get("reportSchemaVersion")
+            == "backtest-report-v4"
+        )
+        deleted, has_more = self.loop_input_store.prune_unreferenced(
+            stored,
+            reports,
+            remaining_budget=remaining_budget,
+        )
+        return RetentionPruneResult(deleted_count=deleted, has_more=has_more)
 
     def checkpoint_wal(self) -> tuple[int, int, int]:
         """Run a non-blocking passive checkpoint at an explicit safe boundary."""
@@ -1917,6 +2003,16 @@ class BacktestResultStore:
 
             stored_metadata = row[10:16]
             already_materialized = bool(row[9])
+            if summary.assumptions.get("reportSchemaVersion") == "backtest-report-v4":
+                from trade_plan_monitor.backtest.loop_publication import verify_loop_publication
+
+                verify_loop_publication(
+                    self,
+                    connection,
+                    summary,
+                    run_input,
+                    materialized=already_materialized,
+                )
             if any(value is None for value in stored_metadata) and not all(
                 value is None for value in stored_metadata
             ):
@@ -2876,6 +2972,15 @@ def _result_retention_has_more(
     retention_parameters: tuple[object, ...],
     stale_input_query: str,
 ) -> bool:
+    if any(
+        _has_candidate(connection, _excess_run_query(table, identity), (1,))
+        for table, identity in (
+            ("backtest_detail", "detail_id"),
+            ("backtest_fill", "fill_id"),
+            ("backtest_run", "run_id"),
+        )
+    ):
+        return True
     return any(
         _has_candidate(connection, query, query_parameters)
         for query, query_parameters in (
@@ -2887,6 +2992,70 @@ def _result_retention_has_more(
             (_RETENTION_CANDIDATES_SQL, (*retention_parameters, 1)),
         )
     )
+
+
+def _unfinished_backtest_work(connection: sqlite3.Connection) -> bool:
+    if (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'backtest_job'"
+        ).fetchone()
+        is None
+    ):
+        return False
+    return (
+        connection.execute(
+            "SELECT 1 FROM backtest_job "
+            "WHERE status IN ('QUEUED', 'RUNNING', 'CANCEL_REQUESTED') LIMIT 1"
+        ).fetchone()
+        is not None
+        or connection.execute(
+            "SELECT 1 FROM backtest_job_idempotency WHERE operation = 'SUBMIT' "
+            "AND job_id IS NULL AND response_json IS NULL LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+
+
+def _excess_run_query(table: str, identity: str) -> str:
+    if (table, identity) not in {
+        ("backtest_detail", "detail_id"),
+        ("backtest_fill", "fill_id"),
+        ("backtest_run", "run_id"),
+    }:
+        raise ValueError("unsupported whole-run retention table")
+    empty_children = (
+        "AND NOT EXISTS (SELECT 1 FROM backtest_detail WHERE run_id = r.run_id) "
+        "AND NOT EXISTS (SELECT 1 FROM backtest_fill WHERE run_id = r.run_id)"
+        if table == "backtest_run"
+        else ""
+    )
+    # Remove fractions before timezone conversion, then restore all six digits. SQLite's
+    # date functions alone round fractions to milliseconds, which would change tie ordering.
+    return f"""
+        WITH ranked AS (
+            SELECT run_id, ROW_NUMBER() OVER (
+                ORDER BY strftime('%Y-%m-%dT%H:%M:%S',
+                    substr(created_at, 1, 19) || substr(created_at, 27))
+                    || substr(created_at, 20, 7) DESC, run_id DESC
+            ) AS run_rank FROM backtest_run WHERE materialized = 1
+        )
+        SELECT item.{identity} FROM {table} AS item
+        JOIN ranked AS r ON r.run_id = item.run_id
+        WHERE r.run_rank > {_SUCCESS_DETAIL_RUNS} {empty_children}
+        ORDER BY r.run_rank DESC, item.{identity} LIMIT ?
+    """
+
+
+def _prune_excess_runs(connection: sqlite3.Connection, budget: int) -> int:
+    deleted = 0
+    for table, identity in (
+        ("backtest_detail", "detail_id"),
+        ("backtest_fill", "fill_id"),
+        ("backtest_run", "run_id"),
+    ):
+        values = _candidate_ids(connection, _excess_run_query(table, identity), (budget - deleted,))
+        deleted += _delete_ids(connection, table, identity, values)
+    return deleted
 
 
 def _delete_ids(
@@ -3206,7 +3375,7 @@ def _publication_run_row(
 def _publication_run_input(
     connection: sqlite3.Connection,
     run_id: str,
-) -> tuple[BacktestRunInput | None, str | None]:
+) -> tuple[BacktestRunInput | LoopInputReference | None, str | None]:
     row = _publication_input_row(connection, run_id)
     if row is None:
         return None, None
@@ -3220,6 +3389,17 @@ def _publication_run_input(
         payload = json.loads(input_json)
         if not isinstance(payload, dict):
             raise RuntimeError("stored backtest run input payload is invalid")
+        if payload.get("schema_version") == "monitor-loop-input-reference-v1":
+            from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+
+            reference = LoopInputReference.model_validate_json(input_json)
+            if (
+                reference.run_id != run_id
+                or reference.run_id != str(row[0])
+                or canonical_json(reference) != input_json
+            ):
+                raise RuntimeError("stored loop input reference identity is invalid")
+            return reference, _publication_input_fingerprint_from_row(row)
         run_input = BacktestRunInput.model_validate(
             {**payload, "plan_snapshot": snapshot},
             strict=False,
@@ -3841,10 +4021,17 @@ def _domain_bytes(value: str) -> bytes:
 
 def _validate_summary_input(
     summary: BacktestRunSummary,
-    run_input: BacktestRunInput,
+    run_input: BacktestRunInput | LoopInputReference,
 ) -> None:
+    from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+
     if not isinstance(summary, BacktestRunSummary):
         raise TypeError("summary must be a BacktestRunSummary")
+    if isinstance(run_input, LoopInputReference):
+        from trade_plan_monitor.backtest.loop_publication import validate_reference_summary
+
+        validate_reference_summary(summary, run_input)
+        return
     if not isinstance(run_input, BacktestRunInput):
         raise TypeError("run_input must be a BacktestRunInput")
     expected = (

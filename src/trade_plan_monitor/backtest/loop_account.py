@@ -112,6 +112,27 @@ class LoopAccountState(ResearchValue):
     realized_pnl_fen: SignedFen | None
     paid_fees_fen: SafeFen
 
+    @classmethod
+    def from_opening(cls, opening):
+        """Project reviewed opening facts identically for execution and verification."""
+        return cls(
+            revision=1,
+            cash=opening.cash,
+            inventory_known=opening.inventory_known,
+            realized_pnl_fen=0,
+            paid_fees_fen=0,
+            lots=tuple(
+                LoopLedgerLot(
+                    lot_key=lot.lot_key,
+                    bucket=lot.bucket,
+                    quantity=lot.quantity,
+                    cost_basis_fen=lot.cost_basis_fen,
+                    acquired_trade_date=lot.acquired_trade_date,
+                )
+                for lot in opening.lots
+            ),
+        )
+
     @model_validator(mode="after")
     def bounded(self):
         keys = tuple((lot.lot_key, lot.bucket) for lot in self.lots)
@@ -166,23 +187,7 @@ class LoopAccountParticipant:
         self.work, self.session = work, work.daily.session
 
     def initialize(self, opening):
-        value = LoopAccountState(
-            revision=1,
-            cash=opening.cash,
-            inventory_known=opening.inventory_known,
-            realized_pnl_fen=0,
-            paid_fees_fen=0,
-            lots=tuple(
-                LoopLedgerLot(
-                    lot_key=lot.lot_key,
-                    bucket=lot.bucket,
-                    quantity=lot.quantity,
-                    cost_basis_fen=lot.cost_basis_fen,
-                    acquired_trade_date=lot.acquired_trade_date,
-                )
-                for lot in opening.lots
-            ),
-        )
+        value = LoopAccountState.from_opening(opening)
         self.session.execute(
             ACCOUNT_TABLE.insert().values(singleton_id=1, payload_json=value.model_dump_json())
         )

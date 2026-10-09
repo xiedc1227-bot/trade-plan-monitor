@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 22 completed, 15 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV31.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20/ML-T21, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 23 completed, 14 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV32.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -245,12 +245,15 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T21. Publish and retain loop results atomically
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T17`, `ML-T20`
 - **Acceptance:** Stream typed events, verify stored input/report hashes and publish only complete runs. Failure/cancel/overflow leaves no completed partial report. Retain latest 30 materialized historical runs total by publication/retention time descending and run_id tie-breaks. Existing bounded maintenance deletes oldest excess summaries/fills/details after publication; pins do not bypass the cap. Protect queued/running references, shared datasets/snapshots and retained frozen single-plan inputs. Existing exports remain byte-compatible; no new cleanup scheduler or resource-budget framework.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py tests/integration/test_backtest_publication.py -q -m "not live"`
-- **Primary files:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`
-- **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A10.
+- **Primary files:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/loop_publication.py`, `src/trade_plan_monitor/backtest/loop_input_store.py`, `src/trade_plan_monitor/backtest/loop_account.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`, `tests/integration/test_backtest_results.py`
+- **Scope:** M, split into two slices before implementation; **Trace:** ML-A09, ML-A10.
+- **Implementation slices:** ML-T21.1 covers typed staging/publication in `results.py`, `loop_publication.py`, `loop_input_store.py`, the shared pure opening-state constructor in `loop_account.py`, and its publication test (5 files). ML-T21.2 covers bounded whole-run/file retention in `results.py`, `loop_input_store.py`, `jobs/maintenance.py` and its retention test (4 files). Worker calls remain ML-T19. Existing canonical storage envelopes stay version-compatible; explicit `backtest-report-v4`/`monitor-loop-event-v1` payloads identify new semantics. Store large report headers as immutable result-owned files under existing object bounds, retaining the 32 KiB row limit. Use the existing decision artifact family for the ordered typed audit and the existing fill ledger for committed receipts; verify input/report bindings, every audit/fill and stage revision before the existing token-fenced publication. Reuse the existing caller-budgeted maintenance transaction and ownership tag for safe bounded file cleanup, with no scheduler, database or queue added.
+- **Compatibility verification boundary:** ML-T21.2 also updates the obsolete retention-count assertions in existing `tests/integration/test_backtest_results.py` to the latest-30 total policy (5 primary files total). Keep age, batch budget, shared input and export regression assertions; do not weaken checks.
+- **Evidence:** MV32: 22 final task checks and 118 related regressions pass; latest-30 mutation produces one expected failure and exact bytes are restored. Token-atomic publication, partial/cancel/corruption refusal, fill/audit bindings, total/time/tie ordering, pins within the cap, bounded owned-file cleanup and unfinished reservation/task protection are verified. ML-T19 follows with worker consumption and the existing post-completion maintenance call.
 
 ### ML-C07. Checkpoint
 

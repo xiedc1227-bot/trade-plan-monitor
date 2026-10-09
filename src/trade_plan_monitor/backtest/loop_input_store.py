@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
@@ -162,6 +162,36 @@ class LoopInputStore:
     def day_path(self, digest: str) -> Path:
         return self._object_path("day", digest)
 
+    def report_path(self, digest: str) -> Path:
+        return self._object_path("report", digest)
+
+    def persist_report(self, report):
+        """Publish a typed immutable header without enlarging SQLite row bounds."""
+        from trade_plan_monitor.backtest.loop_report import MonitorLoopReport
+
+        report = MonitorLoopReport.model_validate_json(report.model_dump_json())
+        self._owned_root(create=False)
+        payload = canonical_json(report.model_dump(mode="python", exclude={"report_hash"})).encode()
+        self._publish(self.report_path(report.report_hash), payload)
+        return self.load_report(report.report_hash)
+
+    def load_report(self, digest: str):
+        from trade_plan_monitor.backtest.loop_report import LOOP_REPORT_VERSION, MonitorLoopReport
+
+        self._owned_root(create=False)
+        payload = self._read(self.report_path(digest), LOOP_REPORT_VERSION, digest)
+        import json
+
+        report = MonitorLoopReport.model_validate_json(
+            canonical_json(json.loads(payload) | {"report_hash": digest})
+        )
+        if (
+            canonical_json(report.model_dump(mode="python", exclude={"report_hash"})).encode()
+            != payload
+        ):
+            raise RuntimeError("immutable loop report is not canonical")
+        return report
+
     def _publish(self, path: Path, payload: bytes) -> None:
         if len(payload) > _MAX_OBJECT_BYTES:
             raise ValueError("loop input object exceeds existing evidence bounds")
@@ -256,6 +286,47 @@ class LoopInputStore:
             raise RuntimeError("copied loop day is not canonical")
         _verify_day(stored.dataset, index, day)
         return day
+
+    def prune_unreferenced(
+        self,
+        inputs: Iterable[StoredLoopInput],
+        reports: Iterable[str],
+        *,
+        remaining_budget: int,
+    ) -> tuple[int, bool]:
+        """Remove individual owned objects only; caller serializes with publication."""
+        if type(remaining_budget) is not int or not 0 <= remaining_budget <= 1000:
+            raise ValueError("remaining_budget must be between 0 and 1000")
+        if not self.root.exists():
+            return 0, False
+        self._owned_root(create=False)
+        keep = {"owner.json"}
+        for stored in inputs:
+            keep.add(self.bundle_path(stored.reference).name)
+            keep.update(self.day_path(digest).name for digest in stored.day_hashes)
+        keep.update(self.report_path(digest).name for digest in reports)
+        deleted = 0
+        with os.scandir(self.root) as entries:
+            for entry in entries:
+                if entry.name in keep or not (
+                    re.fullmatch(r"(?:bundle|day|report)-[0-9a-f]{64}\.json", entry.name)
+                    or entry.name.startswith(".writing-")
+                ):
+                    continue
+                path = Path(entry.path)
+                if (
+                    path.is_symlink()
+                    or path.is_junction()
+                    or not entry.is_file(follow_symlinks=False)
+                ):
+                    raise RuntimeError("loop cleanup object must be an owned regular file")
+                if path.parent.resolve() != self.root.resolve():
+                    raise RuntimeError("loop cleanup path escapes its owned directory")
+                if deleted == remaining_budget:
+                    return deleted, True
+                path.unlink()
+                deleted += 1
+        return deleted, False
 
     @contextmanager
     def open_dataset(

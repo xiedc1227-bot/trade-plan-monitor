@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 22 项、待完成活动任务 15 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV31。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18/ML-T20/ML-T21、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 23 项、待完成活动任务 14 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV32。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -245,12 +245,15 @@
 
 ## ML-T21. 原子发布与保留闭环结果
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T17`, `ML-T20`
 - **验收:** 流式类型化事件，验证存储输入/报告哈希，仅发布完整运行。失败/取消/超限不留下已完成部分报告。总共保留最新 30 条已物化历史运行，按发布/保留时间降序、run_id 破同序。发布后既有有界维护删除最旧超额摘要/成交/详情，置顶不绕过上限。保护排队/运行引用、共享数据集/快照及保留冻结单计划输入。既有导出保持字节兼容，不新增清理调度器或资源预算框架。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py tests/integration/test_backtest_publication.py -q -m "not live"`
-- **主要文件:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/application.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A10.
+- **主要文件:** `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/loop_publication.py`, `src/trade_plan_monitor/backtest/loop_input_store.py`, `src/trade_plan_monitor/backtest/loop_account.py`, `src/trade_plan_monitor/backtest/jobs/maintenance.py`, `tests/integration/test_monitor_loop_publication.py`, `tests/integration/test_monitor_loop_retention.py`, `tests/integration/test_backtest_results.py`
+- **范围:** M，实施前拆为两个分段；**追溯:** ML-A09, ML-A10.
+- **实施分段:** ML-T21.1 在 `results.py`、`loop_publication.py`、`loop_input_store.py`、`loop_account.py` 的共用纯期初状态构造及其发布测试完成类型化暂存/发布（5 个文件）。ML-T21.2 在 `results.py`、`loop_input_store.py`、`jobs/maintenance.py` 及其留存测试完成有界整次运行/文件留存（4 个文件）。工作线程调用仍由 ML-T19 完成。既有规范存储信封保持版本兼容，用明确的 `backtest-report-v4`/`monitor-loop-event-v1` 载荷标识新语义。大型报告头部以既有对象边界内的不可变结果文件保存，保留 32 KiB 行限制。既有决策工件族保存有序类型化审计，既有成交账本保存已提交收据；在既有令牌保护的发布前验证输入/报告绑定、逐条审计/成交及暂存修订。复用既有调用者预算的维护事务和归属标记，安全有界清理文件，不增加调度器、数据库或队列。
+- **兼容性验证边界：** ML-T21.2 同步更新现有 `tests/integration/test_backtest_results.py` 中被最新 30 次总量策略替代的旧保留数量断言（合计 5 个主要文件）。保留年龄、分批预算、共享输入及导出回归断言，不降低检查要求。
+- **证据:** MV32：22 项最终任务检查及 118 项相关回归通过；最近 30 次上限变异产生 1 项预期失败，恢复精确字节。任务令牌原子发布、部分/取消/损坏拒绝、逐条成交审计绑定、总量/时间/并列顺序、置顶不豁免、有界归属文件清理及未完成预留/任务保护已验证。下一项 ML-T19 接入后台消费及完成后的既有维护调用。
 
 ### ML-C07. 检查点
 

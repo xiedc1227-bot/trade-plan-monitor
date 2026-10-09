@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from trade_plan_monitor.backtest.jobs.repository import BacktestJobRepository
-from trade_plan_monitor.backtest.results import BacktestResultStore, RetentionPruneResult
+from trade_plan_monitor.backtest.results import (
+    BacktestResultStore,
+    RetentionPruneResult,
+    _unfinished_backtest_work,
+)
 
 
 class BacktestJobMaintenance:
@@ -35,6 +39,8 @@ class BacktestJobMaintenance:
         if type(batch_size) is not int or not 1 <= batch_size <= 1_000:
             raise ValueError("batch_size must be between 1 and 1000")
         with self._repository.maintenance_unit_of_work() as connection:
+            if _unfinished_backtest_work(connection):
+                return RetentionPruneResult(deleted_count=0, has_more=False)
             jobs = self._repository.prune_job_rows_participant(
                 connection,
                 as_of=as_of,
@@ -45,9 +51,13 @@ class BacktestJobMaintenance:
                 as_of=as_of,
                 remaining_budget=batch_size - jobs.deleted_count,
             )
+            files = self._results.prune_loop_files_participant(
+                connection,
+                remaining_budget=batch_size - jobs.deleted_count - results.deleted_count,
+            )
         return RetentionPruneResult(
-            deleted_count=jobs.deleted_count + results.deleted_count,
-            has_more=jobs.has_more or results.has_more,
+            deleted_count=jobs.deleted_count + results.deleted_count + files.deleted_count,
+            has_more=jobs.has_more or results.has_more or files.has_more,
         )
 
 

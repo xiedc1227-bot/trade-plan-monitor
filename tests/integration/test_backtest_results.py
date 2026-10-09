@@ -706,8 +706,7 @@ def test_detail_retention_combines_age_count_debug_and_pin_rules(
     as_of = datetime(2026, 8, 25, 12, tzinfo=UTC)
     expected_kept: set[str] = set()
 
-    # 102 successes plus one newer debug run: only the newest 100 unpinned
-    # successful runs keep normal detail.
+    # All completed runs, including pinned ones, share the latest-30 total cap.
     for index in range(102):
         summary = _summary(
             f"recent-{index:03d}",
@@ -715,7 +714,7 @@ def test_detail_retention_combines_age_count_debug_and_pin_rules(
         )
         detail = _detail(summary, BacktestDetailKind.DECISION)
         _materialize(store, summary, fills=(_fill(summary),), details=(detail,))
-        if index >= 3:
+        if index >= 73:
             expected_kept.add(detail.detail_id)
 
     old_success = _summary("old-success", completed_at=as_of - timedelta(days=91))
@@ -745,7 +744,6 @@ def test_detail_retention_combines_age_count_debug_and_pin_rules(
         fills=(_fill(pinned),),
         details=(pinned_detail,),
     )
-    expected_kept.add(pinned_detail.detail_id)
 
     deleted = 0
     while True:
@@ -755,19 +753,20 @@ def test_detail_retention_combines_age_count_debug_and_pin_rules(
         if not result.has_more:
             break
 
-    assert deleted == 5
+    assert deleted == 226
     kept_ids: set[str] = set()
     for summary in store.list_runs(limit=200):
         kept_ids.update(item.detail_id for item in store.list_details(summary.run_id))
     assert kept_ids == expected_kept
 
     statistics = store.statistics()
-    assert statistics.run_count == 105
-    assert statistics.fill_count == 104
+    assert statistics.run_count == 30
+    assert statistics.fill_count == 29
     assert statistics.detail_count == len(expected_kept)
-    assert store.get_run(old_success.run_id) == old_success
-    assert store.list_fills(old_success.run_id) == (_fill(old_success),)
-    with pytest.raises(ResultConflictError, match="cannot append details"):
+    assert store.get_run(old_success.run_id) is None
+    assert store.list_fills(old_success.run_id) == ()
+    assert store.get_run(pinned.run_id) is None
+    with pytest.raises(KeyError, match="unknown run_id"):
         store.record_details(old_success.run_id, (old_success_detail,))
 
 
