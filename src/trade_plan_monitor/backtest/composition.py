@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Callable, Mapping
-from datetime import date, datetime
+from collections.abc import Awaitable, Callable, Mapping
+from datetime import date, datetime, time
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
@@ -24,7 +24,7 @@ from trade_plan_monitor.backtest.cursor_key_security import (
     create_cursor_key_file,
     read_cursor_key_file,
 )
-from trade_plan_monitor.backtest.dataset import FrozenMarketIndexDatasetReader
+from trade_plan_monitor.backtest.dataset import DatasetScope, FrozenMarketIndexDatasetReader
 from trade_plan_monitor.backtest.dataset_service import (
     BacktestDatasetFilters,
     BacktestDatasetService,
@@ -51,16 +51,21 @@ from trade_plan_monitor.backtest.jobs import (
 from trade_plan_monitor.backtest.jobs import (
     BacktestJobView as DomainBacktestJobView,
 )
+from trade_plan_monitor.backtest.jobs.models import LoopInputReference, MonitorLoopJobRequest
 from trade_plan_monitor.backtest.jobs.repository import (
     BacktestJobSubmissionBinding,
     BacktestRunSubmissionReservation,
     JobAdmissionError,
 )
+from trade_plan_monitor.backtest.loop_dataset import LoopDatasetRequest, loop_dataset_requirements
+from trade_plan_monitor.backtest.loop_input import LoopCosts, LoopResponsePolicy, MonitorLoopInput
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.pagination import HmacCursorSigner, InvalidCursorError
+from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary
+from trade_plan_monitor.backtest.preparation_review import FrozenPreparedPlan
 from trade_plan_monitor.backtest.preparation_service import PreparationService
-from trade_plan_monitor.backtest.preparation_store import PreparationStore
+from trade_plan_monitor.backtest.preparation_store import PreparationConflictError, PreparationStore
 from trade_plan_monitor.backtest.reference_projection import (
     project_decision_reference_market,
 )
@@ -147,6 +152,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestRunSummaryView,
     BacktestRunView,
     BacktestSignalView,
+    PreparedBacktestRunCommand,
 )
 from trade_plan_monitor.web.cursor_keys import load_or_create_cursor_key
 from trade_plan_monitor.web.errors import ApiError
@@ -163,6 +169,7 @@ from trade_plan_monitor.web.routers.backtest_runs import (
 from trade_plan_monitor.web.routers.plans import PlanVersionView
 from trade_plan_monitor.web.schemas import (
     ApiErrorCode,
+    ErrorDetail,
     MutationContext,
     validate_api_response,
 )
@@ -424,6 +431,11 @@ def create_backtest_composition(
         ),
     )
     domain_signer = HmacCursorSigner(key)
+
+    async def read_prepared(identity: str) -> FrozenPreparedPlan:
+        preparation = await composition.ensure_preparations()
+        return await preparation.get_frozen(identity)
+
     service = _ProductionBacktestService(
         plan_snapshot_reader=plan_snapshot_reader,
         market_store=market_store,
@@ -440,13 +452,15 @@ def create_backtest_composition(
         coordinator=coordinator,
         result_cursor_signer=domain_signer,
         job_cursor_signer=BacktestApiCursorSigner(key),
+        prepared_plan_reader=read_prepared,
     )
-    return BacktestComposition(
+    composition = BacktestComposition(
         read_service=service,
         operation_service=service,
         coordinator=coordinator,
         preparation_factory=lambda: _PreparationLifecycle(preparation_database, repository),
     )
+    return composition
 
 
 class _ProductionBacktestService:
@@ -464,6 +478,7 @@ class _ProductionBacktestService:
         coordinator: BacktestJobCoordinator,
         result_cursor_signer: HmacCursorSigner,
         job_cursor_signer: BacktestApiCursorSigner,
+        prepared_plan_reader: Callable[[str], Awaitable[FrozenPreparedPlan]] | None = None,
     ) -> None:
         self._plan_snapshot_reader = plan_snapshot_reader
         self._market_store = market_store
@@ -474,14 +489,17 @@ class _ProductionBacktestService:
         self._coordinator = coordinator
         self._result_cursor_signer = result_cursor_signer
         self._job_cursor_signer = job_cursor_signer
+        self._prepared_plan_reader = prepared_plan_reader
         self._metadata_thread = BacktestMetadataThread()
+        self._reservation_thread = BacktestMetadataThread()
 
     @property
     def outstanding_work(self) -> int:
-        return self._metadata_thread.outstanding_work
+        return self._metadata_thread.outstanding_work + self._reservation_thread.outstanding_work
 
     async def stop_metadata(self) -> None:
         await self._metadata_thread.stop()
+        await self._reservation_thread.stop()
 
     async def _run_sync[ResultT](
         self, function: Callable[..., ResultT], /, *args: object, **kwargs: object,
@@ -536,7 +554,7 @@ class _ProductionBacktestService:
     async def submit_run(
         self,
         *,
-        command: BacktestRunCommand,
+        command: BacktestRunCommand | PreparedBacktestRunCommand,
         context: MutationContext,
     ) -> BacktestRunSubmissionOutcome:
         self._require_coordinator_healthy()
@@ -552,6 +570,9 @@ class _ProductionBacktestService:
                     context.idempotency_key,
                 )
                 if isinstance(claim, BacktestJobSubmissionBinding):
+                    if isinstance(command, PreparedBacktestRunCommand):
+                        _verify_prepared_submission_binding(claim)
+                        return _run_submission_outcome(claim.receipt)
                     if (
                         claim.receipt.kind is not BacktestJobKind.BACKTEST_RUN
                         or not _persisted_run_matches_command(
@@ -571,6 +592,10 @@ class _ProductionBacktestService:
                 await sleep(_RUN_CLAIM_POLL_SECONDS)
             else:
                 raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+            if isinstance(command, PreparedBacktestRunCommand):
+                receipt = await self._submit_prepared_run(command, reservation, reservation_lost)
+                reservation = None
+                return _run_submission_outcome(receipt)
             if self._plan_snapshot_reader is None:
                 raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
             value = await self._plan_snapshot_reader.get_plan_version(
@@ -665,10 +690,131 @@ class _ProductionBacktestService:
                 reservation_heartbeat.cancel()
                 await asyncio.gather(reservation_heartbeat, return_exceptions=True)
             if reservation is not None:
+                # A cancelled waiter cannot release admission while its owned copy still runs.
+                while self._metadata_thread.outstanding_work:
+                    await sleep(_RUN_CLAIM_POLL_SECONDS)
                 await self._run_sync(
                     self._repository.release_run_submission,
                     reservation,
                 )
+
+    async def _submit_prepared_run(
+        self,
+        command: PreparedBacktestRunCommand,
+        reservation: BacktestRunSubmissionReservation,
+        lost: asyncio.Event,
+    ) -> DomainBacktestJobReceipt:
+        if self._prepared_plan_reader is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        try:
+            prepared = await self._prepared_plan_reader(command.preparation_id)
+        except PreparationConflictError as error:
+            raise ApiError(
+                ApiErrorCode.NOT_FOUND
+                if error.code == "PREPARATION_NOT_FOUND"
+                else ApiErrorCode.CONFLICT
+            ) from None
+        except BacktestServiceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+        if (
+            prepared.preparation_id != command.preparation_id
+            or prepared.manifest_hash != command.manifest_hash
+        ):
+            raise ApiError(ApiErrorCode.CONFLICT)
+        try:
+            reference = await self._run_sync(
+                self._freeze_prepared_input, prepared, command, reservation
+            )
+        except ValueError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        if lost.is_set():
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        return await self._run_sync(
+            self._repository.finalize_run_submission,
+            MonitorLoopJobRequest(input_reference=reference),
+            reservation,
+            on_admitted=self._coordinator.authorize_new_job,
+        )
+
+    def _freeze_prepared_input(
+        self,
+        prepared: FrozenPreparedPlan,
+        command: PreparedBacktestRunCommand,
+        reservation: BacktestRunSubmissionReservation,
+    ) -> LoopInputReference:
+        start = max(
+            prepared.source.available_at,
+            datetime.combine(prepared.source.effective_trade_date, time.min, SHANGHAI),
+        )
+        boundary = LoopEndBoundary.resolve(
+            started_at=start,
+            submitted_at=reservation.claimed_at,
+            end_date=command.end_date,
+        )
+        requirements = loop_dataset_requirements(prepared.version.snapshot)
+        warmup_start = min(start.date(), prepared.source.effective_trade_date)
+        needed = max(
+            requirements.daily_observations,
+            (max(requirements.minute_observations - 1, 0) + 47) // 48,
+        )
+        calendar = self._market_store.current_trading_day(
+            prepared.version.snapshot.market, start.date()
+        )
+        for _ in range(needed):
+            if calendar is None:
+                break
+            previous = self._market_store.current_trading_day(
+                prepared.version.snapshot.market,
+                calendar.previous_trade_date,
+            )
+            if previous is None:
+                break
+            if not previous.is_open:
+                raise RuntimeError("loop warmup calendar chain is inconsistent")
+            warmup_start = min(warmup_start, previous.cal_date)
+            calendar = previous
+        result = self._market_store.freeze_loop_dataset(
+            LoopDatasetRequest(
+                scope=DatasetScope(
+                    symbols=(prepared.version.snapshot.symbol,),
+                    start=start.date(),
+                    end=boundary.resolved_end_date,
+                    warmup_start=warmup_start,
+                    historical_profile=HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1,
+                ),
+                schedule=prepared.schedule,
+                boundary=boundary,
+            )
+        )
+        if not result.ready:
+            raise ApiError(
+                ApiErrorCode.CONFLICT,
+                details=tuple(
+                    ErrorDetail(
+                        location=("marketEvidence",),
+                        code=blocker.split(":", 1)[0],
+                        message="Required closed evidence or plan warm-up is unavailable.",
+                    )
+                    for blocker in result.blockers
+                ),
+            )
+        run_input = MonitorLoopInput(
+            schedule=prepared.schedule,
+            initial_account=prepared.account,
+            boundary=boundary,
+            dataset_hash=result.manifest.dataset_hash,
+            response=LoopResponsePolicy(
+                mode=command.response.mode,
+                response_delay_seconds=command.response.response_delay_seconds,
+            ),
+            costs=LoopCosts(**command.costs.model_dump(mode="python", by_alias=False)),
+        )
+        return self._result_store.record_loop_input(
+            prepared=prepared,
+            run_input=run_input,
+            dataset=result.manifest,
+            market_source=self._market_store,
+        )
 
     async def _keep_run_reservation_alive(
         self,
@@ -677,7 +823,10 @@ class _ProductionBacktestService:
     ) -> None:
         while True:
             await sleep(_RUN_RESERVATION_HEARTBEAT_SECONDS)
-            if not await self._run_sync(self._repository.renew_run_submission, reservation):
+            if not await self._reservation_thread.run(
+                self._repository.renew_run_submission,
+                reservation,
+            ):
                 lost.set()
                 return
 
@@ -1339,6 +1488,21 @@ _ACTIVE_JOB_STATUSES = frozenset(
 
 def _job_receipt(receipt: DomainBacktestJobReceipt) -> BacktestJobReceipt:
     return BacktestJobReceipt.model_validate(_public_value(receipt))
+
+
+def _verify_prepared_submission_binding(binding: BacktestJobSubmissionBinding) -> None:
+    """Intent was already compared atomically; replay needs no mutable source or clock."""
+    root = json.loads(binding.canonical_request_json)
+    if not isinstance(root, dict) or set(root) != {"kind", "inputReference"}:
+        raise RuntimeError("stored prepared submission envelope is invalid")
+    reference = LoopInputReference.model_validate_json(canonical_json(root["inputReference"]))
+    if (
+        root["kind"] != BacktestJobKind.BACKTEST_RUN.value
+        or binding.receipt.kind is not BacktestJobKind.BACKTEST_RUN
+        or binding.receipt.run_id != reference.run_id
+        or binding.receipt.dataset_hash != reference.dataset_hash
+    ):
+        raise RuntimeError("stored prepared submission identity is invalid")
 
 
 def _persisted_run_matches_command(

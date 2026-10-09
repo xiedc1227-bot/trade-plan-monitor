@@ -546,6 +546,8 @@ class BacktestJobRepository:
                 )
             if str(row[0]) != "SUBMIT":
                 raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
+            if str(row[1]) != intent_hash:
+                raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
             if row[2] is not None or row[3] is not None:
                 if row[2] is None or row[3] is None or row[6] is None:
                     raise RuntimeError("committed submission binding is incomplete")
@@ -556,8 +558,6 @@ class BacktestJobRepository:
                 )
                 connection.commit()
                 return binding
-            if str(row[1]) != intent_hash:
-                raise JobAdmissionError("IDEMPOTENCY_CONFLICT")
             connection.commit()
             return None
 

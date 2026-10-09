@@ -1,7 +1,7 @@
 # Active Task List: Monitoring-loop Backtest
 
-> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
-> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 20 completed, 17 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV29.
+> Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). ML-T01–ML-T05, ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18, ML-T30–ML-T34, ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 and ML-C12 are implemented and verified; other tasks remain pending. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
+> Scope correction 2026-10-07; progress 2026-10-09: ML-T06/ML-T09 are cancelled; 21 completed, 16 pending active tasks, 37 active / 39 retained IDs, 13 checkpoints. ML-A07 is not a gate. One frozen plan and one unfinished task; evidence MV17–MV30.
 
 Run commands from `trade-plan-monitor/`; new files are planned outputs. Execute verification after implementing its task; writing this list does not mean those checks ran. Keep each task to about five primary files; split expanded scope first. Contract generation and digest approval are separate; do not silently approve an API to pass a check.
 
@@ -208,17 +208,20 @@ Whole-delivery gaps are grouped in [MV10](../docs/verification/monitor-loop-back
 
 ## ML-T18. Submit a loop run with one resolved time boundary
 
-- [ ] Complete implementation and task verification.
+- [x] Complete implementation and task verification.
 - **Dependencies:** `ML-T16`, `ML-T17`, `ML-T33`
 - **Acceptance:** Extend submission additively with reviewed preparation identity and optional end; freeze input and cutoff under the idempotency reservation. Duplicate requests after midnight reuse the original result; stale reviews and invalid ranges reject. Resolve/freeze submission through the backtest service and owned repository executor; preserve independent store ownership.
 - **Verification:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_run_api.py -q -m "not live"`
-- **Primary files:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `tests/integration/test_monitor_loop_submission.py`
-- **Scope:** M (4 primary files including tests); **Trace:** ML-A09, ML-A10, ML-A15, ML-A18.
+- **Primary files:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `tests/integration/test_monitor_loop_submission.py`
+- **Scope:** M (5 primary files including tests); **Trace:** ML-A09, ML-A10, ML-A15, ML-A18.
+- **Verification-driven correction:** A changed response under a committed public key must conflict. Compare the stored intent hash in the existing reservation transaction before returning a committed binding; keep expired-binding behavior and all admission rules. Metadata copy and reservation renewal use two inert, bounded roles of the existing owned-thread primitive; no queue or coordinator is added.
+- **Implementation boundary:** Add a closed `PreparedBacktestRunCommand` variant to the existing `POST /api/v1/backtest-runs`, preserving legacy `BacktestRunCommand` bytes/fields. Require `preparationId`, exact `manifestHash`, typed `response`/`costs` and optional `endDate`; start comes from reviewed source availability/effective date. Claim the unchanged public intent before reading preparation/data and resolve submission time from its reservation. Read preparation through its independently owned service; derive only available warm-up sessions via the market store and freeze/copy through the backtest metadata executor. Replay the original receipt/reference before any new lookup. Missing preparation maps to 404, stale authority/missing market evidence to 409, invalid time/rate/range to 422 and unavailable owned services to 503. Generated contract publication remains ML-T23; worker consumption remains ML-T19, with no provider call or new admission mechanism.
+- **Evidence:** MV30: 75 final task checks and 261 related regressions pass, with one pre-existing environment-conditional skip; changed-intent mutation fails as expected and exact bytes are restored. Mounted HTTP, original cutoff/midnight replay, missing evidence, stale review, exact rates, long-copy renewal, cancellation drain and single-task exclusion are verified. ML-T18/ML-C06 complete; ML-T19 is next. Contract publication/approval remain ML-T23/ML-T29.
 
 ### ML-C06. Checkpoint
 
-- [ ] Frozen cutoff input and job references survive retry and stale-review checks.
-- [ ] Record executed evidence; resolve failures before dependent work without lowering the bar.
+- [x] Frozen cutoff input and job references survive retry and stale-review checks.
+- [x] Record executed evidence; resolve failures before dependent work without lowering the bar.
 
 ## ML-T19. Run frozen loop inputs through the background worker
 

@@ -1,7 +1,7 @@
 # 当前任务清单：监控闭环回测
 
-> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
-> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 20 项、待完成活动任务 17 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV29。
+> 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。ML-T01–ML-T05、ML-T07/ML-T08/ML-T10/ML-T11/ML-T12/ML-T13/ML-T14/ML-T15/ML-T16/ML-T17/ML-T18、ML-T30–ML-T34、ML-C01/ML-C02/ML-C03/ML-C04/ML-C05/ML-C06 与 ML-C12 已实现并验证，其余任务待完成。证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
+> 2026-10-07 范围纠正；2026-10-09 进度：ML-T06/ML-T09 已取消；完成 21 项、待完成活动任务 16 项，37 项活动 / 保留 39 个 ID，13 个检查点。ML-A07 不作门槛，每次运行固定一份计划，最多一个未完成任务，证据 MV17–MV30。
 
 所有命令从 `trade-plan-monitor/` 执行；标出的新文件是预期产物。验证命令在对应实现后执行，本次编写文档不代表已运行。每项约五个主要文件以内，超出时先拆分。生成契约/批准摘要分别处理，不能为通过检查静默批准 API。
 
@@ -208,17 +208,20 @@
 
 ## ML-T18. 以一次确定的时间边界提交闭环运行
 
-- [ ] 完成实现和本项验证.
+- [x] 完成实现和本项验证.
 - **依赖:** `ML-T16`, `ML-T17`, `ML-T33`
 - **验收:** 增量提交已审核准备身份和可选结束日期，在幂等预留下冻结输入/截止。跨午夜重复请求复用原结果，拒绝陈旧审核和无效区间。 通过回测服务和自有仓库执行器解析/冻结提交，保持独立存储归属。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_run_api.py -q -m "not live"`
-- **主要文件:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `tests/integration/test_monitor_loop_submission.py`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A09, ML-A10, ML-A15, ML-A18.
+- **主要文件:** `src/trade_plan_monitor/backtest/composition.py`, `src/trade_plan_monitor/web/backtest_schemas.py`, `src/trade_plan_monitor/web/routers/backtest_runs.py`, `src/trade_plan_monitor/backtest/jobs/repository.py`, `tests/integration/test_monitor_loop_submission.py`
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A09, ML-A10, ML-A15, ML-A18.
+- **验证推动的修正:** 已提交公共请求标识下改变响应必须冲突。在既有预约事务返回已提交绑定前比较保存的意图哈希，保留过期绑定行为及全部准入规则。元数据复制与预约续期使用既有自有线程原语的两个惰性、有界职责，不增加队列或协调器。
+- **实施边界:** 在既有 `POST /api/v1/backtest-runs` 增加封闭的 `PreparedBacktestRunCommand` 变体，保留旧 `BacktestRunCommand` 字节/字段。要求 `preparationId`、精确 `manifestHash`、类型化 `response`/`costs` 及可选 `endDate`；开始时间来自已审核原文的可用时间/生效日期。读取准备/数据前先声明不变公共意图，以预约时间解析提交。通过独立归属的准备服务读取审核，通过市场存储推导已有预热时段，并在回测元数据执行器冻结/复制。任何新查询前先重放原收据/引用。准备缺失对应 404，审核陈旧/行情缺失对应 409，时间/费率/范围无效对应 422，自有服务不可用对应 503。生成契约发布仍由 ML-T23 完成，工作线程消费仍由 ML-T19 完成，不调用服务商或新增准入机制。
+- **证据:** MV30：75 项最终任务检查、261 项相关回归通过，1 项既有环境条件跳过；改变意图的变异测试预期失败并恢复原始字节。挂载 HTTP、原始截止/跨午夜重试、缺失行情、陈旧审核、精确费率、长复制续期、取消物理排空及单任务互斥均验证。ML-T18/ML-C06 完成，下一项 ML-T19；生成契约与批准分别仍由 ML-T23/ML-T29 完成。
 
 ### ML-C06. 检查点
 
-- [ ] 冻结截止输入和任务引用通过重试与陈旧审核检查。
-- [ ] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
+- [x] 冻结截止输入和任务引用通过重试与陈旧审核检查。
+- [x] 记录实际证据；失败不降低门槛，先修复再继续依赖工作。
 
 ## ML-T19. 通过后台工作者执行冻结闭环输入
 

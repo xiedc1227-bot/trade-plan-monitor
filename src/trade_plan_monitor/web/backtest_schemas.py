@@ -26,6 +26,7 @@ from pydantic import (
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
 from trade_plan_monitor.backtest.models import ExecutionStatus, UnfilledReason
+from trade_plan_monitor.backtest.models import StableIdentifier as PreparedIdentifier
 from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
 from trade_plan_monitor.backtest.research_report import (
     ResearchDecisionEvent,
@@ -372,6 +373,43 @@ class BacktestInitialLotInput(_BacktestApiInput):
     acquired_trade_date: ApiDate
     quantity: PositiveSafeBoardLot
     cost_basis_fen: PositiveJavaScriptSafeInteger
+
+
+class BacktestLoopResponseInput(_BacktestApiInput):
+    mode: Literal["FOLLOW_REMINDERS", "OBSERVE_ONLY"]
+    response_delay_seconds: JavaScriptSafeInteger = 0
+
+
+class BacktestLoopCostsInput(_BacktestApiInput):
+    commission_rate: DecimalText
+    minimum_commission_fen: JavaScriptSafeInteger
+    stamp_duty_rate: DecimalText
+    transfer_fee_rate: DecimalText
+    buy_slippage_fen: JavaScriptSafeInteger
+    sell_slippage_fen: JavaScriptSafeInteger
+
+    @model_validator(mode="after")
+    def rates(self) -> Self:
+        if any(
+            not Decimal(0) <= rate <= Decimal(1)
+            for rate in (
+                self.commission_rate,
+                self.stamp_duty_rate,
+                self.transfer_fee_rate,
+            )
+        ):
+            raise ValueError("loop fee rates must be between 0 and 1")
+        return self
+
+
+class PreparedBacktestRunCommand(_BacktestApiInput):
+    """This one frozen preparation supplies all plan and opening-account authority."""
+
+    preparation_id: PreparedIdentifier
+    manifest_hash: Sha256Hex
+    response: BacktestLoopResponseInput
+    costs: BacktestLoopCostsInput
+    end_date: ApiDate | None = None
 
 
 class BacktestRunCommand(_BacktestApiInput):

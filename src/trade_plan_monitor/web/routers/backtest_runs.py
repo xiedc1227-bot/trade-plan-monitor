@@ -15,6 +15,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestRunFiltersView,
     BacktestRunPage,
     BacktestRunView,
+    PreparedBacktestRunCommand,
 )
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.schemas import (
@@ -124,7 +125,7 @@ class BacktestRunOperationService(Protocol):
     async def submit_run(
         self,
         *,
-        command: BacktestRunCommand,
+        command: BacktestRunCommand | PreparedBacktestRunCommand,
         context: MutationContext,
     ) -> BacktestRunSubmissionOutcome: ...
 
@@ -226,7 +227,7 @@ async def get_backtest_run(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def submit_backtest_run(
-    command: BacktestRunCommand,
+    command: BacktestRunCommand | PreparedBacktestRunCommand,
     context: MutationContextDependency,
     service: BacktestRunOperationServiceDependency,
     response: Response,
@@ -238,7 +239,8 @@ async def submit_backtest_run(
     expected_location = f"{_JOB_LOCATION_PREFIX}{receipt.job_id}"
     if (
         receipt.kind != "BACKTEST_RUN"
-        or receipt.dataset_hash != command.dataset_hash
+        or isinstance(command, BacktestRunCommand)
+        and receipt.dataset_hash != command.dataset_hash
         or outcome.location != expected_location
     ):
         raise RuntimeError("backtest operation service returned a mismatched run receipt")
