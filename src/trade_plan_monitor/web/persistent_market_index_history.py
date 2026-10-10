@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from trade_plan_monitor.market_index.canonical import canonical_json
 from trade_plan_monitor.market_index.identity import MAPPING_VERSION, MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexBar, MarketIndexInterval
+from trade_plan_monitor.market_index.selection import snapshot_rank
 from trade_plan_monitor.state.repositories import RepositoryError
 from trade_plan_monitor.state.unit_of_work import UnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
@@ -162,18 +163,11 @@ class PersistentMarketIndexHistorySource:
                     if interval is MarketIndexInterval.FIVE_MINUTE
                     else snapshot.official_daily_bars
                 )
-                snapshot_rank: tuple[object, ...] = (
-                    snapshot.decision_cutoff,
-                    snapshot.observed_at,
-                    snapshot.health.value == "LIVE",
-                    len(snapshot.fact_requests),
-                    snapshot.revision,
-                    snapshot.snapshot_hash,
-                )
+                rank = snapshot_rank(snapshot)
                 for bar in candidates:
                     if not start_at <= bar.bar_at <= end_at:
                         continue
-                    incoming = (*snapshot_rank, bar.observed_at, bar.provider_revision)
+                    incoming = (*rank, bar.observed_at, bar.provider_revision)
                     current = selected.get(bar.bar_at)
                     if current is None or incoming > current[0]:
                         selected[bar.bar_at] = incoming, bar

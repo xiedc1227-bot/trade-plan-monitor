@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Annotated, Protocol, Self, cast
+from typing import Annotated, Literal, Protocol, Self, cast
 
-from fastapi import APIRouter, Depends, Path, Query, Request
-from pydantic import BeforeValidator, Field, model_validator
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from pydantic import UUID4, BeforeValidator, Field, model_validator
 
 from trade_plan_monitor.backtest.time import (
     format_shanghai_datetime,
     parse_shanghai_datetime,
 )
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
-from trade_plan_monitor.market_index.identity import MarketIndexCode
+from trade_plan_monitor.market_index.identity import Board, MarketIndexCode
 from trade_plan_monitor.market_index.models import (
     MarketIndexBar,
+    MarketIndexHealth,
     MarketIndexInterval,
+    MarketIndexIssueCode,
     MarketIndexSourceKind,
 )
 from trade_plan_monitor.web.backtest_pagination import (
@@ -27,6 +29,7 @@ from trade_plan_monitor.web.backtest_pagination import (
 )
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.routers.dashboard import (
+    MarketTurnoverSummaryView,
     ReadModel,
     Sha256Hex,
     validate_read_response,
@@ -140,6 +143,68 @@ class MarketIndexReadService(Protocol):
     ) -> MarketIndexBarPage | None: ...
 
 
+class MarketSessionView(ReadModel):
+    phase: Literal["PREOPEN", "OPEN", "BREAK", "CLOSED", "UNKNOWN"]
+    calendar_status: Literal["KNOWN", "UNKNOWN"]
+    session_date: date
+    display_trade_date: date | None
+    expected_bucket_at: ShanghaiDatetime | None
+
+
+class MarketIndexOverviewData(ReadModel):
+    snapshot_hash: Sha256Hex
+    observed_at: ShanghaiDatetime
+    completed_bucket_at: ShanghaiDatetime
+    source_kind: MarketIndexSourceKind
+    close_points: PositivePoints
+    prior_close_points: PositivePoints | None
+    session_change_ratio: Decimal | None
+    high_points: PositivePoints
+    low_points: PositivePoints
+    amount: NonNegativeDecimal | None
+    bars: tuple[MarketIndexBarView, ...] = Field(min_length=1, max_length=48)
+
+    @model_validator(mode="after")
+    def validate_coherence(self) -> Self:
+        if (
+            self.close_points != self.bars[-1].close_points
+            or self.completed_bucket_at != self.bars[-1].bar_at
+        ):
+            raise ValueError("Overview quotation must match the chart endpoint")
+        if any(a.bar_at >= b.bar_at for a, b in zip(self.bars, self.bars[1:], strict=False)):
+            raise ValueError("Overview bars must be strictly ordered")
+        if len({bar.bar_at.date() for bar in self.bars}) != 1:
+            raise ValueError("Overview bars must describe one trading date")
+        return self
+
+
+class MarketIndexLatestAcquisition(ReadModel):
+    decision_cutoff: ShanghaiDatetime
+    observed_at: ShanghaiDatetime
+    health: MarketIndexHealth
+    issues: tuple[MarketIndexIssueCode, ...] = Field(max_length=16)
+    next_retry_at: ShanghaiDatetime | None
+
+
+class MarketIndexOverviewItem(ReadModel):
+    index_code: MarketIndexCode
+    display_name: str
+    board: Board
+    data_status: Literal["CURRENT", "INCOMPLETE", "CACHED", "EMPTY", "UNVERIFIED"]
+    data: MarketIndexOverviewData | None
+    latest_acquisition: MarketIndexLatestAcquisition | None
+
+
+class MarketIndexOverviewResponse(ReadModel):
+    schema_version: Literal[1] = 1
+    observed_at: ShanghaiDatetime
+    runtime_generation: UUID4 | None
+    sequence: Annotated[int, Field(ge=0, le=9_007_199_254_740_991)]
+    market_session: MarketSessionView
+    indexes: tuple[MarketIndexOverviewItem, ...] = Field(min_length=4, max_length=4)
+    market_turnover: MarketTurnoverSummaryView | None
+
+
 class MarketIndexHistoryAnchor(ReadModel):
     """Immutable high-water identity captured before a paginated traversal."""
 
@@ -185,11 +250,18 @@ class SignedMarketIndexHistoryService:
         *,
         source: MarketIndexHistorySource,
         cursor_signer: BacktestApiCursorSigner,
+        overview_service: object | None = None,
     ) -> None:
         if not isinstance(cursor_signer, BacktestApiCursorSigner):
             raise TypeError("cursor_signer must be a BacktestApiCursorSigner")
         self._source = source
         self._cursor_signer = cursor_signer
+        self._overview_service = overview_service
+
+    async def get_market_index_overview(self) -> MarketIndexOverviewResponse:
+        if self._overview_service is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        return await self._overview_service.get_market_index_overview()
 
     async def list_market_index_bars(
         self,
@@ -394,6 +466,20 @@ async def list_market_index_bars(
     if any(not start_at <= item.bar_at <= end_at for item in response.items):
         raise ValueError("market-index history item lies outside requested range")
     return response
+
+
+@router.get("/market-indexes/overview", response_model=MarketIndexOverviewResponse)
+async def get_market_index_overview(
+    response: Response, service: MarketIndexReadServiceDependency,
+) -> MarketIndexOverviewResponse:
+    reader = getattr(service, "get_market_index_overview", None)
+    if reader is None:
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+    value = validate_read_response(await reader(), MarketIndexOverviewResponse)
+    if len(value.model_dump_json(by_alias=True).encode("utf-8")) > 512 * 1024:
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+    response.headers["Cache-Control"] = "no-store"
+    return value
 
 
 __all__ = [

@@ -1559,10 +1559,28 @@ def create_monitor_composition(
         return lifecycle
 
     runtime = runtime_factory()
+    from trade_plan_monitor.web.market_index_overview import PersistentMarketIndexOverviewService
+
+    def index_display_authority():
+        owner = composition._runtime
+        state = runtime_states.get(owner.runtime_generation)
+        pipeline = None if state is None else state._pipeline
+        if pipeline is None:
+            return owner.runtime_generation, None, False
+        return (owner.runtime_generation, pipeline.index_source_identity,
+            pipeline.index_display_source_current()
+            and not any(pipeline._controller.is_permission_blocked(operation) for operation in (
+                TushareOperation.INDEX_REALTIME_MINUTES, TushareOperation.INDEX_HISTORICAL_MINUTES,
+                TushareOperation.INDEX_DAILY,
+            )))
+
     market_index_read_service = SignedMarketIndexHistoryService(
         source=PersistentMarketIndexHistorySource(unit_of_work_factory),
         cursor_signer=BacktestApiCursorSigner(
             load_or_create_cursor_key(database_path.with_suffix(".cursor.key"))
+        ),
+        overview_service=PersistentMarketIndexOverviewService(
+            unit_of_work_factory, clock=clock.now, authority=index_display_authority,
         ),
     )
 

@@ -77,6 +77,7 @@ def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
         BASE,
         BASE + "/recovery-requests",
         BASE + "/stop-requests",
+        "/api/v1/market-indexes/overview",
     }
     for path, operation in before["paths"].items():
         assert document["paths"][path] == operation, path

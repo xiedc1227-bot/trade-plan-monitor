@@ -99,3 +99,9 @@ OpenAPI 快照 SHA-256：`dde2866b81a9710a51bf7817eeeb30513cfb4e844437adba7a2ef2
 服务状态保持惰性，控制绑定启动 `epoch`、`expectedRevision`、原始请求体/键及最多一个所选 `resumeJobIds` 条目。接受 202 控制收据不代表清理完成。READ_READY/READY 均不自动授权待恢复任务。一个未完成任务会阻止新建及互斥操作，直至最终状态或明确有证据的恢复。取消中及未知工作保留槽位，自有晚完成工作实际排空前阻止替换。真实有界 SQLite BUSY/LOCKED 元数据冲突使用既有 503/Retry-After 错误结构，保留原始请求重试，不改变其他 SQL 故障。服务/线程上限及每十分钟五次实验的实测负载边界保持 ML15–ML17/ML-O08/ML-O09 的说明。
 
 U04/MV12 保留历史 `a0915f7` 批准不一致及针对 `7a92f75` 单独审阅的纠正。此 U09 批准仅在 MV46 记录的最终接口检查通过后替代当前契约身份，不抹去先前失败、不认证真实 AI/行情提供方、不批准生产迁移/部署，也不扩展已接受的同进程限制。
+
+## U10. 已授权的指数总览契约扩展（2026-10-09）
+
+OpenAPI 快照 SHA-256：`76a63344e2ff29ed50c44d4ff7a5fa1e5f5f2faf938274991f8b0b6edd194c29`。当前监测 v2 快照 SHA-256：`a2d99ac2c89cca1dd031cf2045251be24524550da80f1012df1e36cb0a4d595f`。用户于 2026-10-09 授权实施并验收 [SPEC-index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) ICDR01–ICDR10。U09 保留原有监控闭环历史批准及其范围。
+
+相对于 U09 快照的限范围比较证明，两种 profile 的全部既有路径和结构均保持不变。每种 profile 现有 63 条路径：唯一新增操作为只读 `GET /api/v1/market-indexes/overview`，支持结构共五个：`MarketIndexLatestAcquisition`、`MarketIndexOverviewData`、`MarketIndexOverviewItem`、`MarketIndexOverviewResponse`、`MarketSessionView`。不增加计划、记账、供应商或执行操作。生成快照／类型与实际路由一致。已执行的验收和发布结果记录在[配套验收报告](../../verification/2026-10-09-index-close-display-repair.zh-CN.md)。

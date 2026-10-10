@@ -14634,6 +14634,275 @@
         "title": "MarketIndexIssueCode",
         "type": "string"
       },
+      "MarketIndexLatestAcquisition": {
+        "additionalProperties": false,
+        "properties": {
+          "decisionCutoff": {
+            "format": "date-time",
+            "title": "Decisioncutoff",
+            "type": "string"
+          },
+          "health": {
+            "$ref": "#/components/schemas/MarketIndexHealth"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexIssueCode"
+            },
+            "maxItems": 16,
+            "title": "Issues",
+            "type": "array"
+          },
+          "nextRetryAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextretryat"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decisionCutoff",
+          "observedAt",
+          "health",
+          "issues",
+          "nextRetryAt"
+        ],
+        "title": "MarketIndexLatestAcquisition",
+        "type": "object"
+      },
+      "MarketIndexOverviewData": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexBarView"
+            },
+            "maxItems": 48,
+            "minItems": 1,
+            "title": "Bars",
+            "type": "array"
+          },
+          "closePoints": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Closepoints",
+            "type": "string"
+          },
+          "completedBucketAt": {
+            "format": "date-time",
+            "title": "Completedbucketat",
+            "type": "string"
+          },
+          "highPoints": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Highpoints",
+            "type": "string"
+          },
+          "lowPoints": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Lowpoints",
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "priorClosePoints": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priorclosepoints"
+          },
+          "sessionChangeRatio": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionchangeratio"
+          },
+          "snapshotHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshothash",
+            "type": "string"
+          },
+          "sourceKind": {
+            "$ref": "#/components/schemas/MarketIndexSourceKind"
+          }
+        },
+        "required": [
+          "snapshotHash",
+          "observedAt",
+          "completedBucketAt",
+          "sourceKind",
+          "closePoints",
+          "priorClosePoints",
+          "sessionChangeRatio",
+          "highPoints",
+          "lowPoints",
+          "amount",
+          "bars"
+        ],
+        "title": "MarketIndexOverviewData",
+        "type": "object"
+      },
+      "MarketIndexOverviewItem": {
+        "additionalProperties": false,
+        "properties": {
+          "board": {
+            "$ref": "#/components/schemas/Board"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketIndexOverviewData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dataStatus": {
+            "enum": [
+              "CURRENT",
+              "INCOMPLETE",
+              "CACHED",
+              "EMPTY",
+              "UNVERIFIED"
+            ],
+            "title": "Datastatus",
+            "type": "string"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "indexCode": {
+            "$ref": "#/components/schemas/MarketIndexCode"
+          },
+          "latestAcquisition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketIndexLatestAcquisition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "indexCode",
+          "displayName",
+          "board",
+          "dataStatus",
+          "data",
+          "latestAcquisition"
+        ],
+        "title": "MarketIndexOverviewItem",
+        "type": "object"
+      },
+      "MarketIndexOverviewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "indexes": {
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexOverviewItem"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Indexes",
+            "type": "array"
+          },
+          "marketSession": {
+            "$ref": "#/components/schemas/MarketSessionView"
+          },
+          "marketTurnover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketTurnoverSummaryView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "runtimeGeneration": {
+            "anyOf": [
+              {
+                "format": "uuid4",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimegeneration"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "default": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "sequence": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "observedAt",
+          "runtimeGeneration",
+          "sequence",
+          "marketSession",
+          "indexes",
+          "marketTurnover"
+        ],
+        "title": "MarketIndexOverviewResponse",
+        "type": "object"
+      },
       "MarketIndexSnapshotView": {
         "additionalProperties": false,
         "description": "Plan-neutral projection of one shared board-index snapshot.",
@@ -14817,6 +15086,68 @@
         ],
         "title": "MarketIndexSourceKind",
         "type": "string"
+      },
+      "MarketSessionView": {
+        "additionalProperties": false,
+        "properties": {
+          "calendarStatus": {
+            "enum": [
+              "KNOWN",
+              "UNKNOWN"
+            ],
+            "title": "Calendarstatus",
+            "type": "string"
+          },
+          "displayTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displaytradedate"
+          },
+          "expectedBucketAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedbucketat"
+          },
+          "phase": {
+            "enum": [
+              "PREOPEN",
+              "OPEN",
+              "BREAK",
+              "CLOSED",
+              "UNKNOWN"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "sessionDate": {
+            "format": "date",
+            "title": "Sessiondate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "calendarStatus",
+          "sessionDate",
+          "displayTradeDate",
+          "expectedBucketAt"
+        ],
+        "title": "MarketSessionView",
+        "type": "object"
       },
       "MarketTurnoverSummaryView": {
         "additionalProperties": false,
@@ -30790,6 +31121,137 @@
         "summary": "Get Manual Event Risk",
         "tags": [
           "manual-event-risk"
+        ]
+      }
+    },
+    "/api/v1/market-indexes/overview": {
+      "get": {
+        "operationId": "get_market_index_overview_api_v1_market_indexes_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketIndexOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Market Index Overview",
+        "tags": [
+          "market-indexes"
         ]
       }
     },

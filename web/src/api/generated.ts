@@ -2213,6 +2213,47 @@ export type MarketIndexInterval = "FIVE_MINUTE" | "OFFICIAL_DAILY";
 
 export type MarketIndexIssueCode = "MISSING_FIVE_MINUTE_BAR" | "MISSING_OFFICIAL_DAILY_BAR" | "INSUFFICIENT_HISTORY" | "STALE_DATA" | "DUPLICATE_IDENTITY" | "GAPPED_SERIES" | "INDEX_IDENTITY_MISMATCH" | "FUTURE_DATA" | "INVALID_TIMESTAMP" | "NONCANONICAL_DECIMAL" | "INVALID_OHLC" | "FORMULA_MISMATCH" | "PROVIDER_UNAVAILABLE";
 
+export type MarketIndexLatestAcquisition = {
+  decisionCutoff: string;
+  health: components["schemas"]["MarketIndexHealth"];
+  issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
+  nextRetryAt: (string) | (null);
+  observedAt: string;
+};
+
+export type MarketIndexOverviewData = {
+  amount: (string) | (null);
+  bars: Array<components["schemas"]["MarketIndexBarView"]>;
+  closePoints: string;
+  completedBucketAt: string;
+  highPoints: string;
+  lowPoints: string;
+  observedAt: string;
+  priorClosePoints: (string) | (null);
+  sessionChangeRatio: (string) | (null);
+  snapshotHash: string;
+  sourceKind: components["schemas"]["MarketIndexSourceKind"];
+};
+
+export type MarketIndexOverviewItem = {
+  board: components["schemas"]["Board"];
+  data: (components["schemas"]["MarketIndexOverviewData"]) | (null);
+  dataStatus: "CURRENT" | "INCOMPLETE" | "CACHED" | "EMPTY" | "UNVERIFIED";
+  displayName: string;
+  indexCode: components["schemas"]["MarketIndexCode"];
+  latestAcquisition: (components["schemas"]["MarketIndexLatestAcquisition"]) | (null);
+};
+
+export type MarketIndexOverviewResponse = {
+  indexes: Array<components["schemas"]["MarketIndexOverviewItem"]>;
+  marketSession: components["schemas"]["MarketSessionView"];
+  marketTurnover: (components["schemas"]["MarketTurnoverSummaryView"]) | (null);
+  observedAt: string;
+  runtimeGeneration: (string) | (null);
+  schemaVersion?: 1;
+  sequence: number;
+};
+
 export type MarketIndexSnapshotView = {
   board: components["schemas"]["Board"];
   closePoints: (string) | (null);
@@ -2234,6 +2275,14 @@ export type MarketIndexSnapshotView = {
 };
 
 export type MarketIndexSourceKind = "PROVISIONAL" | "OFFICIAL";
+
+export type MarketSessionView = {
+  calendarStatus: "KNOWN" | "UNKNOWN";
+  displayTradeDate: (string) | (null);
+  expectedBucketAt: (string) | (null);
+  phase: "PREOPEN" | "OPEN" | "BREAK" | "CLOSED" | "UNKNOWN";
+  sessionDate: string;
+};
 
 export type MarketTurnoverSummaryView = {
   benchmarkCodes: Array<components["schemas"]["MarketIndexCode"]>;
@@ -3787,8 +3836,13 @@ export interface components {
     MarketIndexHealth: MarketIndexHealth;
     MarketIndexInterval: MarketIndexInterval;
     MarketIndexIssueCode: MarketIndexIssueCode;
+    MarketIndexLatestAcquisition: MarketIndexLatestAcquisition;
+    MarketIndexOverviewData: MarketIndexOverviewData;
+    MarketIndexOverviewItem: MarketIndexOverviewItem;
+    MarketIndexOverviewResponse: MarketIndexOverviewResponse;
     MarketIndexSnapshotView: MarketIndexSnapshotView;
     MarketIndexSourceKind: MarketIndexSourceKind;
+    MarketSessionView: MarketSessionView;
     MarketTurnoverSummaryView: MarketTurnoverSummaryView;
     MinuteBar: MinuteBar;
     MinuteCloseBelow: MinuteCloseBelow;
@@ -6696,6 +6750,79 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["ManualEventRiskView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/market-indexes/overview": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["MarketIndexOverviewResponse"];
           };
         };
         "400": {
