@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **5 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **6 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -12,6 +12,8 @@ RP-T03 is complete and RP-C01 passes: one private session traverses reviewed ver
 RP-T04 is complete: v2 ordered items share the existing tagged document store, preserve v1 records/receipts, enforce source and predecessor bindings, and invalidate only the changed suffix. Exact whole-chain review bindings and UNKNOWN/cancelling exclusion are checked. Independent review corrected constructed-source validation before persistence. 91 store/input checks pass; removing predecessor-base validation causes the expected failure and original bytes are restored. Ruff and diff review pass. **4 of 20 repair tasks complete.** Next: RP-T05. Sequential extraction and freezing remain RP-T07/RP-T08.
 
 RP-T05 is complete: first-source extraction remains unchanged; follow-up extraction uses a distinct bounded contract containing only its source and validated past context, explicit scope/operations and non-authoritative account assertions. Independent review found and corrected cross-bucket quantity attribution and overlapping evidence. 144 extraction/provider checks pass, including 23 new follow-up cases; both account-attribution regressions failed before repair. Windows sandbox socket initialization blocked asyncio; the approved unsandboxed local fake-provider checks passed. Ruff and diff checks pass. **5 of 20 repair tasks complete.** Next: RP-T06; candidates remain unresolved until materialization and explicit review.
+
+RP-T06 is complete and RP-C02 passes: deterministic full replacement and explicit add/modify/revoke/retain operations produce complete candidates and reviewable differences. Inherited fields retain original source spans, binding paths and human supplement hashes through index changes; later holdings remain comparison context. Independent review reproduced and corrected negated/hypothetical replacement and unsupported account-dependency attribution. 67 focused merge/binding/fixture/schedule checks pass, including 31 merge/binding cases and bounded evidence persistence through store restart. Narrow literal scope/dependency guards leave other wording unresolved for explicit review. Ruff and diff review pass. **6 of 20 repair tasks complete.** Next: RP-T07; worker integration and whole-chain freezing remain pending.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -65,7 +67,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T06. Materialize complete reviewed candidates
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T05; **Acceptance:** RP-A02, RP-A06.
 - **Allowed files:** `src/trade_plan_monitor/backtest/plan_updates.py` (new); `src/trade_plan_monitor/ai/update_review.py` (new); `tests/unit/test_plan_update_merge.py` (new); `tests/unit/test_plan_update_bindings.py` (new).
 - **Result:** Apply supported changes deterministically; show removed/retained rules and original inherited bindings. Block ambiguous scope, unresolved bases and fabricated account changes.

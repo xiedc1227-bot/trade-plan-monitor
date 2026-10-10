@@ -22,6 +22,14 @@ RP-T05 is complete: first-source extraction remains unchanged; follow-up extract
 .venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_extraction.py tests/integration/test_ai_provider_contract.py -q --basetemp=.pytest_cache/rpt05-final
 ```
 
+## RP-V06. Materialized source evidence
+
+RP-T06 is complete and RP-C02 passes: deterministic full replacement and explicit add/modify/revoke/retain operations produce complete candidates and reviewable differences. Inherited fields retain original source spans, binding paths and human supplement hashes through index changes; later holdings remain comparison context. Independent review reproduced and corrected negated/hypothetical replacement and unsupported account-dependency attribution. 67 focused merge/binding/fixture/schedule checks pass, including 31 merge/binding cases and bounded evidence persistence through store restart. Narrow literal scope/dependency guards leave other wording unresolved for explicit review. Ruff and diff review pass. **6 of 20 repair tasks complete.** Next: RP-T07; worker integration and whole-chain freezing remain pending.
+
+```text
+.venv/Scripts/python.exe -m pytest tests/unit/test_plan_update_merge.py tests/unit/test_plan_update_bindings.py tests/unit/test_monitor_loop_continuity_fixture.py tests/unit/test_monitor_loop_schedule.py -q --basetemp=.pytest_cache/rpt06-durable
+```
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

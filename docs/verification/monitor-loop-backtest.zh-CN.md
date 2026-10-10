@@ -22,6 +22,14 @@ RP-T05 完成：首份原文提取保持不变；后续提取采用独立受限�
 .venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_extraction.py tests/integration/test_ai_provider_contract.py -q --basetemp=.pytest_cache/rpt05-final
 ```
 
+## RP-V06. 完整候选来源证据
+
+RP-T06 完成，RP-C02 通过：确定性的完整替换及显式新增/修改/撤销/保留操作生成完整候选和可审核差异。索引变化后，继承字段仍保留原始来源片段、绑定路径和人工补充哈希；后续持仓只作为比较背景。独立审阅复现并修复否定/假设替换及缺乏依据的账户依赖归属。67 项合并/绑定/夹具/日程检查通过，其中 31 项合并/绑定用例覆盖受限证据经存储重启后的保留。有限的字面范围/依赖检查让其他措辞继续待显式审核。Ruff 和差异审阅通过。**20 项修复任务，完成 6 项。** 下一项 RP-T07；工作线程集成及整链冻结仍待完成。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/unit/test_plan_update_merge.py tests/unit/test_plan_update_bindings.py tests/unit/test_monitor_loop_continuity_fixture.py tests/unit/test_monitor_loop_schedule.py -q --basetemp=.pytest_cache/rpt06-durable
+```
+
 ## MV01. 已实现边界
 
 历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。
