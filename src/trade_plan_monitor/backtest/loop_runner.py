@@ -61,6 +61,12 @@ class LoopRunner:
     def _evaluate(self, inputs):
         if self.evaluations >= self.session.run_input.limits.max_evaluations:
             raise ValueError("LOOP_EVALUATION_LIMIT_EXCEEDED")
+        for transition in self.session.advance(inputs.evaluated_at):
+            if transition.kind in {"REPLACED", "NO_AUTHORITY"}:
+                closed = self.policy.replace_authority(transition.authority_id)
+                transition = transition.model_copy(update={"closed_intent_ids": closed})
+            if self.report_writer is not None:
+                self.report_writer.transitioned(transition)
         self.evaluations += 1
         evaluated = self.session.evaluate(inputs)
         if self.report_writer is not None:
@@ -174,6 +180,8 @@ class LoopRunner:
                 return None, "LOOP_CURRENT_AUTHORITY_MISSING", True
             payload = cause["payload"]
             if cause["kind"] == "SIGNAL":
+                if payload["rule_id"] in self.session.blocked_rule_ids:
+                    return None, "LOOP_ACCOUNT_CONTEXT_INCOMPATIBLE", True
                 closed = payload["state"] in {"SIMULATED", "EXPIRED", "INVALIDATED"}
                 quantity = payload["executable_qty"]
                 if closed or quantity == 0:

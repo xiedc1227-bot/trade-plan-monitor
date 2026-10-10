@@ -15,8 +15,9 @@ from trade_plan_monitor.backtest.loop_input import (
     KnownLoopCash,
     SafeFen,
     SafePositiveFen,
+    ScheduledLoopInput,
 )
-from trade_plan_monitor.backtest.models import Sha256Hex
+from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
 from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary, LoopTimestamp
 from trade_plan_monitor.backtest.reminder_capture import CapturedReminder
 from trade_plan_monitor.backtest.research_input import ResearchValue
@@ -217,6 +218,23 @@ class LoopValuationEvent(ResearchValue):
     valuation: LoopValuation
 
 
+class LoopAccountDiscrepancy(ResearchValue):
+    bucket: Literal["CORE", "TACTICAL"]
+    stated_qty: SafeFen
+    actual_qty: SafeFen | None
+
+
+class LoopPlanTransition(ResearchValue):
+    kind: Literal["REPLACED", "CONTINUED", "NO_AUTHORITY"]
+    at: LoopTimestamp
+    from_version_id: StableIdentifier
+    version_id: StableIdentifier | None
+    authority_id: Sha256Hex | None
+    context_mismatches: tuple[LoopAccountDiscrepancy, ...] = Field(default=(), max_length=2)
+    blocked_rule_ids: tuple[StableIdentifier, ...] = Field(default=(), max_length=2)
+    closed_intent_ids: tuple[Sha256Hex, ...] = Field(default=(), max_length=MAX_LOOP_RECORDS)
+
+
 type LoopAuditPayload = Annotated[
     LoopEvaluation
     | LoopReminder
@@ -250,11 +268,34 @@ class LoopAuditEvent(ResearchValue):
         return self
 
 
+class ScheduledLoopAuditEvent(ResearchValue):
+    schema_version: Literal["monitor-loop-event-v2"] = "monitor-loop-event-v2"
+    run_id: Sha256Hex
+    sequence: int = Field(ge=1, le=MAX_AUDIT_EVENTS)
+    at: LoopTimestamp
+    event_id: Sha256Hex
+    cause_event_id: Sha256Hex | None
+    version_id: StableIdentifier | None
+    authority_id: Sha256Hex | None
+    payload: LoopAuditPayload | LoopPlanTransition
+
+    @model_validator(mode="after")
+    def integrity(self):
+        LoopAuditEvent.integrity(self)
+        if isinstance(self.payload, LoopPlanTransition) and (
+            self.at, self.version_id, self.authority_id
+        ) != (self.payload.at, self.payload.version_id, self.payload.authority_id):
+            raise ValueError("loop transition authority/time mismatch")
+        return self
+
+
 def _event_hash(value):
     # The run binds the whole dataset; semantic event identity binds causal past.
     # Run membership remains checked separately and included in the stream digest.
     causal_value = {key: item for key, item in value.items() if key != "run_id"}
-    return sha256((LOOP_EVENT_VERSION + "\0" + canonical_json(causal_value)).encode()).hexdigest()
+    return sha256(
+        (value["schema_version"] + "\0" + canonical_json(causal_value)).encode()
+    ).hexdigest()
 
 
 def _digest_event(digest, event):
@@ -431,12 +472,26 @@ class LoopReportWriter:
             cause_event_id=cause,
             payload=payload,
         )
-        event = LoopAuditEvent(event_id=_event_hash(values), **values)
+        event_type = LoopAuditEvent
+        if isinstance(self.session.run_input, ScheduledLoopInput):
+            event_type = ScheduledLoopAuditEvent
+            selection = self.session.run_input.schedule.select(at)
+            values.update(
+                schema_version="monitor-loop-event-v2",
+                version_id=None if selection is None else selection.version.version_id,
+                authority_id=None if selection is None else selection.authority_id,
+            )
+            if isinstance(payload, LoopPlanTransition):
+                values.update(version_id=payload.version_id, authority_id=payload.authority_id)
+        event = event_type(event_id=_event_hash(values), **values)
         self.sink(event)  # A failed write never advances the digest or completion identity.
         _digest_event(self._digest, event)
         self._sequence = event.sequence
         self._last_event_id = event.event_id
         return event.event_id
+
+    def transitioned(self, transition: LoopPlanTransition):
+        self._emit(transition.at, transition, self._last_event_id)
 
     def evaluated(self, inputs, result):
         with self.session.work() as work:

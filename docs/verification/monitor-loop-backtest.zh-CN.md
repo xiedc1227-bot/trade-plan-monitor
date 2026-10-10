@@ -4,6 +4,16 @@
 
 当前验收为 MV18–MV46：来源准备与完整审核冻结、一次截止时间、私有监测闭环、原子结算、原生因果结果、最新 30 次保留、惰性生命周期/服务控制及前端流程均已实现。MV43 保留四次负载失败、局部修正与通过原门槛的 Windows 600/600 秒实测；MV44 记录 58 项最终相关后端、935 项前端及 34 项真实 Chrome 流程通过，MV45 记录操作边界。MV46 按已提交源码隔离审阅两份接口、保留历史批准、完成 69 项契约检查与精确白名单破坏/恢复验证；此前两项审批失败已解决。共同进程和实测有节奏负载边界保持，不认证真实 AI/行情提供方、生产迁移或部署。保留历史检查点编号及独有已执行证据；已被替代的过程叙述合并为摘要，不代表当前阻塞。
 
+## RP-V01. 离线连续性检查点
+
+RP-T03 完成，RP-C01 通过：一个私有会话经共享激活事务遍历已审核版本，保留账户/风险状态，关闭旧普通意图，记录背景差异而不虚构交易。独立审阅修复重复原始快照身份及失效事件权限问题。64 项运行时/账户/循环/报告/夹具/旧格式检查通过，其中包含 10 项切换用例；故意移除普通意图关闭后失败，已恢复精确字节。Ruff 和差异检查通过。**20 项修复任务，完成 3 项。** 下一项 RP-T04。端到端准备、发布及界面验收仍待完成。
+
+后续 MV 章节描述历史较窄交付，不代表整个修复验收。RP-T01 基准：11 项夹具 / 14 项夹具加旧格式检查；RP-T02：65 项日程/输入/夹具/旧格式检查。四版本字面量回放买入 100 股，价款 100000 分加佣金 500 分，现金 899500 分、成本 100500 分并保留 T+1；随后以 120000 分卖出、扣佣金 500 分：最终现金 1019000 分、已实现盈亏 19000 分、总费用 1000 分。后续原文声明 0 或 200 股不覆盖账本；明确依赖该持仓的指令被阻断。没有脚本预置交易或真实供应商调用。已验证 v2 生命周期事件；完整 v2 报告发布仍属 RP-T11。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_plan_switch.py tests/integration/test_monitor_loop_account.py tests/integration/test_monitor_loop_cycle.py tests/unit/test_monitor_loop_report.py tests/unit/test_monitor_loop_continuity_fixture.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt03-identity-fixed
+```
+
 ## MV01. 已实现边界
 
 历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。

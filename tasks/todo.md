@@ -7,6 +7,8 @@ Implementation update, 2026-10-10: the user authorized this bounded repair in th
 
 RP-T02 is complete: distinct v2 source/schedule/input codecs preserve v1 boundaries, canonical effective-day selection, first-day opening-account anchoring and causal authority. The independent review found and corrected nested subtype acceptance and skipped-first-day defects. 65 focused schedule/input/fixture/legacy compatibility checks pass; the successor-opening mutation is detected and restored. Ruff and diff checks pass. **2 of 20 repair tasks complete.** Next: RP-T03; RP-C01 is not yet passed.
 
+RP-T03 is complete and RP-C01 passes: one private session traverses reviewed versions through the shared activation transaction, retains account/risk state, closes old ordinary intents and records context mismatches without inventing trades. Independent review corrected duplicate source snapshot identities and expired-event authority. 64 focused runtime/account/cycle/report/fixture/legacy checks pass, including 10 switch cases; deliberate removal of ordinary-intent closure fails and exact bytes are restored. Ruff and diff checks pass. **3 of 20 repair tasks complete.** Next: RP-T04. End-to-end preparation, publication and UI acceptance remain pending.
+
 ## RP-TASK-RULES. Execution boundary
 
 2026-10-10 parity erratum: the Chinese historical ML-T35/ML-T36 file counts are corrected to 5/6, matching their existing exact file lists and the English record. Historical completion and verification evidence are unchanged.
@@ -35,7 +37,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T03. Switch inside one continuous session
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T02; **Acceptance:** RP-A05, RP-A06, RP-A09.
 - **Allowed files:** `src/trade_plan_monitor/backtest/loop_session.py`; `src/trade_plan_monitor/backtest/loop_runner.py`; `src/trade_plan_monitor/backtest/response_policy.py`; `src/trade_plan_monitor/backtest/loop_report.py`; `tests/integration/test_monitor_loop_plan_switch.py` (new).
 - **Result:** Apply replacement before evaluation/execution; keep account/risk, close old ordinary intents, record lifecycle facts and account-context incompatibility. Prove the RP-A09 literal account across boundaries.

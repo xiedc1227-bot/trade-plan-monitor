@@ -21,9 +21,17 @@ class ReminderResponsePolicy:
     def __init__(self, policy: LoopResponsePolicy, *, authority_id: str, limit: int):
         self.policy, self.authority_id, self.limit = policy, authority_id, limit
         self.intents: dict[str, LoopIntent] = {}
+        self._retained_risk = False
 
     def register(self, reminder: CapturedReminder) -> None:
         if self.policy.mode != "FOLLOW_REMINDERS" or not reminder.execution_candidate:
+            return
+        if self._retained_risk and reminder.event.signal_type == "RISK_EXIT" and any(
+            intent.status == "PENDING"
+            and intent.reminder.event.cause_id == reminder.event.cause_id
+            and intent.reminder.event.risk_scope == reminder.event.risk_scope
+            for intent in self.intents.values()
+        ):
             return
         identity = daily_hash(
             "monitor-loop-intent-v1",
@@ -41,6 +49,17 @@ class ReminderResponsePolicy:
         except OverflowError:
             raise ValueError("LOOP_RESPONSE_DELAY_OUTSIDE_RANGE") from None
         self.intents[identity] = LoopIntent(identity, reminder, ready)
+
+    def replace_authority(self, authority_id: str | None) -> tuple[str, ...]:
+        self._retained_risk = True
+        closed = []
+        for intent in self.intents.values():
+            if intent.status == "PENDING" and intent.reminder.event.signal_type != "RISK_EXIT":
+                intent.status = "CLOSED"
+                closed.append(intent.intent_id)
+        if authority_id is not None:
+            self.authority_id = authority_id
+        return tuple(sorted(closed))
 
     def pending(self) -> tuple[LoopIntent, ...]:
         # Shared monitoring decides conflicts; this order only preserves risk priority.
