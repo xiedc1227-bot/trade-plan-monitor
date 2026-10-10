@@ -5,6 +5,8 @@ Status: design for review, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [C
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
 
+RP-T02 is complete: distinct v2 source/schedule/input codecs preserve v1 boundaries, canonical effective-day selection, first-day opening-account anchoring and causal authority. The independent review found and corrected nested subtype acceptance and skipped-first-day defects. 65 focused schedule/input/fixture/legacy compatibility checks pass; the successor-opening mutation is detected and restored. Ruff and diff checks pass. **2 of 20 repair tasks complete.** Next: RP-T03; RP-C01 is not yet passed.
+
 ## RP-TASK-RULES. Execution boundary
 
 2026-10-10 parity erratum: the Chinese historical ML-T35/ML-T36 file counts are corrected to 5/6, matching their existing exact file lists and the English record. Historical completion and verification evidence are unchanged.
@@ -25,7 +27,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T02. Restore scheduled input
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T01; **Acceptance:** RP-A04, RP-A07, RP-A10.
 - **Allowed files:** `src/trade_plan_monitor/backtest/plan_schedule.py`; `src/trade_plan_monitor/backtest/loop_input.py`; `tests/unit/test_monitor_loop_schedule.py`; `tests/unit/test_monitor_loop_input.py`.
 - **Result:** Add new-mode version arrays, canonical order and effective-day selection. Reject date/conflict/start/size violations; preserve v1 decoding and same-version continuity.

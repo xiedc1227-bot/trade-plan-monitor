@@ -239,3 +239,120 @@ def test_single_plan_requires_one_entry_and_keeps_evidence_bindings_independent(
         "review": first.review.model_copy(update={"source_hashes": hashes}),
     })
     assert LoopSchedule(entries=(row(value=reviewed),)).select(at()).version == reviewed
+
+
+def scheduled_row(day=20, *, value=None):
+    from trade_plan_monitor.backtest.plan_schedule import (
+        ScheduledPlanVersion,
+        ScheduledScheduleEntry,
+    )
+
+    value = value or version()
+    return ScheduledScheduleEntry(
+        effective_trade_date=date(2026, 8, day),
+        version=ScheduledPlanVersion.model_validate(value.model_dump()),
+    )
+
+
+def continuity_schedule():
+    import json
+    from pathlib import Path
+
+    from trade_plan_monitor.backtest.plan_schedule import ScheduledLoopSchedule
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+
+    data = json.loads((Path(__file__).parents[1] / "fixtures" /
+                       "monitor_loop_continuity.json").read_text(encoding="utf-8"))
+    rows = []
+    for item in data["sources"]:
+        plan = UnifiedTradePlan.model_validate_json(json.dumps(item["snapshot"]))
+        value = version(item["version_id"], plan=plan,
+                        authored=datetime.fromisoformat(item["authored_at"]),
+                        available=datetime.fromisoformat(item["available_at"]),
+                        evidence=datetime.fromisoformat(item["information_cutoff"]))
+        value = value.model_copy(update={
+            "source_hashes": (item["source_hash"],),
+            "review": value.review.model_copy(update={"source_hashes": (item["source_hash"],)}),
+        })
+        day = date.fromisoformat(item["effective_trade_date"]).day
+        rows.append(scheduled_row(day, value=value))
+    return ScheduledLoopSchedule(entries=tuple(rows))
+
+
+def test_scheduled_four_version_selection_canonical_order_and_same_version_continuation():
+    schedule = continuity_schedule()
+    reversed_schedule = schedule.model_copy(update={"entries": tuple(reversed(schedule.entries))})
+    assert reversed_schedule == schedule
+    assert [schedule.select(at(day, 10)).version.version_id for day in (20, 21, 24, 25)] == [
+        "p1", "p2", "p3", "p4",
+    ]
+    repeat = schedule.model_copy(update={"entries": (
+        schedule.entries[0], scheduled_row(21, value=schedule.entries[0].version),
+    )})
+    first, carried = repeat.select(at()), repeat.select(at(24))
+    assert carried.version == first.version
+    assert carried.effective_trade_date == first.effective_trade_date == date(2026, 8, 20)
+    assert carried.activated_at == first.activated_at and carried.continued
+    assert carried.authority_id == first.authority_id
+
+
+def test_scheduled_replacement_expiry_does_not_restore_an_older_still_valid_plan():
+    from trade_plan_monitor.backtest.plan_schedule import ScheduledLoopSchedule
+
+    expired = research_plan().model_copy(update={"activation": {
+        "mode": "TRADING_DAY", "trading_day": date(2026, 8, 21),
+    }})
+    schedule = ScheduledLoopSchedule(entries=(scheduled_row(), scheduled_row(
+        21, value=version("p2", plan=expired, available=at(21, 0)),
+    )))
+    assert schedule.select(at(21)).version.version_id == "p2"
+    assert schedule.select(at(24)) is None
+
+
+def test_scheduled_rejects_duplicate_days_conflicting_version_ids_symbols_and_oversize():
+    from trade_plan_monitor.backtest.plan_schedule import ScheduledLoopSchedule
+
+    first = scheduled_row()
+    changed = research_plan().model_copy(update={"name": "Other immutable content"})
+    other = research_plan().model_copy(update={"symbol": "002240.SZ", "market": "SZSE"})
+    for entries in ((), (first, first),
+                    (first, scheduled_row(21, value=version(plan=changed))),
+                    (first, scheduled_row(21, value=version("p2", plan=other)))):
+        with pytest.raises(ValidationError):
+            ScheduledLoopSchedule(entries=entries)
+    rows = tuple(first.model_copy(update={"effective_trade_date": date(2026, 8, 20) +
+                                         timedelta(days=i)}) for i in range(257))
+    assert len(ScheduledLoopSchedule(entries=rows[:256]).entries) == 256
+    with pytest.raises(ValidationError):
+        ScheduledLoopSchedule(entries=rows)
+
+
+def test_scheduled_first_intraday_and_successor_opening_availability_are_distinct():
+    from trade_plan_monitor.backtest.plan_schedule import ScheduledLoopSchedule
+
+    first = scheduled_row(value=version(available=at(20, 10, 15)))
+    schedule = ScheduledLoopSchedule(entries=(first,))
+    assert schedule.select(at(20, 10)) is None
+    assert schedule.select(at(20, 10, 15)).activated_at == at(20, 10, 15)
+    second = scheduled_row(21, value=version("p2", available=at(21, 9, 30)))
+    schedule = ScheduledLoopSchedule(entries=(first, second))
+    assert schedule.select(at(21, 9, 30)).version == second.version
+    late = scheduled_row(21, value=version("p2", available=at(21, 9, 30, 1)))
+    with pytest.raises(ValidationError):
+        ScheduledLoopSchedule(entries=(first, late))
+
+
+def test_scheduled_preflight_limits_calendar_requirements_to_run_and_rejects_uncovered_start():
+    from trade_plan_monitor.backtest.plan_schedule import ScheduledLoopSchedule
+
+    schedule = continuity_schedule()
+    schedule.preflight(calendar(), started_at=at(), evidence_cutoff=at(24, 15))
+    with pytest.raises(ValueError):  # p4 is now relevant but its calendar day is missing.
+        schedule.preflight(calendar(), started_at=at(), evidence_cutoff=at(25, 15))
+    with pytest.raises(ValueError):
+        schedule.preflight(calendar(), started_at=at(19), evidence_cutoff=at(24, 15))
+    closed = ScheduledLoopSchedule(entries=(scheduled_row(), scheduled_row(
+        22, value=version("p2", available=at(21, 18)),
+    )))
+    with pytest.raises(ValueError):
+        closed.preflight(calendar(), started_at=at(), evidence_cutoff=at(24, 15))

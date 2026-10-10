@@ -4,12 +4,18 @@ from datetime import date
 from hashlib import sha256
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from trade_plan_monitor.ai.prompts import MAX_SOURCE_TEXT_CHARS
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
-from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary, LoopSchedule, LoopTimestamp
+from trade_plan_monitor.backtest.plan_schedule import (
+    MAX_SCHEDULED_ENTRIES,
+    LoopEndBoundary,
+    LoopSchedule,
+    LoopTimestamp,
+    ScheduledLoopSchedule,
+)
 from trade_plan_monitor.backtest.research_input import ExactDecimal, ResearchValue
 from trade_plan_monitor.backtest.run_input import MAX_INITIAL_LOTS, MAX_SAFE_INTEGER
 from trade_plan_monitor.domain.daily_plan_models import Text
@@ -56,6 +62,16 @@ class LoopSourceBatch(ResearchValue):
         if sum(len(source.text.encode("utf-8")) for source in self.sources) > MAX_SOURCE_BYTES:
             raise ValueError("source batch exceeds 8 MiB of UTF-8 text")
         return self
+
+
+class LoopSourceCollection(ResearchValue):
+    """New preparation branch; reuse per-source and aggregate UTF-8 safeguards."""
+
+    sources: tuple[LoopSource, ...] = Field(min_length=1, max_length=MAX_SCHEDULED_ENTRIES)
+
+    @model_validator(mode="after")
+    def bounded(self) -> Self:
+        return LoopSourceBatch.bounded(self)
 
 
 class KnownLoopCash(ResearchValue):
@@ -217,3 +233,49 @@ class MonitorLoopInput(ResearchValue):
     @property
     def run_id(self) -> str:
         return sha256((LOOP_RUN_FORMULA_VERSION + "\0" + canonical_json(self)).encode()).hexdigest()
+
+
+class ScheduledLoopInput(ResearchValue):
+    """One account/run over reviewed daily versions, separately encoded from v1."""
+
+    schema_version: Literal["monitor-loop-input-v2"] = "monitor-loop-input-v2"
+    run_formula_version: Literal["backtest-run-v6"] = "backtest-run-v6"
+    schedule: ScheduledLoopSchedule
+    initial_account: LoopAccountInput
+    boundary: LoopEndBoundary
+    dataset_hash: Sha256Hex
+    response: LoopResponsePolicy
+    costs: LoopCosts
+    limits: LoopLimits = Field(default_factory=LoopLimits)
+
+    @model_validator(mode="after")
+    def coherent(self) -> Self:
+        return MonitorLoopInput.coherent(self)
+
+    @model_validator(mode="after")
+    def first_account(self) -> Self:
+        selected = self.schedule.select(self.boundary.started_at)
+        first = self.schedule.entries[0]
+        if (
+            selected.version != first.version
+            or self.boundary.started_at.date() != first.effective_trade_date
+        ):
+            raise ValueError("opening account must bind the first scheduled version")
+        return self
+
+    @property
+    def input_hash(self) -> str:
+        return sha256((self.schema_version + "\0" + canonical_json(self)).encode()).hexdigest()
+
+    @property
+    def run_id(self) -> str:
+        return sha256((self.run_formula_version + "\0" + canonical_json(self)).encode()).hexdigest()
+
+
+_LOOP_INPUT_CODEC = TypeAdapter(
+    Annotated[MonitorLoopInput | ScheduledLoopInput, Field(discriminator="schema_version")]
+)
+
+
+def decode_monitor_loop_input_json(value: str | bytes) -> MonitorLoopInput | ScheduledLoopInput:
+    return _LOOP_INPUT_CODEC.validate_json(value)

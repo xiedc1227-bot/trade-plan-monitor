@@ -282,3 +282,143 @@ def test_review_must_already_exist_when_the_run_is_submitted():
     )
     with pytest.raises(ValidationError, match="review"):
         original.model_copy(update={"schedule": LoopSchedule(entries=(row(value=late),))})
+
+
+def scheduled_input():
+    from tests.unit.test_monitor_loop_schedule import continuity_schedule
+
+    from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
+
+    return ScheduledLoopInput(
+        schedule=continuity_schedule(), initial_account=account(
+            cash=KnownLoopCash(balance_fen=1_000_000), lots=(),
+        ), boundary=LoopEndBoundary.resolve(started_at=at(), submitted_at=at(27, 10)),
+        dataset_hash="3" * 64, response=LoopResponsePolicy(mode="FOLLOW_REMINDERS"), costs=costs(),
+    )
+
+
+def test_scheduled_input_roundtrip_dispatch_and_distinct_versioned_hashes():
+    from trade_plan_monitor.backtest.loop_input import (
+        ScheduledLoopInput,
+        decode_monitor_loop_input_json,
+    )
+
+    value = scheduled_input()
+    assert value.schema_version == "monitor-loop-input-v2"
+    assert value.run_formula_version == "backtest-run-v6"
+    assert ScheduledLoopInput.model_validate_json(value.model_dump_json()) == value
+    assert decode_monitor_loop_input_json(value.model_dump_json()) == value
+    assert type(decode_monitor_loop_input_json(frozen().model_dump_json())) is MonitorLoopInput
+    assert value.input_hash != frozen().input_hash and value.run_id != frozen().run_id
+    for key, wrong in (("schema_version", "monitor-loop-input-v1"),
+                       ("run_formula_version", "backtest-run-v5")):
+        with pytest.raises(ValidationError):
+            value.model_copy(update={key: wrong})
+    with pytest.raises(ValueError):
+        decode_monitor_loop_input_json('{"schema_version":"monitor-loop-input-v99"}')
+
+
+def test_scheduled_future_content_and_chain_review_time_do_not_rename_past_authority():
+    value = scheduled_input()
+    later = value.schedule.entries[-1]
+    changed = later.version.snapshot.model_copy(update={"name": "Changed future plan"})
+    from tests.unit.test_monitor_loop_schedule import scheduled_row
+
+    future = scheduled_row(25, value=version("p4", plan=changed, available=at(25, 8)))
+    altered = value.model_copy(update={"schedule": value.schedule.model_copy(update={
+        "entries": value.schedule.entries[:-1] + (future,),
+    })})
+    reviewed = value.model_copy(update={"schedule": value.schedule.model_copy(update={
+        "entries": tuple(row.model_copy(update={"version": row.version.model_copy(update={
+            "review": row.version.review.model_copy(update={"reviewed_at": at(27, 9)}),
+        })}) for row in value.schedule.entries),
+    })})
+    assert altered.run_id != value.run_id
+    assert altered.schedule.select(at()).authority_id == value.schedule.select(at()).authority_id
+    assert reviewed.schedule.select(at()).authority_id == value.schedule.select(at()).authority_id
+
+
+def test_scheduled_opening_account_cannot_skip_the_first_version():
+    value = scheduled_input()
+    with pytest.raises(ValidationError):
+        value.model_copy(update={"boundary": LoopEndBoundary.resolve(
+            started_at=at(21), submitted_at=at(27, 10),
+        )})
+
+
+def test_v1_rejects_v2_objects_at_construction_copy_and_validation_boundaries():
+    from trade_plan_monitor.backtest.loop_input import LoopSourceCollection
+    from trade_plan_monitor.backtest.plan_schedule import LoopPlanVersion, LoopScheduleEntry
+
+    new = scheduled_input()
+    for schedule in (new.schedule, new.schedule.model_copy(update={
+        "entries": new.schedule.entries[:1],
+    })):
+        for construct in (
+            lambda schedule=schedule: frozen(schedule=schedule),
+            lambda schedule=schedule: frozen().model_copy(update={"schedule": schedule}),
+            lambda schedule=schedule: LoopSchedule.model_validate(schedule),
+        ):
+            with pytest.raises(ValidationError):
+                construct()
+    with pytest.raises(ValidationError):
+        MonitorLoopInput.model_validate(new)
+    with pytest.raises(ValidationError):
+        LoopSchedule(entries=(new.schedule.entries[0],))
+    with pytest.raises(ValidationError):
+        LoopScheduleEntry(effective_trade_date=at().date(), version=new.schedule.entries[0].version)
+    with pytest.raises(ValidationError):
+        LoopPlanVersion.model_validate(new.schedule.entries[0].version)
+    for sources in ((source(),), (source(), source("second"))):
+        with pytest.raises(ValidationError):
+            LoopSourceBatch.model_validate(LoopSourceCollection(sources=sources))
+
+
+def test_scheduled_start_is_anchored_to_first_day_even_without_a_successor():
+    value = scheduled_input()
+    single = value.model_copy(update={"schedule": value.schedule.model_copy(update={
+        "entries": value.schedule.entries[:1],
+    })})
+    with pytest.raises(ValidationError, match="first"):
+        single.model_copy(update={"boundary": LoopEndBoundary.resolve(
+            started_at=at(21), submitted_at=at(27, 10),
+        )})
+    same_day = single.model_copy(update={"boundary": LoopEndBoundary.resolve(
+        started_at=at(20, 10), submitted_at=at(27, 10),
+    )})
+    assert same_day.boundary.started_at == at(20, 10)
+
+
+def test_source_collection_accepts_256_and_keeps_character_id_and_exact_utf8_byte_bounds():
+    from trade_plan_monitor.backtest.loop_input import LoopSourceCollection
+
+    sources = tuple(source(f"s{i}") for i in range(257))
+    assert len(LoopSourceCollection(sources=sources[:256]).sources) == 256
+    for invalid in ((), sources, (sources[0], sources[0])):
+        with pytest.raises(ValidationError):
+            LoopSourceCollection(sources=invalid)
+    # 55 * 150,000 + 138,608 = 8 MiB; individual text limits remain unchanged.
+    full = tuple(source(f"s{i}", text="x" * 150_000) for i in range(55))
+    tail = source("tail", text="x" * 138_608)
+    assert len(LoopSourceCollection(sources=(*full, tail)).sources) == 56
+    for last in ("x" * 138_609, "文" * 138_608):
+        with pytest.raises(ValidationError):
+            LoopSourceCollection(sources=(*full, source("tail", text=last)))
+
+
+def test_account_context_is_bounded_evidenced_and_cannot_name_absent_rules():
+    from trade_plan_monitor.backtest.plan_schedule import LoopAccountContext
+
+    value = scheduled_input().schedule.entries[2].version
+    context = LoopAccountContext(core_qty=0, tactical_qty=200,
+                                 dependent_rule_ids=("ordinary-chain",), evidence="source-3")
+    assert value.model_copy(update={"account_context": context}).account_context == context
+    for update in ({"tactical_qty": 1}, {"core_qty": True}, {"tactical_qty": -100},
+                   {"tactical_qty": MAX_SAFE_INTEGER + 1}, {"evidence": ""}):
+        with pytest.raises(ValidationError):
+            context.model_copy(update=update)
+    for ids in (("absent",), ("ordinary-chain", "ordinary-chain")):
+        with pytest.raises(ValidationError):
+            value.model_copy(update={"account_context": context.model_copy(
+                update={"dependent_rule_ids": ids},
+            )})

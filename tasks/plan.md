@@ -5,6 +5,8 @@ Status: design for review, 2026-10-10, Asia/Shanghai. This request authorizes th
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
 
+RP-T02 is complete: distinct v2 source/schedule/input codecs preserve v1 boundaries, canonical effective-day selection, first-day opening-account anchoring and causal authority. The independent review found and corrected nested subtype acceptance and skipped-first-day defects. 65 focused schedule/input/fixture/legacy compatibility checks pass; the successor-opening mutation is detected and restored. Ruff and diff checks pass. **2 of 20 repair tasks complete.** Next: RP-T03; RP-C01 is not yet passed.
+
 ## RP01. Baseline and authority
 
 The business baseline is ML01–ML13 in commit [e95de03](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/e95de03ec809517cc0a3b2484c6145675418960c/docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md), still present before narrowing in `0db69c9`. The implementation proposal at that commit supplies IP04–IP06 details, subject to the expressly retained constraints below. The 2026-10-10 user request requires a bounded repair of identified deviations. It does not authorize product expansion.
