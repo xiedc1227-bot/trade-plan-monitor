@@ -16,14 +16,18 @@ from trade_plan_monitor.backtest.models import StableIdentifier
 from trade_plan_monitor.backtest.preparation_models import (
     PREPARATION_DOMAIN,
     PREPARATION_SCHEMA_VERSION,
+    CollectionPreparationRecord,
+    PlanCollectionPreparationInput,
     PreparationAttempt,
     PreparationCandidate,
     PreparationCandidateInput,
+    PreparationItem,
     PreparationRecord,
     PreparationReview,
     PreparationSource,
     PreparationWorkClaim,
     SinglePlanPreparationInput,
+    decode_preparation_record_json,
 )
 from trade_plan_monitor.backtest.preparation_review import (
     PreparationReviewCommand,
@@ -117,20 +121,22 @@ class PreparationStore:
             with connection:
                 yield connection
 
-    def get(self, preparation_id: str) -> PreparationRecord | None:
+    def get(self, preparation_id: str) -> PreparationRecord | CollectionPreparationRecord | None:
         preparation_id = _IDENTIFIER.validate_python(preparation_id)
         with self._connect() as connection:
             return self._read(connection, preparation_id)
 
     @staticmethod
-    def _read(connection: sqlite3.Connection, preparation_id: str) -> PreparationRecord | None:
+    def _read(
+        connection: sqlite3.Connection, preparation_id: str,
+    ) -> PreparationRecord | CollectionPreparationRecord | None:
         row = connection.execute(
             "SELECT document_json FROM backtest_preparation WHERE preparation_id = ?",
             (preparation_id,),
         ).fetchone()
         if row is None:
             return None
-        record = PreparationRecord.model_validate_json(row[0])
+        record = decode_preparation_record_json(row[0])
         if record.preparation_id != preparation_id:
             raise ValueError("stored preparation identity does not match its key")
         return record
@@ -148,7 +154,7 @@ class PreparationStore:
             if previous is not None:
                 if previous[0] != request_hash:
                     raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
-                return PreparationRecord.model_validate_json(previous[1])
+                return decode_preparation_record_json(previous[1])
             if connection.execute(
                 "SELECT 1 FROM backtest_preparation WHERE preparation_id != ? "
                 "AND json_extract(document_json, '$.status') IN "
@@ -171,15 +177,24 @@ class PreparationStore:
             return record
 
     def create(
-        self, command: SinglePlanPreparationInput, *, idempotency_key: str,
-    ) -> PreparationRecord:
-        if not isinstance(command, SinglePlanPreparationInput):
-            raise TypeError("command must be SinglePlanPreparationInput")
-        command = SinglePlanPreparationInput.model_validate(command.model_dump(mode="python"))
+        self, command: SinglePlanPreparationInput | PlanCollectionPreparationInput,
+        *, idempotency_key: str,
+    ) -> PreparationRecord | CollectionPreparationRecord:
+        if not isinstance(command, (SinglePlanPreparationInput, PlanCollectionPreparationInput)):
+            raise TypeError("command must be a versioned preparation input")
+        command = type(command).model_validate(command.model_dump(mode="python"))
 
         def change(previous, now):
             if previous is not None:
                 raise PreparationConflictError("PREPARATION_EXISTS")
+            if isinstance(command, PlanCollectionPreparationInput):
+                return CollectionPreparationRecord(
+                    preparation_id=command.preparation_id, revision=1,
+                    items=tuple(PreparationItem(
+                        source=source, status="DRAFT" if index == 0 else "WAITING",
+                    ) for index, source in enumerate(command.sources)),
+                    created_at=now, updated_at=now,
+                )
             return PreparationRecord(
                 preparation_id=command.preparation_id, revision=1,
                 source=command.sources[0], source_revision=1, created_at=now, updated_at=now,
@@ -188,6 +203,67 @@ class PreparationStore:
         return self._operation(
             "CREATE", command.preparation_id, command, idempotency_key, change,
         )
+
+    def edit_collection(
+        self, preparation_id, *, expected_revision, idempotency_key,
+        source: PreparationSource | None = None, source_order: tuple[str, ...] | None = None,
+    ) -> CollectionPreparationRecord:
+        """Invalidate only the affected suffix; frozen mutation receipts remain unchanged."""
+        if source is None and source_order is None:
+            raise ValueError("collection edit requires source or source_order")
+        if source is not None:
+            if not isinstance(source, PreparationSource):
+                raise TypeError("source must be PreparationSource")
+            source = PreparationSource.model_validate(source.model_dump(mode="python"))
+        if source_order is not None:
+            if type(source_order) is not tuple:
+                raise ValueError("source_order must be an explicit tuple of existing IDs")
+            source_order = tuple(_IDENTIFIER.validate_python(value) for value in source_order)
+
+        def change(previous, now):
+            record = self._require_revision(previous, expected_revision)
+            if not isinstance(record, CollectionPreparationRecord):
+                raise PreparationConflictError("PREPARATION_SCHEMA_CONFLICT")
+            if record.status in {"EXTRACTING", "CANCEL_REQUESTED"} or record.work_claim is not None:
+                raise PreparationConflictError("PREPARATION_BUSY")
+            if record.status == "CANCELLED":
+                raise PreparationConflictError("PREPARATION_CANCELLED")
+            original = tuple(item.source.source_id for item in record.items)
+            order = original if source_order is None else source_order
+            if len(order) != len(original) or set(order) != set(original):
+                raise PreparationConflictError("SOURCE_ORDER_CONFLICT")
+            if source is not None and source.source_id not in original:
+                raise PreparationConflictError("SOURCE_ID_CONFLICT")
+            by_id = {item.source.source_id: item for item in record.items}
+            changed = [index for index, identity in enumerate(order) if identity != original[index]]
+            if source is not None and source != by_id[source.source_id].source:
+                changed.append(order.index(source.source_id))
+            if not changed:
+                return record
+            first, items = min(changed), []
+            for index, identity in enumerate(order):
+                item = by_id[identity]
+                if index >= first:
+                    replacement = (source if source is not None and source.source_id == identity
+                                   else item.source)
+                    ready = index == 0 or (index == first and items[-1].candidate is not None
+                                           and items[-1].candidate.validation == "VALID")
+                    item = item.model_copy(update={
+                        "source": replacement,
+                        "source_revision": item.source_revision + int(replacement != item.source),
+                        "candidate_revision": item.candidate_revision + 1,
+                        "candidate": None, "base_hash": None, "attempts": (),
+                        "status": "DRAFT" if ready else "WAITING",
+                    })
+                items.append(item)
+            return self._updated(
+                record, now, items=tuple(items), status="DRAFT", review=None,
+                review_revision=record.review_revision + 1,
+            )
+
+        return self._operation("EDIT_COLLECTION", preparation_id, {
+            "expected_revision": expected_revision, "source": source, "source_order": source_order,
+        }, idempotency_key, change)
 
     @staticmethod
     def _require_revision(record, expected_revision):
@@ -212,7 +288,7 @@ class PreparationStore:
             return None
         if row[0] != expected:
             raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
-        return PreparationRecord.model_validate_json(row[1])
+        return decode_preparation_record_json(row[1])
 
     @staticmethod
     def _updated(record, now, **changes):
@@ -273,7 +349,7 @@ class PreparationStore:
             return None
         if row[0] != expected:
             raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
-        return PreparationRecord.model_validate_json(row[1])
+        return decode_preparation_record_json(row[1])
 
     def start_attempt(
         self, preparation_id: str, *, expected_revision: int, idempotency_key: str,
@@ -338,7 +414,7 @@ class PreparationStore:
             return None
         if row[0] != expected:
             raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
-        return PreparationRecord.model_validate_json(row[1])
+        return decode_preparation_record_json(row[1])
 
     @staticmethod
     def _owned_claim(record, generation, owner_id):
@@ -603,4 +679,4 @@ class PreparationStore:
             return None
         if row[0] != expected:
             raise PreparationConflictError("IDEMPOTENCY_CONFLICT")
-        return PreparationRecord.model_validate_json(row[1])
+        return decode_preparation_record_json(row[1])

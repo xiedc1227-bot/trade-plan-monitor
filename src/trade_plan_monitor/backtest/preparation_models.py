@@ -6,7 +6,7 @@ from decimal import Decimal
 from hashlib import sha256
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from trade_plan_monitor.ai.extraction import (
     MAX_EXTRACTION_JSON_DEPTH,
@@ -18,9 +18,10 @@ from trade_plan_monitor.backtest.loop_input import (
     MAX_EXTRACTION_ATTEMPTS,
     LoopSource,
     LoopSourceBatch,
+    LoopSourceCollection,
 )
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
-from trade_plan_monitor.backtest.plan_schedule import LoopTimestamp
+from trade_plan_monitor.backtest.plan_schedule import MAX_SCHEDULED_ENTRIES, LoopTimestamp
 from trade_plan_monitor.backtest.research_input import ResearchValue
 
 PREPARATION_DOMAIN = "backtest-preparation-v1"
@@ -255,3 +256,203 @@ class PreparationRecord(ResearchValue):
             ) != (running[0].attempt_id, running[0].source_revision, running[0].source_hash):
                 raise ValueError("worker generation differs from the pending source attempt")
         return self
+
+
+class PlanCollectionPreparationInput(ResearchValue):
+    schema_version: Literal["backtest-preparation-v2"] = "backtest-preparation-v2"
+    preparation_id: StableIdentifier
+    sources: tuple[PreparationSource, ...] = Field(min_length=1, max_length=MAX_SCHEDULED_ENTRIES)
+
+    @model_validator(mode="after")
+    def bounded(self) -> Self:
+        LoopSourceCollection(sources=self.sources)
+        return self
+
+
+class CollectionPreparationCandidate(PreparationCandidateInput):
+    source_revision: int = Field(ge=1)
+    source_hash: Sha256Hex
+    base_hash: Sha256Hex | None
+
+    @property
+    def candidate_hash(self) -> str:
+        return _hash("preparation-candidate-v2", self)
+
+
+class CollectionPreparationAttempt(ResearchValue):
+    attempt_id: StableIdentifier
+    source_revision: int = Field(ge=1)
+    source_hash: Sha256Hex
+    base_hash: Sha256Hex | None
+    status: Literal["RUNNING", "CANCEL_REQUESTED", "SUCCEEDED", "FAILED", "CANCELLED"]
+    started_at: LoopTimestamp
+    finished_at: LoopTimestamp | None = None
+    error_code: Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$")] | None = None
+    retryable: bool = False
+
+    @model_validator(mode="after")
+    def coherent(self) -> Self:
+        return PreparationAttempt.coherent(self)
+
+
+class PreparationItem(ResearchValue):
+    source: PreparationSource
+    source_revision: int = Field(default=1, ge=1)
+    candidate_revision: int = Field(default=0, ge=0)
+    candidate: CollectionPreparationCandidate | None = None
+    attempts: tuple[CollectionPreparationAttempt, ...] = Field(
+        default=(), max_length=MAX_EXTRACTION_ATTEMPTS,
+    )
+    base_hash: Sha256Hex | None = None
+    status: Literal[
+        "WAITING", "DRAFT", "EXTRACTING", "CANCEL_REQUESTED", "CANDIDATE", "FAILED", "CANCELLED"
+    ] = "WAITING"
+
+    @model_validator(mode="after")
+    def bound(self) -> Self:
+        binding = self.source_revision, self.source.binding_hash, self.base_hash
+        if len({item.attempt_id for item in self.attempts}) != len(self.attempts):
+            raise ValueError("item attempt identities must be unique")
+        for attempt in self.attempts:
+            if (attempt.source_revision, attempt.source_hash, attempt.base_hash) != binding:
+                raise ValueError("item attempt has a stale source or base")
+        pending = tuple(item for item in self.attempts if item.finished_at is None)
+        if len(pending) > 1 or bool(pending) != (
+            self.status in {"EXTRACTING", "CANCEL_REQUESTED"}
+        ):
+            raise ValueError("item status contradicts pending attempt")
+        if pending and (pending[0] != self.attempts[-1] or pending[0].status != (
+            "RUNNING" if self.status == "EXTRACTING" else "CANCEL_REQUESTED"
+        )):
+            raise ValueError("only the latest matching item attempt may be pending")
+        if self.status in {"WAITING", "DRAFT"} and self.attempts:
+            raise ValueError("unstarted item cannot contain attempts")
+        if self.status == "FAILED" and (
+            not self.attempts or self.attempts[-1].status != "FAILED"
+        ):
+            raise ValueError("failed item requires its classified attempt")
+        if (self.candidate is not None) != (self.status == "CANDIDATE"):
+            raise ValueError("item candidate contradicts status")
+        if self.candidate is not None and (
+            (self.candidate.source_revision, self.candidate.source_hash, self.candidate.base_hash)
+            != binding or self.candidate_revision == 0 or not self.attempts
+            or self.attempts[-1].status != "SUCCEEDED"
+        ):
+            raise ValueError("item candidate has a stale source/base/attempt binding")
+        return self
+
+
+class CollectionPreparationWorkClaim(ResearchValue):
+    generation: StableIdentifier
+    owner_id: StableIdentifier
+    source_id: StableIdentifier
+    source_revision: int = Field(ge=1)
+    source_hash: Sha256Hex
+    base_hash: Sha256Hex | None
+    admission_key: StableIdentifier
+    intent_hash: Sha256Hex
+    claimed_at: LoopTimestamp
+    intent_json: str = Field(min_length=2, max_length=2048)
+    phase: Literal["READY", "CALLING", "UNKNOWN", "ENDED"]
+
+
+class PreparationItemReview(ResearchValue):
+    source_id: StableIdentifier
+    source_revision: int = Field(ge=1)
+    candidate_revision: int = Field(ge=1)
+    candidate_hash: Sha256Hex
+    evidence_hash: Sha256Hex
+    base_hash: Sha256Hex | None
+
+
+class CollectionPreparationReview(ResearchValue):
+    items: tuple[PreparationItemReview, ...] = Field(min_length=1, max_length=MAX_SCHEDULED_ENTRIES)
+    confirmed: Literal[True]
+    reviewed_at: LoopTimestamp
+
+    @field_validator("confirmed", mode="before")
+    @classmethod
+    def explicit_confirmation(cls, value):
+        return PreparationReview.explicit_confirmation(value)
+
+
+class CollectionPreparationRecord(ResearchValue):
+    schema_version: Literal["backtest-preparation-v2"] = "backtest-preparation-v2"
+    preparation_id: StableIdentifier
+    revision: int = Field(ge=1)
+    items: tuple[PreparationItem, ...] = Field(min_length=1, max_length=MAX_SCHEDULED_ENTRIES)
+    status: Literal[
+        "DRAFT", "EXTRACTING", "CANCEL_REQUESTED", "CANDIDATE", "REVIEWED", "FAILED", "CANCELLED"
+    ] = "DRAFT"
+    review_revision: int = Field(default=0, ge=0)
+    review: CollectionPreparationReview | None = None
+    created_at: LoopTimestamp
+    updated_at: LoopTimestamp
+    work_claim: CollectionPreparationWorkClaim | None = None
+
+    @model_validator(mode="after")
+    def bound(self) -> Self:
+        PlanCollectionPreparationInput(
+            preparation_id=self.preparation_id, sources=tuple(item.source for item in self.items),
+        )
+        if self.updated_at < self.created_at:
+            raise ValueError("collection update precedes creation")
+        previous, running = None, []
+        for index, item in enumerate(self.items):
+            expected_base = None if previous is None else previous.candidate_hash
+            if item.status not in {"WAITING", "DRAFT", "CANCELLED"}:
+                if index and (previous is None or previous.validation != "VALID"):
+                    raise ValueError("item depends on an unresolved predecessor")
+                if item.base_hash != expected_base:
+                    raise ValueError("item base differs from the predecessor candidate")
+            elif item.base_hash is not None:
+                raise ValueError("unstarted item cannot retain base authority")
+            if item.attempts and item.attempts[-1].finished_at is None:
+                running.append(item)
+            if any(attempt.started_at > self.updated_at or (
+                attempt.finished_at is not None and attempt.finished_at > self.updated_at
+            ) for attempt in item.attempts):
+                raise ValueError("item attempt is in the future")
+            previous = item.candidate
+        if len(running) > 1:
+            raise ValueError("only one collection item can run")
+        claim = self.work_claim
+        active = self.status in {"EXTRACTING", "CANCEL_REQUESTED"}
+        if active != bool(running) or active != (claim is not None and claim.phase != "ENDED"):
+            raise ValueError("collection status/claim differs from its pending item")
+        if running:
+            item = running[0]
+            attempt = item.attempts[-1]
+            if item.status != self.status or claim.claimed_at > self.updated_at:
+                raise ValueError("collection status/time differs from its worker claim")
+            if (claim.source_id, claim.source_revision, claim.source_hash, claim.base_hash,
+                claim.generation) != (item.source.source_id, item.source_revision,
+                item.source.binding_hash, item.base_hash, attempt.attempt_id):
+                raise ValueError("collection worker has a stale item generation")
+        if self.status in {"CANDIDATE", "REVIEWED"} and any(
+            item.candidate is None for item in self.items
+        ):
+            raise ValueError("complete collection requires all candidates")
+        if (self.review is not None) != (self.status == "REVIEWED"):
+            raise ValueError("collection review contradicts status")
+        if self.review is not None:
+            bindings = tuple(PreparationItemReview(
+                source_id=item.source.source_id, source_revision=item.source_revision,
+                candidate_revision=item.candidate_revision,
+                candidate_hash=item.candidate.candidate_hash,
+                evidence_hash=item.candidate.evidence_hash, base_hash=item.base_hash,
+            ) for item in self.items)
+            if (self.review.items != bindings or self.review_revision == 0
+                or self.review.reviewed_at > self.updated_at
+                or any(item.candidate.validation != "VALID" for item in self.items)):
+                raise ValueError("collection review is not bound to the exact valid chain")
+        return self
+
+
+_PREPARATION_CODEC = TypeAdapter(Annotated[
+    PreparationRecord | CollectionPreparationRecord, Field(discriminator="schema_version"),
+])
+
+
+def decode_preparation_record_json(value: str | bytes):
+    return _PREPARATION_CODEC.validate_json(value)

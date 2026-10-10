@@ -559,3 +559,299 @@ def test_constructed_values_cannot_persist_unbounded_candidate(tmp_path):
     with pytest.raises(ValueError):
         finish(store, running, value=forged)
     assert store.get(running.preparation_id) == running
+
+
+def collection_input():
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+
+    return PlanCollectionPreparationInput(
+        preparation_id="collection-1", sources=tuple(
+            PreparationSource(source_id=f"source-{number}",
+                              text=f"Synthetic complete source {number}")
+            for number in (3, 1, 2)
+        ),
+    )
+
+
+def test_collection_creation_preserves_order_and_frozen_receipt_across_restart(tmp_path):
+    path, value = tmp_path / "preparations.sqlite", collection_input()
+    store = PreparationStore(path, clock=lambda: NOW)
+    created = store.create(value, idempotency_key="collection-create")
+    assert created.schema_version == "backtest-preparation-v2"
+    assert tuple(item.source for item in created.items) == value.sources
+    assert [item.status for item in created.items] == ["DRAFT", "WAITING", "WAITING"]
+    assert all(item.source_revision == 1 and item.candidate_revision == 0
+               and item.candidate is item.base_hash is None and item.attempts == ()
+               for item in created.items)
+    reopened = PreparationStore(path, clock=lambda: NOW)
+    assert reopened.get(created.preparation_id) == created
+    assert reopened.create(value, idempotency_key="collection-create") == created
+
+
+def edit_collection(store, record, *, source=None, order=None, key="collection-edit"):
+    return store.edit_collection(
+        record.preparation_id, source=source, source_order=order,
+        expected_revision=record.revision, idempotency_key=key,
+    )
+
+
+def test_collection_edit_invalidates_only_changed_suffix_and_freezes_old_receipts(tmp_path):
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    value = collection_input()
+    original = store.create(value, idempotency_key="collection-create")
+    corrected = original.items[1].source.model_copy(update={"text": "Synthetic correction"})
+    edited = edit_collection(store, original, source=corrected)
+    assert edited.revision == original.revision + 1
+    assert edited.items[0].model_dump_json() == original.items[0].model_dump_json()
+    assert [item.source_revision for item in edited.items] == [1, 2, 1]
+    assert [item.candidate_revision for item in edited.items] == [0, 1, 1]
+    assert all(item.candidate is item.base_hash is None for item in edited.items[1:])
+    assert edited.review is None
+    assert edit_collection(store, original, source=corrected) == edited
+    assert store.create(value, idempotency_key="collection-create") == original
+    assert store.replay_create(value, idempotency_key="collection-create") == original
+    assert PreparationStore(store.database_path).get(original.preparation_id) == edited
+
+
+def test_collection_reorder_preserves_ids_and_invalidates_from_first_changed_position(tmp_path):
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    original = store.create(collection_input(), idempotency_key="collection-create")
+    reordered = edit_collection(store, original, order=("source-3", "source-2", "source-1"))
+    assert [item.source.source_id for item in reordered.items] == [
+        "source-3", "source-2", "source-1",
+    ]
+    assert reordered.items[0].model_dump_json() == original.items[0].model_dump_json()
+    assert [item.source_revision for item in reordered.items] == [1, 1, 1]
+    assert [item.candidate_revision for item in reordered.items] == [0, 1, 1]
+    assert {item.source.source_id: item.source for item in reordered.items} == {
+        item.source.source_id: item.source for item in original.items
+    }
+    for number, order in enumerate(((), ("source-3", "source-1"),
+                                    ("source-3", "source-1", "source-1"),
+                                    ("source-3", "source-1", "new-id"))):
+        with pytest.raises(ValueError):
+            edit_collection(store, reordered, order=order, key=f"bad-order-{number}")
+    with pytest.raises(ValueError):
+        edit_collection(store, reordered, source=PreparationSource(source_id="new-id", text="New"),
+                        key="changed-id")
+    assert store.get(original.preparation_id) == reordered
+
+
+def test_collection_noop_and_metadata_edit_keep_precise_revision_semantics(tmp_path):
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    original = store.create(collection_input(), idempotency_key="collection-create")
+    unchanged = edit_collection(store, original, source=original.items[0].source,
+                                order=tuple(item.source.source_id for item in original.items))
+    assert unchanged.model_dump_json() == original.model_dump_json()
+    corrected = original.items[1].source.model_copy(update={
+        "authored_at": NOW, "available_at": NOW, "effective_trade_date": NOW.date(),
+    })
+    edited = edit_collection(store, original, source=corrected, key="metadata-edit")
+    assert corrected.source_hash == original.items[1].source.source_hash
+    assert corrected.binding_hash != original.items[1].source.binding_hash
+    assert edited.items[0] == original.items[0]
+    assert [item.source_revision for item in edited.items] == [1, 2, 1]
+    assert [item.candidate_revision for item in edited.items] == [0, 1, 1]
+    with pytest.raises(PreparationConflictError, match="REVISION_CONFLICT"):
+        edit_collection(store, original, source=corrected, key="stale-edit")
+
+
+def test_collection_concurrent_edits_have_one_revision_winner(tmp_path):
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    original = store.create(collection_input(), idempotency_key="collection-create")
+
+    def change(number):
+        try:
+            corrected = original.items[1].source.model_copy(update={"text": f"Correction {number}"})
+            return edit_collection(store, original, source=corrected, key=f"edit-{number}")
+        except PreparationConflictError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(change, range(2)))
+    assert results.count("REVISION_CONFLICT") == 1
+    current = store.get(original.preparation_id)
+    assert current.revision == 2 and current.items[1].source_revision == 2
+    assert current.items[0] == original.items[0]
+
+
+def test_collection_count_identity_and_exact_utf8_aggregate_bounds():
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+
+    sources = tuple(PreparationSource(source_id=f"s{number}", text="Synthetic")
+                    for number in range(257))
+    def make(items):
+        return PlanCollectionPreparationInput(preparation_id="bounded", sources=items)
+
+    assert len(make(sources[:256]).sources) == 256
+    for invalid in ((), sources, (sources[0], sources[0])):
+        with pytest.raises(ValidationError):
+            make(invalid)
+    full = tuple(PreparationSource(source_id=f"full-{number}", text="x" * 150_000)
+                 for number in range(55))
+    assert len(make((*full, PreparationSource(source_id="tail", text="x" * 138_608))).sources) == 56
+    for tail in ("x" * 138_609, "文" * 138_608):
+        with pytest.raises(ValidationError):
+            make((*full, PreparationSource(source_id="tail", text=tail)))
+
+
+def materialized_collection(record):
+    from trade_plan_monitor.backtest.preparation_models import (
+        CollectionPreparationAttempt,
+        CollectionPreparationCandidate,
+    )
+
+    items, base_hash = [], None
+    for item in record.items:
+        value = CollectionPreparationCandidate(
+            **candidate().model_dump(), source_revision=item.source_revision,
+            source_hash=item.source.binding_hash, base_hash=base_hash,
+        )
+        attempt = CollectionPreparationAttempt(
+            attempt_id="fixture-" + item.source.source_id, source_revision=item.source_revision,
+            source_hash=item.source.binding_hash, base_hash=base_hash,
+            status="SUCCEEDED", started_at=NOW, finished_at=NOW,
+        )
+        items.append(item.model_copy(update={
+            "candidate": value, "candidate_revision": 1, "base_hash": base_hash,
+            "attempts": (attempt,), "status": "CANDIDATE",
+        }))
+        base_hash = value.candidate_hash
+    return record.model_copy(update={"items": tuple(items), "status": "CANDIDATE"})
+
+
+def test_collection_candidate_chain_rejects_stale_source_and_predecessor_bindings(tmp_path):
+    from trade_plan_monitor.backtest.preparation_models import CollectionPreparationRecord
+
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    ready = materialized_collection(store.create(collection_input(), idempotency_key="create"))
+    assert CollectionPreparationRecord.model_validate_json(ready.model_dump_json()) == ready
+    for field, stale in (("source_revision", 2), ("source_hash", "f" * 64),
+                         ("base_hash", "e" * 64)):
+        raw = ready.model_dump(mode="python")
+        raw["items"][1]["candidate"][field] = stale
+        with pytest.raises(ValidationError):
+            CollectionPreparationRecord.model_validate(raw)
+    raw = ready.model_dump(mode="python")
+    # Even matching local candidate/attempt bases cannot replace the actual predecessor binding.
+    raw["items"][1]["base_hash"] = "e" * 64
+    raw["items"][1]["candidate"]["base_hash"] = "e" * 64
+    raw["items"][1]["attempts"][0]["base_hash"] = "e" * 64
+    with pytest.raises(ValidationError):
+        CollectionPreparationRecord.model_validate(raw)
+
+
+def test_collection_edit_clears_materialized_descendants_and_preserves_prefix_bytes(tmp_path):
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    original = store.create(collection_input(), idempotency_key="create")
+    ready = materialized_collection(original)
+    # Persist an explicitly synthetic completed chain; worker orchestration belongs to RP-T07.
+    store._operation("FIXTURE_CANDIDATES", original.preparation_id, {}, "fixture-candidates",
+                     lambda record, now: ready)
+    edited = edit_collection(store, ready, source=ready.items[1].source.model_copy(update={
+        "text": "Synthetic revised middle source",
+    }))
+    assert edited.items[0].model_dump_json() == ready.items[0].model_dump_json()
+    assert [item.source_revision for item in edited.items] == [1, 2, 1]
+    assert [item.candidate_revision for item in edited.items] == [1, 2, 2]
+    assert [item.status for item in edited.items] == ["CANDIDATE", "DRAFT", "WAITING"]
+    assert all(item.candidate is item.base_hash is None and item.attempts == ()
+               for item in edited.items[1:])
+    assert store.get(edited.preparation_id) == edited
+
+
+def test_collection_whole_chain_review_binds_every_item_and_requires_explicit_true(tmp_path):
+    from trade_plan_monitor.backtest.preparation_models import (
+        CollectionPreparationRecord,
+        CollectionPreparationReview,
+        PreparationItemReview,
+    )
+
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    ready = materialized_collection(store.create(collection_input(), idempotency_key="create"))
+    approval = CollectionPreparationReview(items=tuple(PreparationItemReview(
+        source_id=item.source.source_id, source_revision=item.source_revision,
+        candidate_revision=item.candidate_revision, candidate_hash=item.candidate.candidate_hash,
+        evidence_hash=item.candidate.evidence_hash, base_hash=item.base_hash,
+    ) for item in ready.items), confirmed=True, reviewed_at=NOW)
+    approved = ready.model_copy(update={
+        "status": "REVIEWED", "review_revision": 1, "review": approval,
+    })
+    for implicit in (1, False, "true"):
+        with pytest.raises(ValidationError):
+            approval.model_copy(update={"confirmed": implicit})
+    for field, wrong in (("source_id", "other"), ("source_revision", 2),
+                         ("candidate_revision", 2), ("candidate_hash", "f" * 64),
+                         ("evidence_hash", "f" * 64), ("base_hash", "f" * 64)):
+        raw = approved.model_dump(mode="python")
+        raw["review"]["items"][1][field] = wrong
+        with pytest.raises(ValidationError):
+            CollectionPreparationRecord.model_validate(raw)
+    for items in (approval.items[:-1], tuple(reversed(approval.items))):
+        with pytest.raises(ValidationError):
+            approved.model_copy(update={"review": approval.model_copy(update={"items": items})})
+    store._operation("FIXTURE_REVIEW", ready.preparation_id, {}, "fixture-review",
+                     lambda record, now: approved)
+    reopened = PreparationStore(store.database_path, clock=lambda: NOW)
+    assert reopened.get(ready.preparation_id) == approved
+    edited = edit_collection(reopened, approved, source=approved.items[-1].source.model_copy(
+        update={"text": "Synthetic corrected last source"},
+    ))
+    assert edited.review is None and edited.review_revision == approved.review_revision + 1
+    assert edited.items[:-1] == approved.items[:-1]
+
+
+@pytest.mark.parametrize("status", ["EXTRACTING", "CANCEL_REQUESTED"])
+def test_collection_unknown_claim_keeps_creation_and_edits_exclusive(tmp_path, status):
+    from trade_plan_monitor.backtest.preparation_models import (
+        CollectionPreparationAttempt,
+        CollectionPreparationWorkClaim,
+    )
+
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    legacy = create(store)
+    original = store.create(collection_input(), idempotency_key="collection-create")
+    item = original.items[0]
+    attempt = CollectionPreparationAttempt(
+        attempt_id="synthetic-generation", source_revision=1, source_hash=item.source.binding_hash,
+        base_hash=None, status="RUNNING" if status == "EXTRACTING" else "CANCEL_REQUESTED",
+        started_at=NOW,
+    )
+    claim = CollectionPreparationWorkClaim(
+        generation=attempt.attempt_id, owner_id="synthetic-owner", source_id=item.source.source_id,
+        source_revision=1, source_hash=item.source.binding_hash, base_hash=None,
+        admission_key="synthetic-admission", intent_hash="a" * 64, claimed_at=NOW,
+        intent_json="{}", phase="UNKNOWN",
+    )
+    pending = original.model_copy(update={
+        "items": (item.model_copy(update={"attempts": (attempt,), "status": status}),
+                  *original.items[1:]), "status": status, "work_claim": claim,
+    })
+    store._operation("FIXTURE_PENDING", original.preparation_id, {}, "fixture-pending",
+                     lambda record, now: pending)
+    reopened = PreparationStore(store.database_path, clock=lambda: NOW)
+    assert reopened.get(original.preparation_id) == pending
+    with pytest.raises(PreparationConflictError, match="PREPARATION_BUSY"):
+        edit_collection(reopened, pending, source=item.source.model_copy(
+            update={"text": "Changed"},
+        ))
+    with pytest.raises(PreparationConflictError, match="PREPARATION_BUSY"):
+        reopened.create(collection_input().model_copy(update={"preparation_id": "other"}),
+                        idempotency_key="other-create")
+    with pytest.raises(PreparationConflictError, match="PREPARATION_BUSY"):
+        reopened.edit_source(legacy.preparation_id, source=source("Changed"),
+                             expected_revision=legacy.revision, idempotency_key="legacy-edit")
+    assert reopened.replay_create(
+        collection_input(), idempotency_key="collection-create",
+    ) == original
+    assert create(reopened).model_dump_json() == legacy.model_dump_json()
+    assert reopened.get(original.preparation_id) == pending
+
+
+def test_collection_edit_revalidates_constructed_source_before_persisting(tmp_path):
+    store = PreparationStore(tmp_path / "preparations.sqlite", clock=lambda: NOW)
+    original = store.create(collection_input(), idempotency_key="create")
+    forged = PreparationSource.model_construct(source_id="source-1", text=" ")
+    with pytest.raises(ValueError):
+        edit_collection(store, original, source=forged)
+    assert store.get(original.preparation_id) == original

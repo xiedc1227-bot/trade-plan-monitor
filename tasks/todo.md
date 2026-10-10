@@ -9,6 +9,8 @@ RP-T02 is complete: distinct v2 source/schedule/input codecs preserve v1 boundar
 
 RP-T03 is complete and RP-C01 passes: one private session traverses reviewed versions through the shared activation transaction, retains account/risk state, closes old ordinary intents and records context mismatches without inventing trades. Independent review corrected duplicate source snapshot identities and expired-event authority. 64 focused runtime/account/cycle/report/fixture/legacy checks pass, including 10 switch cases; deliberate removal of ordinary-intent closure fails and exact bytes are restored. Ruff and diff checks pass. **3 of 20 repair tasks complete.** Next: RP-T04. End-to-end preparation, publication and UI acceptance remain pending.
 
+RP-T04 is complete: v2 ordered items share the existing tagged document store, preserve v1 records/receipts, enforce source and predecessor bindings, and invalidate only the changed suffix. Exact whole-chain review bindings and UNKNOWN/cancelling exclusion are checked. Independent review corrected constructed-source validation before persistence. 91 store/input checks pass; removing predecessor-base validation causes the expected failure and original bytes are restored. Ruff and diff review pass. **4 of 20 repair tasks complete.** Next: RP-T05. Sequential extraction and freezing remain RP-T07/RP-T08.
+
 ## RP-TASK-RULES. Execution boundary
 
 2026-10-10 parity erratum: the Chinese historical ML-T35/ML-T36 file counts are corrected to 5/6, matching their existing exact file lists and the English record. Historical completion and verification evidence are unchanged.
@@ -45,7 +47,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T04. Persist ordered preparation items
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T01; **Acceptance:** RP-A01, RP-A03, RP-A10.
 - **Allowed files:** `src/trade_plan_monitor/backtest/preparation_models.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_store.py`; `tests/unit/test_monitor_loop_input.py`.
 - **Result:** Store a v2 item collection and dependency/revision bindings inside the existing document table; enforce limits/idempotency and descendant invalidation; preserve old records/receipts.
