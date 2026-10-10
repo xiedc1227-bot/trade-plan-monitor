@@ -104,3 +104,7 @@ WebSocket 联合类型增加 `market.index.updated`，准确字段为 `entityId`
 - 先确认：增加接口/字段/事件、浏览器 store、图表计算或新展示结论。
 - 禁止：让 Vue 映射股票、计算指标/条件、推断交易影响、隐藏故障指数或暴露密钥。
 - 用户能够把显示的计划影响追溯到准确路径和快照；没有指数叶子的计划行为不变。
+
+## ICDR20261009 收市展示修复
+
+已接受的 [index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) ICDR05–ICDR06 新增只供展示的 `GET /api/v1/market-indexes/overview`、`schemaVersion=1`。一次本地读取事务返回固定顺序的四张卡片，每张最多 48 根行情，总量不超过 512 KiB，并分别返回交易时段与最近采集事实。正常 v2 总览使用一致信封；既有 dashboard/detail/history DTO 及签名游标保持不变。CLOSED + CURRENT 显示“已收市”；不完整／缓存／待核验数据保留真实状态与原始截止时间。后续失败诊断不抹除有效收市点位。展示回退不赋予计划或提醒资格。

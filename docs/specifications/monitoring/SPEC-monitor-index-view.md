@@ -104,3 +104,7 @@ Route views remain composition surfaces. Readonly generated types flow down thro
 - Ask first: add an endpoint/field/event, browser store, chart calculation, or new display conclusion.
 - Never: let Vue map symbols, compute indicators/conditions, infer trade effects, hide failed indices, or expose secrets.
 - The user can trace displayed plan impact to an exact path and snapshot while a plan with no index leaf remains behaviorally unchanged.
+
+## ICDR20261009 Closed-session display repair
+
+The accepted [index-close-display-repair](SPEC-index-close-display-repair.md), ICDR05–ICDR06, adds `GET /api/v1/market-indexes/overview`, `schemaVersion=1`, as a display-only resource. It returns exactly four cards in fixed order, at most 48 bars each and 512 KiB overall, plus separate exchange-session and latest-acquisition facts from one local read transaction. The normal v2 overview uses this coherent envelope; existing dashboard/detail/history DTOs and signed cursors stay unchanged. CLOSED + CURRENT renders 已收市; incomplete/cached/unverified data retains its honest status and original cutoff. Later failure diagnostics never erase a valid closed quotation. No display fallback grants plan or alert authority.

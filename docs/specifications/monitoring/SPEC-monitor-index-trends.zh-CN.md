@@ -8,7 +8,7 @@
 
 **已实施——用户已授权实施。** 本文档记录已交付范围与验证边界；不授权超出该范围的供应商配置、API、依赖、推送或部署变更。
 
-2026-09-30 保留功能修正：`web/src/runtime-status/DashboardView.vue` 中正常 monitor-contract `2` 入口在运行状态面板旁保留本规格既有的四指数图表及成交额区域。复用 `MarketIndexDataStrip.vue`、`useDashboardMarketIndexTrends.ts`，通过注入的 fetch 上下文读取既有历史 API；保留缓存/断连及空数据展示。这是修复遗漏的 UI 接线，不改变采集、行情源语义、交易规则或四步恢复方案。
+2026-09-30 保留功能修正：`web/src/runtime-status/DashboardView.vue` 中正常 monitor-contract `2` 入口在运行状态面板旁保留本规格既有的四指数图表及成交额区域。当时复用 `MarketIndexDataStrip.vue`、`useDashboardMarketIndexTrends.ts` 及既有历史 API。2026-10-09 已授权的收市修复将正常 v2 指数区域切换为 `useMarketIndexOverview.ts` 和 `/api/v1/market-indexes/overview`；保留缓存/断连及空数据展示。这是修复遗漏的 UI 接线，不改变采集、行情源语义、交易规则或四步恢复方案。
 
 ## 目标
 
@@ -28,7 +28,7 @@
 ### 首版包含
 
 - 在总览标题下方、监控计数上方放置固定的四指数切换行和一个共享图表面板。由于应用外壳已统一负责全局实时传输状态，总览不再渲染独立连接状态条。
-- 只显示当前交易日，不提供时间范围选择器。
+- 只显示一个后端选定的交易日，不提供时间范围选择器。开盘前及非交易日显式显示上一可信交易日日期；未知日历不宣称当日完整。
 - 当日走势只使用已认证完成的 `FIVE_MINUTE` 收盘点位。
 - 每个切换项显示指数名和带符号涨跌；选中面板显示代码、当前/最高/最低点位、返回 K 线成交额合计、昨收、数据截止、健康状态和一张大折线图。
 - 尚无指数 K 线时，四个切换项仍然可见，当前选中指数显示带标签的空走势图区域，不得消失。
@@ -40,7 +40,7 @@
 
 - 用户自选指数、北证50、行业/主题指数、成分股聚合、K 线/成交量视图、技术指标、历史范围切换、跨指数归一化、比较排名、大盘结论和交易信号。
 - 浏览器端收益率、SMA、条件或策略计算。
-- 新供应商端点或新的公共 Web API 契约。
+- 新供应商端点。公共 API 的唯一已授权扩展为下述只读 overview 资源；不改变既有 DTO。
 
 ## 技术栈、命令与项目结构
 
@@ -101,15 +101,13 @@ web/tests/e2e/dashboard.spec.ts
 
 `rt_idx_min_daily` 继续作为热路径，在每个已完成五分钟截止刷新。上一交易时段的 `idx_mins` 数据帧和盘中的 `index_daily` 参考数据帧在同一交易日内保持稳定，因此供应商按指数与交易日期各缓存一份已校验原始数据帧，并在后续截止使用防御性副本。`15:00` 及之后的 `index_daily` 绕过盘中缓存，确保官方收盘校正始终执行新的供应商读取。该策略不改变端点或数据语义，同时让正常指数在每日预热之后，从每个截止三次供应商调用降为一次热请求，另加官方收盘刷新。
 
-### 复用现有 API
+### 一致的 overview 读取及兼容 API
 
-不需要增加端点或响应字段：
+2026-10-09 已接受 [index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) ICDR05–ICDR06。正常 monitor-contract `2` 总览使用 `GET /api/v1/market-indexes/overview`、`schemaVersion=1`：一次本地只读事务返回固定四指数、交易时段、展示完整性、最近采集和对齐成交额。每卡最多 48 根行情，总响应最多 512 KiB；点位、涨跌幅、最高／最低／金额与曲线来自同一不可变快照。完整收市显示“已收市”；缺尾或内部缺口显示“已收市 · 数据待补齐”；后续采集失败另行提示。未知来源保留缓存，缺昨收不编造涨跌幅。
 
-- 摘要与权威健康：现有 `DashboardResponse.marketIndexes`。
-- 走势 K 线：现有 `GET /api/v1/market-indexes/{indexCode}/bars`。
-- 刷新：新的总览快照或原生重试触发当日指数数据的受限重新获取。
+`useMarketIndexOverview.ts` 同时最多一个读取，合并既有失效／sequence／时段观察；代次及序列保护丢弃过时响应，失败时保留整个先前信封并标记缓存，不拼接新摘要与旧曲线。默认选择上证指数；缺失柱使曲线断开，正常午休不视为缺口。不新增浏览器行情源轮询。
 
-总览连接为 `CONNECTED` 时，浏览器针对上海当前交易日最多并发四个走势请求。每个查询使用 `interval=FIVE_MINUTE` 和 `limit=64`，低于现有端点的 `2,000` 点限制。请求接受带零到六位小数秒的规范 `Asia/Shanghai` 时间戳，使用 `AbortController` 和请求代次保护，并且不自动翻页。
+既有 `DashboardResponse.marketIndexes`、`GET /api/v1/market-indexes/{indexCode}/bars` 和签名历史语义保持兼容。仅兼容 v1 入口继续使用 `useDashboardMarketIndexTrends.ts` 的四个有界历史请求（`interval=FIVE_MINUTE`、`limit=64`，端点上限 `2,000`）；不自动翻页。不支持新接口时显示版本更新提示。
 
 ## Vue 组件与状态设计
 
@@ -120,7 +118,8 @@ web/tests/e2e/dashboard.spec.ts
 | `MarketIndexTrendCard.vue` | 渲染选中指数的摘要和图表状态 | identity、快照、K 线、加载、错误的类型化 props |
 | `MarketIndexSparkline.vue` | 渲染准确 K 线时间/收盘坐标和标注 | 不发请求，不包含健康策略、指标或交易推断 |
 | `marketIndexChartOptions.ts` | 计算包含 K 线与昨收并留有边距的 Y 轴范围 | 纯有限数字输入和不可变范围输出 |
-| `useDashboardMarketIndexTrends.ts` | 构建固定当日请求、获取四页数据、刷新时保留成功状态并取消旧代次 | 返回只读、按代码组织的 `IDLE|LOADING|READY|EMPTY|ERROR` 状态 |
+| `useMarketIndexOverview.ts` | 一次读取四指数／时段信封、原子替换、合并失效及取消旧代次 | 只读 overview／cached／error 状态 |
+| `useDashboardMarketIndexTrends.ts`（兼容 v1） | 构建固定当日请求、获取四页数据、刷新时保留成功状态并取消旧代次 | 返回只读、按代码组织的 `IDLE|LOADING|READY|EMPTY|ERROR` 状态 |
 
 风格示例：
 
@@ -169,8 +168,8 @@ const selectedIdentity = computed(() =>
 
 ## 性能与经济性约束
 
-- 四个请求并行且有上限；组件卸载或收到更新的失效代次时取消旧请求。
-- 同一视图刷新进行时按代码保留最后成功页；当日查询绝不请求历史翻页。
+- 正常 v2 使用一个有界 overview 读取并合并失效；兼容 v1 最多四个并行历史读取。组件卸载或失效代次更新时取消旧请求。
+- 正常 v2 刷新时原子保留最后成功信封；兼容 v1 按代码保留成功页。两者均不自动历史翻页。
 - 仅注册本功能需要的 ECharts `LineChart`、`CanvasRenderer`、`GridComponent`、`MarkLineComponent`、`TooltipComponent` 和 `AriaComponent`。
 - 不增加图表依赖；复用已安装的 ECharts。
 - 目标：本地验证中，总览数据就绪后，四个切换项和首张缓存/fixture 图在 `500 ms` 内稳定。
@@ -213,3 +212,7 @@ const selectedIdentity = computed(() =>
 ## 待解决问题
 
 无。“两创”定义为 `创业板指 (399006.SZ)` 与 `科创50 (000688.SH)`，用户已将首版限制为仅显示当前交易日。
+
+## ICDR20261009 收市展示修复
+
+实现与验收以 [index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) ICDR01–ICDR10 为准。此扩展仅修改正常 v2 总览的指数读取和时段显示、有效引用持久化以及最终桶补查。计划评估资格、普通频率、供应商权限、既有 API DTO 和成交额公式保持不变。新增浏览器验收为 `web/tests/e2e/index-close-display.spec.ts`，同时核对摘要点位与 ECharts 实际末点。

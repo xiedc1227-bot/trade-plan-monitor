@@ -99,3 +99,7 @@ Provider name, raw response ordering, cache hits, plan ids, operational timings,
 - Ask first: verify/enable a provider, change formulas, health semantics, hash domains, or cache identity.
 - Never: produce a universal market conclusion, hidden trade gate, industry index, synthetic index, unfinished bucket, future fact, or token-bearing diagnostic.
 - One `(indexCode, cutoff, requestSet)` yields one byte-stable snapshot; monitoring and replay use these same models, formulas, and hashes.
+
+## ICDR20261009 Closed-session display repair
+
+The accepted [index-close-display-repair](SPEC-index-close-display-repair.md), ICDR03–ICDR04/ICDR07–ICDR08, makes the existing success-retention rule durable. Exact-key `LIVE` data survives later failed/stale/gapped attempts; a later valid correction is ordered by capture time rather than numeric provider revision. Immutable snapshots and plan inputs keep the attempted outcome. `market_index_acquisition_state` stores bounded sanitized latest-attempt metadata and source provenance separately. Migration `0025_index_close_display` adds it and typed recovery storage; startup repair only restores validated same-key captures and preserves decision references. Ordinary transient recovery remains 30/60/120 seconds; final-target supplements share at most 3 starts through target +5 minutes, including reason changes and restarts. No provider endpoint, permission, formula or hash domain changes.

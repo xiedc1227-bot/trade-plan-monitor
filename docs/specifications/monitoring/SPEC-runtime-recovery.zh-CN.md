@@ -254,3 +254,7 @@ runtime/reconciliation.py 和 runtime/recovery_targets.py 中的小型类型化�
 ## 来源
 
 [Python 3.14 任务取消](https://docs.python.org/3.14/library/asyncio-task.html) 与 [SQLAlchemy 事务边界](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html) 用于自有任务清理和本地原子持久化，不用于定义业务语义。
+
+## ICDR20261009 收市展示修复
+
+已接受的 [index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) ICDR07 通过既有串行恢复到期机制，补齐 11:30 与 15:00 的指数展示末尾行情。末端缺失按 +72/+132/+252 秒补查，目标后 +5 分钟之前最多 3 次物理启动。最终目标耗尽预算保留到过期，原因变化及重启不能重置；普通临时失败 30/60/120 秒保持不变。较晚或较慢请求完成后至少 60 秒才允许下一次补查，不能集中补发。沿用权限、冷却、物理排空、配置／来源／代次及提交保护。恢复仅发布指数事实／失效事件，不重放已完成计划或提醒。保留 15:20/16:00/17:00 核对。

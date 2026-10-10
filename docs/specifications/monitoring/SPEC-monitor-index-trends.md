@@ -8,7 +8,7 @@
 
 **IMPLEMENTED — user authorized implementation.** This document records the delivered scope and validation boundary. It does not authorize provider-profile, API, dependency, push, or deployment changes outside that scope.
 
-2026-09-30 preservation correction: the normal monitor-contract `2` entry in `web/src/runtime-status/DashboardView.vue` retains this existing four-index chart and turnover area alongside the runtime-status board. It reuses `MarketIndexDataStrip.vue`, `useDashboardMarketIndexTrends.ts` and the existing history API through the supplied fetch context; cached/disconnected and empty-data presentation remain intact. This repairs an omitted UI integration without changing acquisition, provider semantics, trading rules or the four-stage recovery plan.
+2026-09-30 preservation correction: the normal monitor-contract `2` entry in `web/src/runtime-status/DashboardView.vue` retains this existing four-index chart and turnover area alongside the runtime-status board. At that time it reused `MarketIndexDataStrip.vue`, `useDashboardMarketIndexTrends.ts` and the existing history API. The authorized 2026-10-09 close repair switches the normal v2 index strip to `useMarketIndexOverview.ts` and `/api/v1/market-indexes/overview`; cached/disconnected and empty-data presentation remain intact. This repairs an omitted UI integration without changing acquisition, provider semantics, trading rules or the four-stage recovery plan.
 
 ## Objective
 
@@ -28,7 +28,7 @@ The four index selectors are always present, independent of which boards are ref
 ### Included in the first version
 
 - A fixed four-index selector row and one shared chart panel below the overview header and above monitor counts. The overview renders no standalone connection strip because the app shell already owns the global real-time transport status.
-- One fixed current-trading-day view with no range selector.
+- One backend-selected trading-day view with no range selector. Preopen and non-trading dates explicitly show the previous trusted trading date; unknown calendars never claim current-day completeness.
 - The current-day trend uses certified completed `FIVE_MINUTE` closes only.
 - Every selector shows the index name and signed change. The selected panel shows code, current/high/low points, aggregated returned-bar turnover, prior close, data cutoff, health, and one large line chart.
 - When no index bars exist yet, all four selectors remain visible and the selected index renders an empty labelled chart area instead of disappearing.
@@ -40,7 +40,7 @@ The four index selectors are always present, independent of which boards are ref
 
 - User-selected indices, BSE 50, industry/theme indices, constituent aggregation, candlestick/volume views, technical indicators, historical range switching, cross-index normalization, comparison ranking, market conclusions, and trading signals.
 - Browser-side return, SMA, condition, or policy calculations.
-- New provider endpoints or a new public Web API contract.
+- New provider endpoints. The sole authorized public API extension is the read-only overview resource below; existing DTOs are unchanged.
 
 ## Tech Stack, Commands, and Project Structure
 
@@ -101,15 +101,13 @@ The source does not call Tushare and does not turn a historical query into a pro
 
 `rt_idx_min_daily` remains the hot path and is refreshed at each completed five-minute cutoff. The previous-session `idx_mins` frame and the intraday `index_daily` reference frame are stable for the trading day, so the provider caches one validated raw frame per index and trade date and reuses defensive copies during later cutoffs. At or after `15:00`, `index_daily` bypasses the intraday cache so official-close reconciliation always performs a fresh provider read. This changes no endpoint or data semantics while reducing a normal index from three provider calls per cutoff to one hot request after its daily warm-up, plus the official-close refresh.
 
-### Existing API reuse
+### Coherent overview read and compatibility APIs
 
-No new endpoint or response field is required:
+The 2026-10-09 [index-close-display-repair](SPEC-index-close-display-repair.md), ICDR05–ICDR06, is accepted. The normal monitor-contract `2` overview uses `GET /api/v1/market-indexes/overview`, `schemaVersion=1`: one local readonly transaction returns four fixed indexes, session, display completeness, latest acquisition and aligned turnover. Each card has at most 48 bars and the whole response at most 512 KiB; point, change, high/low/amount and line come from one immutable snapshot. Complete closed data renders 已收市; a missing tail or internal gap renders 已收市 · 数据待补齐; later failure is secondary. Unknown source retains cached presentation; missing prior close never invents a return.
 
-- Summary and authoritative health: existing `DashboardResponse.marketIndexes`.
-- Trend bars: existing `GET /api/v1/market-indexes/{indexCode}/bars`.
-- Refresh: a newer dashboard snapshot or native retry triggers a bounded refetch of the current-day index data.
+`useMarketIndexOverview.ts` permits one read in flight and coalesces existing invalidation/sequence/session observations. Generation and sequence guards discard old responses; failure retains the whole previous envelope as cached instead of combining a new summary with an old line. SSE remains the default; missing bars break the line, while normal lunch is not a gap. No browser provider polling is added.
 
-The browser issues at most four concurrent trend requests for the current Shanghai trading day while the dashboard connection is `CONNECTED`. Each query uses `interval=FIVE_MINUTE` and `limit=64`, below the existing `2,000`-point endpoint limit. Requests accept canonical `Asia/Shanghai` timestamps with zero to six fractional-second digits, use `AbortController` and generation guards, and do not paginate automatically.
+Existing `DashboardResponse.marketIndexes`, `GET /api/v1/market-indexes/{indexCode}/bars` and signed history semantics stay compatible. Only the compatibility v1 entry continues using four bounded history reads through `useDashboardMarketIndexTrends.ts` (`interval=FIVE_MINUTE`, `limit=64`, endpoint bound `2,000`), without automatic pagination. An unsupported new endpoint shows an update/version message.
 
 ## Vue Component and State Design
 
@@ -120,7 +118,8 @@ The browser issues at most four concurrent trend requests for the current Shangh
 | `MarketIndexTrendCard.vue` | Render the selected index's summary and chart state | Typed props for identity, snapshot, bars, loading, error |
 | `MarketIndexSparkline.vue` | Render exact bar time/close coordinates and annotations | No requests, health policy, indicators, or trade inference |
 | `marketIndexChartOptions.ts` | Calculate a padded Y-axis extent containing bars and prior close | Pure finite-number input and immutable bounds output |
-| `useDashboardMarketIndexTrends.ts` | Build fixed current-day queries, fetch four pages, retain successful state during refresh, cancel stale generations | Returns readonly per-code `IDLE|LOADING|READY|EMPTY|ERROR` state |
+| `useMarketIndexOverview.ts` | Read one four-index/session envelope, replace atomically, coalesce invalidations and cancel old generations | Readonly overview/cached/error state |
+| `useDashboardMarketIndexTrends.ts` (compatibility v1) | Build fixed current-day queries, fetch four pages, retain successful state during refresh, cancel stale generations | Returns readonly per-code `IDLE|LOADING|READY|EMPTY|ERROR` state |
 
 Style example:
 
@@ -169,8 +168,8 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 
 ## Performance and Economic Constraints
 
-- Four requests are parallel and capped; unmounting or a newer invalidation generation cancels obsolete requests.
-- Retain the last successful page per code while a same-view refresh is in flight; a current-day query never requests historical pagination.
+- Normal v2 uses one bounded overview read with coalesced invalidations; compatibility v1 permits at most four parallel history reads. Unmounting or a newer invalidation generation cancels obsolete requests.
+- Normal v2 atomically retains the last successful envelope during refresh; compatibility v1 retains pages per code. Neither automatically paginates history.
 - Register only ECharts `LineChart`, `CanvasRenderer`, `GridComponent`, `MarkLineComponent`, `TooltipComponent`, and `AriaComponent` needed by the feature.
 - Do not add a charting dependency. Reuse the installed ECharts package.
 - Target: the four selectors and first cached/fixture chart become stable within `500 ms` after dashboard data is available in local verification.
@@ -184,7 +183,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 
 ## Boundaries
 
-- **Always:** show all four identities as selectors, source cutoff, health, “current trading day,” chart tooltip values, and isolated errors; reuse validated bars and existing contracts.
+- **Always:** show all four identities as selectors, source cutoff, health, explicit display date, chart tooltip values, and isolated errors; reuse validated bars and existing contracts.
 - **Ask first:** change the four-code list, add a historical range, change interval/refresh cadence, endpoint/schema, provider quota profile, or add a calculated/interpretive annotation.
 - **Never:** synthesize missing points, use unfinished quotes, normalize/compare raw point levels, hide a failed index, infer market strength, alter plan decisions, or render provider error text.
 
@@ -213,3 +212,7 @@ Source state stays minimal. Display ordering and status copy are derived with `c
 ## Open Questions
 
 None. “两创” is defined as `创业板指 (399006.SZ)` and `科创50 (000688.SH)`, and the user has limited the first version to the current trading day only.
+
+## ICDR20261009 Closed-session display repair
+
+Implementation and acceptance follow [index-close-display-repair](SPEC-index-close-display-repair.md), ICDR01–ICDR10. This extension only changes the normal v2 overview index read/session display, durable effective-head selection and final-bucket supplements. Plan eligibility, normal cadence, provider permissions, existing API DTOs and turnover formulas remain unchanged. The new browser acceptance is `web/tests/e2e/index-close-display.spec.ts`; it compares the headline point with the actual ECharts endpoint.

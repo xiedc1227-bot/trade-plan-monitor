@@ -254,3 +254,7 @@ Always enforce scoped exact evidence and stale-alert safety. Ask before changing
 ## Sources
 
 [Python 3.14 task cancellation](https://docs.python.org/3.14/library/asyncio-task.html) and [SQLAlchemy transaction boundaries](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html) inform owned task cleanup and atomic local persistence, not business semantics.
+
+## ICDR20261009 Closed-session display repair
+
+The accepted [index-close-display-repair](SPEC-index-close-display-repair.md), ICDR07, adds index-display final-bucket recovery at 11:30 and 15:00 using the existing serial recovery deadline. Missing-tail targets receive supplements at +72/+132/+252 seconds, at most 3 physical starts before target +5 minutes. Final targets keep an exhausted budget record until expiry across reason changes and restart; ordinary transient 30/60/120-second scheduling is preserved. Late or slow work schedules the next supplement at least 60 seconds after completion, without a burst. Existing permission, cooldown, physical-drain, configuration/source/generation and commit gates apply. Recovery only publishes index facts/invalidation, never replays completed plans or alerts. Existing 15:20/16:00/17:00 reconciliation remains.

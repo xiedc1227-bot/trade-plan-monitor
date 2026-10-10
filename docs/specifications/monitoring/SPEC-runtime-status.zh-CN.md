@@ -323,3 +323,7 @@ Cache-Control: no-store
 当前 `ConditionPlanEntryView` 公开 `planFamily=CONDITION_PLAN`、`availability=CURRENT|CACHED` 与 `planRuntime`。代码、计划哈希、版本和启用修订须与活动计划准确匹配。`currentActionable=true` 要求 `CURRENT` 且 `scope.readOnly=false`。已提交完成证明绑定 generation/configuration、最新已完成目标、日历及所有已消费原文/事实/状态依赖。GET 不调用供应商、不写业务数据，只重新校验本地权威事实；权威缺失或变更时，判断保持缓存和只读。仅含审核事实的确认仍使用声明周期选择目标。
 
 后端 OpenAPI 与前端类型一起生成；各监控版本具有各自严格解析器/检查门禁。匹配的后端与带哈希前端资源须一起部署。离线验收使用真实组合、临时数据库、假 SDK/渠道及受控时钟，覆盖协商、重启与完成证明失效。截图不能单独证明权威性。真实供应商验收、用户数据库迁移及部署仍是独立操作。
+
+## ICDR20261009 收市展示修复
+
+已接受的 [index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) 是集中的展示扩展，不修改 monitor contract `2`、范围就绪、计划资格或失效事件流。正常总览指数区域通过既有协商 fetch 上下文及已提交 sequence/generation 保护读取 `/api/v1/market-indexes/overview`。后端日历／时段、展示完整性和最近采集是独立事实。刷新失败保留整个信封并标记缓存，不将展示数据提升为计划结果。既有心跳及失效观察触发合并读取，同时最多一个请求，不新增行情源轮询。

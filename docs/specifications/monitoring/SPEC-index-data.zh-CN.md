@@ -99,3 +99,7 @@ tests/integration/test_market_index_snapshots.py
 - 先确认：验证/启用供应商、修改公式、健康语义、哈希域或缓存身份。
 - 禁止：统一市场结论、隐藏交易门槛、行业指数、合成指数、未完成周期、未来事实或包含 token 的诊断。
 - 同一 `(indexCode, cutoff, requestSet)` 产生一份字节稳定快照；监控和回放使用相同模型、公式和哈希。
+
+## ICDR20261009 收市展示修复
+
+已接受的 [index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) ICDR03–ICDR04/ICDR07–ICDR08 将既有成功保留规则落实到持久化。精确键的 `LIVE` 数据不被后续失败／陈旧／缺口覆盖；后续有效修订按采集时间排序，不按供应商修订号大小。不可变快照与计划输入仍保留实际尝试结果。`market_index_acquisition_state` 单独保存有界脱敏采集诊断及来源证明；迁移 `0025_index_close_display` 增加该表及恢复类型。启动修复只恢复同键已验证记录并保留决策引用。普通临时失败仍为 30/60/120 秒；最终目标在 +5 分钟内共享最多 3 次补充启动，涵盖原因变化及重启。不改变数据源接口、权限、公式或哈希域。
