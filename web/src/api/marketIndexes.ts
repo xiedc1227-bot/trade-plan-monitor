@@ -118,7 +118,7 @@ function isMarketIndexBarPage(
   );
 }
 
-function isMarketIndexBar(
+export function isMarketIndexBar(
   value: unknown,
   query: Readonly<MarketIndexHistoryQuery>,
 ): boolean {

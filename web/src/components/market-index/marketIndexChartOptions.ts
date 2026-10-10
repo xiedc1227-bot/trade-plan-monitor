@@ -7,7 +7,7 @@ export interface IndexAxisBounds {
 
 export interface MarketIndexChartPoint {
   readonly at: string;
-  readonly value: number;
+  readonly value: number | null;
 }
 
 export type MarketIndexDirection = "down" | "flat" | "up";
@@ -23,10 +23,23 @@ const openingBucketAt = /^(\d{4}-\d{2}-\d{2})T09:35:00(?:\.\d{1,6})?\+08:00$/;
 export function buildMarketIndexChartPoints(
   bars: readonly MarketIndexBarView[],
 ): readonly MarketIndexChartPoint[] {
-  const points = bars.flatMap((bar) => {
+  const available = bars.flatMap((bar) => {
     const value = Number(bar.closePoints);
     return Number.isFinite(value) ? [{ at: bar.barAt, value }] : [];
   });
+  const points: MarketIndexChartPoint[] = [];
+  for (const point of available) {
+    const previous = points.at(-1);
+    if (previous?.at.slice(0, 10) === point.at.slice(0, 10)) {
+      for (let at = Date.parse(previous.at) + 300_000; at < Date.parse(point.at); at += 300_000) {
+        const local = new Date(at + 28_800_000).toISOString().slice(0, 19);
+        const time = local.slice(11, 16);
+        if (time > "11:30" && time < "13:05") continue;
+        points.push({ at: `${local}+08:00`, value: null });
+      }
+    }
+    points.push(point);
+  }
   const firstBar = bars[0];
   if (firstBar === undefined || !Number.isFinite(Number(firstBar.closePoints))) {
     return points;

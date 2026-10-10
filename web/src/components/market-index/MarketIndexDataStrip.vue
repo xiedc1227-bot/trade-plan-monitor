@@ -5,8 +5,10 @@ import type {
   ConnectionStatus,
   MarketIndexSnapshotView,
   MarketTurnoverSummaryView,
+  MarketIndexOverviewResponse,
 } from "../../api/generated";
 import { dashboardMarketIndexIdentities } from "../../api/marketIndexIdentity";
+import { overviewItemSnapshot } from "../../api/marketIndexOverview";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
 import { marketIndexDirection } from "./marketIndexChartOptions";
 import MarketIndexTrendCard from "./MarketIndexTrendCard.vue";
@@ -17,6 +19,9 @@ interface Props {
   indexes: readonly MarketIndexSnapshotView[];
   marketTurnover?: MarketTurnoverSummaryView | null;
   trends: Readonly<Record<MarketIndexSnapshotView["indexCode"], DashboardMarketIndexTrend>>;
+  overview?: MarketIndexOverviewResponse | null;
+  overviewCached?: boolean;
+  overviewError?: string | null;
 }
 
 interface Emits {
@@ -30,8 +35,17 @@ const emit = defineEmits<Emits>();
 const defaultIdentity = dashboardMarketIndexIdentities[0];
 if (defaultIdentity === undefined) throw new Error("dashboard index identities cannot be empty");
 const summariesByCode = computed(() =>
-  new Map(props.indexes.map((item) => [item.indexCode, item] as const)),
+  new Map((props.overview === undefined ? props.indexes
+    : (props.overview?.indexes ?? []).flatMap(item => {
+      const snapshot = overviewItemSnapshot(item);
+      return snapshot === null ? [] : [snapshot];
+    })).map((item) => [item.indexCode, item] as const)),
 );
+const selectedItem = computed(() => props.overview === undefined ? undefined
+  : props.overview?.indexes.find(item => item.indexCode === selectedIndexCode.value) ?? null);
+const displayDate = computed(() => props.overview?.marketSession.displayTradeDate);
+const titleDate = computed(() => !props.overview || displayDate.value === props.overview.marketSession.sessionDate
+  ? "当日" : displayDate.value ?? "日期待确认");
 const selectedIndexCode = shallowRef(defaultIdentity.indexCode);
 const selectedIdentity = computed(
   () => dashboardMarketIndexIdentities.find(
@@ -54,7 +68,7 @@ function formatSessionChange(value: string | null | undefined): string {
 <template>
   <section class="index-strip" aria-labelledby="market-index-strip-title">
     <header class="index-strip__header">
-      <h2 id="market-index-strip-title">主要指数走势 · 当日</h2>
+      <h2 id="market-index-strip-title">主要指数走势 · {{ titleDate }}</h2>
       <p>已完成五分钟数据 · 虚线为昨收</p>
     </header>
     <div class="index-strip__surface">
@@ -81,11 +95,14 @@ function formatSessionChange(value: string | null | undefined): string {
           :identity="selectedIdentity"
           :summary="summariesByCode.get(selectedIdentity.indexCode) ?? null"
           :trend="trends[selectedIdentity.indexCode]"
+          :item="selectedItem"
+          :market-session="overview?.marketSession"
+          :cached="overviewCached"
         />
-        <MarketTurnoverCard :summary="marketTurnover">
-          <template v-if="trends[selectedIdentity.indexCode].status === 'ERROR'" #actions>
+        <MarketTurnoverCard :summary="overview === undefined ? marketTurnover : overview?.marketTurnover ?? null">
+          <template v-if="overviewError || trends[selectedIdentity.indexCode].status === 'ERROR'" #actions>
             <div class="index-strip__retry">
-              <p role="alert">{{ trends[selectedIdentity.indexCode].error }}</p>
+              <p role="alert">{{ overviewError ?? trends[selectedIdentity.indexCode].error }}</p>
               <button type="button" @click="emit('retryIndex', selectedIdentity.indexCode)">重试</button>
             </div>
           </template>

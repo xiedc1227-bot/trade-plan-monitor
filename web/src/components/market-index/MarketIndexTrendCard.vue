@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { ConnectionStatus, MarketIndexSnapshotView } from "../../api/generated";
+import type { ConnectionStatus, MarketIndexSnapshotView, MarketIndexOverviewItem, MarketSessionView } from "../../api/generated";
+import { overviewItemSnapshot } from "../../api/marketIndexOverview";
 import type { CanonicalMarketIndexIdentity } from "../../api/marketIndexIdentity";
 import type { DashboardMarketIndexTrend } from "../../composables/useDashboardMarketIndexTrends";
 import { marketIndexDirection, marketIndexValueDirection } from "./marketIndexChartOptions";
@@ -15,26 +16,34 @@ interface Props {
   };
   summary: MarketIndexSnapshotView | null;
   trend: DashboardMarketIndexTrend;
+  item?: MarketIndexOverviewItem | null | undefined;
+  marketSession?: MarketSessionView | undefined;
+  cached?: boolean | undefined;
 }
 
 const props = defineProps<Props>();
-const bars = computed(() => props.trend.page?.items ?? []);
+const summary = computed(() => props.item === undefined ? props.summary : overviewItemSnapshot(props.item));
+const bars = computed(() => props.item === undefined ? props.trend.page?.items ?? [] : props.item?.data?.bars ?? []);
 const lastValidBarAt = computed(() => bars.value.at(-1)?.barAt ?? null);
-const highPoints = computed(() => extrema("highPoints", Math.max));
-const lowPoints = computed(() => extrema("lowPoints", Math.min));
+const highPoints = computed(() => props.item === undefined ? extrema("highPoints", Math.max) : props.item?.data?.highPoints ?? null);
+const lowPoints = computed(() => props.item === undefined ? extrema("lowPoints", Math.min) : props.item?.data?.lowPoints ?? null);
 const currentDirection = computed(() => marketIndexValueDirection(
-  props.summary?.closePoints,
-  props.summary?.priorClosePoints,
+  summary.value?.closePoints,
+  summary.value?.priorClosePoints,
 ));
 const highDirection = computed(() => marketIndexValueDirection(
   highPoints.value,
-  props.summary?.priorClosePoints,
+  summary.value?.priorClosePoints,
 ));
 const lowDirection = computed(() => marketIndexValueDirection(
   lowPoints.value,
-  props.summary?.priorClosePoints,
+  summary.value?.priorClosePoints,
 ));
 const turnover = computed(() => {
+  if (props.item !== undefined) {
+    const amount = props.item?.data?.amount;
+    return amount == null ? "—" : `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(Number(amount) / 100_000_000)}亿`;
+  }
   const amounts = bars.value
     .map((bar) => bar.amount === null ? Number.NaN : Number(bar.amount))
     .filter(Number.isFinite);
@@ -57,25 +66,39 @@ const healthSymbols = Object.freeze({
   STALE: "!",
 } as const);
 const displayedHealthState = computed<keyof typeof healthSymbols>(() => {
-  if (props.summary === null) return "NONE";
-  if (props.summary.health === "LIVE" && props.connectionStatus !== "CONNECTED") {
+  if (props.item !== undefined) {
+    if (!props.item?.data) return "NONE";
+    if (props.cached || props.connectionStatus !== "CONNECTED" || props.item.dataStatus === "CACHED") return "CACHED";
+    return props.item.dataStatus === "CURRENT" ? "LIVE" : "STALE";
+  }
+  if (summary.value === null) return "NONE";
+  if (summary.value.health === "LIVE" && props.connectionStatus !== "CONNECTED") {
     return "CACHED";
   }
-  return props.summary.health;
+  return summary.value.health;
 });
 const displayedHealth = computed(() => {
-  if (props.summary === null) return "暂无快照";
+  if (props.item !== undefined) {
+    const phase = props.marketSession?.phase;
+    const prefix = phase === "CLOSED" ? "已收市" : phase === "BREAK" ? "午间休市" : phase === "PREOPEN" ? "未开市" : phase === "UNKNOWN" ? "时段待确认" : "";
+    const status = !props.item?.data ? "暂无行情" : displayedHealthState.value === "CACHED" ? "已缓存"
+      : props.item.dataStatus === "UNVERIFIED" ? "数据待核验" : props.item.dataStatus === "INCOMPLETE"
+        ? prefix ? "数据待补齐" : "数据待更新" : prefix ? "" : "实时";
+    return [prefix, status].filter(Boolean).join(" · ");
+  }
+  if (summary.value === null) return "暂无快照";
   if (displayedHealthState.value === "CACHED") return "已缓存";
-  return healthLabels[props.summary.health];
+  return healthLabels[summary.value.health];
 });
 const displayedHealthSymbol = computed(() => healthSymbols[displayedHealthState.value]);
-const shouldPulseLive = computed(() => displayedHealthState.value === "LIVE");
+const shouldPulseLive = computed(() => displayedHealthState.value === "LIVE" && (props.item === undefined || props.marketSession?.phase === "OPEN"));
 const healthSymbolKey = computed(() => {
-  if (shouldPulseLive.value) return props.summary?.snapshotHash ?? "live";
+  if (shouldPulseLive.value) return summary.value?.snapshotHash ?? "live";
   return displayedHealthState.value;
 });
 const chartLabel = computed(() => {
-  return `${props.identity.displayName}当日五分钟指数走势，最新点位 ${props.summary?.closePoints ?? "未知"}，涨跌 ${formatSessionChange(props.summary?.sessionChangeRatio ?? null)}，数据截止 ${formatDisplayDateTime(props.summary?.completedBucketAt ?? null, "未知")}，${displayedHealth.value}，虚线为昨收点位`;
+  const day = props.item === undefined ? "当日" : props.marketSession?.displayTradeDate ?? "所示日期";
+  return `${props.identity.displayName}${day}五分钟指数走势，最新点位 ${summary.value?.closePoints ?? "未知"}，涨跌 ${formatSessionChange(summary.value?.sessionChangeRatio ?? null)}，数据截止 ${formatDisplayDateTime(summary.value?.completedBucketAt ?? null, "未知")}，${displayedHealth.value}，虚线为昨收点位`;
 });
 
 function formatSessionChange(value: string | null): string {
@@ -152,10 +175,18 @@ function extrema(
       />
       <div v-if="bars.length === 0" class="market-index-trend-card__plot-empty">
         <span aria-hidden="true">— / —</span>
-        <p>{{ trend.status === 'LOADING' ? '正在加载当日走势' : '当日走势尚未就绪' }}</p>
+        <p>{{ item !== undefined ? '所示日期走势尚未就绪' : trend.status === 'LOADING' ? '正在加载当日走势' : '当日走势尚未就绪' }}</p>
         <small>已存点位与数据截止时间见下方</small>
       </div>
     </div>
+    <p
+      v-if="item?.latestAcquisition?.health === 'BLOCKED'"
+      class="market-index-trend-card__status"
+      role="status"
+    >最近更新失败{{ item.data ? '，保留已取得行情' : '，暂无已取得行情' }}。
+      <template v-if="item.latestAcquisition.nextRetryAt">下次补查 {{ formatDisplayDateTime(item.latestAcquisition.nextRetryAt) }}。</template>
+      问题：{{ item.latestAcquisition.issues.join('、') }}
+    </p>
     <p
       v-if="summary?.health === 'BLOCKED' && summary.issues.includes('PROVIDER_UNAVAILABLE')"
       class="market-index-trend-card__status"
@@ -183,7 +214,7 @@ function extrema(
     >
       当前时段暂无已完成的五分钟数据。
     </p>
-    <p v-else-if="bars.length === 0 && trend.status !== 'ERROR'" class="market-index-trend-card__status">当前暂无当日五分钟数据。</p>
+    <p v-else-if="bars.length === 0 && trend.status !== 'ERROR'" class="market-index-trend-card__status">{{ item !== undefined ? '所示日期暂无五分钟数据。' : '当前暂无当日五分钟数据。' }}</p>
     <dl class="market-index-trend-card__facts">
       <div>
         <dt>涨跌</dt>

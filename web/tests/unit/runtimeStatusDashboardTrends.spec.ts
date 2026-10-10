@@ -13,6 +13,7 @@ import { useRuntimeMonitorStore } from "../../src/runtime-status/store";
 import { createRuntimeMonitor } from "../../src/runtime-status/stream";
 import { isRuntimeDashboard, isRuntimeHealth } from "../../src/runtime-status/validators";
 import { emptyDashboard } from "../fixtures/runtimeStatus";
+import { overviewFixture } from "../fixtures/indexOverview";
 
 async function dashboard(withData: boolean) {
   const pinia = createPinia(); setActivePinia(pinia);
@@ -32,16 +33,24 @@ async function dashboard(withData: boolean) {
   store.setTransport(withData ? "LIVE" : "DISCONNECTED");
   const fetchImplementation: typeof fetch = vi.fn(async input => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
-    const indexCode = url.pathname.split("/")[4];
-    return new Response(JSON.stringify({
-      hasMore: false, limit: 64, nextCursor: null, snapshotHash: "b".repeat(64),
-      items: ["09:35", "10:10"].map(time => ({
-        amount: "100000000", barAt: `2026-09-14T${time}:00+08:00`, closePoints: "1010",
-        highPoints: "1012", indexCode, interval: "FIVE_MINUTE", lowPoints: "1000",
-        observedAt: base.observedAt, openPoints: "1005", providerRevision: 1,
-        sourceKind: "PROVISIONAL", volume: "100",
-      })),
-    }), { headers: { "Content-Type": "application/json" } });
+    expect(url.pathname).toBe("/api/v1/market-indexes/overview");
+    const overview = overviewFixture();
+    overview.observedAt = base.observedAt;
+    overview.sequence = base.sequence;
+    overview.runtimeGeneration = base.runtimeGeneration;
+    overview.marketSession = { phase: "OPEN", calendarStatus: "KNOWN", sessionDate: "2026-09-14", displayTradeDate: "2026-09-14", expectedBucketAt: "2026-09-14T10:10:00+08:00" };
+    for (const item of overview.indexes) {
+      item.latestAcquisition = null;
+      item.data = { snapshotHash: "a".repeat(64), observedAt: base.observedAt, completedBucketAt: overview.marketSession.expectedBucketAt!, sourceKind: "PROVISIONAL", closePoints: "1010", priorClosePoints: "1000", sessionChangeRatio: "0.01", highPoints: "1012", lowPoints: "1000", amount: "800000000",
+        bars: Array.from({ length: 8 }, (_, i) => { const minute = 575 + i * 5; return {
+          amount: "100000000", barAt: `2026-09-14T${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}:00+08:00`, closePoints: "1010",
+          highPoints: "1012", indexCode: item.indexCode, interval: "FIVE_MINUTE", lowPoints: "1000",
+          observedAt: base.observedAt, openPoints: "1005", providerRevision: 1,
+          sourceKind: "PROVISIONAL", volume: "100",
+        }; }),
+      };
+    }
+    return new Response(JSON.stringify(overview), { headers: { "Content-Type": "application/json" } });
   });
   const protocol = createMonitorProtocol({ origin: window.location.origin, validateHealth: isRuntimeHealth });
   const api = createRuntimeApi(protocol);
@@ -64,16 +73,15 @@ describe("normal v2 dashboard trend preservation", () => {
       expect(selectors.map(selector => selector.text())).toEqual([
         "上证指数+1.00%", "深证成指+1.00%", "创业板指+1.00%", "科创50+1.00%",
       ]);
-      expect(fetchImplementation).toHaveBeenCalledTimes(4);
+      expect(fetchImplementation).toHaveBeenCalledTimes(1);
       for (const call of vi.mocked(fetchImplementation).mock.calls) {
         const url = new URL(String(call[0]), window.location.origin);
-        expect(url.searchParams.get("limit")).toBe("64");
-        expect(url.searchParams.get("startAt")).toBe("2026-09-14T09:30:00+08:00");
-        expect(url.searchParams.get("endAt")).toBe(store.snapshot!.observedAt);
+        expect(url.pathname).toBe("/api/v1/market-indexes/overview");
+        expect([...url.searchParams]).toHaveLength(0);
         expect(call[1]?.method).toBe("GET");
       }
       expect(wrapper.get('[data-testid="market-index-health"]').text()).toContain("实时");
-      expect(wrapper.findComponent(MarketIndexSparkline).props("bars")).toHaveLength(2);
+      expect(wrapper.findComponent(MarketIndexSparkline).props("bars")).toHaveLength(8);
       await selectors[3]!.trigger("click");
       expect(wrapper.findComponent(MarketIndexSparkline).props("displayName")).toBe("科创50");
       expect(wrapper.text()).toContain("待机");
@@ -85,8 +93,8 @@ describe("normal v2 dashboard trend preservation", () => {
       expect(wrapper.findAll('[data-testid="market-turnover-card"]')).toHaveLength(1);
       store.setTransport("DISCONNECTED"); await flushPromises();
       expect(wrapper.get('[data-testid="market-index-health"]').text()).toContain("已缓存");
-      expect(wrapper.findComponent(MarketIndexSparkline).props("bars")).toHaveLength(2);
-      expect(fetchImplementation).toHaveBeenCalledTimes(4);
+      expect(wrapper.findComponent(MarketIndexSparkline).props("bars")).toHaveLength(8);
+      expect(fetchImplementation).toHaveBeenCalledTimes(1);
     } finally { wrapper.unmount(); }
   });
 
@@ -95,8 +103,8 @@ describe("normal v2 dashboard trend preservation", () => {
     try {
       expect(wrapper.findAll('[data-testid="market-index-selector"]')).toHaveLength(4);
       expect(wrapper.get('[data-testid="market-index-sparkline"]').attributes("role")).toBe("img");
-      expect(wrapper.text()).toContain("暂无快照");
-      expect(wrapper.text()).toContain("当前暂无当日五分钟数据");
+      expect(wrapper.text()).toContain("暂无行情");
+      expect(wrapper.text()).toContain("所示日期暂无五分钟数据");
       expect(wrapper.text()).toContain("暂无成交额数据");
       expect(fetchImplementation).not.toHaveBeenCalled();
     } finally { wrapper.unmount(); }

@@ -4,22 +4,23 @@ import { RouterLink } from "vue-router";
 import PageIntro from "../components/common/PageIntro.vue";
 import type { ConnectionStatus } from "../api/generated";
 import { resolveApiFetch } from "../api/context";
-import { createMarketIndexApi } from "../api/marketIndexes";
+import { createMarketIndexOverviewApi } from "../api/marketIndexOverview";
 import MarketIndexDataStrip from "../components/market-index/MarketIndexDataStrip.vue";
-import { useDashboardMarketIndexTrends } from "../composables/useDashboardMarketIndexTrends";
+import { emptyDashboardMarketIndexTrends } from "../composables/useDashboardMarketIndexTrends";
+import { useMarketIndexOverview } from "../composables/useMarketIndexOverview";
 import { useRuntimeContext } from "./context";
 import OverviewStatus from "./OverviewStatus.vue";
 import PlanRow from "./PlanRow.vue";
 const { store } = useRuntimeContext();
-const marketIndexes = computed(() => store.snapshot?.marketIndexes ?? []);
 const connectionStatus = computed<ConnectionStatus>(() =>
   store.transport === "LIVE" ? "CONNECTED" : store.transport === "CONNECTING" ? "UNKNOWN" : "DISCONNECTED",
 );
-const marketIndexTrends = useDashboardMarketIndexTrends({
-  api: createMarketIndexApi(resolveApiFetch()),
+const marketIndexOverview = useMarketIndexOverview({
+  api: createMarketIndexOverviewApi(resolveApiFetch()),
   connectionStatus,
-  observedAt: computed(() => store.snapshot?.observedAt ?? null),
-  summaries: marketIndexes,
+  observedAt: computed(() => store.observedAt),
+  runtimeGeneration: computed(() => store.snapshot?.runtimeGeneration ?? null),
+  sequence: computed(() => store.snapshot?.sequence ?? 0),
 });
 const counts = { actionable: "当前提醒", blocked: "受阻", stale: "陈旧", risk: "风险", lowZoneWatch: "低吸观察", normal: "正常" };
 </script>
@@ -35,10 +36,12 @@ const counts = { actionable: "当前提醒", blocked: "受阻", stale: "陈旧",
       <OverviewStatus v-if="store.runtimeStatus" :status="store.runtimeStatus" :live="store.transport === 'LIVE' && !store.error" :no-active-plans="store.snapshot !== null && !store.snapshot.symbols.length" />
       <MarketIndexDataStrip
         :connection-status="connectionStatus"
-        :indexes="marketIndexes"
-        :market-turnover="store.snapshot?.marketTurnover ?? null"
-        :trends="marketIndexTrends.trends.value"
-        @retry-index="marketIndexTrends.refresh($event)"
+        :indexes="[]"
+        :trends="emptyDashboardMarketIndexTrends"
+        :overview="marketIndexOverview.overview.value"
+        :overview-cached="marketIndexOverview.cached.value"
+        :overview-error="marketIndexOverview.error.value"
+        @retry-index="marketIndexOverview.refresh()"
       />
     </div>
     <p v-if="!store.snapshot" role="status">正在读取监控快照。</p>

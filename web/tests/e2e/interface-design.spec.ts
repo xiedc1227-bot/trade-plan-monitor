@@ -3,6 +3,7 @@ import { createServer, type ViteDevServer } from "vite";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { emptyDashboard, explicitDashboard, runtimeHealth } from "../fixtures/runtimeStatus";
+import { overviewFixture } from "../fixtures/indexOverview";
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 let server: ViteDevServer;
@@ -25,14 +26,23 @@ async function prepare(page: Page, active: boolean): Promise<void> {
   await page.route(`${origin}/api/v1/**`, async route => {
     const path = new URL(route.request().url()).pathname;
     expect(route.request().method()).toBe("GET");
-    expect(["/api/v1/dashboard", "/api/v1/health"]).toContain(path);
+    expect(["/api/v1/dashboard", "/api/v1/health", "/api/v1/market-indexes/overview"]).toContain(path);
+    const dashboard = active ? explicitDashboard() : emptyDashboard();
+    const overview = overviewFixture();
+    overview.runtimeGeneration = dashboard.runtimeGeneration;
+    overview.sequence = dashboard.sequence;
     await route.fulfill({
-      json: path.endsWith("/health") ? runtimeHealth() : active ? explicitDashboard() : emptyDashboard(),
+      json: path.endsWith("/health") ? runtimeHealth() : path.endsWith("/overview") ? overview : dashboard,
       headers: { "X-Monitor-Contract-Version": "2" },
     });
   });
   // An isolated transport keeps the presentation check independent of providers.
-  await page.routeWebSocket(`${origin.replace("http:", "ws:")}/ws/v1/monitor**`, () => {});
+  await page.routeWebSocket(`${origin.replace("http:", "ws:")}/ws/v1/monitor**`, socket => {
+    const dashboard = active ? explicitDashboard() : emptyDashboard();
+    socket.send(JSON.stringify({ type: "heartbeat", monitorContractVersion: 2,
+      observedAt: dashboard.observedAt, runtimeGeneration: dashboard.runtimeGeneration,
+      sequence: dashboard.sequence, runtimeStatus: dashboard.runtimeStatus }));
+  });
 }
 
 test("installed v2 overview keeps empty and active plans accessible at every design breakpoint", async ({ page }) => {

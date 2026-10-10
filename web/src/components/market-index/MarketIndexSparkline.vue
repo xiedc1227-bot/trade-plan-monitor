@@ -94,7 +94,7 @@ function buildOption(
   const points = buildMarketIndexChartPoints(bars);
   const priorClose = priorClosePoints === null ? null : Number(priorClosePoints);
   const values = points.map((point) => point.value);
-  const bounds = calculateIndexAxisBounds(values, Number.isFinite(priorClose) ? priorClose : null);
+  const bounds = calculateIndexAxisBounds(values.filter((value): value is number => value !== null), Number.isFinite(priorClose) ? priorClose : null);
   const trendColor = marketIndexDirectionColor(sessionChangeRatio);
   return {
     animation: false,
@@ -104,6 +104,7 @@ function buildOption(
       {
         areaStyle: { color: trendColor, opacity: 0.08 },
         data: values,
+        connectNulls: false,
         endLabel: {
           backgroundColor: trendColor,
           borderRadius: 2,
