@@ -33,11 +33,12 @@
 - [source-treatment-review](specifications/monitoring/SPEC-source-treatment-review.zh-CN.md) ([English](specifications/monitoring/SPEC-source-treatment-review.md))
 - [strategy-state（策略状态与持久化）](specifications/monitoring/SPEC-strategy-state.zh-CN.md) ([English](specifications/monitoring/SPEC-strategy-state.md))
 - [单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md) ([English](specifications/monitoring/SPEC-unified-plan.md))
+- [指数收市展示修复](specifications/monitoring/SPEC-index-close-display-repair.zh-CN.md) ([English](specifications/monitoring/SPEC-index-close-display-repair.md))
 
 ## 回测规格
 
-- [监控闭环回测方案 — DRAFT，待审阅](specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md) ([English](specifications/backtesting/PROPOSAL-monitor-loop-backtest.md))
-- 当前监控闭环实施：[方案](../tasks/plan.zh-CN.md)（[English](../tasks/plan.md)）与[任务](../tasks/todo.zh-CN.md)（[English](../tasks/todo.md)）；待实施。
+- [监控闭环回测设计（已实施）](specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md) ([English](specifications/backtesting/PROPOSAL-monitor-loop-backtest.md))
+- 当前监控闭环实施：[方案](../tasks/plan.zh-CN.md)（[English](../tasks/plan.md)）与[任务](../tasks/todo.zh-CN.md)（[English](../tasks/todo.md)）；实施及验收完成，结果见 MV18–MV46。
 - [统一计划历史回放](specifications/backtesting/SPEC-unified-replay.zh-CN.md) ([English](specifications/backtesting/SPEC-unified-replay.md))
 - [backtest-api](specifications/backtesting/SPEC-backtest-api.zh-CN.md) ([English](specifications/backtesting/SPEC-backtest-api.md))
 - [backtest-data](specifications/backtesting/SPEC-backtest-data.zh-CN.md) ([English](specifications/backtesting/SPEC-backtest-data.md))
@@ -58,11 +59,14 @@
 - [ADR 0005：版本化显式计划规则并保留历史含义](decisions/0005-version-explicit-plan-rules.zh-CN.md) ([English](decisions/0005-version-explicit-plan-rules.md))
 - [ADR 0006：使用有界服务端处理完成混合原文复核](decisions/0006-review-mixed-source-with-bounded-treatments.zh-CN.md) ([English](decisions/0006-review-mixed-source-with-bounded-treatments.md))
 - [ADR 0007：将恢复交付元数据与提醒身份分离](decisions/0007-separate-recovery-delivery-metadata.zh-CN.md) ([English](decisions/0007-separate-recovery-delivery-metadata.md))
+- [ADR 0008：使用专用线程隔离回测服务生命周期](decisions/0008-isolate-backtest-service-lifecycle.zh-CN.md) ([English](decisions/0008-isolate-backtest-service-lifecycle.md))
+- [ADR 0009：只准入一个未完成回测任务](decisions/0009-single-unfinished-backtest-task.zh-CN.md) ([English](decisions/0009-single-unfinished-backtest-task.md))
 
 ## 操作与约定
 
 - [Tushare 真实认证](operations/live-certification.zh-CN.md) ([English](operations/live-certification.md))
 - [当前计划回放使用指南](operations/unified-replay.zh-CN.md) ([English](operations/unified-replay.md))
+- [监控闭环回测操作指南](operations/monitor-loop-backtest.zh-CN.md) ([English](operations/monitor-loop-backtest.md))
 
 ## 指南
 
@@ -73,6 +77,8 @@
 - [统一计划回放验证](verification/2026-10-03-unified-replay.zh-CN.md) ([English](verification/2026-10-03-unified-replay.md))
 - [单一计划流程验证](verification/2026-10-03-unified-plan.zh-CN.md) ([English](verification/2026-10-03-unified-plan.md))
 - [回测生产 fake 验收](verification/backtest-acceptance.zh-CN.md) ([English](verification/backtest-acceptance.md))
+- [监控闭环回测验收](verification/monitor-loop-backtest.zh-CN.md) ([English](verification/monitor-loop-backtest.md))
+- [指数收市展示及相关监控修复验收](verification/2026-10-09-index-close-display-repair.zh-CN.md) ([English](verification/2026-10-09-index-close-display-repair.md))
 
 ## 维护规则
 

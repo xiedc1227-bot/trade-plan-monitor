@@ -2,111 +2,47 @@
 
 英文规范：[monitor-loop-backtest.md](monitor-loop-backtest.md)。更新于 2026-10-09，Asia/Shanghai。用户要求的本轮 20 项逐项验证、提交并推送；全部 37 个活动任务和 13 个检查点完成，取消的 ML-T06/ML-T09 与 ML-A07 保留历史编号。单计划、单个未完成任务及互斥操作要求保持。
 
-当前验收为 MV18–MV46：来源准备与完整审核冻结、一次截止时间、私有监测闭环、原子结算、原生因果结果、最新 30 次保留、惰性生命周期/服务控制及前端流程均已实现。MV43 保留四次负载失败、局部修正与通过原门槛的 Windows 600/600 秒实测；MV44 记录 58 项最终相关后端、935 项前端及 34 项真实 Chrome 流程通过，MV45 记录操作边界。MV46 按已提交源码隔离审阅两份接口、保留历史批准、完成 69 项契约检查与精确白名单破坏/恢复验证；此前两项审批失败已解决。共同进程和实测有节奏负载边界保持，不认证真实 AI/行情提供方、生产迁移或部署。以下历史原文和失败证据保留，不代表当前阻塞。
+当前验收为 MV18–MV46：来源准备与完整审核冻结、一次截止时间、私有监测闭环、原子结算、原生因果结果、最新 30 次保留、惰性生命周期/服务控制及前端流程均已实现。MV43 保留四次负载失败、局部修正与通过原门槛的 Windows 600/600 秒实测；MV44 记录 58 项最终相关后端、935 项前端及 34 项真实 Chrome 流程通过，MV45 记录操作边界。MV46 按已提交源码隔离审阅两份接口、保留历史批准、完成 69 项契约检查与精确白名单破坏/恢复验证；此前两项审批失败已解决。共同进程和实测有节奏负载边界保持，不认证真实 AI/行情提供方、生产迁移或部署。保留历史检查点编号及独有已执行证据；已被替代的过程叙述合并为摘要，不代表当前阻塞。
 
 ## MV01. 已实现边界
 
-ML-T30–ML-T32 定义无副作用生命周期值及有限观察预算，启动时登记未使用管理器，拆分元数据与执行能力，共用首次初始化，并拥有有界准备/元数据线程。取消等待者不会取消共用准备或物理查询。初始化较慢返回带 `Retry-After` 的 503；失败后须明确重试。仅执行初始化失败时，保留已健康的元数据读取并阻止执行；关闭时撤销该读取能力。晚到工作在清理期间继续受归属管理，替换须等待物理排空。用户明确授权了 `web/errors.py` 中允许 503 `Retry-After` 的窄改动。
-
-ML-T33 工作通过当前会话授权任务 ID 约束生产协调器。仅真正新建的耐久任务准入授予权限；重放旧回执或命中旧排队操作不授权。历史读取和执行就绪均保持积压休眠。明确选中恢复保留租约/领取代次，普通任务失败不降级健康服务。取消/发布保护仍由现有仓库执行。关闭超时保留物理 future/执行器，工作线程返回后继续清理。
-
-ML-T33 仍未勾选，等待用户决定过期历史 RUNNING/CANCEL_REQUESTED 任务是否继续占用既有单槽。ML-T34 仍待完成既有有限工作/存储防护回归及历史同步本地限速。2026-10-07 用户移除 AI 提取隔离阻塞项，并要求最小行情范围：不新增全局额度、正式容量预留或跨业务调度，不要求新增 AI/监测连接。原行情连接范围问题不再阻塞本项。ML-C12 和全部业务/UI/负载任务仍待完成。不新增回测 CLI、子进程或每线程硬 CPU/内存保证。
+历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。
 
 ## MV02. 已执行检查
 
-全部命令从 `trade-plan-monitor/` 执行；使用虚拟供应商和临时存储。不启动真实监控或付费供应商调用。
-
-| 检查 | 命令 | 实际结果 |
-|---|---|---|
-| 基线单元/契约 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m "not live"` | 2744 passed，4 deselected。 |
-| 更新后单元/契约 | `.venv/Scripts/python.exe -m pytest tests/unit tests/contract -q -m "not live"` | 最终能力修正后为 2758 passed，4 deselected。 |
-| ML-T30 | `.venv/Scripts/python.exe -m pytest tests/unit/test_backtest_service_contract.py -q -m "not live"` | 最初 11 passed；最终针对性检查包含全部 14 项案例。 |
-| 启动、归属与组合 | `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_startup_isolation.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_production_composition.py tests/integration/test_monitor_production_composition.py -q -m "not live"` | 新增元数据归属案例之前为 55 passed，1 skipped；新增案例在针对性 8 项检查中通过。 |
-| 恢复、协调器与任务 | `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_job_coordinator.py tests/integration/test_backtest_jobs.py tests/integration/test_backtest_production_composition.py -q -m "not live"` | 新增生产历史/过期领取案例之前为 61 passed，1 skipped；扩展后恢复文件的 5 项案例随后全部通过。 |
-| 最终能力与组合回归 | `.venv/Scripts/python.exe -m pytest tests/unit/test_backtest_service_contract.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_startup_isolation.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_production_composition.py tests/integration/test_monitor_production_composition.py -q -m "not live"` | 修正执行失败后元数据保留能力后为 76 passed，1 skipped。新增回归测试在修正前先失败。 |
-| 静态检查 | `.venv/Scripts/python.exe -m ruff check src tests scripts` | 通过。 |
-| 两组生成契约 | `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check` | canonical monitor v2 与 compatibility monitor v1 均通过；生成文件未变。 |
-| 授权变异 | 临时允许空授权集合领取任意排队任务，运行 `tests/integration/test_backtest_thread_recovery.py::test_scoped_claim_leaves_old_queue_dormant_and_selected_resume_is_explicit`。 | 测试按要求失败，已还原原始源码字节。 |
-
-基线选定集成检查为 97 passed、1 skipped，仅已有 OpenAPI 批准检查失败。扩大后的选定回归在最终执行失败元数据修正前为 281 passed、1 skipped，仅同一批准检查失败，用时 113.57 秒；随后受影响回归的结果已列于上表。这些检查不代表未实现验收项完成。保留现有 Starlette/httpx 弃用警告及平台跳过，不降低测试掩盖结果。
-
-扩大后的选定回归命令：
-
-```text
-.venv/Scripts/python.exe -m pytest tests/integration/test_unified_runtime.py tests/integration/test_unified_simulation_transactions.py tests/integration/test_unified_replay.py tests/integration/test_unified_replay_parity.py tests/integration/test_backtest_compatibility.py tests/integration/test_openapi_snapshot.py tests/integration/test_backtest_startup_isolation.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_production_composition.py tests/integration/test_monitor_production_composition.py tests/integration/test_backtest_job_coordinator.py tests/integration/test_backtest_jobs.py tests/integration/test_backtest_publication.py tests/integration/test_backtest_data_api.py tests/integration/test_backtest_job_api.py tests/integration/test_backtest_run_api.py tests/integration/test_backtest_exports.py -q -m "not live"
-```
+初期分项检查使用虚拟供应商及隔离临时存储，不运行真实监控或付费请求。阶段计数以 MV43／MV44／MV46 的最终已执行验收为准；可复现命令见 ML-O07。逐步原始记录保留于 Git 历史。
 
 ## MV03. 已有批准不一致
 
-`tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval` 在生命周期改动前后均失败。实际快照 SHA-256 为 `8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`；双语 `SPEC-unified-plan` 批准记录为 `4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255`。生成快照/类型仍与挂载路由一致，未改批准记录和测试。ML-T29 须审阅最终具体接口差异后才可更新批准摘要。
+历史 OpenAPI 审批测试面对实际 SHA-256 `8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`，双语审批记录却为 `4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255`，因此失败。没有静默更改审批来消除失败：MV12 及最终 MV46 记录具体接口审阅和保留的审批历史。这些历史哈希不是当前接口权限。
 
 ## MV04. 待完成证据与决策
 
-先解决过期历史活动领取行为，再推进依赖的 ML-T33 改动。在 ML-T34 回归既有有限工作/存储领域防护，实施本地固定同步限速，完成 ML-C12 后推进业务。全局额度设计、容量预留、共用预算认证及额外监测/AI 连接已从本范围移除。低频 AI 提取保留既有防护和批内顺序执行，不作为隔离阻塞项。服务控制路由及生成状态/UI 契约属于 ML-T35/ML-T39/ML-T36。
-
-尚未运行 Windows ML-T37 基线/负载阶段（各 10 分钟、各至少 1000 次状态请求）、p95/p99 门槛和完整故障矩阵。尚未开始页面改动或浏览器验证。原文准备、首份计划账户初始化、每日更新、确定性闭环回放及闭环原子发布仍待完成。同进程/原生崩溃、内存耗尽、磁盘竞争和不协作线程限制仍是已接受边界，不是已测量保证。
+历史过期领取、限速、控制、业务／界面及负载缺口已由 MV18–MV46 完成。共同进程原生崩溃、内存耗尽、磁盘竞争及不协作线程限制仍是接受的边界。付费 AI／供应商认证和生产部署不属于本验收。
 
 ## MV05. AI 决策与同步本地限速范围
 
-2026-10-07 用户确认 AI 提取不是资源隔离阻塞项。普通提取已具备单并发槽和幂等回执（`web/ai_service.py`），保留这些防护及准备批次的顺序执行。本次仅修改双语设计/任务记录，不接通供应商、不发真实请求、不改运行代码。
-
-`web/app.py` 中挂载的监测/回测工厂接收同一 `config_path`，各自使用配置的 Tushare 账号构造独立传输。历史同步按缺失股票/交易日循环获取分钟数据（`backtest/sync.py`），使用 `stk_mins`，并调用 `daily`、`trade_cal` 和 `stk_limit`（`market_data/tushare_historical.py`）；当前 inline 控制器直接调用供应商，没有节奏限制。监测已有有界优先/节奏控制，也使用这些参考接口（`runtime/production.py`、`runtime/request_control.py`）。这些发现支持批量同步的简单本地限速，不构成监测竞争的实测证据，也不作为共用额度框架的前置要求。
-
-[官方历史分钟文档](https://tushare.pro/document/2?doc_id=370) 当前标明每分钟 500 次、滚动 24 小时 300,000 次。[官方权限表](https://tushare.pro/document/2?doc_id=290) 分别列出历史与实时分钟权限。这些来源不能证明 `stk_mins` 与 `rt_min` 共用一个合并额度。尚未测量用户实际权限、更广额度范围、实际请求频率、限流及监测延迟影响。不据此推断额度耗尽，也不声明供应商额度隔离保证。
-
-收窄后的本项保留单活跃同步、外部请求开始之间的本地固定间隔（沿用已有 1.25 秒节奏值）、协作取消及既有超时/错误映射。不规划新增重试策略、全局额度池、容量预留、跨业务调度器、共用冷却、账号/接口注册表、动态分配、额度页面或通用准入模块。改动限定于 `backtest/sync.py` 及虚拟间隔/取消测试，正式监测和 AI 请求控制保留既有行为。移除计划中的 `backtest/capability_admission.py` 和 `tests/integration/test_backtest_provider_admission.py`，改用计划中的针对性 `tests/integration/test_backtest_sync_pacing.py`。本次为范围调整，不是实现证据。保留其他资源保护及既有离线负载阈值。
+2026-10-07 范围决定保留单个活动 AI 提取、幂等回执及顺序准备批次。历史同步保留单个活动任务、请求起点间本地 1.25 秒限速及协作取消。未引入全局配额池、容量预留、跨业务调度器、共享冷却、自适应分配或供应商隔离保证。不推断实际权限或共用配额范围。已实现限制维护于 ML-O06。
 
 ## MV06. 导出兼容与并行范围
 
-2026-10-07 用户确认导出只保留兼容，不新增开发。既有按运行 SUMMARY_JSON/FILLS_CSV 导出保留契约、字节、分块和断开行为。移除计划中的闭环导出支持/测试、新下载 UI、批量打包、导出任务/调度器及导出参与重型操作互斥要求。ML-T22 只新增分页闭环结果/明细 API，既有导出测试保留为兼容回归。浏览器/负载范围不增加导出流程。本次只修改双语设计/任务记录，未修改运行代码，也未新增应用测试结果。
-
-既有耐久任务仓库通过单活跃槽串行执行同步/验证/回放（`backtest/jobs/repository.py`）。全局准备/回放互斥原为减少并发 CPU/内存/磁盘压力而提出；尚未确认实测并行操作故障。按照最小范围方向，从本次范围移除额外互斥，不新增跨操作锁、队列或调度层。保留既有任务槽及批次级修订/冻结保护。同一批审核/冻结后才可回放属于输入前置条件。IP04 要求已提交不可变输入独立于可变准备，因此准备另一批与回放已冻结运行没有必然业务冲突。这不构成硬资源隔离保证，也不表示待完成准备流程已实现。
+2026-10-07 决定保留旧 `SUMMARY_JSON`／`FILLS_CSV` 契约、字节、分块及断连行为，不新增闭环导出、批量打包、导出任务或调度。此前全局准备／回放互斥提案已撤回；已实现流程以之后 MV45 的单个未完成任务准入及操作边界为准。不可变冻结前提及修订保护继续有效；不宣称硬资源隔离保证。
 
 ## MV07. 取消磁盘/日志预算与最新 30 个保留策略
 
-2026-10-07 用户因部署磁盘余量充足取消磁盘/日志预算，要求历史回测记录只保留 30 个，超额删除。从 ML-T34/ML-A23/ML17 移除保留/临时数据字节上限、日志额度/轮转开发及空闲容量准入阈值。普通存储错误处理及既有存储领域防护保留；后续存储决策移除新增深度文件身份检查。未检查或修改生产存储或日志配置。
-
-已授权结果策略合并所有支持模式/状态，总共保留最新 30 个 materialized 历史运行，按发布/保留时间及 run_id 降序。新结果发布后触发既有有界维护，删除最旧超额整份运行及其摘要/成交/详情。置顶不豁免总数上限。保留运行及任务保护共用快照/输入/数据集，排队/运行中任务及其暂存不是删除对象。既有任务/幂等及诊断/暂存过期规则不变。不新增调度器、额度框架或导出功能。此项归 ML-T21，不作为隔离前置条件。
-
-当前 `backtest/results.py` 使用 `_SUCCESS_DETAIL_RUNS = 100`、`_SUCCESS_DETAIL_DAYS = 90` 及 `_DIAGNOSTIC_DETAIL_DAYS = 14`，成功运行数量限制清理的是详情，而非整份摘要/成交。最新 30 个整份运行保留策略已记录到双语 `SPEC-backtest-results` 及设计/方案/任务，但尚未实现或验证为运行行为。未删除用户历史数据，不声明新增应用测试结果。
+2026-10-07 决定取消新增磁盘／日志配额及空闲空间准入门槛，保留普通存储错误处理和既有保护。最新 30 次保留是包括置顶的一个总上限；有界发布清理保护活动任务、共享输入及自有文件。最终实现及验收替代初期待办状态，见 ML-O06 和 MV18–MV46。未增加清理调度器。
 
 ## MV08. 仅保留既有存储保护与压力评估
 
-2026-10-07 用户采用保留既有存储防护、不深入开发的建议。保留独立默认数据库、路径规范化及 `backtest/storage_guard.py` 对正式监测表和行情/结果领域混用的拒绝。从 ML-A22/ML17/ML-T34 移除新增深度 Windows 文件身份、junction/硬链接及跨文件别名框架要求。此前已执行 `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_results.py -q -k "storage_domains_reject_aliases_and_live_tables or stores_reject_each_plan_web_state_table" -m "not live"`，结果为 3 passed、14 deselected，用时 1.37 秒。本次范围更新只修改双语文档，不声称穷尽别名保护。
-
-内存/压力评估：当前研究运行器累计决策事件，但到 70,000 个事件时拒绝评估；任务有 100 个排队上限及单活跃槽；自有准备/元数据线程限制未完成物理工作；结果读取/导出有界分批。这些是具体已有的有限工作防护。此前 ML17 范围曾提出测量内存/CPU/监控延迟，压力下拒绝或协作取消回测。尚未发现生产压力控制器或校准后的压力阈值，ML-T37 负载证据仍未执行。同进程内存耗尽/CPU 竞争属于已接受风险；此次评估未证明新增压力准入系统的必要性；后续 MV09 用户决策移除该拟议开发。
+保留独立默认数据库、路径规范化及既有拒绝实时监控表／混合表的存储域检查。未授权新增深度 Windows 文件身份、junction／hard-link 或跨文件别名框架。既有有限事件、队列、线程及读取批次边界保持；Windows 实测负载见 MV43，不宣称穷尽别名或硬 CPU／内存隔离。
 
 ## MV09. 已采用有限工作范围与剩余保护项
 
-2026-10-07 用户采用保留既有有限工作防护的建议，取消新增动态内存/CPU 压力控制器、采样驱动的阈值及压力触发的准入/取消。移除计划中的 `backtest/resource_control.py` 及通用 `test_backtest_resource_boundaries.py`。ML-T34 现仅两个主要文件：`backtest/sync.py` 及针对性 `test_backtest_sync_pacing.py`，既有防护测试保留为回归检查。保留离线负载验证以发现实际竞争、普通协作取消及已接受的同进程边界。本次仅修改双语文档，不声明新增运行保护或测试结果。
-
-| 剩余项目 | 任务 | 当前状态及待完成内容 |
-|---|---|---|
-| 明确积压恢复与安全取消 | ML-T33 | 会话授权及物理排空检查已通过；过期历史 RUNNING/CANCEL_REQUESTED 是否占用既有单槽，仍待用户决定后收尾。 |
-| 历史同步本地限速 | ML-T34 | 未实现：保留串行同步，仅增加 1.25 秒请求开始间隔、可取消等待及虚拟调用测试。不新增全局额度或监测模块改动。 |
-| 最新 30 个整份历史结果 | ML-T21 | 未实现：发布后触发有界、最旧优先的整份结果清理，保护活动任务及共用引用。不作为隔离前置条件。 |
-| 状态/停止/重试/选中恢复控制及清晰 UI | ML-T35, ML-T39, ML-T36 | 公开控制、生成契约及页面反馈待完成；打开历史不得恢复积压。既有契约批准不一致留待明确最终审阅。 |
-| 故障/负载验证与操作指导 | ML-T37, ML-T38 | 完成剩余 Windows 离线故障/负载检查及双语停止/恢复指导；已有部分测试不代表完整验收。 |
-
-已完成核心保护：ML-T30–ML-T32/ML-C11 的无副作用启动、受保护首次准备、元数据/执行分离、局部初始化失败、有界线程归属及晚到工作保留。既有单执行、队列/事件上限、分页/分批读取及存储领域防护保留，不新增通用资源框架。已移除开发：全局 AI/供应商额度、预留监测容量、跨操作准备/回放/导出互斥、新导出、磁盘/日志预算、深度存储别名检查及动态压力控制。完整监控闭环业务/UI 属于另行待完成工作，此清单仅覆盖保护。
+2026-10-07 决定保留既有有限工作保护、协作取消及离线负载检查，取消动态 CPU／内存压力控制器、采样准入门槛及通用资源控制模块。后续恢复、同步限速、最新 30 次保留及服务／界面验收均在 MV18–MV46 完成。ML-O06 及正式 ML17 范围保留授权边界。
 
 ## MV10. 完整验收缺口清单
 
-截至 2026-10-07，既有 39 项任务切片中，3 项完成（ML-T30–ML-T32）、1 项部分完成（ML-T33）、35 项待完成。这描述的是新监控闭环交付，不代表既有产品完成百分比。此前 MV09 只列保护项，不是完整交付缺口。以下七组恰好覆盖全部 36 项未完成任务，每项只归一组，不新增要求或任务 ID。
-
-| 既有工作组 | 任务 | 当前缺口 | 完成证据 |
-|---|---|---|---|
-| 隔离收尾与本地同步限速 | ML-T33–ML-T34 | ML-T33 部分实现，过期历史活动任务占槽规则未定。本地 1.25 秒同步间隔未实现。 | 仅明确操作才处理积压，取消/发布/租约竞态、排空后替换及虚拟调用间隔/取消检查通过。 |
-| 计划准备与审核 | ML-T07–ML-T15 | 新流程的持久批次准备、带前版上下文的顺序提取、修订绑定审核及上传/进度/日历页面未实现。 | 实际 UI/API 支持上传、顺序提取、修改/重试、原文/账户审核及冻结已批准计划链，不修改正式计划。AI 额度管理已排除，但提取业务功能仍在范围内。 |
-| 确定性闭环回放与提交 | ML-T01–ML-T06, ML-T16–ML-T20 | 新冻结输入/时间截止、期初账户、提醒、模拟响应、原子账本反馈、每日计划延续/替换、任务分派及因果投影待完成。 | 无未来交易脚本，买卖/账户转换符合独立预期；无未来证据、重复成交、部分提交或结束日期漂移。不支持的原文条款保持可见。 |
-| 发布、结果页面与最新 30 个保留 | ML-T21–ML-T25 | 新闭环发布/结果 API、运行表单/时间线/账户视图及最新 30 个整份清理待完成。 | 可查看完整保留结果，失败/取消不发布已完成部分报告；安全删除最旧超额整份运行，保留旧结果的导出兼容。 |
-| 服务控制与页面反馈 | ML-T35, ML-T36, ML-T39 | 状态/停止/重试/选中恢复公开控制、生成传输契约及首次使用/降级 UI 待完成。 | 实际页面如实显示服务/任务状态并提供局部恢复；历史/预取不恢复工作，监控页面保持可用。 |
-| 集成、浏览器及 Windows 负载验收 | ML-T26, ML-T27, ML-T37 | 新闭环一致性/故障覆盖、真实挂载 UI/API 端到端流程及完整 Windows 负载未执行。 | 浏览器上传→审核→运行→结果；虚拟供应商下 10 分钟 10 只股票监测基线加 10 分钟回测负载，每阶段至少 1,000 次状态请求，通过既有 ML17 延迟及事件完整性门槛。 |
-| 最终证据、操作说明与契约审阅 | ML-T28, ML-T29, ML-T38 | 最终操作说明/已执行证据及双语 API 批准对齐待完成，基线已有 OpenAPI 批准不一致。 | 记录实际最终测试/构建/类型生成结果和支持限制，审阅最终具体 API 差异后更新批准记录。此审阅不阻止前序实现。 |
-
-已知待定规则：仅 ML-T33 的过期历史 RUNNING/CANCEL_REQUESTED 是否占用既有执行槽，仍未决定。OpenAPI 不一致属于已知最终审阅问题，不是另一个资源系统要求或实现范围许可。其他行均为既有方案内已授权实现或验证工作。
-
-验收范围仍为实际产品 UI/API/组合接入隔离存储、确定性外部服务替身，以及 ML17 已列 Windows 负载配置。不新增付费 AI/供应商认证、正式通知、券商执行、生产迁移或部署门槛。不隐含新增原文引擎支持，准备/结果中应明确支持和不支持的条款。MV05–MV09 已取消保护项继续排除。后续更新应对照本清单报告进展/失败；若提出新增范围，须明确标为新增，不能静默变成另一个前置条件。
+2026-10-07 清单最初记录 39 项任务：3 项完成、1 项部分完成及 35 项待办。该历史缺口清单以最终 37 个活动任务和 13 个已完成检查点为准；取消的 ML-T06／ML-T09 及 ML-A07 保留编号。MV18–MV46 保留已执行业务、界面、故障／负载及契约证据。未新增付费供应商、实时通知、券商执行、生产迁移或部署门槛。
 
 ## MV11. 仅启动解耦验收
 
@@ -165,7 +101,7 @@ HTTP 探测使用真实 socket 与 `X-Monitor-Contract-Version: 2`，与前端�
 
 ## MV12. 隔离收尾与契约审阅
 
-日期：2026-10-07，Asia/Shanghai。本轮完成 ML-T33/ML-T34/ML-C12，并修复既有统一研究批准记录。不实施监控闭环业务/UI，也不认证未来接口。MV01–MV10 保留原检查结果，包括此前失败的 OpenAPI 批准检查。MV11 保持 **PASS**，不重跑或把真实启动/浏览器证据重新定义为负载验收。
+日期：2026-10-07，Asia/Shanghai。本轮完成 ML-T33/ML-T34/ML-C12，并修复既有统一研究批准记录。不实施监控闭环业务/UI，也不认证未来接口。MV01–MV10 保留历史范围摘要，原逐步记录见 Git 历史；此前 OpenAPI 审批失败仍记录于 MV03。MV11 保持 **PASS**，不重跑或把真实启动/浏览器证据重新定义为负载验收。
 
 ### MV12.1 基线与实现行为
 
@@ -214,20 +150,7 @@ ML-T30–ML-T34 及 ML-C11/ML-C12 已完成，既有 39 项任务中仍有 34 �
 
 ## MV13. 提交整理与产物清理
 
-用户于 2026-10-07 授权整理当前改动、删除无用过程/测试产物、提交并推送至 GitHub。生命周期隔离/恢复、本地同步限速及双语设计/任务/验证文档按独立逻辑提交。独立盛新研究文件保留在这些提交范围外。MV01–MV12 关于未提交/推送的文字描述各自原验证轮次；本次后续授权仅为整理提交替代该边界。
-
-删除 36 个冗余过程文件：完整哈希/状态清单、重复差异/检查备份、PID/最新/过渡快照、夹具/stdout/stderr 日志、AX 导出、空控制台捕获及重复截图。保留 22 个必要验收附件。启动 HTTP 文件保留成功验收观察；OpenAPI 索引保留全部 37 个变更路径，不重复已提交 schema。保留可复用离线真实服务脚本及有效生命周期/线程归属/恢复/限速回归测试。未删除或削弱任何既有测试。恢复测试辅助函数现向取消 token 传入 `SYNC_CALENDAR`，真正执行类型化协作取消，而非意外缺参错误。
-
-清理后在 `trade-plan-monitor/` 使用离线夹具和临时数据库执行：
-
-| 检查 | 命令 | 结果 |
-|---|---|---|
-| 隔离/恢复/限速/契约 | `.venv/Scripts/python.exe -m pytest tests/unit/test_backtest_service_contract.py tests/integration/test_backtest_thread_recovery.py tests/integration/test_backtest_job_leases.py tests/integration/test_backtest_job_coordinator.py tests/integration/test_backtest_jobs.py tests/integration/test_backtest_sync_pacing.py tests/integration/test_backtest_sync.py tests/integration/test_backtest_results.py tests/integration/test_backtest_thread_ownership.py tests/integration/test_backtest_production_composition.py tests/integration/test_backtest_startup_isolation.py tests/integration/test_unified_replay_entries.py tests/integration/test_backtest_compatibility.py tests/integration/test_openapi_snapshot.py -q -m 'not live'` | 160 passed，1 skipped，87.89 秒。跳过项需要 POSIX 线程归属语义。 |
-| Web/监控及回测 API 兼容 | `.venv/Scripts/python.exe -m pytest tests/integration/test_web_api.py tests/integration/test_monitor_production_composition.py tests/integration/test_backtest_data_api.py tests/integration/test_backtest_job_api.py tests/integration/test_backtest_run_api.py tests/integration/test_backtest_result_api.py tests/integration/test_backtest_export_api.py -q -m 'not live'` | 353 passed，32.31 秒。 |
-| 静态/生成产物 | `.venv/Scripts/python.exe -m ruff check src tests scripts`；`.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`；`git diff --check` | PASS；监控 v2 与兼容 v1 均保持最新。 |
-| 文档与范围审阅 | 双语 ID/标题结构/相对链接；已完成历史 todo 尾部；明确暂存文件审阅 | 7 对双语文档全部 PASS。清理后链接可解析，独立研究保持未修改。 |
-
-两组 pytest 保留既有 Starlette/httpx 弃用告警。审阅未发现尚未解决的范围内问题。这些检查新增整理提交/兼容证据，不代表完成剩余 34 项业务/UI/负载任务，也不授权部署、付费请求或生产改动。
+用户于 2026-10-07 授权整理提交并交付 GitHub。移除冗余过程产物，保留必要证据、可复用离线脚本及有效回归测试；独立盛新研究仍在交付范围之外。未削弱安全断言或门槛。阶段整理测试计数以 MV44／MV46 为准。该历史授权不授予部署或付费供应商操作权限。
 
 ## MV14. 冻结输入与共用模拟基础
 

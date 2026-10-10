@@ -68,3 +68,23 @@ All regression providers/clocks are offline fakes. The displayed value is a comp
 The two remaining baseline lifecycle tests require eager backtest startup, while unchanged `web/lifespan.py` uses `LazyBacktestLifecycle`. Their custom fake lifecycles do not touch index composition, selection or reads. The application, lifecycle module and these tests have no changes against HEAD. They are retained as known failures; no unrelated backtest behavior or assertions are modified.
 
 Final completion: A01–A13 and local rollout are accepted within the authorized index scope. The full regression is not entirely green: the two recorded, unchanged backtest lifecycle failures remain outside this repair. The paired focused task plan is complete without replacing ongoing backtest work.
+
+## ICDV07 Related monitor and presentation acceptance
+
+The preceding overview investigation reproduced three defects: a second wall-clock read rejected an already elapsed immediate wake; the legacy DEGRADED projection omitted a timestamp required for a physically STOPPED owner under monitor contract `2`; and explicit quota wording was misclassified as permission denial. Elapsed wakes now use zero delay while retaining the 30-second future limit and existing token/overdue/owner guards. STOPPED reads retain actual owner health, generation and timestamp. Explicit rate-limit wording installs the existing cooldown; structured authorization errors and genuine permission denials still block. The original October 8 provider reply was not retained, so the classification defect is not established as the cause of that specific reply.
+
+Focused scheduling/lifecycle checks passed 37, broader monitoring checks passed 225, and provider/cooldown/permission checks passed 413. On October 9 the unchanged configured service and credential returned HTTP 200/code 0 for `trade_cal`, `idx_mins`, `rt_idx_min_daily` and `index_daily`; no additional entitlement or permission reset was required. These are dated observations, not continuing live-provider certification.
+
+Retry/refresh reads stored display data; it does not call the provider or restart a stopped runtime. Ordinary acquisition follows completed five-minute boundaries plus the existing 12-second publication grace and automatic recovery. Transport connectivity alone does not prove current data. Subsequent startup/final-bucket display behavior is governed by ICDR01–ICDR10 and ICDV02–ICDV05.
+
+The requested presentation changes remove numbered English page captions and the overview management button, and place the connection banner above backtest navigation. Chinese headings, descriptions and accessible actions remain. The caption removal's original checks passed type checking, 118 unit tests in 7 files, 6 browser cases, production build and visual inspection. Current combined checks are recorded below.
+
+## ICDV08 Final-code verification on 2026-10-10
+
+- Related backend regression: 183 passed, covering scheduling, quota handling, composition, persistence, recovery, session, overview and OpenAPI.
+- Complete frontend unit suite: 942 passed in 63 files with file parallelism disabled.
+- Browser acceptance: 9 passed across `dashboard.spec.ts`, `index-close-display.spec.ts` and `interface-design.spec.ts`.
+- Type checking, generated canonical v2/compatibility v1 contracts, scoped Python lint and isolated production build passed.
+- Mutation review inverted LIVE retention only inside an isolated test process; both A01/A02 persistence cases failed as expected. Source and the running service were unchanged.
+
+These final-code checks do not replace the full-regression limits in ICDV04/ICDV06: the two unchanged backtest lifecycle failures remain recorded. No assertions or thresholds were weakened.

@@ -30,6 +30,8 @@ Pop-Location
 
 API 测试自行创建已审核未激活的合成计划和临时数据库。浏览器使用既有本地 fake API 及真实强类型决策字节，操作当前表单/详情页面，并检查可访问性及外部请求/控制台错误。两者都不是实际 AI 或供应商认证。
 
+已移除的命令树为 `backtest sync/verify/run/list/prune`，同时移除 `BacktestApplicationService` 及合成夹具生成器的 `--run` 分发。旧 CLI 调用和已移除的 Python 门面没有兼容别名或替代 CLI。生产 Web/API 共用 worker 工厂及冻结结果格式仍受支持。有界保留仍是内部能力；移除 `prune` 不新增自动清理调度器或公开替代端点。命令入口回归位于 `tests/unit/test_command_surface.py`。
+
 ## R03. 明确操作与资金
 
 空 `operations` 数组不授权库存变化。`SIMULATE` 指定规则及准确 occurrence 或风险种类、完整正整手数量、明确时间和顺序。当前权限、T+1、CORE、容量、报价和风险校验仍然适用。部分数量请求被阻断；已消费 occurrence 不能再次授权同一交易。限定范围的肯定/否定事实、独立事件证据、停用、已审核替换终止及明确风险重评都属于冻结输入。替换不执行第二个计划。另存草稿不终止原权限。

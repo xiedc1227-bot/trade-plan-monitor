@@ -56,6 +56,10 @@
 
 原文最多 150000 字符；有界原文字节、3 次提取、70000 条闭环记录及最多 420001 行审计为明确边界。结果以最近 30 次运行作为一个总上限，包括置顶，使用有界清理并保护自有输入/报告文件。分页最多 100 项；整数保持安全，金额计算保持精确。历史同步只有一个活动任务，以 BACKGROUND 优先级，在日历/日线/分钟/涨跌停真实请求起点间至少等待 1.25 秒。缓存命中不新增等待；取消会在下一供应商调用前观察节流。不增加全局配额分配器或动态 CPU/内存控制器。
 
+`SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT` 的启动恢复仅限已有有效 SQLite 主文件、空 `-wal`，且边车只有 `-wal`/`-shm`。先检查不可变主文件并记录全部源文件指纹；要求完整 `CURRENT` 存储域结构，没有迁移或元数据修正原因，再复核指纹。使用 SQLite `PRAGMA wal_checkpoint(TRUNCATE)` 和配置的 busy timeout，随后关闭恢复连接。绝不手工删除 WAL/SHM 文件。
+
+恢复后重新执行严格清单检查。残留边车、失败／忙碌 checkpoint 或不可读文件均阻止初始化。迁移清单保持只读，并拒绝所有边车。非空 WAL、回滚日志、孤立文件、旧／未知结构、待扩展结构及 UTC／无效元数据均不自动恢复。回归位于 `tests/integration/test_backtest_migrations.py` 和 `tests/integration/test_backtest_production_composition.py`。
+
 ## ML-O07. 复现本地验证
 
 在 `trade-plan-monitor/` 使用既有开发环境执行。下列检查使用合成事实和一次性存储，不使用真实用户数据或付费供应商。若默认 OS pytest 临时根目录不可用，可追加新的工作区 `--basetemp=.pytest_cache/local-verification-unique` 目录，不修改检查：

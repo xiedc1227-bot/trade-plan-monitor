@@ -33,11 +33,12 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 - [source-treatment-review](specifications/monitoring/SPEC-source-treatment-review.md) ([中文](specifications/monitoring/SPEC-source-treatment-review.zh-CN.md))
 - [strategy-state (Strategy State and Persistence)](specifications/monitoring/SPEC-strategy-state.md) ([中文](specifications/monitoring/SPEC-strategy-state.zh-CN.md))
 - [Specification: One Trade Plan Workflow](specifications/monitoring/SPEC-unified-plan.md) ([中文](specifications/monitoring/SPEC-unified-plan.zh-CN.md))
+- [Index close display repair](specifications/monitoring/SPEC-index-close-display-repair.md) ([中文](specifications/monitoring/SPEC-index-close-display-repair.zh-CN.md))
 
 ## Backtesting specifications
 
-- [Monitoring-loop backtest proposal — DRAFT, pending review](specifications/backtesting/PROPOSAL-monitor-loop-backtest.md) ([中文](specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md))
-- Active monitoring-loop implementation: [plan](../tasks/plan.md) ([中文](../tasks/plan.zh-CN.md)) and [tasks](../tasks/todo.md) ([中文](../tasks/todo.zh-CN.md)); pending implementation.
+- [Monitoring-loop backtest design (implemented)](specifications/backtesting/PROPOSAL-monitor-loop-backtest.md) ([中文](specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md))
+- Active monitoring-loop implementation: [plan](../tasks/plan.md) ([中文](../tasks/plan.zh-CN.md)) and [tasks](../tasks/todo.md) ([中文](../tasks/todo.zh-CN.md)); implementation and acceptance are complete, with results in MV18–MV46.
 - [Unified Plan Historical Replay](specifications/backtesting/SPEC-unified-replay.md) ([中文](specifications/backtesting/SPEC-unified-replay.zh-CN.md))
 - [backtest-api](specifications/backtesting/SPEC-backtest-api.md) ([中文](specifications/backtesting/SPEC-backtest-api.zh-CN.md))
 - [backtest-data](specifications/backtesting/SPEC-backtest-data.md) ([中文](specifications/backtesting/SPEC-backtest-data.zh-CN.md))
@@ -58,11 +59,14 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 - [ADR 0005: Version Explicit Plan Rules Without Reinterpreting History](decisions/0005-version-explicit-plan-rules.md) ([中文](decisions/0005-version-explicit-plan-rules.zh-CN.md))
 - [ADR 0006: Review Mixed Source with Bounded Server Treatments](decisions/0006-review-mixed-source-with-bounded-treatments.md) ([中文](decisions/0006-review-mixed-source-with-bounded-treatments.zh-CN.md))
 - [ADR 0007: Separate Recovery Delivery Metadata from Alert Identity](decisions/0007-separate-recovery-delivery-metadata.md) ([中文](decisions/0007-separate-recovery-delivery-metadata.zh-CN.md))
+- [ADR 0008: Isolate the Backtest Service Lifecycle with Dedicated Threads](decisions/0008-isolate-backtest-service-lifecycle.md) ([中文](decisions/0008-isolate-backtest-service-lifecycle.zh-CN.md))
+- [ADR 0009: Admit One Unfinished Backtest Task](decisions/0009-single-unfinished-backtest-task.md) ([中文](decisions/0009-single-unfinished-backtest-task.zh-CN.md))
 
 ## Operations and conventions
 
 - [Tushare Live Certification](operations/live-certification.md) ([中文](operations/live-certification.zh-CN.md))
 - [Current Plan Replay Guide](operations/unified-replay.md) ([中文](operations/unified-replay.zh-CN.md))
+- [Monitoring-loop Backtest Operations](operations/monitor-loop-backtest.md) ([中文](operations/monitor-loop-backtest.zh-CN.md))
 
 ## Guides
 
@@ -73,6 +77,8 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 - [Unified Replay Verification](verification/2026-10-03-unified-replay.md) ([中文](verification/2026-10-03-unified-replay.zh-CN.md))
 - [One Plan Workflow Verification](verification/2026-10-03-unified-plan.md) ([中文](verification/2026-10-03-unified-plan.zh-CN.md))
 - [Backtest production-fake acceptance](verification/backtest-acceptance.md) ([中文](verification/backtest-acceptance.zh-CN.md))
+- [Monitoring-loop Backtest Verification](verification/monitor-loop-backtest.md) ([中文](verification/monitor-loop-backtest.zh-CN.md))
+- [Index Close Display and Related Monitor Repair Verification](verification/2026-10-09-index-close-display-repair.md) ([中文](verification/2026-10-09-index-close-display-repair.zh-CN.md))
 
 ## Maintenance policy
 

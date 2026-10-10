@@ -30,6 +30,8 @@ Pop-Location
 
 The API test creates its own reviewed inactive synthetic plan and temporary databases. The browser uses the existing local fake API and actual typed decision bytes, exercises the current form/detail page, and checks accessibility and external-request/console failures. Neither is a real AI or provider certification.
 
+The removed command tree is `backtest sync/verify/run/list/prune`, together with `BacktestApplicationService` and the synthetic fixture generator's `--run` dispatch. Old CLI invocations and the removed Python facade have no compatibility alias or replacement CLI. The shared production Web/API worker factory and frozen result formats remain supported. Bounded retention remains an internal capability; removing `prune` adds no automatic cleanup scheduler or public replacement endpoint. Command-surface regression is in `tests/unit/test_command_surface.py`.
+
 ## R03. Explicit operations and money
 
 An empty `operations` array authorizes no inventory change. `SIMULATE` names a rule and exact occurrence or a risk kind, full positive whole-lot quantity, explicit timestamp and order. Current authority, T+1, CORE, capacity, quote and risk checks still apply. Partial requests are blocked; a consumed occurrence cannot grant the same trade again. Scoped positive/negative facts, independent-event evidence, deactivation, reviewed replacement termination and explicit risk reassessment are frozen inputs. A replacement does not execute a second plan. Saving another draft does not terminate the original authority.

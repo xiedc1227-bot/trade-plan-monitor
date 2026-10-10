@@ -56,6 +56,10 @@ Default isolated paths are `data/backtest-market.sqlite3`, `data/backtest-result
 
 A source is capped at 150000 characters; bounded source bytes, 3 extraction attempts, 70000 loop records and at most 420001 audit rows are explicit limits. Results retain the latest 30 runs as one total cap, including pinned runs, with bounded cleanup and owned input/report-file protection. Pages cap at 100; integers remain safe and monetary arithmetic remains exact. Historical synchronization is single-active, uses BACKGROUND request priority and at least 1.25 seconds between actual starts across calendar/daily/minute/limit requests. Cache hits add no wait; cancellation observes pacing before the next provider call. No global quota allocator or dynamic CPU/memory controller is added.
 
+Startup recovery for `SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT` is limited to an existing valid SQLite main file with an empty `-wal` and only `-wal`/`-shm` sidecars. Inspect the immutable main file and fingerprint all source files; require the complete `CURRENT` domain schema without migration or metadata-correction reasons, then recheck the fingerprint. Use SQLite `PRAGMA wal_checkpoint(TRUNCATE)` with the configured busy timeout and close the recovery connection. Never manually delete WAL/SHM files.
+
+Repeat strict inventory after recovery. Remaining sidecars, failed/busy checkpoints or unreadable files block initialization. Migration inventory remains read-only and rejects every sidecar. Non-empty WAL, rollback journals, orphaned files, legacy/unknown schemas, pending extensions and UTC/invalid metadata remain outside automatic recovery. Regressions are in `tests/integration/test_backtest_migrations.py` and `tests/integration/test_backtest_production_composition.py`.
+
 ## ML-O07. Reproduce local verification
 
 Run from `trade-plan-monitor/` with the existing development environment. These checks use synthetic facts and disposable stores, not live user data or paid providers. If the default OS pytest temporary root is unavailable, add a fresh workspace `--basetemp=.pytest_cache/local-verification-unique` directory without changing checks:
