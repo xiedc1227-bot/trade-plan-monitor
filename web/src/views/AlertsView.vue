@@ -582,7 +582,7 @@ function isConflict(value: unknown): boolean {
 
 <template>
   <section class="alerts-view" aria-labelledby="alerts-title">
-    <PageIntro title="文字提醒中心" title-id="alerts-title" eyebrow="03 / ALERT CENTER" description="关注需要行动的时刻。提醒、确认与人工成交是彼此独立的操作。" />
+    <PageIntro title="文字提醒中心" title-id="alerts-title" description="关注需要行动的时刻。提醒、确认与人工成交是彼此独立的操作。" />
 
     <p v-if="error !== null" class="alerts-view__error" role="alert">{{ error }}</p>
     <p

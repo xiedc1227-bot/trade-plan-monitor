@@ -78,8 +78,10 @@ summary { min-height: 2.75rem; }
 .action-link { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-5); min-height: 2.75rem; padding: var(--space-3) var(--space-5); color: var(--color-surface-ink); background: var(--color-signal-watch-amber); border: 1px solid var(--color-signal-watch-amber); border-radius: var(--radius-control); text-decoration: none; font-size: .875rem; font-weight: 600; transition: background-color var(--motion-fast), transform var(--motion-fast); }
 .action-link:hover { color: var(--color-surface-ink); background: var(--color-focus-ring); transform: translateY(-2px); }
 .action-link:active { transform: translateY(0); }
-.workspace-eyebrow { margin: 0 0 var(--space-4) !important; color: var(--color-signal-watch-amber); font: 500 .6875rem var(--font-numeric); letter-spacing: .18em; }
-.workspace-eyebrow + h1 + p { margin-block-start: var(--space-3); color: var(--color-text-muted); font-size: .875rem; }
+.backtest-runs-view__hero h1 + p,
+.backtest-data-view__hero h1 + p,
+.backtest-new-view__hero h1 + p,
+.run-detail-view__hero h1 + p { margin-block-start: var(--space-3); color: var(--color-text-muted); font-size: .875rem; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
 
 :focus-visible {

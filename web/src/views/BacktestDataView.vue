@@ -137,7 +137,6 @@ onBeforeUnmount(() => {
   <div class="backtest-data-view">
     <header class="backtest-data-view__hero">
       <div>
-        <p class="workspace-eyebrow">05 / DATA LIBRARY</p>
         <h1>历史数据管理</h1>
         <p>管理回测数据范围、查看服务端覆盖事实，并以显式授权启动联网同步。</p>
       </div>

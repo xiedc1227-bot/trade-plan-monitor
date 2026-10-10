@@ -95,7 +95,6 @@ onBeforeUnmount(() => {
   <div class="backtest-new-view">
     <header class="backtest-new-view__hero">
       <div>
-        <p class="workspace-eyebrow">05 / NEW EXPERIMENT</p>
         <h1 ref="pageTitle" tabindex="-1">创建回测</h1>
         <p>选择不可变计划版本与已验证数据集，提交可复现的回测运行。</p>
       </div>

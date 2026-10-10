@@ -90,7 +90,7 @@ test("installed v2 mobile navigation, action focus, and reduced motion work toge
   await expect(navigation).toHaveAttribute("aria-expanded", "false");
   await expect(navigation).toBeFocused();
   await navigation.press("Tab");
-  const action = page.getByRole("link", { name: "管理交易计划" });
+  const action = page.getByRole("link", { name: "查看系统详情" });
   await expect(action).toBeFocused();
   const feedback = await action.evaluate(element => ({
     outline: getComputedStyle(element).outlineStyle,

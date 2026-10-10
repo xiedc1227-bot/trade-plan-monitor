@@ -24,7 +24,7 @@ const currentDetail = computed(() => {
 
 <template>
   <section class="runtime-page">
-    <PageIntro :title="`个股详情 · ${symbol}`" eyebrow="01 / SYMBOL DETAIL" description="从当前判断到原始证据，逐项核对这份计划。" />
+    <PageIntro :title="`个股详情 · ${symbol}`" description="从当前判断到原始证据，逐项核对这份计划。" />
     <p v-if="loading" role="status">正在读取当前计划投影。</p>
     <p v-if="error" role="status">{{ error }}</p>
     <template v-if="currentDetail">

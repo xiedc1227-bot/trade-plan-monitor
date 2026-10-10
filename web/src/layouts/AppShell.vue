@@ -188,6 +188,22 @@ onBeforeUnmount(() => {
       </nav>
     </header>
 
+    <section
+      class="app-shell__connection-banner"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      :data-connection-state="connectionState.code"
+    >
+      <slot name="connectionBanner" :state="connectionState">
+        <span class="app-shell__connection-marker" aria-hidden="true">
+          {{ connectionState.marker }}
+        </span>
+        <span>{{ connectionState.label }}</span>
+      </slot>
+      <span class="app-shell__connection-context" aria-hidden="true">LOCAL WORKSPACE <span> / </span> UTC+08:00</span>
+    </section>
+
     <nav v-if="isBacktestRoute" class="app-shell__backtest-navigation" aria-label="回测导航">
       <ul class="app-shell__navigation-list">
         <li v-for="item in backtestNavigationItems" :key="item.to">
@@ -207,22 +223,6 @@ onBeforeUnmount(() => {
         </li>
       </ul>
     </nav>
-
-    <section
-      class="app-shell__connection-banner"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      :data-connection-state="connectionState.code"
-    >
-      <slot name="connectionBanner" :state="connectionState">
-        <span class="app-shell__connection-marker" aria-hidden="true">
-          {{ connectionState.marker }}
-        </span>
-        <span>{{ connectionState.label }}</span>
-      </slot>
-      <span class="app-shell__connection-context" aria-hidden="true">LOCAL WORKSPACE <span> / </span> UTC+08:00</span>
-    </section>
 
     <main id="main-content" ref="mainContent" class="app-shell__main" tabindex="-1">
       <BacktestServiceState v-if="isBacktestRoute" />

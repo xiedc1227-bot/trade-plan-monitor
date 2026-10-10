@@ -64,7 +64,6 @@ onBeforeUnmount(() => {
   <div class="backtest-runs-view">
     <header class="backtest-runs-view__hero">
       <div>
-        <p class="workspace-eyebrow">05 / RESEARCH LAB</p>
         <h1 ref="pageTitle" tabindex="-1">回测运行记录</h1>
         <p>用历史检验规则。查看已完成的回测结果，核对每一次研究运行。</p>
       </div>

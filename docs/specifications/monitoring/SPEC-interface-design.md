@@ -17,7 +17,7 @@ Use an original precision-workbench identity: warm ink surfaces, mineral text, a
 | Component | Responsibility | Contract |
 |---|---|---|
 | `AppShell.vue` | Brand, navigation, connection banner, focus routing | Existing route/connection state and slot |
-| `PageIntro.vue` | Consistent page hierarchy | `title`, `eyebrow`, `description`; action slot |
+| `PageIntro.vue` | Consistent page hierarchy | `title`, optional `titleId`, `description`; action slot |
 | `DashboardView.vue` in `runtime-status` | Compose current facts, market, status, and active plans | Existing runtime context; no policy calculation |
 | `OverviewStatus.vue` | Separate transport certainty from monitoring readiness | Existing readonly status/live props |
 | `PlanDraftingView.vue`, `PlanWorkbench.vue` | Compose the AI review workspace independently of configuration loading | `runtimeLoading` controls configuration-dependent actions; preserve early source input |
@@ -27,7 +27,7 @@ Use an original precision-workbench identity: warm ink surfaces, mineral text, a
 
 ## Acceptance criteria
 
-- `UI02` Typography and whitespace: one clear page title, readable supporting text, tabular numbers, and a 4px spacing rhythm; primary facts remain prominent.
+- `UI02` Typography and whitespace: one clear page title, readable supporting text, tabular numbers, and a 4px spacing rhythm; primary facts remain prominent. Omit decorative numbered English captions above page titles, including monitor, alert, system, symbol-detail and backtest pages.
 - `UI03` Hierarchy and color: actions, facts, diagnostics, and unavailable/cached states remain distinct. Normal text contrast is at least 4.5:1; large text at least 3:1. Status always has text.
 - `UI04` Motion and interaction: restrained entrance/hover/press feedback, visible keyboard focus, working mobile navigation and Escape behavior. `prefers-reduced-motion` disables nonessential movement. No scroll hijacking or decorative live-data animation.
 - `UI05` Responsive: inspect 320px, 768px, 1024px, and 1440px. No page-level horizontal overflow; dense tables may scroll locally. Mobile controls remain usable with 44px targets. In the wide workspace, align the monitoring panel's top with the actual index surface, below its heading; preserve status-first stacking on narrow layouts. Place trend error text and retry to the right of the full-day turnover estimate when space permits, stacking below on small screens; reserve no action column when the action slot is absent.

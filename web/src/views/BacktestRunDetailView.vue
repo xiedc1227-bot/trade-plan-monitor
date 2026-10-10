@@ -408,7 +408,6 @@ onBeforeUnmount(() => {
   <div class="run-detail-view">
     <header class="run-detail-view__hero">
       <div>
-        <p class="workspace-eyebrow">05 / EXPERIMENT RESULTS</p>
         <h1>回测结果</h1>
         <p>仅展示服务端权威任务状态与已物化历史模拟结果。</p>
       </div>

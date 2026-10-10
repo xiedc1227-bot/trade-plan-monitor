@@ -26,9 +26,7 @@ const counts = { actionable: "当前提醒", blocked: "受阻", stale: "陈旧",
 
 <template>
   <section class="runtime-page monitor-overview">
-    <PageIntro title="监控总览" eyebrow="01 / THE MONITOR" description="看清市场，守住计划。每一个提醒，都有规则与数据作依据。">
-      <RouterLink class="action-link" to="/plans">管理交易计划 <span aria-hidden="true">↗</span></RouterLink>
-    </PageIntro>
+    <PageIntro title="监控总览" description="看清市场，守住计划。每一个提醒，都有规则与数据作依据。" />
     <p v-if="store.error" role="status">{{ store.error }}</p>
     <dl v-if="store.snapshot" class="runtime-counts" aria-label="后端快照统计">
       <div v-for="(label, key) in counts" :key="key" :data-count="key"><dt>{{ label }}</dt><dd>{{ store.snapshot.counts[key] }}</dd></div>
