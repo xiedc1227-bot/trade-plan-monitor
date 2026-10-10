@@ -73,6 +73,47 @@ def test_v2_composition_retains_generation_and_actual_stop_without_provider_call
     asyncio.run(scenario())
 
 
+def test_v2_health_retains_stop_timestamp_after_supervised_runner_failure(tmp_path, monkeypatch):
+    from tushare.pro.client import DataApi
+
+    def reject(*args, **kwargs):
+        raise AssertionError("offline composition attempted provider I/O")
+
+    monkeypatch.setattr(DataApi, "query", reject)
+    config = tmp_path / "app.yaml"
+    config.write_text("tushare: {}\n", encoding="utf-8")
+    composition = create_monitor_composition(
+        config_path=config,
+        database_path=tmp_path / "monitor.sqlite3",
+        monitor_contract_version=2,
+    )
+    owner = composition._runtime
+
+    async def fail_run():
+        await owner.stop()
+        owner._unexpected_run_exit = True
+        raise ValueError("scheduled progress failed")
+
+    monkeypatch.setattr(owner, "run", fail_run)
+    monkeypatch.setattr(composition, "_runtime_factory", None)
+
+    async def scenario():
+        try:
+            await composition.start()
+            await composition._runner_task
+            health = await composition.read_service.get_health()
+            dashboard = await composition.read_service.get_dashboard()
+            assert health.runtime_status.lifecycle == "STOPPED"
+            assert health.runtime_status.reason_code == "RUNTIME_STOPPED"
+            assert health.stopped_at == owner.health().stopped_at
+            assert health.runtime_generation == owner.runtime_generation
+            assert health.runtime_status == dashboard.runtime_status
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
 def test_normal_production_entry_defers_v2_owner_and_rejects_old_clients(tmp_path, monkeypatch):
     from importlib import resources
 

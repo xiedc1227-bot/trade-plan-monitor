@@ -993,7 +993,14 @@ class TushareMarketDataProvider:
                 ),
             )
         message = str(error).casefold()
+        # Quota messages may link to permission documentation. An explicit rate
+        # limit must trigger cooldown rather than an entitlement block.
         if any(
+            marker in message
+            for marker in ("rate limit", "too many requests", "每分钟")
+        ) or _RATE_LIMIT_STATUS_PATTERN.search(message):
+            code = TushareErrorCode.RATE_LIMITED
+        elif any(
             marker in message
             for marker in (
                 "permission",
@@ -1004,10 +1011,7 @@ class TushareMarketDataProvider:
             )
         ) or _PERMISSION_STATUS_PATTERN.search(message):
             code = TushareErrorCode.BLOCKED_PERMISSION
-        elif any(
-            marker in message
-            for marker in ("rate limit", "too many requests", "频率", "每分钟")
-        ) or _RATE_LIMIT_STATUS_PATTERN.search(message):
+        elif "频率" in message:
             code = TushareErrorCode.RATE_LIMITED
         elif any(
             marker in message

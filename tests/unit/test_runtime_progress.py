@@ -129,6 +129,24 @@ def test_maintenance_cannot_be_scheduled_beyond_30_seconds():
     assert progress.snapshot().state == "WORKING"
 
 
+@pytest.mark.parametrize("elapsed", [timedelta(microseconds=1), timedelta(seconds=2)])
+def test_elapsed_wake_is_immediately_due_after_genuine_completion(elapsed):
+    clock, progress = tracker()
+    token = progress.begin_step(timeout_seconds=15)
+    wake = clock.wall
+    clock.wall += elapsed
+    clock.tick += elapsed.total_seconds()
+
+    assert progress.complete_step(token, next_wake_at=wake)
+    snapshot = progress.snapshot()
+    assert snapshot.state == "SCHEDULED"
+    assert snapshot.last_progress_at == clock.wall
+    assert snapshot.next_wake_at == clock.wall
+    assert snapshot.progress_due_at == clock.wall
+    clock.tick += 0.001
+    assert progress.snapshot().state == "STALLED"
+
+
 def test_snapshot_freezes_evidence_before_observing_clocks():
     clock, progress = tracker()
     token = progress.begin_step(timeout_seconds=15)

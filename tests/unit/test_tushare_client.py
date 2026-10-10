@@ -386,7 +386,15 @@ def test_default_url_timeout_is_sanitized_without_retry(
     ("message", "expected"),
     (
         (f"permission denied token={TOKEN_SENTINEL}", RequestControlErrorCode.BLOCKED_PERMISSION),
+        (
+            f"您没有权限访问该频率行情 token={TOKEN_SENTINEL}",
+            RequestControlErrorCode.BLOCKED_PERMISSION,
+        ),
         (f"每分钟最多访问 token={TOKEN_SENTINEL}", RequestControlErrorCode.RATE_LIMITED),
+        (
+            f"每分钟最多访问2次，请查看权限说明 token={TOKEN_SENTINEL}",
+            RequestControlErrorCode.RATE_LIMITED,
+        ),
     ),
 )
 def test_default_url_2xx_provider_error_is_sanitized_and_not_retried(
@@ -674,7 +682,9 @@ def test_direct_connection_keeps_http_failures_structured_without_retry_or_secre
     "message, expected_code",
     [
         (f"permission denied {TOKEN_SENTINEL}", "BLOCKED_PERMISSION"),
+        (f"您没有权限访问该频率行情 {TOKEN_SENTINEL}", "BLOCKED_PERMISSION"),
         (f"每分钟最多访问 {TOKEN_SENTINEL}", "RATE_LIMITED"),
+        (f"每分钟最多访问2次，请查看权限说明 {TOKEN_SENTINEL}", "RATE_LIMITED"),
         (f"connection failed {TOKEN_SENTINEL}", "TRANSIENT"),
         (f"unexpected {TOKEN_SENTINEL}", "ERROR"),
     ],

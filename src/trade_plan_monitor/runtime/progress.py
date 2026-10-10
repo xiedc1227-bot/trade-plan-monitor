@@ -106,8 +106,10 @@ class RuntimeProgress:
             return False
         now_wall = _canonical_shanghai(self._clock())
         next_wake_at = _canonical_shanghai(next_wake_at)
-        delay = (next_wake_at - now_wall).total_seconds()
-        if not 0 <= delay <= 30:
+        # An immediate/due wake can elapse between selection and this clock read.
+        # Keep it due now; genuine completion must not grant a fresh grace period.
+        delay = max(0.0, (next_wake_at - now_wall).total_seconds())
+        if delay > 30:
             raise ValueError("local reconsideration must be scheduled within 0..30 seconds")
         now = self._tick()
         self._record = _ProgressRecord(

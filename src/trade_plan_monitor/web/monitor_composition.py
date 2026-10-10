@@ -1420,7 +1420,9 @@ def create_monitor_composition(
             token=(token, owner.progress_authority_token(), block_reason),
             lifecycle=lifecycle,
             progress=progress,
-            health=health,
+            # The supervisor's DEGRADED projection clears stopped_at for v1.
+            # V2 retains the physically stopped owner's lifecycle timestamps.
+            health=owner.health() if lifecycle == "STOPPED" else health,
             configuration_revision=revision or "",
             plans=plans,
             dependencies=dependencies,

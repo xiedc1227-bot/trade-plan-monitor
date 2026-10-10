@@ -225,6 +225,57 @@ def test_local_wake_preserves_due_market_unit_when_clock_crosses_deadline():
     asyncio.run(scenario())
 
 
+def test_due_market_unit_dispatches_when_wall_clock_advances_between_reads():
+    async def scenario():
+        class AdvancingClock(Clock):
+            wall = datetime(2026, 9, 14, 10, 4, 15, tzinfo=SHANGHAI)
+
+            def now(self):
+                value = self.wall
+                self.wall += timedelta(microseconds=1)
+                self.tick += 0.000001
+                return value
+
+            async def sleep_until(self, deadline):
+                self.tick += max(0, (deadline - self.wall).total_seconds())
+                self.wall = max(self.wall, deadline) + timedelta(microseconds=1)
+                await asyncio.sleep(0)
+
+        clock = AdvancingClock()
+        completed = asyncio.Event()
+        dispatched = []
+
+        def validate():
+            token = owner.begin_progress_step(timeout_seconds=15)
+            owner.complete_progress_step(
+                token, next_wake_at=clock.now() + timedelta(seconds=30),
+            )
+
+        def run_deadline(deadline):
+            dispatched.append(deadline)
+            token = owner.begin_progress_step(timeout_seconds=30)
+            owner.complete_progress_step(
+                token, next_wake_at=clock.now() + timedelta(seconds=30),
+            )
+            completed.set()
+
+        owner = service(
+            clock, validate=validate,
+            scheduler=MarketSessionScheduler(clock=clock, is_open_on=lambda _day: True),
+            run_deadline=run_deadline,
+        )
+        running = asyncio.create_task(owner.run())
+        try:
+            await asyncio.wait_for(completed.wait(), 1)
+            assert dispatched[0].bar_end == datetime(2026, 9, 14, 10, 5, tzinfo=SHANGHAI)
+            assert owner.status.value == "RUNNING"
+        finally:
+            await owner.stop()
+            await running
+
+    asyncio.run(scenario())
+
+
 def test_stop_evidence_waits_for_physical_cleanup_and_failed_cleanup_is_not_stopped():
     async def scenario():
         clock = Clock()
