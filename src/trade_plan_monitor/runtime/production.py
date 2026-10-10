@@ -696,6 +696,10 @@ class ProductionMonitorPipeline:
                 progress_owner=self._status_progress_owner,
             )
         )
+        self.index_source_identity = sha256((self._recovery_configuration_revision + ":" + (
+            self._index_semantics.semantic_revision if self._index_semantics is not None
+            else str(self._index_evidence)
+        )).encode("utf-8")).hexdigest()
         self.health_tracker = SymbolHealthTracker(stale_after=timedelta(seconds=90))
         self.symbols = SymbolService(
             provider=self.provider,
@@ -724,6 +728,7 @@ class ProductionMonitorPipeline:
             recovery_delivery=True,
             commit_admission=self._decision_commit_current,
             index_commit_admission=self._index_commit_current,
+            index_source_identity=self.index_source_identity,
             committed_result_observer=(
                 self._observe_status_commit if enable_runtime_status else None
             ),
@@ -1230,6 +1235,25 @@ class ProductionMonitorPipeline:
             if not current and self._index_semantics is not None:
                 self._on_semantic_revoked()
             return current
+        evidence = load_index_certification(
+            self._certifications / "tushare-board-index-live.json",
+            now=self._clock.now(),
+            endpoint_url=self._endpoint,
+        )
+        return evidence is not None and evidence == self._index_evidence
+
+    def index_display_source_current(self) -> bool:
+        """Read source authority without probing or publishing a revocation."""
+        if (
+            not self._configuration_current() or not self._generation_current()
+            or self._admission_revoked()
+        ):
+            return False
+        if self._semantic_bindings is not None:
+            return (
+                self._index_semantics is not None
+                and self._load_semantic_binding("BOARD_INDEX") is not None
+            )
         evidence = load_index_certification(
             self._certifications / "tushare-board-index-live.json",
             now=self._clock.now(),
@@ -3378,6 +3402,15 @@ class ProductionMonitorPipeline:
 
     def _defer_permission_blocked_index_recoveries(self, now: datetime) -> None:
         """A zero-call historical block cannot spend an index recovery attempt."""
+        records = self.index_service.recovery_records()
+        if self._controller.cooldown_until is not None and self._controller.cooldown_until > now:
+            self.index_service.defer_due_recoveries(now=now, until=self._controller.cooldown_until,
+                index_codes=frozenset(record[0] for record in records))
+        if self._controller.is_permission_blocked(TushareOperation.INDEX_REALTIME_MINUTES):
+            due = self._controller.permission_retry_at(TushareOperation.INDEX_REALTIME_MINUTES)
+            self.index_service.defer_due_recoveries(now=now,
+                until=max(now + timedelta(seconds=30), due or now),
+                index_codes=frozenset(record[0] for record in records))
         if not self._controller.is_permission_blocked(
             TushareOperation.INDEX_HISTORICAL_MINUTES
         ):
@@ -4161,11 +4194,16 @@ class ProductionMonitorPipeline:
                 mapping_version="board-index-map-v1",
                 index_codes=ALWAYS_ON_INDEX_CODES,
             )
-            records = work.projections.list_market_index_recoveries()
+            records = work.projections.list_market_index_recoveries(include_exhausted=True)
+            kinds = work.projections.market_index_recovery_kinds(
+                source_identity=self.index_source_identity
+            )
+            records = tuple(record for record in records if record[0] in kinds)
         self.index_service.restore_recoveries(
             snapshots={record.snapshot.index_code: record.snapshot for record in latest},
             records=records,
             now=self._clock.now(),
+            kinds=kinds,
         )
 
     async def _recover_historical_closes(self, *, before_date: date | None) -> None:

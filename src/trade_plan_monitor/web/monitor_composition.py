@@ -810,6 +810,15 @@ class _ProductionRuntimeState:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             upgrade_database(self._engine)
+            from trade_plan_monitor.state.index_close_repair import repair_current_index_display
+
+            with self.unit_of_work_factory() as work:
+                repaired, backfilled = repair_current_index_display(work, now=self._clock.now())
+                work.commit()
+            if repaired or backfilled:
+                _LOGGER.info(
+                    "Index display repaired: heads=%d acquisitions=%d", repaired, backfilled
+                )
         except BaseException:
             self._engine.dispose()
             raise

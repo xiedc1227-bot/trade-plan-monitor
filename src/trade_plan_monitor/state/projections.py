@@ -31,6 +31,7 @@ from trade_plan_monitor.market_index.canonical import (
 )
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexSnapshot
+from trade_plan_monitor.market_index.selection import retain_effective_snapshot, snapshot_rank
 from trade_plan_monitor.runtime.health import LEGACY_RUNTIME_GENERATION
 from trade_plan_monitor.state.models import (
     EvaluationLedger,
@@ -40,6 +41,7 @@ from trade_plan_monitor.state.models import (
 from trade_plan_monitor.state.models import (
     EvaluationResult as EvaluationResultRow,
 )
+from trade_plan_monitor.state.models import MarketIndexAcquisitionState as IndexAcquisitionRow
 from trade_plan_monitor.state.models import MarketIndexRecoveryState as MarketIndexRecoveryRow
 from trade_plan_monitor.state.models import (
     MarketIndexSnapshot as MarketIndexSnapshotRow,
@@ -559,6 +561,7 @@ class ProjectionRepository:
 
     def list_market_index_recoveries(
         self,
+        *, include_exhausted: bool = False,
     ) -> tuple[tuple[MarketIndexCode, datetime, datetime, int, datetime], ...]:
         rows = self._session.scalars(select(MarketIndexRecoveryRow)).all()
         return tuple(
@@ -570,11 +573,14 @@ class ProjectionRepository:
                 _market_datetime(row.due_at, "due_at"),
             )
             for row in rows
+            if include_exhausted or row.attempts < 3
         )
 
     def replace_market_index_recoveries(
         self,
         records: tuple[tuple[MarketIndexCode, datetime, datetime, int, datetime], ...],
+        *, kinds: Mapping[MarketIndexCode, str] | None = None,
+        source_identity: str | None = None,
     ) -> None:
         existing = self._session.scalars(select(MarketIndexRecoveryRow)).all()
         selected = {record[0].value for record in records}
@@ -582,7 +588,12 @@ class ProjectionRepository:
             if row.index_code not in selected:
                 self._session.delete(row)
         for code, cutoff, first_failed_at, attempts, due_at in records:
-            if not 0 <= attempts < 3 or due_at <= first_failed_at:
+            kind = (kinds or {}).get(code, "TRANSIENT")
+            if kind not in {"TRANSIENT", "FINAL_BUCKET"} or not (
+                0 <= attempts <= 3
+                if kind == "FINAL_BUCKET" or (cutoff.hour, cutoff.minute) in ((11, 30), (15, 0))
+                else 0 <= attempts < 3
+            ) or due_at <= first_failed_at:
                 raise ValueError("market-index recovery state is invalid")
             row = self._session.get(MarketIndexRecoveryRow, code.value)
             if row is None:
@@ -594,6 +605,13 @@ class ProjectionRepository:
             ).isoformat()
             row.attempts = attempts
             row.due_at = _market_datetime(due_at, "due_at").isoformat()
+            row.kind = kind
+            row.source_identity = source_identity
+
+    def market_index_recovery_kinds(self, *, source_identity: str | None = None) -> dict:
+        rows = self._session.scalars(select(MarketIndexRecoveryRow)).all()
+        return {MarketIndexCode(row.index_code): row.kind for row in rows
+            if source_identity is None or row.source_identity == source_identity}
 
     def put_market_index_snapshot(
         self,
@@ -667,6 +685,21 @@ class ProjectionRepository:
             snapshot.request_set_hash,
         )
         current = self._session.get(MarketIndexSnapshotHeadRow, key)
+        if current is not None:
+            previous = self.get_market_index_snapshot(current.snapshot_hash)
+            if previous is None:
+                raise ProjectionMissingDependencyError("Effective index payload is missing")
+            if retain_effective_snapshot(
+                previous.snapshot,
+                snapshot,
+                current_observed_at=_market_datetime(current.updated_at, "updated_at"),
+                incoming_observed_at=head_observed_at,
+            ):
+                return self.get_market_index_head(
+                    mapping_version=snapshot.mapping_version, index_code=snapshot.index_code,
+                    decision_cutoff=snapshot.decision_cutoff,
+                    request_set_hash=snapshot.request_set_hash,
+                )
         values = {
             "provider_content_revision": provider_revision,
             "snapshot_hash": snapshot.snapshot_hash,
@@ -723,6 +756,137 @@ class ProjectionRepository:
             snapshot=snapshot,
             provider_content_revision=provider_revision,
         )
+
+    def put_market_index_acquisition(
+        self, snapshot: MarketIndexSnapshot, *, observed_at: datetime, sequence: int,
+        source_identity: str | None = None,
+    ) -> None:
+        """Record a committed attempted capture without granting data authority."""
+        validate_market_index_snapshot_integrity(snapshot)
+        key = (snapshot.mapping_version, snapshot.index_code.value)
+        row = self._session.get(IndexAcquisitionRow, key)
+        if row is not None and (
+            _market_datetime(row.decision_cutoff, "decision_cutoff"),
+            _market_datetime(row.observed_at, "observed_at"), row.sequence,
+        ) > (snapshot.decision_cutoff, observed_at, sequence):
+            return
+        if row is None:
+            row = IndexAcquisitionRow(mapping_version=key[0], index_code=key[1])
+            self._session.add(row)
+        row.attempt_id = snapshot.snapshot_hash
+        row.decision_cutoff = snapshot.decision_cutoff.isoformat()
+        row.request_set_hash = snapshot.request_set_hash
+        row.observed_at = _market_datetime(observed_at, "observed_at").isoformat()
+        row.snapshot_hash = snapshot.snapshot_hash
+        row.health = snapshot.health.value
+        row.issues_json = json.dumps([issue.value for issue in snapshot.issues])
+        row.sequence = sequence
+        row.source_identity = source_identity
+        head = self.get_market_index_head(
+            mapping_version=snapshot.mapping_version, index_code=snapshot.index_code,
+            decision_cutoff=snapshot.decision_cutoff, request_set_hash=snapshot.request_set_hash,
+        )
+        if head is not None and head.snapshot.snapshot_hash == snapshot.snapshot_hash:
+            row.effective_source_identity = source_identity
+            row.effective_snapshot_hash = snapshot.snapshot_hash
+        self._session.flush()
+
+    def market_index_source_matches(
+        self, snapshot: MarketIndexSnapshot, source_identity: str | None
+    ) -> bool:
+        row = self._session.get(
+            IndexAcquisitionRow, (snapshot.mapping_version, snapshot.index_code.value)
+        )
+        return bool(row is not None and source_identity is not None
+            and row.effective_source_identity == source_identity
+            and row.effective_snapshot_hash == snapshot.snapshot_hash)
+
+    def list_market_index_acquisitions(self, *, mapping_version: str) -> tuple:
+        rows = self._session.scalars(select(IndexAcquisitionRow).where(
+            IndexAcquisitionRow.mapping_version == mapping_version
+        )).all()
+        result = []
+        for row in rows:
+            record = self.get_market_index_snapshot(row.snapshot_hash)
+            if record is None or (
+                record.snapshot.index_code.value != row.index_code
+                or record.snapshot.mapping_version != row.mapping_version
+                or record.snapshot.decision_cutoff != _market_datetime(
+                    row.decision_cutoff, "decision_cutoff"
+                )
+                or record.snapshot.request_set_hash != row.request_set_hash
+                or row.attempt_id != record.snapshot.snapshot_hash
+                or row.sequence < 0
+                or record.snapshot.health.value != row.health
+                or [i.value for i in record.snapshot.issues] != json.loads(row.issues_json)
+            ):
+                raise ProjectionIdentityConflictError("Invalid index acquisition linkage")
+            result.append((record.snapshot, _market_datetime(row.observed_at, "observed_at")))
+        return tuple(result)
+
+    def repair_market_index_heads(self, *, trade_date: date, mapping_version: str) -> int:
+        """Restore only poisoned exact-key heads from validated immutable LIVE captures."""
+        heads = self._session.scalars(select(MarketIndexSnapshotHeadRow).where(
+            MarketIndexSnapshotHeadRow.mapping_version == mapping_version,
+            MarketIndexSnapshotHeadRow.decision_cutoff.like(f"{trade_date.isoformat()}T%"),
+        )).all()
+        repaired = 0
+        for head in heads:
+            current = self.get_market_index_snapshot(head.snapshot_hash)
+            if current is None:
+                raise ProjectionMissingDependencyError("Repair head has no payload")
+            if current.snapshot.health.value == "LIVE":
+                continue
+            rows = self._session.scalars(select(MarketIndexSnapshotRow).where(
+                MarketIndexSnapshotRow.mapping_version == head.mapping_version,
+                MarketIndexSnapshotRow.index_code == head.index_code,
+                MarketIndexSnapshotRow.decision_cutoff == head.decision_cutoff,
+                MarketIndexSnapshotRow.request_set_hash == head.request_set_hash,
+            )).all()
+            candidates = [_market_index_from_row(row)[0] for row in rows]
+            live = [item for item in candidates if item.health.value == "LIVE"]
+            if not live:
+                continue
+            selected = max(live, key=lambda item: (item.observed_at, item.snapshot_hash))
+            head.snapshot_hash = selected.snapshot_hash
+            head.provider_content_revision = selected.cache_key.provider_content_revision
+            head.updated_at = selected.observed_at.isoformat()
+            repaired += 1
+        self._session.flush()
+        return repaired
+
+    def backfill_market_index_acquisitions(self, *, trade_date: date, mapping_version: str) -> int:
+        """Use exact committed event identities; uncertain links remain absent."""
+        from trade_plan_monitor.state.events import MonitorEventType, monitor_event_id
+
+        rows = self._session.scalars(select(MarketIndexSnapshotRow).where(
+            MarketIndexSnapshotRow.mapping_version == mapping_version,
+            MarketIndexSnapshotRow.decision_cutoff.like(f"{trade_date.isoformat()}T%"),
+        ).limit(4097)).all()
+        if len(rows) > 4096:
+            raise ProjectionError("Index repair exceeds its daily capture bound")
+        selected = {}
+        for row in rows:
+            snapshot, _ = _market_index_from_row(row)
+            event_id = monitor_event_id(
+                MonitorEventType.MARKET_INDEX_UPDATED, snapshot.index_code.value,
+                snapshot.decision_cutoff.isoformat(), snapshot.request_set_hash,
+                snapshot.snapshot_hash, snapshot.observed_at.isoformat(),
+            )
+            event = self._session.get(MonitorEventRow, str(event_id))
+            if event is None:
+                continue
+            current = selected.get(snapshot.index_code)
+            if current is None or event.sequence > current[1].sequence:
+                selected[snapshot.index_code] = (snapshot, event)
+        count = 0
+        for code, (snapshot, event) in selected.items():
+            if self._session.get(IndexAcquisitionRow, (mapping_version, code.value)) is None:
+                self.put_market_index_acquisition(snapshot,
+                    observed_at=_market_datetime(event.occurred_at, "occurred_at"),
+                    sequence=event.sequence)
+                count += 1
+        return count
 
     def list_latest_market_index_snapshots(
         self,
@@ -985,17 +1149,8 @@ def _decision_head_rank(result: EvaluationResult) -> tuple[datetime, int, dateti
     return target_at, kind_rank, result.snapshot.evaluated_at
 
 
-def _market_index_snapshot_rank(
-    snapshot: MarketIndexSnapshot,
-) -> tuple[datetime, datetime, bool, int, int, str]:
-    return (
-        snapshot.decision_cutoff,
-        snapshot.observed_at,
-        snapshot.health.value == "LIVE",
-        len(snapshot.fact_requests),
-        snapshot.revision,
-        snapshot.snapshot_hash,
-    )
+def _market_index_snapshot_rank(snapshot: MarketIndexSnapshot) -> tuple:
+    return snapshot_rank(snapshot)
 
 
 def _result_validation_json(value: str) -> str:

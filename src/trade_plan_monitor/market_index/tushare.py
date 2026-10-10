@@ -201,6 +201,7 @@ class TushareMarketIndexProviderError(RuntimeError):
         stage: str = "CERTIFICATION",
         reason: RequestControlErrorCode | None = None,
         next_retry_at: datetime | None = None,
+        request_started: bool | None = None,
     ) -> None:
         self.code = MarketIndexIssueCode.PROVIDER_UNAVAILABLE.value
         self.stage = stage
@@ -210,6 +211,7 @@ class TushareMarketIndexProviderError(RuntimeError):
             RequestControlErrorCode.TIMEOUT,
         }
         self.next_retry_at = next_retry_at
+        self.request_started = reason is not None if request_started is None else request_started
         super().__init__("Tushare market-index provider unavailable")
 
 
@@ -382,6 +384,7 @@ class TushareMarketIndexProvider:
                 stage=stage,
                 reason=error.code,
                 next_retry_at=error.next_retry_at,
+                request_started=error.attempts > 0,
             ) from None
         except Exception:
             _LOGGER.warning(

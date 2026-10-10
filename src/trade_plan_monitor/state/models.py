@@ -869,12 +869,35 @@ class MarketIndexSnapshotHead(Base):
     updated_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
 
 
+class MarketIndexAcquisitionState(Base):
+    """Bounded latest attempt, separate from the effective quotation head."""
+
+    __tablename__ = "market_index_acquisition_state"
+    mapping_version: Mapped[str] = mapped_column(String(32), primary_key=True)
+    index_code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    decision_cutoff: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    request_set_hash: Mapped[str] = mapped_column(String(HASH_LENGTH))
+    observed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    snapshot_hash: Mapped[str] = mapped_column(
+        String(HASH_LENGTH), ForeignKey("market_index_snapshot.snapshot_hash", ondelete="RESTRICT")
+    )
+    health: Mapped[str] = mapped_column(String(16))
+    issues_json: Mapped[str] = mapped_column(Text)
+    sequence: Mapped[int] = mapped_column(Integer)
+    source_identity: Mapped[str | None] = mapped_column(String(HASH_LENGTH), nullable=True)
+    effective_source_identity: Mapped[str | None] = mapped_column(
+        String(HASH_LENGTH), nullable=True
+    )
+    effective_snapshot_hash: Mapped[str | None] = mapped_column(String(HASH_LENGTH), nullable=True)
+
+
 class MarketIndexRecoveryState(Base):
     """Bounded transient retry budget persisted across runtime restarts."""
 
     __tablename__ = "market_index_recovery_state"
     __table_args__ = (
-        CheckConstraint("attempts BETWEEN 0 AND 2", name="ck_index_recovery_attempts"),
+        CheckConstraint("attempts BETWEEN 0 AND 3", name="ck_index_recovery_attempts"),
     )
 
     index_code: Mapped[str] = mapped_column(String(16), primary_key=True)
@@ -882,6 +905,8 @@ class MarketIndexRecoveryState(Base):
     first_failed_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
     attempts: Mapped[int] = mapped_column(Integer)
     due_at: Mapped[str] = mapped_column(String(TIMESTAMP_LENGTH))
+    kind: Mapped[str] = mapped_column(String(32), default="TRANSIENT", server_default="TRANSIENT")
+    source_identity: Mapped[str | None] = mapped_column(String(HASH_LENGTH), nullable=True)
 
 
 class AIProviderConfiguration(Base):
@@ -1154,6 +1179,7 @@ __all__ = [
     "LatestQuote",
     "MarketIndexSnapshot",
     "MarketIndexSnapshotHead",
+    "MarketIndexAcquisitionState",
     "MarketIndexRecoveryState",
     "MinuteBar",
     "MonitorEvent",

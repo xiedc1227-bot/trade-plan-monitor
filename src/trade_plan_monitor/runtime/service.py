@@ -625,6 +625,7 @@ class RuntimeEvaluationService:
         recovery_delivery: bool = False,
         commit_admission: Callable[[], bool] | None = None,
         index_commit_admission: Callable[[RuntimeMarketIndexBatch], bool] | None = None,
+        index_source_identity: str | None = None,
         committed_result_observer: (
             Callable[[TradePlan, EvaluationResult, EvaluationContext], None] | None
         ) = None,
@@ -685,6 +686,7 @@ class RuntimeEvaluationService:
         self._recovery_delivery = recovery_delivery
         self._commit_admission = commit_admission or (lambda: True)
         self._index_commit_admission = index_commit_admission or (lambda _batch: True)
+        self._index_source_identity = index_source_identity
         self._official_serial = asyncio.Lock()
 
     def _require_commit_admission(self) -> None:
@@ -2400,6 +2402,7 @@ class RuntimeEvaluationService:
                 if (
                     current_head is None
                     or current_head.snapshot.snapshot_hash != canonical_snapshot.snapshot_hash
+                    or snapshot.observed_at > current_head.updated_at
                 ):
                     events.append(
                         unit_of_work.events.append(
@@ -2423,10 +2426,20 @@ class RuntimeEvaluationService:
                             )
                         )
                     )
+                unit_of_work.projections.put_market_index_acquisition(
+                    canonical_snapshot, observed_at=snapshot.observed_at,
+                    sequence=unit_of_work.events.current_sequence(),
+                    source_identity=self._index_source_identity,
+                )
             if self._market_index_service is not None:
-                recovery_records = self._market_index_service.recovery_records()
+                recovery_records = self._market_index_service.recovery_records(
+                    include_exhausted=True
+                )
                 current_recoveries = {record[0]: record for record in recovery_records}
-                unit_of_work.projections.replace_market_index_recoveries(recovery_records)
+                unit_of_work.projections.replace_market_index_recoveries(
+                    recovery_records, kinds=self._market_index_service.recovery_kinds(),
+                    source_identity=self._index_source_identity,
+                )
                 already_notified = {event.aggregate_id for event in events}
                 for code, canonical_snapshot in canonical.items():
                     if (
