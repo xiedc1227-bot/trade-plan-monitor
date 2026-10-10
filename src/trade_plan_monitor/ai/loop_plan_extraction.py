@@ -266,12 +266,18 @@ def _missing_account_issues(account):
     )
 
 
-def build_loop_plan_prompt(source: str) -> str:
-    clauses = [c.model_dump(mode="json") for c in server_source_clauses(source)]
-    data = json.dumps({"source_text": source, "clauses": clauses}, ensure_ascii=False)
+def encode_untrusted_plan_data(value) -> str:
+    """Keep source and prior evidence inside one literal JSON data boundary."""
+    data = json.dumps(value, ensure_ascii=False)
     data = data.replace("<", "\\u003c").replace(">", "\\u003e")
     for marker in ("UNTRUSTED_PLAN_DATA_START", "UNTRUSTED_PLAN_DATA_END"):
         data = data.replace(marker, "\\u0055" + marker[1:])
+    return data
+
+
+def build_loop_plan_prompt(source: str) -> str:
+    clauses = [c.model_dump(mode="json") for c in server_source_clauses(source)]
+    data = encode_untrusted_plan_data({"source_text": source, "clauses": clauses})
     schema = json.dumps(LoopPlanExtractionOutput.model_json_schema(), ensure_ascii=False)
     return (
         LOOP_PROMPT_VERSION + ": Return one JSON object matching this complete Schema 5 "

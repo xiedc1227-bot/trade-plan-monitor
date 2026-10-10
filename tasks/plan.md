@@ -1,6 +1,6 @@
 # Repair Plan: Restore Daily Plan Continuity
 
-Status: design for review, 2026-10-10, Asia/Shanghai. This request authorizes the repair design; it does not record approval of new implementation details or claim completed repair. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`, all pending.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **5 of 20 repair tasks complete.** Concrete API approval remains pending at RP-T14. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -10,6 +10,8 @@ RP-T02 is complete: distinct v2 source/schedule/input codecs preserve v1 boundar
 RP-T03 is complete and RP-C01 passes: one private session traverses reviewed versions through the shared activation transaction, retains account/risk state, closes old ordinary intents and records context mismatches without inventing trades. Independent review corrected duplicate source snapshot identities and expired-event authority. 64 focused runtime/account/cycle/report/fixture/legacy checks pass, including 10 switch cases; deliberate removal of ordinary-intent closure fails and exact bytes are restored. Ruff and diff checks pass. **3 of 20 repair tasks complete.** Next: RP-T04. End-to-end preparation, publication and UI acceptance remain pending.
 
 RP-T04 is complete: v2 ordered items share the existing tagged document store, preserve v1 records/receipts, enforce source and predecessor bindings, and invalidate only the changed suffix. Exact whole-chain review bindings and UNKNOWN/cancelling exclusion are checked. Independent review corrected constructed-source validation before persistence. 91 store/input checks pass; removing predecessor-base validation causes the expected failure and original bytes are restored. Ruff and diff review pass. **4 of 20 repair tasks complete.** Next: RP-T05. Sequential extraction and freezing remain RP-T07/RP-T08.
+
+RP-T05 is complete: first-source extraction remains unchanged; follow-up extraction uses a distinct bounded contract containing only its source and validated past context, explicit scope/operations and non-authoritative account assertions. Independent review found and corrected cross-bucket quantity attribution and overlapping evidence. 144 extraction/provider checks pass, including 23 new follow-up cases; both account-attribution regressions failed before repair. Windows sandbox socket initialization blocked asyncio; the approved unsandboxed local fake-provider checks passed. Ruff and diff checks pass. **5 of 20 repair tasks complete.** Next: RP-T06; candidates remain unresolved until materialization and explicit review.
 
 ## RP01. Baseline and authority
 

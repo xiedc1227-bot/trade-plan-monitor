@@ -29,6 +29,7 @@ from trade_plan_monitor.ai.models import (
     PlanExtractionStatus,
 )
 from trade_plan_monitor.ai.openai_compatible import OpenAICompatibleProvider
+from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateContext, extract_plan_update
 from trade_plan_monitor.ai.review import dump_explicit_plan_draft_json
 from trade_plan_monitor.ai.secrets import InMemorySecretStore
 from trade_plan_monitor.backtest.preparation_worker import PreparationExtractor
@@ -255,7 +256,7 @@ class ConfiguredAIWebLifecycle:
         slots = self._extraction_slots
         config = binding.config.model_copy(update={"max_retries": 0})
 
-        def call(identity, source, token):
+        def call(identity, source, token, *, context: PlanUpdateContext | None = None):
             while not slots.acquire(timeout=0.05):
                 if token.cancelled:
                     return None
@@ -273,6 +274,11 @@ class ConfiguredAIWebLifecycle:
                         provider = OpenAICompatibleProvider(
                             client=client, secret_store=secret_store, profile=binding.profile,
                         )
+                        if context is not None:
+                            return await extract_plan_update(
+                                request_id=identity, source=source, context=context,
+                                config=config, provider=provider,
+                            )
                         return await extract_loop_plan(
                             request_id=identity, source=source, config=config, provider=provider,
                         )

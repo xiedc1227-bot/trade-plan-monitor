@@ -14,6 +14,14 @@ The earlier MV sections describe the narrower historical delivery and are not wh
 .venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_plan_switch.py tests/integration/test_monitor_loop_account.py tests/integration/test_monitor_loop_cycle.py tests/unit/test_monitor_loop_report.py tests/unit/test_monitor_loop_continuity_fixture.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt03-identity-fixed
 ```
 
+## RP-V05. Follow-up extraction
+
+RP-T05 is complete: first-source extraction remains unchanged; follow-up extraction uses a distinct bounded contract containing only its source and validated past context, explicit scope/operations and non-authoritative account assertions. Independent review found and corrected cross-bucket quantity attribution and overlapping evidence. 144 extraction/provider checks pass, including 23 new follow-up cases; both account-attribution regressions failed before repair. Windows sandbox socket initialization blocked asyncio; the approved unsandboxed local fake-provider checks passed. Ruff and diff checks pass. **5 of 20 repair tasks complete.** Next: RP-T06; candidates remain unresolved until materialization and explicit review.
+
+```text
+.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_extraction.py tests/integration/test_ai_provider_contract.py -q --basetemp=.pytest_cache/rpt05-final
+```
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

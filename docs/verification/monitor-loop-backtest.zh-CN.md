@@ -14,6 +14,14 @@ RP-T03 完成，RP-C01 通过：一个私有会话经共享激活事务遍历已
 .venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_plan_switch.py tests/integration/test_monitor_loop_account.py tests/integration/test_monitor_loop_cycle.py tests/unit/test_monitor_loop_report.py tests/unit/test_monitor_loop_continuity_fixture.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt03-identity-fixed
 ```
 
+## RP-V05. 后续原文提取
+
+RP-T05 完成：首份原文提取保持不变；后续提取采用独立受限契约，仅包含本份原文、已校验前项上下文、明确范围/操作及不具账户修改权限的持仓陈述。独立审阅发现并修复跨仓位数量错配及重叠证据。144 项提取/提供方检查通过，其中新增 23 项后续提取用例；两项账户归属回归在修复前失败。Windows 沙箱阻塞 asyncio 本机连接初始化，经批准在沙箱外运行本地模拟提供方检查后通过。Ruff 和差异检查通过。**20 项修复任务，完成 5 项。** 下一项 RP-T06；候选仍须程序整理及显式审核。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/unit/test_monitor_loop_extraction.py tests/integration/test_ai_provider_contract.py -q --basetemp=.pytest_cache/rpt05-final
+```
+
 ## MV01. 已实现边界
 
 历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。
