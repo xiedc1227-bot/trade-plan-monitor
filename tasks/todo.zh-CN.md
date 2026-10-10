@@ -1,3 +1,211 @@
+# 修复任务：按日计划连续回测
+
+状态：设计待审阅，2026-10-10，Asia/Shanghai。[修复方案](plan.zh-CN.md)；[英文权威版](todo.md)。**20 项修复任务，完成 1 项。** RP 编号独立于历史 ML 完成/取消记录。本清单限定实施范围，不表示已经授权实施或执行验证。
+
+
+实施进度，2026-10-10：用户已在当前会话授权本受限修复。RP-T01 完成：恢复原始 ML01–ML13、具体编解码/顺序编辑矩阵；11 项夹具检查及 14 项夹具/旧格式兼容检查通过；故意将账本预期 899500 改为 899501 后失败，已恢复精确字节。Ruff、双语章节/链接检查和差异审阅通过。这里只验证基准，不代表运行时连续性通过。**20 项修复任务，完成 1 项。** 下一项 RP-T02。下文历史仅规划授权措辞由本指令覆盖，具体 API 审查仍待完成。
+
+## RP-TASK-RULES. 执行边界
+
+2026-10-10 双语勘误：历史 ML-T35/ML-T36 的中文文件计数纠正为 5/6，与既有确切文件清单及英文记录一致。历史完成状态和验证证据不变。
+
+按下列顺序执行，依赖列同时明确前置条件。每项包含确切文件白名单、验收和验证；P/V 命令按 RP-CHECKS 添加前缀。验证命令中出现的文件仅为读取/测试对象，不自动获得额外编辑权限。计划新增文件已标明。源代码修改不得超出各项清单；本方案/清单及既有验证文档对的常规双语进度/证据更新，须写明实际结果，不得改变基准。每个增量可在不改变行为的前提下拆至约五个手写代码/测试文件，双语文档和机械生成产物单列。
+
+RP-T01 恢复被取消的 ML 要求，同时保留历史完成证据。新增 v2 测试接受连续性，旧格式拒绝测试继续作为兼容检查。集成期间保持既有单份流程可用，未完成候选不能取得执行权限。本任务序列不包含新的全局功能开关框架。
+
+## RP-TASKS. 顺序任务
+
+### RP-T01. 锁定恢复要求与独立夹具
+
+- [x] 实现、验证并完成差异审阅。
+- **依赖:** 无; **验收:** RP-A09, RP-A10, RP-A12.
+- **允许文件:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`; `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`; `tests/fixtures/monitor_loop_continuity.json`（新增）; `tests/unit/test_monitor_loop_continuity_fixture.py`（新增）.
+- **结果:** 恢复原业务条款并保留后续平台决定；记录 RP04 字段/版本矩阵、夹具字面量预期及旧冻结兼容用例，不修改运行逻辑。
+- **验证:** `P: tests/unit/test_monitor_loop_continuity_fixture.py`.
+
+### RP-T02. 恢复日程输入
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T01; **验收:** RP-A04, RP-A07, RP-A10.
+- **允许文件:** `src/trade_plan_monitor/backtest/plan_schedule.py`; `src/trade_plan_monitor/backtest/loop_input.py`; `tests/unit/test_monitor_loop_schedule.py`; `tests/unit/test_monitor_loop_input.py`.
+- **结果:** 新增模式支持版本数组、规范顺序和生效日选择；拒绝日期/冲突/起点/大小违规，保持 v1 解码及同版本延续。
+- **验证:** `P: tests/unit/test_monitor_loop_schedule.py tests/unit/test_monitor_loop_input.py`.
+
+### RP-T03. 在同一连续会话中切换
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T02; **验收:** RP-A05, RP-A06, RP-A09.
+- **允许文件:** `src/trade_plan_monitor/backtest/loop_session.py`; `src/trade_plan_monitor/backtest/loop_runner.py`; `src/trade_plan_monitor/backtest/response_policy.py`; `src/trade_plan_monitor/backtest/loop_report.py`; `tests/integration/test_monitor_loop_plan_switch.py`（新增）.
+- **结果:** 评估/执行前替换，保留账户/风险，关闭旧普通意图，记录生命周期事实和账户背景不兼容；证明 RP-A09 字面量账户跨边界保持。
+- **验证:** `P: tests/integration/test_monitor_loop_plan_switch.py tests/integration/test_monitor_loop_account.py tests/integration/test_monitor_loop_cycle.py`.
+
+### RP-T04. 持久化有序准备条目
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T01; **验收:** RP-A01, RP-A03, RP-A10.
+- **允许文件:** `src/trade_plan_monitor/backtest/preparation_models.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_store.py`; `tests/unit/test_monitor_loop_input.py`.
+- **结果:** 在既有文档表保存 v2 条目集合及依赖/修订绑定，执行上限/幂等和后续失效，保留旧记录/回执。
+- **验证:** `P: tests/integration/test_plan_preparation_store.py tests/unit/test_monitor_loop_input.py`.
+
+### RP-T05. 提取有来源绑定的后续变化
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T04; **验收:** RP-A02, RP-A10.
+- **允许文件:** `src/trade_plan_monitor/ai/loop_plan_extraction.py`; `src/trade_plan_monitor/ai/plan_update_extraction.py`（新增）; `src/trade_plan_monitor/web/ai_service.py`; `tests/unit/test_monitor_loop_extraction.py`.
+- **结果:** 版本化首份/后续提取契约，仅提供已校验过去上下文和明确变化范围；保留供应商防护及普通在线提取，模型不得产生批准。
+- **验证:** `P: tests/unit/test_monitor_loop_extraction.py tests/integration/test_ai_provider_contract.py`.
+
+### RP-T06. 形成完整可审核候选
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T05; **验收:** RP-A02, RP-A06.
+- **允许文件:** `src/trade_plan_monitor/backtest/plan_updates.py`（新增）; `src/trade_plan_monitor/ai/update_review.py`（新增）; `tests/unit/test_plan_update_merge.py`（新增）; `tests/unit/test_plan_update_bindings.py`（新增）.
+- **结果:** 确定性应用支持的变化，显示移除/保留规则及继承字段原始绑定；阻断作用域歧义、未解决前版和编造的账户变更。
+- **验证:** `P: tests/unit/test_plan_update_merge.py tests/unit/test_plan_update_bindings.py`.
+
+### RP-T07. 运行及恢复顺序提取
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T06; **验收:** RP-A01, RP-A03, RP-A11.
+- **允许文件:** `src/trade_plan_monitor/backtest/preparation_service.py`; `src/trade_plan_monitor/backtest/preparation_worker.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_worker.py`; `tests/integration/test_plan_preparation_api.py`.
+- **结果:** 一个操作串行处理条目并在实际结束前持续互斥；只重试受影响工作，以原文/前版/代次拒绝晚到结果并停止依赖提取。
+- **验证:** `P: tests/integration/test_plan_preparation_worker.py tests/integration/test_plan_preparation_api.py`.
+
+### RP-T08. 审核并冻结版本链
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T07; **验收:** RP-A02, RP-A03, RP-A06.
+- **允许文件:** `src/trade_plan_monitor/backtest/preparation_review.py`; `src/trade_plan_monitor/backtest/preparation_models.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_review.py`.
+- **结果:** 按精确修订冻结已接受完整快照、差异、日程及一份期初账户；校验本身不授权回放，保留不支持条款与旧冻结输入。
+- **验证:** `P: tests/integration/test_plan_preparation_review.py`.
+
+### RP-T09. 冻结全部适用数据需求
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T03, RP-T08; **验收:** RP-A04, RP-A07, RP-A10.
+- **允许文件:** `src/trade_plan_monitor/backtest/loop_dataset.py`; `src/trade_plan_monitor/backtest/loop_replay.py`; `tests/integration/test_monitor_loop_dataset.py`; `tests/unit/test_monitor_loop_cutoff.py`.
+- **结果:** 冻结相关需求并集，只提供活动版本证据，展示后继缺口；保留预热、日历、截止及旧数据集字节。
+- **验证:** `P: tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py`.
+
+### RP-T10. 提交并回放一份冻结链
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T09; **验收:** RP-A01, RP-A06, RP-A07, RP-A10.
+- **允许文件:** `src/trade_plan_monitor/backtest/loop_input_store.py`; `src/trade_plan_monitor/backtest/composition.py`; `src/trade_plan_monitor/backtest/application.py`; `tests/integration/test_monitor_loop_input_store.py`; `tests/integration/test_monitor_loop_submission.py`.
+- **结果:** 存储版本化不可变链包并提交一个有界引用/任务；重试保持运行 ID/截止，回放共用一个账户，不读取可变准备或调用 AI。
+- **验证:** `P: tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_monitor_loop_worker.py`.
+
+### RP-T11. 发布连续因果结果
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T10; **验收:** RP-A07, RP-A08, RP-A10.
+- **允许文件:** `src/trade_plan_monitor/backtest/loop_report.py`; `src/trade_plan_monitor/backtest/loop_publication.py`; `src/trade_plan_monitor/backtest/results.py`; `src/trade_plan_monitor/backtest/loop_input_store.py`; `tests/integration/test_monitor_loop_publication.py`.
+- **结果:** 发布一份包含版本的连续估值/因果事件报告，保持原子完成、上限、旧读取器和最新 30 次保留。
+- **验证:** `P: tests/unit/test_monitor_loop_report.py tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py`.
+
+### RP-T12. 提供有界准备操作
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T08, RP-T11; **验收:** RP-A01, RP-A03, RP-A11.
+- **允许文件:** `src/trade_plan_monitor/web/preparation_schemas.py`; `src/trade_plan_monitor/web/routers/backtest_preparations.py`; `src/trade_plan_monitor/backtest/preparation_service.py`; `tests/integration/test_plan_preparation_api.py`; `tests/integration/test_plan_preparation_contract.py`.
+- **结果:** 仅扩展 RP04 资源/分支，支持条目录入、分页、修正、重试和链审核；验证 4 MiB HTTP/总量上限、修订、互斥和 v1 兼容。
+- **验证:** `P: tests/integration/test_plan_preparation_api.py tests/integration/test_plan_preparation_contract.py`.
+
+### RP-T13. 提供一个运行及版本结果
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T12; **验收:** RP-A01, RP-A08, RP-A10.
+- **允许文件:** `src/trade_plan_monitor/web/backtest_schemas.py`; `src/trade_plan_monitor/web/routers/backtest_runs.py`; `src/trade_plan_monitor/backtest/composition.py`; `tests/integration/test_monitor_loop_result_api.py`; `tests/integration/test_monitor_loop_contract.py`.
+- **结果:** 接受一次已审核链提交，返回有界版本/日历/事件投影；保留旧响应分支、错误、历史及不新增导出的边界。
+- **验证:** `P: tests/integration/test_monitor_loop_result_api.py tests/integration/test_monitor_loop_contract.py`.
+
+### RP-T14. 生成并核对确切契约差异
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T13; **验收:** RP-A10, RP-A12.
+- **允许文件:** `openapi.json`; `openapi.runtime-status.json`; `web/src/api/generated.ts`; `web/src/api/generated-runtime-status.ts`; `scripts/generate_frontend_types.py`; `tests/integration/test_openapi_snapshot.py`; `docs/specifications/monitoring/SPEC-unified-plan.md`; `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`.
+- **结果:** 生成两套契约，仅核对约定新分支/条目读取路径并验证旧分支；生成器仅在这些结构必需时修改。具体差异审阅后才按既有流程记录契约批准，区分审阅证据与用户授权，不手工改生成类型或静默批准摘要。批准文档对与机械产物单独计算。
+- **验证:** `G; P: tests/integration/test_openapi_snapshot.py tests/integration/test_plan_preparation_contract.py tests/integration/test_monitor_loop_contract.py`.
+
+### RP-T15. 连接准备控制器与传输
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T14; **验收:** RP-A01, RP-A03.
+- **允许文件:** `web/src/api/preparations.ts`; `web/src/api/preparationReview.ts`; `web/src/composables/usePlanPreparation.ts`; `web/tests/unit/PlanPreparation.spec.ts`.
+- **结果:** 保持一个准备控制器，接收有序条目投影并使用稳定变更键；保留未保存内容、修订防护、轮询清理及结束/未知状态控制。
+- **验证:** `V: web/tests/unit/PlanPreparation.spec.ts`.
+
+### RP-T16. 展示整批录入与逐日审核
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T15; **验收:** RP-A01, RP-A02, RP-A04.
+- **允许文件:** `web/src/components/backtests/PlanPreparationSourceForm.vue`; `web/src/components/backtests/PlanPreparationProgress.vue`; `web/src/components/backtests/PlanPreparationReview.vue`; `web/src/views/BacktestNewView.vue`; `web/tests/unit/PlanPreparationReview.spec.ts`.
+- **结果:** 一次录入动作展示明确原文分段、逐项进度/差异、逐日适用情况、期初账户及未解决项，再审核整链；沿用既有布局规范。
+- **验证:** `V: web/tests/unit/PlanPreparationReview.spec.ts web/tests/unit/BacktestNewView.spec.ts`.
+
+### RP-T17. 从已审核集合提交一次
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T16; **验收:** RP-A01, RP-A07, RP-A11.
+- **允许文件:** `web/src/api/backtests.ts`; `web/src/composables/useBacktestRunForm.ts`; `web/src/components/backtests/BacktestRunForm.vue`; `web/tests/unit/MonitorLoopRunForm.spec.ts`.
+- **结果:** 绑定一份已审核链清单及数据集/响应/结束设置，只提供一次提交；不逐项循环提交回测，重试复用同一已接受运行。
+- **验证:** `V: web/tests/unit/MonitorLoopRunForm.spec.ts`.
+
+### RP-T18. 展示连续结果
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T17; **验收:** RP-A08, RP-A10.
+- **允许文件:** `web/src/components/backtests/MonitorLoopTimeline.vue`; `web/src/components/backtests/MonitorLoopSummary.vue`; `web/src/views/BacktestRunDetailView.vue`; `web/tests/unit/MonitorLoopResults.spec.ts`.
+- **结果:** 在既有报告展示版本切换、账户背景/旧意图说明及一条连续曲线，保留旧结果显示。
+- **验证:** `V: web/tests/unit/MonitorLoopResults.spec.ts web/tests/unit/BacktestRunDetailView.spec.ts`.
+
+### RP-T19. 验证原始业务全流程
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T18; **验收:** RP-A01–RP-A11.
+- **允许文件:** `tests/integration/test_monitor_loop_plan_switch.py`; `tests/integration/test_monitor_loop_parity.py`; `tests/integration/test_monitor_loop_faults.py`; `tests/integration/test_monitor_loop_worker.py`; `web/tests/e2e/monitor-loop-backtest.spec.ts`.
+- **结果:** 以独立四版本夹具、未来输入扰动、故障及真实浏览器覆盖 RP-A01–RP-A11，保留原平台阈值，如实记录真实原文仍存在的阻断。
+- **验证:** `P: tests/integration/test_monitor_loop_plan_switch.py tests/integration/test_monitor_loop_parity.py tests/integration/test_monitor_loop_faults.py tests/integration/test_monitor_loop_worker.py; E; F`.
+
+### RP-T20. 核对证据与操作指导
+
+- [ ] 实现、验证并完成差异审阅。
+- **依赖:** RP-T19; **验收:** RP-A12.
+- **允许文件:** `docs/operations/monitor-loop-backtest.md`; `docs/operations/monitor-loop-backtest.zh-CN.md`; `docs/verification/monitor-loop-backtest.md`; `docs/verification/monitor-loop-backtest.zh-CN.md`; `docs/specifications/monitoring/SPEC-unified-plan.md`; `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`.
+- **结果:** 记录一次录入/一次运行及确切证据/限制，通过既有具体契约审阅流程核对原 ML 门槛与双语/API；不编造批准或完成，文档可按成对文件拆分。
+- **验证:** `D; G; inspect original ML-A07/ML-A11/ML-A13/ML-A16–ML-A18 evidence`.
+
+## RP-CHECKPOINTS. 必需检查点
+
+| ID | 完成至 | 门槛 |
+|---|---|---|
+| RP-C01 | RP-T03 | 已审阅基准及实际离线日程/切换/账户连续性，符合 RP-A09 字面量结果。 |
+| RP-C02 | RP-T06 | 耐久、带来源绑定的提取/合并，明确未解决情形。 |
+| RP-C03 | RP-T08 | 顺序恢复及完整链冻结，无第二个准入操作。 |
+| RP-C04 | RP-T11 | 冻结数据/输入经一个工作线程形成原子连续报告，旧模式兼容。 |
+| RP-C05 | RP-T14 | 实际 API 和两套生成契约符合受限设计，生成不等于批准。 |
+| RP-C06 | RP-T17 | 整批准备/日历/审核最终只产生一个运行。 |
+| RP-C07 | RP-T20 | 原始业务验收、浏览器/故障/兼容证据及双语指导全部核对。 |
+
+## RP-CHECKS. 验证命令
+
+命令从 `trade-plan-monitor/` 执行。上文标明新增的文件为计划产物，不表示已经执行。单项测试通过不能代替原始业务门槛。
+
+- **P:** `.venv/Scripts/python.exe -m pytest <listed paths> -q -m "not live"`。
+- **V:** `npm --prefix web run test -- --run <listed paths with the leading web/ removed>`，然后执行 `npm --prefix web run type-check`。
+- **G:** `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`，按 RP04 审阅两套生成 OpenAPI/类型差异；既有批准快照失败须具体审阅，不能静默修改摘要。
+- **E:** `npm --prefix web run test:e2e -- tests/e2e/monitor-loop-backtest.spec.ts`，使用既有虚拟供应商浏览器夹具。
+- **F:** 受影响的既有共用运行时/记账、单任务/恢复、冻结回放/导出兼容测试；`.venv/Scripts/python.exe -m ruff check src tests scripts`；`npm --prefix web run test -- --run`；`npm --prefix web run type-check`；`npm --prefix web run build`；RP07 要求时执行原负载实验。记录确切选取的测试路径及结果，不声明未执行的检查。
+- **D:** `git diff --check`，双语 ID/上限/路径/命令/验收一致性及相对链接检查，并按 RP05 核对最终范围。
+
+编写本方案没有执行任何实现任务/测试。此前五项聚焦检查仅证明固定版本限制，不能作为修复验收。
+
+## RP-TASK-HISTORY. 已被替代的交付记录
+
+下文原任务清单原样保留。其中 37 项完成、ML-T06/ML-T09 取消及此前完成声明描述的是较窄的固定版本实现，不能据此排除本修复的原始要求，也不能计为修复完成。
+
+<!-- prior-delivery-record -->
+
 # 当前任务清单：监控闭环回测
 
 > 已授权实施，更新于 2026-10-09。实施方案：[plan.zh-CN.md](plan.zh-CN.md)；英文权威清单：[todo.md](todo.md)。已实施并验证：ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T29, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37, ML-T38. 证据：[验证记录](../docs/verification/monitor-loop-backtest.zh-CN.md)。其后保留此前已完成的历史清单。
@@ -439,7 +647,7 @@
 - **验收:** 未使用时状态/停止无副作用，真正数据/操作请求通过 guard/校验后激活所需能力。恢复按 epoch/修订/幂等明确重试准备或已选 resumeJobIds（<=1）。局部 503/Retry-After 表示任务未准入，初始化轮询不能重启失败准备。
 - **验证:** `.venv/Scripts/python.exe -m pytest tests/integration/test_backtest_service_api.py -q -m "not live"`
 - **主要文件:** `src/trade_plan_monitor/web/routers/backtest_service.py`, `src/trade_plan_monitor/web/backtest_service_schemas.py`, `src/trade_plan_monitor/web/app.py`, `src/trade_plan_monitor/backtest/service_lifecycle.py`, `tests/integration/test_backtest_service_api.py`
-- **范围:** M (4 个主要文件，含测试); **追溯:** ML-A19, ML-A21, ML-A24.
+- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A19, ML-A21, ML-A24.
 - **证据:** MV39：77 项检查通过，另有 1 项既有环境跳过。启动身份/修订/幂等、单个指定恢复、首次失败缓存、实际排空后修复、无启动副作用的状态/停止及 1000 回执上限均通过。移除启动身份保护产生 1 项预期失败并恢复精确字节。下一项 ML-T39。
 
 
@@ -461,7 +669,7 @@
 - **验收:** 仅活跃回测数据请求触发惰性准备，路由预取/全局状态轮询无副作用。区分未用/初始化/读取就绪/执行就绪/失败，503 保留表单并复用变更键。打开历史不恢复任务/AI，明确重试/恢复展示选中积压，监控可用。
 - **验证:** `npm --prefix web run test -- --run tests/unit/BacktestServiceState.spec.ts`; `npm --prefix web run type-check`
 - **主要文件:** `web/src/api/backtestService.ts`, `web/src/composables/useBacktestService.ts`, `web/src/components/backtests/BacktestServiceState.vue`, `web/src/layouts/AppShell.vue`, `web/src/composables/useBacktestRunForm.ts`, `web/tests/unit/BacktestServiceState.spec.ts`
-- **范围:** M (5 个主要文件，含测试); **追溯:** ML-A21, ML-A24.
+- **范围:** M (6 个主要文件；分两个增量); **追溯:** ML-A21, ML-A24.
 
 - **实施分片:** 先完成独立 API/组合函数/状态组件及专项测试，再接入仅活动回测路由的共享布局和既有提交请求的 503 保留；不在预取或监控路由进行服务控制。
 - **证据:** MV41：前端全部 935 项检查、类型检查及生产构建通过。真实 Chrome 验证只读历史及一次明确勾选恢复，在 1440/390/320 像素下无运行错误或溢出。移除 503 请求保留产生 1 项预期失败并恢复精确字节。下一项 ML-T27。

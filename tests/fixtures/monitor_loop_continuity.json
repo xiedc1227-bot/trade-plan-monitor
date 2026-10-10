@@ -1,0 +1,1009 @@
+{
+  "fixture_version": "monitor-loop-continuity-oracle-v1",
+  "provenance": {
+    "kind": "SYNTHETIC_OFFLINE",
+    "user_market_data": false,
+    "note": "All dates, rules, cash, prices and costs are explicitly invented offline test inputs. Expected monetary values are literal hand-worked assertions, not runtime output. Lifecycle variants are separate from the two-fill main path."
+  },
+  "symbol": "601021.SH",
+  "sources": [
+    {
+      "source_id": "source-1",
+      "version_id": "p1",
+      "scope": "FULL_REPLACEMENT",
+      "text": "SYNTHETIC OFFLINE COMPLETE TRADING PLAN p1\nSymbol: 601021.SH; market: SSE. This is invented test data, not a market recommendation or user plan.\nAuthored 2026-08-19 18:00:00 Asia/Shanghai; available 2026-08-19 18:01:00 Asia/Shanghai. Effective trading date: 2026-08-20. This is a complete replacement of all earlier ordinary rules.\nOpening cash is exactly CNY 10,000.00 (1,000,000 fen), with zero CORE shares, zero TACTICAL shares and no opening lots. The opening account snapshot is 2026-08-20 09:00:00 Asia/Shanghai.\nMaximum total position: 300 shares. No CORE or TACTICAL target allocation is inferred. Holdings and cash carry forward from the first opening account; only simulated fills change them.\nOrdinary rule ordinary-chain: Buy exactly 100 TACTICAL shares once when a completed five-minute close is strictly below 1,100 fen per share. The rule is valid while this version is active. Confirm using a completed five-minute bar, execute within the current session, and allow one planned quantity per independent occurrence. A new occurrence requires an explicit reviewed independent event linked to the prior signal; continuing true evidence and calendar changes do not reset consumption. Risk or reviewed invalidation ends ordinary authority; conflicting ordinary buy/sell instructions block both.\nNo new risk branch or pure alert is defined. Existing risk obligations survive replacement; their explicit shared reassessment requirements continue. Severe risk precedes ordinary risk.\nSimulation assumptions: FOLLOW_REMINDERS, zero-second response delay, full quantity at the next eligible completed one-minute close, one-fen tick, next-exchange-session settlement (T+1), CORE protection, block unverified special states. Commission rate zero with minimum commission 500 fen each side; stamp duty zero, transfer fee zero, buy/sell slippage zero. These are synthetic test assumptions. No recorded future transactions, partial fills, external fundamentals or discretionary conditions.\n",
+      "source_hash": "76d69f8eb64d2de22dcf2f0da199ab35c28a2e610e0dc0e186d4024f7e948d9b",
+      "authored_at": "2026-08-19T18:00:00+08:00",
+      "available_at": "2026-08-19T18:01:00+08:00",
+      "information_cutoff": "2026-08-19T15:00:00+08:00",
+      "effective_trade_date": "2026-08-20",
+      "stated_quantity": 0,
+      "snapshot": {
+        "schema_version": 5,
+        "execution_mode": "CONDITION_PLAN",
+        "execution_version": "condition-plan-v1",
+        "plan_id": "synthetic-continuity",
+        "version": 1,
+        "symbol": "601021.SH",
+        "name": "Synthetic continuity plan",
+        "market": "SSE",
+        "metadata": {
+          "report_at": null,
+          "reference_price_fen": null
+        },
+        "activation": {
+          "mode": "MANUAL"
+        },
+        "levels": null,
+        "position": {
+          "max_qty": 300,
+          "core_target_qty": null,
+          "tactical_target_qty": null,
+          "allocation_provenance": null,
+          "allocation_evidence": null
+        },
+        "trading_rules": {
+          "settlement": "NEXT_EXCHANGE_SESSION",
+          "tick_size_fen": 1,
+          "special_state_restrictions": "BLOCK_UNVERIFIED"
+        },
+        "monitoring": null,
+        "ordinary_rules": [
+          {
+            "status": "ENABLED",
+            "side": "BUY",
+            "rule_id": "ordinary-chain",
+            "quantity": 100,
+            "bucket": "TACTICAL",
+            "condition": {
+              "type": "MINUTE_CLOSE_BELOW",
+              "timeframe_minutes": 5,
+              "price_fen": 1100
+            },
+            "confirmation": {
+              "kind": "COMPLETED_BAR_CLOSE",
+              "timeframe_minutes": 5
+            },
+            "execution_window": "CURRENT_SESSION",
+            "zone": null,
+            "validity": {
+              "mode": "PLAN_ACTIVE"
+            },
+            "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+            "independent_signal": {
+              "mode": "REVIEWED_INDEPENDENT_EVENT",
+              "evidence_requirement": "Explicit reviewed independent event linked to the prior signal; unchanged true evidence never resets it."
+            }
+          }
+        ],
+        "risk_branches": [],
+        "execution_policy": {
+          "same_signal": "ONE_PLANNED_QUANTITY",
+          "risk_priority": "SEVERE_THEN_ORDINARY",
+          "ordinary_conflict": "BLOCK_BOTH"
+        },
+        "alert_rules": []
+      }
+    },
+    {
+      "source_id": "source-2",
+      "version_id": "p2",
+      "scope": "FULL_REPLACEMENT",
+      "text": "SYNTHETIC OFFLINE COMPLETE TRADING PLAN p2\nSymbol: 601021.SH; market: SSE. This is invented test data, not a market recommendation or user plan.\nAuthored 2026-08-20 18:00:00 Asia/Shanghai; available 2026-08-20 18:01:00 Asia/Shanghai. Effective trading date: 2026-08-21. This is a complete replacement of all earlier ordinary rules.\nHistorical account context says now flat, zero shares. This statement is only a comparison with the simulated ledger, not a reset, deposit, withdrawal or trade. The rule below is not conditional on that statement.\nMaximum total position: 300 shares. No CORE or TACTICAL target allocation is inferred. Holdings and cash carry forward from the first opening account; only simulated fills change them.\nOrdinary rule ordinary-chain: Buy exactly 100 TACTICAL shares once when a completed five-minute close is strictly below 500 fen per share. Revoke the previous below-1,100 rule; retaining its rule ID does not transfer prior signals. The rule is valid while this version is active. Confirm using a completed five-minute bar, execute within the current session, and allow one planned quantity per independent occurrence. A new occurrence requires an explicit reviewed independent event linked to the prior signal; continuing true evidence and calendar changes do not reset consumption. Risk or reviewed invalidation ends ordinary authority; conflicting ordinary buy/sell instructions block both.\nNo new risk branch or pure alert is defined. Existing risk obligations survive replacement; their explicit shared reassessment requirements continue. Severe risk precedes ordinary risk.\nSimulation assumptions: FOLLOW_REMINDERS, zero-second response delay, full quantity at the next eligible completed one-minute close, one-fen tick, next-exchange-session settlement (T+1), CORE protection, block unverified special states. Commission rate zero with minimum commission 500 fen each side; stamp duty zero, transfer fee zero, buy/sell slippage zero. These are synthetic test assumptions. No recorded future transactions, partial fills, external fundamentals or discretionary conditions.\n",
+      "source_hash": "600c9afe70b220fbf3d29d8a271042e230ef9e998b109459d04ef3940f038078",
+      "authored_at": "2026-08-20T18:00:00+08:00",
+      "available_at": "2026-08-20T18:01:00+08:00",
+      "information_cutoff": "2026-08-20T15:00:00+08:00",
+      "effective_trade_date": "2026-08-21",
+      "stated_quantity": 0,
+      "snapshot": {
+        "schema_version": 5,
+        "execution_mode": "CONDITION_PLAN",
+        "execution_version": "condition-plan-v1",
+        "plan_id": "synthetic-continuity",
+        "version": 2,
+        "symbol": "601021.SH",
+        "name": "Synthetic continuity plan",
+        "market": "SSE",
+        "metadata": {
+          "report_at": null,
+          "reference_price_fen": null
+        },
+        "activation": {
+          "mode": "MANUAL"
+        },
+        "levels": null,
+        "position": {
+          "max_qty": 300,
+          "core_target_qty": null,
+          "tactical_target_qty": null,
+          "allocation_provenance": null,
+          "allocation_evidence": null
+        },
+        "trading_rules": {
+          "settlement": "NEXT_EXCHANGE_SESSION",
+          "tick_size_fen": 1,
+          "special_state_restrictions": "BLOCK_UNVERIFIED"
+        },
+        "monitoring": null,
+        "ordinary_rules": [
+          {
+            "status": "ENABLED",
+            "side": "BUY",
+            "rule_id": "ordinary-chain",
+            "quantity": 100,
+            "bucket": "TACTICAL",
+            "condition": {
+              "type": "MINUTE_CLOSE_BELOW",
+              "timeframe_minutes": 5,
+              "price_fen": 500
+            },
+            "confirmation": {
+              "kind": "COMPLETED_BAR_CLOSE",
+              "timeframe_minutes": 5
+            },
+            "execution_window": "CURRENT_SESSION",
+            "zone": null,
+            "validity": {
+              "mode": "PLAN_ACTIVE"
+            },
+            "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+            "independent_signal": {
+              "mode": "REVIEWED_INDEPENDENT_EVENT",
+              "evidence_requirement": "Explicit reviewed independent event linked to the prior signal; unchanged true evidence never resets it."
+            }
+          }
+        ],
+        "risk_branches": [],
+        "execution_policy": {
+          "same_signal": "ONE_PLANNED_QUANTITY",
+          "risk_priority": "SEVERE_THEN_ORDINARY",
+          "ordinary_conflict": "BLOCK_BOTH"
+        },
+        "alert_rules": []
+      }
+    },
+    {
+      "source_id": "source-3",
+      "version_id": "p3",
+      "scope": "FULL_REPLACEMENT",
+      "text": "SYNTHETIC OFFLINE COMPLETE TRADING PLAN p3\nSymbol: 601021.SH; market: SSE. This is invented test data, not a market recommendation or user plan.\nAuthored 2026-08-21 18:00:00 Asia/Shanghai; available 2026-08-21 18:01:00 Asia/Shanghai. Effective trading date: 2026-08-24. This is a complete replacement of all earlier ordinary rules.\nHistorical account context says currently 200 TACTICAL shares, zero CORE shares. This statement is only a comparison with the simulated ledger, not a reset or trade. The sale below requires only 100 actually sellable TACTICAL shares, not a 200-share account.\nMaximum total position: 300 shares. No CORE or TACTICAL target allocation is inferred. Holdings and cash carry forward from the first opening account; only simulated fills change them.\nOrdinary rule ordinary-chain: Sell exactly 100 TACTICAL shares once when a completed five-minute close is between 1,200 and 1,300 fen inclusive. Revoke the previous buy rule; retaining its rule ID does not transfer prior signals. The rule is valid while this version is active. Confirm using a completed five-minute bar, execute within the current session, and allow one planned quantity per independent occurrence. A new occurrence requires an explicit reviewed independent event linked to the prior signal; continuing true evidence and calendar changes do not reset consumption. Risk or reviewed invalidation ends ordinary authority; conflicting ordinary buy/sell instructions block both.\nNo new risk branch or pure alert is defined. Existing risk obligations survive replacement; their explicit shared reassessment requirements continue. Severe risk precedes ordinary risk.\nSimulation assumptions: FOLLOW_REMINDERS, zero-second response delay, full quantity at the next eligible completed one-minute close, one-fen tick, next-exchange-session settlement (T+1), CORE protection, block unverified special states. Commission rate zero with minimum commission 500 fen each side; stamp duty zero, transfer fee zero, buy/sell slippage zero. These are synthetic test assumptions. No recorded future transactions, partial fills, external fundamentals or discretionary conditions.\n",
+      "source_hash": "187746f58654537050a40f74513c9fe7e10b8da9d766439ffb5b09ccffc3d1dc",
+      "authored_at": "2026-08-21T18:00:00+08:00",
+      "available_at": "2026-08-21T18:01:00+08:00",
+      "information_cutoff": "2026-08-21T15:00:00+08:00",
+      "effective_trade_date": "2026-08-24",
+      "stated_quantity": 200,
+      "snapshot": {
+        "schema_version": 5,
+        "execution_mode": "CONDITION_PLAN",
+        "execution_version": "condition-plan-v1",
+        "plan_id": "synthetic-continuity",
+        "version": 3,
+        "symbol": "601021.SH",
+        "name": "Synthetic continuity plan",
+        "market": "SSE",
+        "metadata": {
+          "report_at": null,
+          "reference_price_fen": null
+        },
+        "activation": {
+          "mode": "MANUAL"
+        },
+        "levels": null,
+        "position": {
+          "max_qty": 300,
+          "core_target_qty": null,
+          "tactical_target_qty": null,
+          "allocation_provenance": null,
+          "allocation_evidence": null
+        },
+        "trading_rules": {
+          "settlement": "NEXT_EXCHANGE_SESSION",
+          "tick_size_fen": 1,
+          "special_state_restrictions": "BLOCK_UNVERIFIED"
+        },
+        "monitoring": null,
+        "ordinary_rules": [
+          {
+            "status": "ENABLED",
+            "side": "SELL",
+            "rule_id": "ordinary-chain",
+            "quantity": 100,
+            "bucket": "TACTICAL",
+            "condition": {
+              "type": "MINUTE_CLOSE_IN_RANGE",
+              "timeframe_minutes": 5,
+              "low_fen": 1200,
+              "high_fen": 1300,
+              "include_low": true,
+              "include_high": true
+            },
+            "confirmation": {
+              "kind": "COMPLETED_BAR_CLOSE",
+              "timeframe_minutes": 5
+            },
+            "execution_window": "CURRENT_SESSION",
+            "zone": null,
+            "validity": {
+              "mode": "PLAN_ACTIVE"
+            },
+            "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+            "independent_signal": {
+              "mode": "REVIEWED_INDEPENDENT_EVENT",
+              "evidence_requirement": "Explicit reviewed independent event linked to the prior signal; unchanged true evidence never resets it."
+            }
+          }
+        ],
+        "risk_branches": [],
+        "execution_policy": {
+          "same_signal": "ONE_PLANNED_QUANTITY",
+          "risk_priority": "SEVERE_THEN_ORDINARY",
+          "ordinary_conflict": "BLOCK_BOTH"
+        },
+        "alert_rules": []
+      }
+    },
+    {
+      "source_id": "source-4",
+      "version_id": "p4",
+      "scope": "FULL_REPLACEMENT",
+      "text": "SYNTHETIC OFFLINE COMPLETE TRADING PLAN p4\nSymbol: 601021.SH; market: SSE. This is invented test data, not a market recommendation or user plan.\nAuthored 2026-08-24 18:00:00 Asia/Shanghai; available 2026-08-24 18:01:00 Asia/Shanghai. Effective trading date: 2026-08-25. This is a complete replacement of all earlier ordinary rules.\nHistorical account context says now flat, zero shares. This statement is only a comparison with the simulated ledger, not a reset or trade. The rule below is not conditional on that statement.\nMaximum total position: 300 shares. No CORE or TACTICAL target allocation is inferred. Holdings and cash carry forward from the first opening account; only simulated fills change them.\nOrdinary rule ordinary-chain: Buy exactly 100 TACTICAL shares once when a completed five-minute close is strictly below 500 fen per share. Revoke the previous sell rule; retaining its rule ID does not transfer prior signals. The rule is valid while this version is active. Confirm using a completed five-minute bar, execute within the current session, and allow one planned quantity per independent occurrence. A new occurrence requires an explicit reviewed independent event linked to the prior signal; continuing true evidence and calendar changes do not reset consumption. Risk or reviewed invalidation ends ordinary authority; conflicting ordinary buy/sell instructions block both.\nNo new risk branch or pure alert is defined. Existing risk obligations survive replacement; their explicit shared reassessment requirements continue. Severe risk precedes ordinary risk.\nSimulation assumptions: FOLLOW_REMINDERS, zero-second response delay, full quantity at the next eligible completed one-minute close, one-fen tick, next-exchange-session settlement (T+1), CORE protection, block unverified special states. Commission rate zero with minimum commission 500 fen each side; stamp duty zero, transfer fee zero, buy/sell slippage zero. These are synthetic test assumptions. No recorded future transactions, partial fills, external fundamentals or discretionary conditions.\n",
+      "source_hash": "fc7b1755714510740ba96ea4ecccb9a2c4837f24967c765147349650ea4d9644",
+      "authored_at": "2026-08-24T18:00:00+08:00",
+      "available_at": "2026-08-24T18:01:00+08:00",
+      "information_cutoff": "2026-08-24T15:00:00+08:00",
+      "effective_trade_date": "2026-08-25",
+      "stated_quantity": 0,
+      "snapshot": {
+        "schema_version": 5,
+        "execution_mode": "CONDITION_PLAN",
+        "execution_version": "condition-plan-v1",
+        "plan_id": "synthetic-continuity",
+        "version": 4,
+        "symbol": "601021.SH",
+        "name": "Synthetic continuity plan",
+        "market": "SSE",
+        "metadata": {
+          "report_at": null,
+          "reference_price_fen": null
+        },
+        "activation": {
+          "mode": "MANUAL"
+        },
+        "levels": null,
+        "position": {
+          "max_qty": 300,
+          "core_target_qty": null,
+          "tactical_target_qty": null,
+          "allocation_provenance": null,
+          "allocation_evidence": null
+        },
+        "trading_rules": {
+          "settlement": "NEXT_EXCHANGE_SESSION",
+          "tick_size_fen": 1,
+          "special_state_restrictions": "BLOCK_UNVERIFIED"
+        },
+        "monitoring": null,
+        "ordinary_rules": [
+          {
+            "status": "ENABLED",
+            "side": "BUY",
+            "rule_id": "ordinary-chain",
+            "quantity": 100,
+            "bucket": "TACTICAL",
+            "condition": {
+              "type": "MINUTE_CLOSE_BELOW",
+              "timeframe_minutes": 5,
+              "price_fen": 500
+            },
+            "confirmation": {
+              "kind": "COMPLETED_BAR_CLOSE",
+              "timeframe_minutes": 5
+            },
+            "execution_window": "CURRENT_SESSION",
+            "zone": null,
+            "validity": {
+              "mode": "PLAN_ACTIVE"
+            },
+            "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+            "independent_signal": {
+              "mode": "REVIEWED_INDEPENDENT_EVENT",
+              "evidence_requirement": "Explicit reviewed independent event linked to the prior signal; unchanged true evidence never resets it."
+            }
+          }
+        ],
+        "risk_branches": [],
+        "execution_policy": {
+          "same_signal": "ONE_PLANNED_QUANTITY",
+          "risk_priority": "SEVERE_THEN_ORDINARY",
+          "ordinary_conflict": "BLOCK_BOTH"
+        },
+        "alert_rules": []
+      }
+    }
+  ],
+  "opening_account": {
+    "snapshot_at": "2026-08-20T09:00:00+08:00",
+    "inventory_known": true,
+    "cash": {
+      "kind": "KNOWN",
+      "balance_fen": 1000000
+    },
+    "lots": [],
+    "opening_mark": null,
+    "evidence": "source-1 explicitly declares synthetic opening cash and zero shares."
+  },
+  "response": {
+    "mode": "FOLLOW_REMINDERS",
+    "response_delay_seconds": 0,
+    "fill_model": "NEXT_ELIGIBLE_MINUTE_CLOSE"
+  },
+  "costs": {
+    "formula_version": "monitor-loop-costs-v1",
+    "commission_rate": "0",
+    "minimum_commission_fen": 500,
+    "stamp_duty_rate": "0",
+    "transfer_fee_rate": "0",
+    "buy_slippage_fen": 0,
+    "sell_slippage_fen": 0
+  },
+  "recorded_actions": [],
+  "calendar": [
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-08-19",
+      "is_open": true,
+      "previous_trade_date": "2026-08-18"
+    },
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-08-20",
+      "is_open": true,
+      "previous_trade_date": "2026-08-19"
+    },
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-08-21",
+      "is_open": true,
+      "previous_trade_date": "2026-08-20"
+    },
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-08-22",
+      "is_open": false,
+      "previous_trade_date": "2026-08-21"
+    },
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-08-23",
+      "is_open": false,
+      "previous_trade_date": "2026-08-21"
+    },
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-08-24",
+      "is_open": true,
+      "previous_trade_date": "2026-08-21"
+    },
+    {
+      "exchange": "SSE",
+      "cal_date": "2026-08-25",
+      "is_open": true,
+      "previous_trade_date": "2026-08-24"
+    }
+  ],
+  "minute_bars": [
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:31:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:31:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:32:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:32:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:33:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:33:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:34:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:34:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:35:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:35:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:36:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:36:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:37:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:37:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-20T09:38:00+08:00",
+      "open_fen": 1000,
+      "high_fen": 1000,
+      "low_fen": 1000,
+      "close_fen": 1000,
+      "volume_shares": 1000,
+      "amount_yuan": "10000",
+      "received_at": "2026-08-20T09:38:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:31:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:31:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:32:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:32:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:33:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:33:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:34:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:34:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:35:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:35:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:36:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:36:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:37:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:37:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-21T09:38:00+08:00",
+      "open_fen": 1100,
+      "high_fen": 1100,
+      "low_fen": 1100,
+      "close_fen": 1100,
+      "volume_shares": 1000,
+      "amount_yuan": "11000",
+      "received_at": "2026-08-21T09:38:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:31:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:31:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:32:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:32:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:33:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:33:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:34:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:34:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:35:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:35:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:36:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:36:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:37:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:37:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-24T09:38:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-24T09:38:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:31:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:31:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:32:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:32:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:33:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:33:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:34:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:34:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:35:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:35:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:36:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:36:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:37:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:37:12+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "bar_end": "2026-08-25T09:38:00+08:00",
+      "open_fen": 1200,
+      "high_fen": 1200,
+      "low_fen": 1200,
+      "close_fen": 1200,
+      "volume_shares": 1000,
+      "amount_yuan": "12000",
+      "received_at": "2026-08-25T09:38:12+08:00"
+    }
+  ],
+  "daily_limits": [
+    {
+      "symbol": "601021.SH",
+      "trade_date": "2026-08-20",
+      "up_limit_fen": 2000,
+      "down_limit_fen": 400,
+      "received_at": "2026-08-20T08:00:00+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "trade_date": "2026-08-21",
+      "up_limit_fen": 2000,
+      "down_limit_fen": 400,
+      "received_at": "2026-08-21T08:00:00+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "trade_date": "2026-08-24",
+      "up_limit_fen": 2000,
+      "down_limit_fen": 400,
+      "received_at": "2026-08-24T08:00:00+08:00"
+    },
+    {
+      "symbol": "601021.SH",
+      "trade_date": "2026-08-25",
+      "up_limit_fen": 2000,
+      "down_limit_fen": 400,
+      "received_at": "2026-08-25T08:00:00+08:00"
+    }
+  ],
+  "expected": {
+    "account_initializations": 1,
+    "run_count": 1,
+    "result_count": 1,
+    "version_boundaries": [
+      {
+        "version_id": "p1",
+        "at": "2026-08-20T09:00:00+08:00",
+        "cash_fen": 1000000,
+        "quantity": 0,
+        "sellable_quantity": 0,
+        "cost_basis_fen": 0,
+        "paid_fees_fen": 0,
+        "realized_pnl_fen": 0,
+        "lots": []
+      },
+      {
+        "version_id": "p2",
+        "at": "2026-08-21T09:00:00+08:00",
+        "cash_fen": 899500,
+        "quantity": 100,
+        "sellable_quantity": 100,
+        "cost_basis_fen": 100500,
+        "paid_fees_fen": 500,
+        "realized_pnl_fen": 0,
+        "lots": [
+          {
+            "origin": "p1-buy",
+            "bucket": "TACTICAL",
+            "quantity": 100,
+            "acquired_trade_date": "2026-08-20",
+            "cost_basis_fen": 100500,
+            "sellable_quantity": 100
+          }
+        ]
+      },
+      {
+        "version_id": "p3",
+        "at": "2026-08-24T09:00:00+08:00",
+        "cash_fen": 899500,
+        "quantity": 100,
+        "sellable_quantity": 100,
+        "cost_basis_fen": 100500,
+        "paid_fees_fen": 500,
+        "realized_pnl_fen": 0,
+        "lots": [
+          {
+            "origin": "p1-buy",
+            "bucket": "TACTICAL",
+            "quantity": 100,
+            "acquired_trade_date": "2026-08-20",
+            "cost_basis_fen": 100500,
+            "sellable_quantity": 100
+          }
+        ]
+      },
+      {
+        "version_id": "p4",
+        "at": "2026-08-25T09:00:00+08:00",
+        "cash_fen": 1019000,
+        "quantity": 0,
+        "sellable_quantity": 0,
+        "cost_basis_fen": 0,
+        "paid_fees_fen": 1000,
+        "realized_pnl_fen": 19000,
+        "lots": []
+      }
+    ],
+    "after_buy": {
+      "cash_fen": 899500,
+      "quantity": 100,
+      "sellable_quantity": 0,
+      "cost_basis_fen": 100500,
+      "paid_fees_fen": 500,
+      "realized_pnl_fen": 0,
+      "lots": [
+        {
+          "origin": "p1-buy",
+          "bucket": "TACTICAL",
+          "quantity": 100,
+          "acquired_trade_date": "2026-08-20",
+          "cost_basis_fen": 100500,
+          "sellable_quantity": 0
+        }
+      ]
+    },
+    "final_account": {
+      "cash_fen": 1019000,
+      "quantity": 0,
+      "sellable_quantity": 0,
+      "cost_basis_fen": 0,
+      "paid_fees_fen": 1000,
+      "realized_pnl_fen": 19000,
+      "lots": []
+    },
+    "fills": [
+      {
+        "version_id": "p1",
+        "side": "BUY",
+        "quantity": 100,
+        "price_fen": 1000,
+        "fees_fen": 500,
+        "reminder_available_at": "2026-08-20T09:35:12+08:00",
+        "bar_end": "2026-08-20T09:37:00+08:00",
+        "available_at": "2026-08-20T09:37:12+08:00"
+      },
+      {
+        "version_id": "p3",
+        "side": "SELL",
+        "quantity": 100,
+        "price_fen": 1200,
+        "fees_fen": 500,
+        "reminder_available_at": "2026-08-24T09:35:12+08:00",
+        "bar_end": "2026-08-24T09:37:00+08:00",
+        "available_at": "2026-08-24T09:37:12+08:00"
+      }
+    ],
+    "account_context": [
+      {
+        "version_id": "p2",
+        "stated_quantity": 0,
+        "simulated_quantity": 100,
+        "difference_quantity": -100,
+        "account_mutated": false
+      },
+      {
+        "version_id": "p3",
+        "stated_quantity": 200,
+        "simulated_quantity": 100,
+        "difference_quantity": 100,
+        "account_mutated": false
+      },
+      {
+        "version_id": "p4",
+        "stated_quantity": 0,
+        "simulated_quantity": 0,
+        "difference_quantity": 0,
+        "account_mutated": false
+      }
+    ]
+  },
+  "variants": {
+    "account_dependent_instruction": {
+      "version_id": "p3",
+      "source_amendment": "Replace the p3 sale with: only when the account has exactly 200 TACTICAL shares, sell 100 shares on the declared completed five-minute range confirmation. No interpretation overriding this dependency is reviewed.",
+      "required_quantity": 200,
+      "actual_quantity": 100,
+      "expected": {
+        "instruction_blocked": true,
+        "fabricated_fills": 0,
+        "cash_fen": 899500,
+        "quantity": 100,
+        "cost_basis_fen": 100500,
+        "paid_fees_fen": 500
+      }
+    },
+    "replacement_with_pending_authority": {
+      "note": "Separate lifecycle setup after the p1 buy; not an extra order in the main path. Seed an authorized daily next-session ordinary intent and an existing risk obligation before the p2 switch.",
+      "switch_at": "2026-08-21T09:00:00+08:00",
+      "old_ordinary_intent": {
+        "owner_version_id": "p1",
+        "rule_id": "ordinary-chain",
+        "side": "SELL",
+        "quantity": 100,
+        "execution_window": "NEXT_EXCHANGE_SESSION_ONLY",
+        "ready_at": "2026-08-21T09:30:00+08:00"
+      },
+      "risk_obligation": {
+        "obligation_id": "retained-risk-1",
+        "origin_version_id": "p1",
+        "revision": 1,
+        "target_core_qty": 0,
+        "target_tactical_qty": 0,
+        "status": "AWAITING_EXPLICIT_REASSESSMENT",
+        "evidence": "Synthetic existing obligation; missing scoped reassessment evidence is not release."
+      },
+      "expected": {
+        "ordinary_status": "CLOSED_REPLACED",
+        "transferred_authority": false,
+        "fills_before_successor_evaluation": 0,
+        "risk_obligation": {
+          "obligation_id": "retained-risk-1",
+          "origin_version_id": "p1",
+          "revision": 1,
+          "target_core_qty": 0,
+          "target_tactical_qty": 0,
+          "status": "AWAITING_EXPLICIT_REASSESSMENT",
+          "evidence": "Synthetic existing obligation; missing scoped reassessment evidence is not release."
+        },
+        "account_after_switch": {
+          "version_id": "p2",
+          "at": "2026-08-21T09:00:00+08:00",
+          "cash_fen": 899500,
+          "quantity": 100,
+          "sellable_quantity": 100,
+          "cost_basis_fen": 100500,
+          "paid_fees_fen": 500,
+          "realized_pnl_fen": 0,
+          "lots": [
+            {
+              "origin": "p1-buy",
+              "bucket": "TACTICAL",
+              "quantity": 100,
+              "acquired_trade_date": "2026-08-20",
+              "cost_basis_fen": 100500,
+              "sellable_quantity": 100
+            }
+          ]
+        }
+      },
+      "draft_only_expected": {
+        "active_version_id": "p1",
+        "ordinary_closed": false
+      }
+    }
+  },
+  "compatibility": {
+    "monitor_loop_input_v1": {
+      "json": "{\"schema_version\":\"monitor-loop-input-v1\",\"run_formula_version\":\"backtest-run-v5\",\"schedule\":{\"entries\":[{\"effective_trade_date\":\"2026-08-20\",\"version\":{\"version_id\":\"p1\",\"plan_hash\":\"57f2c23c96a0cbff4e3a0041d69fa9c696a181651c4e6029821773cdf9ca3e80\",\"snapshot\":{\"schema_version\":5,\"execution_mode\":\"CONDITION_PLAN\",\"execution_version\":\"condition-plan-v1\",\"plan_id\":\"synthetic-daily\",\"version\":1,\"symbol\":\"601021.SH\",\"name\":\"Synthetic reviewed plan\",\"market\":\"SSE\",\"metadata\":{\"report_at\":null,\"reference_price_fen\":null},\"activation\":{\"mode\":\"MANUAL\"},\"levels\":null,\"position\":{\"max_qty\":1000,\"core_target_qty\":null,\"tactical_target_qty\":null,\"allocation_provenance\":null,\"allocation_evidence\":null},\"trading_rules\":{\"settlement\":\"NEXT_EXCHANGE_SESSION\",\"tick_size_fen\":1,\"special_state_restrictions\":\"BLOCK_UNVERIFIED\"},\"monitoring\":null,\"ordinary_rules\":[{\"status\":\"ENABLED\",\"side\":\"BUY\",\"rule_id\":\"low-buy\",\"quantity\":100,\"bucket\":\"TACTICAL\",\"condition\":{\"type\":\"MINUTE_CLOSE_BELOW\",\"timeframe_minutes\":5,\"price_fen\":4000},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"execution_window\":\"CURRENT_SESSION\",\"zone\":null,\"validity\":{\"mode\":\"PLAN_ACTIVE\"},\"invalidation\":\"RISK_OR_REVIEWED_INVALIDATION\",\"independent_signal\":{\"mode\":\"REVIEWED_INDEPENDENT_EVENT\",\"evidence_requirement\":\"New structure linked to prior signal\"}}],\"risk_branches\":[],\"execution_policy\":{\"same_signal\":\"ONE_PLANNED_QUANTITY\",\"risk_priority\":\"SEVERE_THEN_ORDINARY\",\"ordinary_conflict\":\"BLOCK_BOTH\"},\"alert_rules\":[]},\"source_hashes\":[\"1111111111111111111111111111111111111111111111111111111111111111\"],\"evidence_hash\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"authored_at\":\"2026-08-19T18:00:00+08:00\",\"authored_date\":null,\"available_at\":\"2026-08-20T08:00:00+08:00\",\"information_cutoff\":\"2026-08-19T15:00:00+08:00\",\"review\":{\"content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"reviewed_at\":\"2026-08-26T18:00:00+08:00\",\"confirmed\":true,\"evidence\":\"Offline reviewed fixture; retrospective provenance stays explicit.\",\"source_hashes\":[\"1111111111111111111111111111111111111111111111111111111111111111\"],\"evidence_hash\":\"2222222222222222222222222222222222222222222222222222222222222222\"}}}]},\"initial_account\":{\"snapshot_at\":\"2026-08-20T09:00:00+08:00\",\"inventory_known\":true,\"cash\":{\"kind\":\"KNOWN\",\"balance_fen\":0},\"lots\":[{\"lot_key\":\"opening-core\",\"bucket\":\"CORE\",\"quantity\":100,\"cost_basis_fen\":401050,\"acquired_trade_date\":null,\"sellable_quantity\":null,\"evidence\":\"Source explicitly states 100 CORE at 40.105/share.\"}],\"opening_mark\":null,\"evidence\":\"Explicit reviewed opening account; no acquisition-date inference.\"},\"boundary\":{\"started_at\":\"2026-08-20T09:00:00+08:00\",\"submitted_at\":\"2026-08-27T10:00:00+08:00\",\"requested_end_date\":null,\"resolved_end_date\":\"2026-08-27\",\"origin\":\"DEFAULTED\",\"evidence_cutoff\":\"2026-08-27T10:00:00+08:00\"},\"dataset_hash\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"response\":{\"mode\":\"FOLLOW_REMINDERS\",\"response_delay_seconds\":0,\"fill_model\":\"NEXT_ELIGIBLE_MINUTE_CLOSE\"},\"costs\":{\"formula_version\":\"monitor-loop-costs-v1\",\"commission_rate\":\"0.0003\",\"minimum_commission_fen\":500,\"stamp_duty_rate\":\"0.0005\",\"transfer_fee_rate\":\"0.00001\",\"buy_slippage_fen\":1,\"sell_slippage_fen\":1},\"limits\":{\"max_evaluations\":70000,\"max_reminders\":70000,\"max_intents\":70000,\"max_execution_attempts\":70000}}",
+      "canonical_json": "{\"boundary\":{\"evidence_cutoff\":\"2026-08-27T10:00:00.000000+08:00\",\"origin\":\"DEFAULTED\",\"requested_end_date\":null,\"resolved_end_date\":\"2026-08-27\",\"started_at\":\"2026-08-20T09:00:00.000000+08:00\",\"submitted_at\":\"2026-08-27T10:00:00.000000+08:00\"},\"costs\":{\"buy_slippage_fen\":1,\"commission_rate\":\"0.0003\",\"formula_version\":\"monitor-loop-costs-v1\",\"minimum_commission_fen\":500,\"sell_slippage_fen\":1,\"stamp_duty_rate\":\"0.0005\",\"transfer_fee_rate\":\"0.00001\"},\"dataset_hash\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"initial_account\":{\"cash\":{\"balance_fen\":0,\"kind\":\"KNOWN\"},\"evidence\":\"Explicit reviewed opening account; no acquisition-date inference.\",\"inventory_known\":true,\"lots\":[{\"acquired_trade_date\":null,\"bucket\":\"CORE\",\"cost_basis_fen\":401050,\"evidence\":\"Source explicitly states 100 CORE at 40.105/share.\",\"lot_key\":\"opening-core\",\"quantity\":100,\"sellable_quantity\":null}],\"opening_mark\":null,\"snapshot_at\":\"2026-08-20T09:00:00.000000+08:00\"},\"limits\":{\"max_evaluations\":70000,\"max_execution_attempts\":70000,\"max_intents\":70000,\"max_reminders\":70000},\"response\":{\"fill_model\":\"NEXT_ELIGIBLE_MINUTE_CLOSE\",\"mode\":\"FOLLOW_REMINDERS\",\"response_delay_seconds\":0},\"run_formula_version\":\"backtest-run-v5\",\"schedule\":{\"entries\":[{\"effective_trade_date\":\"2026-08-20\",\"version\":{\"authored_at\":\"2026-08-19T18:00:00.000000+08:00\",\"authored_date\":null,\"available_at\":\"2026-08-20T08:00:00.000000+08:00\",\"evidence_hash\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"information_cutoff\":\"2026-08-19T15:00:00.000000+08:00\",\"plan_hash\":\"57f2c23c96a0cbff4e3a0041d69fa9c696a181651c4e6029821773cdf9ca3e80\",\"review\":{\"confirmed\":true,\"content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"evidence\":\"Offline reviewed fixture; retrospective provenance stays explicit.\",\"evidence_hash\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"reviewed_at\":\"2026-08-26T18:00:00.000000+08:00\",\"source_hashes\":[\"1111111111111111111111111111111111111111111111111111111111111111\"]},\"snapshot\":{\"activation\":{\"mode\":\"MANUAL\"},\"alert_rules\":[],\"execution_mode\":\"CONDITION_PLAN\",\"execution_policy\":{\"ordinary_conflict\":\"BLOCK_BOTH\",\"risk_priority\":\"SEVERE_THEN_ORDINARY\",\"same_signal\":\"ONE_PLANNED_QUANTITY\"},\"execution_version\":\"condition-plan-v1\",\"levels\":null,\"market\":\"SSE\",\"metadata\":{\"reference_price_fen\":null,\"report_at\":null},\"monitoring\":null,\"name\":\"Synthetic reviewed plan\",\"ordinary_rules\":[{\"bucket\":\"TACTICAL\",\"condition\":{\"price_fen\":4000,\"timeframe_minutes\":5,\"type\":\"MINUTE_CLOSE_BELOW\"},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"execution_window\":\"CURRENT_SESSION\",\"independent_signal\":{\"evidence_requirement\":\"New structure linked to prior signal\",\"mode\":\"REVIEWED_INDEPENDENT_EVENT\"},\"invalidation\":\"RISK_OR_REVIEWED_INVALIDATION\",\"quantity\":100,\"rule_id\":\"low-buy\",\"side\":\"BUY\",\"status\":\"ENABLED\",\"validity\":{\"mode\":\"PLAN_ACTIVE\"},\"zone\":null}],\"plan_id\":\"synthetic-daily\",\"position\":{\"allocation_evidence\":null,\"allocation_provenance\":null,\"core_target_qty\":null,\"max_qty\":1000,\"tactical_target_qty\":null},\"risk_branches\":[],\"schema_version\":5,\"symbol\":\"601021.SH\",\"trading_rules\":{\"settlement\":\"NEXT_EXCHANGE_SESSION\",\"special_state_restrictions\":\"BLOCK_UNVERIFIED\",\"tick_size_fen\":1},\"version\":1},\"source_hashes\":[\"1111111111111111111111111111111111111111111111111111111111111111\"],\"version_id\":\"p1\"}}]},\"schema_version\":\"monitor-loop-input-v1\"}",
+      "input_hash": "4ea793e8bc07ca968024059b78ee741fdcf7958e82c5ee38aae52b3ee0ca8acc",
+      "run_id": "6c9afa5ac84d8d85f09a3585f32be041fc7fd6974328d95f2b6ce356c6e0f124"
+    },
+    "legacy_artifact_sha256": {
+      "v1_identity_goldens.json": "653ae6017c0106b4d868f45a1c4c70609f0dadd4e03a51f0096e732adcf7976d",
+      "v1_result_summary.json": "18bb98e4c54caab9f9d64b941e8ded97802857c3930346571df0fbc6fa2588b9",
+      "v1_fills.csv": "c2adea02efbd2487bcc53449296c25f75f670e0e29e5a485fa1ecc6cfed3af01"
+    }
+  }
+}

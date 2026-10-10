@@ -1,3 +1,116 @@
+# Repair Plan: Restore Daily Plan Continuity
+
+Status: design for review, 2026-10-10, Asia/Shanghai. This request authorizes the repair design; it does not record approval of new implementation details or claim completed repair. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`, all pending.
+
+
+Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
+
+## RP01. Baseline and authority
+
+The business baseline is ML01–ML13 in commit [e95de03](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/e95de03ec809517cc0a3b2484c6145675418960c/docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md), still present before narrowing in `0db69c9`. The implementation proposal at that commit supplies IP04–IP06 details, subject to the expressly retained constraints below. The 2026-10-10 user request requires a bounded repair of identified deviations. It does not authorize product expansion.
+
+The fixed-version interpretation introduced in `91eca25` is withdrawn as a business requirement. Its statements that the user cancelled daily continuity are an assistant interpretation, not independent evidence of user authorization. Its executed checks remain historical evidence for that narrower implementation. They do not establish acceptance of the original workflow.
+
+Terms are fixed: **task** = one admitted preparation/heavy operation or replay run; **plan version** = one immutable reviewed snapshot with an effective date; **continuous backtest** = one symbol, one account, one run identity/result, traversing the applicable versions in order. Preparing several versions does not create several replay jobs. Single-task exclusion continues to apply across preparation, sync, verification and replay.
+
+Explicit later platform choices remain: same-process owned threads and lazy startup, one unfinished task including cancellation/unknown work, existing recovery/lease fences, local historical-sync pacing, latest 30 published results, existing export compatibility only, existing finite-work safeguards. Cancelled global quota, process-isolation, resource-pressure, disk-budget and log-budget projects do not return.
+
+## RP02. Business rules that implementation must preserve
+
+| ID | Required behavior | Original basis |
+|---|---|---|
+| RP-B01 | Supply the first and all follow-up sources in one preparation; extract sequentially; review the chain; submit once and receive one run/result. | ML01, ML09, ML13 |
+| RP-B02 | Freeze source boundaries/order, hashes, authoring/availability times, effective dates, full accepted snapshots and evidence bindings before replay. Upload order, report date and import time are not substitutes for effective dates. | ML04, ML07, ML13 |
+| RP-B03 | At each exchange-day boundary, apply that day's reviewed version before monitoring or execution. Carry forward the latest still-valid version when there is no update. The same version continues without reactivation; a changed version replaces it. | ML05, ML07 |
+| RP-B04 | Initialize from the first source exactly once. Carry cash, lots, acquisition dates, sellability, costs and accumulated fees across versions. Later statements such as “now flat” are compared with the simulated account, never used to overwrite it. Incompatible account-dependent instructions remain blocked pending explicit interpretation. | ML04, ML07, ML-A13 |
+| RP-B05 | Genuine replacement closes old ordinary authority and pending ordinary intents, including next-session daily intents. Preserve existing risk obligations; use the shared explicit reassessment rules. Draft edits do not switch the active plan. | ML05–ML07, ML-A07 |
+| RP-B06 | Review complete replacements and explicitly supported updates with add/modify/revoke/retain differences and original evidence for inherited fields. Ambiguous scope cannot silently retain or remove rules. Reusing a rule ID does not transfer old execution authority. | ML13, ML-A16–ML-A18 |
+| RP-B07 | Persist per-item progress and source/base revisions; retry only the affected item within existing limits. Editing an ancestor/order invalidates affected descendants and reviews. Stop dependent extraction on unresolved semantics; reject late results. Frozen submitted runs remain independent. | ML08, ML13 |
+| RP-B08 | Preflight the union of required evidence for versions relevant to the run, but expose only the active version and then-available evidence to decisions. Freeze end/cutoff once at submission; future source/evidence changes cannot rename earlier semantic events. | ML04, ML08, ML-A04, ML-A11, ML-A15 |
+| RP-B09 | Present a daily applicability preview and one causal report with version transitions, carry-forward/no-authority intervals, account-context differences and continuous account valuation. Preserve unknown/unsupported information visibly. | ML07, ML09 |
+| RP-B10 | Preserve current shared monitoring, response modes, full-quantity fills, T+1, CORE, risk priority, costs, atomic settlement, cancellation and atomic publication. A plan update never invents strategy, trades or account facts. | ML03, ML05–ML08 |
+
+Only complete trading-plan replies from the user's four-source example enter its acceptance input. Short position confirmations and incidental chat are not automatically promoted into versions. Restoring ML13 update semantics does not add a chat crawler or automatic conversation classifier.
+
+A first source available intraday may initialize at its actual availability. Later content switches remain daily: a version must be available before the scheduled day's monitoring/execution; a later intraday source requires an explicitly corrected later effective day. Reject inconsistent dates; never silently shift dates or backdate availability. Sources after the frozen run end do not govern that run.
+
+## RP03. Traceability from the nine deviations
+
+| Deviation | Required repair | Tasks | Acceptance |
+|---|---|---|---|
+| One-source entry | One ordered preparation with multiple source items. | RP-T04, RP-T12, RP-T15, RP-T16 | RP-A01 |
+| Independent extraction | Source-bound predecessor context and explicit changes. | RP-T05, RP-T06 | RP-A02 |
+| Missing chain review/dependencies | Per-item recovery, descendant invalidation, whole-chain freeze. | RP-T07, RP-T08 | RP-A03 |
+| One-row schedule | Effective-day selection, continuation and calendar preview. | RP-T02, RP-T16 | RP-A04 |
+| No version replacement | Switch before evaluation/fill; close old ordinary intents; preserve risk. | RP-T03 | RP-A05 |
+| Independent accounts | One initialization, continuous lots/cash and context-difference checks. | RP-T03, RP-T10 | RP-A06 |
+| First-version evidence only | Union preflight with active-version causal access. | RP-T09 | RP-A07 |
+| Fixed-version results | One identity, stored chain and auditable version/account timeline. | RP-T10, RP-T11, RP-T13, RP-T17, RP-T18 | RP-A08 |
+| Rewritten acceptance | Restore original business gates and independent expected outcomes. | RP-T01, RP-T14, RP-T19, RP-T20 | RP-A09–RP-A12 |
+
+## RP04. Limited implementation design
+
+**Preparation.** Extend the existing preparation models/store/service/worker/review boundaries. Keep one preparation ID and one owned extraction operation, with an ordered bounded item collection inside it. Process one item at a time under the existing task exclusion; do not create an independently admitted job for each source or release/reacquire the slot between AI calls. Keep the slot while work is unfinished/unknown/cancelling. A settled preparation can later proceed to review/submission through existing admission rules.
+
+Reuse current extraction/provider defenses. The first item emits opening facts and rules. A follow-up receives only its own source, the validated predecessor and required earlier evidence excerpts. Materialize complete snapshots deterministically using the original proposed `backtest/plan_updates.py` and `ai/update_review.py`; use a separately versioned `ai/plan_update_extraction.py` prompt adapter. Full replacements identify removed conditions; updates need explicit supported inheritance scope. No model output approves itself.
+
+Keep the existing preparation SQLite tables, database ownership tag and JSON-document storage. Add a discriminated v2 document codec inside that storage, while retaining v1 read/operation semantics and idempotency receipts. Do not rewrite old documents automatically, add another database or perform production migration. Freeze the chain plus one opening account in the existing result-owned immutable input store.
+
+**Runtime.** Extend `plan_schedule.py`, `loop_session.py` and `loop_runner.py` in place for scheduled versions. Reuse shared activation/replacement/risk participants and one private session database. Do not recreate the account/session at each switch. Rebuild current evidence requirements after replacement; do not expose future snapshots to the evaluator. Changes in `response_policy.py` are limited to closing replaced ordinary intents and retaining the shared risk rules. Switch/account failure aborts the run and cannot publish a completed report.
+
+**Data and results.** Extend existing dataset manifest/coverage and frozen-input bindings to the relevant reviewed chain. Keep the job request as a bounded immutable reference and keep the submission reservation/cutoff behavior. Extend existing report events with version transition/carry-forward/no-authority and account-context evidence. Each event identifies its active version and causal past; only the run identity binds the whole future chain. Version/activation/event identities must not incorporate the full-chain hash or a later whole-chain review timestamp. The pre-run preview displays source account context/dependencies, not a predicted future simulated account; calculate actual differences from the ledger at version activation. Reuse existing valuations, charts, pagination, atomic publication and retention.
+
+**Version compatibility.** New semantics use additive discriminated codecs; old serialized values keep their meaning and bytes. Proposed fixed names for this repair are `backtest-preparation-v2`, `prepared-loop-plan-v2`, `monitor-loop-input-v2`, `backtest-run-v6`, `monitor-loop-dataset-v2`, `monitor-loop-stored-input-v2`, `monitor-loop-event-v2` and `backtest-report-v5`. RP-T01 verifies collisions and records the concrete field matrix before dependent work. Existing job enums/reference semantics, fee formulas, copied market artifacts and old export formats stay unchanged. Public projections gain explicit new branches where their shape changes; they do not relabel old v1 data. These names are proposed design, not a claim that v2 is already implemented.
+
+**API.** Reuse the existing preparation root and `/source`, `/extractions`, `/cancellations`, `/reviews`, `/recoveries` resources. The new creation branch supplies ordered `sources`; editing identifies the existing `source_id`; extraction/retry binds item/base revisions; review binds the complete chain. Bound pagination may add only `GET /api/v1/backtest-preparations/{preparation_id}/items` for item detail/progress. Correcting order/effective dates is confined to the preparation revision, never an active run. RP-T01 must spell out the smallest necessary order-edit payload in the existing source-edit command; no extra management endpoint is authorized. Submit through the existing `POST /api/v1/backtest-runs`, using one reviewed manifest and one `run_id`. Existing origin guards, errors, idempotency, status/recovery controls and two generated contract profiles remain.
+
+**UI.** Extend existing preparation form/progress/review/controller, `/backtests/new` and current result components. One user upload/entry action provides the source collection; show item progress, differences and daily applicability before one review/submission. Preserve complete raw sources with per-item boundaries; do not merge all texts into one AI request. Use server-computed state and calendar; no browser-side strategy merge, execution or accounting. Do not add a new workspace, route family, batch-job dashboard or unrelated visual redesign.
+
+**Bounds.** Restore the original proposed cap of 256 sources/schedule entries; retain 8 MiB aggregate UTF-8 source bytes, 150,000 characters per source, one extraction at a time, at most 3 retryable attempts per item, 200 opening lots and existing 70,000 evaluation/reminder/intent/attempt bounds. Count added lifecycle audit events within an explicitly bounded report envelope. Preserve the existing 256 KiB serialized job-reference limit and the Web's 4 MiB total request-body limit: a Web submission must satisfy both its domain limits and encoded HTTP size; reject before any partial admission. The 8 MiB domain limit does not promise that an 8 MiB Web request is accepted. No chunked-upload system or limit increase is authorized. Preserve latest-30 retention and the original platform/load thresholds.
+
+## RP05. Change boundary and prohibited expansion
+
+Handwritten source/test changes are limited to the exact files per task in [todo.md](todo.md). The only planned new production modules are the three original preparation helpers named in RP04. Existing shared monitor/state modules, job coordinator/repository, service lifecycle/threads, sync/provider behavior, origin guards and all unrelated modules are regression targets, not automatic edit permission. If an existing shared participant cannot express required replacement, record the precise missing behavior and proposed smallest diff before touching that boundary; do not copy the evaluator or silently rewrite shared semantics.
+
+No parallel backtest jobs, multi-symbol shared cash, intraday content replacement, strategy generation during replay, real trading, new notifications, new execution/fee/risk rules, partial fills, new data providers, new dependencies, new export formats, generic workflow engine, global resource controls, production-data migration or unrelated refactor belongs to this repair. Keep existing unrelated research artifacts outside repair commits.
+
+Each implementation increment names its RP task, original ML requirement, exact files and acceptance case before editing. Limit an increment to about five handwritten source/test files; split within the same agreed behavior if necessary. Mechanical contract outputs and paired documentation updates are listed separately. Splitting does not authorize new behavior. Differences in the business rules, public shape beyond RP04, limits, task exclusions or acceptance criteria require a concrete bilingual change proposal and explicit user instruction before dependent implementation. Ordinary in-scope function organization does not require repeated permission.
+
+Do not write “user confirmed” for an inferred decision. Keep the user's actual instruction, original requirement and implementation inference separate. Never cancel a business gate, weaken an assertion, increase a threshold or replace a continuity test with rejection merely to make tests pass. Preserve old-mode rejection tests where they still define compatibility; new-mode tests must accept the reviewed sequence.
+
+## RP06. Acceptance fixed before implementation
+
+| ID | Required evidence |
+|---|---|
+| RP-A01 | Four complete source items are entered once, extracted in order under one preparation, reviewed and submitted as one admitted replay job and one result. One-source input remains supported. |
+| RP-A02 | Later extraction sees only its source and validated past context. Explicit full replacement/add/modify/revoke/retain cases produce complete snapshots, a reviewable diff and correct source bindings; ambiguity blocks dependent work. |
+| RP-A03 | Retry an item without repeating unchanged predecessors. Ancestor/order edits invalidate affected descendants/reviews; stale responses cannot commit. Cancel/unknown work retains exclusion; restart cannot silently repeat a paid call. Already submitted input remains unchanged. |
+| RP-A04 | Daily switch, still-valid carry-forward, same-version continuation, expiry/no authority, uncovered start, duplicate effective days, non-trading days and intraday availability obey RP-B02/RP-B03. No automatic date shifting. |
+| RP-A05 | Replacement precedes the day's evaluation/fill, closes old ordinary next-session intent and does not transfer its authority. Existing risk obligation and account survive. Saving a draft has no effect. |
+| RP-A06 | One opening account persists across all versions. Later zero/200-share descriptions produce differences, never resets or fictitious fills. Incompatible account-dependent instructions are blocked. Cash, lots, T+1, fees and costs have independently asserted values. |
+| RP-A07 | All relevant versions' requirements are preflighted; absent successor evidence is explicit, never fallback to old strategy. Changing future content/evidence leaves earlier decisions and semantic event IDs unchanged. Submission/retry/end-cutoff behavior is unchanged. |
+| RP-A08 | One report shows all applicable versions, switch/continuation/no-authority reasons, old-intent closures and continuous account curves. Each decision/fill is traceable to its version and evidence. Failure/cancellation publishes no completed partial result. |
+| RP-A09 | A declared offline four-version fixture has literal expected results independent of implementation: opening cash 1,000,000 fen and no shares; a 100-share buy at 1,000 fen/share with 500 fen fee leaves 899,500 fen and 100 shares; a later eligible 100-share sell at 1,200 fen/share with 500 fen fee leaves 1,019,000 fen and zero shares. Total fees are 1,000 fen and realized gain is 19,000 fen. Fixture taxes/transfer fees/slippage are explicitly zero, with eligible future-bar execution and T+1; these are synthetic test assumptions, not the user's market plan. Intermediate version boundaries preserve the account exactly. |
+| RP-A10 | Same facts, lifecycle transitions and fills produce independently checked online/research state/reminder semantics. Frozen old inputs/reports/hashes/export bytes and one-version behavior remain compatible. |
+| RP-A11 | Real browser journey covers four-item preparation, correction/retry, calendar/review, one submission and one continuous result, including rejection of a second unfinished operation. Existing startup/recovery/cancellation/platform gates remain at their original thresholds. |
+| RP-A12 | Completion traces every RP-B rule to executable evidence and restores original ML-A07/ML-A11/ML-A13/ML-A16–ML-A18 coverage. No missing original requirement is excluded from the completion denominator. Both languages, API diff and operational instructions agree. |
+
+Use the four Shengxin sources only for source fidelity, grouped entry, chronology/review and visible blockers unless the missing facts are explicitly resolved. Do not invent cash, authoring/effective dates or numerical definitions of subjective conditions to make that example run. Zero fills are not a failure by themselves; that example cannot substitute for the independent transaction fixture.
+
+## RP07. Order, verification and completion
+
+Follow RP-T01–RP-T20 and the checkpoints in [todo.md](todo.md). Prove offline continuity before preparing the final UI. Preparation, data, submission and report changes integrate through existing services; no task may independently redefine a business rule.
+
+Verification commands are recorded with each task. Use fake AI/providers, private stores and declared data. Changed assertions need an original-ML/RP reason; expected values cannot come from the same implementation under test. Final checks include focused chain tests, existing shared-runtime/accounting and frozen compatibility checks, generated-contract drift, frontend tests/type-check/build and the actual browser journey. Repeat the existing load experiment at unchanged thresholds when the changed batch/loop workload affects its measured assumptions; do not invent a larger capacity project.
+
+A task is complete only with its acceptance evidence and reviewed diff. Checkpoints are verification points, not repeated permission requests. No task is currently complete. The earlier 37 completed tasks/20-item delivery remain a narrower historical implementation record; they do not count toward repair completion. Implementation starts only on a user instruction to implement this reviewed plan; this planning request alone is not recorded as that instruction.
+
+## RP-HISTORY. Superseded fixed-version delivery record
+
+The following previous text is retained unchanged for traceability. Its fixed-version scope, inferred cancellation/authorization statements and whole-business completion claims are superseded by RP01–RP07. Do not use them to cancel repair requirements or authorize scope changes.
+
+<!-- prior-delivery-record -->
+
 # Implementation Plan: Monitoring-loop Backtest
 
 Status: implementation authorized on 2026-10-07, Asia/Shanghai, with isolation first. Business decisions come from [the proposal](../docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md); final API approval and live/load acceptance remain pending. Executed checks: [verification](../docs/verification/monitor-loop-backtest.md). Chinese copy: [plan.zh-CN.md](plan.zh-CN.md). Active tasks: [todo.md](todo.md), IDs `ML-T01`–`ML-T39`; older completed tasks remain below them.

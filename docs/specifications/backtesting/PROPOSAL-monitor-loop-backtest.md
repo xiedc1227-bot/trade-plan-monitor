@@ -1,48 +1,53 @@
 # Proposal: Backtest the Monitoring Loop
 
-Status: Implementation authorized by the user on 2026-10-07, Asia/Shanghai: isolate backtest first, then deliver the business workflow. Final API/contract review of the concrete implemented diff is recorded in ML-T29/ML-C10, with approval in SPEC-unified-plan U09 and executed evidence in MV43–MV46; implementation authorization alone is not acceptance evidence. Module: `backtest-engine`; adapters: `backtest-data`, `backtest-jobs`, `backtest-results`, `backtest-api`, `backtest-web`. Chinese review copy: [PROPOSAL-monitor-loop-backtest.zh-CN.md](PROPOSAL-monitor-loop-backtest.zh-CN.md).
+> **Repair baseline restored, 2026-10-10:** ML01–ML13 below restore the original daily-continuity requirements from `e95de03ec809517cc0a3b2484c6145675418960c`. The user has authorized implementation of RP-T01–RP-T20 in this repair session. The [repair plan](../../../tasks/plan.md) controls the exact file boundaries and expressly retained later platform choices; its RP sections override superseded proposal details. Implementation authorization is not completion or approval of unreviewed concrete API changes. ML14–ML18 and historical verification remain evidence of the previous narrower delivery, not acceptance of this repair.
 
-The confirmed business choices are mapped to an [implementation plan](../../../tasks/plan.md) and [task list](../../../tasks/todo.md). Thread isolation is confirmed. Executed implementation checks are recorded separately in [verification](../../verification/monitor-loop-backtest.md); ML18 records final executed scope and accepted boundaries.
+Module: `backtest-engine`; adapters: `backtest-data`, `backtest-jobs`, `backtest-results`, `backtest-api`, `backtest-web`. [Chinese review copy](PROPOSAL-monitor-loop-backtest.zh-CN.md). Current tasks: [todo.md](../../../tasks/todo.md).
 
 ## ML01. Objective and assumptions
 
-Scope confirmed by the user on 2026-10-07: **one reviewed plan establishes the opening position → shared monitoring triggers reminders → simulated execution → account/state feedback → continued monitoring until the end date**. Each run freezes exactly one plan for one symbol/account. The plan can govern multiple trading days while valid; execution changes state, not its rules. Daily plan chains, replacement during a run and simultaneous multi-plan replay are cancelled from this release.
+The user has confirmed the main workflow: **first plan establishes the opening position → daily plan updates derive add/reduce conditions → monitoring triggers add/reduce reminders → simulated execution → account/state feedback → continued monitoring until the end date**. The first plan's existing holdings initialize the account once; they are not purchased a second time. The user supplies the plan collection and response settings; the run discovers reminder and trade times from historical evidence.
 
-1. Supply one historical source plan; extract/review its complete Schema 5 snapshot and explicit opening holdings/cost. Preserve actual authoring, availability and historical start separately from today's import/submission time. Later-authored retrospective experiments remain labelled.
-2. Update inventory, sellability, consumed occurrences, risk and the monitoring view after fills. Keep strategy text, thresholds, quantities and branches fixed for the run.
-3. Select a simulated response policy explicitly. No automatic live trading follows this research authorization.
-4. End date remains optional: resolve once at submission in Asia/Shanghai. Preserve frozen cutoff, account precision, full-quantity checks and causal evidence.
-5. Prepare one source with existing extraction/review safeguards. No predecessor context, inherited-rule merge, batch ordering or descendant invalidation is needed.
+Assumptions proposed for review:
 
-Success remains a causally complete, auditable monitoring history; returns alone do not prove the loop.
+1. The user supplies the first historical plan and all follow-up plans together. Extract and review the source plans into Schema 5 before the run. The first plan anchors the historical account/timeline and provides explicitly stated initial holdings and costs; today's job creation/import time is not the historical start. A plan reviewed today may be researched over past dates, but the report must not imply it was known then.
+2. Automatic updates include inventory, sellable quantities, consumed signal occurrences, risk state, and the resulting monitoring view. Strategy text, thresholds, quantities, or logical branches do not change merely because a reminder fires.
+3. Confirmed by the user: all plans are prepared and supplied before the historical run; plan updates occur by day. Freeze a schedule keyed by `symbol` and `effective_trade_date`, and switch plans at the corresponding trading-day boundary. The run does not generate strategy content.
+4. The recommended mode applies an explicitly selected simulated response policy to eligible trade reminders. This research authorization never enables automatic live trading.
+5. Confirmed by the user: the end date is optional. A supplied date ends the study on that date; otherwise resolve it to the current date in Asia/Shanghai when the run is submitted.
+6. Confirmed by the user: one batch upload, followed by sequential per-plan AI extraction in chronological order. This is not one AI request containing every plan. ML13 defines extraction, predecessor binding, validation and retry behavior.
 
-## ML02. Planning-time gaps and delivered changes
+Success means a causally complete, auditable monitoring history; returns are a result of the simulated responses, not the sole acceptance criterion.
 
-The planning-time replay already shared monitoring evaluation. This table preserves its orchestration gaps and the delivered direction; ML18 records executed completion:
+## ML02. Observed gaps and intended changes
+
+The current replay already shares monitoring evaluation; it is not a separate evaluator throughout. Its orchestration is the gap:
 
 | Observed current behavior | Proposed behavior |
 |---|---|
 | `research_session.py` constructs one plan and activation identity. | A session owns the active plan version, its activation revision, and evolving execution state. |
 | `research_input.py` / UR03 require explicit operations targeting an exact occurrence. | Ordinary research needs a response policy, not a prewritten list of future trades. Recorded actions remain an optional replay mode. |
-| `research_runner.py` ends ordinary authority after `REPLACE`. | The new single-plan mode accepts no replacement; old frozen modes retain their existing semantics. |
+| `research_runner.py` marks ordinary authority ended after `REPLACE`. | Successful replacement invalidates old ordinary authority, binds the successor, refreshes requirements, and continues the same run. |
 | `_ResearchRuntime._enqueue` suppresses notifications. | Capture reminders through an isolated sink, including the same eligibility and stale-evidence checks that precede live delivery. |
 | `_simulate` updates inventory, consumes the signal, and may fulfil risk obligations. | Reuse those transitions, then refresh the monitoring view and derived requirements before subsequent actions. |
 | UR06 may preserve a monitoring receipt after research cash becomes insufficient. | In the new mode, cash checks, inventory changes, signal consumption, and monetary entries form one research transaction; rejection changes none of them. |
 
-Current contracts remain [SPEC-unified-plan.md](../monitoring/SPEC-unified-plan.md) and [SPEC-unified-replay.md](SPEC-unified-replay.md). This proposal delivers an additive monitoring-loop mode that replaces the explicit-script requirement, replacement-ends-run behavior, and post-receipt cash handling **only in that new mode**. Frozen historical runs retain their original meaning.
+Current contracts remain [SPEC-unified-plan.md](../monitoring/SPEC-unified-plan.md) and [SPEC-unified-replay.md](SPEC-unified-replay.md). Approval of this proposal would authorize a new monitoring-loop mode that replaces the explicit-script requirement, replacement-ends-run behavior, and post-receipt cash handling **only in that new mode**. Frozen historical runs retain their original meaning.
 
 ## ML03. Shared core and environmental adapters
 
 ```mermaid
 flowchart TD
-    P[One reviewed plan and activation] --> C[Conditions and evidence requirements]
-    H[Historical evidence and virtual clock] --> M[Shared monitoring]
+    P[Reviewed plan and activation] --> C[Derive conditions and evidence requirements]
+    H[Historical evidence and virtual clock] --> M[Shared monitoring evaluation]
     C --> M
     M --> R[Eligible reminder captured locally]
-    R --> A[Simulated response]
-    A --> E[Execution checks and atomic account]
-    E --> U[Inventory, signal and risk feedback]
-    U --> M
+    R --> A[Configured simulated response]
+    A --> E[Execution checks and atomic research accounting]
+    E --> U[Update inventory, signal and risk state]
+    U --> C
+    V[Preloaded daily plan schedule] --> T[Switch at the effective trading day]
+    T --> P
     M --> J[Event history and report]
     E --> J
 ```
@@ -51,23 +56,23 @@ Reuse condition interpretation, signal independence/expiry, risk priority/latchi
 
 Online adapters use real data, time, storage, notification delivery and explicit user actions. Research adapters use a frozen dataset, virtual clock, private repositories, a recording notification sink and a simulated response policy. No production composition, provider request, live notification or live plan mutation occurs during deterministic replay.
 
-“Derive conditions” interprets the one reviewed plan into condition trees, timeframes, warm-up, validity, confirmation, quantity, reset policy and execution windows. It never asks AI for new per-tick rules. Position/risk feedback changes eligibility; strategy definitions stay frozen throughout the run.
+“Derive conditions” means interpreting the reviewed plan and constructing its current monitoring requirements: condition tree, timeframe, warm-up, validity, confirmation, quantity, reset policy and execution window. It does not mean asking an AI to invent new conditions at every market tick. Position/risk changes update eligibility; only an authorized content revision changes strategy definitions.
 
-Before replay, ML13 translates one supplied source into a complete candidate and explicit opening-account facts. Validation and human review freeze that snapshot. Replay reads only it and frozen market evidence, with no AI calls.
+Before replay, ML13 uses AI to translate supplied text into structured candidates and change descriptions. Programs validate and materialize complete versions; review then freezes the accepted chain. During replay, the monitoring engine only reads those frozen versions and market evidence, with no AI extraction calls.
 
 ## ML04. Inputs and state ownership
 
-Freeze exactly one reviewed plan snapshot and its initial effective date, dataset/revisions, range/warm-up, cash, inventory lots/costs, calendar, evidence versions and response/fill assumptions. Preserve causal adjustment/availability checks. Unknown inventory allows observation but blocks execution and full-account return claims.
+Freeze all reviewed plan snapshots and their daily schedule, dataset/revisions, run range and warm-up, known cash, dated inventory lots and costs, trading calendar, indicator/adjustment evidence versions, response/fill assumptions, and optional external evidence. Preserve existing point-in-time adjustment and availability checks. Unknown inventory permits observation but blocks execution and full-account return claims.
 
-The initial binding retains `symbol`, `effective_trade_date`, `plan_version_id`, `plan_hash` and the reviewed snapshot. Accept exactly one entry; reject a second entry even if it repeats the same version. Validate the effective trading day and a covered run start. The initial date does not widen activation/rule validity and provides no switch capability.
+Proposed schedule fields: `symbol`, `effective_trade_date`, `plan_version_id`, `plan_hash` and an immutable reviewed snapshot binding. Each symbol has at most one entry per effective trading day. Sort and validate the complete schedule before submission; reject conflicting duplicates, unknown/unreviewed versions and non-trading effective dates rather than silently shifting them. Preflight must establish an applicable plan at the run start. Plan validity/activation constraints still apply and cannot be widened by scheduling. These are proposed input fields, not existing API claims.
 
-**Optional end date.** Omitted/null `end_date` resolves once to submission day in Asia/Shanghai; store resolved date and explicit/defaulted origin. It is inclusive. Reject dates before the plan start or after submission. Preserve weekend/holiday end dates and use the exchange calendar for sessions.
+**Optional end date.** Accept an optional `end_date`. Omission/null resolves once to the submission date in Asia/Shanghai; store the resolved date and whether it was explicit or defaulted. The date is inclusive. Reject an end before the first-plan start or after the submission date; a historical replay does not wait for future dates. A weekend/holiday is a valid end date: preserve the requested date and use the exchange calendar for actual market sessions. Plans effective after the end remain outside this run's decision timeline.
 
 Resolve and freeze the evidence cutoff with the input: for a past end date use the end of that local day; for today's end use the submission instant. Consume only completed, available evidence no later than that cutoff. Do not create today's closing data while the session is still open. Admission checks still require the needed dataset coverage; genuine gaps are shown and handled by the existing coverage rules, not silently treated as an earlier requested end. Reports distinguish the requested/resolved end date, frozen evidence cutoff and actual last market evidence/valuation time. Waiting in a queue, retrying tomorrow or repeating a frozen run does not move its end date or add newer evidence; submitting a new run can use a later current date.
 
 At the cutoff, stop generating and executing intents, retain remaining holdings for valuation and show pending intents as unfilled at the run end. Do not force liquidation solely because the study ended. This terminal run status does not claim the underlying plan's signal expired early.
 
-**Single-plan initialization.** Derive the historical account/start from the supplied plan and its known availability/effectiveness. A post-close plan cannot drive earlier trades; an intraday plan can initialize at its actual availability. Show this mapping and warm up without transactions. Initialize holdings only once.
+**First-plan initialization.** Derive the historical start from the first supplied plan, rather than asking for an unrelated start and a manually reconstructed portfolio. Separate the account snapshot at that first-plan point from the earliest executable monitoring time: execution requires the plan to be available and effective. A plan available before trading on September 7 can govern that day; one written after its close cannot produce trades earlier that day. An intraday first plan can initialize the session at its known availability time without backdating it to the opening. Subsequent content updates still use the daily schedule. Show this mapping before running; keep import time separate and load warm-up before the historical start without generating transactions.
 
 Use explicit statements of actual holdings, actual CORE/TACTICAL allocation and cost in the first source to build a reviewed initial-account snapshot. Strategy allocation targets alone still cannot initialize holdings. Bind extracted values to source text and record any confirmed supplements/overrides. Already-owned shares are opening inventory, not a new simulated buy; do not charge purchase fees again or infer an acquisition date from the plan date. Unknown cash or acquisition/sellability facts remain missing inputs: request them when needed for funded trading/T+1 checks, or explicitly limit the run to observation with incomplete account valuation. Never insert an arbitrary cash balance or assume all opening shares are sellable.
 
@@ -98,16 +103,16 @@ Keep four distinct state groups:
 | Plan definition | Immutable source/content hash, reviewed conditions and quantities; new content creates a new version. |
 | Monitoring state | Active version/revision, signal occurrences, resets, expiry, risk records, evidence dependencies and reminder identities. |
 | Research account | Cash, dated CORE/TACTICAL lots, sellable quantities, costs and fees; shared inventory transitions plus research money entries. |
-| Event history | Evidence availability, evaluations, reminders, requests, fills/rejections, state transitions, fixed-plan provenance and valuation. |
+| Event history | Evidence availability, evaluations, reminders, requests, fills/rejections, state transitions, version changes and valuation. |
 
-Declare research activation separately from production. Bind explicit review without invented historical human facts. Derive/preload data requirements from this one snapshot; apply market and external-evidence availability cutoffs. Missing dependencies block affected conditions with a reason. Loading another plan cannot replace this run snapshot.
+Declare research activation independently of production activation. Bind imported research review declarations explicitly; do not manufacture historical human facts. Inspect all scheduled plans to preflight and preload the union of data requirements, but expose only the currently effective plan to decision-making. Future plan contents cannot influence earlier conditions, actions or event identities. Market and external evidence keep their own availability cutoffs. Missing successor data blocks affected conditions with a reason; it never silently falls back to the old strategy.
 
 ## ML05. Event time and one monitoring cycle
 
 Drive evaluation with evidence availability and scheduled lifecycle boundaries, not just a loop over price rows. The calendar must advance expiry and T+1 sellability even when no new price arrives. At a timestamp, process a deterministic sequence:
 
 1. Make newly available market revisions and scoped external facts visible; apply calendar transitions.
-2. Preserve the same frozen plan at calendar boundaries; advance expiry, T+1 and explicit supported risk reassessment/deactivation without introducing new content or resetting occurrences.
+2. At the trading-day boundary, apply that day's scheduled plan before the first monitoring evaluation or execution attempt; also apply explicitly ordered deactivation and approved reassessment events. Reject ambiguous competing lifecycle events. Invalidate old pending ordinary actions before they can execute. No scheduled intraday plan-content switch is supported in this design.
 3. Freeze the current plan/state revisions and evidence cutoff, derive requirements, and run shared monitoring. Missing dependencies yield unknown/blocked conditions.
 4. Recheck reminder eligibility using current revisions/evidence and capture the simulated delivery. Pure technical alerts cannot authorize a trade. Delivery here means a configured research assumption, not proof of real external delivery.
 5. Process eligible response intents. A new intent can use only a future eligible price interval; an older intent may attempt execution now. Use shared risk/conflict priority; do not invent a favorable buy/sell order for simultaneous conflicting signals.
@@ -132,33 +137,47 @@ Recommended initial fill model: full quantity at the **close of the first eligib
 
 For example, a five-minute confirmation available at 09:35:12 cannot fill at 09:35 or 09:36 using the 09:35–09:36 interval; the first candidate interval is 09:36–09:37, evaluated only after its evidence arrives. A daily reminder waits for the next eligible exchange session. End-of-run intents remain visibly unfilled.
 
-Enforce current full-quantity positive 100-share units, T+1, CORE protection, position limits and risk/conflict checks. Check cash including fees before commitment; no partial substitute. Cash/sellability/market blockers may retry on later evidence while authority remains valid, once per intent/eligible interval. Expiry, consumption or deactivation closes ordinary intents. Insufficient data/liquidity evidence is explicitly blocked/unsupported. Preserve conservative suspension/price-limit checks; minute bars establish neither queue priority nor real fill certainty.
+Enforce current full-quantity positive 100-share units, T+1, CORE protection, position limits and risk/conflict checks. Check cash including fees before commitment; no partial quantity substitution. Cash/sellability/market blockers may be retried on subsequent evidence while authority remains valid, with one attempt per intent per eligible interval. Expiry, consumption, replacement or deactivation closes ordinary intents. Insufficient data/liquidity evidence yields an explicit blocked/unsupported attempt, never a fabricated fill. Preserve conservative existing suspension/price-limit rules; minute bars cannot establish queue priority or real execution certainty.
 
-## ML07. Fixed plan and execution-state continuity
+## ML07. Plan updates and successor continuity
 
-The run holds one immutable plan and activation identity. Calendar transitions retain signal/reset/consumption state while its authority remains valid. Expiry or explicit deactivation ends ordinary authority without substituting a new plan; preserve risk obligations and account valuation. Reject an uncovered run start and any multi-entry input.
+There are two update paths, both visible in the timeline:
 
-Fills change cash, lots, sellability and signal/risk state; subsequent monitoring uses this feedback. A satisfied condition, reminder or read receipt alone changes no holdings. Repeated buying still requires the declared independent-signal reset policy. No new sell condition is invented.
+**Execution-state update.** A fill changes cash/lots and the corresponding signal/risk state; the next monitoring view uses the new holdings, capacity, sellability and consumed occurrence. A satisfied condition alone, notification delivery, or read receipt does not change inventory. Repeated buying requires the plan's existing independent-signal reset rule, not simply a new day. No new sell condition is invented when a buy fills.
 
-Initialize the reviewed account once. The frozen plan's stated holdings do not repeatedly overwrite the evolving ledger. `RECORDED_ACTIONS` requires separately evidenced prices, quantities and times; a portfolio statement alone is insufficient. Preserve authoring, effective date, availability and import time as separate provenance. Later-authored retrospective experiments remain explicit.
+**Daily plan-content update.** All reviewed versions are supplied before the run. At the start of `effective_trade_date`, before any evaluation or execution: recheck the scheduled binding → end old ordinary authority and pending intents → activate that day's version → rebuild requirements → continue monitoring. Use the exchange calendar in Asia/Shanghai. Initialize the applicable version before the first event for an intraday run start; do not replay pre-start trades. Draft saving alone does not switch plans. Carry cash/lots, acquisition dates, costs and existing risk obligations across the switch; never reset the account or silently release risk. Risk reassessment follows the existing explicit evidence rules.
+
+Schedule semantics (carry-forward confirmed by the user; other defaults remain proposed):
+
+- A schedule row states the day a plan starts governing monitoring, not necessarily its creation/report date. A plan using day D's close must be assigned to the next eligible trading day, never day D's opening. Later-authored retrospective plans remain explicitly labelled experiments.
+- Confirmed: with no new row on a day, continue the most recent still-valid active plan. Show this carry-forward in the preview. If its authority has expired or was deactivated, do not extend it; record no ordinary plan authority while preserving risk obligations and account valuation. Reject an uncovered run start before running.
+- Repeating the same immutable version on adjacent days is continuation, not a fresh activation; preserve occurrence/reset/consumption state. A genuinely different scheduled version uses the existing replacement semantics.
+- An old ordinary daily signal that was due to execute today loses authority if a different plan replaces its owner before execution. Do not silently transfer it to the new version. Without replacement, it retains its original next-session window. This consequence must appear in the report and acceptance fixtures.
+- Loading every future plan into storage is not permission for the monitoring core to read it early. No strategy generation, AI generation call, automatic content editing or intraday strategy update occurs during replay.
+
+Example: D1 schedules P1, D2 schedules P2, and D3 has no row. D1 monitors P1; D2 switches to P2 before monitoring and retains the accumulated account; D3 continues P2 if still valid. The preview expands this into an explicit daily plan calendar.
+
+Initialize the account from the first plan only. Later plans' statements such as “currently 200 shares” or “now flat” are historical observations, not instructions to overwrite simulated holdings/cost/cash. Compare them with the replay account and show discrepancies. In `FOLLOW_REMINDERS`, the ledger evolves only through its simulated fills; do not fabricate trades to match a later description. If a follow-up strategy is explicitly contingent on a different account state, mark the affected instructions incompatible pending an explicit reviewed interpretation, rather than inventing quantities or changing their meaning. `RECORDED_ACTIONS` may apply separately evidenced actual trades with their prices, quantities and times; a portfolio statement alone is insufficient. The report describes execution of supplied historical plans, not a claim that these fixed follow-ups would have been authored identically under a different simulated trading history.
+
+The authoring date records when the plan was actually written, for provenance and interpretation of its information context; preserve an exact timestamp when available. The effective trading date selects when that version starts governing monitoring. Import time is a third, separate storage event and changes neither date. For example, a plan written on Monday evening using Monday's close starts on Tuesday; if no new plan arrives Wednesday, it continues while valid, with its original Tuesday effective date unchanged. A plan written Friday for next Monday can be stored over the weekend without becoming active early. Importing historical plans today preserves their original authoring/effective dates. A plan actually authored today but assigned to a past trading day is a retrospective experiment, not a historically available plan. Date labels alone do not prove absence of future information; underlying evidence cutoffs still require validation. Only the effective trading date drives schedule selection.
 
 ## ML08. Persistence, determinism and limits
 
 Reuse existing durable jobs, frozen datasets, isolated result storage, cancellation and atomic report publication. Use a new versioned input/report discriminator for this mode; exact version identifiers and API schemas belong to the approved interface design. Do not relabel old `backtest-run-v4` or `backtest-report-v3` data with changed semantics.
 
-Run identity includes the single reviewed snapshot/evidence, dataset, response/fill policies and engine versions. Event identity depends only on causal past; future market evidence cannot rename earlier events. Task IDs, retries and wall-clock time stay outside semantic identity. Cash/inventory use one private transaction and stable idempotency. A failed attempt can restart from the frozen input; mid-run checkpoints are not required initially.
+The run identity includes normalized input, plan-chain/evidence artifacts, dataset identity, response/fill policies and relevant engine versions. Event identities depend only on their causal past, so changing future evidence cannot rename earlier events. Task IDs, retries and wall-clock time stay outside semantic identity. Preserve cash and inventory in one private transaction with stable idempotency keys; a failed worker attempt can restart from frozen input with identical output. Mid-run checkpoint optimization is not required initially.
 
-Keep 70,000 evaluation events including refreshes, and separate finite bounds for captured reminders, intents and attempts. Plan count is exactly one. Exceeding a bound fails visibly without publishing completion. Stream the audit trail. Missing evidence is a business blocker; unsupported inputs/engine errors fail the run. Failed/cancelled runs are not completed performance results.
+Retain the current 70,000-decision-event bound; include any added monitoring refreshes in the count. Freeze and validate separate finite limits for captured reminders, intents, plan revisions and attempts during interface design; exceeding a limit fails visibly and publishes no completed report. Stream the audit trail rather than keeping the entire run in memory. Missing condition evidence is a recorded business blocker; unsupported inputs or engine errors are run failures. Canceled/failed runs never appear as completed performance results.
 
 ## ML09. User workflow and reports
 
-The create page accepts or selects one plan, previews its historical start, opening holdings/cost/allocation, reviewed rules and unresolved clauses, then accepts optional end (default today in Asia/Shanghai), dataset and response settings. Request only missing cash/sellability facts. Show resolved end/cutoff and data/warm-up gaps. Reject multiple plans; no daily plan calendar or switch UI is needed. Label historical versus retrospective interpretation.
+The create page accepts the first plan and all follow-ups in one batch, then previews the extracted first-plan start, initial holdings/cost/allocation and daily effective-date schedule. The user optionally supplies an end date (blank means today in Asia/Shanghai), chooses the dataset and response mode, and fills only genuinely missing account inputs such as available cash or sellability evidence. Show the resolved date and available-data cutoff in the submission result. Execution assumptions and optional timed facts are advanced inputs. Ordinary use does not require raw operation JSON or retyping initial values already explicit in the plan. Preview a calendar showing each day's effective plan, switches, carry-forward and uncovered days, alongside unresolved plan bindings, duplicate dates, account-context discrepancies, data/warm-up gaps and unsupported clauses. Clearly label whether this is a historical plan replay or a retrospective experiment using later-authored plans.
 
-The result timeline is **fixed plan → condition/evidence → reminder → response → fill/blocker → state feedback → next monitoring cycle**. Show frozen plan provenance, holdings/cash/equity, reminder-to-fill counts and rejected/expired/unfilled intents. Link each step to its cause, cutoff, state revision and reason. Distinguish satisfied condition, eligible reminder and completed trade.
+The main result is a timeline: **active plan → condition/evidence → reminder → response → fill/blocker → state update → next monitoring cycle**. Show a plan-version lane, holdings/cash/equity charts, and reminder-to-execution counts including rejected/expired/unfilled intents. Each step links to its causal event, active version, cutoff, state revision and reason. Distinguish “condition satisfied”, “reminder eligible”, and “trade completed”.
 
-Preparation shows one source's extraction/progress/retry/review state. Corrections invalidate only that candidate's approval; submitted frozen runs remain immutable. End/cutoff resolves at run submission, not upload.
+Before starting the run, show extraction progress per plan, failed/needs-review items, each version's condition diff and the complete daily plan calendar. Let the user correct or retry the affected item and review the resulting chain together. Do not require uploading the entire collection again after one extraction failure. Batch upload/extraction is preparation; ML04's default end date and cutoff are resolved at backtest submission, not at the earlier upload time.
 
-Return/drawdown/fees/turnover require valid valuations. Unknown prices/holdings stay visible. Observation results may show known holdings' market changes but attribute none to simulated trades. Preserve cost-based P/L separately from interval return.
+Include return/drawdown/fees/turnover only where valuation is valid; label missing prices and unknown holdings. Observation-only results emphasize reminders and may show mark-to-market on known initial holdings; never attribute that change to simulated trades. A return curve alone cannot demonstrate monitoring parity.
 
 ## ML10. Acceptance criteria
 
@@ -170,18 +189,18 @@ Return/drawdown/fees/turnover require valid valuations. Unknown prices/holdings 
 | ML-A04 | Completed five-minute/daily/mixed conditions, delayed reception, warm-up, gaps, corrections and the 09:35:12 example obey point-in-time availability and execution windows. Changing future inputs leaves earlier events unchanged. |
 | ML-A05 | Fees-inclusive cash failure, T+1, CORE, max position and full-quantity rejection leave cash, holdings and signal consumption atomically unchanged; a later valid attempt can succeed exactly once. |
 | ML-A06 | Shared risk/conflict priority governs simultaneous candidates; no favorable arbitrary ordering. A new risk or stale evidence blocks a queued positive reminder/intent. |
-| ML-A07 | Cancelled on 2026-10-07: daily successor activation/multi-plan continuity is outside the single-plan release; retained ID is not a completion gate. |
+| ML-A07 | Successor activation invalidates old ordinary intents, preserves lots/cash/risks and continues with new conditions in the same run; draft-only changes have no effect. Unknown or unreviewed successor content is blocked. |
 | ML-A08 | Feed identical facts, lifecycle changes and execution outcomes through online application participants and the research adapter; compare semantic reminders and state transitions event by event, with independent expected-value assertions. Exclude only environmental delivery IDs/time. |
 | ML-A09 | Repeated runs/retries produce identical canonical reports; cash/inventory commits are fault-tested; cancellation and all finite-limit failures publish no completed report. Old frozen reports/exports remain byte-compatible. |
 | ML-A10 | Existing API/job/result paths and a browser flow create and inspect the loop without handwritten future trades; deterministic tests make zero live-provider, AI, notification or production-database calls. |
-| ML-A11 | Exactly one reviewed binding covers the historical start. Reject second entries/closed or unknown effective dates; respect availability and expiry. Multi-day continuation retains activation and consumed occurrences without resets. |
+| ML-A11 | Preload P1/P2 and switch only at their effective trading days before evaluation/execution; retain account state. Cover carry-forward, expired plans, uncovered start, duplicate/non-trading dates and intraday run initialization. Repeating the same version does not reset signals. Replacement cancels old next-session ordinary intents; continuation preserves their window. Editing future P2 cannot change earlier P1 decisions. |
 | ML-A12 | Extract the first-plan 100 CORE shares, 0 TACTICAL, cost 40.105/share and ceiling 300; preserve total cost `401050` fen without an opening simulated buy or duplicate purchase fee. Reference quotes/hypothetical fee trades do not initialize lots. Missing cash/sellability stays explicit. |
-| ML-A13 | Account initialization happens once. Fixed plan text cannot overwrite evolved cash/lots/cost. Historical cost P/L and interval return remain distinct. |
+| ML-A13 | A later plan declaring 200 or 0 shares cannot overwrite the replay ledger; detect incompatible account-dependent instructions. Interval return and historical cost P/L remain distinct. |
 | ML-A14 | Today's import/job time does not replace the first-plan historical start; no trades precede its availability/effectiveness. The supplied September 10 information cannot drive September 7 decisions. Unsupported source clauses remain visible rather than silently translated into executable rules. |
 | ML-A15 | Explicit and omitted/null end dates produce the correct inclusive Asia/Shanghai boundary. Cover UTC/local-day differences, queueing across midnight, retries, holidays, today's incomplete session, invalid before-start/future dates and genuine data gaps. Frozen reruns do not extend the cutoff; reports show actual coverage. Ending preserves open holdings and does not create a liquidation trade. |
-| ML-A16 | One source yields a complete plan candidate and explicit initial-account facts through existing bounded extraction guards, with source spans. No batch/update/predecessor context or replay AI calls. |
-| ML-A17 | Review one complete candidate and source-bound fields; unresolved clauses remain visible. AI cannot invent thresholds, account facts or approval. Inheritance/merge operations are cancelled. |
-| ML-A18 | Bound retry/cancel/restart to one source revision. Editing that source invalidates its candidate/review and fences late results; submitted frozen inputs stay unchanged. Explicit review precedes replay. |
+| ML-A16 | One batch is extracted sequentially: the first source yields initial-account data and a complete rule candidate; each follow-up sees only its own source and validated predecessor context. No future-plan text enters an earlier request. Every accepted item produces a complete snapshot and traceable change list. |
+| ML-A17 | Exercise add/modify/revoke/retain and full-replacement versus partial-update semantics; missing scope or unclear references block dependent extraction. Preserve original bindings for inherited rules; AI cannot invent thresholds, account mutations or approvals. |
+| ML-A18 | A failed item retries without re-extracting its unchanged predecessors; unresolved semantics stop dependent items. Changing an earlier source/base invalidates dependent candidates and their reviews, but leaves frozen historical runs intact. Batch review and all required bindings precede replay; replay makes zero AI calls. |
 | ML-A19 | App startup/status/monitor navigation/shutdown performs zero backtest preparation even with unusable backtest-only settings. Explicit first-use failure is scoped to backtest; metadata reads never resume jobs or paid work, and queued recovery requires explicit selected authorization. |
 | ML-A20 | Concurrent first requests share one lazy initialization; waiter cancellation and failed-init polling cannot duplicate work. Bounded threads/resources drain before retry/replacement; a controlled non-cooperative timeout reports degradation, never forced termination. |
 | ML-A21 | Persist cancellation and inject cancel/commit/lease races: committed cancellation wins, stale work cannot publish, lost completed replies reuse verified results. Unconfirmed cancellation is visible; failed/cancelled jobs do not requeue. |
@@ -193,15 +212,15 @@ Return/drawdown/fees/turnover require valid valuations. Unknown prices/holdings 
 
 This is one redesign within `backtest-engine`, using existing module boundaries. Expected code ownership: `backtest/` for orchestration/clock/response/account/report adapters; `decision/`, `runtime/`, `state/` for necessary shared participants; `web/` for input/results. Existing `research_*` readers remain available for frozen mode compatibility. Tests belong in `tests/unit`, `tests/integration` and `web/tests`.
 
-Single-plan preparation may extend the existing extractor only for explicit initial-account facts and review bindings. Preserve versioned output/prompt contracts and existing regressions. No plan-update extractor, inherited-rule merge or batch controller is required. No strategy-generation capability is added.
+The approved per-plan preparation approach also touches the existing `ai/plan_extraction.py`, source-review/domain validation participants and narrowly scoped batch orchestration. Reuse the single-plan extraction capability and add explicit predecessor/change context; do not claim the current prompt already implements batch updates. Keep any changed extraction/prompt contract versioned and regression-tested against existing single-plan behavior. No strategy-generation capability is added.
 
 Use existing strict immutable Python models, snake_case, revision-checked transitions and exact Decimal/integer-fen arithmetic; Vue changes follow TypeScript Composition API and `<script setup>`. Preserve naming and bilingual documentation conventions.
 
 - Always: maintain one strategy evaluator, causal evidence, isolated storage, full-quantity constraints, explicit version contracts and online parity regressions.
-- Resolve before extending scope: new production schema/dependencies or shared multi-symbol capital. Strategy generation and plan-content switching remain outside this single-plan design.
+- Resolve before extending scope: new production schema/dependencies or shared multi-symbol capital. Strategy generation and intraday plan-content switching are outside this daily-schedule design.
 - Never: alter historical bytes, invent thresholds/facts, weaken failing tests, write production state, send real alerts, submit broker orders or silently reinterpret historical runs.
 
-After implementation, run the following from `trade-plan-monitor/` (frontend commands from `web/`), plus focused tests added for ML-A01–ML-A24 and affected extraction/source-review tests with fake AI responses:
+After implementation, run the following from `trade-plan-monitor/` (frontend commands from `web/`), plus focused tests added for ML-A01–ML-A18 and affected extraction/source-review tests with fake AI responses:
 
 ```text
 .venv/Scripts/python.exe -m pytest tests/unit/test_unified_replay_input.py tests/integration/test_unified_replay.py tests/integration/test_unified_replay_parity.py tests/integration/test_unified_runtime.py tests/integration/test_unified_simulation_transactions.py -q -m "not live"
@@ -218,19 +237,65 @@ Expand tests according to shared-participant changes, retain unaffected capacity
 
 ## ML12. Decisions for review
 
-The user's 2026-10-07 correction supersedes all earlier multi-plan choices: implement one frozen plan per run. Cancel daily switching, successor inheritance, multi-plan extraction/merge and simultaneous multi-plan replay. Keep one-plan preparation, explicit review, opening-account extraction, reminder responses, atomic feedback, optional end and existing isolation/publication safeguards.
+Confirmed scope: all historical plans are supplied before the run and activated by effective trading day. The earlier question about generating strategy content is resolved; no generation during replay is required.
 
-Recommended baseline remains `FOLLOW_REMINDERS` with frozen assumptions; observation and recorded actions remain supported modes. The same plan continues across days while valid without resetting state. Multi-entry inputs are rejected.
+Confirmed input workflow: start the historical study from the first plan, extract its explicit initial portfolio and cost, and process the supplied follow-ups thereafter. Initialization occurs once; any missing cash/sellability or source-time ambiguity is an input gap to resolve for an actual run, not permission to invent a baseline account.
 
-This scope decision is authoritative but does not complete pending implementation or approve future API digests. Keep historical evidence and stable task/acceptance IDs; mark cancelled multi-plan gates separately.
+The user has confirmed the opening-position → plan update → add/reduce conditions → reminder → execution loop and manual end-date selection with a current-date default. ML04 defines the proposed deterministic cutoff and end-of-run handling; this workflow confirmation does not by itself assert implementation or test completion.
 
-## ML13. Single-plan extraction and review
+Confirmed extraction choice: upload once, extract each plan separately in chronological sequence, validate/save per item, and preview/review the entire chain before replay. ML13 records this choice; no further choice between one-shot and per-plan extraction is pending.
 
-Preserve one original source, hash, authoring/availability/effective dates and supplied account evidence. Reuse the existing single-plan extraction/source-review flow. A bounded, versioned candidate contains a complete Schema 5 plan and explicitly stated opening holdings/allocation/cost. Targets, references and hypothetical trades cannot become actual holdings or costs.
+Recommended baseline: `FOLLOW_REMINDERS`, explicit execution assumptions, automatic execution-state updates and the frozen daily plan schedule. Preserve observation and recorded-action modes. The user has confirmed carrying forward the latest still-valid plan on days without a new entry. ML07's switching before the day's first evaluation/execution remains a design recommendation.
 
-Validate unsupported clauses and missing facts without fabricating them. Keep human review separate from parsing/validation. Bind exact source/content/evidence revisions and freeze one accepted snapshot; no predecessor, update operations, inheritance or chain review is included.
+This document specifies the proposed behavior and acceptance contract. Implementation tasks and code follow a later review of the proposal; no implementation is included here.
 
-Use existing provider guards and at most 3 retryable attempts for this source. Persist candidate/progress/review state as needed for restart; edits/cancel/restart fence late completions. Unknown paid-request outcomes need explicit recovery, not blind retry. Re-extraction can differ and requires fresh review; submitted inputs remain immutable. Replay uses the stored snapshot and makes zero AI calls.
+## ML13. One upload, sequential per-plan extraction
+
+**Preparation sequence.** Preserve the original text, source identity/hash, plan time and explicit ordering for each item. Confirm source boundaries and chronological order before extraction; conflicting dates or ambiguous same-day order require correction rather than upload-order guessing. Source chronology and the effective-day calendar are distinct: multiple same-day source updates still need an explicitly selected effective version under ML04. Freeze a stable item order for the batch and process one item at a time.
+
+1. Extract the first source into initial-account facts and a complete monitoring-rule candidate, keeping those outputs separate as ML04 requires.
+2. For each follow-up, provide its source plus the preceding validated structured candidate and retained source bindings. Include earlier source excerpts only when needed to resolve an explicit reference. Never include later plans or future replay results. If the predecessor is ambiguous or incomplete, stop dependent extraction until corrected.
+3. Ask AI to identify changes and scope: a full replacement or a partial update, with explicit additions, modifications, revocations and retained conditions. Every change cites the current source; inherited fields retain their original evidence. A program checks targets and applies supported changes to materialize a complete new snapshot plus its diff.
+4. Validate the candidate, persist the item result and its predecessor binding, and continue only when no unresolved semantic dependency remains. Show initial-account values, changes and unresolved issues in a batch preview.
+5. Review the complete chain through the existing source-bound review process and freeze approved snapshots and the effective-day schedule before backtest submission. Automatic format/consistency validation is not human approval: a clean candidate may support further preparation, but neither it nor its descendants become executable solely by passing validation.
+
+**Update semantics.** For partial updates, retain only the scope supported by the update or an explicit reviewed clarification, such as “other conditions unchanged.” Full replacements must identify removed prior rules in the diff; omission alone does not authorize silently retaining or deleting an unclear rule. Vague instructions such as “new platform” or “obvious deterioration” remain unresolved evidence/parameter requirements. A follow-up account description does not mutate the simulated account. Reusing a rule identifier preserves traceability, not authority for an old signal across a genuine version replacement; ML07 still applies.
+
+**Per-item state and recovery.** Show pending, extracting, validated candidate, needs review and failed states, alongside separate approval status; these are proposed business states, not existing API enums. Save source/base hashes, extraction contract/prompt version, model/provider, candidate/diff/bindings, issues and attempt metadata. A transient/format failure retries only that item using the same frozen inputs, retaining successful predecessors. Semantic uncertainty needs correction, not unlimited retries or silent skipping. No dependent item is processed against a failed or unresolved base.
+
+Each persisted result binds its source revision and predecessor content hash. Editing an earlier source, order, interpretation or base invalidates affected descendants and their reviews; resume preparation from the earliest affected item. Reject a late extraction result if its source/base has changed. Do not overwrite approved frozen snapshots or previously submitted runs. Explicitly re-extracting unchanged text can yield a different candidate; review it as a new result rather than assuming AI determinism. Deterministic replay depends on stored accepted snapshots, not on reproducing model output.
+
+**Why this approach.** It extends the existing single-plan extractor with predecessor context, a sequential batch controller and per-item progress. Local failure recovery and source/diff review are simpler than disentangling all versions from a single large model response. The user still uploads once; preparation may require multiple AI requests, but monitoring/replay requires none.
+
+**Repair boundary clarification (2026-10-10).** Historical planning/approval wording in these restored original sections is provenance, not a new start-permission gate. RP04/RP05 and the per-task file allowlists control implementation: only the three named new production helpers, existing storage/threads/admission participants, no extra exports or shared-core rewrite. ML-A19–ML-A24 remain active. ML14–ML18 preserve later platform choices and executed history; references there to one frozen plan describe the old format, while the new format freezes a daily chain for one symbol/account/run.
+
+### RP04-FIELDS. Concrete repair codecs and field boundary
+
+RP-T01 collision inspection found none of the eight proposed discriminators in production code, tests or generated frontend code. The following is the bounded implementation design, not an assertion of completed API review. Separate new branches preserve the old defaults, serialized fields, hashes and rejection behavior; never add optional fields to an old frozen encoding merely to accommodate the new branch.
+
+| Discriminator | New branch and exact material fields | Compatibility |
+|---|---|---|
+| `backtest-preparation-v2` | Existing preparation identity/revision/status/times/owned `work_claim`; ordered `items` (1–256). Each item carries `source`, `source_revision`, `candidate_revision`, `candidate`, `attempts`, `base_hash`, and `status`. Candidate bindings add predecessor `base_hash` and source revision/hash; the work claim binds the current `source_id` and base. Whole-chain `review` binds the ordered item identities/revisions/hashes. | Existing SQLite tables, owner tag and receipt identity remain; v1 stays single-source. |
+| `prepared-loop-plan-v2` | `preparation_id`, `revision`, ordered `items`, `schedule`, `account`, `account_origin`, `reviewed_at`. Each frozen item retains source/revision, extraction candidate/evidence hashes, complete `version`, source-bound mapping, change list and account-context evidence. Only the first item establishes `account`. | `prepared-loop-plan-v1` remains a single version/account. |
+| `monitor-loop-input-v2` / `backtest-run-v6` | Keep `initial_account`, `boundary`, `dataset_hash`, `response`, `costs`, `limits`; `schedule.entries` accepts 1–256 canonical effective-date bindings to complete reviewed versions. New-version `account_context` contains optional `core_qty`/`tactical_qty`, explicit `dependent_rule_ids`, and source `evidence`; it is a comparison/eligibility constraint, not an account mutation. | v1/v5 preserve exactly one entry. New input/run hashes use their own discriminators; old hashes keep their domains. |
+| `monitor-loop-dataset-v2` | Keep scope/boundary/days/warmup blockers; replace the single plan binding with ordered relevant `plan_bindings` (`effective_trade_date`, `version_id`, `plan_hash`) and `requirements` as their union. | v1 manifests and copied market artifacts remain unchanged. |
+| `monitor-loop-stored-input-v2` | Same `prepared`, `run_input`, `dataset`, `day_hashes` envelope, with the corresponding v2 branches and exact cross-binding validation. | Existing bounded job reference and old immutable bundle remain valid. |
+| `monitor-loop-event-v2` | Keep sequence/time/cutoff/causal payload; bind active `version_id` and `authority_id`. Add lifecycle payloads for replacement/continuation/no authority, closed ordinary intent IDs and observed account-context differences. | v1 events retain exact bytes. All v2 lifecycle events count within the existing 420,001-event envelope (`6 * 70,000 + 1`), not an increased limit. |
+| `backtest-report-v5` | Same single-run summary, metrics, continuous valuations and event artifact; replace single authority with ordered version bindings and transition facts. | v4 report readers/hashes and older exports retain their meaning; no new export mode. |
+
+Schedule order is canonical by `effective_trade_date`; duplicate days and mixed symbols/markets are rejected. A repeated identical version keeps its original activation/effective day; a reused version ID with different immutable content is rejected. The first source can start intraday. Each successor must be available by that day's first exchange session at 09:30 Asia/Shanghai; later availability is rejected, never shifted. Expired latest content does not resurrect an older version. Calendar preflight rejects closed/unknown effective days and uncovered start. Future-after-end rows remain provenance but never affect earlier selection or required evidence.
+
+Source order is explicit and distinct from canonical schedule order. Missing dates remain unresolved until review; contradictory known source chronology is rejected. Version/activation/event identity excludes whole-chain review time/hash, item attempt/generation IDs and future sources. A version's causal binding covers its snapshot/content, own and inherited past source/evidence bindings, explicit account context and activation time. Changing future input changes run identity, never past semantic identity.
+
+The table uses Python/domain field names. Public transport envelopes retain existing camelCase aliases; embedded research contracts (`input`, `source`, frozen values) retain snake_case. The creation discriminator is therefore `input.schema_version`; mutation envelope discriminators are `schemaVersion`.
+
+The minimal new Web branches use `schemaVersion: "backtest-preparation-v2"` on preparation mutation commands; old commands without it remain v1. Creation keeps `{input: {schema_version, preparation_id, sources}}`. Existing `PUT /api/v1/backtest-preparations/{preparation_id}/source` accepts `{schemaVersion, expectedRevision, source?, sourceOrder?}`: `source` is the complete existing `PreparationSource` with its stable `source_id`; `sourceOrder` is an exact permutation of all existing source IDs (1–256), not insertion/deletion. At least one is required. The earliest changed source/order position invalidates that item and every dependent candidate/review; unresolved physical work retains the slot.
+
+Extraction/retry adds `sourceId`, `expectedSourceRevision`, `expectedBaseHash` to the existing revision command when selecting an affected item; initial sequential extraction starts at the earliest unresolved item. Cancellation/recovery remain whole-operation commands with the existing generation/physical-drain checks. Chain review supplies the exact ordered item source/candidate/base/evidence bindings, per-item reviewed corrections and one opening-account declaration. Only `GET /api/v1/backtest-preparations/{preparation_id}/items` is added, with `expectedRevision`, `offset` (0–255) and `limit` (1–100); a changed preparation revision conflicts instead of mixing pages. Root progress and item pages keep the existing 2 MiB preparation projection bound. HTTP mutations keep the 4 MiB total encoded-body bound and reject before partial admission.
+
+Run creation adds an explicit `schemaVersion: "prepared-loop-plan-v2"` branch to the existing prepared command (`preparationId`, `manifestHash`, `response`, `costs`, optional `endDate`). The server resolves the frozen chain/dataset and returns one existing job/run receipt. Existing job enums, idempotency, origin guards, errors, recovery and result pagination limits do not change. RP-T14 must review the actual generated diff in both profiles before recording any contract approval.
+
+RP-A09's synthetic four-version fixture is `tests/fixtures/monitor_loop_continuity.json`; its literal oracle is verified by `tests/unit/test_monitor_loop_continuity_fixture.py`. Fixture validation is a baseline, not proof that the runtime already implements continuity. Old-mode fixtures and second-entry rejection checks remain compatibility requirements throughout the repair.
 
 ## ML14. Why backtest startup is currently coupled
 

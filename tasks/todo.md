@@ -1,3 +1,211 @@
+# Repair Tasks: Daily Plan Continuity
+
+Status: design for review, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **1 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. This list is implementation scope, not a claim of implementation authorization or executed verification.
+
+
+Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
+
+## RP-TASK-RULES. Execution boundary
+
+2026-10-10 parity erratum: the Chinese historical ML-T35/ML-T36 file counts are corrected to 5/6, matching their existing exact file lists and the English record. Historical completion and verification evidence are unchanged.
+
+Follow the ordered list below; dependencies additionally identify each prerequisite. Each row contains its exact file allowlist, acceptance and verification. Prefix P/V commands as defined in RP-CHECKS. A file listed in a verification command is a read/test target, not extra edit permission. Planned new files are labelled. Per-task source changes may not exceed this list; routine bilingual progress/evidence updates to this plan/list and the existing verification pair must identify the actual outcome and cannot change the baseline. Split an increment to about five handwritten code/test files without changing its behavior; list paired documentation/mechanical outputs separately.
+
+RP-T01 restores cancelled ML requirements without rewriting historical completion evidence. New v2 tests accept continuity while old-format rejection tests remain compatibility checks. Keep the current one-source workflow usable during integration; no incomplete candidate acquires execution authority. No new global feature-flag framework is part of this sequence.
+
+## RP-TASKS. Ordered work
+
+### RP-T01. Lock restored requirements and independent fixtures
+
+- [x] Implemented, verified and diff reviewed.
+- **Dependencies:** None; **Acceptance:** RP-A09, RP-A10, RP-A12.
+- **Allowed files:** `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md`; `docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md`; `tests/fixtures/monitor_loop_continuity.json` (new); `tests/unit/test_monitor_loop_continuity_fixture.py` (new).
+- **Result:** Restore original business clauses while retaining later platform decisions; record the RP04 field/version matrix, literal fixture oracle and old frozen compatibility cases. No runtime change.
+- **Verify:** `P: tests/unit/test_monitor_loop_continuity_fixture.py`.
+
+### RP-T02. Restore scheduled input
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T01; **Acceptance:** RP-A04, RP-A07, RP-A10.
+- **Allowed files:** `src/trade_plan_monitor/backtest/plan_schedule.py`; `src/trade_plan_monitor/backtest/loop_input.py`; `tests/unit/test_monitor_loop_schedule.py`; `tests/unit/test_monitor_loop_input.py`.
+- **Result:** Add new-mode version arrays, canonical order and effective-day selection. Reject date/conflict/start/size violations; preserve v1 decoding and same-version continuity.
+- **Verify:** `P: tests/unit/test_monitor_loop_schedule.py tests/unit/test_monitor_loop_input.py`.
+
+### RP-T03. Switch inside one continuous session
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T02; **Acceptance:** RP-A05, RP-A06, RP-A09.
+- **Allowed files:** `src/trade_plan_monitor/backtest/loop_session.py`; `src/trade_plan_monitor/backtest/loop_runner.py`; `src/trade_plan_monitor/backtest/response_policy.py`; `src/trade_plan_monitor/backtest/loop_report.py`; `tests/integration/test_monitor_loop_plan_switch.py` (new).
+- **Result:** Apply replacement before evaluation/execution; keep account/risk, close old ordinary intents, record lifecycle facts and account-context incompatibility. Prove the RP-A09 literal account across boundaries.
+- **Verify:** `P: tests/integration/test_monitor_loop_plan_switch.py tests/integration/test_monitor_loop_account.py tests/integration/test_monitor_loop_cycle.py`.
+
+### RP-T04. Persist ordered preparation items
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T01; **Acceptance:** RP-A01, RP-A03, RP-A10.
+- **Allowed files:** `src/trade_plan_monitor/backtest/preparation_models.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_store.py`; `tests/unit/test_monitor_loop_input.py`.
+- **Result:** Store a v2 item collection and dependency/revision bindings inside the existing document table; enforce limits/idempotency and descendant invalidation; preserve old records/receipts.
+- **Verify:** `P: tests/integration/test_plan_preparation_store.py tests/unit/test_monitor_loop_input.py`.
+
+### RP-T05. Extract source-bound follow-up changes
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T04; **Acceptance:** RP-A02, RP-A10.
+- **Allowed files:** `src/trade_plan_monitor/ai/loop_plan_extraction.py`; `src/trade_plan_monitor/ai/plan_update_extraction.py` (new); `src/trade_plan_monitor/web/ai_service.py`; `tests/unit/test_monitor_loop_extraction.py`.
+- **Result:** Version the first/follow-up extraction contract; pass only validated past context and explicit change scope. Preserve provider safeguards and ordinary live extraction; no model-created approval.
+- **Verify:** `P: tests/unit/test_monitor_loop_extraction.py tests/integration/test_ai_provider_contract.py`.
+
+### RP-T06. Materialize complete reviewed candidates
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T05; **Acceptance:** RP-A02, RP-A06.
+- **Allowed files:** `src/trade_plan_monitor/backtest/plan_updates.py` (new); `src/trade_plan_monitor/ai/update_review.py` (new); `tests/unit/test_plan_update_merge.py` (new); `tests/unit/test_plan_update_bindings.py` (new).
+- **Result:** Apply supported changes deterministically; show removed/retained rules and original inherited bindings. Block ambiguous scope, unresolved bases and fabricated account changes.
+- **Verify:** `P: tests/unit/test_plan_update_merge.py tests/unit/test_plan_update_bindings.py`.
+
+### RP-T07. Run and recover sequential extraction
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T06; **Acceptance:** RP-A01, RP-A03, RP-A11.
+- **Allowed files:** `src/trade_plan_monitor/backtest/preparation_service.py`; `src/trade_plan_monitor/backtest/preparation_worker.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_worker.py`; `tests/integration/test_plan_preparation_api.py`.
+- **Result:** One operation processes items serially and retains exclusion until settled; retry only affected work; source/base/generation fences reject late responses and stop dependent extraction.
+- **Verify:** `P: tests/integration/test_plan_preparation_worker.py tests/integration/test_plan_preparation_api.py`.
+
+### RP-T08. Review and freeze the chain
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T07; **Acceptance:** RP-A02, RP-A03, RP-A06.
+- **Allowed files:** `src/trade_plan_monitor/backtest/preparation_review.py`; `src/trade_plan_monitor/backtest/preparation_models.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_review.py`.
+- **Result:** Freeze accepted full snapshots, differences, schedule and one opening account against exact revisions. Validation alone grants no replay authority; preserve unsupported clauses and old frozen input.
+- **Verify:** `P: tests/integration/test_plan_preparation_review.py`.
+
+### RP-T09. Freeze all applicable evidence requirements
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T03, RP-T08; **Acceptance:** RP-A04, RP-A07, RP-A10.
+- **Allowed files:** `src/trade_plan_monitor/backtest/loop_dataset.py`; `src/trade_plan_monitor/backtest/loop_replay.py`; `tests/integration/test_monitor_loop_dataset.py`; `tests/unit/test_monitor_loop_cutoff.py`.
+- **Result:** Freeze the relevant requirement union and feed only active-version evidence; report successor gaps; preserve warmup, calendar, cutoff and old dataset bytes.
+- **Verify:** `P: tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py`.
+
+### RP-T10. Submit and replay one frozen chain
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T09; **Acceptance:** RP-A01, RP-A06, RP-A07, RP-A10.
+- **Allowed files:** `src/trade_plan_monitor/backtest/loop_input_store.py`; `src/trade_plan_monitor/backtest/composition.py`; `src/trade_plan_monitor/backtest/application.py`; `tests/integration/test_monitor_loop_input_store.py`; `tests/integration/test_monitor_loop_submission.py`.
+- **Result:** Store a versioned immutable chain bundle and submit one bounded reference/job. Retry keeps run ID/cutoff; replay uses one account and cannot read mutable preparation or call AI.
+- **Verify:** `P: tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_monitor_loop_worker.py`.
+
+### RP-T11. Publish continuous causal results
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T10; **Acceptance:** RP-A07, RP-A08, RP-A10.
+- **Allowed files:** `src/trade_plan_monitor/backtest/loop_report.py`; `src/trade_plan_monitor/backtest/loop_publication.py`; `src/trade_plan_monitor/backtest/results.py`; `src/trade_plan_monitor/backtest/loop_input_store.py`; `tests/integration/test_monitor_loop_publication.py`.
+- **Result:** Publish one version-aware report with continuous valuation and causal event identity. Preserve atomic completion, bounds, old readers and latest-30 retention.
+- **Verify:** `P: tests/unit/test_monitor_loop_report.py tests/integration/test_monitor_loop_publication.py tests/integration/test_monitor_loop_retention.py`.
+
+### RP-T12. Expose bounded preparation operations
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T08, RP-T11; **Acceptance:** RP-A01, RP-A03, RP-A11.
+- **Allowed files:** `src/trade_plan_monitor/web/preparation_schemas.py`; `src/trade_plan_monitor/web/routers/backtest_preparations.py`; `src/trade_plan_monitor/backtest/preparation_service.py`; `tests/integration/test_plan_preparation_api.py`; `tests/integration/test_plan_preparation_contract.py`.
+- **Result:** Extend only RP04 resources/branches for item entry, paging, corrections, retry and chain review. Verify 4 MiB HTTP/aggregate limits, revisions, exclusion and v1 compatibility.
+- **Verify:** `P: tests/integration/test_plan_preparation_api.py tests/integration/test_plan_preparation_contract.py`.
+
+### RP-T13. Expose one run and version-aware results
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T12; **Acceptance:** RP-A01, RP-A08, RP-A10.
+- **Allowed files:** `src/trade_plan_monitor/web/backtest_schemas.py`; `src/trade_plan_monitor/web/routers/backtest_runs.py`; `src/trade_plan_monitor/backtest/composition.py`; `tests/integration/test_monitor_loop_result_api.py`; `tests/integration/test_monitor_loop_contract.py`.
+- **Result:** Accept one reviewed-chain submission and return bounded version/calendar/event projections. Preserve old response branches, errors, history and the absence of new exports.
+- **Verify:** `P: tests/integration/test_monitor_loop_result_api.py tests/integration/test_monitor_loop_contract.py`.
+
+### RP-T14. Generate and inspect exact contract changes
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T13; **Acceptance:** RP-A10, RP-A12.
+- **Allowed files:** `openapi.json`; `openapi.runtime-status.json`; `web/src/api/generated.ts`; `web/src/api/generated-runtime-status.ts`; `scripts/generate_frontend_types.py`; `tests/integration/test_openapi_snapshot.py`; `docs/specifications/monitoring/SPEC-unified-plan.md`; `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`.
+- **Result:** Generate both profiles, inspect only agreed new branches/item-read path and verify old branches. Generator changes only if required for these shapes. Record contract approval through the existing process only after concrete diff review, distinguishing review evidence from user authorization; never hand-edit generated types or silently approve digests. The paired approval documents are separate from the mechanical outputs.
+- **Verify:** `G; P: tests/integration/test_openapi_snapshot.py tests/integration/test_plan_preparation_contract.py tests/integration/test_monitor_loop_contract.py`.
+
+### RP-T15. Connect preparation controller and transport
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T14; **Acceptance:** RP-A01, RP-A03.
+- **Allowed files:** `web/src/api/preparations.ts`; `web/src/api/preparationReview.ts`; `web/src/composables/usePlanPreparation.ts`; `web/tests/unit/PlanPreparation.spec.ts`.
+- **Result:** Keep one preparation controller with ordered item projections and stable mutation keys; preserve unsaved changes, revision fences, polling cleanup and settled/unknown-state controls.
+- **Verify:** `V: web/tests/unit/PlanPreparation.spec.ts`.
+
+### RP-T16. Show grouped entry and daily review
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T15; **Acceptance:** RP-A01, RP-A02, RP-A04.
+- **Allowed files:** `web/src/components/backtests/PlanPreparationSourceForm.vue`; `web/src/components/backtests/PlanPreparationProgress.vue`; `web/src/components/backtests/PlanPreparationReview.vue`; `web/src/views/BacktestNewView.vue`; `web/tests/unit/PlanPreparationReview.spec.ts`.
+- **Result:** One entry action shows explicit source boundaries, per-item progress/diffs, daily applicability, opening account and unresolved issues before chain review; retain existing layout conventions.
+- **Verify:** `V: web/tests/unit/PlanPreparationReview.spec.ts web/tests/unit/BacktestNewView.spec.ts`.
+
+### RP-T17. Submit once from the reviewed collection
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T16; **Acceptance:** RP-A01, RP-A07, RP-A11.
+- **Allowed files:** `web/src/api/backtests.ts`; `web/src/composables/useBacktestRunForm.ts`; `web/src/components/backtests/BacktestRunForm.vue`; `web/tests/unit/MonitorLoopRunForm.spec.ts`.
+- **Result:** Bind one reviewed-chain manifest, dataset/response/end settings and one submit action. No per-item replay loop; retries reuse the same accepted run.
+- **Verify:** `V: web/tests/unit/MonitorLoopRunForm.spec.ts`.
+
+### RP-T18. Display the continuous result
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T17; **Acceptance:** RP-A08, RP-A10.
+- **Allowed files:** `web/src/components/backtests/MonitorLoopTimeline.vue`; `web/src/components/backtests/MonitorLoopSummary.vue`; `web/src/views/BacktestRunDetailView.vue`; `web/tests/unit/MonitorLoopResults.spec.ts`.
+- **Result:** Show version transitions and account-context/old-intent explanations in the existing report with one continuous curve; keep old result rendering.
+- **Verify:** `V: web/tests/unit/MonitorLoopResults.spec.ts web/tests/unit/BacktestRunDetailView.spec.ts`.
+
+### RP-T19. Verify the original business journey
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T18; **Acceptance:** RP-A01–RP-A11.
+- **Allowed files:** `tests/integration/test_monitor_loop_plan_switch.py`; `tests/integration/test_monitor_loop_parity.py`; `tests/integration/test_monitor_loop_faults.py`; `tests/integration/test_monitor_loop_worker.py`; `web/tests/e2e/monitor-loop-backtest.spec.ts`.
+- **Result:** Exercise RP-A01–RP-A11 with the independent four-version fixture, future-input perturbation, failures and real browser flow; retain original platform thresholds. Record remaining real-source blockers honestly.
+- **Verify:** `P: tests/integration/test_monitor_loop_plan_switch.py tests/integration/test_monitor_loop_parity.py tests/integration/test_monitor_loop_faults.py tests/integration/test_monitor_loop_worker.py; E; F`.
+
+### RP-T20. Reconcile evidence and operating guidance
+
+- [ ] Implemented, verified and diff reviewed.
+- **Dependencies:** RP-T19; **Acceptance:** RP-A12.
+- **Allowed files:** `docs/operations/monitor-loop-backtest.md`; `docs/operations/monitor-loop-backtest.zh-CN.md`; `docs/verification/monitor-loop-backtest.md`; `docs/verification/monitor-loop-backtest.zh-CN.md`; `docs/specifications/monitoring/SPEC-unified-plan.md`; `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`.
+- **Result:** Document one-upload/one-run behavior and exact evidence/limits; reconcile original ML gates and both language/API versions through the existing concrete contract-review process. No invented approval or completion. Documentation may be split by pair.
+- **Verify:** `D; G; inspect original ML-A07/ML-A11/ML-A13/ML-A16–ML-A18 evidence`.
+
+## RP-CHECKPOINTS. Required checkpoints
+
+| ID | After | Gate |
+|---|---|---|
+| RP-C01 | RP-T03 | Reviewed baseline plus actual offline schedule/switch/account continuity; RP-A09 literal values. |
+| RP-C02 | RP-T06 | Durable source-bound extraction/merge with explicit unresolved cases. |
+| RP-C03 | RP-T08 | Sequential recovery and whole-chain freeze; no second admitted operation. |
+| RP-C04 | RP-T11 | Frozen data/input through one worker to atomic continuous report and old compatibility. |
+| RP-C05 | RP-T14 | Actual API and both generated profiles match the bounded design; approval is not inferred from generation. |
+| RP-C06 | RP-T17 | Grouped preparation/calendar/review leads to exactly one run. |
+| RP-C07 | RP-T20 | Original business acceptance, browser/fault/compatibility evidence and bilingual instructions reconciled. |
+
+## RP-CHECKS. Verification commands
+
+Commands run from `trade-plan-monitor/`. Filenames marked new above are planned, not already executed. A passing task suite is not a substitute for the original business gates.
+
+- **P:** `.venv/Scripts/python.exe -m pytest <listed paths> -q -m "not live"`.
+- **V:** `npm --prefix web run test -- --run <listed paths with the leading web/ removed>`; then `npm --prefix web run type-check`.
+- **G:** `.venv/Scripts/python.exe scripts/generate_frontend_types.py --check`; review both generated OpenAPI/type diffs against RP04. Existing approved-snapshot failures require concrete review, not silent digest changes.
+- **E:** `npm --prefix web run test:e2e -- tests/e2e/monitor-loop-backtest.spec.ts` with the existing fake-provider browser fixture.
+- **F:** affected existing shared-runtime/accounting, one-task/recovery, frozen replay/export compatibility tests; `.venv/Scripts/python.exe -m ruff check src tests scripts`; `npm --prefix web run test -- --run`; `npm --prefix web run type-check`; `npm --prefix web run build`; original load experiment when RP07 requires it. Record exact selected test paths and outcomes; do not claim unexecuted checks.
+- **D:** `git diff --check`, bilingual IDs/limits/paths/commands/acceptance parity and relative-link checks; inspect the final scope against RP05.
+
+No implementation task/test has been executed by writing this plan. The earlier five focused checks established the fixed-version restriction only; they are not repair acceptance.
+
+## RP-TASK-HISTORY. Superseded delivery record
+
+The following previous task list is retained unchanged. Its 37 completed items, cancelled ML-T06/ML-T09 and prior completion statements describe the narrower fixed-version implementation. They cannot exclude original requirements from this repair or be counted as repair completion.
+
+<!-- prior-delivery-record -->
+
 # Active Task List: Monitoring-loop Backtest
 
 > Implementation authorized, updated 2026-10-09. Plan: [plan.md](plan.md); Chinese copy: [todo.zh-CN.md](todo.zh-CN.md). Implemented and verified: ML-T01, ML-T02, ML-T03, ML-T04, ML-T05, ML-T07, ML-T08, ML-T10, ML-T11, ML-T12, ML-T13, ML-T14, ML-T15, ML-T16, ML-T17, ML-T18, ML-T19, ML-T20, ML-T21, ML-T22, ML-T23, ML-T24, ML-T25, ML-T26, ML-T27, ML-T28, ML-T29, ML-T30, ML-T31, ML-T32, ML-T33, ML-T34, ML-T35, ML-T39, ML-T36, ML-T37, ML-T38. Evidence: [verification](../docs/verification/monitor-loop-backtest.md). Previously completed historical tasks are retained below.
