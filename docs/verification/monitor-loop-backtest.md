@@ -78,6 +78,10 @@ RP-T13 is complete: a required prepared-loop-plan-v2 command submits one reviewe
 
 RP-T14 is complete and RP-C05 passes: independent review of both actual generated profiles approves only one new item-page path, 10 additive existing-operation changes and 36 new schemas; three old schemas gain unions and all other old surfaces remain exact. The required public create discriminator was reproduced in both profiles before repair. U11 records all four reviewed artifact hashes under standing authorization. All 54 snapshot/preparation/result contract checks and both generator checks pass. Windows sandbox stalled the local contract run; the approved isolated rerun passed. Full frontend type checking identifies the new event-union consumers reserved for RP-T18; no checks were suppressed. Ruff and diff checks pass. **14 of 20 repair tasks complete.** Next: RP-T15.
 
+## RP-V15. One collection preparation controller
+
+RP-T15 is complete: the existing controller supports one ordered collection, revision-bound complete item pages, preserved local source edits, stable mutation receipts, explicit correction and exact whole-chain review. Independent tests reproduced mutable account data changing a same-key retry and a materialized candidate carrying the wrong source identity; both are fixed. All 128 preparation/controller/existing-review/new-view checks pass, including 82 controller/transport cases. T15 has no type errors; the two known event-union consumers remain RP-T18. Windows sandbox blocked Vitest temporary renames; the approved local rerun passed. Diff review passes. **15 of 20 repair tasks complete.** Next: RP-T16.
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

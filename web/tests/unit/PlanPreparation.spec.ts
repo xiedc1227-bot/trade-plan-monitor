@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, isReadonly } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 
-import type { PreparationView } from "../../src/api/generated-runtime-status";
+import type { CollectionItemView, CollectionItemsPage, CollectionPreparationView, PreparationView } from "../../src/api/generated-runtime-status";
 import { createPreparationApi, type PreparationApi, type PreparationReceipt } from "../../src/api/preparations";
 import { ApiClientError } from "../../src/api/transport";
 import { usePlanPreparation } from "../../src/composables/usePlanPreparation";
@@ -11,6 +12,10 @@ import PlanPreparationProgress from "../../src/components/backtests/PlanPreparat
 
 const BASE = "/api/v1/backtest-preparations";
 const SOURCE = { source_id: "source-1", text: "完整计划原文" };
+const COLLECTION_SOURCES = ["初始计划", "次日跟踪", "第三日跟踪", "第四日跟踪"].map((text, index) => ({
+  source_id: `daily-${index + 1}`, text: `  ${text}\n保留原文边界  `,
+  available_at: `2026-10-${12 + index}T08:30:00+08:00`, effective_trade_date: `2026-10-${12 + index}`,
+}));
 const wrappers: VueWrapper[] = [];
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -58,6 +63,328 @@ function receipt(body = preparation(), status = 200, headers: Record<string, str
       ...(status === 202 ? { "Retry-After": "2" } : {}), ...headers },
   });
 }
+
+function collectionDetails(): CollectionItemView[] {
+  return COLLECTION_SOURCES.map((source, index) => ({
+    sourceId: source.source_id, sourceRevision: 1, candidateRevision: 0, baseHash: null,
+    candidateHash: null, evidenceHash: null, validation: null, attemptCount: 0,
+    status: index === 0 ? "DRAFT" : "WAITING", effectiveTradeDate: source.effective_trade_date,
+    source: { ...source }, attempts: [], candidate: null,
+  }));
+}
+function collection(overrides: Partial<CollectionPreparationView> = {}): CollectionPreparationView {
+  return {
+    schemaVersion: "backtest-preparation-v2", preparationId: "prep-1", revision: 1,
+    reviewRevision: 0, itemCount: 4, items: collectionDetails().map(({ source, attempts, candidate, ...summary }) => summary),
+    status: "DRAFT", workPhase: null, generation: null, currentSourceId: null, frozen: null, ...overrides,
+  };
+}
+function collectionReceipt(body = collection(), status: 200 | 201 | 202 = 200): PreparationReceipt {
+  return { body, status, retryAfterSeconds: status === 202 ? 2 : null };
+}
+function itemPage(items = collectionDetails(), overrides: Partial<CollectionItemsPage> = {}): CollectionItemsPage {
+  return { preparationId: "prep-1", revision: 1, total: 4, offset: 0, limit: 20, nextOffset: null, items, ...overrides };
+}
+function collectionResponse(body: CollectionPreparationView | CollectionItemsPage = collection(), status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: {
+    "Cache-Control": "no-store", Location: `${BASE}/${body.preparationId}`,
+    ...(status === 202 ? { "Retry-After": "2" } : {}),
+  } });
+}
+function collectionApi() {
+  return {
+    ...mockApi(),
+    create: vi.fn<PreparationApi["create"]>().mockResolvedValue(collectionReceipt(collection(), 201)),
+    get: vi.fn<PreparationApi["get"]>().mockResolvedValue(collectionReceipt()),
+    items: vi.fn<NonNullable<PreparationApi["items"]>>().mockResolvedValue(itemPage()),
+    reviewCollection: vi.fn<NonNullable<PreparationApi["reviewCollection"]>>(),
+    correct: vi.fn<NonNullable<PreparationApi["correct"]>>(),
+  };
+}
+function reviewableCollection() {
+  const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.json", "utf8")) as {
+    candidate: PreparationView; reviewed: PreparationView;
+  };
+  if (fixture.candidate.candidate?.kind !== "EXTRACTION" || fixture.reviewed.candidate?.kind !== "FROZEN") throw new Error("fixture variant");
+  const candidate = fixture.candidate.candidate;
+  const reviewed = fixture.reviewed.candidate.frozen;
+  const details = collectionDetails().map((item, index): CollectionItemView => {
+    const candidateHash = String(index + 1).repeat(64); const evidenceHash = String(index + 5).repeat(64);
+    const source = { ...fixture.candidate.source, source_id: item.sourceId,
+      available_at: item.source.available_at ?? null, effective_trade_date: item.effectiveTradeDate };
+    return { ...item, source, candidateRevision: index + 2, candidateHash, evidenceHash,
+      baseHash: index === 0 ? null : String(index).repeat(64), validation: "VALID", status: "CANDIDATE",
+      candidate: { kind: index === 0 ? "INITIAL" : "MATERIALIZED", candidateHash, evidenceHash, validation: "VALID", issues: [],
+        draft: structuredClone(candidate.draft), mapping: structuredClone(reviewed.mapping),
+        openingAccount: index === 0 ? structuredClone(candidate.openingAccount) : null,
+        review: { source_id: item.sourceId, source_hash: "a".repeat(64), available_at: source.available_at!,
+          draft: structuredClone(candidate.draft), bindings: reviewed.mapping.bindings.map(binding => ({
+            binding: structuredClone(binding), candidate_content_hash: reviewed.mapping.candidate_content_hash,
+            clauses: structuredClone(reviewed.mapping.clauses.filter(clause => binding.clause_ids.includes(clause.clause_id))),
+            original_path: binding.path, path: binding.path, source_hash: "a".repeat(64), source_id: item.sourceId,
+            supplement: structuredClone(reviewed.mapping.supplements.find(supplement => supplement.supplement_id === binding.supplement_id) ?? null),
+          })), changes: [], issues: [], account_context: null },
+      },
+    };
+  });
+  const root = collection({ status: "CANDIDATE", revision: 9,
+    items: details.map(({ source, attempts, candidate, ...summary }) => summary) });
+  return { details, root, account: reviewed.account };
+}
+
+describe("ordered collection preparation transport", () => {
+  it("creates all four raw sources in one explicitly versioned request", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(collectionResponse(collection(), 201));
+    const command = { input: { schema_version: "backtest-preparation-v2" as const, preparation_id: "prep-1", sources: COLLECTION_SOURCES } };
+    const response = await createPreparationApi(fetcher).create(command, "batch-1");
+    expect(response.body).toEqual(collection());
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetcher.mock.calls[0]![1]?.body))).toEqual(command);
+  });
+
+  it.each(["duplicate", "empty", "count", "encoded-size"])("rejects invalid collection %s before fetch", async kind => {
+    const fetcher = vi.fn<typeof fetch>();
+    const sources = kind === "duplicate" ? [COLLECTION_SOURCES[0]!, COLLECTION_SOURCES[0]!] :
+      kind === "empty" ? [] : kind === "count" ? Array.from({ length: 257 }, (_, i) => ({ source_id: `s-${i}`, text: "x" })) :
+      Array.from({ length: 10 }, (_, i) => ({ source_id: `s-${i}`, text: "汉".repeat(150_000) }));
+    await expect(createPreparationApi(fetcher).create({ input: {
+      schema_version: "backtest-preparation-v2", preparation_id: "prep-1", sources,
+    } }, "batch-1")).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("accepts adaptive item pages and binds the read to an exact revision", async () => {
+    const page = itemPage(collectionDetails().slice(0, 1), { nextOffset: 1 });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(collectionResponse(page));
+    const api = createPreparationApi(fetcher);
+    expect(await api.items!("prep-1", { expectedRevision: 1, offset: 0, limit: 20 })).toEqual(page);
+    const [url, init] = fetcher.mock.calls[0]!;
+    const parsed = new URL(String(url), "http://localhost");
+    expect(parsed.pathname).toBe(`${BASE}/prep-1/items`);
+    expect(Object.fromEntries(parsed.searchParams)).toEqual({ expectedRevision: "1", offset: "0", limit: "20" });
+    expect(init).toMatchObject({ method: "GET", credentials: "same-origin", redirect: "error" });
+  });
+
+  it.each([
+    { preparationId: "other" }, { revision: 2 }, { offset: 1 }, { total: 257 },
+    { nextOffset: 0 }, { nextOffset: 3 }, { nextOffset: null },
+  ])("rejects mismatched or nonadvancing item pages: %o", async overrides => {
+    const page = itemPage(collectionDetails().slice(0, 1), { nextOffset: 1, ...overrides });
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(collectionResponse(page)));
+    await expect(api.items!("prep-1", { expectedRevision: 1, offset: 0, limit: 20 })).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("rejects malformed detail source binding and duplicate item identifiers", async () => {
+    const details = collectionDetails();
+    details[0]!.source.source_id = "forged-source";
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(collectionResponse(itemPage(details))));
+    await expect(api.items!("prep-1", { expectedRevision: 1 })).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    const duplicate = collection(); duplicate.items[1] = { ...duplicate.items[0]! };
+    await expect(createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(collectionResponse(duplicate))).get("prep-1"))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("accepts actual INITIAL and MATERIALIZED projection evidence through the transport", async () => {
+    const { details } = reviewableCollection();
+    const page = itemPage(details, { revision: 9 });
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(collectionResponse(page)));
+    expect(await api.items!("prep-1", { expectedRevision: 9 })).toEqual(page);
+  });
+
+  it("rejects a materialized candidate whose review belongs to another source", async () => {
+    const { details } = reviewableCollection();
+    details[1]!.candidate!.review!.source_id = "unrelated-source";
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(collectionResponse(itemPage(details, { revision: 9 }))));
+    const rejection = await api.items!("prep-1", { expectedRevision: 9 }).then(() => null, error => error.code);
+    expect(rejection).toBe("INVALID_RESPONSE");
+  });
+});
+
+describe("one ordered collection preparation controller", () => {
+  it("creates a collection only on explicit submission and keeps one preparation", async () => {
+    const api = collectionApi(); const { state } = controller(api, null);
+    api.create.mockImplementation(async command => {
+      const created = collection({ preparationId: command.input.preparation_id });
+      api.items.mockResolvedValue(itemPage(collectionDetails(), { preparationId: created.preparationId }));
+      return collectionReceipt(created, 201);
+    });
+    await flushPromises(); state.updateSources(COLLECTION_SOURCES);
+    expect(api.create).not.toHaveBeenCalled();
+    await state.submitSources(); await flushPromises();
+    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(api.create.mock.calls[0]![0].input).toMatchObject({ schema_version: "backtest-preparation-v2", sources: COLLECTION_SOURCES });
+    expect(state.collection.value?.itemCount).toBe(4);
+    expect(state.preparation.value).toBeNull();
+    expect(state.items.value.map(item => item.sourceId)).toEqual(COLLECTION_SOURCES.map(source => source.source_id));
+    await state.submitSources();
+    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(isReadonly(state.sources)).toBe(true);
+  });
+
+  it("loads every adaptive page at one revision before making the chain reviewable", async () => {
+    const api = collectionApi(); const last = deferred<CollectionItemsPage>();
+    api.items.mockResolvedValueOnce(itemPage(collectionDetails().slice(0, 1), { nextOffset: 1 }))
+      .mockImplementationOnce(() => last.promise);
+    const { state } = controller(api); await flushPromises();
+    expect(api.items.mock.calls.map(([, query]) => [query.expectedRevision, query.offset ?? 0])).toEqual([[1, 0], [1, 1]]);
+    expect(state.canReview.value).toBe(false);
+    last.resolve(itemPage(collectionDetails().slice(1), { offset: 1 })); await flushPromises();
+    expect(state.items.value.map(item => item.sourceId)).toEqual(COLLECTION_SOURCES.map(source => source.source_id));
+  });
+
+  it.each(["reorder", "revision", "summary"])("does not mix item details that disagree with root %s", async kind => {
+    const api = collectionApi(); const details = collectionDetails();
+    if (kind === "reorder") details.reverse();
+    if (kind === "summary") details[1]!.sourceRevision = 2;
+    api.items.mockResolvedValue(itemPage(details, kind === "revision" ? { revision: 2 } : {}));
+    const { state } = controller(api); await flushPromises();
+    expect(state.items.value).toHaveLength(0);
+    expect(state.canReview.value).toBe(false);
+    expect(state.errorMessage.value).toBeTruthy();
+  });
+
+  it("retains an unsaved selected source while polling newer server revisions", async () => {
+    const api = collectionApi(); const { state } = controller(api); await flushPromises();
+    state.selectSource("daily-2");
+    state.updateSource({ ...state.draft.value, text: "  尚未提交的次日修订  " });
+    api.get.mockResolvedValue(collectionReceipt(collection({ revision: 2 })));
+    api.items.mockResolvedValue(itemPage(collectionDetails(), { revision: 2 }));
+    await state.refresh(); await flushPromises();
+    expect(state.selectedSourceId.value).toBe("daily-2");
+    expect(state.draft.value.text).toBe("  尚未提交的次日修订  ");
+    expect(state.sourceDirty.value).toBe(true);
+    expect(state.canExtract.value).toBe(false);
+  });
+
+  it("persists an exact reorder with the current root revision", async () => {
+    const api = collectionApi(); const { state } = controller(api); await flushPromises();
+    await state.reorderSources(["daily-1", "daily-3", "daily-2", "daily-4"]);
+    expect(api.edit).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.edit).mock.calls[0]![1]).toEqual({ schemaVersion: "backtest-preparation-v2", expectedRevision: 1,
+      sourceOrder: ["daily-1", "daily-3", "daily-2", "daily-4"] });
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it("retries an uncertain batch create with the original key and unchanged source bytes", async () => {
+    const api = collectionApi();
+    api.create.mockRejectedValueOnce(new ApiClientError({ code: "NETWORK_ERROR", status: 0, message: "disconnected" }))
+      .mockResolvedValueOnce(collectionReceipt(collection(), 201));
+    const { state } = controller(api, null); await flushPromises();
+    state.updateSources(COLLECTION_SOURCES); await state.submitSources();
+    expect(state.mutationState.value).toBe("UNCERTAIN");
+    state.updateSources([{ source_id: "replacement", text: "不得替换未决请求" }]);
+    await state.retryMutation(); await flushPromises();
+    expect(api.create).toHaveBeenCalledTimes(2);
+    expect(api.create.mock.calls[1]!.slice(0, 2)).toEqual(api.create.mock.calls[0]!.slice(0, 2));
+    expect(api.create.mock.calls[1]![0].input.sources).toEqual(COLLECTION_SOURCES);
+  });
+
+  it.each(["UNKNOWN", "CALLING"] as const)("locks editing and review while collection work remains %s", async workPhase => {
+    const api = collectionApi();
+    api.get.mockResolvedValue(collectionReceipt(collection({ status: "CANCEL_REQUESTED", workPhase, generation: "g1", currentSourceId: "daily-2" }), 202));
+    const { state } = controller(api); await flushPromises();
+    expect(state.isBusy.value).toBe(true);
+    expect(state.canSubmitSource.value).toBe(false);
+    expect(state.canExtract.value).toBe(false);
+    expect(state.canReview.value).toBe(false);
+    expect(state.canRecover.value).toBe(workPhase === "UNKNOWN");
+    await state.reorderSources(["daily-4", "daily-3", "daily-2", "daily-1"]);
+    expect(api.edit).not.toHaveBeenCalled();
+  });
+
+  it("aborts and discards an item page arriving after unmount", async () => {
+    const api = collectionApi(); const late = deferred<CollectionItemsPage>();
+    api.items.mockImplementation(() => late.promise);
+    const { state, wrapper } = controller(api); await flushPromises();
+    expect(api.items).toHaveBeenCalledTimes(1);
+    const signal = api.items.mock.calls[0]![2]?.signal;
+    wrapper.unmount();
+    expect(signal?.aborted).toBe(true);
+    late.resolve(itemPage()); await flushPromises();
+    expect(state.items.value).toHaveLength(0);
+  });
+
+  it("discards a late old revision after visibility resumes a newer read", async () => {
+    const api = collectionApi(); const oldPage = deferred<CollectionItemsPage>();
+    api.get.mockResolvedValueOnce(collectionReceipt(collection({ status: "EXTRACTING", workPhase: "CALLING", generation: "g1", currentSourceId: "daily-1" }), 202))
+      .mockResolvedValueOnce(collectionReceipt(collection({ revision: 2 })));
+    api.items.mockImplementationOnce(() => oldPage.promise).mockResolvedValueOnce(itemPage(collectionDetails(), { revision: 2 }));
+    const { state } = controller(api); await flushPromises();
+    const visibility = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(api.items.mock.calls[0]![2]?.signal?.aborted).toBe(true);
+    visibility.mockReturnValue(false); document.dispatchEvent(new Event("visibilitychange")); await flushPromises();
+    expect(state.collection.value?.revision).toBe(2);
+    oldPage.resolve(itemPage()); await flushPromises();
+    expect(state.collection.value?.revision).toBe(2);
+    expect(state.items.value.map(item => item.sourceId)).toEqual(COLLECTION_SOURCES.map(source => source.source_id));
+    expect(state.errorMessage.value).toBeNull();
+  });
+
+  it("requires every ordered detail and emits exact source, candidate, evidence and predecessor bindings", async () => {
+    const { root, details } = reviewableCollection(); const api = collectionApi();
+    api.get.mockResolvedValue(collectionReceipt(root));
+    const second = deferred<CollectionItemsPage>();
+    api.items.mockResolvedValueOnce(itemPage(details.slice(0, 2), { revision: 9, nextOffset: 2 })).mockImplementationOnce(() => second.promise);
+    const { state } = controller(api); await flushPromises();
+    await state.reviewCollection("逐份核对全部计划及期初账户", true);
+    expect(api.reviewCollection).not.toHaveBeenCalled();
+    second.resolve(itemPage(details.slice(2), { revision: 9, offset: 2 })); await flushPromises();
+    expect(state.canReview.value).toBe(true);
+    api.reviewCollection.mockRejectedValue(new ApiClientError({ code: "NETWORK_ERROR", status: 0, message: "lost receipt" }));
+    await state.reviewCollection("逐份核对全部计划及期初账户", true);
+    expect(api.reviewCollection).toHaveBeenCalledTimes(1);
+    expect(api.reviewCollection.mock.calls[0]![1]).toEqual({ schemaVersion: "backtest-preparation-v2", kind: "CHAIN_REVIEW", review: {
+      confirmed: true, evidence: "逐份核对全部计划及期初账户", expected_revision: 9,
+      items: details.map(item => ({ source_id: item.sourceId, source_revision: item.sourceRevision,
+        candidate_revision: item.candidateRevision, candidate_hash: item.candidateHash, evidence_hash: item.evidenceHash, base_hash: item.baseHash })),
+    } });
+    await state.retryMutation();
+    expect(api.reviewCollection.mock.calls[1]!.slice(0, 3)).toEqual(api.reviewCollection.mock.calls[0]!.slice(0, 3));
+  });
+
+  it("never reviews a chain with one unresolved source", async () => {
+    const { root, details } = reviewableCollection(); const api = collectionApi();
+    root.items[2]!.validation = "UNRESOLVED"; details[2]!.validation = "UNRESOLVED";
+    details[2]!.candidate!.validation = "UNRESOLVED"; details[2]!.candidate!.issues = ["Ambiguous daily follow-up"];
+    api.get.mockResolvedValue(collectionReceipt(root)); api.items.mockResolvedValue(itemPage(details, { revision: 9 }));
+    const { state } = controller(api); await flushPromises();
+    expect(state.canReview.value).toBe(false);
+    await state.reviewCollection("不能跳过未决来源", true);
+    expect(api.reviewCollection).not.toHaveBeenCalled();
+  });
+
+  it("freezes an explicit account inside an uncertain chain-review intent", async () => {
+    const { root, details, account } = reviewableCollection(); const api = collectionApi();
+    api.get.mockResolvedValue(collectionReceipt(root)); api.items.mockResolvedValue(itemPage(details, { revision: 9 }));
+    api.reviewCollection.mockRejectedValue(new ApiClientError({ code: "NETWORK_ERROR", status: 0, message: "lost receipt" }));
+    const { state } = controller(api); await flushPromises();
+    await state.reviewCollection("明确核对人工期初账户", true, account);
+    const original = structuredClone(api.reviewCollection.mock.calls[0]![1]);
+    account.evidence = "后来修改的账户，不属于原请求";
+    if (account.cash.kind === "KNOWN") account.cash.balance_fen += 1;
+    await state.retryMutation();
+    expect(api.reviewCollection).toHaveBeenCalledTimes(2);
+    expect(api.reviewCollection.mock.calls[1]![1]).toEqual(original);
+    expect(api.reviewCollection.mock.calls[1]![2]).toBe(api.reviewCollection.mock.calls[0]![2]);
+  });
+
+  it("invalidates complete old details while newer revision pages are pending", async () => {
+    const { root, details } = reviewableCollection(); const api = collectionApi();
+    api.get.mockResolvedValueOnce(collectionReceipt(root)).mockResolvedValueOnce(collectionReceipt({ ...root, revision: 10 }));
+    const next = deferred<CollectionItemsPage>();
+    api.items.mockResolvedValueOnce(itemPage(details, { revision: 9 })).mockImplementationOnce(() => next.promise);
+    const { state } = controller(api); await flushPromises();
+    expect(state.canReview.value).toBe(true);
+    const refresh = state.refresh(); await flushPromises();
+    expect(state.canReview.value).toBe(false);
+    await state.reviewCollection("不得审核旧修订", true);
+    expect(api.reviewCollection).not.toHaveBeenCalled();
+    next.resolve(itemPage(details, { revision: 10 })); await refresh; await flushPromises();
+    expect(state.collection.value?.revision).toBe(10);
+    expect(state.canReview.value).toBe(true);
+  });
+});
 
 describe("one-source preparation transport", () => {
   it("sends one embedded source, revision and stable mutation key without following redirects", async () => {

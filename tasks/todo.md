@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **14 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **15 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -38,6 +38,8 @@ RP-T13 is complete: a required prepared-loop-plan-v2 command submits one reviewe
 RP-T14 allowance under RP05-A03: independent concrete contract review found that collection creation advertised an optional discriminator while HTTP requires it. Add only `src/trade_plan_monitor/web/preparation_schemas.py` and `tests/integration/test_plan_preparation_contract.py` for a required public collection-create discriminator and its regression. The private input default and bytes remain unchanged; regenerate and review the concrete outputs again before approval.
 
 RP-T14 is complete and RP-C05 passes: independent review of both actual generated profiles approves only one new item-page path, 10 additive existing-operation changes and 36 new schemas; three old schemas gain unions and all other old surfaces remain exact. The required public create discriminator was reproduced in both profiles before repair. U11 records all four reviewed artifact hashes under standing authorization. All 54 snapshot/preparation/result contract checks and both generator checks pass. Windows sandbox stalled the local contract run; the approved isolated rerun passed. Full frontend type checking identifies the new event-union consumers reserved for RP-T18; no checks were suppressed. Ruff and diff checks pass. **14 of 20 repair tasks complete.** Next: RP-T15.
+
+RP-T15 is complete: the existing controller supports one ordered collection, revision-bound complete item pages, preserved local source edits, stable mutation receipts, explicit correction and exact whole-chain review. Independent tests reproduced mutable account data changing a same-key retry and a materialized candidate carrying the wrong source identity; both are fixed. All 128 preparation/controller/existing-review/new-view checks pass, including 82 controller/transport cases. T15 has no type errors; the two known event-union consumers remain RP-T18. Windows sandbox blocked Vitest temporary renames; the approved local rerun passed. Diff review passes. **15 of 20 repair tasks complete.** Next: RP-T16.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -168,7 +170,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T15. Connect preparation controller and transport
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T14; **Acceptance:** RP-A01, RP-A03.
 - **Allowed files:** `web/src/api/preparations.ts`; `web/src/api/preparationReview.ts`; `web/src/composables/usePlanPreparation.ts`; `web/tests/unit/PlanPreparation.spec.ts`.
 - **Result:** Keep one preparation controller with ordered item projections and stable mutation keys; preserve unsaved changes, revision fences, polling cleanup and settled/unknown-state controls.

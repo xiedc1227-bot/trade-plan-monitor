@@ -1,4 +1,4 @@
-import type { DailyMapping, PreparationFrozenView, PreparationReviewInput, PreparationSource, PreparationView } from "./generated-runtime-status";
+import type { CollectionItemView, CollectionItemReviewDeclaration, CollectionPreparationView, CollectionPreparationFrozenView, CollectionReviewInput, CollectionItemCorrectionInput, LoopAccountInput, CollectionVersionView, DailyMapping, PreparationFrozenView, PreparationReviewInput, PreparationSource, PreparationView } from "./generated-runtime-status";
 import { isCalendarDate, isShanghaiDateTime } from "./shanghaiTime";
 
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -181,4 +181,84 @@ export function isReviewedPreparation(preparation: ReviewPreparation | null): bo
     frozen.extraction_candidate_revision + 1 === preparation.candidateRevision && frozen.source.source_id === preparation.source.source_id &&
     frozen.source.authored_at === preparation.source.authored_at && frozen.source.available_at === preparation.source.available_at &&
     frozen.source.effective_trade_date === preparation.source.effective_trade_date;
+}
+
+
+export function collectionBinding(item: CollectionItemView): CollectionItemReviewDeclaration {
+  if (!item.candidateHash || !item.evidenceHash || !item.candidate) throw new Error("候选证据尚不完整");
+  return { source_id: item.sourceId, source_revision: item.sourceRevision, candidate_revision: item.candidateRevision,
+    candidate_hash: item.candidateHash, evidence_hash: item.evidenceHash, base_hash: item.baseHash };
+}
+
+export function validCollectionVersion(value: unknown): value is CollectionVersionView {
+  return record(value) && text(value.sourceId, 128) && integer(value.sourceRevision, 1) && integer(value.candidateRevision, 1) &&
+    text(value.versionId, 128) && hash(value.planHash) && hash(value.evidenceHash) && isCalendarDate(value.effectiveTradeDate) &&
+    isShanghaiDateTime(value.availableAt) && (value.accountContext === null || record(value.accountContext) &&
+      nullable(value.accountContext.core_qty, integer) && nullable(value.accountContext.tactical_qty, integer) &&
+      text(value.accountContext.evidence) && Array.isArray(value.accountContext.dependent_rule_ids) && value.accountContext.dependent_rule_ids.every(id => text(id, 128)));
+}
+export function validCollectionFrozen(value: unknown): value is CollectionPreparationFrozenView {
+  return record(value) && bounded(value) && value.schemaVersion === "prepared-loop-plan-v2" && text(value.preparationId, 128) &&
+    integer(value.revision, 1) && hash(value.manifestHash) && account(value.account) && isShanghaiDateTime(value.reviewedAt) &&
+    ["SOURCE", "HUMAN_REVIEW"].includes(String(value.accountOrigin)) && Array.isArray(value.versions) &&
+    value.versions.length > 0 && value.versions.length <= 256 && value.versions.every(validCollectionVersion) &&
+    new Set(value.versions.map(version => version.sourceId)).size === value.versions.length;
+}
+/** Validate projection shape, never re-materialize or infer execution authority in the browser. */
+export function validCollectionCandidate(value: unknown, source: string): boolean {
+  if (value === null) return true;
+  if (!record(value) || !bounded(value) || !hash(value.candidateHash) || !hash(value.evidenceHash) ||
+      !["VALID", "INVALID", "UNRESOLVED"].includes(String(value.validation)) || !Array.isArray(value.issues) ||
+      value.issues.length > 128 || !value.issues.every(issue => typeof issue === "string" && Array.from(issue).length <= 512)) return false;
+  if (value.kind === "INITIAL") return draft(value.draft) && mapping(value.mapping, Array.from(source)) && opening(value.openingAccount, Array.from(source));
+  if (value.kind === "UNAVAILABLE") return value.validation === "INVALID";
+  if (value.kind === "UPDATE") return record(value.update) && ["FULL_REPLACEMENT", "EXPLICIT_CHANGES", "UNRESOLVED"].includes(String(value.update.scope));
+  return ["MATERIALIZED", "CORRECTED"].includes(String(value.kind)) && record(value.review) && draft(value.review.draft) &&
+    text(value.review.source_id, 128) && hash(value.review.source_hash) && nullable(value.review.available_at, isShanghaiDateTime) &&
+    Array.isArray(value.review.bindings) && value.review.bindings.every(binding => record(binding) && hash(binding.source_hash) &&
+      hash(binding.candidate_content_hash) && text(binding.path, 512) && text(binding.source_id, 128) && record(binding.binding) && Array.isArray(binding.clauses)) &&
+    Array.isArray(value.review.issues) && value.review.issues.every(issue => text(issue)) &&
+    (value.review.changes === undefined || Array.isArray(value.review.changes) && value.review.changes.every(change => record(change) &&
+      ["ADD", "MODIFY", "REVOKE", "RETAIN"].includes(String(change.action)) && text(change.target, 512)));
+}
+export function inspectCollectionReview(value: CollectionPreparationView, items: readonly CollectionItemView[]) {
+  const blockers: string[] = [], unknownFacts: string[] = [];
+  if (items.length !== value.itemCount || items.some((item, index) => {
+    const summary = value.items[index];
+    return !summary || item.sourceId !== summary.sourceId || item.sourceRevision !== summary.sourceRevision ||
+      item.candidateRevision !== summary.candidateRevision || item.candidateHash !== summary.candidateHash || item.evidenceHash !== summary.evidenceHash || item.baseHash !== summary.baseHash;
+  })) blockers.push("请读取当前修订的全部原文和候选后再复核");
+  for (const [index, item] of items.entries()) {
+    if (!item.source.authored_at || !item.source.available_at || !item.source.effective_trade_date) blockers.push(`第 ${index + 1} 份原文的历史时间与交易日仍不完整`);
+    if (!item.candidate || item.validation !== "VALID" || item.candidate.issues.length) blockers.push(`第 ${index + 1} 份候选仍需修正`);
+  }
+  const first = items[0]?.candidate;
+  if (first?.kind === "INITIAL" && first.openingAccount) {
+    const facts = first.openingAccount;
+    if (!facts.snapshot_at) blockers.push("期初账户快照时间缺失");
+    if (!facts.cash_fen) unknownFacts.push("期初现金未知");
+    if (!facts.inventory_quantity) unknownFacts.push("期初持仓总量未知");
+    for (const lot of facts.lots) if (!lot.unit_cost_yuan || !lot.acquired_trade_date || !lot.sellable_quantity) unknownFacts.push(`${lot.lot_key} 的成本、取得日期或可卖数量未知`);
+  }
+  return { blockers, unknownFacts, requiresAccount: first?.kind === "CORRECTED" };
+}
+export function buildCollectionReview(value: CollectionPreparationView, items: readonly CollectionItemView[], evidence: string,
+  unknownConfirmed: boolean, reviewedAccount?: LoopAccountInput): CollectionReviewInput {
+  const inspection = inspectCollectionReview(value, items);
+  if (inspection.blockers.length || !text(evidence) || inspection.unknownFacts.length && !unknownConfirmed ||
+      inspection.requiresAccount && !reviewedAccount || reviewedAccount !== undefined && !account(reviewedAccount)) throw new Error("整链复核尚不完整");
+  return { schemaVersion: "backtest-preparation-v2", kind: "CHAIN_REVIEW", review: {
+    confirmed: true, expected_revision: value.revision, evidence: evidence.trim(), items: items.map(collectionBinding),
+    ...(reviewedAccount === undefined ? {} : { account: JSON.parse(JSON.stringify(reviewedAccount)) as LoopAccountInput }),
+  } };
+}
+export function validCollectionReviewInput(value: unknown): value is CollectionReviewInput | CollectionItemCorrectionInput {
+  if (!record(value) || !bounded(value) || value.schemaVersion !== "backtest-preparation-v2" || !record(value.review) ||
+      value.review.confirmed !== true || !integer(value.review.expected_revision, 1) || !text(value.review.evidence)) return false;
+  const binding = (item: unknown) => record(item) && text(item.source_id, 128) && integer(item.source_revision, 1) &&
+    integer(item.candidate_revision, 1) && hash(item.candidate_hash) && hash(item.evidence_hash) && (item.base_hash === null || hash(item.base_hash));
+  if (value.kind === "CHAIN_REVIEW") return Array.isArray(value.review.items) && value.review.items.length > 0 && value.review.items.length <= 256 &&
+    value.review.items.every(binding) && new Set(value.review.items.map(item => item.source_id)).size === value.review.items.length && nullable(value.review.account, account);
+  return value.kind === "ITEM_CORRECTION" && binding(value.review.binding) && nullable(value.review.draft, draft) &&
+    nullable(value.review.mapping, mapping) && (value.review.update == null || record(value.review.update));
 }
