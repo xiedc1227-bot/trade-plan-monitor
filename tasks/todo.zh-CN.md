@@ -1,6 +1,6 @@
 # 修复任务：按日计划连续回测
 
-状态：受限实施已授权，2026-10-10，Asia/Shanghai。[修复方案](plan.zh-CN.md)；[英文权威版](todo.md)。**20 项修复任务，完成 18 项。** RP 编号独立于历史 ML 完成/取消记录。具体 API 审查已通过 RP-T14/U11。
+状态：受限实施已授权，2026-10-10，Asia/Shanghai。[修复方案](plan.zh-CN.md)；[英文权威版](todo.md)。**20 项修复任务，完成 19 项。** RP 编号独立于历史 ML 完成/取消记录。具体 API 审查已通过 RP-T14/U11。
 
 
 实施进度，2026-10-10：用户已在当前会话授权本受限修复。RP-T01 完成：恢复原始 ML01–ML13、具体编解码/顺序编辑矩阵；11 项夹具检查及 14 项夹具/旧格式兼容检查通过；故意将账本预期 899500 改为 899501 后失败，已恢复精确字节。Ruff、双语章节/链接检查和差异审阅通过。这里只验证基准，不代表运行时连续性通过。**20 项修复任务，完成 1 项。** 下一项 RP-T02。下文历史仅规划授权措辞由本指令覆盖，具体 API 审查仍待完成。
@@ -66,6 +66,8 @@ RP-T19 已实际复现整链审核 HTTP 409：原始原文前夜可用，期初�
 仅为该 RP-T19 开始时间修正，补充 `tests/integration/test_plan_preparation_review.py` 中独立的首日期初快照、跨日拒绝及不可用期初估值回归。
 
 RP-T19 真实浏览器复现：修改第三份原文后重提取返回 HTTP 409 PREPARATION_ITEM_BINDING_CONFLICT。按 RP05-A03 仅补充 `web/src/composables/usePlanPreparation.ts` 和 `web/tests/unit/PlanPreparation.spec.ts`，从同一修订的完整条目列表取得当前已验证前项候选，作为提取绑定，而不是使用已失效条目被清空的历史 baseHash。服务端检查、未知命令身份与重试次数保持不变。
+
+RP-T19 已完成：最终真实 Chrome 三条流程全部通过（4.0 分钟），覆盖四份完整原文、中间项重试、前项不变／后缀失效、拒绝第二个未完成操作、一次整链审核／提交、字面连续账本及全部 7 个权益点。控制台／页面错误为空。完整前端 1,028 项通过；原 600/600 秒负载门槛通过，完成 5 次回放。独立审查通过。**20 项修复任务，完成 19 项。** 下一项 RP-T20 核对文档；本轮不推送。
 
 ## RP-TASK-RULES. 执行边界
 
@@ -228,7 +230,7 @@ RP-T01 恢复被取消的 ML 要求，同时保留历史完成证据。新增 v2
 
 ### RP-T19. 验证原始业务全流程
 
-- [ ] 实现、验证并完成差异审阅。
+- [x] 实现、验证并完成差异审阅。
 - **依赖:** RP-T18; **验收:** RP-A01–RP-A11.
 - **允许文件:** `tests/integration/test_monitor_loop_plan_switch.py`; `tests/integration/test_monitor_loop_parity.py`; `tests/integration/test_monitor_loop_faults.py`; `tests/integration/test_monitor_loop_worker.py`; `web/tests/e2e/monitor-loop-backtest.spec.ts`.
 - **结果:** 以独立四版本夹具、未来输入扰动、故障及真实浏览器覆盖 RP-A01–RP-A11，保留原平台阈值，如实记录真实原文仍存在的阻断。

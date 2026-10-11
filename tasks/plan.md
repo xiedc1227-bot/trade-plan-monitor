@@ -1,6 +1,6 @@
 # Repair Plan: Restore Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **18 of 20 repair tasks complete.** Concrete API review passes RP-T14/U11. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **19 of 20 repair tasks complete.** Concrete API review passes RP-T14/U11. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -40,6 +40,8 @@ RP-T19 now reproduces HTTP 409 during whole-chain review with the original prior
 Add `tests/integration/test_plan_preparation_review.py` only for independent first-day snapshot, later-day rejection and unavailable-opening-mark regressions for that RP-T19 start-time correction.
 
 RP-T19 real-browser suffix retry reproduced HTTP 409 PREPARATION_ITEM_BINDING_CONFLICT after editing the third source. Add `web/src/composables/usePlanPreparation.ts` and `web/tests/unit/PlanPreparation.spec.ts` under RP05-A03 only to bind extraction to the current validated predecessor candidate from the complete revision-bound item list, rather than the invalidated item's cleared historical baseHash. Keep server checks, uncertain-command identity and retry limits unchanged.
+
+RP-T19 is complete: the final real Chrome suite passes all 3 journeys (4.0 minutes), including four complete sources, middle-item retry, unchanged prefix/suffix invalidation, rejection of a competing unfinished operation, one chain review/submission, the literal continuous ledger and all 7 equity points. Console/page errors are empty. Full frontend: 1,028 passed; original 600/600-second load gates pass with 5 replay jobs. Independent review passes. **19 of 20 repair tasks complete.** Next: RP-T20 documentation reconciliation; no push.
 
 ## RP01. Baseline and authority
 

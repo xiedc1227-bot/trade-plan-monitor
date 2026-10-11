@@ -104,6 +104,47 @@ npm --prefix web run test -- --run tests/unit/MonitorLoopResults.spec.ts tests/u
 npm --prefix web run type-check
 ```
 
+## RP-V19. Original business acceptance and unchanged load gates
+
+Executed 2026-10-11, Asia/Shanghai, under RP05-A03. RP-T19 passes with 19 of 20 repair tasks complete; RP-T20 documentation closure follows. The independent oracle remains `tests/fixtures/monitor_loop_continuity.json`: 1,000,000 fen / 0 shares → buy 100 at 1,000 fen plus 500 fee → 899,500 fen / 100 shares → eligible sale at 1,200 fen less 500 fee → 1,019,000 fen / 0 shares; fees 1,000 and realized gain 19,000 fen. Later 0/200-share source statements never reset that ledger.
+
+The mounted fixture preserves all four complete synthetic source texts and appends explicit canonical field declarations and account facts. Only raw AI responses, market observations and clocks are fixtures; extraction validation, stored predecessor reconstruction, chain review, admission, immutable input, worker, settlement, publication and result APIs are production paths. This verifies the declared offline example, not live AI interpretation or a real user's strategy. The real historical-data path contains 741 frozen minute bars and actual weekend VALUATION events: its complete curve has 7 points (opening plus 2026-08-20–2026-08-25), cash `[1000000,899500,899500,899500,899500,1019000,1019000]` and quantities `[0,100,100,100,100,0,0]`. RP-V18's direct four-trading-day fixture has 5 points because that fixture supplies only those four days; neither path truncates actual valuations.
+
+Real extraction/browser failures were reproduced before correction: explicit empty SOURCE collections; unsupported-capability false positives in an exact negative sentence; original-extraction/frozen reload using the old detector; explicit closed-range Boolean evidence; first-day 09:00 account time after prior-evening source availability; and null predecessor binding after editing the third source. Corrections are narrow literal v5 rules, shared source checks, v2 same-day start anchoring and current validated predecessor identity. Questions, conditional/positive unsupported capabilities, unrelated Booleans, next-day snapshots and unavailable opening marks remain rejected. Independent review added adversarial cases and removed a quadratic unsupported-text scan; 120,000-character repeated input checked in about 0.002 seconds. No source boundary, assertion, product threshold or server binding was weakened. The browser test's bounded wait accommodates the full historical replay; it is not a change to the platform load gates.
+
+| Executed check | Result |
+|---|---|
+| Original switch/parity/fault/worker suite (`test_monitor_loop_plan_switch.py`, `test_monitor_loop_parity.py`, `test_monitor_loop_faults.py`, `test_monitor_loop_worker.py`) | 25 passed, 29.27 s. Replacement/continuation, ledger/risk preservation, future perturbation, atomic faults and no external replay calls. |
+| Shared runtime/replay parity; compatibility, exports/export API, retention/jobs; loop account/submission | 130 passed, 58.30 s. Original frozen compatibility and platform constraints retained. |
+| Daily review, loop extraction, update merge/bindings and preparation review | 243 passed, 10.67 s. Includes literal-source adversarial checks. |
+| Schedule/input/continuity fixture and dataset/input-store | 107 passed, 18.52 s. Causal dates, frozen relevant evidence and no future authority. |
+| Preparation review/worker | 126 passed, 16.23 s. Serial recovery, stale completion and cancellation/unknown exclusion. |
+| Final submission, loop contract and preparation contract | 67 passed, 24.57 s. |
+| Final first-day review/submission | 113 passed, 20.08 s, including 5 new time-boundary regressions. |
+| Final real Chrome suite | 3 journeys passed, 4.0 minutes: one four-source create, source calls `[0,1,1,2,3,2,3]`, 409 during held retry, preserved prefix after source edit, one chain review and one run, exact final ledger/7 curve points and visible chart/table. All 320/768/1024/1440 widths have no page overflow; console/page errors are empty. |
+| Final mounted production composition | 8 passed, 7.65 s. |
+| Final preparation/review components | 128 passed; predecessor regression failed before repair, then passed. |
+| Full frontend | 1,028 passed in 63 files, 9.10 s; type-check and production build passed. |
+| Both generated API profiles | `generate_frontend_types.py --check` passed; all four U11 hashes unchanged. |
+| Independent review / static checks | Source/time/controller/test diffs reviewed; Ruff and `git diff --check` passed. |
+
+The final browser rehearsal first passed every business/curve assertion but reported one favicon 404 from the test-only HTML entry. A minimal browser probe identified `/favicon.ico`; the fixture now declares the existing icon explicitly, without filtering console errors. The full 3-journey rerun passed. Screenshots are retained locally in `.pytest_cache/rpt19-visual/`; visual inspection checks wrapping/layout, not pixel-perfect or live-monitor certification.
+
+Groups overlap and are not a combined unique-test total. The OS default pytest temporary directory hit an ACL setup error; the same checks used fresh workspace `--basetemp` directories and passed. No paid/live provider or production store was used.
+
+The unchanged `windows-thread-isolation-v1` load fixture passed with `--profile windows-threads --offline` (not smoke), Windows 11 10.0.26200, Python 3.14.7, 24 logical CPUs. Each phase ran 600 seconds, 600 monitor ticks, 6,000 evaluations and 1,200 status requests. 5 sequential native replays completed at the original minimum 120-second admission spacing. Baseline steady-state reminders were 10; load added 0 duplicates. Raw local evidence is `.pytest_cache/rpt19-backtest-thread-load.json` (ignored).
+
+| Measurement | Baseline | Replay/WAL load | Original gate |
+|---|---:|---:|---|
+| Status p95 | 17.386 ms | 29.768 ms | <= 250 ms; added 12.382 ms <= 100 ms |
+| Status p99 | 25.122 ms | 38.807 ms | <= 1000 ms |
+| Monitoring scheduling p99 | 1.961 ms | 2.544 ms | added 0.583 ms <= 250 ms |
+| Peak owned backtest threads | 0 | 7 | <= 7 |
+| Peak process RSS | 274075648 bytes | 539541504 bytes | Observation; no invented memory ceiling |
+| Peak WAL | 4206552 bytes | 5673336 bytes | Observation; no invented disk ceiling |
+
+Admission p95 was 530.884 ms. This unchanged paced native single-plan workload checks the original shared-process regression gates; it is not a four-source maximum-capacity certification. Historical failed load attempts in MV43 remain intact. Shared CPU/memory/disk/process risks, live providers and larger workloads remain outside the measured claim.
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).
