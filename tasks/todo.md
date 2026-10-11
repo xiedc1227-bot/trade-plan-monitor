@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **6 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **7 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -14,6 +14,8 @@ RP-T04 is complete: v2 ordered items share the existing tagged document store, p
 RP-T05 is complete: first-source extraction remains unchanged; follow-up extraction uses a distinct bounded contract containing only its source and validated past context, explicit scope/operations and non-authoritative account assertions. Independent review found and corrected cross-bucket quantity attribution and overlapping evidence. 144 extraction/provider checks pass, including 23 new follow-up cases; both account-attribution regressions failed before repair. Windows sandbox socket initialization blocked asyncio; the approved unsandboxed local fake-provider checks passed. Ruff and diff checks pass. **5 of 20 repair tasks complete.** Next: RP-T06; candidates remain unresolved until materialization and explicit review.
 
 RP-T06 is complete and RP-C02 passes: deterministic full replacement and explicit add/modify/revoke/retain operations produce complete candidates and reviewable differences. Inherited fields retain original source spans, binding paths and human supplement hashes through index changes; later holdings remain comparison context. Independent review reproduced and corrected negated/hypothetical replacement and unsupported account-dependency attribution. 67 focused merge/binding/fixture/schedule checks pass, including 31 merge/binding cases and bounded evidence persistence through store restart. Narrow literal scope/dependency guards leave other wording unresolved for explicit review. Ruff and diff review pass. **6 of 20 repair tasks complete.** Next: RP-T07; worker integration and whole-chain freezing remain pending.
+
+RP-T07 is complete. The user approved RP05-A01 on 2026-10-11; the two cancellation invariant regressions now pass. One owned operation processes items serially with source/base/generation fences, per-item retry budgets, explicit unknown recovery and exact edit receipts. Cancellation preserves validated predecessors and original attempt bindings, retains global exclusion until physical work ends, and rejects late completion. 169 preparation service/worker/store checks pass, including restart and real blocked fake-provider cancellation. Ruff, bilingual checks and independent diff review pass. **7 of 20 repair tasks complete.** Next: RP-T08.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -75,11 +77,14 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T07. Run and recover sequential extraction
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T06; **Acceptance:** RP-A01, RP-A03, RP-A11.
 - **Allowed files:** `src/trade_plan_monitor/backtest/preparation_service.py`; `src/trade_plan_monitor/backtest/preparation_worker.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_worker.py`; `tests/integration/test_plan_preparation_api.py`.
 - **Result:** One operation processes items serially and retains exclusion until settled; retry only affected work; source/base/generation fences reject late responses and stop dependent extraction.
 - **Verify:** `P: tests/integration/test_plan_preparation_worker.py tests/integration/test_plan_preparation_api.py`.
+
+
+- **Approved allowance:** The user approved RP05-A01 on 2026-10-11, adding `src/trade_plan_monitor/backtest/preparation_models.py` only for the cancellation invariant repair.
 
 ### RP-T08. Review and freeze the chain
 

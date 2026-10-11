@@ -16,7 +16,10 @@ from trade_plan_monitor.backtest.models import StableIdentifier
 from trade_plan_monitor.backtest.preparation_models import (
     PREPARATION_DOMAIN,
     PREPARATION_SCHEMA_VERSION,
+    CollectionPreparationAttempt,
+    CollectionPreparationCandidate,
     CollectionPreparationRecord,
+    CollectionPreparationWorkClaim,
     PlanCollectionPreparationInput,
     PreparationAttempt,
     PreparationCandidate,
@@ -188,6 +191,7 @@ class PreparationStore:
             if previous is not None:
                 raise PreparationConflictError("PREPARATION_EXISTS")
             if isinstance(command, PlanCollectionPreparationInput):
+                self.validate_collection_chronology(command.sources)
                 return CollectionPreparationRecord(
                     preparation_id=command.preparation_id, revision=1,
                     items=tuple(PreparationItem(
@@ -256,6 +260,7 @@ class PreparationStore:
                         "status": "DRAFT" if ready else "WAITING",
                     })
                 items.append(item)
+            self.validate_collection_chronology(tuple(item.source for item in items))
             return self._updated(
                 record, now, items=tuple(items), status="DRAFT", review=None,
                 review_revision=record.review_revision + 1,
@@ -328,10 +333,11 @@ class PreparationStore:
 
     def replay_mutation(
         self, operation, preparation_id, *, expected_revision, idempotency_key, source=None,
+        source_order=None,
     ):
         """Return an original edit/cancel receipt before consulting new-work admission."""
-        if operation not in {"EDIT", "CANCEL"}:
-            raise ValueError("mutation must be EDIT or CANCEL")
+        if operation not in {"EDIT", "CANCEL", "EDIT_COLLECTION"}:
+            raise ValueError("mutation must be EDIT, EDIT_COLLECTION or CANCEL")
         identity = _IDENTIFIER.validate_python(preparation_id)
         key = _IDENTIFIER.validate_python(idempotency_key)
         payload = {"expected_revision": expected_revision}
@@ -339,6 +345,16 @@ class PreparationStore:
             if not isinstance(source, PreparationSource):
                 raise TypeError("source must be PreparationSource")
             payload["source"] = PreparationSource.model_validate(source.model_dump(mode="python"))
+        elif operation == "EDIT_COLLECTION":
+            if source is None and source_order is None:
+                raise ValueError("collection edit requires source or source_order")
+            if source is not None:
+                source = PreparationSource.model_validate(source.model_dump(mode="python"))
+            if source_order is not None:
+                if type(source_order) is not tuple:
+                    raise ValueError("source_order must be an explicit tuple")
+                source_order = tuple(_IDENTIFIER.validate_python(item) for item in source_order)
+            payload.update(source=source, source_order=source_order)
         expected = _request_hash(operation, identity, payload)
         with self._connect() as connection:
             row = connection.execute(
@@ -353,14 +369,21 @@ class PreparationStore:
 
     def start_attempt(
         self, preparation_id: str, *, expected_revision: int, idempotency_key: str,
-        work_claim: PreparationWorkClaim | None = None,
+        work_claim: PreparationWorkClaim | CollectionPreparationWorkClaim | None = None,
     ) -> PreparationRecord:
         """Record explicit intent only; this method never invokes or resumes AI."""
         if work_claim is not None:
-            work_claim = PreparationWorkClaim.model_validate(work_claim.model_dump(mode="python"))
+            claim_type = (CollectionPreparationWorkClaim
+                          if isinstance(work_claim, CollectionPreparationWorkClaim)
+                          else PreparationWorkClaim)
+            work_claim = claim_type.model_validate(work_claim.model_dump(mode="python"))
 
         def change(previous, now):
             record = self._require_revision(previous, expected_revision)
+            if isinstance(record, CollectionPreparationRecord):
+                return self._start_collection_attempt(record, work_claim, now)
+            if isinstance(work_claim, CollectionPreparationWorkClaim):
+                raise PreparationConflictError("PREPARATION_SCHEMA_CONFLICT")
             if record.work_claim is not None and (
                 work_claim is None or record.work_claim.phase != "ENDED"
                 or (record.work_claim.admission_key, record.work_claim.intent_hash,
@@ -397,6 +420,105 @@ class PreparationStore:
         return self._operation("START_ATTEMPT", preparation_id, {
             "expected_revision": expected_revision,
         }, idempotency_key, change)
+
+    @staticmethod
+    def validate_collection_chronology(sources):
+        for field in ("authored_at", "available_at", "effective_trade_date"):
+            known = [getattr(source, field) for source in sources
+                     if getattr(source, field) is not None]
+            if any(left > right for left, right in zip(known, known[1:], strict=False)):
+                raise PreparationConflictError("SOURCE_CHRONOLOGY_CONFLICT")
+
+    @staticmethod
+    def next_collection_item(record):
+        """Earliest unresolved item only; no caller can skip a failed predecessor."""
+        for index, item in enumerate(record.items):
+            if item.candidate is None or item.candidate.validation != "VALID":
+                return index, item
+        raise PreparationConflictError("PREPARATION_COMPLETE")
+
+    def _start_collection_attempt(self, record, claim, now):
+        self.validate_collection_chronology(tuple(item.source for item in record.items))
+        if not isinstance(claim, CollectionPreparationWorkClaim):
+            raise PreparationConflictError("WORKER_CLAIM_REQUIRED")
+        if record.work_claim is not None and (
+            record.work_claim.phase != "ENDED"
+            or (record.work_claim.admission_key, record.work_claim.intent_hash,
+                record.work_claim.claimed_at, record.work_claim.owner_id) != (
+                claim.admission_key, claim.intent_hash, claim.claimed_at, claim.owner_id)
+        ):
+            raise PreparationConflictError("WORKER_CLAIM_PENDING")
+        if record.status in {"EXTRACTING", "CANCEL_REQUESTED"}:
+            raise PreparationConflictError("PREPARATION_BUSY")
+        if record.status == "CANCELLED":
+            raise PreparationConflictError("PREPARATION_CANCELLED")
+        index, item = self.next_collection_item(record)
+        base = None if index == 0 else record.items[index - 1].candidate
+        expected_base = base.candidate_hash if base else None
+        if index and (base is None or base.validation != "VALID"):
+            raise PreparationConflictError("PREDECESSOR_UNRESOLVED")
+        if claim.phase != "READY" or (
+            claim.source_id, claim.source_revision, claim.source_hash, claim.base_hash
+        ) != (item.source.source_id, item.source_revision, item.source.binding_hash, expected_base):
+            raise PreparationConflictError("STALE_WORKER")
+        if item.status == "FAILED" and not item.attempts[-1].retryable:
+            raise PreparationConflictError("RETRY_NOT_ALLOWED")
+        if len(item.attempts) >= MAX_EXTRACTION_ATTEMPTS:
+            raise PreparationConflictError("ATTEMPTS_EXHAUSTED")
+        attempt = CollectionPreparationAttempt(
+            attempt_id=claim.generation, source_revision=item.source_revision,
+            source_hash=item.source.binding_hash, base_hash=expected_base,
+            status="RUNNING", started_at=now,
+        )
+        items = list(record.items)
+        items[index] = item.model_copy(update={
+            "base_hash": expected_base, "status": "EXTRACTING", "candidate": None,
+            "attempts": (*item.attempts, attempt),
+            "candidate_revision": item.candidate_revision + 1,
+        })
+        return self._updated(
+            record, now, items=tuple(items), status="EXTRACTING", work_claim=claim,
+            review=None, review_revision=record.review_revision + 1,
+        )
+
+    @staticmethod
+    def _collection_active_item(record, attempt_id):
+        claim = record.work_claim
+        if claim is None or claim.generation != attempt_id:
+            raise PreparationConflictError("STALE_WORKER")
+        for index, item in enumerate(record.items):
+            if item.source.source_id == claim.source_id:
+                if not item.attempts or item.attempts[-1].attempt_id != attempt_id:
+                    break
+                return index, item
+        raise PreparationConflictError("STALE_ATTEMPT")
+
+    def _finish_collection_attempt(self, record, now, attempt_id, candidate, error_code, retryable):
+        index, item = self._collection_active_item(record, attempt_id)
+        if record.status != "EXTRACTING" or item.status != "EXTRACTING":
+            raise PreparationConflictError("STALE_ATTEMPT")
+        attempt = item.attempts[-1].model_copy(update={
+            "status": "SUCCEEDED" if candidate is not None else "FAILED", "finished_at": now,
+            "error_code": error_code, "retryable": retryable,
+        })
+        bound = None if candidate is None else CollectionPreparationCandidate(
+            **candidate.model_dump(), source_revision=item.source_revision,
+            source_hash=item.source.binding_hash, base_hash=item.base_hash,
+        )
+        items = list(record.items)
+        items[index] = item.model_copy(update={
+            "status": "CANDIDATE" if bound is not None else "FAILED",
+            "candidate": bound, "attempts": (*item.attempts[:-1], attempt),
+            "candidate_revision": item.candidate_revision + int(bound is not None),
+        })
+        if bound is not None and bound.validation == "VALID" and index + 1 < len(items):
+            items[index + 1] = items[index + 1].model_copy(update={"status": "DRAFT"})
+        complete = all(item.candidate is not None for item in items)
+        return self._updated(
+            record, now, items=tuple(items),
+            status="FAILED" if bound is None else "CANDIDATE" if complete else "DRAFT",
+            work_claim=record.work_claim.model_copy(update={"phase": "ENDED"}),
+        )
 
     def replay_start_attempt(self, preparation_id, *, expected_revision, idempotency_key):
         """Read a matching original receipt; never restart the recorded attempt."""
@@ -474,6 +596,10 @@ class PreparationStore:
                 return self._ended_cancellation(record, now)
             if record.status != "EXTRACTING":
                 raise PreparationConflictError("STALE_WORKER")
+            if isinstance(record, CollectionPreparationRecord):
+                return self._finish_collection_attempt(
+                    record, now, claim.generation, None, "UNKNOWN_PROVIDER_OUTCOME", True,
+                )
             ended = record.attempts[-1].model_copy(update={
                 "status": "FAILED", "finished_at": now,
                 "error_code": "UNKNOWN_PROVIDER_OUTCOME", "retryable": True,
@@ -507,6 +633,10 @@ class PreparationStore:
                 claim = self._owned_claim(record, attempt_id, worker_owner_id)
                 if claim.phase != "CALLING":
                     raise PreparationConflictError("STALE_WORKER")
+            if isinstance(record, CollectionPreparationRecord):
+                return self._finish_collection_attempt(
+                    record, now, attempt_id, candidate, error_code, retryable,
+                )
             if record.status != "EXTRACTING" or record.attempts[-1].attempt_id != attempt_id:
                 raise PreparationConflictError("STALE_ATTEMPT")
             attempt = record.attempts[-1].model_copy(update={
@@ -538,6 +668,27 @@ class PreparationStore:
     ) -> PreparationRecord:
         def change(previous, now):
             record = self._require_revision(previous, expected_revision)
+            if isinstance(record, CollectionPreparationRecord):
+                if record.status in {"CANCEL_REQUESTED", "CANCELLED"}:
+                    return record
+                items = []
+                for item in record.items:
+                    if item.status == "EXTRACTING":
+                        pending = item.attempts[-1].model_copy(update={
+                            "status": "CANCEL_REQUESTED",
+                        })
+                        item = item.model_copy(update={
+                            "status": "CANCEL_REQUESTED",
+                            "attempts": (*item.attempts[:-1], pending),
+                        })
+                    elif not item.attempts:
+                        item = item.model_copy(update={"status": "CANCELLED"})
+                    items.append(item)
+                return self._updated(
+                    record, now, items=tuple(items), review=None,
+                    review_revision=record.review_revision + 1,
+                    status="CANCEL_REQUESTED" if record.status == "EXTRACTING" else "CANCELLED",
+                )
             if record.status == "CANCEL_REQUESTED":
                 return (
                     self._updated(record, now, source_edit_pending=False)
@@ -571,7 +722,12 @@ class PreparationStore:
             record = self._require_revision(previous, expected_revision)
             if record.work_claim is not None:
                 self._owned_claim(record, attempt_id, worker_owner_id)
-            if record.status != "CANCEL_REQUESTED" or record.attempts[-1].attempt_id != attempt_id:
+            if isinstance(record, CollectionPreparationRecord):
+                _, item = self._collection_active_item(record, attempt_id)
+                attempts = item.attempts
+            else:
+                attempts = record.attempts
+            if record.status != "CANCEL_REQUESTED" or attempts[-1].attempt_id != attempt_id:
                 raise PreparationConflictError("STALE_ATTEMPT")
             return self._ended_cancellation(record, now)
 
@@ -583,6 +739,19 @@ class PreparationStore:
         return self._operation("ACK_CANCEL", preparation_id, payload, idempotency_key, change)
 
     def _ended_cancellation(self, record, now):
+        if isinstance(record, CollectionPreparationRecord):
+            index, item = self._collection_active_item(record, record.work_claim.generation)
+            ended = item.attempts[-1].model_copy(update={
+                "status": "CANCELLED", "finished_at": now,
+            })
+            item = item.model_copy(update={
+                "status": "CANCELLED", "attempts": (*item.attempts[:-1], ended),
+            })
+            return self._updated(
+                record, now, status="CANCELLED",
+                items=(*record.items[:index], item, *record.items[index + 1:]),
+                work_claim=record.work_claim.model_copy(update={"phase": "ENDED"}),
+            )
         superseded = record.attempts[-1].source_revision != record.source_revision
         ended = record.attempts[-1].model_copy(update={"status": "CANCELLED", "finished_at": now})
         return self._updated(

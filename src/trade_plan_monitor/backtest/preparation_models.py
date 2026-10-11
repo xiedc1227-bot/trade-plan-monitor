@@ -331,6 +331,10 @@ class PreparationItem(ResearchValue):
             not self.attempts or self.attempts[-1].status != "FAILED"
         ):
             raise ValueError("failed item requires its classified attempt")
+        if self.status == "CANCELLED" and self.attempts and (
+            self.attempts[-1].status != "CANCELLED"
+        ):
+            raise ValueError("cancelled item requires its cancelled attempt")
         if (self.candidate is not None) != (self.status == "CANDIDATE"):
             raise ValueError("item candidate contradicts status")
         if self.candidate is not None and (
@@ -400,7 +404,9 @@ class CollectionPreparationRecord(ResearchValue):
         previous, running = None, []
         for index, item in enumerate(self.items):
             expected_base = None if previous is None else previous.candidate_hash
-            if item.status not in {"WAITING", "DRAFT", "CANCELLED"}:
+            if item.status not in {"WAITING", "DRAFT", "CANCELLED"} or (
+                item.status == "CANCELLED" and item.attempts
+            ):
                 if index and (previous is None or previous.validation != "VALID"):
                     raise ValueError("item depends on an unresolved predecessor")
                 if item.base_hash != expected_base:

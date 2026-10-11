@@ -396,6 +396,384 @@ def test_actual_extraction_release_failure_keeps_admission_until_explicit_recove
     asyncio.run(scenario())
 
 
+def collection_record_fixture():
+    from tests.integration.test_plan_preparation_store import NOW, collection_input
+
+    from trade_plan_monitor.backtest.preparation_models import (
+        CollectionPreparationRecord,
+        PreparationItem,
+    )
+
+    value = collection_input()
+    return CollectionPreparationRecord(
+        preparation_id=value.preparation_id,
+        items=tuple(PreparationItem(source=source, status="DRAFT" if i == 0 else "WAITING")
+                    for i, source in enumerate(value.sources)),
+        revision=1, created_at=NOW, updated_at=NOW,
+    )
+
+
+def test_collection_cancelled_successor_preserves_original_predecessor_attempt_binding():
+    from tests.integration.test_plan_preparation_store import materialized_collection
+
+    from trade_plan_monitor.backtest.preparation_models import CollectionPreparationRecord
+
+    ready = materialized_collection(collection_record_fixture())
+    raw = ready.model_dump(mode="python")
+    raw.update(items=raw["items"][:2], status="CANCELLED")
+    successor = raw["items"][1]
+    successor.update(candidate=None, status="CANCELLED")
+    successor["attempts"][0]["status"] = "CANCELLED"
+    result = CollectionPreparationRecord.model_validate(raw)
+    assert result.items[0] == ready.items[0]
+    assert result.items[1].candidate is None
+    assert result.items[1].base_hash == ready.items[0].candidate.candidate_hash
+    assert result.items[1].attempts[-1].base_hash == result.items[1].base_hash
+    assert result.items[1].attempts[-1].status == "CANCELLED"
+    assert CollectionPreparationRecord.model_validate_json(result.model_dump_json()) == result
+
+
+def test_collection_cancelled_item_cannot_relabel_a_succeeded_attempt():
+    from tests.integration.test_plan_preparation_store import materialized_collection
+
+    from trade_plan_monitor.backtest.preparation_models import CollectionPreparationRecord
+
+    raw = materialized_collection(collection_record_fixture()).model_dump(mode="python")
+    raw.update(items=raw["items"][:1], status="CANCELLED")
+    raw["items"][0].update(candidate=None, status="CANCELLED")
+    with pytest.raises(ValueError):
+        CollectionPreparationRecord.model_validate(raw)
+
+
+def collection_claim(record, index, *, generation="generation-first"):
+    from tests.integration.test_plan_preparation_store import NOW
+
+    from trade_plan_monitor.backtest.preparation_models import CollectionPreparationWorkClaim
+
+    item = record.items[index]
+    predecessor = record.items[index - 1].candidate if index else None
+    return CollectionPreparationWorkClaim(
+        generation=generation, owner_id="collection-owner", source_id=item.source.source_id,
+        source_revision=item.source_revision, source_hash=item.source.binding_hash,
+        base_hash=predecessor.candidate_hash if predecessor else None,
+        admission_key="collection-reservation", intent_hash="a" * 64,
+        claimed_at=NOW, intent_json='{"synthetic":"collection-extraction"}', phase="READY",
+    )
+
+
+def test_collection_store_requires_owned_claim_and_valid_predecessor(tmp_path):
+    from tests.integration.test_plan_preparation_store import NOW, collection_input
+
+    store = PreparationStore(tmp_path / "collection.sqlite", clock=lambda: NOW)
+    record = store.create(collection_input(), idempotency_key="create-collection")
+    with pytest.raises(PreparationConflictError):
+        store.start_attempt(
+            record.preparation_id, expected_revision=record.revision, idempotency_key="unowned",
+        )
+    with pytest.raises(PreparationConflictError):
+        store.start_attempt(
+            record.preparation_id, expected_revision=record.revision, idempotency_key="skip-first",
+            work_claim=collection_claim(record, 1),
+        )
+    assert store.get(record.preparation_id) == record
+
+
+def test_collection_store_advances_serially_and_fences_wrong_base_or_old_generation(tmp_path):
+    from tests.integration.test_plan_preparation_store import NOW, collection_input
+
+    store = PreparationStore(tmp_path / "collection.sqlite", clock=lambda: NOW)
+    record = store.create(collection_input(), idempotency_key="create-collection")
+    claim = collection_claim(record, 0)
+    running = store.start_attempt(
+        record.preparation_id, expected_revision=record.revision, idempotency_key="first-start",
+        work_claim=claim,
+    )
+    assert [item.status for item in running.items] == ["EXTRACTING", "WAITING", "WAITING"]
+    calling = store.begin_call(
+        record.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
+        expected_revision=running.revision,
+    )
+    first = store.finish_attempt(
+        record.preparation_id, attempt_id=claim.generation, expected_revision=calling.revision,
+        idempotency_key="first-finish", candidate=candidate(), worker_owner_id=claim.owner_id,
+    )
+    assert first.items[0].candidate.validation == "VALID"
+    assert first.items[0].candidate.base_hash is None
+    assert first.items[1].candidate is None and not first.items[1].attempts
+    assert first.work_claim.phase == "ENDED"
+    second_claim = collection_claim(first, 1, generation="generation-second")
+    with pytest.raises(PreparationConflictError):
+        store.start_attempt(
+            record.preparation_id, expected_revision=first.revision, idempotency_key="wrong-base",
+            work_claim=second_claim.model_copy(update={"base_hash": "f" * 64}),
+        )
+    second = store.start_attempt(
+        record.preparation_id, expected_revision=first.revision, idempotency_key="second-start",
+        work_claim=second_claim,
+    )
+    assert second.items[0] == first.items[0]
+    assert second.items[1].attempts[-1].base_hash == first.items[0].candidate.candidate_hash
+    assert second.work_claim.admission_key == first.work_claim.admission_key
+    assert PreparationStore(store.database_path).get(record.preparation_id) == second
+    with pytest.raises(PreparationConflictError):
+        store.finish_attempt(
+            record.preparation_id, attempt_id=claim.generation, expected_revision=second.revision,
+            idempotency_key="late-first", candidate=candidate(), worker_owner_id=claim.owner_id,
+        )
+    assert store.get(record.preparation_id) == second
+
+
+def collection_worker_setup(tmp_path, *, future_source=None, start_successor=True):
+    from tests.integration.test_plan_preparation_store import NOW
+    from tests.unit.test_monitor_loop_schedule import at
+    from tests.unit.test_plan_update_bindings import current_update, prior_review
+
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+
+    base = prior_review()
+    current, output = current_update()
+    first = PreparationSource(
+        source_id="first", text="Synthetic human-reviewed supplements for this fixture.",
+        authored_at=at(19), available_at=at(19), effective_trade_date=at(19).date(),
+    )
+    future = future_source or PreparationSource(
+        source_id="future", text="FUTURE_CONTENT_MUST_NOT_REACH_CURRENT_PROVIDER",
+        authored_at=at(21), available_at=at(21), effective_trade_date=at(21).date(),
+    )
+    assert first.binding_hash == base.source_hash
+    store = PreparationStore(tmp_path / "collection.sqlite", clock=lambda: NOW)
+    jobs = BacktestJobRepository(tmp_path / "results.sqlite", clock=lambda: NOW)
+    record = store.create(
+        PlanCollectionPreparationInput(
+            preparation_id="worker-collection", sources=(first, current, future),
+        ), idempotency_key="create-collection",
+    )
+    intent = canonical_json({"synthetic": "whole-collection-reservation"})
+    reservation = jobs.claim_run_submission(intent, "collection-reservation")
+    claim = collection_claim(record, 0, generation=str(uuid4())).model_copy(update={
+        "intent_json": intent, "intent_hash": reservation.intent_hash,
+        "claimed_at": reservation.claimed_at,
+    })
+    running = store.start_attempt(
+        record.preparation_id, expected_revision=record.revision,
+        idempotency_key="seed-start", work_claim=claim,
+    )
+    calling = store.begin_call(
+        record.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
+        expected_revision=running.revision,
+    )
+    seeded = store.finish_attempt(
+        record.preparation_id, attempt_id=claim.generation, expected_revision=calling.revision,
+        idempotency_key="seed-finish", candidate=base.to_preparation_candidate(),
+        worker_owner_id=claim.owner_id,
+    )
+    if not start_successor:
+        jobs.release_run_submission(reservation)
+        seeded = store.clear_work_claim(
+            record.preparation_id, generation=claim.generation, expected_revision=seeded.revision,
+        )
+        return store, jobs, seeded, base, output
+    next_claim = claim.model_copy(update={
+        "generation": str(uuid4()), "source_id": current.source_id,
+        "source_hash": current.binding_hash, "base_hash": seeded.items[0].candidate.candidate_hash,
+    })
+    next_record = store.start_attempt(
+        record.preparation_id, expected_revision=seeded.revision,
+        idempotency_key="second-start", work_claim=next_claim,
+    )
+    return store, jobs, next_record, base, output
+
+
+def collection_update_result(base, source, output, identity, context):
+    from tests.unit.test_plan_update_bindings import extraction_for
+
+    result = extraction_for(base, source, output)
+    digest = sha256(canonical_json({
+        "domain": "monitor-loop-update-evidence-v1",
+        "source_binding_hash": source.binding_hash, "context": context, "output": output,
+    }).encode()).hexdigest()
+    return result.model_copy(update={
+        "request_id": identity, "base_hash": context.base_hash, "evidence_hash": digest,
+    })
+
+
+def test_collection_worker_only_sends_current_source_and_bound_predecessor(tmp_path):
+    store, jobs, running, base, output = collection_worker_setup(tmp_path)
+    calls = []
+
+    def extract(identity, source, token, *, context):
+        calls.append((identity, source, context))
+        return collection_update_result(base, source, output, identity, context)
+
+    outcome = run_attempt(store, jobs, running, PreparationExtractor(extract), CancellationToken())
+    assert len(calls) == 1
+    identity, source, context = calls[0]
+    assert str(identity) == running.work_claim.generation
+    assert source == running.items[1].source
+    assert context.base_hash == running.items[0].candidate.candidate_hash
+    assert context.snapshot == base.draft.to_executable()
+    assert context.available_at == running.items[0].source.available_at
+    assert "FUTURE_CONTENT" not in canonical_json(context)
+    assert not outcome.unknown
+    assert outcome.candidate.validation == "VALID"
+    payload = json.loads(outcome.candidate.payload_json)
+    assert payload["review"]["draft"]["position"]["max_qty"] == 300
+    durable = store.get(running.preparation_id)
+    assert durable.items[1].candidate is None and durable.work_claim.phase == "CALLING"
+    assert durable.items[2] == running.items[2]
+
+
+@pytest.mark.parametrize("tamper", ["generation", "base", "source", "digest", "review-type"])
+def test_collection_worker_rejects_unbound_provider_result_without_candidate(tmp_path, tamper):
+    store, jobs, running, base, output = collection_worker_setup(tmp_path)
+    calls = []
+
+    def extract(identity, source, token, *, context):
+        calls.append(identity)
+        if tamper == "review-type":
+            return base  # A provider cannot return trusted server-reviewed evidence.
+        result = collection_update_result(base, source, output, identity, context)
+        changes = {
+            "generation": {"request_id": uuid4()},
+            "base": {"base_hash": "f" * 64},
+            "source": {"source_id": "future"},
+            "digest": {"evidence_hash": "0" * 64},
+        }
+        return result.model_copy(update=changes[tamper])
+
+    outcome = run_attempt(store, jobs, running, PreparationExtractor(extract), CancellationToken())
+    assert len(calls) == 1
+    assert outcome.unknown and outcome.candidate is None
+    durable = store.get(running.preparation_id)
+    assert durable.items[0] == running.items[0]
+    assert durable.items[1].candidate is None
+    assert durable.items[2] == running.items[2]
+    with pytest.raises(PreparationConflictError):
+        run_attempt(store, jobs, running, PreparationExtractor(extract), CancellationToken())
+    assert len(calls) == 1
+
+
+def test_collection_unknown_recovery_retains_prefix_and_bounds_owned_retries(tmp_path):
+    store, jobs, running, _, _ = collection_worker_setup(tmp_path)
+    original_claim = running.work_claim
+    calling = store.begin_call(
+        running.preparation_id, generation=original_claim.generation,
+        owner_id=original_claim.owner_id, expected_revision=running.revision,
+    )
+    unknown = store.mark_unknown(
+        running.preparation_id, generation=original_claim.generation,
+        owner_id=original_claim.owner_id, expected_revision=calling.revision,
+    )
+    assert unknown.work_claim.phase == "UNKNOWN"
+    for confirmation in (False, 1):
+        with pytest.raises(PreparationConflictError, match="RECOVERY_CONFIRMATION_REQUIRED"):
+            store.recover_unknown(
+                running.preparation_id, generation=original_claim.generation,
+                expected_revision=unknown.revision, confirmed_ended=confirmation,
+                idempotency_key="bad-recovery",
+            )
+    recovered = store.recover_unknown(
+        running.preparation_id, generation=original_claim.generation,
+        expected_revision=unknown.revision, confirmed_ended=True, idempotency_key="recover-v2",
+    )
+    item = recovered.items[1]
+    assert recovered.status == item.status == "FAILED"
+    assert item.attempts[-1].status == "FAILED"
+    assert item.attempts[-1].error_code == "UNKNOWN_PROVIDER_OUTCOME"
+    assert item.attempts[-1].retryable
+    assert item.base_hash == item.attempts[-1].base_hash == running.items[1].base_hash
+    assert recovered.items[0] == running.items[0]
+    assert recovered.items[2] == running.items[2]
+    assert recovered.work_claim.phase == "ENDED"
+    reservation = jobs.get_run_submission_reservation(
+        original_claim.intent_json, original_claim.admission_key,
+    )
+    assert jobs.release_run_submission(reservation)
+    current = store.clear_work_claim(
+        running.preparation_id, generation=original_claim.generation,
+        expected_revision=recovered.revision,
+    )
+    reservation = jobs.claim_run_submission(original_claim.intent_json, "recovery-retry")
+    retry_claim = original_claim.model_copy(update={
+        "generation": str(uuid4()), "phase": "READY",
+        "admission_key": reservation.idempotency_key, "intent_hash": reservation.intent_hash,
+        "claimed_at": reservation.claimed_at,
+    })
+    for number in (2, 3):
+        retry_claim = retry_claim.model_copy(update={"generation": str(uuid4())})
+        active = store.start_attempt(
+            running.preparation_id, expected_revision=current.revision,
+            idempotency_key=f"retry-{number}", work_claim=retry_claim,
+        )
+        assert len(active.items[1].attempts) == number
+        with pytest.raises(PreparationConflictError):
+            store.finish_attempt(
+                running.preparation_id, attempt_id=original_claim.generation,
+                expected_revision=active.revision, idempotency_key=f"stale-{number}",
+                candidate=candidate(), worker_owner_id=original_claim.owner_id,
+            )
+        calling = store.begin_call(
+            running.preparation_id, generation=retry_claim.generation,
+            owner_id=retry_claim.owner_id, expected_revision=active.revision,
+        )
+        current = store.finish_attempt(
+            running.preparation_id, attempt_id=retry_claim.generation,
+            expected_revision=calling.revision, idempotency_key=f"retry-finish-{number}",
+            error_code="TRANSIENT", retryable=True, worker_owner_id=retry_claim.owner_id,
+        )
+        assert current.items[0] == running.items[0]
+        assert current.items[2] == running.items[2]
+        assert current.items[1].base_hash == running.items[1].base_hash
+    with pytest.raises(PreparationConflictError, match="ATTEMPTS_EXHAUSTED"):
+        store.start_attempt(
+            running.preparation_id, expected_revision=current.revision,
+            idempotency_key="retry-fourth",
+            work_claim=retry_claim.model_copy(update={"generation": str(uuid4())}),
+        )
+    assert store.get(running.preparation_id) == current
+
+
+def test_collection_explicitly_corrected_successor_can_seed_next_context(tmp_path):
+    from trade_plan_monitor.ai.update_review import build_update_review, context_from_review
+    from trade_plan_monitor.backtest.preparation_models import CollectionPreparationRecord
+    from trade_plan_monitor.backtest.preparation_worker import preparation_candidate_review
+
+    store, _, running, base, output = collection_worker_setup(tmp_path)
+    source = running.items[1].source
+    # This is trusted server review evidence persisted by an explicit correction,
+    # distinct from the provider's allowed extraction result type.
+    corrected = build_update_review(base, source, output)
+    claim = running.work_claim
+    calling = store.begin_call(
+        running.preparation_id, generation=claim.generation,
+        owner_id=claim.owner_id, expected_revision=running.revision,
+    )
+    ready = store.finish_attempt(
+        running.preparation_id, attempt_id=claim.generation,
+        expected_revision=calling.revision, idempotency_key="explicit-successor-review",
+        candidate=corrected.to_preparation_candidate(), worker_owner_id=claim.owner_id,
+    )
+    predecessor = preparation_candidate_review(ready, 1)
+    assert predecessor == corrected
+    context = context_from_review(predecessor, ready.items[1].candidate.candidate_hash)
+    assert context.snapshot.position.max_qty == 300
+    assert context.available_at == source.available_at < ready.items[2].source.available_at
+    assert context.base_hash == ready.items[1].candidate.candidate_hash
+    assert "FUTURE_CONTENT" not in canonical_json(context)
+
+    moved_source = source.model_copy(update={"text": source.text + "Changed source."})
+    with pytest.raises(ValueError):
+        changed_item = ready.items[1].model_copy(update={"source": moved_source})
+        changed = ready.model_copy(update={"items": (ready.items[0], changed_item, ready.items[2])})
+        preparation_candidate_review(changed, 1)
+    raw = ready.model_dump(mode="python")
+    raw["items"][1]["base_hash"] = "f" * 64
+    raw["items"][1]["candidate"]["base_hash"] = "f" * 64
+    raw["items"][1]["attempts"][-1]["base_hash"] = "f" * 64
+    with pytest.raises(ValueError):
+        CollectionPreparationRecord.model_validate(raw)
+
+
 def test_service_runs_one_owned_call_and_idempotency_never_redispatches(tmp_path):
 
     async def scenario():
@@ -1058,3 +1436,130 @@ def test_pending_call_blocks_all_jobs_until_physical_drain(tmp_path, action):
             await service.stop()
 
     asyncio.run(scenario())
+
+
+def test_collection_successor_cancel_waits_for_physical_call_and_preserves_prefix(tmp_path):
+    store, jobs, prepared, base, output = collection_worker_setup(tmp_path, start_successor=False)
+    entered, release = Event(), Event()
+    calls = []
+
+    def extract(identity, source, token, *, context):
+        calls.append(source.source_id)
+        entered.set()
+        assert release.wait(10), "synthetic provider was not drained"
+        return collection_update_result(base, source, output, identity, context)
+
+    async def scenario():
+        service = PreparationService(store, jobs, PreparationExtractor(extract))
+        try:
+            await service.submit_extraction(
+                prepared.preparation_id, expected_revision=prepared.revision,
+                idempotency_key="cancel-successor-start",
+            )
+            assert await asyncio.to_thread(entered.wait, 5)
+            calling = store.get(prepared.preparation_id)
+            assert calling.work_claim.phase == "CALLING"
+            assert calling.items[1].base_hash == prepared.items[0].candidate.candidate_hash
+            pending = await service.cancel(
+                prepared.preparation_id, expected_revision=calling.revision,
+                idempotency_key="cancel-successor",
+            )
+            assert pending.status == pending.items[1].status == "CANCEL_REQUESTED"
+            assert pending.items[1].attempts[-1].status == "CANCEL_REQUESTED"
+            assert pending.items[1].attempts[-1].finished_at is None
+            assert pending.items[0] == prepared.items[0]
+            for kind in ("RUN", "SYNC", "VERIFY"):
+                with pytest.raises(JobAdmissionError):
+                    jobs.submit(request(kind), "blocked-collection-" + kind, request_id="a" * 32)
+            with pytest.raises(PreparationConflictError, match="WORKER_NOT_DRAINED"):
+                await service.recover(
+                    prepared.preparation_id, generation=pending.work_claim.generation,
+                    expected_revision=pending.revision, confirmed_ended=True,
+                    idempotency_key="premature-recovery",
+                )
+            with pytest.raises(PreparationConflictError):
+                store.finish_attempt(
+                    prepared.preparation_id, attempt_id=calling.work_claim.generation,
+                    expected_revision=pending.revision, idempotency_key="late-success",
+                    candidate=candidate(), worker_owner_id=calling.work_claim.owner_id,
+                )
+            release.set()
+            await service.wait_for_drain()
+            ended = store.get(prepared.preparation_id)
+            assert ended.status == ended.items[1].status == "CANCELLED"
+            assert ended.work_claim is None and ended.review is None
+            assert ended.items[0] == prepared.items[0]
+            assert ended.items[1].candidate is None
+            attempt = ended.items[1].attempts[-1]
+            assert attempt.status == "CANCELLED" and attempt.finished_at is not None
+            assert attempt.base_hash == calling.items[1].base_hash == ended.items[1].base_hash
+            assert attempt.attempt_id == calling.work_claim.generation
+            assert not ended.items[2].attempts and ended.items[2].candidate is None
+            assert calls == ["second"]
+            assert await service.cancel(
+                prepared.preparation_id, expected_revision=calling.revision,
+                idempotency_key="cancel-successor",
+            ) == pending
+            assert store.get(prepared.preparation_id) == ended
+            assert jobs.submit(request("VERIFY"), "after-collection-drain").job_id
+        finally:
+            release.set()
+            await service.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("unknown", [False, True], ids=["calling", "unknown"])
+def test_collection_cancelled_successor_restarts_without_losing_attempt_base(tmp_path, unknown):
+    from tests.integration.test_plan_preparation_store import NOW
+
+    store, jobs, running, _, _ = collection_worker_setup(tmp_path)
+    claim = running.work_claim
+    calling = store.begin_call(
+        running.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
+        expected_revision=running.revision,
+    )
+    if unknown:
+        calling = store.mark_unknown(
+            running.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
+            expected_revision=calling.revision,
+        )
+    pending = store.cancel(
+        running.preparation_id, expected_revision=calling.revision,
+        idempotency_key="cancel-before-restart",
+    )
+    reopened = PreparationStore(store.database_path, clock=lambda: NOW)
+    assert reopened.get(running.preparation_id) == pending
+    assert pending.items[0] == running.items[0]
+    with pytest.raises(JobAdmissionError):
+        jobs.submit(request("VERIFY"), "restart-still-occupied")
+    for generation, confirmed in (("wrong-generation", True), (claim.generation, False)):
+        with pytest.raises(PreparationConflictError):
+            reopened.recover_unknown(
+                running.preparation_id, generation=generation, expected_revision=pending.revision,
+                confirmed_ended=confirmed, idempotency_key="reject-cancel-recovery",
+            )
+    ended = reopened.recover_unknown(
+        running.preparation_id, generation=claim.generation, expected_revision=pending.revision,
+        confirmed_ended=True, idempotency_key="recover-cancelled-successor",
+    )
+    assert ended.status == ended.items[1].status == "CANCELLED"
+    assert ended.items[0] == running.items[0]
+    assert ended.items[1].base_hash == running.items[1].base_hash
+    assert ended.items[1].attempts[-1].base_hash == running.items[1].base_hash
+    assert ended.items[1].attempts[-1].status == "CANCELLED"
+    assert ended.items[1].candidate is None and not ended.items[2].attempts
+    assert ended.work_claim.phase == "ENDED"
+    with pytest.raises(PreparationConflictError):
+        reopened.finish_attempt(
+            running.preparation_id, attempt_id=claim.generation, expected_revision=ended.revision,
+            idempotency_key="stale-after-recovery", candidate=candidate(),
+            worker_owner_id=claim.owner_id,
+        )
+    reservation = jobs.get_run_submission_reservation(claim.intent_json, claim.admission_key)
+    assert jobs.release_run_submission(reservation)
+    cleaned = reopened.clear_work_claim(
+        running.preparation_id, generation=claim.generation, expected_revision=ended.revision,
+    )
+    assert cleaned.items == ended.items and cleaned.work_claim is None
+    assert jobs.submit(request("VERIFY"), "after-restart-recovery").job_id

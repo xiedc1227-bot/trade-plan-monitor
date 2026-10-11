@@ -30,6 +30,14 @@ RP-T06 完成，RP-C02 通过：确定性的完整替换及显式新增/修改/�
 .venv/Scripts/python.exe -m pytest tests/unit/test_plan_update_merge.py tests/unit/test_plan_update_bindings.py tests/unit/test_monitor_loop_continuity_fixture.py tests/unit/test_monitor_loop_schedule.py -q --basetemp=.pytest_cache/rpt06-durable
 ```
 
+## RP-V07. 顺序准备与取消
+
+RP-T07 完成。用户于 2026-10-11 批准 RP05-A01，两项取消不变量回归现已通过。同一自有操作串行处理条目，执行原文/前项/代次校验、逐项重试预算、显式未知结果恢复及精确编辑回执。取消保留已校验前项和原始尝试绑定，实际调用结束前持续全局互斥，并拒绝晚到完成。169 项准备服务/工作线程/存储检查通过，包含重启及实际阻塞模拟提供方的取消。Ruff、双语检查及独立差异审阅通过。**20 项修复任务，完成 7 项。** 下一项 RP-T08。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py tests/integration/test_plan_preparation_worker.py tests/integration/test_plan_preparation_store.py -q --basetemp=.pytest_cache/rpt07-reviewed-cancel
+```
+
 ## MV01. 已实现边界
 
 历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。

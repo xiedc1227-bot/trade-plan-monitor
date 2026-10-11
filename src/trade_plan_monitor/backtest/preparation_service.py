@@ -17,6 +17,9 @@ from trade_plan_monitor.backtest.jobs.repository import (
 )
 from trade_plan_monitor.backtest.loop_input import MAX_EXTRACTION_ATTEMPTS
 from trade_plan_monitor.backtest.preparation_models import (
+    CollectionPreparationRecord,
+    CollectionPreparationWorkClaim,
+    PlanCollectionPreparationInput,
     PreparationRecord,
     PreparationSource,
     PreparationWorkClaim,
@@ -72,11 +75,12 @@ class PreparationService:
                 + int(self._worker is not None and not self._worker.done()))
 
     async def create(
-        self, command: SinglePlanPreparationInput, *, idempotency_key: str,
+        self, command: SinglePlanPreparationInput | PlanCollectionPreparationInput,
+        *, idempotency_key: str,
     ) -> PreparationRecord:
-        if not isinstance(command, SinglePlanPreparationInput):
-            raise TypeError("command must be SinglePlanPreparationInput")
-        command = SinglePlanPreparationInput.model_validate(command.model_dump(mode="python"))
+        if not isinstance(command, (SinglePlanPreparationInput, PlanCollectionPreparationInput)):
+            raise TypeError("command must be a versioned preparation input")
+        command = type(command).model_validate(command.model_dump(mode="python"))
         return await self._metadata.run(self._create, command, idempotency_key)
 
     def _create(self, command, key):
@@ -197,15 +201,26 @@ class PreparationService:
         if replay is not None:
             return replay, False
         record = self._store._require_revision(self._store.get(preparation_id), expected_revision)
-        intent = canonical_json(
-            {
+        collection = isinstance(record, CollectionPreparationRecord)
+        if collection:
+            index, item = self._store.next_collection_item(record)
+            intent_fields = {
+                "domain": "collection-preparation-v2", "preparation_id": preparation_id,
+                "expected_revision": expected_revision,
+                "sources_hash": sha256(canonical_json(tuple(
+                    (item.source.binding_hash, item.source_revision) for item in record.items
+                )).encode()).hexdigest(),
+            }
+        else:
+            item = record
+            intent_fields = {
                 "domain": "single-source-preparation-v1",
                 "preparation_id": preparation_id,
                 "source_revision": record.source_revision,
                 "source_hash": record.source.binding_hash,
                 "expected_revision": expected_revision,
             }
-        )
+        intent = canonical_json(intent_fields)
         admission_key = (
             "prep-extract-"
             + sha256(
@@ -223,16 +238,22 @@ class PreparationService:
             reservation = self._jobs.claim_run_submission(intent, admission_key)
         if not isinstance(reservation, BacktestRunSubmissionReservation):
             raise JobAdmissionError("BACKTEST_BUSY")
-        claim = PreparationWorkClaim(
+        claim_type = CollectionPreparationWorkClaim if collection else PreparationWorkClaim
+        extra = {} if not collection else {
+            "source_id": item.source.source_id,
+            "base_hash": record.items[index - 1].candidate.candidate_hash if index else None,
+        }
+        claim = claim_type(
             generation=str(uuid4()),
             owner_id=self._owner_id,
-            source_revision=record.source_revision,
-            source_hash=record.source.binding_hash,
+            source_revision=item.source_revision,
+            source_hash=item.source.binding_hash,
             admission_key=admission_key,
             intent_hash=reservation.intent_hash,
             claimed_at=reservation.claimed_at,
             intent_json=intent,
             phase="READY",
+            **extra,
         )
         try:
             extractor = extractor_factory() if extractor_factory is not None else self._extractor
@@ -274,8 +295,12 @@ class PreparationService:
             # The completion owner waits for the existing local transaction to drain.
             while self._metadata.outstanding_work:
                 await asyncio.sleep(0.005)
+            previous = record
             record = await self._metadata.run(self._complete, record, outcome, retries, token)
-            retries -= 1
+            retries = (self._extractor.max_retries
+                       if isinstance(record, CollectionPreparationRecord)
+                       and record.work_claim.source_id != previous.work_claim.source_id
+                       else retries - 1)
 
     def _complete(self, original, outcome, retries, token):
         identity = original.preparation_id
@@ -302,6 +327,10 @@ class PreparationService:
             return None
         if record.status == "CANCEL_REQUESTED":
             ended = self._store.acknowledge_cancellation(identity, **common)
+        elif outcome.error_code is not None:
+            ended = self._store.finish_attempt(identity, **common, error_code=outcome.error_code)
+        elif outcome.candidate is not None:
+            ended = self._store.finish_attempt(identity, **common, candidate=outcome.candidate)
         elif isinstance(outcome.result, LoopPlanExtractionResult):
             ended = self._store.finish_attempt(
                 identity,
@@ -325,6 +354,8 @@ class PreparationService:
                 error_code=code or "INVALID_OUTPUT",
                 retryable=code in {"TRANSIENT", "RATE_LIMITED"},
             )
+        if isinstance(ended, CollectionPreparationRecord):
+            return self._advance_collection(ended, retries, token)
         if (
             ended.status == "FAILED"
             and ended.attempts[-1].retryable
@@ -338,6 +369,28 @@ class PreparationService:
                 expected_revision=ended.revision,
                 idempotency_key=str(uuid4()),
                 work_claim=claim.model_copy(update={"generation": str(uuid4()), "phase": "READY"}),
+            )
+        self._release(ended)
+        return None
+
+    def _advance_collection(self, ended, retries, token):
+        claim = ended.work_claim
+        index, item = self._store._collection_active_item(ended, claim.generation)
+        retry = (item.status == "FAILED" and item.attempts[-1].retryable and retries > 0
+                 and len(item.attempts) < MAX_EXTRACTION_ATTEMPTS)
+        successor = (item.candidate is not None and item.candidate.validation == "VALID"
+                     and index + 1 < len(ended.items))
+        if (retry or successor) and not token.cancelled and not self._closed:
+            selected = ended.items[index + 1] if successor else item
+            return self._store.start_attempt(
+                ended.preparation_id, expected_revision=ended.revision,
+                idempotency_key=str(uuid4()), work_claim=claim.model_copy(update={
+                    "generation": str(uuid4()), "phase": "READY",
+                    "source_id": selected.source.source_id,
+                    "source_revision": selected.source_revision,
+                    "source_hash": selected.source.binding_hash,
+                    "base_hash": item.candidate.candidate_hash if successor else item.base_hash,
+                }),
             )
         self._release(ended)
         return None
@@ -394,6 +447,41 @@ class PreparationService:
             idempotency_key,
             source,
         )
+
+    async def edit_collection(
+        self, preparation_id, *, expected_revision, idempotency_key,
+        source: PreparationSource | None = None, source_order: tuple[str, ...] | None = None,
+    ):
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        return await self._metadata.run(
+            self._edit_collection, preparation_id, expected_revision, idempotency_key,
+            source, source_order,
+        )
+
+    def _edit_collection(self, identity, revision, key, source, order):
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        kwargs = {"expected_revision": revision, "idempotency_key": key,
+                  "source": source, "source_order": order}
+        intent = canonical_json({
+            "domain": "collection-source-edit-v2", "preparation_id": identity,
+            "command_hash": sha256(canonical_json(kwargs).encode()).hexdigest(),
+        })
+        admission_key = "prep-collection-edit-" + sha256(key.encode()).hexdigest()
+        replay = self._store.replay_mutation("EDIT_COLLECTION", identity, **kwargs)
+        if replay is not None:
+            reservation = self._jobs.get_run_submission_reservation(intent, admission_key)
+            if reservation is not None:
+                self._jobs.release_run_submission(reservation)
+            return replay
+        reservation = self._jobs.claim_run_submission(intent, admission_key)
+        if not isinstance(reservation, BacktestRunSubmissionReservation):
+            raise JobAdmissionError("BACKTEST_BUSY")
+        try:
+            return self._store.edit_collection(identity, **kwargs)
+        finally:
+            self._jobs.release_run_submission(reservation)
 
     def _mutate(self, operation, identity, revision, key, source):
         if self._closed:

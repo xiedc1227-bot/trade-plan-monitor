@@ -935,3 +935,175 @@ def test_opaque_legacy_candidates_cannot_expose_raw_payload_or_frozen_authority(
         )
         assert review.status_code == 409 and store.get("one") == record
         assert ai.captures == 0 and ai.calls == []
+
+
+def test_collection_service_stops_after_unresolved_first_item_without_dispatching_future(tmp_path):
+    from tests.integration.test_plan_preparation_worker import loop_extractor
+    from tests.unit.test_monitor_loop_extraction import CASES
+
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+
+    store = PreparationStore(tmp_path / "preparation.sqlite3")
+    jobs = BacktestJobRepository(tmp_path / "results.sqlite3")
+    extractor, calls = loop_extractor()
+    command = PlanCollectionPreparationInput(preparation_id="chain", sources=(
+        PreparationSource(source_id="first", text=CASES[0]["source"]),
+        PreparationSource(source_id="future", text="Future source must not reach this call."),
+    ))
+
+    async def scenario():
+        service = PreparationService(store, jobs, extractor)
+        try:
+            initial = await service.create(command, idempotency_key="create-chain")
+            submitted = await service.submit_extraction("chain", expected_revision=initial.revision,
+                                                        idempotency_key="extract-chain")
+            await service.wait_for_drain()
+            ended = store.get("chain")
+            assert len(calls) == 1
+            assert ended.items[0].candidate.validation == "UNRESOLVED"
+            assert ended.items[1].status == "WAITING" and not ended.items[1].attempts
+            assert ended.work_claim is None and ended.review is None
+            assert await service.submit_extraction("chain", expected_revision=initial.revision,
+                                                   idempotency_key="extract-chain") == submitted
+            assert len(calls) == 1
+            assert jobs.submit(request("VERIFY"), "after-collection").job_id
+        finally:
+            await service.stop()
+
+    asyncio.run(scenario())
+
+
+def test_collection_service_runs_successors_serially_under_one_reservation(tmp_path):
+    from tests.integration.test_plan_preparation_worker import (
+        collection_update_result,
+        collection_worker_setup,
+    )
+    from tests.unit.test_monitor_loop_schedule import at
+    from tests.unit.test_plan_update_bindings import current_update
+
+    from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
+
+    third, third_output = current_update("仅修改最大仓位为400股，其余规则保留。")
+    third = third.model_copy(update={"source_id": "third", "authored_at": at(21),
+                                    "available_at": at(21), "effective_trade_date": at(21).date()})
+    raw = third_output.model_dump(mode="json")
+    raw["draft"]["position"]["max_qty"] = 400
+    raw["bindings"][0]["value"] = 400
+    third_output = PlanUpdateExtractionOutput.model_validate_json(json.dumps(raw))
+    store, jobs, prepared, base, second_output = collection_worker_setup(
+        tmp_path, future_source=third, start_successor=False,
+    )
+    calls, reservations = [], []
+
+    def extract(identity, source, token, *, context):
+        current = store.get(prepared.preparation_id)
+        calls.append((source.source_id, context.snapshot.position.max_qty))
+        reservations.append((current.work_claim.admission_key, current.work_claim.intent_hash))
+        with pytest.raises(JobAdmissionError):
+            jobs.submit(request("VERIFY"), "during-" + source.source_id)
+        if source.source_id == "third":
+            assert current.items[1].candidate.validation == "VALID"
+            assert context.base_hash == current.items[1].candidate.candidate_hash
+        return collection_update_result(
+            base, source, second_output if source.source_id == "second" else third_output,
+            identity, context,
+        )
+
+    async def scenario():
+        service = PreparationService(store, jobs, PreparationExtractor(extract))
+        try:
+            submitted = await service.submit_extraction(
+                prepared.preparation_id, expected_revision=prepared.revision,
+                idempotency_key="resume-chain",
+            )
+            await service.wait_for_drain()
+            ended = store.get(prepared.preparation_id)
+            assert calls == [("second", 1000), ("third", 300)]
+            assert len(set(reservations)) == 1
+            assert ended.status == "CANDIDATE" and ended.review is None
+            assert ended.work_claim is None
+            assert [len(item.attempts) for item in ended.items] == [1, 1, 1]
+            assert ended.items[0] == prepared.items[0]
+            payload = json.loads(ended.items[2].candidate.payload_json)
+            assert payload["review"]["draft"]["position"]["max_qty"] == 400
+            assert await service.submit_extraction(
+                prepared.preparation_id, expected_revision=prepared.revision,
+                idempotency_key="resume-chain",
+            ) == submitted
+            assert len(calls) == 2
+            assert jobs.submit(request("VERIFY"), "after-chain").job_id
+        finally:
+            await service.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("field", ["authored_at", "available_at", "effective_trade_date"])
+def test_collection_creation_rejects_contradictory_known_source_order_before_persistence(
+    tmp_path, field,
+):
+    from tests.unit.test_monitor_loop_schedule import at
+
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store = PreparationStore(tmp_path / "chronology.sqlite3")
+    jobs = BacktestJobRepository(tmp_path / "jobs.sqlite3")
+    later = at(21).date() if field == "effective_trade_date" else at(21)
+    earlier = at(20).date() if field == "effective_trade_date" else at(20)
+    sources = tuple(PreparationSource(source_id=identity, text="Original source.", **{field: value})
+                    for identity, value in (("first", later), ("second", earlier)))
+    value = PlanCollectionPreparationInput(preparation_id="chronology", sources=sources)
+
+    async def scenario():
+        service = PreparationService(store, jobs, PreparationExtractor(forbidden_ai))
+        try:
+            with pytest.raises(PreparationConflictError, match="SOURCE_CHRONOLOGY_CONFLICT"):
+                await service.create(value, idempotency_key="create-chronology")
+            assert store.get("chronology") is None
+            assert jobs.submit(request("VERIFY"), "after-rejection").job_id
+        finally:
+            await service.stop()
+
+    asyncio.run(scenario())
+
+
+def test_collection_source_edit_replays_exact_receipt_while_other_task_is_busy(tmp_path):
+    from tests.integration.test_plan_preparation_store import collection_input
+
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store = PreparationStore(tmp_path / "edit.sqlite3")
+    jobs = BacktestJobRepository(tmp_path / "jobs.sqlite3")
+
+    async def scenario():
+        service = PreparationService(store, jobs, PreparationExtractor(forbidden_ai))
+        try:
+            created = await service.create(collection_input(), idempotency_key="create-edit")
+            order = tuple(reversed([i.source.source_id for i in created.items]))
+            edited = await service.edit_collection(
+                created.preparation_id, expected_revision=created.revision,
+                idempotency_key="edit-order", source_order=order,
+            )
+            assert tuple(i.source.source_id for i in edited.items) == order
+            jobs.submit(request("VERIFY"), "busy")
+            assert await service.edit_collection(
+                created.preparation_id, expected_revision=created.revision,
+                idempotency_key="edit-order", source_order=order,
+            ) == edited
+            with pytest.raises(JobAdmissionError):
+                await service.edit_collection(
+                    created.preparation_id, expected_revision=edited.revision,
+                    idempotency_key="new-edit", source=edited.items[0].source.model_copy(
+                        update={"text": "Changed source while another task is busy."}),
+                )
+            with pytest.raises(PreparationConflictError, match="IDEMPOTENCY_CONFLICT"):
+                await service.edit_collection(
+                    created.preparation_id, expected_revision=created.revision,
+                    idempotency_key="edit-order", source_order=tuple(reversed(order)),
+                )
+            assert store.get(created.preparation_id) == edited
+        finally:
+            await service.stop()
+
+    asyncio.run(scenario())
