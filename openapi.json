@@ -1961,6 +1961,9 @@
           },
           {
             "$ref": "#/components/schemas/BacktestLoopEventView"
+          },
+          {
+            "$ref": "#/components/schemas/BacktestScheduledEventView"
           }
         ]
       },
@@ -4852,6 +4855,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/BacktestLoopRunSummaryView"
+                },
+                {
+                  "$ref": "#/components/schemas/BacktestScheduledRunSummaryView"
                 }
               ]
             },
@@ -5184,6 +5190,503 @@
           "limitations"
         ],
         "title": "BacktestRunView",
+        "type": "object"
+      },
+      "BacktestScheduledEventView": {
+        "additionalProperties": false,
+        "properties": {
+          "detailId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Detailid",
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/ScheduledLoopAuditEvent"
+          },
+          "eventAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Eventat",
+            "type": "string"
+          },
+          "kind": {
+            "const": "DECISION",
+            "title": "Kind",
+            "type": "string"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "monitor-loop-event-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detailId",
+          "runId",
+          "eventAt",
+          "kind",
+          "schemaVersion",
+          "event"
+        ],
+        "title": "BacktestScheduledEventView",
+        "type": "object"
+      },
+      "BacktestScheduledProvenanceView": {
+        "additionalProperties": false,
+        "properties": {
+          "inputHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Inputhash",
+            "type": "string"
+          },
+          "manifestHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifesthash",
+            "type": "string"
+          },
+          "preparationId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparationid",
+            "type": "string"
+          },
+          "revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestScheduledSourceView"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "preparationId",
+          "manifestHash",
+          "inputHash",
+          "revision",
+          "sources"
+        ],
+        "title": "BacktestScheduledProvenanceView",
+        "type": "object"
+      },
+      "BacktestScheduledReportHeader": {
+        "additionalProperties": false,
+        "description": "Bounded projection of an already verified immutable report, not its private codec.",
+        "properties": {
+          "boundary": {
+            "$ref": "#/components/schemas/LoopEndBoundary"
+          },
+          "cycle": {
+            "$ref": "#/components/schemas/LoopCycleSummary"
+          },
+          "dataset_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Dataset Hash",
+            "type": "string"
+          },
+          "event_count": {
+            "maximum": 420001.0,
+            "minimum": 1.0,
+            "title": "Event Count",
+            "type": "integer"
+          },
+          "event_set_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Event Set Hash",
+            "type": "string"
+          },
+          "final_account": {
+            "$ref": "#/components/schemas/LoopAccountState"
+          },
+          "final_inventory": {
+            "$ref": "#/components/schemas/DailyInventoryView"
+          },
+          "final_valuation": {
+            "$ref": "#/components/schemas/LoopValuation"
+          },
+          "input_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "last_evidence_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Evidence At"
+          },
+          "last_valuation_at": {
+            "format": "date-time",
+            "title": "Last Valuation At",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/LoopMetrics"
+          },
+          "opening_valuation": {
+            "$ref": "#/components/schemas/LoopValuation"
+          },
+          "report_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Report Hash",
+            "type": "string"
+          },
+          "report_schema_version": {
+            "const": "backtest-report-v5",
+            "title": "Report Schema Version",
+            "type": "string"
+          },
+          "run_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_schema_version",
+          "run_id",
+          "input_hash",
+          "dataset_hash",
+          "symbol",
+          "boundary",
+          "cycle",
+          "event_count",
+          "event_set_hash",
+          "opening_valuation",
+          "final_valuation",
+          "final_account",
+          "final_inventory",
+          "last_evidence_at",
+          "last_valuation_at",
+          "metrics",
+          "report_hash"
+        ],
+        "title": "BacktestScheduledReportHeader",
+        "type": "object"
+      },
+      "BacktestScheduledRunSummaryView": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/BacktestResultAvailabilityView"
+          },
+          "completedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Completedat",
+            "type": "string"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "eventEnd": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventend",
+            "type": "string"
+          },
+          "eventStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventstart",
+            "type": "string"
+          },
+          "fillCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fillcount",
+            "type": "integer"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/LoopMetrics"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "null"
+          },
+          "reportHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reporthash",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "monitor-loop-result-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "status": {
+            "const": "COMPLETED",
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "runId",
+          "reportHash",
+          "planVersionId",
+          "planHash",
+          "datasetHash",
+          "symbol",
+          "status",
+          "eventStart",
+          "eventEnd",
+          "completedAt",
+          "pinned",
+          "revision",
+          "fillCount",
+          "metrics",
+          "availability"
+        ],
+        "title": "BacktestScheduledRunSummaryView",
+        "type": "object"
+      },
+      "BacktestScheduledRunView": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/BacktestResultAvailabilityView"
+          },
+          "completedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Completedat",
+            "type": "string"
+          },
+          "costs": {
+            "$ref": "#/components/schemas/LoopCosts"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "eventEnd": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventend",
+            "type": "string"
+          },
+          "eventStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventstart",
+            "type": "string"
+          },
+          "fillCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fillcount",
+            "type": "integer"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/LoopMetrics"
+          },
+          "openingAccount": {
+            "$ref": "#/components/schemas/LoopAccountInput"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "null"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/BacktestScheduledProvenanceView"
+          },
+          "report": {
+            "$ref": "#/components/schemas/BacktestScheduledReportHeader"
+          },
+          "reportHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reporthash",
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/LoopResponsePolicy"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "monitor-loop-result-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "status": {
+            "const": "COMPLETED",
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionVersionView"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "runId",
+          "reportHash",
+          "planVersionId",
+          "planHash",
+          "datasetHash",
+          "symbol",
+          "status",
+          "eventStart",
+          "eventEnd",
+          "completedAt",
+          "pinned",
+          "revision",
+          "fillCount",
+          "metrics",
+          "availability",
+          "provenance",
+          "versions",
+          "openingAccount",
+          "response",
+          "costs",
+          "report"
+        ],
+        "title": "BacktestScheduledRunView",
+        "type": "object"
+      },
+      "BacktestScheduledSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "baseHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basehash"
+          },
+          "candidateHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidatehash",
+            "type": "string"
+          },
+          "candidateRevision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Candidaterevision",
+            "type": "integer"
+          },
+          "evidenceHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidencehash",
+            "type": "string"
+          },
+          "sourceHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          },
+          "sourceId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sourceId",
+          "sourceHash",
+          "sourceRevision",
+          "candidateRevision",
+          "candidateHash",
+          "evidenceHash",
+          "baseHash"
+        ],
+        "title": "BacktestScheduledSourceView",
         "type": "object"
       },
       "BacktestServiceControlReceipt": {
@@ -5860,6 +6363,1221 @@
         ],
         "title": "ClauseDisposition",
         "type": "string"
+      },
+      "CollectionAttemptView": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "base_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Hash"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "retryable": {
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash",
+            "type": "string"
+          },
+          "source_revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Source Revision",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "RUNNING",
+              "CANCEL_REQUESTED",
+              "SUCCEEDED",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attempt_id",
+          "source_revision",
+          "source_hash",
+          "base_hash",
+          "status",
+          "started_at"
+        ],
+        "title": "CollectionAttemptView",
+        "type": "object"
+      },
+      "CollectionCandidateView": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidatehash",
+            "type": "string"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedPlanDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidenceHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidencehash",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "maxLength": 512,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "title": "Issues",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "INITIAL",
+              "UPDATE",
+              "MATERIALIZED",
+              "CORRECTED",
+              "UNAVAILABLE"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "openingAccount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpeningAccountFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanCandidateReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "update": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanUpdateExtractionOutput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validation": {
+            "enum": [
+              "VALID",
+              "INVALID",
+              "UNRESOLVED"
+            ],
+            "title": "Validation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "candidateHash",
+          "evidenceHash",
+          "validation",
+          "issues"
+        ],
+        "title": "CollectionCandidateView",
+        "type": "object"
+      },
+      "CollectionChainReviewDeclaration": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopAccountInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmed": {
+            "const": true,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "evidence": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Evidence",
+            "type": "string"
+          },
+          "expected_revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionItemReviewDeclaration"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "items",
+          "confirmed",
+          "evidence"
+        ],
+        "title": "CollectionChainReviewDeclaration",
+        "type": "object"
+      },
+      "CollectionCorrectionDeclaration": {
+        "additionalProperties": false,
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/CollectionItemReviewDeclaration"
+          },
+          "confirmed": {
+            "const": true,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedPlanDraftInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Evidence",
+            "type": "string"
+          },
+          "expected_revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "update": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanUpdateExtractionOutputInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "expected_revision",
+          "binding",
+          "confirmed",
+          "evidence"
+        ],
+        "title": "CollectionCorrectionDeclaration",
+        "type": "object"
+      },
+      "CollectionExtractionCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedBaseHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedbasehash"
+          },
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "expectedSourceRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedsourcerevision"
+          },
+          "schemaVersion": {
+            "const": "backtest-preparation-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sourceId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceid"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "schemaVersion"
+        ],
+        "title": "CollectionExtractionCommand",
+        "type": "object"
+      },
+      "CollectionItemCorrectionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "ITEM_CORRECTION",
+            "title": "Kind",
+            "type": "string"
+          },
+          "review": {
+            "$ref": "#/components/schemas/CollectionCorrectionDeclaration"
+          },
+          "schemaVersion": {
+            "const": "backtest-preparation-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "kind",
+          "review"
+        ],
+        "title": "CollectionItemCorrectionInput",
+        "type": "object"
+      },
+      "CollectionItemReviewDeclaration": {
+        "additionalProperties": false,
+        "properties": {
+          "base_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Hash"
+          },
+          "candidate_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Hash",
+            "type": "string"
+          },
+          "candidate_revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Candidate Revision",
+            "type": "integer"
+          },
+          "evidence_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Source Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_id",
+          "source_revision",
+          "candidate_revision",
+          "candidate_hash",
+          "evidence_hash",
+          "base_hash"
+        ],
+        "title": "CollectionItemReviewDeclaration",
+        "type": "object"
+      },
+      "CollectionItemSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "attemptCount": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Attemptcount",
+            "type": "integer"
+          },
+          "baseHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basehash"
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidatehash"
+          },
+          "candidateRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Candidaterevision",
+            "type": "integer"
+          },
+          "effectiveTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectivetradedate"
+          },
+          "evidenceHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidencehash"
+          },
+          "sourceId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "WAITING",
+              "DRAFT",
+              "EXTRACTING",
+              "CANCEL_REQUESTED",
+              "CANDIDATE",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "enum": [
+                  "VALID",
+                  "INVALID",
+                  "UNRESOLVED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation"
+          }
+        },
+        "required": [
+          "sourceId",
+          "sourceRevision",
+          "candidateRevision",
+          "baseHash",
+          "status",
+          "candidateHash",
+          "evidenceHash",
+          "validation",
+          "attemptCount",
+          "effectiveTradeDate"
+        ],
+        "title": "CollectionItemSummary",
+        "type": "object"
+      },
+      "CollectionItemView": {
+        "additionalProperties": false,
+        "properties": {
+          "attemptCount": {
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Attemptcount",
+            "type": "integer"
+          },
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionAttemptView"
+            },
+            "maxItems": 3,
+            "title": "Attempts",
+            "type": "array"
+          },
+          "baseHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basehash"
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionCandidateView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidatehash"
+          },
+          "candidateRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Candidaterevision",
+            "type": "integer"
+          },
+          "effectiveTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectivetradedate"
+          },
+          "evidenceHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidencehash"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PreparationSource"
+          },
+          "sourceId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "WAITING",
+              "DRAFT",
+              "EXTRACTING",
+              "CANCEL_REQUESTED",
+              "CANDIDATE",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "enum": [
+                  "VALID",
+                  "INVALID",
+                  "UNRESOLVED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation"
+          }
+        },
+        "required": [
+          "sourceId",
+          "sourceRevision",
+          "candidateRevision",
+          "baseHash",
+          "status",
+          "candidateHash",
+          "evidenceHash",
+          "validation",
+          "attemptCount",
+          "effectiveTradeDate",
+          "source",
+          "attempts",
+          "candidate"
+        ],
+        "title": "CollectionItemView",
+        "type": "object"
+      },
+      "CollectionItemsPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionItemView"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextOffset": {
+            "anyOf": [
+              {
+                "maximum": 255.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextoffset"
+          },
+          "offset": {
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "preparationId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparationid",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "total": {
+            "maximum": 256.0,
+            "minimum": 1.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "preparationId",
+          "revision",
+          "offset",
+          "limit",
+          "total",
+          "nextOffset",
+          "items"
+        ],
+        "title": "CollectionItemsPage",
+        "type": "object"
+      },
+      "CollectionPreparationCreateInput": {
+        "additionalProperties": false,
+        "description": "HTTP callers must opt into collections; the stored codec keeps its default.",
+        "properties": {
+          "preparation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparation Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "backtest-preparation-v2",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/PreparationSource"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "preparation_id",
+          "sources"
+        ],
+        "title": "CollectionPreparationCreateInput",
+        "type": "object"
+      },
+      "CollectionPreparationFrozenView": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/LoopAccountInput"
+          },
+          "accountOrigin": {
+            "enum": [
+              "SOURCE",
+              "HUMAN_REVIEW"
+            ],
+            "title": "Accountorigin",
+            "type": "string"
+          },
+          "manifestHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifesthash",
+            "type": "string"
+          },
+          "preparationId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparationid",
+            "type": "string"
+          },
+          "reviewedAt": {
+            "format": "date-time",
+            "title": "Reviewedat",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "schemaVersion": {
+            "const": "prepared-loop-plan-v2",
+            "default": "prepared-loop-plan-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionVersionView"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "preparationId",
+          "manifestHash",
+          "revision",
+          "account",
+          "accountOrigin",
+          "reviewedAt",
+          "versions"
+        ],
+        "title": "CollectionPreparationFrozenView",
+        "type": "object"
+      },
+      "CollectionPreparationView": {
+        "additionalProperties": false,
+        "properties": {
+          "currentSourceId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentsourceid"
+          },
+          "frozen": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPreparationFrozenView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generation": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation"
+          },
+          "itemCount": {
+            "maximum": 256.0,
+            "minimum": 1.0,
+            "title": "Itemcount",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionItemSummary"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "preparationId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparationid",
+            "type": "string"
+          },
+          "reviewRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Reviewrevision",
+            "type": "integer"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "schemaVersion": {
+            "const": "backtest-preparation-v2",
+            "default": "backtest-preparation-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "DRAFT",
+              "EXTRACTING",
+              "CANCEL_REQUESTED",
+              "CANDIDATE",
+              "REVIEWED",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "workPhase": {
+            "anyOf": [
+              {
+                "enum": [
+                  "READY",
+                  "CALLING",
+                  "UNKNOWN",
+                  "ENDED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workphase"
+          }
+        },
+        "required": [
+          "preparationId",
+          "revision",
+          "reviewRevision",
+          "status",
+          "itemCount",
+          "items",
+          "workPhase",
+          "generation",
+          "currentSourceId",
+          "frozen"
+        ],
+        "title": "CollectionPreparationView",
+        "type": "object"
+      },
+      "CollectionRecoveryCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmedEnded": {
+            "const": true,
+            "title": "Confirmedended",
+            "type": "boolean"
+          },
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "generation": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "backtest-preparation-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "generation",
+          "confirmedEnded",
+          "schemaVersion"
+        ],
+        "title": "CollectionRecoveryCommand",
+        "type": "object"
+      },
+      "CollectionReviewInput": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "CHAIN_REVIEW",
+            "title": "Kind",
+            "type": "string"
+          },
+          "review": {
+            "$ref": "#/components/schemas/CollectionChainReviewDeclaration"
+          },
+          "schemaVersion": {
+            "const": "backtest-preparation-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "kind",
+          "review"
+        ],
+        "title": "CollectionReviewInput",
+        "type": "object"
+      },
+      "CollectionRevisionCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "schemaVersion": {
+            "const": "backtest-preparation-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "schemaVersion"
+        ],
+        "title": "CollectionRevisionCommand",
+        "type": "object"
+      },
+      "CollectionSourceCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "schemaVersion": {
+            "const": "backtest-preparation-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreparationSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceOrder": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                  "type": "string"
+                },
+                "maxItems": 256,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceorder"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "schemaVersion"
+        ],
+        "title": "CollectionSourceCommand",
+        "type": "object"
+      },
+      "CollectionVersionView": {
+        "additionalProperties": false,
+        "properties": {
+          "accountContext": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopAccountContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "availableAt": {
+            "format": "date-time",
+            "title": "Availableat",
+            "type": "string"
+          },
+          "candidateRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Candidaterevision",
+            "type": "integer"
+          },
+          "effectiveTradeDate": {
+            "format": "date",
+            "title": "Effectivetradedate",
+            "type": "string"
+          },
+          "evidenceHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidencehash",
+            "type": "string"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "sourceId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Sourcerevision",
+            "type": "integer"
+          },
+          "versionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Versionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceId",
+          "sourceRevision",
+          "candidateRevision",
+          "versionId",
+          "planHash",
+          "evidenceHash",
+          "effectiveTradeDate",
+          "availableAt",
+          "accountContext"
+        ],
+        "title": "CollectionVersionView",
+        "type": "object"
       },
       "CompletedMinuteConfirmation": {
         "additionalProperties": false,
@@ -12855,6 +14573,102 @@
         "title": "LegacyPlanPreviewResponse",
         "type": "object"
       },
+      "LoopAccountContext": {
+        "additionalProperties": false,
+        "description": "Reviewed source assertions to compare with the ledger, never opening inventory.",
+        "properties": {
+          "core_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Core Qty"
+          },
+          "dependent_rule_ids": {
+            "default": [],
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Dependent Rule Ids",
+            "type": "array"
+          },
+          "evidence": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Evidence",
+            "type": "string"
+          },
+          "tactical_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tactical Qty"
+          }
+        },
+        "required": [
+          "evidence"
+        ],
+        "title": "LoopAccountContext",
+        "type": "object"
+      },
+      "LoopAccountDiscrepancy": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Qty"
+          },
+          "bucket": {
+            "enum": [
+              "CORE",
+              "TACTICAL"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "stated_qty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Stated Qty",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket",
+          "stated_qty",
+          "actual_qty"
+        ],
+        "title": "LoopAccountDiscrepancy",
+        "type": "object"
+      },
       "LoopAccountInput": {
         "additionalProperties": false,
         "properties": {
@@ -13941,6 +15755,98 @@
           "evidence_hash"
         ],
         "title": "LoopPlanReview",
+        "type": "object"
+      },
+      "LoopPlanTransition": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "authority_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authority Id"
+          },
+          "blocked_rule_ids": {
+            "default": [],
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Blocked Rule Ids",
+            "type": "array"
+          },
+          "closed_intent_ids": {
+            "default": [],
+            "items": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "maxItems": 70000,
+            "title": "Closed Intent Ids",
+            "type": "array"
+          },
+          "context_mismatches": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LoopAccountDiscrepancy"
+            },
+            "maxItems": 2,
+            "title": "Context Mismatches",
+            "type": "array"
+          },
+          "from_version_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "From Version Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "REPLACED",
+              "CONTINUED",
+              "NO_AUTHORITY"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "from_version_id",
+          "version_id",
+          "authority_id"
+        ],
+        "title": "LoopPlanTransition",
         "type": "object"
       },
       "LoopPlanVersion": {
@@ -16325,6 +18231,152 @@
         "title": "PlanActiveValidity",
         "type": "object"
       },
+      "PlanCandidateReview": {
+        "additionalProperties": false,
+        "description": "Validation evidence, never a human confirmation or frozen replay input.",
+        "properties": {
+          "account_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAccountContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available At"
+          },
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/SourceBoundField"
+            },
+            "maxItems": 2000,
+            "title": "Bindings",
+            "type": "array"
+          },
+          "changes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlanChange"
+            },
+            "maxItems": 64,
+            "title": "Changes",
+            "type": "array"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/UnifiedPlanDraft"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 128,
+            "title": "Issues",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": "monitor-loop-candidate-evidence-v1",
+            "default": "monitor-loop-candidate-evidence-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "source_hash",
+          "available_at",
+          "draft",
+          "bindings",
+          "issues"
+        ],
+        "title": "PlanCandidateReview",
+        "type": "object"
+      },
+      "PlanChange": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "ADD",
+              "MODIFY",
+              "REVOKE",
+              "RETAIN"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "after": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "before": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "clause_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Clause Ids",
+            "type": "array"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "target": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "rule_id",
+          "action",
+          "before",
+          "after",
+          "clause_ids"
+        ],
+        "title": "PlanChange",
+        "type": "object"
+      },
       "PlanDeactivationCommand": {
         "additionalProperties": false,
         "properties": {
@@ -16947,6 +18999,288 @@
           "resolution"
         ],
         "title": "PlanReviewResolution",
+        "type": "object"
+      },
+      "PlanUpdateExtractionOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "account_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAccountContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assumptions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtractionIssue"
+            },
+            "maxItems": 256,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/DailyFieldBinding"
+            },
+            "maxItems": 2000,
+            "title": "Bindings",
+            "type": "array"
+          },
+          "clauses": {
+            "items": {
+              "$ref": "#/components/schemas/DailyClause"
+            },
+            "maxItems": 512,
+            "minItems": 1,
+            "title": "Clauses",
+            "type": "array"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/UnifiedPlanDraft"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/PlanUpdateOperation"
+            },
+            "maxItems": 64,
+            "title": "Operations",
+            "type": "array"
+          },
+          "retain_unmentioned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retain Unmentioned"
+          },
+          "schema_version": {
+            "const": "monitor-loop-update-extraction-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "FULL_REPLACEMENT",
+              "EXPLICIT_CHANGES",
+              "UNRESOLVED"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "scope_clause_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Scope Clause Ids",
+            "type": "array"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtractionIssue"
+            },
+            "maxItems": 256,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "draft",
+          "clauses",
+          "bindings",
+          "schema_version",
+          "scope",
+          "scope_clause_ids",
+          "retain_unmentioned",
+          "operations"
+        ],
+        "title": "PlanUpdateExtractionOutput",
+        "type": "object"
+      },
+      "PlanUpdateExtractionOutputInput": {
+        "additionalProperties": false,
+        "properties": {
+          "account_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAccountContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assumptions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtractionIssue"
+            },
+            "maxItems": 256,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/DailyFieldBinding"
+            },
+            "maxItems": 2000,
+            "title": "Bindings",
+            "type": "array"
+          },
+          "clauses": {
+            "items": {
+              "$ref": "#/components/schemas/DailyClause"
+            },
+            "maxItems": 512,
+            "minItems": 1,
+            "title": "Clauses",
+            "type": "array"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/UnifiedPlanDraftInput"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/PlanUpdateOperation"
+            },
+            "maxItems": 64,
+            "title": "Operations",
+            "type": "array"
+          },
+          "retain_unmentioned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retain Unmentioned"
+          },
+          "schema_version": {
+            "const": "monitor-loop-update-extraction-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "FULL_REPLACEMENT",
+              "EXPLICIT_CHANGES",
+              "UNRESOLVED"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "scope_clause_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Scope Clause Ids",
+            "type": "array"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtractionIssue"
+            },
+            "maxItems": 256,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "draft",
+          "clauses",
+          "bindings",
+          "schema_version",
+          "scope",
+          "scope_clause_ids",
+          "retain_unmentioned",
+          "operations"
+        ],
+        "title": "PlanUpdateExtractionOutput",
+        "type": "object"
+      },
+      "PlanUpdateOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "ADD",
+              "MODIFY",
+              "REVOKE",
+              "RETAIN"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "clause_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Clause Ids",
+            "type": "array"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "target": {
+            "enum": [
+              "ordinary_rules",
+              "risk_branches",
+              "alert_rules",
+              "activation",
+              "levels",
+              "position",
+              "monitoring",
+              "execution_policy",
+              "trading_rules",
+              "metadata"
+            ],
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "action",
+          "clause_ids"
+        ],
+        "title": "PlanUpdateOperation",
         "type": "object"
       },
       "PlanVersionPage": {
@@ -17739,7 +20073,15 @@
         "additionalProperties": false,
         "properties": {
           "input": {
-            "$ref": "#/components/schemas/SinglePlanPreparationInput"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SinglePlanPreparationInput"
+              },
+              {
+                "$ref": "#/components/schemas/CollectionPreparationCreateInput"
+              }
+            ],
+            "title": "Input"
           }
         },
         "required": [
@@ -20420,6 +22762,149 @@
         "title": "RuntimeServiceStatus",
         "type": "string"
       },
+      "ScheduledLoopAuditEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "authority_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authority Id"
+          },
+          "cause_event_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause Event Id"
+          },
+          "event_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopAuditPayload"
+              },
+              {
+                "$ref": "#/components/schemas/LoopPlanTransition"
+              }
+            ],
+            "title": "Payload"
+          },
+          "run_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "monitor-loop-event-v2",
+            "default": "monitor-loop-event-v2",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 420001.0,
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "run_id",
+          "sequence",
+          "at",
+          "event_id",
+          "cause_event_id",
+          "version_id",
+          "authority_id",
+          "payload"
+        ],
+        "title": "ScheduledLoopAuditEvent",
+        "type": "object"
+      },
+      "ScheduledPreparedBacktestRunCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "costs": {
+            "$ref": "#/components/schemas/BacktestLoopCostsInput"
+          },
+          "endDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enddate"
+          },
+          "manifestHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifesthash",
+            "type": "string"
+          },
+          "preparationId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparationid",
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/BacktestLoopResponseInput"
+          },
+          "schemaVersion": {
+            "const": "prepared-loop-plan-v2",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preparationId",
+          "manifestHash",
+          "response",
+          "costs",
+          "schemaVersion"
+        ],
+        "title": "ScheduledPreparedBacktestRunCommand",
+        "type": "object"
+      },
       "SecretReferenceView": {
         "additionalProperties": false,
         "properties": {
@@ -20746,6 +23231,73 @@
           "formulaDefinitionHash"
         ],
         "title": "SmaLookbackIndicatorFactView",
+        "type": "object"
+      },
+      "SourceBoundField": {
+        "additionalProperties": false,
+        "description": "Keep the original binding and human supplement unchanged when its path moves.",
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/DailyFieldBinding"
+          },
+          "candidate_content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Content Hash",
+            "type": "string"
+          },
+          "clauses": {
+            "items": {
+              "$ref": "#/components/schemas/DailyClause"
+            },
+            "maxItems": 50,
+            "title": "Clauses",
+            "type": "array"
+          },
+          "original_path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Original Path",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "supplement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailySupplement"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "original_path",
+          "source_id",
+          "source_hash",
+          "candidate_content_hash",
+          "binding",
+          "clauses"
+        ],
+        "title": "SourceBoundField",
         "type": "object"
       },
       "SourceClauseView": {
@@ -24522,6 +27074,58 @@
         "title": "UnmappedText",
         "type": "object"
       },
+      "UpdateAccountContext": {
+        "additionalProperties": false,
+        "description": "Holdings assertions are comparison context, never account initialization.",
+        "properties": {
+          "core_qty": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dependency_clause_ids": {
+            "default": [],
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Dependency Clause Ids",
+            "type": "array"
+          },
+          "dependent_rule_ids": {
+            "default": [],
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Dependent Rule Ids",
+            "type": "array"
+          },
+          "tactical_qty": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "UpdateAccountContext",
+        "type": "object"
+      },
       "UserSupplementView": {
         "additionalProperties": false,
         "properties": {
@@ -26993,7 +29597,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response 201 Create Preparation Api V1 Backtest Preparations Post"
                 }
               }
             },
@@ -27162,7 +29780,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response 200 Get Preparation Api V1 Backtest Preparations  Preparation Id  Get"
                 }
               }
             },
@@ -27342,7 +29974,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PreparationRevisionCommand"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreparationRevisionCommand"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CollectionRevisionCommand"
+                  }
+                ],
+                "title": "Command"
               }
             }
           },
@@ -27353,7 +29993,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response 200 Cancel Preparation Api V1 Backtest Preparations  Preparation Id  Cancellations Post"
                 }
               }
             },
@@ -27378,7 +30032,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response 202 Cancel Preparation Api V1 Backtest Preparations  Preparation Id  Cancellations Post"
                 }
               }
             },
@@ -27564,7 +30226,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PreparationRevisionCommand"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreparationRevisionCommand"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CollectionExtractionCommand"
+                  }
+                ],
+                "title": "Command"
               }
             }
           },
@@ -27575,7 +30245,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response 202 Extract Preparation Api V1 Backtest Preparations  Preparation Id  Extractions Post"
                 }
               }
             },
@@ -27728,6 +30412,203 @@
         ]
       }
     },
+    "/api/v1/backtest-preparations/{preparation_id}/items": {
+      "get": {
+        "operationId": "get_preparation_items_api_v1_backtest_preparations__preparation_id__items_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "preparation_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Preparation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expectedRevision",
+            "required": true,
+            "schema": {
+              "maximum": 9007199254740991,
+              "minimum": 1,
+              "title": "Expectedrevision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 255,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionItemsPage"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "maximum": 1,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get Preparation Items",
+        "tags": [
+          "backtest-preparations"
+        ]
+      }
+    },
     "/api/v1/backtest-preparations/{preparation_id}/recoveries": {
       "post": {
         "operationId": "recover_preparation_api_v1_backtest_preparations__preparation_id__recoveries_post",
@@ -27761,7 +30642,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PreparationRecoveryCommand"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreparationRecoveryCommand"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CollectionRecoveryCommand"
+                  }
+                ],
+                "title": "Command"
               }
             }
           },
@@ -27772,7 +30661,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response 200 Recover Preparation Api V1 Backtest Preparations  Preparation Id  Recoveries Post"
                 }
               }
             },
@@ -27952,7 +30855,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PreparationReviewInput"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreparationReviewInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CollectionReviewInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CollectionItemCorrectionInput"
+                  }
+                ],
+                "title": "Command"
               }
             }
           },
@@ -27963,7 +30877,18 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationFrozenView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationFrozenView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationFrozenView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response Review Preparation Api V1 Backtest Preparations  Preparation Id  Reviews Post"
                 }
               }
             },
@@ -28136,7 +31061,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PreparationSourceCommand"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PreparationSourceCommand"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CollectionSourceCommand"
+                  }
+                ],
+                "title": "Command"
               }
             }
           },
@@ -28147,7 +31080,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparationView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PreparationView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CollectionPreparationView"
+                    }
+                  ],
+                  "title": "Response 200 Edit Preparation Api V1 Backtest Preparations  Preparation Id  Source Put"
                 }
               }
             },
@@ -28595,6 +31542,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/PreparedBacktestRunCommand"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ScheduledPreparedBacktestRunCommand"
                   }
                 ],
                 "title": "Command"
@@ -28759,6 +31709,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/BacktestLoopRunView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BacktestScheduledRunView"
                     }
                   ],
                   "title": "Response Get Backtest Run Api V1 Backtest Runs  Run Id  Get"
@@ -28932,6 +31885,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/BacktestLoopRunView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BacktestScheduledRunView"
                     }
                   ],
                   "title": "Response Pin Backtest Run Api V1 Backtest Runs  Run Id  Patch"

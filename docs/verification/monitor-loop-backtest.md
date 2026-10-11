@@ -74,6 +74,10 @@ RP-T12 is complete: explicit v2 preparation branches support batch creation, exa
 
 RP-T13 is complete: a required prepared-loop-plan-v2 command submits one reviewed chain; bounded monitor-loop-result-v2 projects ordered source/version provenance and a typed backtest-report-v5 header, with version-aware event pages. Independent HTTP tests reproduced a legacy-union parser exception; the fix passes all 4 scheduled HTTP cases and 12 old result API cases. The submission suite passes 27 checks. Two unchanged snapshot checks await RP-T14 generation/review. Ruff and independent diff review pass. **13 of 20 repair tasks complete.** Next: RP-T14.
 
+## RP-V14. Concrete dual-profile API approval
+
+RP-T14 is complete and RP-C05 passes: independent review of both actual generated profiles approves only one new item-page path, 10 additive existing-operation changes and 36 new schemas; three old schemas gain unions and all other old surfaces remain exact. The required public create discriminator was reproduced in both profiles before repair. U11 records all four reviewed artifact hashes under standing authorization. All 54 snapshot/preparation/result contract checks and both generator checks pass. Windows sandbox stalled the local contract run; the approved isolated rerun passed. Full frontend type checking identifies the new event-union consumers reserved for RP-T18; no checks were suppressed. Ruff and diff checks pass. **14 of 20 repair tasks complete.** Next: RP-T15.
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

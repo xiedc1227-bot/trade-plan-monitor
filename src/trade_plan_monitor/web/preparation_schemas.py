@@ -48,8 +48,14 @@ def _embedded[T: BaseModel](model: type[T], value: object) -> T:
     return model.model_validate_json(json.dumps(value, ensure_ascii=False, allow_nan=False))
 
 
+class CollectionPreparationCreateInput(PlanCollectionPreparationInput):
+    """HTTP callers must opt into collections; the stored codec keeps its default."""
+
+    schema_version: Literal["backtest-preparation-v2"]
+
+
 class PreparationCreateCommand(ApiValue):
-    input: SinglePlanPreparationInput | PlanCollectionPreparationInput
+    input: SinglePlanPreparationInput | CollectionPreparationCreateInput
 
     @field_validator("input", mode="before")
     @classmethod
@@ -57,7 +63,7 @@ class PreparationCreateCommand(ApiValue):
         schema = value.get("schema_version") if isinstance(value, dict) else getattr(
             value, "schema_version", None,
         )
-        model = PlanCollectionPreparationInput if schema == "backtest-preparation-v2" else (
+        model = CollectionPreparationCreateInput if schema == "backtest-preparation-v2" else (
             SinglePlanPreparationInput
         )
         return _embedded(model, value)

@@ -105,3 +105,15 @@ U04/MV12 保留历史 `a0915f7` 批准不一致及针对 `7a92f75` 单独审阅�
 OpenAPI 快照 SHA-256：`76a63344e2ff29ed50c44d4ff7a5fa1e5f5f2faf938274991f8b0b6edd194c29`。当前监测 v2 快照 SHA-256：`a2d99ac2c89cca1dd031cf2045251be24524550da80f1012df1e36cb0a4d595f`。用户于 2026-10-09 授权实施并验收 [SPEC-index-close-display-repair](SPEC-index-close-display-repair.zh-CN.md) ICDR01–ICDR10。U09 保留原有监控闭环历史批准及其范围。
 
 相对于 U09 快照的限范围比较证明，两种 profile 的全部既有路径和结构均保持不变。每种 profile 现有 63 条路径：唯一新增操作为只读 `GET /api/v1/market-indexes/overview`，支持结构共五个：`MarketIndexLatestAcquisition`、`MarketIndexOverviewData`、`MarketIndexOverviewItem`、`MarketIndexOverviewResponse`、`MarketSessionView`。不增加计划、记账、供应商或执行操作。生成快照／类型与实际路由一致。已执行的验收和发布结果记录在[配套验收报告](../../verification/2026-10-09-index-close-display-repair.zh-CN.md)。
+
+## U11. 按日连续回测具体 API 审查（2026-10-11）
+
+OpenAPI 快照 SHA-256：`7fc0340a8b2a07414f09dc09f2fd894f4be6aeb3aa4401323cea8c0c691f4a43`。规范监控 v2 快照 SHA-256：`b9d8b1e79b3c0b4637c91095ad34cff671b96c3d6cc39150eefd05218cacbf65`。生成 TypeScript SHA-256：兼容版 `5dccf9683a0def43a65dcee44fcbeddb6b0b212c70b7b0139a0cd5d18461b047`；规范版 `80d3a8e49f490a26f3daee1ed5411caf0f1eae27d281c548a21c7e21a03bb477`。
+
+依据 RP05-A03 持续授权，本审批记录两套实际生成差异相对 U10 的独立审查，实施基于 `05cad3e` 加公开创建格式标识修正。授权与验证相互独立，保留 U09/U10 历史身份。每套配置现有 64 条路径：仅新增只读 `GET /api/v1/backtest-preparations/{preparation_id}/items`。七个既有准备操作和运行 POST/GET/PATCH 增加显式 v2 分支（共 10 个既有操作）；操作 ID 与错误响应精确不变。没有删除路径或旧模型。仅 `PreparationCreateCommand`、`BacktestRunPage`、`BacktestDetailView` 增加联合分支；其余 397/410 个旧模型及全部监控操作保持不变。
+
+36 个新增模型覆盖有界集合创建/进度/分页、条目修正/整链审核、来源绑定候选证据、版本切换与连续结果。创建必须使用 `schema_version: backtest-preparation-v2`；其他集合变更必须使用 `schemaVersion: backtest-preparation-v2`；连续运行提交必须使用 `schemaVersion: prepared-loop-plan-v2`。来源/版本最多 256 项，条目页最多 100 项，精确绑定 expectedRevision，并通过 nextOffset 自适应返回完整条目。修订号仍为 JavaScript 安全整数。继续遵守 4 MiB 请求/结果和 2 MiB 准备投影限制；生成数组类型无法自行约束运行时长度。
+
+`monitor-loop-result-v2` 提供有序版本/来源证据，以及通过 `report_schema_version` 标识的 `backtest-report-v5` 类型化报告摘要。公开摘要不含私有完整计划表和原始来源，不能作为完整私有报告独立重算哈希；后台仍必须验证不可变报告与输入。旧 v1 准备、v4 报告字节/哈希、受支持导出、唯一未完成操作、取消/未知工作排空互斥、同进程唯一工作线程及最近 30 份保留规则不变。循环回测导出仍返回 409。不批准新增全局资源、配额、实时监控控制、生产迁移或部署。
+
+独立审查先在两套配置中复现创建格式标识可省略的问题，再以公开子类型修正，使契约匹配 HTTP 分派，同时保持私有默认值精确不变。两份生成 TypeScript 与各自生成器一致。实际接口门禁及待完成的前端验收记录在 RP-V14；本 API 审批不代表 RP-T15–RP-T20 已完成。

@@ -301,7 +301,7 @@ export type BacktestDetailPage = {
   nextCursor: (string) | (null);
 };
 
-export type BacktestDetailView = (components["schemas"]["BacktestDecisionView"]) | (components["schemas"]["BacktestSignalView"]) | (components["schemas"]["BacktestExecutionOutcomeView"]) | (components["schemas"]["ResearchDecisionView"]) | (components["schemas"]["ResearchOperationView"]) | (components["schemas"]["BacktestLoopEventView"]);
+export type BacktestDetailView = (components["schemas"]["BacktestDecisionView"]) | (components["schemas"]["BacktestSignalView"]) | (components["schemas"]["BacktestExecutionOutcomeView"]) | (components["schemas"]["ResearchDecisionView"]) | (components["schemas"]["ResearchOperationView"]) | (components["schemas"]["BacktestLoopEventView"]) | (components["schemas"]["BacktestScheduledEventView"]);
 
 export type BacktestEquityPointView = {
   cashFen: string;
@@ -745,7 +745,7 @@ export type BacktestRunPage = {
   filters: components["schemas"]["BacktestRunFiltersView"];
   hasMore: boolean;
   highWatermark: string;
-  items: Array<(components["schemas"]["BacktestRunSummaryView"]) | (components["schemas"]["BacktestLoopRunSummaryView"])>;
+  items: Array<(components["schemas"]["BacktestRunSummaryView"]) | (components["schemas"]["BacktestLoopRunSummaryView"]) | (components["schemas"]["BacktestScheduledRunSummaryView"])>;
   limit: number;
   nextCursor: (string) | (null);
 };
@@ -795,6 +795,97 @@ export type BacktestRunView = {
   runId: string;
   status: "COMPLETED";
   symbol: string;
+};
+
+export type BacktestScheduledEventView = {
+  detailId: string;
+  event: components["schemas"]["ScheduledLoopAuditEvent"];
+  eventAt: string;
+  kind: "DECISION";
+  runId: string;
+  schemaVersion: "monitor-loop-event-v2";
+};
+
+export type BacktestScheduledProvenanceView = {
+  inputHash: string;
+  manifestHash: string;
+  preparationId: string;
+  revision: number;
+  sources: Array<components["schemas"]["BacktestScheduledSourceView"]>;
+};
+
+export type BacktestScheduledReportHeader = {
+  boundary: components["schemas"]["LoopEndBoundary"];
+  cycle: components["schemas"]["LoopCycleSummary"];
+  dataset_hash: string;
+  event_count: number;
+  event_set_hash: string;
+  final_account: components["schemas"]["LoopAccountState"];
+  final_inventory: components["schemas"]["DailyInventoryView"];
+  final_valuation: components["schemas"]["LoopValuation"];
+  input_hash: string;
+  last_evidence_at: (string) | (null);
+  last_valuation_at: string;
+  metrics: components["schemas"]["LoopMetrics"];
+  opening_valuation: components["schemas"]["LoopValuation"];
+  report_hash: string;
+  report_schema_version: "backtest-report-v5";
+  run_id: string;
+  symbol: string;
+};
+
+export type BacktestScheduledRunSummaryView = {
+  availability: components["schemas"]["BacktestResultAvailabilityView"];
+  completedAt: string;
+  datasetHash: string;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  metrics: components["schemas"]["LoopMetrics"];
+  pinned: boolean;
+  planHash: string;
+  planVersionId: null;
+  reportHash: string;
+  revision: number;
+  runId: string;
+  schemaVersion: "monitor-loop-result-v2";
+  status: "COMPLETED";
+  symbol: string;
+};
+
+export type BacktestScheduledRunView = {
+  availability: components["schemas"]["BacktestResultAvailabilityView"];
+  completedAt: string;
+  costs: components["schemas"]["LoopCosts"];
+  datasetHash: string;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  metrics: components["schemas"]["LoopMetrics"];
+  openingAccount: components["schemas"]["LoopAccountInput"];
+  pinned: boolean;
+  planHash: string;
+  planVersionId: null;
+  provenance: components["schemas"]["BacktestScheduledProvenanceView"];
+  report: components["schemas"]["BacktestScheduledReportHeader"];
+  reportHash: string;
+  response: components["schemas"]["LoopResponsePolicy"];
+  revision: number;
+  runId: string;
+  schemaVersion: "monitor-loop-result-v2";
+  status: "COMPLETED";
+  symbol: string;
+  versions: Array<components["schemas"]["CollectionVersionView"]>;
+};
+
+export type BacktestScheduledSourceView = {
+  baseHash: (string) | (null);
+  candidateHash: string;
+  candidateRevision: number;
+  evidenceHash: string;
+  sourceHash: string;
+  sourceId: string;
+  sourceRevision: number;
 };
 
 export type BacktestServiceControlReceipt = {
@@ -919,6 +1010,179 @@ export type CertifiedDailyBar = {
 };
 
 export type ClauseDisposition = "MAPPED" | "UNRESOLVED" | "UNSUPPORTED";
+
+export type CollectionAttemptView = {
+  attempt_id: string;
+  base_hash: (string) | (null);
+  error_code?: (string) | (null);
+  finished_at?: (string) | (null);
+  retryable?: boolean;
+  source_hash: string;
+  source_revision: number;
+  started_at: string;
+  status: "RUNNING" | "CANCEL_REQUESTED" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+};
+
+export type CollectionCandidateView = {
+  candidateHash: string;
+  draft?: (components["schemas"]["UnifiedPlanDraft"]) | (null);
+  evidenceHash: string;
+  issues: Array<string>;
+  kind: "INITIAL" | "UPDATE" | "MATERIALIZED" | "CORRECTED" | "UNAVAILABLE";
+  mapping?: (components["schemas"]["DailyMapping"]) | (null);
+  openingAccount?: (components["schemas"]["OpeningAccountFacts"]) | (null);
+  review?: (components["schemas"]["PlanCandidateReview"]) | (null);
+  update?: (components["schemas"]["PlanUpdateExtractionOutput"]) | (null);
+  validation: "VALID" | "INVALID" | "UNRESOLVED";
+};
+
+export type CollectionChainReviewDeclaration = {
+  account?: (components["schemas"]["LoopAccountInput"]) | (null);
+  confirmed: true;
+  evidence: string;
+  expected_revision: number;
+  items: Array<components["schemas"]["CollectionItemReviewDeclaration"]>;
+};
+
+export type CollectionCorrectionDeclaration = {
+  binding: components["schemas"]["CollectionItemReviewDeclaration"];
+  confirmed: true;
+  draft?: (components["schemas"]["UnifiedPlanDraftInput"]) | (null);
+  evidence: string;
+  expected_revision: number;
+  mapping?: (components["schemas"]["DailyMapping"]) | (null);
+  update?: (components["schemas"]["PlanUpdateExtractionOutputInput"]) | (null);
+};
+
+export type CollectionExtractionCommand = {
+  expectedBaseHash?: (string) | (null);
+  expectedRevision: number;
+  expectedSourceRevision?: (number) | (null);
+  schemaVersion: "backtest-preparation-v2";
+  sourceId?: (string) | (null);
+};
+
+export type CollectionItemCorrectionInput = {
+  kind: "ITEM_CORRECTION";
+  review: components["schemas"]["CollectionCorrectionDeclaration"];
+  schemaVersion: "backtest-preparation-v2";
+};
+
+export type CollectionItemReviewDeclaration = {
+  base_hash: (string) | (null);
+  candidate_hash: string;
+  candidate_revision: number;
+  evidence_hash: string;
+  source_id: string;
+  source_revision: number;
+};
+
+export type CollectionItemSummary = {
+  attemptCount: number;
+  baseHash: (string) | (null);
+  candidateHash: (string) | (null);
+  candidateRevision: number;
+  effectiveTradeDate: (string) | (null);
+  evidenceHash: (string) | (null);
+  sourceId: string;
+  sourceRevision: number;
+  status: "WAITING" | "DRAFT" | "EXTRACTING" | "CANCEL_REQUESTED" | "CANDIDATE" | "FAILED" | "CANCELLED";
+  validation: ("VALID" | "INVALID" | "UNRESOLVED") | (null);
+};
+
+export type CollectionItemView = {
+  attemptCount: number;
+  attempts: Array<components["schemas"]["CollectionAttemptView"]>;
+  baseHash: (string) | (null);
+  candidate: (components["schemas"]["CollectionCandidateView"]) | (null);
+  candidateHash: (string) | (null);
+  candidateRevision: number;
+  effectiveTradeDate: (string) | (null);
+  evidenceHash: (string) | (null);
+  source: components["schemas"]["PreparationSource"];
+  sourceId: string;
+  sourceRevision: number;
+  status: "WAITING" | "DRAFT" | "EXTRACTING" | "CANCEL_REQUESTED" | "CANDIDATE" | "FAILED" | "CANCELLED";
+  validation: ("VALID" | "INVALID" | "UNRESOLVED") | (null);
+};
+
+export type CollectionItemsPage = {
+  items: Array<components["schemas"]["CollectionItemView"]>;
+  limit: number;
+  nextOffset: (number) | (null);
+  offset: number;
+  preparationId: string;
+  revision: number;
+  total: number;
+};
+
+export type CollectionPreparationCreateInput = {
+  preparation_id: string;
+  schema_version: "backtest-preparation-v2";
+  sources: Array<components["schemas"]["PreparationSource"]>;
+};
+
+export type CollectionPreparationFrozenView = {
+  account: components["schemas"]["LoopAccountInput"];
+  accountOrigin: "SOURCE" | "HUMAN_REVIEW";
+  manifestHash: string;
+  preparationId: string;
+  reviewedAt: string;
+  revision: number;
+  schemaVersion?: "prepared-loop-plan-v2";
+  versions: Array<components["schemas"]["CollectionVersionView"]>;
+};
+
+export type CollectionPreparationView = {
+  currentSourceId: (string) | (null);
+  frozen: (components["schemas"]["CollectionPreparationFrozenView"]) | (null);
+  generation: (string) | (null);
+  itemCount: number;
+  items: Array<components["schemas"]["CollectionItemSummary"]>;
+  preparationId: string;
+  reviewRevision: number;
+  revision: number;
+  schemaVersion?: "backtest-preparation-v2";
+  status: "DRAFT" | "EXTRACTING" | "CANCEL_REQUESTED" | "CANDIDATE" | "REVIEWED" | "FAILED" | "CANCELLED";
+  workPhase: ("READY" | "CALLING" | "UNKNOWN" | "ENDED") | (null);
+};
+
+export type CollectionRecoveryCommand = {
+  confirmedEnded: true;
+  expectedRevision: number;
+  generation: string;
+  schemaVersion: "backtest-preparation-v2";
+};
+
+export type CollectionReviewInput = {
+  kind: "CHAIN_REVIEW";
+  review: components["schemas"]["CollectionChainReviewDeclaration"];
+  schemaVersion: "backtest-preparation-v2";
+};
+
+export type CollectionRevisionCommand = {
+  expectedRevision: number;
+  schemaVersion: "backtest-preparation-v2";
+};
+
+export type CollectionSourceCommand = {
+  expectedRevision: number;
+  schemaVersion: "backtest-preparation-v2";
+  source?: (components["schemas"]["PreparationSource"]) | (null);
+  sourceOrder?: (Array<string>) | (null);
+};
+
+export type CollectionVersionView = {
+  accountContext: (components["schemas"]["LoopAccountContext"]) | (null);
+  availableAt: string;
+  candidateRevision: number;
+  effectiveTradeDate: string;
+  evidenceHash: string;
+  planHash: string;
+  sourceId: string;
+  sourceRevision: number;
+  versionId: string;
+};
 
 export type CompletedMinuteConfirmation = {
   kind: "COMPLETED_BAR_CLOSE";
@@ -2032,6 +2296,19 @@ export type LegacyPlanPreviewResponse = {
   plans?: Array<components["schemas"]["LegacyPlanItemView"]>;
 };
 
+export type LoopAccountContext = {
+  core_qty?: (number) | (null);
+  dependent_rule_ids?: Array<string>;
+  evidence: string;
+  tactical_qty?: (number) | (null);
+};
+
+export type LoopAccountDiscrepancy = {
+  actual_qty: (number) | (null);
+  bucket: "CORE" | "TACTICAL";
+  stated_qty: number;
+};
+
 export type LoopAccountInput = {
   cash: (components["schemas"]["KnownLoopCash"] & { kind: "KNOWN" }) | (components["schemas"]["UnknownLoopCash"] & { kind: "UNKNOWN" });
   evidence: string;
@@ -2189,6 +2466,17 @@ export type LoopPlanReview = {
   evidence_hash: string;
   reviewed_at: string;
   source_hashes: Array<string>;
+};
+
+export type LoopPlanTransition = {
+  at: string;
+  authority_id: (string) | (null);
+  blocked_rule_ids?: Array<string>;
+  closed_intent_ids?: Array<string>;
+  context_mismatches?: Array<components["schemas"]["LoopAccountDiscrepancy"]>;
+  from_version_id: string;
+  kind: "REPLACED" | "CONTINUED" | "NO_AUTHORITY";
+  version_id: (string) | (null);
 };
 
 export type LoopPlanVersion = {
@@ -2581,6 +2869,27 @@ export type PlanActiveValidity = {
   mode: "PLAN_ACTIVE";
 };
 
+export type PlanCandidateReview = {
+  account_context?: (components["schemas"]["UpdateAccountContext"]) | (null);
+  available_at: (string) | (null);
+  bindings: Array<components["schemas"]["SourceBoundField"]>;
+  changes?: Array<components["schemas"]["PlanChange"]>;
+  draft: components["schemas"]["UnifiedPlanDraft"];
+  issues: Array<string>;
+  schema_version?: "monitor-loop-candidate-evidence-v1";
+  source_hash: string;
+  source_id: string;
+};
+
+export type PlanChange = {
+  action: "ADD" | "MODIFY" | "REVOKE" | "RETAIN";
+  after: components["schemas"]["JsonValue"];
+  before: components["schemas"]["JsonValue"];
+  clause_ids: Array<string>;
+  rule_id: (string) | (null);
+  target: string;
+};
+
 export type PlanDeactivationCommand = {
   expectedRevision: number;
   symbol: string;
@@ -2687,6 +2996,41 @@ export type PlanScopeView = {
   scopeKey: string;
   status: "WAITING" | "RECOVERING" | "READY" | "BLOCKED";
   symbol: string;
+};
+
+export type PlanUpdateExtractionOutput = {
+  account_context?: (components["schemas"]["UpdateAccountContext"]) | (null);
+  assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
+  bindings: Array<components["schemas"]["DailyFieldBinding"]>;
+  clauses: Array<components["schemas"]["DailyClause"]>;
+  draft: components["schemas"]["UnifiedPlanDraft"];
+  operations: Array<components["schemas"]["PlanUpdateOperation"]>;
+  retain_unmentioned: (boolean) | (null);
+  schema_version: "monitor-loop-update-extraction-v1";
+  scope: "FULL_REPLACEMENT" | "EXPLICIT_CHANGES" | "UNRESOLVED";
+  scope_clause_ids: Array<string>;
+  warnings?: Array<components["schemas"]["ExtractionIssue"]>;
+};
+
+export type PlanUpdateExtractionOutputInput = {
+  account_context?: (components["schemas"]["UpdateAccountContext"]) | (null);
+  assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
+  bindings: Array<components["schemas"]["DailyFieldBinding"]>;
+  clauses: Array<components["schemas"]["DailyClause"]>;
+  draft: components["schemas"]["UnifiedPlanDraftInput"];
+  operations: Array<components["schemas"]["PlanUpdateOperation"]>;
+  retain_unmentioned: (boolean) | (null);
+  schema_version: "monitor-loop-update-extraction-v1";
+  scope: "FULL_REPLACEMENT" | "EXPLICIT_CHANGES" | "UNRESOLVED";
+  scope_clause_ids: Array<string>;
+  warnings?: Array<components["schemas"]["ExtractionIssue"]>;
+};
+
+export type PlanUpdateOperation = {
+  action: "ADD" | "MODIFY" | "REVOKE" | "RETAIN";
+  clause_ids: Array<string>;
+  rule_id?: (string) | (null);
+  target: "ordinary_rules" | "risk_branches" | "alert_rules" | "activation" | "levels" | "position" | "monitoring" | "execution_policy" | "trading_rules" | "metadata";
 };
 
 export type PlanVersionPage = {
@@ -2804,7 +3148,7 @@ export type PreparationAttemptView = {
 };
 
 export type PreparationCreateCommand = {
-  input: components["schemas"]["SinglePlanPreparationInput"];
+  input: (components["schemas"]["SinglePlanPreparationInput"]) | (components["schemas"]["CollectionPreparationCreateInput"]);
 };
 
 export type PreparationExtractionCandidate = {
@@ -3308,6 +3652,27 @@ export type RuntimeSymbolHealthResponse = {
   scope: components["schemas"]["PlanScopeView"];
 };
 
+export type ScheduledLoopAuditEvent = {
+  at: string;
+  authority_id: (string) | (null);
+  cause_event_id: (string) | (null);
+  event_id: string;
+  payload: (components["schemas"]["LoopAuditPayload"]) | (components["schemas"]["LoopPlanTransition"]);
+  run_id: string;
+  schema_version?: "monitor-loop-event-v2";
+  sequence: number;
+  version_id: (string) | (null);
+};
+
+export type ScheduledPreparedBacktestRunCommand = {
+  costs: components["schemas"]["BacktestLoopCostsInput"];
+  endDate?: (string) | (null);
+  manifestHash: string;
+  preparationId: string;
+  response: components["schemas"]["BacktestLoopResponseInput"];
+  schemaVersion: "prepared-loop-plan-v2";
+};
+
 export type ScopeProgressView = {
   completedCount: (number) | (null);
   requiredCount: (number) | (null);
@@ -3377,6 +3742,17 @@ export type SourceAlertView = {
   evaluatedAt: string;
   eventId: string;
   resultHash: string;
+};
+
+export type SourceBoundField = {
+  binding: components["schemas"]["DailyFieldBinding"];
+  candidate_content_hash: string;
+  clauses: Array<components["schemas"]["DailyClause"]>;
+  original_path: string;
+  path: string;
+  source_hash: string;
+  source_id: string;
+  supplement?: (components["schemas"]["DailySupplement"]) | (null);
 };
 
 export type SourceClauseView = {
@@ -3718,6 +4094,13 @@ export type UnmappedText = {
   start?: (number) | (null);
 };
 
+export type UpdateAccountContext = {
+  core_qty?: (components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"]) | (null);
+  dependency_clause_ids?: Array<string>;
+  dependent_rule_ids?: Array<string>;
+  tactical_qty?: (components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"]) | (null);
+};
+
 export type UserSupplementView = {
   label: "human_confirmed_test_supplement" | "human_confirmed_supplement";
   path: string;
@@ -3845,6 +4228,12 @@ export interface components {
     BacktestRunPinCommand: BacktestRunPinCommand;
     BacktestRunSummaryView: BacktestRunSummaryView;
     BacktestRunView: BacktestRunView;
+    BacktestScheduledEventView: BacktestScheduledEventView;
+    BacktestScheduledProvenanceView: BacktestScheduledProvenanceView;
+    BacktestScheduledReportHeader: BacktestScheduledReportHeader;
+    BacktestScheduledRunSummaryView: BacktestScheduledRunSummaryView;
+    BacktestScheduledRunView: BacktestScheduledRunView;
+    BacktestScheduledSourceView: BacktestScheduledSourceView;
     BacktestServiceControlReceipt: BacktestServiceControlReceipt;
     BacktestServiceRecoveryCommand: BacktestServiceRecoveryCommand;
     BacktestServiceState: BacktestServiceState;
@@ -3862,6 +4251,24 @@ export interface components {
     CapturedReminder: CapturedReminder;
     CertifiedDailyBar: CertifiedDailyBar;
     ClauseDisposition: ClauseDisposition;
+    CollectionAttemptView: CollectionAttemptView;
+    CollectionCandidateView: CollectionCandidateView;
+    CollectionChainReviewDeclaration: CollectionChainReviewDeclaration;
+    CollectionCorrectionDeclaration: CollectionCorrectionDeclaration;
+    CollectionExtractionCommand: CollectionExtractionCommand;
+    CollectionItemCorrectionInput: CollectionItemCorrectionInput;
+    CollectionItemReviewDeclaration: CollectionItemReviewDeclaration;
+    CollectionItemSummary: CollectionItemSummary;
+    CollectionItemView: CollectionItemView;
+    CollectionItemsPage: CollectionItemsPage;
+    CollectionPreparationCreateInput: CollectionPreparationCreateInput;
+    CollectionPreparationFrozenView: CollectionPreparationFrozenView;
+    CollectionPreparationView: CollectionPreparationView;
+    CollectionRecoveryCommand: CollectionRecoveryCommand;
+    CollectionReviewInput: CollectionReviewInput;
+    CollectionRevisionCommand: CollectionRevisionCommand;
+    CollectionSourceCommand: CollectionSourceCommand;
+    CollectionVersionView: CollectionVersionView;
     CompletedMinuteConfirmation: CompletedMinuteConfirmation;
     ConditionOutcome: ConditionOutcome;
     ConditionPlanEntryView: ConditionPlanEntryView;
@@ -3977,6 +4384,8 @@ export interface components {
     LegacyPlanInvalidateResult: LegacyPlanInvalidateResult;
     LegacyPlanItemView: LegacyPlanItemView;
     LegacyPlanPreviewResponse: LegacyPlanPreviewResponse;
+    LoopAccountContext: LoopAccountContext;
+    LoopAccountDiscrepancy: LoopAccountDiscrepancy;
     LoopAccountInput: LoopAccountInput;
     LoopAccountReceipt: LoopAccountReceipt;
     LoopAccountState: LoopAccountState;
@@ -3994,6 +4403,7 @@ export interface components {
     LoopMetrics: LoopMetrics;
     LoopOpeningMark: LoopOpeningMark;
     LoopPlanReview: LoopPlanReview;
+    LoopPlanTransition: LoopPlanTransition;
     LoopPlanVersion: LoopPlanVersion;
     LoopReminder: LoopReminder;
     LoopRequest: LoopRequest;
@@ -4045,6 +4455,8 @@ export interface components {
     OperationReceipt: OperationReceipt;
     PlanActivationCommand: PlanActivationCommand;
     PlanActiveValidity: PlanActiveValidity;
+    PlanCandidateReview: PlanCandidateReview;
+    PlanChange: PlanChange;
     PlanDeactivationCommand: PlanDeactivationCommand;
     PlanDocumentFormat: PlanDocumentFormat;
     PlanDraftCommand: PlanDraftCommand;
@@ -4057,6 +4469,9 @@ export interface components {
     PlanReviewConfirmationView: PlanReviewConfirmationView;
     PlanReviewResolution: PlanReviewResolution;
     PlanScopeView: PlanScopeView;
+    PlanUpdateExtractionOutput: PlanUpdateExtractionOutput;
+    PlanUpdateExtractionOutputInput: PlanUpdateExtractionOutputInput;
+    PlanUpdateOperation: PlanUpdateOperation;
     PlanVersionPage: PlanVersionPage;
     PlanVersionStatus: PlanVersionStatus;
     PlanVersionSummary: PlanVersionSummary;
@@ -4124,6 +4539,8 @@ export interface components {
     RuntimeSymbolCollectionResponse: RuntimeSymbolCollectionResponse;
     RuntimeSymbolDetailResponse: RuntimeSymbolDetailResponse;
     RuntimeSymbolHealthResponse: RuntimeSymbolHealthResponse;
+    ScheduledLoopAuditEvent: ScheduledLoopAuditEvent;
+    ScheduledPreparedBacktestRunCommand: ScheduledPreparedBacktestRunCommand;
     ScopeProgressView: ScopeProgressView;
     SecretReferenceView: SecretReferenceView;
     SecretSource: SecretSource;
@@ -4135,6 +4552,7 @@ export interface components {
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
     SourceAlertView: SourceAlertView;
+    SourceBoundField: SourceBoundField;
     SourceClauseView: SourceClauseView;
     SourceProcessingView: SourceProcessingView;
     SourceSpanView: SourceSpanView;
@@ -4171,6 +4589,7 @@ export interface components {
     UnifiedTradePlan: UnifiedTradePlan;
     UnknownLoopCash: UnknownLoopCash;
     UnmappedText: UnmappedText;
+    UpdateAccountContext: UpdateAccountContext;
     UserSupplementView: UserSupplementView;
     ValidationIssue: ValidationIssue;
     ValidationSeverity: ValidationSeverity;
@@ -5140,7 +5559,7 @@ export interface paths {
       responses: {
         "201": {
           content: {
-            "application/json": components["schemas"]["PreparationView"];
+            "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]) | (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
           };
         };
         "400": {
@@ -5215,7 +5634,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["PreparationView"];
+            "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]) | (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
           };
         };
         "400": {
@@ -5290,18 +5709,18 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": components["schemas"]["PreparationRevisionCommand"];
+          "application/json": (components["schemas"]["PreparationRevisionCommand"]) | (components["schemas"]["CollectionRevisionCommand"]);
         };
       };
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["PreparationView"];
+            "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]) | (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
           };
         };
         "202": {
           content: {
-            "application/json": components["schemas"]["PreparationView"];
+            "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
           };
         };
         "400": {
@@ -5376,13 +5795,92 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": components["schemas"]["PreparationRevisionCommand"];
+          "application/json": (components["schemas"]["PreparationRevisionCommand"]) | (components["schemas"]["CollectionExtractionCommand"]);
         };
       };
       responses: {
         "202": {
           content: {
-            "application/json": components["schemas"]["PreparationView"];
+            "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]) | (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-preparations/{preparation_id}/items": {
+    get: {
+      parameters: {
+        query: {
+          expectedRevision: number;
+          limit?: number;
+          offset?: number;
+        };
+        header?: never;
+        path: {
+          preparation_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["CollectionItemsPage"];
           };
         };
         "400": {
@@ -5457,13 +5955,13 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": components["schemas"]["PreparationRecoveryCommand"];
+          "application/json": (components["schemas"]["PreparationRecoveryCommand"]) | (components["schemas"]["CollectionRecoveryCommand"]);
         };
       };
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["PreparationView"];
+            "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]) | (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
           };
         };
         "400": {
@@ -5538,13 +6036,13 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": components["schemas"]["PreparationReviewInput"];
+          "application/json": (components["schemas"]["PreparationReviewInput"]) | (components["schemas"]["CollectionReviewInput"]) | (components["schemas"]["CollectionItemCorrectionInput"]);
         };
       };
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["PreparationFrozenView"];
+            "application/json": (components["schemas"]["PreparationFrozenView"]) | (components["schemas"]["CollectionPreparationFrozenView"]) | (components["schemas"]["CollectionPreparationView"]);
           };
         };
         "400": {
@@ -5619,13 +6117,13 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": components["schemas"]["PreparationSourceCommand"];
+          "application/json": (components["schemas"]["PreparationSourceCommand"]) | (components["schemas"]["CollectionSourceCommand"]);
         };
       };
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["PreparationView"];
+            "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]) | (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
           };
         };
         "400": {
@@ -5778,7 +6276,7 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": (components["schemas"]["BacktestRunCommand"]) | (components["schemas"]["PreparedBacktestRunCommand"]);
+          "application/json": (components["schemas"]["BacktestRunCommand"]) | (components["schemas"]["PreparedBacktestRunCommand"]) | (components["schemas"]["ScheduledPreparedBacktestRunCommand"]);
         };
       };
       responses: {
@@ -5859,7 +6357,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]);
+            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]) | (components["schemas"]["BacktestScheduledRunView"]);
           };
         };
         "400": {
@@ -5938,7 +6436,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]);
+            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]) | (components["schemas"]["BacktestScheduledRunView"]);
           };
         };
         "400": {

@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **13 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **14 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -34,6 +34,10 @@ RP-T12 is complete: explicit v2 preparation branches support batch creation, exa
 RP-T13 allowance under RP05-A03: update only the two collection cases in `tests/integration/test_monitor_loop_submission.py` to use the now-required `schemaVersion: prepared-loop-plan-v2` command; their original cutoff/idempotency assertions remain. Public `monitor-loop-result-v2` carries lightweight ordered version/source bindings and a typed report header with `report_schema_version: backtest-report-v5`, excluding the private full schedule. The immutable full report is still verified before projection; the public header is not a separately hash-recomputable private report codec. This avoids duplicating up to 256 snapshots within the existing 4 MiB result bound.
 
 RP-T13 is complete: a required prepared-loop-plan-v2 command submits one reviewed chain; bounded monitor-loop-result-v2 projects ordered source/version provenance and a typed backtest-report-v5 header, with version-aware event pages. Independent HTTP tests reproduced a legacy-union parser exception; the fix passes all 4 scheduled HTTP cases and 12 old result API cases. The submission suite passes 27 checks. Two unchanged snapshot checks await RP-T14 generation/review. Ruff and independent diff review pass. **13 of 20 repair tasks complete.** Next: RP-T14.
+
+RP-T14 allowance under RP05-A03: independent concrete contract review found that collection creation advertised an optional discriminator while HTTP requires it. Add only `src/trade_plan_monitor/web/preparation_schemas.py` and `tests/integration/test_plan_preparation_contract.py` for a required public collection-create discriminator and its regression. The private input default and bytes remain unchanged; regenerate and review the concrete outputs again before approval.
+
+RP-T14 is complete and RP-C05 passes: independent review of both actual generated profiles approves only one new item-page path, 10 additive existing-operation changes and 36 new schemas; three old schemas gain unions and all other old surfaces remain exact. The required public create discriminator was reproduced in both profiles before repair. U11 records all four reviewed artifact hashes under standing authorization. All 54 snapshot/preparation/result contract checks and both generator checks pass. Windows sandbox stalled the local contract run; the approved isolated rerun passed. Full frontend type checking identifies the new event-union consumers reserved for RP-T18; no checks were suppressed. Ruff and diff checks pass. **14 of 20 repair tasks complete.** Next: RP-T15.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -156,7 +160,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T14. Generate and inspect exact contract changes
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T13; **Acceptance:** RP-A10, RP-A12.
 - **Allowed files:** `openapi.json`; `openapi.runtime-status.json`; `web/src/api/generated.ts`; `web/src/api/generated-runtime-status.ts`; `scripts/generate_frontend_types.py`; `tests/integration/test_openapi_snapshot.py`; `docs/specifications/monitoring/SPEC-unified-plan.md`; `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`.
 - **Result:** Generate both profiles, inspect only agreed new branches/item-read path and verify old branches. Generator changes only if required for these shapes. Record contract approval through the existing process only after concrete diff review, distinguishing review evidence from user authorization; never hand-edit generated types or silently approve digests. The paired approval documents are separate from the mechanical outputs.

@@ -41,6 +41,7 @@ APPROVED_PATHS = {
     "/api/v1/backtest-preparations/{preparation_id}",
     "/api/v1/backtest-preparations/{preparation_id}/cancellations",
     "/api/v1/backtest-preparations/{preparation_id}/extractions",
+    "/api/v1/backtest-preparations/{preparation_id}/items",
     "/api/v1/backtest-preparations/{preparation_id}/recoveries",
     "/api/v1/backtest-preparations/{preparation_id}/reviews",
     "/api/v1/backtest-preparations/{preparation_id}/source",

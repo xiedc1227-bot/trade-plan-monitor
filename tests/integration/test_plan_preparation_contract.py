@@ -249,7 +249,7 @@ def test_published_create_and_progress_are_single_source_and_bounded(document):
     command = resolved(document, operation["requestBody"]["content"]["application/json"]["schema"])
     inputs = command["properties"]["input"]
     names = reference_names(inputs)
-    assert names == {"SinglePlanPreparationInput", "PlanCollectionPreparationInput"}
+    assert names == {"SinglePlanPreparationInput", "CollectionPreparationCreateInput"}
     original = document["components"]["schemas"]["SinglePlanPreparationInput"]
     sources = original["properties"]["sources"]
     assert sources["minItems"] == sources["maxItems"] == 1
@@ -269,9 +269,19 @@ def test_published_create_and_progress_are_single_source_and_bounded(document):
     assert set(recovery["required"]) == {"expectedRevision", "generation", "confirmedEnded"}
 
 
+def test_collection_create_requires_explicit_public_discriminator(document):
+    command = document["components"]["schemas"]["PreparationCreateCommand"]
+    candidates = [resolved(document, item) for item in command["properties"]["input"]["anyOf"]]
+    (collection,) = [
+        item for item in candidates if item["properties"]["sources"]["maxItems"] == 256
+    ]
+    assert "schema_version" in collection["required"]
+    assert collection["properties"]["schema_version"]["const"] == "backtest-preparation-v2"
+
+
 def test_collection_contract_separates_bounded_summary_from_full_item_pages(document):
     schemas = document["components"]["schemas"]
-    collection = schemas["PlanCollectionPreparationInput"]
+    collection = schemas["CollectionPreparationCreateInput"]
     assert collection["properties"]["sources"]["minItems"] == 1
     assert collection["properties"]["sources"]["maxItems"] == 256
     response = document["paths"][BASE + "/{preparation_id}"]["get"]["responses"]["200"]
