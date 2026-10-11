@@ -14,6 +14,7 @@ from trade_plan_monitor.ai.daily_review import (
     build_daily_review,
     semantic_values,
 )
+from trade_plan_monitor.ai.loop_plan_extraction import unsupported_loop_source_spans
 from trade_plan_monitor.ai.plan_update_extraction import (
     PlanUpdateContext,
     PlanUpdateExtractionOutput,
@@ -33,10 +34,6 @@ from trade_plan_monitor.backtest.preparation_models import (
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft, unified_plan_issues
 
-_UNSUPPORTED = re.compile(
-    r"部分成交|挂单|基本面.*(?:退出|卖出)|partial fill|pending.order|fundamental.*exit",
-    re.I,
-)
 _AMBIGUOUS = re.compile(
     r"待确认|不确定|不要|无需|并非|尚未|不是|不能|不应|假设|假想|假定|示例|"
     r"(?:不|未)(?:完整|全部)?(?:替换|修改|调整|撤销|取消|保留|新增|增加)|"
@@ -158,7 +155,7 @@ def build_initial_review(draft: UnifiedPlanDraft, mapping: DailyMapping, source:
     issues = [f"{i.code}: {i.path}" for i in review.issues]
     if source.available_at is None:
         issues.append("LOOP_SOURCE_TIME_REQUIRED")
-    if _UNSUPPORTED.search(source.text):
+    if unsupported_loop_source_spans(source.text):
         issues.append("LOOP_SOURCE_UNSUPPORTED")
     return PlanCandidateReview(
         source_id=source.source_id,
@@ -324,7 +321,7 @@ def build_update_review(
         elif issue.path in selected and issue.code == "DAILY_SOURCE_BINDING_REQUIRED":
             issues.append(f"{issue.code}: {issue.path}")
     issues.extend(f"{i['code']}: {i['path']}" for i in unified_plan_issues(materialized.draft))
-    if _UNSUPPORTED.search(source.text):
+    if unsupported_loop_source_spans(source.text):
         issues.append("LOOP_SOURCE_UNSUPPORTED")
     if output.assumptions or output.warnings:
         issues.append("UPDATE_ASSUMPTIONS_REQUIRE_REVIEW")

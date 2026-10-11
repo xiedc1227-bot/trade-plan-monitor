@@ -131,3 +131,31 @@ def test_fixed_simulation_rules_are_bound_by_server_without_human_broker_evidenc
     rules = tuple(b for b in result.mapping.bindings if b.path.startswith("trading_rules."))
     assert len(rules) == 3
     assert all(b.origin == "PRODUCT_CONTRACT" and b.supplement_id is None for b in rules)
+
+
+@pytest.mark.parametrize(("source", "accepted"), [
+    ("risk_branches=[]", True), ("无风险分支。", True),
+    ("ordinary_rules=[]", False), ("无普通规则。", False),
+    ("风险规则没有写清楚。", False), ("如果放量，无风险分支。", False),
+    ("例如 risk_branches=[]", False), ("并非无风险分支。", False),
+    ("risk_branches=[]？", False), ("risk_branches=[] 或保留原规则", False),
+])
+def test_empty_unified_rules_require_exact_matching_source_declaration(source, accepted):
+    from tests.unit.test_unified_replay_input import research_plan
+
+    from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
+    draft = UnifiedPlanDraft.from_executable(research_plan())
+    raw = reviewed_mapping(draft, source).model_dump(mode="json")
+    binding = next(item for item in raw["bindings"] if item["path"] == "risk_branches")
+    supplement_id = binding["supplement_id"]
+    binding.update(origin="SOURCE", clause_ids=[raw["clauses"][0]["clause_id"]],
+                   supplement_id=None)
+    raw["supplements"] = [s for s in raw["supplements"]
+                          if s["supplement_id"] != supplement_id]
+    mapping = DailyMapping.model_validate(raw)
+    if accepted:
+        assert build_daily_review(draft, mapping, source).issues == ()
+    else:
+        with pytest.raises(ValueError, match="empty rules"):
+            build_daily_review(draft, mapping, source)

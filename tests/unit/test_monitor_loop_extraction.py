@@ -20,6 +20,30 @@ CASES = json.loads(
 )["cases"]
 
 
+@pytest.mark.parametrize("source", [
+    "No partial fills?", "无部分成交？",
+    "If volatility increases, no partial fills.",
+    "For example: no partial fills.", "不确定是否无部分成交。",
+    "No partial fills, unless liquidity is low.",
+])
+def test_unsupported_exclusion_requires_a_statement_not_a_question_or_condition(source):
+    from trade_plan_monitor.ai.loop_plan_extraction import unsupported_loop_source_spans
+
+    spans = unsupported_loop_source_spans(source)
+    assert spans, "Ambiguous exclusion must preserve the unsupported source warning"
+    assert all(source[start:end] for start, end in spans)
+
+
+@pytest.mark.parametrize("source", [
+    "No partial fills.", "无部分成交。", "不使用部分成交、挂单。",
+    "No partial fills or pending orders.",
+])
+def test_complete_unsupported_exclusion_statement_needs_no_warning(source):
+    from trade_plan_monitor.ai.loop_plan_extraction import unsupported_loop_source_spans
+
+    assert unsupported_loop_source_spans(source) == ()
+
+
 def test_opening_account_contract_calculates_total_without_unit_rounding():
     from trade_plan_monitor.ai.loop_plan_extraction import (
         OpeningAccountFacts,

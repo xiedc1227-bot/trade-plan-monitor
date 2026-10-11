@@ -40,6 +40,46 @@ from trade_plan_monitor.backtest.run_input import MAX_INITIAL_LOTS, MAX_SAFE_INT
 
 LOOP_EXTRACTION_VERSION = "monitor-loop-extraction-v1"
 LOOP_PROMPT_VERSION = "monitor-loop-extract-v1"
+
+
+def unsupported_loop_source_spans(text: str) -> tuple[tuple[int, int], ...]:
+    """Retain unsupported requests; exempt only complete literal exclusion sentences."""
+    matches = [match.span() for match in re.finditer(
+        r"部分成交|挂单|partial fill|pending.order", text, re.I,
+    )]
+    # Greedy fundamental-to-exit spans, without retrying an unbounded suffix at
+    # every repeated prefix. The old expressions never crossed a newline.
+    for line in re.finditer(r"[^\n]+", text):
+        for prefix, ending in (("基本面", r"退出|卖出"), ("fundamental", "exit")):
+            start = re.search(prefix, line.group(), re.I)
+            if start is None:
+                continue
+            last = None
+            for end in re.finditer(ending, line.group(), re.I):
+                last = end
+            if last is not None and last.start() >= start.end():
+                matches.append((line.start() + start.start(), line.start() + last.end()))
+    english_item = (
+        r"(?:recorded future transactions|partial fills?|external fundamentals|"
+        r"discretionary conditions|pending orders?|fundamental exits?)"
+    )
+    exclusions = (
+        rf"No\s+{english_item}(?:(?:\s*,\s*|\s+(?:or|and)\s+){english_item})*",
+        r"(?:不支持|不使用|不涉及|无)(?:部分成交|挂单|基本面退出|基本面卖出)"
+        r"(?:(?:、|，|或|和)(?:部分成交|挂单|基本面退出|基本面卖出))*",
+    )
+    excluded = [
+        sentence.span() for sentence in re.finditer(r"[^。！？.!?\n;；]+", text)
+        if text[sentence.end():sentence.end() + 1] not in {"?", "？"}
+        and any(re.fullmatch(pattern, sentence.group().strip(), re.I) for pattern in exclusions)
+    ]
+    found, index = [], 0
+    for start, end in sorted(matches):
+        while index < len(excluded) and excluded[index][1] <= start:
+            index += 1
+        if index >= len(excluded) or start < excluded[index][0] or end > excluded[index][1]:
+            found.append((start, end))
+    return tuple(found)
 UnitCost = Annotated[ExactDecimal, Field(ge=0, le=MAX_SAFE_INTEGER, allow_inf_nan=False)]
 
 
@@ -376,12 +416,9 @@ async def extract_loop_plan(
                     "never infer it from extraction time.",
                 )
             )
+    unsupported = unsupported_loop_source_spans(source.text)
     for clause in reviewed.daily_mapping.clauses:
-        if re.search(
-            r"部分成交|挂单|基本面.*(?:退出|卖出)|partial fill|pending.order|fundamental.*exit",
-            clause.excerpt,
-            re.I,
-        ):
+        if any(start < clause.end and end > clause.start for start, end in unsupported):
             issues.append(
                 _blocking_warning(
                     "LOOP_SOURCE_UNSUPPORTED",

@@ -55,6 +55,10 @@ RP-T19 reproduction allowance under RP05-A03: real complete-source extraction ex
 
 RP-T18 is complete: one continuous result shows the ordered version calendar, exact source/review bindings, replacement/continuation/no-authority events, account discrepancies and closed intents. A previously missing v5 curve now projects opening plus last daily valuations only after full event-chain verification in one read snapshot; unknowns and expiry remain explicit and v4 behavior is unchanged. All 37 result/publication checks and 61 result-component checks pass, along with full frontend type checking. Independent review passes. Fixture corrections use canonical timestamps, public equity projection and the existing 1,000-row retention batch; no assertion or limit is weakened. The earlier review-test helper type is corrected without behavioral changes. **18 of 20 repair tasks complete.** Next: RP-T19; full browser/business acceptance remains pending.
 
+Independent adversarial regressions for the same RP-T19 evidence fixes may also use `tests/unit/test_daily_review.py` and `tests/unit/test_monitor_loop_extraction.py`; no other behavior or test threshold changes.
+
+RP-T19 browser reproduction additionally requires `src/trade_plan_monitor/backtest/preparation_review.py`: the original-extraction reload and frozen v1 evidence validators must use the same narrowly scoped unsupported-source check. Otherwise a valid complete first source is incorrectly rejected as its successor context. No stored bytes or hash domains change.
+
 ## RP-TASK-RULES. Execution boundary
 
 2026-10-10 parity erratum: the Chinese historical ML-T35/ML-T36 file counts are corrected to 5/6, matching their existing exact file lists and the English record. Historical completion and verification evidence are unchanged.

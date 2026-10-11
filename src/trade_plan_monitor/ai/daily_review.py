@@ -515,6 +515,17 @@ def build_daily_review(draft, mapping, source_text):
                     raise MappingValidationError(
                         "source price does not match exact yuan amount", diagnostic_path + ".unit"
                     )
+            elif actual == [] and type(actual) is list and draft.schema_version == 5:
+                labels = {
+                    "ordinary_rules": "普通规则", "risk_branches": "风险分支",
+                    "alert_rules": "提醒规则",
+                }
+                name = labels.get(binding.path)
+                literal = excerpt.strip(" \t\r\n。；;.")
+                if name is None or not re.fullmatch(
+                    rf"(?:{re.escape(binding.path)}\s*=\s*\[\]|无{name})", literal,
+                ):
+                    raise ValueError("empty rules require an explicit scoped source declaration")
             elif isinstance(actual, bool | list) or str(actual) not in excerpt:
                 raise ValueError("source value requires an explicit scoped human definition")
         bound.add(binding.path)
