@@ -1,20 +1,34 @@
 """Bounded preparation transport; embedded research contracts retain their field names."""
 
 import json
+from datetime import date
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import DailyMapping
 from trade_plan_monitor.ai.loop_plan_extraction import LoopPlanExtractionResult, OpeningAccountFacts
+from trade_plan_monitor.ai.plan_update_extraction import (
+    PlanUpdateExtractionOutput,
+    PlanUpdateExtractionResult,
+)
+from trade_plan_monitor.ai.update_review import MaterializedUpdateCandidate, PlanCandidateReview
+from trade_plan_monitor.backtest.loop_input import LoopAccountInput
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
+from trade_plan_monitor.backtest.plan_schedule import LoopAccountContext, LoopTimestamp
 from trade_plan_monitor.backtest.preparation_models import (
+    CollectionPreparationAttempt,
+    CollectionPreparationRecord,
+    PlanCollectionPreparationInput,
     PreparationAttempt,
+    PreparationItemReview,
     PreparationRecord,
     PreparationSource,
     SinglePlanPreparationInput,
 )
 from trade_plan_monitor.backtest.preparation_review import (
+    CollectionItemCorrectionCommand,
+    CollectionPreparationReviewCommand,
     FrozenPreparedPlan,
     PreparationReviewCommand,
     frozen_preparation,
@@ -35,12 +49,18 @@ def _embedded[T: BaseModel](model: type[T], value: object) -> T:
 
 
 class PreparationCreateCommand(ApiValue):
-    input: SinglePlanPreparationInput
+    input: SinglePlanPreparationInput | PlanCollectionPreparationInput
 
     @field_validator("input", mode="before")
     @classmethod
     def parse_input(cls, value):
-        return _embedded(SinglePlanPreparationInput, value)
+        schema = value.get("schema_version") if isinstance(value, dict) else getattr(
+            value, "schema_version", None,
+        )
+        model = PlanCollectionPreparationInput if schema == "backtest-preparation-v2" else (
+            SinglePlanPreparationInput
+        )
+        return _embedded(model, value)
 
 
 class PreparationRevisionCommand(ApiValue):
@@ -172,6 +192,8 @@ class PreparationFrozenView(ApiValue):
 
 
 def project_preparation(record: PreparationRecord) -> PreparationView:
+    if isinstance(record, CollectionPreparationRecord):
+        return project_collection(record)
     candidate = None
     if record.candidate is not None:
         stored = record.candidate
@@ -221,3 +243,289 @@ def project_preparation(record: PreparationRecord) -> PreparationView:
         generation=claim.generation if claim else None,
         candidate=candidate,
     )
+
+
+class CollectionRevisionCommand(PreparationRevisionCommand):
+    schema_version: Literal["backtest-preparation-v2"]
+
+
+class CollectionSourceCommand(CollectionRevisionCommand):
+    source: PreparationSource | None = None
+    source_order: tuple[StableIdentifier, ...] | None = Field(
+        default=None, min_length=1, max_length=256,
+    )
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def parse_source(cls, value):
+        return None if value is None else _embedded(PreparationSource, value)
+
+    @field_validator("source_order", mode="before")
+    @classmethod
+    def parse_order(cls, value):
+        if value is not None and not isinstance(value, (tuple, list)):
+            raise ValueError("sourceOrder must be an array")
+        return None if value is None else tuple(value)
+
+    @model_validator(mode="after")
+    def complete(self):
+        if self.source is None and self.source_order is None:
+            raise ValueError("source or sourceOrder is required")
+        if self.source_order is not None and len(set(self.source_order)) != len(self.source_order):
+            raise ValueError("sourceOrder must contain unique existing source IDs")
+        return self
+
+
+class CollectionExtractionCommand(CollectionRevisionCommand):
+    source_id: StableIdentifier | None = None
+    expected_source_revision: Revision | None = None
+    expected_base_hash: Sha256Hex | None = None
+
+    @model_validator(mode="after")
+    def complete(self):
+        fields = {"source_id", "expected_source_revision", "expected_base_hash"}
+        supplied = self.model_fields_set & fields
+        if supplied and (supplied != fields or self.source_id is None
+                         or self.expected_source_revision is None):
+            raise ValueError("selected extraction requires all source/base revision fields")
+        return self
+
+
+class CollectionRecoveryCommand(PreparationRecoveryCommand):
+    schema_version: Literal["backtest-preparation-v2"]
+
+
+class CollectionItemReviewDeclaration(PreparationItemReview):
+    source_revision: Revision
+    candidate_revision: Revision
+
+
+class CollectionCorrectionDeclaration(CollectionItemCorrectionCommand):
+    expected_revision: Revision
+    binding: CollectionItemReviewDeclaration
+
+
+class CollectionChainReviewDeclaration(CollectionPreparationReviewCommand):
+    expected_revision: Revision
+    items: tuple[CollectionItemReviewDeclaration, ...] = Field(min_length=1, max_length=256)
+
+
+class CollectionItemCorrectionInput(ApiValue):
+    schema_version: Literal["backtest-preparation-v2"]
+    kind: Literal["ITEM_CORRECTION"]
+    review: CollectionCorrectionDeclaration
+
+    @field_validator("review", mode="before")
+    @classmethod
+    def parse_review(cls, value):
+        return _embedded(CollectionCorrectionDeclaration, value)
+
+
+class CollectionReviewInput(ApiValue):
+    schema_version: Literal["backtest-preparation-v2"]
+    kind: Literal["CHAIN_REVIEW"]
+    review: CollectionChainReviewDeclaration
+
+    @field_validator("review", mode="before")
+    @classmethod
+    def parse_review(cls, value):
+        return _embedded(CollectionChainReviewDeclaration, value)
+
+
+class CollectionVersionView(ApiValue):
+    source_id: StableIdentifier
+    source_revision: Revision
+    candidate_revision: Revision
+    version_id: StableIdentifier
+    plan_hash: Sha256Hex
+    evidence_hash: Sha256Hex
+    effective_trade_date: date
+    available_at: LoopTimestamp
+    account_context: LoopAccountContext | None
+
+
+class CollectionPreparationFrozenView(ApiValue):
+    schema_version: Literal["prepared-loop-plan-v2"] = "prepared-loop-plan-v2"
+    preparation_id: StableIdentifier
+    manifest_hash: Sha256Hex
+    revision: Revision
+    account: LoopAccountInput
+    account_origin: Literal["SOURCE", "HUMAN_REVIEW"]
+    reviewed_at: LoopTimestamp
+    versions: tuple[CollectionVersionView, ...] = Field(min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def bounded(self):
+        return PreparationView.bounded(self)
+
+
+class CollectionItemSummary(ApiValue):
+    source_id: StableIdentifier
+    source_revision: Revision
+    candidate_revision: Annotated[int, Field(strict=True, ge=0, le=9_007_199_254_740_991)]
+    base_hash: Sha256Hex | None
+    status: Literal[
+        "WAITING", "DRAFT", "EXTRACTING", "CANCEL_REQUESTED", "CANDIDATE", "FAILED", "CANCELLED",
+    ]
+    candidate_hash: Sha256Hex | None
+    evidence_hash: Sha256Hex | None
+    validation: Literal["VALID", "INVALID", "UNRESOLVED"] | None
+    attempt_count: Annotated[int, Field(strict=True, ge=0, le=3)]
+    effective_trade_date: date | None
+
+
+class CollectionPreparationView(ApiValue):
+    schema_version: Literal["backtest-preparation-v2"] = "backtest-preparation-v2"
+    preparation_id: StableIdentifier
+    revision: Revision
+    review_revision: Annotated[int, Field(strict=True, ge=0, le=9_007_199_254_740_991)]
+    status: Literal[
+        "DRAFT", "EXTRACTING", "CANCEL_REQUESTED", "CANDIDATE", "REVIEWED", "FAILED", "CANCELLED",
+    ]
+    item_count: Annotated[int, Field(strict=True, ge=1, le=256)]
+    items: tuple[CollectionItemSummary, ...] = Field(min_length=1, max_length=256)
+    work_phase: Literal["READY", "CALLING", "UNKNOWN", "ENDED"] | None
+    generation: StableIdentifier | None
+    current_source_id: StableIdentifier | None
+    frozen: CollectionPreparationFrozenView | None
+
+    @model_validator(mode="after")
+    def bounded(self):
+        return PreparationView.bounded(self)
+
+
+class CollectionCandidateView(ApiValue):
+    kind: Literal["INITIAL", "UPDATE", "MATERIALIZED", "CORRECTED", "UNAVAILABLE"]
+    candidate_hash: Sha256Hex
+    evidence_hash: Sha256Hex
+    validation: Literal["VALID", "INVALID", "UNRESOLVED"]
+    issues: tuple[Annotated[str, Field(max_length=512)], ...] = Field(max_length=128)
+    draft: UnifiedPlanDraft | None = None
+    mapping: DailyMapping | None = None
+    opening_account: OpeningAccountFacts | None = None
+    update: PlanUpdateExtractionOutput | None = None
+    review: PlanCandidateReview | None = None
+
+
+class CollectionAttemptView(CollectionPreparationAttempt):
+    source_revision: Revision
+
+
+class CollectionItemView(CollectionItemSummary):
+    source: PreparationSource
+    attempts: tuple[CollectionAttemptView, ...] = Field(max_length=3)
+    candidate: CollectionCandidateView | None
+
+    @field_validator("attempts", mode="before")
+    @classmethod
+    def parse_attempts(cls, values):
+        return tuple(_embedded(CollectionAttemptView, value) for value in values)
+
+
+class CollectionItemsPage(ApiValue):
+    preparation_id: StableIdentifier
+    revision: Revision
+    offset: Annotated[int, Field(strict=True, ge=0, le=255)]
+    limit: Annotated[int, Field(strict=True, ge=1, le=100)]
+    total: Annotated[int, Field(strict=True, ge=1, le=256)]
+    next_offset: Annotated[int, Field(strict=True, ge=0, le=255)] | None
+    items: tuple[CollectionItemView, ...] = Field(max_length=100)
+
+    @model_validator(mode="after")
+    def bounded(self):
+        return PreparationView.bounded(self)
+
+
+def project_collection_frozen(frozen):
+    return CollectionPreparationFrozenView(
+        preparation_id=frozen.preparation_id, manifest_hash=frozen.manifest_hash,
+        revision=frozen.revision, account=frozen.account, account_origin=frozen.account_origin,
+        reviewed_at=frozen.reviewed_at,
+        versions=tuple(CollectionVersionView(
+            source_id=item.source.source_id, source_revision=item.source_revision,
+            candidate_revision=item.extraction_candidate_revision,
+            version_id=row.version.version_id, plan_hash=row.version.plan_hash,
+            evidence_hash=row.version.evidence_hash, effective_trade_date=row.effective_trade_date,
+            available_at=row.version.available_at, account_context=row.version.account_context,
+        ) for item, row in zip(frozen.items, frozen.schedule.entries, strict=True)),
+    )
+
+
+def _item_summary(item):
+    candidate = item.candidate
+    return CollectionItemSummary(
+        source_id=item.source.source_id, source_revision=item.source_revision,
+        candidate_revision=item.candidate_revision, base_hash=item.base_hash, status=item.status,
+        candidate_hash=None if candidate is None else candidate.candidate_hash,
+        evidence_hash=None if candidate is None else candidate.evidence_hash,
+        validation=None if candidate is None else candidate.validation,
+        attempt_count=len(item.attempts), effective_trade_date=item.source.effective_trade_date,
+    )
+
+
+def project_collection(record):
+    claim = record.work_claim
+    return CollectionPreparationView(
+        preparation_id=record.preparation_id, revision=record.revision,
+        review_revision=record.review_revision, status=record.status,
+        item_count=len(record.items), items=tuple(_item_summary(item) for item in record.items),
+        work_phase=None if claim is None else claim.phase,
+        generation=None if claim is None else claim.generation,
+        current_source_id=None if claim is None else claim.source_id,
+        frozen=project_collection_frozen(frozen_preparation(record))
+        if record.status == "REVIEWED" else None,
+    )
+
+
+def _collection_candidate(item):
+    candidate = item.candidate
+    if candidate is None:
+        return None
+    values = dict(candidate_hash=candidate.candidate_hash, evidence_hash=candidate.evidence_hash,
+                  validation=candidate.validation, issues=candidate.issues)
+    try:
+        schema = json.loads(candidate.payload_json).get("schema_version")
+        if schema == "monitor-loop-extraction-v1":
+            value = LoopPlanExtractionResult.model_validate_json(candidate.payload_json)
+            return CollectionCandidateView(kind="INITIAL", draft=value.draft,
+                mapping=value.daily_mapping, opening_account=value.opening_account, **values)
+        if schema == "monitor-loop-update-extraction-v1":
+            value = PlanUpdateExtractionResult.model_validate_json(candidate.payload_json)
+            return CollectionCandidateView(kind="UPDATE", update=value.output, **values)
+        if schema == "monitor-loop-materialized-update-v1":
+            value = MaterializedUpdateCandidate.model_validate_json(candidate.payload_json)
+            return CollectionCandidateView(kind="MATERIALIZED", update=value.extraction.output,
+                                           review=value.review, **values)
+        value = PlanCandidateReview.model_validate_json(candidate.payload_json)
+        return CollectionCandidateView(kind="CORRECTED", review=value, **values)
+    except ValueError:
+        return CollectionCandidateView(kind="UNAVAILABLE", **{
+            **values, "validation": "INVALID", "issues": ("CANDIDATE_PAYLOAD_UNAVAILABLE",),
+        })
+
+
+def project_collection_items(record, *, offset, limit):
+    """Bound encoded pages without truncating any item's original text or evidence."""
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    items = []
+    result = CollectionItemsPage(preparation_id=record.preparation_id, revision=record.revision,
+        offset=offset, limit=limit, total=len(record.items), next_offset=None, items=())
+    for index in range(offset, min(len(record.items), offset + limit)):
+        item = record.items[index]
+        projected = CollectionItemView(**_item_summary(item).model_dump(), source=item.source,
+            attempts=item.attempts, candidate=_collection_candidate(item))
+        try:
+            result = result.model_copy(update={
+                "items": (*items, projected),
+                "next_offset": index + 1 if index + 1 < len(record.items) else None,
+            })
+        except ValueError:
+            if not items:
+                raise PreparationConflictError("PREPARATION_ITEM_PROJECTION_TOO_LARGE") from None
+            break
+        items.append(projected)
+    return result
+
+
+PreparationProgressView = PreparationView | CollectionPreparationView

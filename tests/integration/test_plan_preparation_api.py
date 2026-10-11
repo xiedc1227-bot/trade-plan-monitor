@@ -57,6 +57,290 @@ def forbidden_ai(*args):
     pytest.fail("Metadata operations must not call AI")
 
 
+def collection_body(*, count=2, text="Synthetic supplied source."):
+    return {
+        "input": {
+            "schema_version": "backtest-preparation-v2",
+            "preparation_id": "collection",
+            "sources": [{"source_id": f"source-{index}", "text": text} for index in range(count)],
+        }
+    }
+
+
+def test_collection_http_create_returns_bounded_summary_and_original_receipt(tmp_path):
+    from fastapi.testclient import TestClient
+
+    app, _ = api_app(tmp_path)
+    with TestClient(app, base_url=ORIGIN) as client:
+        body = collection_body()
+        created = client.post(BASE, json=body, headers={"Idempotency-Key": "collection-create"})
+        assert created.status_code == 201
+        value = created.json()
+        assert value["schemaVersion"] == "backtest-preparation-v2"
+        assert value["itemCount"] == 2
+        assert [item["sourceId"] for item in value["items"]] == ["source-0", "source-1"]
+        assert all("source" not in item and "candidate" not in item for item in value["items"])
+        assert client.get(BASE + "/collection").json() == value
+        assert (
+            client.post(BASE, json=body, headers={"Idempotency-Key": "collection-create"}).json()
+            == value
+        )
+
+
+def test_collection_pages_reorder_exactly_and_reject_stale_revision(tmp_path):
+    from fastapi.testclient import TestClient
+
+    app, _ = api_app(tmp_path)
+    with TestClient(app, base_url=ORIGIN) as client:
+        body = collection_body(count=3)
+        initial = client.post(BASE, json=body, headers={"Idempotency-Key": "create"}).json()
+        page = client.get(BASE + "/collection/items?expectedRevision=1&offset=1&limit=1")
+        assert page.status_code == 200
+        assert page.json()["revision"] == initial["revision"]
+        assert page.json()["items"][0]["source"]["source_id"] == "source-1"
+        assert page.json()["items"][0]["source"]["text"] == body["input"]["sources"][1]["text"]
+        assert page.json()["nextOffset"] == 2
+        mutation = {
+            "schemaVersion": "backtest-preparation-v2",
+            "expectedRevision": 1,
+            "sourceOrder": ["source-2", "source-0", "source-1"],
+        }
+        reordered = client.put(
+            BASE + "/collection/source", json=mutation, headers={"Idempotency-Key": "reorder"}
+        )
+        assert reordered.status_code == 200
+        assert [item["sourceId"] for item in reordered.json()["items"]] == mutation["sourceOrder"]
+        assert client.get(BASE + "/collection/items?expectedRevision=1").status_code == 409
+        assert (
+            client.put(
+                BASE + "/collection/source", json=mutation, headers={"Idempotency-Key": "reorder"}
+            ).json()
+            == reordered.json()
+        )
+        assert client.post(BASE, json=body, headers={"Idempotency-Key": "create"}).json() == initial
+        bad = mutation | {
+            "expectedRevision": reordered.json()["revision"],
+            "sourceOrder": ["source-0"],
+        }
+        assert client.put(
+            BASE + "/collection/source", json=bad, headers={"Idempotency-Key": "bad-order"}
+        ).status_code in {409, 422}
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "expectedRevision=1&expectedRevision=1",
+        "expectedRevision=1&unknown=yes",
+        "expectedRevision=true",
+        "expectedRevision=9007199254740992",
+        "expectedRevision=1&offset=-1",
+        "expectedRevision=1&offset=256",
+        "expectedRevision=1&limit=0",
+        "expectedRevision=1&limit=101",
+    ],
+)
+def test_collection_page_query_rejected_before_resource_acquisition(tmp_path, query):
+    from fastapi.testclient import TestClient
+
+    app, _ = api_app(tmp_path)
+    with TestClient(app, base_url=ORIGIN) as client:
+        assert client.get(BASE + "/collection/items?" + query).status_code == 422
+        assert app.state.backtest_lifecycle.snapshot.state.value == "NOT_INITIALIZED"
+        assert not any(tmp_path.iterdir())
+
+
+def test_collection_pages_adapt_to_byte_cap_without_omitting_sources(tmp_path):
+    from fastapi.testclient import TestClient
+
+    app, _ = api_app(tmp_path)
+    body = collection_body(count=24, text="Synthetic original source. " + "x" * 120_000)
+    with TestClient(app, base_url=ORIGIN) as client:
+        created = client.post(BASE, json=body, headers={"Idempotency-Key": "large"})
+        assert created.status_code == 201 and len(created.content) < 2 * 1024 * 1024
+        offset, seen = 0, []
+        while offset is not None:
+            page = client.get(
+                BASE + f"/collection/items?expectedRevision=1&offset={offset}&limit=100"
+            )
+            assert page.status_code == 200 and len(page.content) <= 2 * 1024 * 1024
+            values = page.json()
+            assert 0 < len(values["items"]) < 24
+            seen.extend(item["source"]["source_id"] for item in values["items"])
+            next_offset = values["nextOffset"]
+            assert next_offset is None or next_offset == offset + len(values["items"])
+            offset = next_offset
+        assert seen == [item["source_id"] for item in body["input"]["sources"]]
+
+
+@pytest.mark.parametrize("case", ["duplicate", "too-many", "empty", "partial-binding", "oversize"])
+def test_collection_invalid_input_is_rejected_before_resources(tmp_path, case):
+    from fastapi.testclient import TestClient
+
+    app, _ = api_app(tmp_path)
+    body, path, expected = collection_body(), BASE, 422
+    headers = {"Idempotency-Key": "invalid-collection"}
+    if case == "duplicate":
+        body["input"]["sources"][1]["source_id"] = "source-0"
+    elif case == "too-many":
+        body = collection_body(count=257)
+    elif case == "empty":
+        body = collection_body(count=0)
+    elif case == "partial-binding":
+        path = BASE + "/collection/extractions"
+        body = {
+            "schemaVersion": "backtest-preparation-v2",
+            "expectedRevision": 1,
+            "sourceId": "source-0",
+        }
+    else:
+        headers["Content-Length"], expected = str(32 * 1024 * 1024), 413
+    with TestClient(app, base_url=ORIGIN) as client:
+        assert client.post(path, json=body, headers=headers).status_code == expected
+        assert app.state.backtest_lifecycle.snapshot.state.value == "NOT_INITIALIZED"
+        assert not any(tmp_path.iterdir())
+
+
+def test_collection_item_correction_exact_binding_and_replay_while_busy(tmp_path):
+    from fastapi.testclient import TestClient
+    from tests.integration.test_plan_preparation_review import item_binding, ready_collection
+
+    from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
+    from trade_plan_monitor.backtest.preparation_review import CollectionItemCorrectionCommand
+
+    store, ready = ready_collection(tmp_path)
+    selected = ready.items[1]
+    update = PlanUpdateExtractionOutput.model_validate_json(
+        json.dumps(
+            json.loads(selected.candidate.payload_json)["extraction"]["output"],
+        )
+    )
+    correction = CollectionItemCorrectionCommand(
+        expected_revision=ready.revision,
+        binding=item_binding(selected),
+        confirmed=True,
+        evidence="Explicit synthetic correction of the successor.",
+        update=update,
+    )
+    body = {
+        "schemaVersion": "backtest-preparation-v2",
+        "kind": "ITEM_CORRECTION",
+        "review": correction.model_dump(mode="json"),
+    }
+    app, _ = api_app(tmp_path, preparation_path=store.database_path)
+    route = BASE + f"/{ready.preparation_id}/reviews"
+    with TestClient(app, base_url=ORIGIN) as client:
+        invalid = json.loads(json.dumps(body))
+        invalid["review"]["binding"]["candidate_hash"] = "f" * 64
+        assert (
+            client.post(route, json=invalid, headers={"Idempotency-Key": "correct"}).status_code
+            == 409
+        )
+        assert store.get(ready.preparation_id) == ready
+        response = client.post(route, json=body, headers={"Idempotency-Key": "correct"})
+        assert response.status_code == 200
+        changed = response.json()
+        assert changed["schemaVersion"] == "backtest-preparation-v2"
+        assert changed["items"][0]["candidateHash"] == ready.items[0].candidate.candidate_hash
+        assert changed["items"][1]["candidateRevision"] > selected.candidate_revision
+        jobs = BacktestJobRepository(tmp_path / "results.sqlite3")
+        jobs.submit(request("VERIFY"), "existing-global-job")
+        assert (
+            client.post(route, json=body, headers={"Idempotency-Key": "correct"}).json() == changed
+        )
+        fresh = body | {"review": body["review"] | {"expected_revision": changed["revision"]}}
+        assert (
+            client.post(route, json=fresh, headers={"Idempotency-Key": "another"}).status_code
+            == 409
+        )
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("sourceId", "absent"),
+        ("expectedSourceRevision", 2),
+        ("expectedBaseHash", "f" * 64),
+    ],
+)
+def test_collection_extraction_binding_conflict_precedes_ai_capture(tmp_path, field, value):
+    from fastapi.testclient import TestClient
+
+    ai = FakeAI()
+    app, _ = api_app(tmp_path, ai=ai)
+    with TestClient(app, base_url=ORIGIN) as client:
+        initial = client.post(
+            BASE, json=collection_body(), headers={"Idempotency-Key": "create"}
+        ).json()
+        body = {
+            "schemaVersion": "backtest-preparation-v2",
+            "expectedRevision": 1,
+            "sourceId": "source-0",
+            "expectedSourceRevision": 1,
+            "expectedBaseHash": None,
+        }
+        body[field] = value
+        response = client.post(
+            BASE + "/collection/extractions", json=body, headers={"Idempotency-Key": "bad-binding"}
+        )
+        assert response.status_code == 409
+        assert ai.calls == [] and ai.captures == 0
+        assert client.get(BASE + "/collection").json() == initial
+
+
+def test_collection_chain_review_freezes_light_view_and_receipt_survives_edit(tmp_path):
+    from fastapi.testclient import TestClient
+    from tests.integration.test_plan_preparation_review import (
+        collection_review_command,
+        ready_collection,
+    )
+
+    store, ready = ready_collection(tmp_path)
+    app, _ = api_app(tmp_path, preparation_path=store.database_path)
+    body = {
+        "schemaVersion": "backtest-preparation-v2",
+        "kind": "CHAIN_REVIEW",
+        "review": collection_review_command(ready).model_dump(mode="json"),
+    }
+    with TestClient(app, base_url=ORIGIN) as client:
+        response = client.post(
+            BASE + f"/{ready.preparation_id}/reviews",
+            json=body,
+            headers={"Idempotency-Key": "freeze-collection"},
+        )
+        assert response.status_code == 200
+        frozen = response.json()
+        assert frozen["schemaVersion"] == "prepared-loop-plan-v2"
+        assert frozen["revision"] == ready.revision + 1 and len(frozen["versions"]) == 2
+        assert frozen["account"]["cash"]["balance_fen"] == 1_000_000
+        assert all(
+            "source" not in value and "snapshot" not in value for value in frozen["versions"]
+        )
+        assert "frozen" not in frozen
+        mutation = {
+            "schemaVersion": "backtest-preparation-v2",
+            "expectedRevision": frozen["revision"],
+            "source": ready.items[1]
+            .source.model_copy(update={"text": "Synthetic edit."})
+            .model_dump(mode="json"),
+        }
+        edited = client.put(
+            BASE + f"/{ready.preparation_id}/source",
+            json=mutation,
+            headers={"Idempotency-Key": "edit-after-freeze"},
+        )
+        assert edited.status_code == 200
+        assert (
+            client.post(
+                BASE + f"/{ready.preparation_id}/reviews",
+                json=body,
+                headers={"Idempotency-Key": "freeze-collection"},
+            ).json()
+            == frozen
+        )
+
+
 @pytest.mark.parametrize("kind", ["RUN", "SYNC", "VERIFY"])
 def test_create_obeys_global_admission_without_a_preparation_record(tmp_path, kind):
     store = PreparationStore(tmp_path / "preparation.sqlite3")
@@ -946,25 +1230,33 @@ def test_collection_service_stops_after_unresolved_first_item_without_dispatchin
     store = PreparationStore(tmp_path / "preparation.sqlite3")
     jobs = BacktestJobRepository(tmp_path / "results.sqlite3")
     extractor, calls = loop_extractor()
-    command = PlanCollectionPreparationInput(preparation_id="chain", sources=(
-        PreparationSource(source_id="first", text=CASES[0]["source"]),
-        PreparationSource(source_id="future", text="Future source must not reach this call."),
-    ))
+    command = PlanCollectionPreparationInput(
+        preparation_id="chain",
+        sources=(
+            PreparationSource(source_id="first", text=CASES[0]["source"]),
+            PreparationSource(source_id="future", text="Future source must not reach this call."),
+        ),
+    )
 
     async def scenario():
         service = PreparationService(store, jobs, extractor)
         try:
             initial = await service.create(command, idempotency_key="create-chain")
-            submitted = await service.submit_extraction("chain", expected_revision=initial.revision,
-                                                        idempotency_key="extract-chain")
+            submitted = await service.submit_extraction(
+                "chain", expected_revision=initial.revision, idempotency_key="extract-chain"
+            )
             await service.wait_for_drain()
             ended = store.get("chain")
             assert len(calls) == 1
             assert ended.items[0].candidate.validation == "UNRESOLVED"
             assert ended.items[1].status == "WAITING" and not ended.items[1].attempts
             assert ended.work_claim is None and ended.review is None
-            assert await service.submit_extraction("chain", expected_revision=initial.revision,
-                                                   idempotency_key="extract-chain") == submitted
+            assert (
+                await service.submit_extraction(
+                    "chain", expected_revision=initial.revision, idempotency_key="extract-chain"
+                )
+                == submitted
+            )
             assert len(calls) == 1
             assert jobs.submit(request("VERIFY"), "after-collection").job_id
         finally:
@@ -984,14 +1276,22 @@ def test_collection_service_runs_successors_serially_under_one_reservation(tmp_p
     from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
 
     third, third_output = current_update("仅修改最大仓位为400股，其余规则保留。")
-    third = third.model_copy(update={"source_id": "third", "authored_at": at(21),
-                                    "available_at": at(21), "effective_trade_date": at(21).date()})
+    third = third.model_copy(
+        update={
+            "source_id": "third",
+            "authored_at": at(21),
+            "available_at": at(21),
+            "effective_trade_date": at(21).date(),
+        }
+    )
     raw = third_output.model_dump(mode="json")
     raw["draft"]["position"]["max_qty"] = 400
     raw["bindings"][0]["value"] = 400
     third_output = PlanUpdateExtractionOutput.model_validate_json(json.dumps(raw))
     store, jobs, prepared, base, second_output = collection_worker_setup(
-        tmp_path, future_source=third, start_successor=False,
+        tmp_path,
+        future_source=third,
+        start_successor=False,
     )
     calls, reservations = [], []
 
@@ -1005,15 +1305,19 @@ def test_collection_service_runs_successors_serially_under_one_reservation(tmp_p
             assert current.items[1].candidate.validation == "VALID"
             assert context.base_hash == current.items[1].candidate.candidate_hash
         return collection_update_result(
-            base, source, second_output if source.source_id == "second" else third_output,
-            identity, context,
+            base,
+            source,
+            second_output if source.source_id == "second" else third_output,
+            identity,
+            context,
         )
 
     async def scenario():
         service = PreparationService(store, jobs, PreparationExtractor(extract))
         try:
             submitted = await service.submit_extraction(
-                prepared.preparation_id, expected_revision=prepared.revision,
+                prepared.preparation_id,
+                expected_revision=prepared.revision,
                 idempotency_key="resume-chain",
             )
             await service.wait_for_drain()
@@ -1026,10 +1330,14 @@ def test_collection_service_runs_successors_serially_under_one_reservation(tmp_p
             assert ended.items[0] == prepared.items[0]
             payload = json.loads(ended.items[2].candidate.payload_json)
             assert payload["review"]["draft"]["position"]["max_qty"] == 400
-            assert await service.submit_extraction(
-                prepared.preparation_id, expected_revision=prepared.revision,
-                idempotency_key="resume-chain",
-            ) == submitted
+            assert (
+                await service.submit_extraction(
+                    prepared.preparation_id,
+                    expected_revision=prepared.revision,
+                    idempotency_key="resume-chain",
+                )
+                == submitted
+            )
             assert len(calls) == 2
             assert jobs.submit(request("VERIFY"), "after-chain").job_id
         finally:
@@ -1040,7 +1348,8 @@ def test_collection_service_runs_successors_serially_under_one_reservation(tmp_p
 
 @pytest.mark.parametrize("field", ["authored_at", "available_at", "effective_trade_date"])
 def test_collection_creation_rejects_contradictory_known_source_order_before_persistence(
-    tmp_path, field,
+    tmp_path,
+    field,
 ):
     from tests.unit.test_monitor_loop_schedule import at
 
@@ -1051,8 +1360,10 @@ def test_collection_creation_rejects_contradictory_known_source_order_before_per
     jobs = BacktestJobRepository(tmp_path / "jobs.sqlite3")
     later = at(21).date() if field == "effective_trade_date" else at(21)
     earlier = at(20).date() if field == "effective_trade_date" else at(20)
-    sources = tuple(PreparationSource(source_id=identity, text="Original source.", **{field: value})
-                    for identity, value in (("first", later), ("second", earlier)))
+    sources = tuple(
+        PreparationSource(source_id=identity, text="Original source.", **{field: value})
+        for identity, value in (("first", later), ("second", earlier))
+    )
     value = PlanCollectionPreparationInput(preparation_id="chronology", sources=sources)
 
     async def scenario():
@@ -1082,25 +1393,37 @@ def test_collection_source_edit_replays_exact_receipt_while_other_task_is_busy(t
             created = await service.create(collection_input(), idempotency_key="create-edit")
             order = tuple(reversed([i.source.source_id for i in created.items]))
             edited = await service.edit_collection(
-                created.preparation_id, expected_revision=created.revision,
-                idempotency_key="edit-order", source_order=order,
+                created.preparation_id,
+                expected_revision=created.revision,
+                idempotency_key="edit-order",
+                source_order=order,
             )
             assert tuple(i.source.source_id for i in edited.items) == order
             jobs.submit(request("VERIFY"), "busy")
-            assert await service.edit_collection(
-                created.preparation_id, expected_revision=created.revision,
-                idempotency_key="edit-order", source_order=order,
-            ) == edited
+            assert (
+                await service.edit_collection(
+                    created.preparation_id,
+                    expected_revision=created.revision,
+                    idempotency_key="edit-order",
+                    source_order=order,
+                )
+                == edited
+            )
             with pytest.raises(JobAdmissionError):
                 await service.edit_collection(
-                    created.preparation_id, expected_revision=edited.revision,
-                    idempotency_key="new-edit", source=edited.items[0].source.model_copy(
-                        update={"text": "Changed source while another task is busy."}),
+                    created.preparation_id,
+                    expected_revision=edited.revision,
+                    idempotency_key="new-edit",
+                    source=edited.items[0].source.model_copy(
+                        update={"text": "Changed source while another task is busy."}
+                    ),
                 )
             with pytest.raises(PreparationConflictError, match="IDEMPOTENCY_CONFLICT"):
                 await service.edit_collection(
-                    created.preparation_id, expected_revision=created.revision,
-                    idempotency_key="edit-order", source_order=tuple(reversed(order)),
+                    created.preparation_id,
+                    expected_revision=created.revision,
+                    idempotency_key="edit-order",
+                    source_order=tuple(reversed(order)),
                 )
             assert store.get(created.preparation_id) == edited
         finally:

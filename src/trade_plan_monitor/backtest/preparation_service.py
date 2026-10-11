@@ -26,6 +26,8 @@ from trade_plan_monitor.backtest.preparation_models import (
     SinglePlanPreparationInput,
 )
 from trade_plan_monitor.backtest.preparation_review import (
+    CollectionItemCorrectionCommand,
+    CollectionPreparationReviewCommand,
     FrozenPreparedPlan,
     PreparationReviewCommand,
     PreparationSemanticError,
@@ -130,16 +132,29 @@ class PreparationService:
     ) -> FrozenPreparedPlan:
         if self._closed:
             raise BacktestServiceUnavailable()
-        if not isinstance(command, PreparationReviewCommand):
-            raise TypeError("command must be PreparationReviewCommand")
-        command = PreparationReviewCommand.model_validate(command.model_dump(mode="python"))
+        if not isinstance(command, (PreparationReviewCommand, CollectionPreparationReviewCommand)):
+            raise TypeError("command must be a versioned preparation review")
+        model = (CollectionPreparationReviewCommand
+                 if isinstance(command, CollectionPreparationReviewCommand)
+                 else PreparationReviewCommand)
+        command = model.model_validate_json(command.model_dump_json())
+        return await self._metadata.run(self._review, preparation_id, command, idempotency_key)
+
+    async def correct_collection_item(self, preparation_id, *, command, idempotency_key):
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        command = CollectionItemCorrectionCommand.model_validate_json(command.model_dump_json())
         return await self._metadata.run(self._review, preparation_id, command, idempotency_key)
 
     def _review(self, identity, command, key):
         if self._closed:
             raise BacktestServiceUnavailable()
+        correction = isinstance(command, CollectionItemCorrectionCommand)
+        domain = ("collection-item-correction-v2" if correction else "collection-review-v2"
+                  if isinstance(command, CollectionPreparationReviewCommand)
+                  else "single-source-review-v1")
         intent = canonical_json({
-            "domain": "single-source-review-v1", "preparation_id": identity,
+            "domain": domain, "preparation_id": identity,
             "command_hash": sha256(canonical_json(command).encode()).hexdigest(),
         })
         admission_key = "prep-review-" + sha256(canonical_json({
@@ -147,7 +162,7 @@ class PreparationService:
         }).encode()).hexdigest()
         replay = self._store.replay_review(identity, command=command, idempotency_key=key)
         if replay is not None:
-            frozen = self._frozen(replay)
+            frozen = replay if correction else self._frozen(replay)
             # The durable receipt proves completion if a crash preceded gate release.
             reservation = self._jobs.get_run_submission_reservation(intent, admission_key)
             if reservation is not None:
@@ -157,6 +172,10 @@ class PreparationService:
         if not isinstance(reservation, BacktestRunSubmissionReservation):
             raise JobAdmissionError("BACKTEST_BUSY")
         try:
+            if correction:
+                return self._store.correct_collection_item(
+                    identity, command=command, idempotency_key=key,
+                )
             return self._frozen(self._store.review_and_freeze(
                 identity, command=command, idempotency_key=key,
             ))
@@ -170,19 +189,24 @@ class PreparationService:
         expected_revision: int,
         idempotency_key: str,
         extractor_factory: Callable[[], PreparationExtractor] | None = None,
+        item_binding=None,
+        collection_mode=None,
     ) -> PreparationRecord:
         if self._closed:
             raise BacktestServiceUnavailable()
         task = asyncio.create_task(self._submit(
             preparation_id, expected_revision, idempotency_key, extractor_factory,
+            item_binding, collection_mode,
         ))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return await asyncio.shield(task)
 
-    async def _submit(self, preparation_id, expected_revision, key, extractor_factory=None):
+    async def _submit(self, preparation_id, expected_revision, key, extractor_factory=None,
+                      item_binding=None, collection_mode=None):
         record, dispatch = await self._metadata.run(
             self._admit, preparation_id, expected_revision, key, extractor_factory,
+            item_binding, collection_mode,
         )
         if dispatch:
             self._preparation_id = preparation_id
@@ -190,7 +214,27 @@ class PreparationService:
             self._worker = asyncio.create_task(self._watch(record, self._token))
         return record
 
-    def _admit(self, preparation_id, expected_revision, key, extractor_factory=None):
+    @staticmethod
+    def _extraction_binding(record, binding, collection_mode, *, replay=False):
+        collection = isinstance(record, CollectionPreparationRecord)
+        if collection_mode is not None and collection != collection_mode:
+            raise PreparationConflictError("PREPARATION_SCHEMA_CONFLICT")
+        if binding is None:
+            return
+        if not collection:
+            raise PreparationConflictError("PREPARATION_SCHEMA_CONFLICT")
+        if replay:
+            claim = record.work_claim
+            expected = (claim.source_id, claim.source_revision, claim.base_hash)
+        else:
+            index, item = PreparationStore.next_collection_item(record)
+            expected = (item.source.source_id, item.source_revision,
+                        record.items[index - 1].candidate.candidate_hash if index else None)
+        if binding != expected:
+            raise PreparationConflictError("PREPARATION_ITEM_BINDING_CONFLICT")
+
+    def _admit(self, preparation_id, expected_revision, key, extractor_factory=None,
+               item_binding=None, collection_mode=None):
         if self._closed:
             raise BacktestServiceUnavailable()
         replay = self._store.replay_start_attempt(
@@ -199,8 +243,10 @@ class PreparationService:
             idempotency_key=key,
         )
         if replay is not None:
+            self._extraction_binding(replay, item_binding, collection_mode, replay=True)
             return replay, False
         record = self._store._require_revision(self._store.get(preparation_id), expected_revision)
+        self._extraction_binding(record, item_binding, collection_mode)
         collection = isinstance(record, CollectionPreparationRecord)
         if collection:
             index, item = self._store.next_collection_item(record)

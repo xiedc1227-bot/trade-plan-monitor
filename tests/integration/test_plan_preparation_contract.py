@@ -22,6 +22,7 @@ BASE = "/api/v1/backtest-preparations"
 OPERATIONS = {
     BASE: ("post", {"201"}),
     BASE + "/{preparation_id}": ("get", {"200"}),
+    BASE + "/{preparation_id}/items": ("get", {"200"}),
     BASE + "/{preparation_id}/source": ("put", {"200"}),
     BASE + "/{preparation_id}/extractions": ("post", {"202"}),
     BASE + "/{preparation_id}/cancellations": ("post", {"200", "202"}),
@@ -39,6 +40,14 @@ def resolved(document, schema):
     if "$ref" in schema:
         return document["components"]["schemas"][schema["$ref"].rsplit("/", 1)[1]]
     return schema
+
+
+def reference_names(schema):
+    if "$ref" in schema:
+        return {schema["$ref"].rsplit("/", 1)[1]}
+    return set().union(
+        *(reference_names(branch) for key in ("anyOf", "oneOf") for branch in schema.get(key, []))
+    )
 
 
 def test_generated_contracts_preserve_legacy_response_schema_names(document):
@@ -119,6 +128,7 @@ def test_generated_types_narrow_candidates_and_reject_invalid_commands(document,
 type Read = paths["/api/v1/backtest-preparations/{preparation_id}"]["get"];
 type Progress = Read["responses"][200]["content"]["application/json"];
 export function inspect(value: Progress): string {
+  if ("items" in value) return value.items.map(item => item.sourceId).join(",");
   const candidate = value.candidate;
   if (!candidate) return value.status;
   switch (candidate.kind) {
@@ -138,6 +148,10 @@ export const cash: components["schemas"]["KnownLoopCash"] = { kind: "KNOWN", bal
 export const unknownCash: components["schemas"]["UnknownLoopCash"] = { kind: "UNKNOWN" };
 export const create: components["schemas"]["PreparationCreateCommand"] = {
   input: { preparation_id: "p1", sources: [{ source_id: "s1", text: "original" }] }
+};
+export const collection: components["schemas"]["PreparationCreateCommand"] = {
+  input: { schema_version: "backtest-preparation-v2", preparation_id: "p2",
+           sources: [{ source_id: "s1", text: "first" }, { source_id: "s2", text: "later" }] }
 };
 """
     )
@@ -195,9 +209,14 @@ def test_preparation_operations_publish_actual_success_and_existing_errors(docum
         responses = operation["responses"]
         assert set(responses) == success | PUBLIC_ERROR_STATUSES
         for status in success:
-            reference = responses[status]["content"]["application/json"]["schema"]["$ref"]
-            expected = "PreparationFrozenView" if path.endswith("/reviews") else "PreparationView"
-            assert reference == "#/components/schemas/" + expected
+            names = reference_names(responses[status]["content"]["application/json"]["schema"])
+            if path.endswith("/items"):
+                assert len(names) == 1
+            else:
+                expected = (
+                    "PreparationFrozenView" if path.endswith("/reviews") else "PreparationView"
+                )
+                assert expected in names and len(names) >= 2
             assert responses[status]["headers"]["Cache-Control"]["schema"]["const"] == "no-store"
             if status == "202":
                 assert responses[status]["headers"]["Retry-After"]["schema"]["const"] == 2
@@ -208,7 +227,16 @@ def test_preparation_operations_publish_actual_success_and_existing_errors(docum
         retry = responses["503"]["headers"]["Retry-After"]["schema"]
         assert retry["minimum"] == retry["maximum"] == 1
         parameters = operation["parameters"]
-        assert not any(parameter["in"] == "query" for parameter in parameters)
+        queries = {
+            parameter["name"]: parameter for parameter in parameters if parameter["in"] == "query"
+        }
+        if path.endswith("/items"):
+            assert set(queries) == {"expectedRevision", "offset", "limit"}
+            assert queries["expectedRevision"]["required"] is True
+            assert queries["offset"]["schema"]["maximum"] == 255
+            assert queries["limit"]["schema"]["maximum"] == 100
+        else:
+            assert not queries
         if method != "get":
             key = next(
                 parameter for parameter in parameters if parameter["name"] == "Idempotency-Key"
@@ -219,7 +247,10 @@ def test_preparation_operations_publish_actual_success_and_existing_errors(docum
 def test_published_create_and_progress_are_single_source_and_bounded(document):
     operation = document["paths"][BASE]["post"]
     command = resolved(document, operation["requestBody"]["content"]["application/json"]["schema"])
-    original = resolved(document, command["properties"]["input"])
+    inputs = command["properties"]["input"]
+    names = reference_names(inputs)
+    assert names == {"SinglePlanPreparationInput", "PlanCollectionPreparationInput"}
+    original = document["components"]["schemas"]["SinglePlanPreparationInput"]
     sources = original["properties"]["sources"]
     assert sources["minItems"] == sources["maxItems"] == 1
     source = resolved(document, sources["items"])
@@ -236,6 +267,56 @@ def test_published_create_and_progress_are_single_source_and_bounded(document):
     recovery = document["components"]["schemas"]["PreparationRecoveryCommand"]
     assert recovery["properties"]["confirmedEnded"]["const"] is True
     assert set(recovery["required"]) == {"expectedRevision", "generation", "confirmedEnded"}
+
+
+def test_collection_contract_separates_bounded_summary_from_full_item_pages(document):
+    schemas = document["components"]["schemas"]
+    collection = schemas["PlanCollectionPreparationInput"]
+    assert collection["properties"]["sources"]["minItems"] == 1
+    assert collection["properties"]["sources"]["maxItems"] == 256
+    response = document["paths"][BASE + "/{preparation_id}"]["get"]["responses"]["200"]
+    names = reference_names(response["content"]["application/json"]["schema"])
+    (collection_name,) = names - {"PreparationView"}
+    root = schemas[collection_name]
+    assert root["properties"]["schemaVersion"]["const"] == "backtest-preparation-v2"
+    summary = resolved(document, root["properties"]["items"]["items"])
+    assert {"sourceId", "sourceRevision", "candidateRevision", "status", "baseHash"} <= set(
+        summary["properties"]
+    )
+    assert {"source", "candidate", "attempts"}.isdisjoint(summary["properties"])
+    page_response = document["paths"][BASE + "/{preparation_id}/items"]["get"]["responses"]["200"]
+    page = resolved(document, page_response["content"]["application/json"]["schema"])
+    assert page["properties"]["items"]["maxItems"] == 100
+    item = resolved(document, page["properties"]["items"]["items"])
+    assert {"source", "candidate"} <= set(item["properties"])
+    assert "nextOffset" in page["properties"]
+
+
+@pytest.mark.parametrize("field", ["expected_revision", "source_revision", "candidate_revision"])
+def test_collection_nested_review_revisions_reject_unsafe_integer(tmp_path, field):
+    from tests.integration.test_plan_preparation_review import (
+        collection_review_command,
+        ready_collection,
+    )
+
+    from trade_plan_monitor.web.preparation_schemas import CollectionReviewInput
+
+    _, record = ready_collection(tmp_path)
+    review = collection_review_command(record).model_dump(mode="json")
+    if field == "expected_revision":
+        review[field] = MAX_SAFE_INTEGER + 1
+    else:
+        review["items"][0][field] = MAX_SAFE_INTEGER + 1
+    with pytest.raises(ValidationError):
+        CollectionReviewInput.model_validate_json(
+            json.dumps(
+                {
+                    "schemaVersion": "backtest-preparation-v2",
+                    "kind": "CHAIN_REVIEW",
+                    "review": review,
+                }
+            )
+        )
 
 
 def test_candidate_schema_discriminates_extraction_frozen_and_unavailable():

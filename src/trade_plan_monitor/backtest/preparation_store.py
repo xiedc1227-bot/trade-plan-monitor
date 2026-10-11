@@ -910,7 +910,9 @@ class PreparationStore:
         """Read the immutable original review receipt after later edits or restarts."""
         preparation_id = _IDENTIFIER.validate_python(preparation_id)
         idempotency_key = _IDENTIFIER.validate_python(idempotency_key)
-        expected = _request_hash("REVIEW_AND_FREEZE", preparation_id, command)
+        operation = ("CORRECT_ITEM" if isinstance(command, CollectionItemCorrectionCommand)
+                     else "REVIEW_AND_FREEZE")
+        expected = _request_hash(operation, preparation_id, command)
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT request_hash, response_json FROM backtest_preparation_idempotency "
