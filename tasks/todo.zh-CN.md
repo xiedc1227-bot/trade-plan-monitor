@@ -59,6 +59,12 @@ RP-T18 已完成：一个连续结果展示有序版本日历、准确的原文�
 
 RP-T19 浏览器复现另需补充 `src/trade_plan_monitor/backtest/preparation_review.py`：原提取重载及已冻结 v1 证据校验须复用同一严格限定的不支持原文检查，否则有效的完整首份原文会在用作后继上下文时被误拒。既有存储字节及哈希域不变。
 
+RP-T19 另复现第三份完整原文因显式闭区间布尔证据失败。既有 `daily_review.py` 补充范围仅包含 v5 `include_low`／`include_high` 完整字面 `path=true`／`path=false` SOURCE 声明，并补充反例单元检查；仍拒绝任意布尔值推断。
+
+RP-T19 已实际复现整链审核 HTTP 409：原始原文前夜可用，期初账户在首个生效日 09:00。补充 `src/trade_plan_monitor/backtest/composition.py` 并延伸既有 `preparation_review.py` 范围，仅让 v2 审核／提交一致地取原文可用时间、首个生效日午夜及期初快照的最大值。开始时间必须仍在首个生效日；保留 v1 语义，并拒绝尚不可用的期初估值。这是恢复声明的 RP-A09 输入，不是平移原文日期。
+
+仅为该 RP-T19 开始时间修正，补充 `tests/integration/test_plan_preparation_review.py` 中独立的首日期初快照、跨日拒绝及不可用期初估值回归。
+
 ## RP-TASK-RULES. 执行边界
 
 2026-10-10 双语勘误：历史 ML-T35/ML-T36 的中文文件计数纠正为 5/6，与既有确切文件清单及英文记录一致。历史完成状态和验证证据不变。

@@ -780,6 +780,8 @@ class _ProductionBacktestService:
             source.available_at,
             datetime.combine(source.effective_trade_date, time.min, SHANGHAI),
         )
+        if scheduled:
+            start = max(start, prepared.account.snapshot_at)
         boundary = LoopEndBoundary.resolve(
             started_at=start,
             submitted_at=reservation.claimed_at,

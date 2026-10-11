@@ -515,6 +515,15 @@ def build_daily_review(draft, mapping, source_text):
                     raise MappingValidationError(
                         "source price does not match exact yuan amount", diagnostic_path + ".unit"
                     )
+            elif type(actual) is bool and draft.schema_version == 5:
+                literal = excerpt.strip(" \t\r\n。；;.")
+                if (not binding.path.endswith((".include_low", ".include_high"))
+                        or not re.fullmatch(
+                            re.escape(binding.path) + r"\s*=\s*" + str(actual).lower(), literal,
+                        )):
+                    raise ValueError(
+                        "range boundary requires an explicit scoped source declaration"
+                    )
             elif actual == [] and type(actual) is list and draft.schema_version == 5:
                 labels = {
                     "ordinary_rules": "普通规则", "risk_branches": "风险分支",

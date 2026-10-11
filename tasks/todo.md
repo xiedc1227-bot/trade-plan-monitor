@@ -59,6 +59,12 @@ Independent adversarial regressions for the same RP-T19 evidence fixes may also 
 
 RP-T19 browser reproduction additionally requires `src/trade_plan_monitor/backtest/preparation_review.py`: the original-extraction reload and frozen v1 evidence validators must use the same narrowly scoped unsupported-source check. Otherwise a valid complete first source is incorrectly rejected as its successor context. No stored bytes or hash domains change.
 
+RP-T19 also reproduces the third complete source failing on explicit inclusive-range Boolean evidence. The existing `daily_review.py` allowance covers only v5 `include_low`/`include_high` complete literal `path=true`/`path=false` SOURCE declarations, with adversarial unit checks; arbitrary Boolean inference remains rejected.
+
+RP-T19 now reproduces HTTP 409 during whole-chain review with the original prior-evening source availability and first-day 09:00 opening account. Add `src/trade_plan_monitor/backtest/composition.py` and extend the existing `preparation_review.py` allowance only so v2 review/submission use the same maximum of source availability, first effective midnight and opening snapshot. Require that start remains on the first effective day; preserve v1 semantics and reject unavailable opening marks. This restores the declared RP-A09 input rather than shifting source dates.
+
+Add `tests/integration/test_plan_preparation_review.py` only for independent first-day snapshot, later-day rejection and unavailable-opening-mark regressions for that RP-T19 start-time correction.
+
 ## RP-TASK-RULES. Execution boundary
 
 2026-10-10 parity erratum: the Chinese historical ML-T35/ML-T36 file counts are corrected to 5/6, matching their existing exact file lists and the English record. Historical completion and verification evidence are unchanged.

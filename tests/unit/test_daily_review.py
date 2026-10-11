@@ -159,3 +159,47 @@ def test_empty_unified_rules_require_exact_matching_source_declaration(source, a
     else:
         with pytest.raises(ValueError, match="empty rules"):
             build_daily_review(draft, mapping, source)
+
+
+@pytest.mark.parametrize(("path", "value", "source", "accepted"), [
+    ("levels.low_buy.include_low", True, "levels.low_buy.include_low=true", True),
+    ("levels.low_buy.include_high", False, "levels.low_buy.include_high=false。", True),
+    ("levels.low_buy.include_low", True, "levels.pressure.include_low=true", False),
+    ("levels.low_buy.include_low", True, "levels.low_buy.include_high=true", False),
+    ("levels.low_buy.include_low", True, "levels.low_buy.include_low=false", False),
+    ("levels.low_buy.include_low", False, "levels.low_buy.include_low=true", False),
+    ("levels.low_buy.include_low", True, "若放量 levels.low_buy.include_low=true", False),
+    ("levels.low_buy.include_low", True, "例如 levels.low_buy.include_low=true", False),
+    ("levels.low_buy.include_low", True, "levels.low_buy.include_low=True", False),
+    ("levels.low_buy.include_low", True, "levels.low_buy.INCLUDE_LOW=true", False),
+    ("levels.low_buy.include_low", True, "levels.low_buy.include_low=true?", False),
+    ("levels.low_buy.include_low", True, "levels.low_buy.include_low=true？", False),
+    ("levels.low_buy.include_low", True, "levels.low_buy.include_low=true or false", False),
+    ("risk_branches[0].involves_core", True, "risk_branches[0].involves_core=true", False),
+])
+def test_range_source_boolean_is_exact_and_cannot_authorize_other_policy(
+    path, value, source, accepted,
+):
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+    from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
+    payload = unified_payload()
+    if path.startswith("levels."):
+        _, zone, field = path.split(".")
+        payload["levels"][zone][field] = value
+    draft = UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(payload))
+    raw = reviewed_mapping(draft, source).model_dump(mode="json")
+    binding = next(item for item in raw["bindings"] if item["path"] == path)
+    supplement_id = binding["supplement_id"]
+    binding.update(origin="SOURCE", clause_ids=[raw["clauses"][0]["clause_id"]],
+                   supplement_id=None)
+    raw["supplements"] = [s for s in raw["supplements"]
+                          if s["supplement_id"] != supplement_id]
+    mapping = DailyMapping.model_validate(raw)
+    if accepted:
+        assert build_daily_review(draft, mapping, source).issues == ()
+    else:
+        with pytest.raises(ValueError, match="range boundary"):
+            build_daily_review(draft, mapping, source)

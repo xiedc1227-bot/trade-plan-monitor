@@ -1,6 +1,5 @@
 """Explicit human preparation review, exact provenance and one frozen research plan."""
 
-import re
 from datetime import datetime, time
 from hashlib import sha256
 from typing import Annotated, Literal
@@ -12,6 +11,7 @@ from trade_plan_monitor.ai.loop_plan_extraction import (
     LoopPlanExtractionOutput,
     LoopPlanExtractionResult,
     OpeningAccountFacts,
+    unsupported_loop_source_spans,
     validate_opening_evidence,
 )
 from trade_plan_monitor.ai.models import PlanExtractionStatus
@@ -59,11 +59,6 @@ from trade_plan_monitor.backtest.time import SHANGHAI
 from trade_plan_monitor.domain.daily_plan_models import Text
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
-
-_UNSUPPORTED = re.compile(
-    r"部分成交|挂单|基本面.*(?:退出|卖出)|partial fill|pending.order|fundamental.*exit",
-    re.I,
-)
 
 
 class PreparationSemanticError(ValueError):
@@ -148,7 +143,7 @@ class FrozenPreparedPlan(ResearchValue):
         if (
             review.issues
             or review.mapping != self.mapping
-            or any(_UNSUPPORTED.search(c.excerpt) for c in self.mapping.clauses)
+            or unsupported_loop_source_spans(self.source.text)
         ):
             raise ValueError("frozen mapping has unresolved or noncanonical evidence")
         digest = _evidence_digest(
@@ -243,7 +238,7 @@ def _original_extraction(record: PreparationRecord) -> LoopPlanExtractionResult:
             or candidate.evidence_hash != digest
         ):
             raise ValueError("original extraction binding changed")
-        if any(_UNSUPPORTED.search(c.excerpt) for c in result.daily_mapping.clauses):
+        if unsupported_loop_source_spans(record.source.text):
             raise PreparationSemanticError("UNSUPPORTED_SOURCE")
         return result
     except PreparationSemanticError:
@@ -616,11 +611,14 @@ class FrozenPreparedCollection(ResearchValue):
         if self.account_origin == "SOURCE" and (self.opening_evidence is None or
             self.account != _source_account(self.opening_evidence, first.source)):
             raise ValueError("initial account differs from original first-source evidence")
-        start = max(first.source.available_at, datetime.combine(
+        start = max(first.source.available_at, self.account.snapshot_at, datetime.combine(
             first.source.effective_trade_date, time.min, SHANGHAI,
         ))
-        if self.schedule.select(start) is None or self.account.snapshot_at > start or (
-            self.account.opening_mark is not None and self.account.opening_mark.available_at > start
+        if (
+            start.date() != first.source.effective_trade_date
+            or self.schedule.select(start) is None
+            or (self.account.opening_mark is not None
+                and self.account.opening_mark.available_at > start)
         ):
             raise ValueError("opening account or plan is unavailable at start")
         if sum(lot.quantity for lot in self.account.lots) > first.version.snapshot.position.max_qty:

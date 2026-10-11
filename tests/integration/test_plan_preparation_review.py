@@ -26,7 +26,7 @@ NOW = datetime(2026, 10, 8, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
 AVAILABLE = datetime(2026, 8, 20, 9, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
-def ready_collection(tmp_path, *, later_text=None):
+def ready_collection(tmp_path, *, later_text=None, first_available=None):
     from tests.integration.test_plan_preparation_worker import (
         collection_claim,
         collection_update_result,
@@ -34,15 +34,23 @@ def ready_collection(tmp_path, *, later_text=None):
     from tests.unit.test_monitor_loop_schedule import at
     from tests.unit.test_plan_update_bindings import current_update, prior_review
 
-    from trade_plan_monitor.ai.update_review import context_from_review, materialize_extraction
+    from trade_plan_monitor.ai.update_review import (
+        build_initial_review,
+        context_from_review,
+        materialize_extraction,
+    )
     from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
 
     base = prior_review()
     source, output = current_update() if later_text is None else current_update(later_text)
     first = PreparationSource(
         source_id="first", text="Synthetic human-reviewed supplements for this fixture.",
-        authored_at=at(19), available_at=at(19), effective_trade_date=at(19).date(),
+        authored_at=first_available or at(19), available_at=first_available or at(19),
+        effective_trade_date=at(19).date(),
     )
+    if first_available is not None:
+        draft = UnifiedPlanDraft.from_executable(research_plan())
+        base = build_initial_review(draft, reviewed_mapping(draft, first.text), first)
     store = PreparationStore(tmp_path / "collection-review.sqlite", clock=lambda: NOW)
     record = store.create(
         PlanCollectionPreparationInput(preparation_id="collection-review", sources=(first, source)),
@@ -967,6 +975,58 @@ def test_restart_replays_durable_review_after_crash_before_admission_release(tmp
             await restarted.stop()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(("case", "accepted"), [
+    ("first_day_snapshot", True), ("next_day_snapshot", False),
+    ("future_mark", False), ("mark_at_snapshot", True),
+])
+def test_collection_opening_clock_uses_first_day_snapshot_without_future_evidence(
+    tmp_path, case, accepted,
+):
+    from tests.unit.test_monitor_loop_schedule import at
+
+    from trade_plan_monitor.backtest.loop_input import LoopOpeningMark
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_collection(tmp_path, first_available=at(18, 18, 1))
+    snapshot = at(20) if case == "next_day_snapshot" else at(19)
+    mark = None
+    if case in {"future_mark", "mark_at_snapshot"}:
+        observed = snapshot + timedelta(minutes=1) if case == "future_mark" else snapshot
+        mark = LoopOpeningMark(price_fen=1000, price_at=observed, available_at=observed,
+                               evidence="Synthetic opening price observation.")
+    account = collection_review_command(ready).account.model_copy(update={
+        "snapshot_at": snapshot, "opening_mark": mark,
+    })
+    command = collection_review_command(ready, account=account)
+    if not accepted:
+        with pytest.raises(PreparationConflictError):
+            store.review_and_freeze(ready.preparation_id, command=command, idempotency_key="clock")
+        assert store.get(ready.preparation_id) == ready
+        return
+    frozen = frozen_preparation(store.review_and_freeze(
+        ready.preparation_id, command=command, idempotency_key="clock",
+    ))
+    assert frozen.account.snapshot_at == at(19)
+    assert frozen.items[0].source.available_at == at(18, 18, 1)
+    assert frozen.schedule.select(at(19)).version == frozen.items[0].version
+    assert frozen.account.opening_mark == mark
+
+
+def test_legacy_opening_clock_does_not_move_to_later_same_day_snapshot(tmp_path):
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_preparation(tmp_path)
+    account = review_command(ready).account.model_copy(update={
+        "snapshot_at": AVAILABLE + timedelta(minutes=1),
+    })
+    with pytest.raises(PreparationConflictError):
+        store.review_and_freeze(
+            "one", command=review_command(ready, account=account), idempotency_key="clock",
+        )
+    assert store.get("one") == ready
 
 
 @pytest.mark.parametrize("future", ["snapshot", "mark"])
