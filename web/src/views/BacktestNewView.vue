@@ -43,8 +43,9 @@ const preparation = usePlanPreparation({
   ...(props.preparationApi === undefined ? {} : { api: props.preparationApi }),
   ...(props.initialPreparationId === undefined ? {} : { initialPreparationId: props.initialPreparationId }),
 });
+const groupedEntry = ref(true);
 const mode = ref<"LEGACY" | "PREPARED">(props.initialPreparationId ? "PREPARED" : "LEGACY");
-watch(() => preparation.preparation.value?.preparationId, (identity) => {
+watch(() => preparation.preparationId.value, (identity) => {
   if (identity && route.path === "/backtests/new" && route.query.preparationId !== identity) {
     void router.replace({ path: route.path, query: { ...route.query, preparationId: identity } });
   }
@@ -76,6 +77,13 @@ function reviewPrepared(value: { evidence: string; choices: ReviewChoice[]; unkn
   if (!runLocked.value) void preparation.review(value.evidence, value.choices, value.unknownConfirmed);
 }
 
+const entrySources = computed(() => preparation.sources.value.length ? preparation.sources.value : [preparation.draft.value]);
+function movePreparedSource(index: number, delta: number): void {
+  if (runLocked.value) return;
+  const order = preparation.collection.value?.items.map(item => item.sourceId) ?? [], next = index + delta;
+  if (next < 0 || next >= order.length) return;
+  [order[index], order[next]] = [order[next]!, order[index]!]; void preparation.reorderSources(order);
+}
 function selectPlanVersion(versionId: string): void {
   const selected = plans.selectVersion(versionId);
   form.updateField("planVersionId", selected?.id ?? "");
@@ -111,18 +119,34 @@ onBeforeUnmount(() => {
       <p v-if="modeLocked" role="status">当前任务或操作未结束，完成前不能切换准备方式或开启其他任务。</p>
     </section>
 
-    <section v-if="mode === 'PREPARED'" class="backtest-new-view__preparation" aria-label="单份计划准备">
-      <PlanPreparationSourceForm :source="preparation.draft.value" :disabled="runLocked || !preparation.canSubmitSource.value"
+    <section v-if="mode === 'PREPARED'" class="backtest-new-view__preparation" aria-label="计划原文准备">
+      <div v-if="preparation.preparationId.value === null" class="entry-kind" aria-label="原文数量">
+        <button type="button" :disabled="modeLocked" :aria-pressed="groupedEntry" @click="groupedEntry = true">准备多份按日原文</button>
+        <button type="button" :disabled="modeLocked" :aria-pressed="!groupedEntry" @click="groupedEntry = false">只准备一份原文</button>
+      </div>
+      <PlanPreparationSourceForm v-if="preparation.preparationId.value === null && groupedEntry" :source="preparation.draft.value" :sources="entrySources"
+        :disabled="runLocked || !preparation.canSubmitSource.value" @update:sources="preparation.updateSources" @submit="preparation.submitSources" />
+      <p v-if="preparation.collection.value && preparation.sourceDirty.value" role="status">请先保存当前原文修改，再切换查看其他条目。</p>
+      <details v-if="preparation.collection.value"><summary>查看并调整已保存原文顺序</summary><ol><li v-for="(item, index) in preparation.collection.value.items" :key="item.sourceId">第 {{ index + 1 }} 份 · {{ item.effectiveTradeDate ?? '日期待补齐' }}
+        <button type="button" :disabled="runLocked || !preparation.canSubmitSource.value || preparation.sourceDirty.value || index === 0" @click="movePreparedSource(index, -1)">上移</button>
+        <button type="button" :disabled="runLocked || !preparation.canSubmitSource.value || preparation.sourceDirty.value || index === preparation.collection.value.itemCount - 1" @click="movePreparedSource(index, 1)">下移</button>
+      </li></ol><p>调整顺序将使受影响条目及后续候选失效，需要重新提取和复核。</p></details>
+      <PlanPreparationSourceForm v-if="preparation.preparationId.value !== null || !groupedEntry" :source="preparation.draft.value" :disabled="runLocked || !preparation.canSubmitSource.value"
         @update:source="preparation.updateSource" @submit="preparation.submitSource" />
-      <PlanPreparationProgress :preparation="preparation.preparation.value" :request-state="preparation.requestState.value"
+      <PlanPreparationProgress :preparation="preparation.preparation.value" :collection="preparation.collection.value" :request-state="preparation.requestState.value"
         :mutation-state="preparation.mutationState.value" :can-extract="!runLocked && preparation.canExtract.value"
         :can-cancel="!runLocked && preparation.canCancel.value" :can-recover="!runLocked && preparation.canRecover.value"
         :can-retry-mutation="!runLocked && preparation.canRetryMutation.value" :error-message="preparation.errorMessage.value"
         @extract="preparation.extract" @cancel="preparation.cancel" @recover="preparation.recover"
-        @retry-mutation="preparation.retryMutation" @refresh="preparation.refresh" />
+        @retry-mutation="preparation.retryMutation" @refresh="preparation.refresh" @select-source="preparation.selectSource" />
       <PlanPreparationReview v-if="preparation.preparation.value?.candidate" :preparation="preparation.preparation.value"
         :can-review="!runLocked && preparation.canReview.value" :source-dirty="preparation.sourceDirty.value"
         :reviewed="preparation.canUsePrepared.value" @review="reviewPrepared" />
+      <PlanPreparationReview v-if="preparation.collection.value" :collection="preparation.collection.value" :items="preparation.items.value"
+        :can-review="!runLocked && preparation.canReview.value" :can-correct="!runLocked && !preparation.isBusy.value"
+        :source-dirty="preparation.sourceDirty.value" :reviewed="preparation.canUsePrepared.value"
+        @review-collection="!runLocked && preparation.reviewCollection($event.evidence, $event.unknownConfirmed, $event.account)"
+        @correct-item="!runLocked && preparation.correctItem($event.sourceId, $event.evidence, $event.changes)" />
     </section>
 
     <BacktestRunForm

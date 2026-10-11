@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **15 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **16 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -40,6 +40,10 @@ RP-T14 allowance under RP05-A03: independent concrete contract review found that
 RP-T14 is complete and RP-C05 passes: independent review of both actual generated profiles approves only one new item-page path, 10 additive existing-operation changes and 36 new schemas; three old schemas gain unions and all other old surfaces remain exact. The required public create discriminator was reproduced in both profiles before repair. U11 records all four reviewed artifact hashes under standing authorization. All 54 snapshot/preparation/result contract checks and both generator checks pass. Windows sandbox stalled the local contract run; the approved isolated rerun passed. Full frontend type checking identifies the new event-union consumers reserved for RP-T18; no checks were suppressed. Ruff and diff checks pass. **14 of 20 repair tasks complete.** Next: RP-T15.
 
 RP-T15 is complete: the existing controller supports one ordered collection, revision-bound complete item pages, preserved local source edits, stable mutation receipts, explicit correction and exact whole-chain review. Independent tests reproduced mutable account data changing a same-key retry and a materialized candidate carrying the wrong source identity; both are fixed. All 128 preparation/controller/existing-review/new-view checks pass, including 82 controller/transport cases. T15 has no type errors; the two known event-union consumers remain RP-T18. Windows sandbox blocked Vitest temporary renames; the approved local rerun passed. Diff review passes. **15 of 20 repair tasks complete.** Next: RP-T16.
+
+RP-T16 allowance under RP05-A03: `web/src/api/preparationReview.ts` receives only a readonly-compatible inspection parameter type so Vue projections can reuse the existing inspection without cloning or changing validation.
+
+RP-T16 is complete: grouped entry preserves every source/date and file boundary, progress shows ordered item attempts, and review exposes complete materialized plans, inherited evidence, differences and comparison-only holdings. Initial supplements use explicit item correction; a corrected first item requires one explicitly entered opening account with unknown acknowledgement. Existing one-source entry remains selectable. Independent review reproduced uploaded files deleting a dated blank source; the fix preserves all authored rows. All 145 preparation/review/new-view checks pass, including 44 review-component cases. T16 has no type errors; known result-event consumers remain RP-T18. Independent diff review passes. **16 of 20 repair tasks complete.** Next: RP-T17.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -178,7 +182,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T16. Show grouped entry and daily review
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T15; **Acceptance:** RP-A01, RP-A02, RP-A04.
 - **Allowed files:** `web/src/components/backtests/PlanPreparationSourceForm.vue`; `web/src/components/backtests/PlanPreparationProgress.vue`; `web/src/components/backtests/PlanPreparationReview.vue`; `web/src/views/BacktestNewView.vue`; `web/tests/unit/PlanPreparationReview.spec.ts`.
 - **Result:** One entry action shows explicit source boundaries, per-item progress/diffs, daily applicability, opening account and unresolved issues before chain review; retain existing layout conventions.

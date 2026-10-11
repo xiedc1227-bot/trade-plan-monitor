@@ -82,6 +82,12 @@ RP-T14 is complete and RP-C05 passes: independent review of both actual generate
 
 RP-T15 is complete: the existing controller supports one ordered collection, revision-bound complete item pages, preserved local source edits, stable mutation receipts, explicit correction and exact whole-chain review. Independent tests reproduced mutable account data changing a same-key retry and a materialized candidate carrying the wrong source identity; both are fixed. All 128 preparation/controller/existing-review/new-view checks pass, including 82 controller/transport cases. T15 has no type errors; the two known event-union consumers remain RP-T18. Windows sandbox blocked Vitest temporary renames; the approved local rerun passed. Diff review passes. **15 of 20 repair tasks complete.** Next: RP-T16.
 
+## RP-V16. Grouped source and daily review interface
+
+RP-T16 allowance under RP05-A03: `web/src/api/preparationReview.ts` receives only a readonly-compatible inspection parameter type so Vue projections can reuse the existing inspection without cloning or changing validation.
+
+RP-T16 is complete: grouped entry preserves every source/date and file boundary, progress shows ordered item attempts, and review exposes complete materialized plans, inherited evidence, differences and comparison-only holdings. Initial supplements use explicit item correction; a corrected first item requires one explicitly entered opening account with unknown acknowledgement. Existing one-source entry remains selectable. Independent review reproduced uploaded files deleting a dated blank source; the fix preserves all authored rows. All 145 preparation/review/new-view checks pass, including 44 review-component cases. T16 has no type errors; known result-event consumers remain RP-T18. Independent diff review passes. **16 of 20 repair tasks complete.** Next: RP-T17.
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

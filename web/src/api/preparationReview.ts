@@ -1,3 +1,4 @@
+import type { DeepReadonly } from "vue";
 import type { CollectionItemView, CollectionItemReviewDeclaration, CollectionPreparationView, CollectionPreparationFrozenView, CollectionReviewInput, CollectionItemCorrectionInput, LoopAccountInput, CollectionVersionView, DailyMapping, PreparationFrozenView, PreparationReviewInput, PreparationSource, PreparationView } from "./generated-runtime-status";
 import { isCalendarDate, isShanghaiDateTime } from "./shanghaiTime";
 
@@ -221,7 +222,7 @@ export function validCollectionCandidate(value: unknown, source: string): boolea
     (value.review.changes === undefined || Array.isArray(value.review.changes) && value.review.changes.every(change => record(change) &&
       ["ADD", "MODIFY", "REVOKE", "RETAIN"].includes(String(change.action)) && text(change.target, 512)));
 }
-export function inspectCollectionReview(value: CollectionPreparationView, items: readonly CollectionItemView[]) {
+export function inspectCollectionReview(value: DeepReadonly<CollectionPreparationView>, items: readonly (CollectionItemView | DeepReadonly<CollectionItemView>)[]) {
   const blockers: string[] = [], unknownFacts: string[] = [];
   if (items.length !== value.itemCount || items.some((item, index) => {
     const summary = value.items[index];

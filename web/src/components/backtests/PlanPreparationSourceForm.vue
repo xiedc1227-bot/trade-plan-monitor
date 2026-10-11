@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
-import { MAX_PREPARATION_SOURCE_CHARACTERS, validPreparationSource, type PreparationSource } from "../../api/preparations";
+import { MAX_PREPARATION_SOURCE_CHARACTERS, validPreparationSource, validPreparationSources, type PreparationSource } from "../../api/preparations";
 import { normalizeShanghaiDateTime } from "../../api/shanghaiTime";
 
 const props = withDefaults(defineProps<{
   source: PreparationSource;
+  sources?: readonly PreparationSource[];
   disabled: boolean;
   errorMessage?: string | null;
   submitLabel?: string;
 }>(), { errorMessage: null, submitLabel: "保存原文" });
-const emit = defineEmits<{ "update:source": [source: PreparationSource]; submit: [] }>();
+const emit = defineEmits<{ "update:source": [source: PreparationSource]; "update:sources": [sources: PreparationSource[]]; submit: [] }>();
 const id = useId();
 const localError = ref<string | null>(null);
 const fileLoading = ref(false);
@@ -19,7 +20,7 @@ let fileGeneration = 0;
 let disposed = false;
 
 function invalidateFile(): void { fileGeneration += 1; fileLoading.value = false; }
-watch(() => [props.disabled, props.source], invalidateFile);
+watch(() => [props.disabled, props.source, props.sources], invalidateFile);
 onBeforeUnmount(() => { disposed = true; invalidateFile(); });
 
 function update(field: keyof PreparationSource, value: string | null): void {
@@ -35,7 +36,14 @@ function updateTime(field: "authored_at" | "available_at", event: Event): void {
 }
 function submit(): void {
   if (props.disabled || fileLoading.value) return;
-  if (!validPreparationSource(props.source)) {
+  const values = props.sources;
+  if (values && values.reduce((sum, source) => sum + new TextEncoder().encode(source.text).byteLength, 0) > 8 * 1024 * 1024) {
+    localError.value = "全部原文的 UTF-8 总量不能超过 8 MiB。"; return;
+  }
+  if (values !== undefined && (!validPreparationSources(values) || new TextEncoder().encode(JSON.stringify({ input: { schema_version: "backtest-preparation-v2", preparation_id: "pending", sources: values } })).byteLength > 4 * 1024 * 1024)) {
+    localError.value = "请保留 1–256 份独立原文，检查日期与重复来源；本次提交不能超过 4 MiB。"; return;
+  }
+  if (values === undefined && !validPreparationSource(props.source)) {
     localError.value = "请填写完整原文（最多 150000 字符），并检查日期；原文成文时间不能晚于可用时间。";
     return;
   }
@@ -48,6 +56,7 @@ async function readFile(event: Event): Promise<void> {
   input.value = "";
   invalidateFile(); localError.value = null;
   if (files.length === 0) return;
+  if (props.sources !== undefined) { await readBatch(files); return; }
   if (files.length !== 1 || !/\.(txt|md)$/i.test(files[0]!.name) || files[0]!.size > 600_000) {
     localError.value = "请选择一份 UTF-8 编码的 .txt 或 .md 文件，文件不能超过 600000 字节。";
     return;
@@ -71,12 +80,82 @@ async function readFile(event: Event): Promise<void> {
     if (generation === fileGeneration) fileLoading.value = false;
   }
 }
+function emitSources(values: PreparationSource[]): void {
+  if (props.disabled) return;
+  invalidateFile(); localError.value = null; emit("update:sources", values);
+}
+function updateItem(index: number, field: keyof PreparationSource, value: string | null): void {
+  emitSources((props.sources ?? []).map((source, position) => position === index ? { ...source, [field]: value } : { ...source }));
+}
+function updateItemTime(index: number, field: "authored_at" | "available_at", event: Event): void {
+  const value = inputValue(event), timestamp = value.length === 16 ? `${value}:00+08:00` : `${value}+08:00`;
+  updateItem(index, field, value ? normalizeShanghaiDateTime(timestamp) ?? timestamp : null);
+}
+function addSource(): void {
+  if ((props.sources?.length ?? 0) >= 256) return;
+  emitSources([...(props.sources ?? []), { source_id: globalThis.crypto.randomUUID(), text: "" }]);
+}
+function removeSource(index: number): void {
+  if ((props.sources?.length ?? 0) <= 1) return;
+  emitSources((props.sources ?? []).filter((_, position) => position !== index));
+}
+function moveSource(index: number, direction: number): void {
+  const values = [...(props.sources ?? [])], next = index + direction;
+  if (next < 0 || next >= values.length) return;
+  [values[index], values[next]] = [values[next]!, values[index]!]; emitSources(values);
+}
+async function readBatch(files: File[]): Promise<void> {
+  if (files.some(file => !/\.(txt|md)$/i.test(file.name) || file.size > 600_000)) { localError.value = "每份文件须为 UTF-8 的 .txt 或 .md，且不超过 600000 字节。"; return; }
+  const current = props.sources ?? [];
+  const first = current[0];
+  const existing = current.length === 1 && first?.text === "" &&
+    !first.authored_at && !first.available_at && !first.effective_trade_date ? [] : [...current];
+  if (existing.length + files.length > 256 || files.reduce((sum, file) => sum + file.size, 0) > 4 * 1024 * 1024) { localError.value = "最多 256 份原文，本次提交不能超过 4 MiB。"; return; }
+  const generation = fileGeneration; fileLoading.value = true;
+  try {
+    const added: PreparationSource[] = [];
+    for (const file of files) {
+      const bytes = await file.arrayBuffer();
+      if (disposed || props.disabled || generation !== fileGeneration) return;
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (!text.trim() || Array.from(text).length > MAX_PREPARATION_SOURCE_CHARACTERS) throw new Error("source size");
+      added.push({ source_id: globalThis.crypto.randomUUID(), text });
+    }
+    emitSources([...existing, ...added]);
+  } catch { if (!disposed && !props.disabled && generation === fileGeneration) localError.value = "文件读取失败，请检查编码和原文长度；已有原文已保留。"; }
+  finally { if (generation === fileGeneration) fileLoading.value = false; }
+}
 </script>
 
 <template>
   <form class="source-form" novalidate @submit.prevent="submit">
     <fieldset :disabled="disabled">
-      <legend>单份计划原文</legend>
+      <legend>{{ sources === undefined ? '单份计划原文' : '按日分组录入原文' }}</legend>
+      <template v-if="sources !== undefined">
+        <p class="hint">第一份是完整计划，后续每份是对应交易日的跟踪原文。按历史顺序录入，日期不明确时请留空，复核前必须补齐。</p>
+        <fieldset v-for="(item, index) in sources" :key="item.source_id" class="source-item" :data-testid="`source-item-${item.source_id}`">
+          <legend>第 {{ index + 1 }} 份 · {{ index === 0 ? '初始完整计划' : '后续跟踪' }}</legend>
+          <label :for="`${id}-${index}-text`">第 {{ index + 1 }} 份完整原文</label>
+          <textarea :id="`${id}-${index}-text`" :value="item.text" rows="7" required @input="updateItem(index, 'text', inputValue($event))" />
+          <p class="hint count">{{ Array.from(item.text).length }} / 150000 字符</p>
+          <div class="dates">
+            <div><label :for="`${id}-${index}-authored`">原文成文时间（上海时间）</label><input :id="`${id}-${index}-authored`" type="datetime-local" step="1" :value="item.authored_at?.slice(0, 19) ?? ''" @input="updateItemTime(index, 'authored_at', $event)" /></div>
+            <div><label :for="`${id}-${index}-available`">历史可用时间（上海时间）</label><input :id="`${id}-${index}-available`" type="datetime-local" step="1" :value="item.available_at?.slice(0, 19) ?? ''" @input="updateItemTime(index, 'available_at', $event)" /></div>
+            <div><label :for="`${id}-${index}-effective`">生效交易日</label><input :id="`${id}-${index}-effective`" type="date" :value="item.effective_trade_date ?? ''" @input="updateItem(index, 'effective_trade_date', inputValue($event) || null)" /></div>
+          </div>
+          <div class="source-actions">
+            <button type="button" :data-testid="`source-up-${item.source_id}`" :disabled="index === 0" @click="moveSource(index, -1)">上移第 {{ index + 1 }} 份</button>
+            <button type="button" :data-testid="`source-down-${item.source_id}`" :disabled="index === sources.length - 1" @click="moveSource(index, 1)">下移第 {{ index + 1 }} 份</button>
+            <button type="button" :data-testid="`source-remove-${item.source_id}`" :disabled="sources.length <= 1" @click="removeSource(index)">移除第 {{ index + 1 }} 份</button>
+          </div>
+        </fieldset>
+        <button type="button" data-testid="source-add" :disabled="sources.length >= 256" @click="addSource">增加一份跟踪原文</button>
+        <label :for="`${id}-files`">一次选择多份文本文件（每份保留独立边界）</label>
+        <input :id="`${id}-files`" type="file" multiple accept=".txt,.md,text/plain,text/markdown" :disabled="fileLoading" @change="readFile" />
+        <p v-if="fileLoading" role="status">正在读取全部原文…</p>
+        <button type="submit" :disabled="fileLoading">保存全部原文</button>
+      </template>
+      <template v-else>
       <p :id="`${id}-help`" class="hint">粘贴完整原文，或读取一份文本文件。修改原文后，请先保存，再重新提取和审核。</p>
       <label :for="`${id}-text`">完整原文</label>
       <textarea :id="`${id}-text`" :value="source.text" rows="10" required
@@ -99,6 +178,7 @@ async function readFile(event: Event): Promise<void> {
         </div>
       </details>
       <button type="submit" :disabled="fileLoading">{{ submitLabel }}</button>
+      </template>
     </fieldset>
     <p v-if="disabled" class="hint">当前操作完成前，原文暂不可修改。</p>
     <p v-if="error" :id="`${id}-error`" role="alert" class="error">{{ error }}</p>
@@ -106,6 +186,8 @@ async function readFile(event: Event): Promise<void> {
 </template>
 
 <style scoped>
+.source-item { border: var(--border-technical); padding: var(--space-4); margin-bottom: var(--space-3); }
+.source-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .source-form { min-width: 0; }
 fieldset { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: var(--space-3); }
 legend { font-size: 1.125rem; font-weight: 600; padding: 0; margin-bottom: var(--space-3); }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, ref, useId, watch, type DeepReadonly } from "vue";
+import type { CollectionPreparationView } from "../../api/generated-runtime-status";
 import type { PreparationView } from "../../api/preparations";
 import type { PreparationMutationState, usePlanPreparation } from "../../composables/usePlanPreparation";
 
@@ -9,6 +10,7 @@ type ProgressPreparation = Readonly<Pick<PreparationView,
 };
 const props = withDefaults(defineProps<{
   preparation: ProgressPreparation | null;
+  collection?: DeepReadonly<CollectionPreparationView> | null;
   requestState: ReturnType<typeof usePlanPreparation>["requestState"]["value"];
   mutationState: PreparationMutationState;
   canExtract: boolean;
@@ -16,20 +18,22 @@ const props = withDefaults(defineProps<{
   canRecover: boolean;
   canRetryMutation: boolean;
   errorMessage?: string | null;
-}>(), { errorMessage: null });
+}>(), { errorMessage: null, collection: null });
 const emit = defineEmits<{
+  selectSource: [id: string];
   extract: []; cancel: []; refresh: []; retryMutation: []; recover: [confirmedEnded: true];
 }>();
 const id = useId();
 const confirmedEnded = ref(false);
 const labels = { DRAFT: "待提取", EXTRACTING: "正在提取", CANCEL_REQUESTED: "等待提取结束",
   CANDIDATE: "待审核", REVIEWED: "已审核冻结", FAILED: "提取失败", CANCELLED: "已取消" } as const;
-const statusText = computed(() => props.preparation ? labels[props.preparation.status] :
+const active = computed(() => props.collection ?? props.preparation);
+const statusText = computed(() => active.value ? labels[active.value.status] :
   props.requestState === "LOADING" ? "正在读取准备状态…" : "尚未保存原文");
-const unfinished = computed(() => props.preparation !== null && (props.preparation.sourceEditPending ||
-  props.preparation.workPhase !== null && props.preparation.workPhase !== "ENDED"));
-const unknown = computed(() => props.preparation?.workPhase === "UNKNOWN");
-watch(() => [props.preparation?.generation, props.preparation?.revision, props.preparation?.workPhase, props.canRecover],
+const unfinished = computed(() => active.value !== null && (("sourceEditPending" in active.value && active.value.sourceEditPending) ||
+  active.value.workPhase !== null && active.value.workPhase !== "ENDED"));
+const unknown = computed(() => active.value?.workPhase === "UNKNOWN");
+watch(() => [active.value?.generation, active.value?.revision, active.value?.workPhase, props.canRecover],
   () => { confirmedEnded.value = false; });
 function recover(): void {
   if (!props.canRecover || !confirmedEnded.value) return;
@@ -41,6 +45,15 @@ function recover(): void {
   <section class="preparation-progress" :aria-labelledby="`${id}-title`">
     <h2 :id="`${id}-title`">准备进度</h2>
     <p role="status" aria-live="polite" class="status">{{ statusText }}</p>
+    <ol v-if="collection" class="collection-progress" aria-label="逐条准备进度">
+      <li v-for="(item, index) in collection.items" :key="item.sourceId">
+        <button type="button" :data-testid="`select-source-${item.sourceId}`" @click="emit('selectSource', item.sourceId)">第 {{ index + 1 }} 份 · {{ item.effectiveTradeDate ?? '交易日待补齐' }} · 已提取 {{ item.attemptCount }} / 3 次</button>
+        <span>{{ item.status === 'WAITING' ? '等待前项完成' : labels[item.status] }}</span>
+        <span v-if="item.validation && item.validation !== 'VALID'"> · 需修正后继续</span>
+        <span v-if="collection.currentSourceId === item.sourceId"> · 当前条目</span>
+      </li>
+    </ol>
+    <p v-if="collection && unfinished" class="notice">{{ unknown ? '此前工作尚未确认结束' : '正在逐条处理或等待取消排空' }}，完成前保持唯一任务占用。</p>
     <template v-if="preparation">
       <p class="hint">已提取 {{ preparation.attempts.length }} / 3 次</p>
       <p v-if="preparation.status === 'CANCEL_REQUESTED'" class="notice">已请求取消，正在等待提取结束。完成前不能开启新任务或修改原文。</p>
@@ -60,7 +73,7 @@ function recover(): void {
     <p v-else-if="mutationState === 'SUBMITTING'" role="status" class="hint">正在提交操作…</p>
     <p v-if="errorMessage" role="alert" class="error">{{ errorMessage }}</p>
     <div class="actions">
-      <button v-if="canExtract" type="button" data-testid="extract-preparation" @click="emit('extract')">{{ preparation?.status === 'FAILED' ? '重试提取' : '提取计划' }}</button>
+      <button v-if="canExtract" type="button" data-testid="extract-preparation" @click="emit('extract')">{{ collection ? '按顺序提取 / 继续' : preparation?.status === 'FAILED' ? '重试提取' : '提取计划' }}</button>
       <button v-if="canCancel" type="button" data-testid="cancel-preparation" @click="emit('cancel')">请求取消</button>
       <button v-if="canRetryMutation" type="button" data-testid="retry-preparation-mutation" @click="emit('retryMutation')">安全重试同一次操作</button>
       <button type="button" data-testid="refresh-preparation" :disabled="mutationState === 'SUBMITTING' || requestState === 'LOADING' || requestState === 'REFRESHING'" @click="emit('refresh')">刷新状态</button>
@@ -69,6 +82,8 @@ function recover(): void {
 </template>
 
 <style scoped>
+.collection-progress { display: grid; gap: var(--space-3); padding-inline-start: var(--space-4); }
+.collection-progress li { overflow-wrap: anywhere; }
 .preparation-progress { min-width: 0; }
 h2 { margin-top: 0; }
 .status { color: var(--color-signal-watch-amber); font-weight: 600; }
