@@ -1322,8 +1322,13 @@ class _ProductionBacktestService:
         )
 
     async def get_equity_series(self, *, run_id: str) -> BacktestEquitySeries:
+        return await self._run_sync(self._equity_series_view, run_id)
+
+    def _equity_series_view(self, run_id: str) -> BacktestEquitySeries:
         try:
-            series = await self._run_sync(self._results.get_equity_series, run_id)
+            series = self._result_store.get_loop_equity_series(run_id)
+            if series is None:
+                series = self._results.get_equity_series(run_id)
         except BacktestResultNotFoundError:
             raise ApiError(ApiErrorCode.NOT_FOUND) from None
         return BacktestEquitySeries.model_validate(
@@ -1799,6 +1804,8 @@ def _run_summary_view(
     }
     if summary.formula_versions.get("report") in {"backtest-report-v4", "backtest-report-v5"}:
         scheduled = summary.formula_versions.get("report") == "backtest-report-v5"
+        if scheduled:
+            payload["availability"]["equitySeries"] = payload["availability"]["decisionDetails"]
         model = BacktestScheduledRunSummaryView if scheduled else BacktestLoopRunSummaryView
         return model.model_validate(
             payload

@@ -140,6 +140,106 @@ def test_scheduled_result_has_exact_bounded_provenance_and_native_report_header(
     assert "report" not in summary and "versions" not in summary
 
 
+def test_scheduled_equity_route_returns_whole_run_opening_and_daily_closes(scheduled_published):
+    client, _, _, reference, report = scheduled_published
+    response = client.get(f"/api/v1/backtest-runs/{reference.run_id}/equity-series")
+    assert response.status_code == 200 and len(response.content) < 4 * 1024 * 1024
+    value = response.json()
+    assert value["availability"] == "AVAILABLE"
+    points = value["items"]
+    assert len(points) == 3  # This real published fixture covers August 19/20 only.
+    assert [point["markedAt"][:10] for point in points] == [
+        "2026-08-19", "2026-08-19", "2026-08-20",
+    ]
+    assert datetime.fromisoformat(points[0]["markedAt"]) == report.opening_valuation.at
+    assert datetime.fromisoformat(points[-1]["markedAt"]) == report.final_valuation.at
+    assert points[0]["cashFen"] == str(report.opening_valuation.cash_fen)
+    assert points[-1]["cashFen"] == str(report.final_valuation.cash_fen)
+    assert points[-1]["positionQuantity"] == report.final_valuation.position_quantity
+    assert points[-1]["equityFen"] == (
+        None if report.final_valuation.equity_fen is None
+        else str(report.final_valuation.equity_fen)
+    )
+    assert all(point["schemaVersion"] == "unified-research-equity-v1" for point in points)
+    assert all(point["runId"] == reference.run_id for point in points)
+    assert len({point["snapshotId"] for point in points}) == len(points)
+    assert [(point["markedAt"], point["snapshotId"]) for point in points] == sorted(
+        (point["markedAt"], point["snapshotId"]) for point in points
+    )
+    header = client.get(f"/api/v1/backtest-runs/{reference.run_id}").json()
+    assert header["availability"]["equitySeries"] == "AVAILABLE"
+
+
+def test_four_version_equity_projection_keeps_one_literal_account(tmp_path):
+    from tests.integration.test_monitor_loop_publication import scheduled_audit_case
+
+    from trade_plan_monitor.backtest.composition import _equity_view
+    from trade_plan_monitor.backtest.loop_publication import loop_equity_points
+
+    report, events = scheduled_audit_case(tmp_path)
+    records = loop_equity_points(report, iter(events))
+    points = [_equity_view(record)
+              for record in records]
+    assert [point["markedAt"][:10] for point in points] == [
+        "2026-08-20", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25",
+    ]
+    assert [point["cashFen"] for point in points] == [
+        "1000000", "899500", "899500", "1019000", "1019000",
+    ]
+    assert [point["positionQuantity"] for point in points] == [0, 100, 100, 0, 0]
+    assert points[-1]["equityFen"] == "1019000"
+    assert all(point["runId"] == report.run_id for point in points)
+    assert len({point["snapshotId"] for point in points}) == 5
+    assert points == [_equity_view(record)
+                      for record in loop_equity_points(report, iter(events))]
+    with pytest.raises(ValueError):
+        loop_equity_points(report, iter(events[:-1]))
+
+
+def test_scheduled_equity_projection_keeps_unknown_cash_and_equity_null(tmp_path):
+    from tests.integration.test_monitor_loop_plan_switch import continuity_input
+    from tests.integration.test_monitor_loop_publication import scheduled_audit_case
+
+    from trade_plan_monitor.backtest.composition import _equity_view
+    from trade_plan_monitor.backtest.loop_input import UnknownLoopCash
+    from trade_plan_monitor.backtest.loop_publication import loop_equity_points
+
+    value = continuity_input()
+    value = value.model_copy(update={"initial_account": value.initial_account.model_copy(
+        update={"cash": UnknownLoopCash(kind="UNKNOWN")},
+    )})
+    report, events = scheduled_audit_case(tmp_path, value=value)
+    points = [_equity_view(record)
+              for record in loop_equity_points(report, iter(events))]
+    assert len(points) == 5
+    assert all(point["cashFen"] is None and point["equityFen"] is None for point in points)
+    assert all(point["valuationValid"] is False and point["blockers"] for point in points)
+
+
+def test_scheduled_equity_expiry_does_not_invent_a_curve(scheduled_published, tmp_path):
+    import shutil
+    import sqlite3
+
+    from trade_plan_monitor.backtest.results import BacktestResultStore
+
+    _, _, original, reference, _ = scheduled_published
+    database = tmp_path / original.database_path.name
+    with sqlite3.connect(original.database_path) as source, sqlite3.connect(database) as target:
+        source.backup(target)
+    shutil.copytree(original.loop_input_store.root, tmp_path / original.loop_input_store.root.name)
+    copied = BacktestResultStore(database)
+    copied.set_pinned(reference.run_id, False)
+    while True:
+        pruned = copied.prune_result_rows(
+            as_of=datetime.now(SHANGHAI) + timedelta(days=91), remaining_budget=1000,
+        )
+        if not pruned.has_more:
+            break
+    series = copied.get_loop_equity_series(reference.run_id)
+    assert series.availability.value == "EXPIRED"
+    assert series.items == ()
+
+
 def test_scheduled_event_pages_bind_each_event_to_its_historical_authority(scheduled_published):
     client, _, _, reference, report = scheduled_published
     actual, cursor = [], None

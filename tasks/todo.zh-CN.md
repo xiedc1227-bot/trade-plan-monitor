@@ -49,6 +49,10 @@ RP-T17 按 RP05-A03 增补：仅增加 `web/src/views/BacktestNewView.vue`，把
 
 RP-T17 已完成，RP-C06 在控制器/组件层通过：一条已复核集合只生成一次 prepared-loop-plan-v2 请求，绑定唯一清单、期初账户、响应/结束设置及费用。即使外部复核选择变化，未知结果也继续使用不可变的原命令与 key。41 项回测表单/创建页面检查全部通过，其中回测表单 22 项；独立审查无新增阻塞。完整浏览器验收仍待 RP-T19，已知结果事件使用处仍由 RP-T18 适配。**20 项修复任务，完成 17 项。** 下一项：RP-T18。
 
+RP05-A03 下 RP-T18 的必要文件补充：增加 `web/src/api/monitorLoopValues.ts` 和 `web/src/api/backtests.ts` 以读取已批准的 v2 契约；增加 `src/trade_plan_monitor/backtest/loop_publication.py`、`src/trade_plan_monitor/backtest/results.py`、`src/trade_plan_monitor/backtest/composition.py` 和 `tests/integration/test_monitor_loop_result_api.py`，通过现有有界曲线契约投影完整、已验证的 v5 每日权益。保持 v4 行为、未知值、过期状态、2,000 点及 4 MiB 上限。`web/tests/unit/PlanPreparationReview.spec.ts` 仅修正审核测试辅助函数的参数类型。RP-T19 另补充 `tests/integration/test_monitor_loop_production_composition.py`，仅用于真实浏览器的伪供应商夹具。这些是 RP-A08／原 ML07–ML09 所需修复，不扩展产品范围。
+
+RP05-A03 下 RP-T19 的复现补充：真实完整原文提取暴露出显式空规则集合无法使用 SOURCE 证据、明确否定能力的整句被误报不支持两处缺口。仅补充 `src/trade_plan_monitor/ai/daily_review.py`、`src/trade_plan_monitor/ai/loop_plan_extraction.py` 和 `src/trade_plan_monitor/ai/update_review.py`，处理严格的字面证据，并在现有生产组合夹具中加入正反例。不会引入 AI 自行批准、推断空策略或不支持的交易能力。较晚的期初账户快照还必须先通过真实整链提交复现，再做受限的开始时间修正。
+
 ## RP-TASK-RULES. 执行边界
 
 2026-10-10 双语勘误：历史 ML-T35/ML-T36 的中文文件计数纠正为 5/6，与既有确切文件清单及英文记录一致。历史完成状态和验证证据不变。

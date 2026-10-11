@@ -6,6 +6,7 @@ import json
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from hashlib import sha256
+from zoneinfo import ZoneInfo
 
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.control import CancellationToken
@@ -37,6 +38,49 @@ from trade_plan_monitor.backtest.results import (
     _load_fill_row,
 )
 from trade_plan_monitor.domain.plan_hash import plan_sha256
+
+
+def loop_equity_points(report, events) -> tuple[BacktestDetailRecord, ...]:
+    """Project opening and last daily valuations only after the full audit verifies."""
+    if not isinstance(report, ScheduledMonitorLoopReport):
+        raise ValueError("continuous equity requires a scheduled report")
+    daily = {}
+
+    def checked():
+        for event in events:
+            if event.payload.kind == "VALUATION":
+                point = event.payload.valuation
+                daily[point.at.astimezone(ZoneInfo("Asia/Shanghai")).date()] = (
+                    event.event_id, point,
+                )
+                if len(daily) >= 2000:
+                    raise ValueError("daily equity must not exceed 2,000 points")
+            yield event
+
+    verify_loop_events(report, checked())
+    opening_id = sha256(f"monitor-loop-opening-equity-v1\0{report.run_id}".encode()).hexdigest()
+    values = [(opening_id, report.opening_valuation), *daily.values()]
+    records = []
+    for snapshot_id, point in sorted(values, key=lambda value: (value[1].at, value[0])):
+        payload = {
+            "schema_version": "unified-research-equity-v1",
+            "snapshot_id": snapshot_id,
+            "run_id": report.run_id,
+            "marked_at": point.at.isoformat(),
+            "position_quantity": point.position_quantity,
+            "valuation_valid": point.valuation_valid,
+            "blockers": list(point.blockers),
+        }
+        for field, value in (
+            ("mark_price_fen", point.price_fen), ("cash_fen", point.cash_fen),
+            ("market_value_fen", point.market_value_fen), ("equity_fen", point.equity_fen),
+        ):
+            payload[field] = None if value is None else str(value)
+        records.append(BacktestDetailRecord(
+            detail_id=snapshot_id, run_id=report.run_id, kind=BacktestDetailKind.DAILY_EQUITY,
+            event_at=point.at, payload=payload,
+        ))
+    return tuple(records)
 
 
 def report_summary(stored: StoredLoopInput, report: MonitorLoopReport) -> BacktestRunSummary:

@@ -23,6 +23,10 @@ RP-T09 完成：独立的版本链数据编解码冻结相关版本绑定及证�
 
 RP-T10 完成：独立的存储输入编解码复制完整审核链及不可变行情日，校验账户/日程/需求精确绑定，拒绝行情日顺序调换，并保留 v1 哈希。组装流程在既有预留下使用初始原文和相关需求并集。用户于 2026-10-11 批准 RP05-A02 及后续授权 RP05-A03，两处首项快照读取现已支持集合登记与重新读取。50 项输入存储/提交/旧格式检查全部通过，包含此前失败的两项登记与提交用例。Ruff 和独立差异审阅通过。**20 项修复任务，完成 10 项。** 下一项 RP-T11。
 
+RP05-A03 下 RP-T18 的必要文件补充：增加 `web/src/api/monitorLoopValues.ts` 和 `web/src/api/backtests.ts` 以读取已批准的 v2 契约；增加 `src/trade_plan_monitor/backtest/loop_publication.py`、`src/trade_plan_monitor/backtest/results.py`、`src/trade_plan_monitor/backtest/composition.py` 和 `tests/integration/test_monitor_loop_result_api.py`，通过现有有界曲线契约投影完整、已验证的 v5 每日权益。保持 v4 行为、未知值、过期状态、2,000 点及 4 MiB 上限。`web/tests/unit/PlanPreparationReview.spec.ts` 仅修正审核测试辅助函数的参数类型。RP-T19 另补充 `tests/integration/test_monitor_loop_production_composition.py`，仅用于真实浏览器的伪供应商夹具。这些是 RP-A08／原 ML07–ML09 所需修复，不扩展产品范围。
+
+RP05-A03 下 RP-T19 的复现补充：真实完整原文提取暴露出显式空规则集合无法使用 SOURCE 证据、明确否定能力的整句被误报不支持两处缺口。仅补充 `src/trade_plan_monitor/ai/daily_review.py`、`src/trade_plan_monitor/ai/loop_plan_extraction.py` 和 `src/trade_plan_monitor/ai/update_review.py`，处理严格的字面证据，并在现有生产组合夹具中加入正反例。不会引入 AI 自行批准、推断空策略或不支持的交易能力。较晚的期初账户快照还必须先通过真实整链提交复现，再做受限的开始时间修正。
+
 ## RP01. 基准与依据
 
 业务基准为提交 [e95de03](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/e95de03ec809517cc0a3b2484c6145675418960c/docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md) 中的 ML01–ML13，收窄前的 `0db69c9` 仍保留该流程。同一提交的实施方案提供 IP04–IP06 技术细节，受下述明确保留的后续限制约束。2026-10-10 用户要求针对已确认偏离制定受限修复方案，没有授权扩展产品范围。

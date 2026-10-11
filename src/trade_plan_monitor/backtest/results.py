@@ -886,6 +886,65 @@ class BacktestResultStore:
                 materialized=True,
             )
 
+    def get_loop_equity_series(self, run_id: str):
+        """Verify and project a complete v5 curve in one retention-consistent snapshot."""
+        from trade_plan_monitor.backtest.loop_publication import (
+            audit_record,
+            loop_equity_points,
+            verify_loop_publication,
+        )
+        from trade_plan_monitor.backtest.loop_report import decode_loop_event
+        from trade_plan_monitor.backtest.result_service import (
+            BacktestEquitySeries,
+            _require_bounded_items,
+            _require_bounded_page,
+        )
+
+        run_id = _validate_hash(run_id, "run_id")
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            row = connection.execute(
+                "SELECT run_id, plan_sha256, dataset_hash, status, completed_at, "
+                "summary_domain, summary_hash, summary_json, pinned FROM backtest_run "
+                "WHERE run_id = ? AND materialized = 1",
+                (run_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            summary = _load_summary_row(row, expected_run_id=run_id)
+            if summary.assumptions.get("reportSchemaVersion") != "backtest-report-v5":
+                return None
+            reference, _ = _publication_run_input(connection, run_id)
+            report = verify_loop_publication(
+                self, connection, summary, reference, materialized=True,
+            )
+            state = _artifact_state(connection, run_id, BacktestDetailKind.DECISION)
+            if state is None:
+                raise RuntimeError("scheduled result is missing availability")
+            if state.availability is not BacktestArtifactAvailability.AVAILABLE:
+                return BacktestEquitySeries(items=(), availability=state.availability)
+
+            def events():
+                cursor = connection.execute(
+                    "SELECT detail_id, run_id, kind, event_at, content_domain, "
+                    "content_hash, payload_json FROM backtest_detail "
+                    "WHERE run_id = ? AND kind = 'DECISION' ORDER BY event_at, detail_id",
+                    (run_id,),
+                )
+                while rows := cursor.fetchmany(1000):
+                    for row in rows:
+                        record = _load_detail_row(tuple(row), expected_run_id=run_id)
+                        event = decode_loop_event(canonical_json(record.payload))
+                        if record != audit_record(event):
+                            raise ValueError("loop audit row identity mismatch")
+                        yield event
+
+            items = loop_equity_points(report, events())
+            _require_bounded_items(items)
+            series = BacktestEquitySeries(items=items, availability=state.availability)
+            _require_bounded_page(series)
+            return series
+
     def record_verified_run(
         self,
         summary: BacktestRunSummary,
