@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **7 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **8 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -16,6 +16,8 @@ RP-T05 is complete: first-source extraction remains unchanged; follow-up extract
 RP-T06 is complete and RP-C02 passes: deterministic full replacement and explicit add/modify/revoke/retain operations produce complete candidates and reviewable differences. Inherited fields retain original source spans, binding paths and human supplement hashes through index changes; later holdings remain comparison context. Independent review reproduced and corrected negated/hypothetical replacement and unsupported account-dependency attribution. 67 focused merge/binding/fixture/schedule checks pass, including 31 merge/binding cases and bounded evidence persistence through store restart. Narrow literal scope/dependency guards leave other wording unresolved for explicit review. Ruff and diff review pass. **6 of 20 repair tasks complete.** Next: RP-T07; worker integration and whole-chain freezing remain pending.
 
 RP-T07 is complete. The user approved RP05-A01 on 2026-10-11; the two cancellation invariant regressions now pass. One owned operation processes items serially with source/base/generation fences, per-item retry budgets, explicit unknown recovery and exact edit receipts. Cancellation preserves validated predecessors and original attempt bindings, retains global exclusion until physical work ends, and rejects late completion. 169 preparation service/worker/store checks pass, including restart and real blocked fake-provider cancellation. Ruff, bilingual checks and independent diff review pass. **7 of 20 repair tasks complete.** Next: RP-T08.
+
+RP-T08 is complete and RP-C03 passes: explicit item correction validates original source/base evidence, preserves the prefix and invalidates descendants; a separate explicit chain review freezes complete versions, provenance, schedule and one opening account. The frozen chain review hash binds account and extraction identities independently of causal version identity. Independent tests reproduced account/candidate tampering and six trusted-candidate source mismatches; all are fixed. 194 review/store/worker/legacy checks pass, including 30 collection cases. Ruff and independent diff review pass. **8 of 20 repair tasks complete.** Next: RP-T09; public collection endpoints remain RP-T12.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -88,7 +90,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T08. Review and freeze the chain
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T07; **Acceptance:** RP-A02, RP-A03, RP-A06.
 - **Allowed files:** `src/trade_plan_monitor/backtest/preparation_review.py`; `src/trade_plan_monitor/backtest/preparation_models.py`; `src/trade_plan_monitor/backtest/preparation_store.py`; `tests/integration/test_plan_preparation_review.py`.
 - **Result:** Freeze accepted full snapshots, differences, schedule and one opening account against exact revisions. Validation alone grants no replay authority; preserve unsupported clauses and old frozen input.

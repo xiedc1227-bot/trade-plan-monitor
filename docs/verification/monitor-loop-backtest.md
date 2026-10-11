@@ -38,6 +38,14 @@ RP-T07 is complete. The user approved RP05-A01 on 2026-10-11; the two cancellati
 .venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_api.py tests/integration/test_plan_preparation_worker.py tests/integration/test_plan_preparation_store.py -q --basetemp=.pytest_cache/rpt07-reviewed-cancel
 ```
 
+## RP-V08. Explicit chain review and immutable freeze
+
+RP-T08 is complete and RP-C03 passes: explicit item correction validates original source/base evidence, preserves the prefix and invalidates descendants; a separate explicit chain review freezes complete versions, provenance, schedule and one opening account. The frozen chain review hash binds account and extraction identities independently of causal version identity. Independent tests reproduced account/candidate tampering and six trusted-candidate source mismatches; all are fixed. 194 review/store/worker/legacy checks pass, including 30 collection cases. Ruff and independent diff review pass. **8 of 20 repair tasks complete.** Next: RP-T09; public collection endpoints remain RP-T12.
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_review.py tests/integration/test_plan_preparation_store.py tests/integration/test_plan_preparation_worker.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt08-reviewed-final
+```
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

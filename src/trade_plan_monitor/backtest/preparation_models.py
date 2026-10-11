@@ -373,6 +373,7 @@ class CollectionPreparationReview(ResearchValue):
     items: tuple[PreparationItemReview, ...] = Field(min_length=1, max_length=MAX_SCHEDULED_ENTRIES)
     confirmed: Literal[True]
     reviewed_at: LoopTimestamp
+    manifest_json: str | None = None
 
     @field_validator("confirmed", mode="before")
     @classmethod

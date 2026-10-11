@@ -19,6 +19,7 @@ from trade_plan_monitor.backtest.preparation_models import (
     CollectionPreparationAttempt,
     CollectionPreparationCandidate,
     CollectionPreparationRecord,
+    CollectionPreparationReview,
     CollectionPreparationWorkClaim,
     PlanCollectionPreparationInput,
     PreparationAttempt,
@@ -33,8 +34,12 @@ from trade_plan_monitor.backtest.preparation_models import (
     decode_preparation_record_json,
 )
 from trade_plan_monitor.backtest.preparation_review import (
+    CollectionItemCorrectionCommand,
+    CollectionPreparationReviewCommand,
     PreparationReviewCommand,
     PreparationSemanticError,
+    correct_collection_candidate,
+    prepare_frozen_collection,
     prepare_frozen_plan,
 )
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
@@ -801,6 +806,8 @@ class PreparationStore:
         self, preparation_id: str, *, command: PreparationReviewCommand, idempotency_key: str,
     ) -> PreparationRecord:
         """One atomic human mutation; legacy review declarations do not freeze semantic input."""
+        if isinstance(command, CollectionPreparationReviewCommand):
+            return self._review_collection(preparation_id, command, idempotency_key)
         if not isinstance(command, PreparationReviewCommand):
             raise TypeError("command must be PreparationReviewCommand")
         command = PreparationReviewCommand.model_validate(command.model_dump(mode="python"))
@@ -828,6 +835,71 @@ class PreparationStore:
                 record, now, status="REVIEWED", candidate=candidate, review=declaration,
                 candidate_revision=record.candidate_revision + 1,
                 review_revision=record.review_revision + 1,
+            )
+
+        return self._operation(
+            "REVIEW_AND_FREEZE", preparation_id, command, idempotency_key, change,
+        )
+
+    def correct_collection_item(self, preparation_id, *, command, idempotency_key):
+        if not isinstance(command, CollectionItemCorrectionCommand):
+            raise TypeError("command must be CollectionItemCorrectionCommand")
+        command = CollectionItemCorrectionCommand.model_validate_json(command.model_dump_json())
+
+        def change(previous, now):
+            record = self._require_revision(previous, command.expected_revision)
+            if not isinstance(record, CollectionPreparationRecord):
+                raise PreparationConflictError("REVIEW_SEMANTIC_CONFLICT")
+            try:
+                index, reviewed = correct_collection_candidate(record, command)
+            except PreparationSemanticError as error:
+                raise PreparationConflictError(error.code) from None
+            except ValueError:
+                raise PreparationConflictError("REVIEW_SEMANTIC_CONFLICT") from None
+            item = record.items[index]
+            candidate = CollectionPreparationCandidate(
+                **reviewed.to_preparation_candidate().model_dump(),
+                source_revision=item.source_revision, source_hash=item.source.binding_hash,
+                base_hash=item.base_hash,
+            )
+            items = list(record.items[:index])
+            items.append(item.model_copy(update={
+                "candidate": candidate, "candidate_revision": item.candidate_revision + 1,
+                "status": "CANDIDATE",
+            }))
+            for offset, later in enumerate(record.items[index + 1:], start=index + 1):
+                items.append(PreparationItem(
+                    source=later.source, source_revision=later.source_revision,
+                    candidate_revision=later.candidate_revision + 1,
+                    status="DRAFT" if offset == index + 1 else "WAITING",
+                ))
+            return self._updated(
+                record, now, items=tuple(items), review=None,
+                review_revision=record.review_revision + 1,
+                status="CANDIDATE" if index == len(record.items) - 1 else "DRAFT",
+            )
+
+        return self._operation("CORRECT_ITEM", preparation_id, command, idempotency_key, change)
+
+    def _review_collection(self, preparation_id, command, idempotency_key):
+        command = CollectionPreparationReviewCommand.model_validate_json(command.model_dump_json())
+
+        def change(previous, now):
+            record = self._require_revision(previous, command.expected_revision)
+            if not isinstance(record, CollectionPreparationRecord):
+                raise PreparationConflictError("REVIEW_SEMANTIC_CONFLICT")
+            try:
+                manifest = prepare_frozen_collection(record, command, now)
+            except PreparationSemanticError as error:
+                raise PreparationConflictError(error.code) from None
+            except ValueError:
+                raise PreparationConflictError("REVIEW_SEMANTIC_CONFLICT") from None
+            return self._updated(
+                record, now, status="REVIEWED", review_revision=record.review_revision + 1,
+                review=CollectionPreparationReview(
+                    items=command.items, confirmed=command.confirmed, reviewed_at=now,
+                    manifest_json=canonical_json(manifest),
+                ),
             )
 
         return self._operation(

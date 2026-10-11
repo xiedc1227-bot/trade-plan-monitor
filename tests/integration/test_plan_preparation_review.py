@@ -5,7 +5,7 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 from threading import Event
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -24,6 +24,424 @@ from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 
 NOW = datetime(2026, 10, 8, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
 AVAILABLE = datetime(2026, 8, 20, 9, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+
+def ready_collection(tmp_path, *, later_text=None):
+    from tests.integration.test_plan_preparation_worker import (
+        collection_claim,
+        collection_update_result,
+    )
+    from tests.unit.test_monitor_loop_schedule import at
+    from tests.unit.test_plan_update_bindings import current_update, prior_review
+
+    from trade_plan_monitor.ai.update_review import context_from_review, materialize_extraction
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+
+    base = prior_review()
+    source, output = current_update() if later_text is None else current_update(later_text)
+    first = PreparationSource(
+        source_id="first", text="Synthetic human-reviewed supplements for this fixture.",
+        authored_at=at(19), available_at=at(19), effective_trade_date=at(19).date(),
+    )
+    store = PreparationStore(tmp_path / "collection-review.sqlite", clock=lambda: NOW)
+    record = store.create(
+        PlanCollectionPreparationInput(preparation_id="collection-review", sources=(first, source)),
+        idempotency_key="create",
+    )
+    for index in range(2):
+        claim = collection_claim(record, index, generation=str(uuid4()))
+        record = store.start_attempt(
+            record.preparation_id, expected_revision=record.revision,
+            idempotency_key=f"start-{index}", work_claim=claim,
+        )
+        record = store.begin_call(
+            record.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
+            expected_revision=record.revision,
+        )
+        candidate = base.to_preparation_candidate()
+        if index:
+            context = context_from_review(base, record.items[0].candidate.candidate_hash)
+            result = collection_update_result(base, source, output, UUID(claim.generation), context)
+            candidate = materialize_extraction(base, context.base_hash, source, result)
+            candidate = candidate.to_preparation_candidate()
+        record = store.finish_attempt(
+            record.preparation_id, attempt_id=claim.generation, expected_revision=record.revision,
+            idempotency_key=f"finish-{index}", worker_owner_id=claim.owner_id, candidate=candidate,
+        )
+    record = store.clear_work_claim(
+        record.preparation_id, generation=claim.generation, expected_revision=record.revision,
+    )
+    return store, record
+
+
+def item_binding(item):
+    from trade_plan_monitor.backtest.preparation_models import PreparationItemReview
+
+    return PreparationItemReview(
+        source_id=item.source.source_id, source_revision=item.source_revision,
+        candidate_revision=item.candidate_revision, candidate_hash=item.candidate.candidate_hash,
+        evidence_hash=item.candidate.evidence_hash, base_hash=item.base_hash,
+    )
+
+
+def collection_review_command(record, **changes):
+    from trade_plan_monitor.backtest.preparation_review import CollectionPreparationReviewCommand
+
+    values = dict(
+        expected_revision=record.revision, items=tuple(item_binding(item) for item in record.items),
+        confirmed=True, evidence="Explicit synthetic review of every source and opening account.",
+        account=LoopAccountInput(
+            snapshot_at=record.items[0].source.available_at, inventory_known=True,
+            cash=KnownLoopCash(balance_fen=1_000_000), lots=(), opening_mark=None,
+            evidence="Synthetic human opening cash 1000000 fen and zero shares.",
+        ),
+    )
+    return CollectionPreparationReviewCommand(**(values | changes))
+
+
+def test_collection_explicit_review_freezes_exact_complete_chain_and_account(tmp_path):
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+
+    store, ready = ready_collection(tmp_path)
+    command = collection_review_command(ready)
+    reviewed = store.review_and_freeze(
+        ready.preparation_id, command=command, idempotency_key="freeze-collection",
+    )
+    frozen = frozen_preparation(reviewed)
+    assert frozen.schema_version == "prepared-loop-plan-v2"
+    assert frozen.preparation_id == ready.preparation_id
+    assert frozen.revision == reviewed.revision == ready.revision + 1
+    assert frozen.account == command.account and frozen.account_origin == "HUMAN_REVIEW"
+    assert [item.source for item in frozen.items] == [item.source for item in ready.items]
+    assert [item.version.snapshot.position.max_qty for item in frozen.items] == [1000, 300]
+    assert all(item.version.review.confirmed is True for item in frozen.items)
+    assert len(frozen.schedule.entries) == 2
+    assert frozen.reviewed_at == NOW
+    assert type(frozen).model_validate_json(reviewed.review.manifest_json) == frozen
+    assert PreparationStore(store.database_path).get(ready.preparation_id) == reviewed
+    assert store.review_and_freeze(
+        ready.preparation_id, command=command, idempotency_key="freeze-collection",
+    ) == reviewed
+
+
+@pytest.mark.parametrize("confirmed", [False, 1, "true", None])
+def test_collection_confirmation_is_literal_for_freeze_and_item_correction(tmp_path, confirmed):
+    from trade_plan_monitor.backtest.preparation_review import CollectionItemCorrectionCommand
+
+    _, ready = ready_collection(tmp_path)
+    with pytest.raises(ValueError):
+        collection_review_command(ready, confirmed=confirmed)
+    with pytest.raises(ValueError):
+        CollectionItemCorrectionCommand(
+            expected_revision=ready.revision, binding=item_binding(ready.items[0]),
+            confirmed=confirmed, evidence="Synthetic explicit correction.",
+        )
+
+
+def test_collection_validation_alone_or_missing_opening_account_cannot_freeze(tmp_path):
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_collection(tmp_path)
+    with pytest.raises(ValueError):
+        frozen_preparation(ready)
+    with pytest.raises(PreparationConflictError):
+        store.review_and_freeze(
+            ready.preparation_id, command=collection_review_command(ready, account=None),
+            idempotency_key="missing-account",
+        )
+    assert store.get(ready.preparation_id) == ready
+
+
+@pytest.mark.parametrize("field", ["source_revision", "candidate_revision", "candidate_hash",
+                                  "evidence_hash", "base_hash"])
+def test_collection_freeze_rejects_stale_item_binding_without_consuming_key(tmp_path, field):
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_collection(tmp_path)
+    bindings = tuple(item_binding(item) for item in ready.items)
+    stale = bindings[1].model_copy(update={field: 99 if field.endswith("revision") else "f" * 64})
+    with pytest.raises(PreparationConflictError):
+        store.review_and_freeze(
+            ready.preparation_id,
+            command=collection_review_command(ready, items=(bindings[0], stale)),
+            idempotency_key="freeze-exact",
+        )
+    assert store.get(ready.preparation_id) == ready
+    assert store.review_and_freeze(
+        ready.preparation_id, command=collection_review_command(ready),
+        idempotency_key="freeze-exact",
+    ).status == "REVIEWED"
+
+
+@pytest.mark.parametrize("index", [0, 1], ids=["invalidate-successor", "keep-prefix"])
+def test_collection_item_correction_preserves_prefix_and_invalidates_descendants(tmp_path, index):
+    from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
+    from trade_plan_monitor.backtest.preparation_review import CollectionItemCorrectionCommand
+    from trade_plan_monitor.backtest.preparation_worker import preparation_candidate_review
+
+    store, ready = ready_collection(tmp_path)
+    selected = ready.items[index]
+    kwargs = {}
+    if index == 0:
+        raw = research_plan().model_dump(mode="json")
+        raw["position"]["max_qty"] = 900
+        draft = UnifiedPlanDraft.model_validate_json(json.dumps(raw))
+        kwargs = {"draft": draft, "mapping": reviewed_mapping(draft, source=selected.source.text)}
+    else:
+        kwargs["update"] = PlanUpdateExtractionOutput.model_validate_json(json.dumps(
+            json.loads(selected.candidate.payload_json)["extraction"]["output"]
+        ))
+    command = CollectionItemCorrectionCommand(
+        expected_revision=ready.revision, binding=item_binding(selected), confirmed=True,
+        evidence="Explicit synthetic item correction with all descendants reconsidered.", **kwargs,
+    )
+    corrected = store.correct_collection_item(
+        ready.preparation_id, command=command, idempotency_key="correct-item",
+    )
+    assert corrected.items[:index] == ready.items[:index]
+    item = corrected.items[index]
+    assert item.source == selected.source and item.source_revision == selected.source_revision
+    assert item.base_hash == selected.base_hash
+    assert item.candidate_revision > selected.candidate_revision
+    assert item.candidate.validation == "VALID"
+    assert json.loads(item.candidate.payload_json)["schema_version"] == (
+        "monitor-loop-candidate-evidence-v1"
+    )
+    assert corrected.review is None
+    assert preparation_candidate_review(corrected, index).draft.position.max_qty == (
+        900 if index == 0 else 300
+    )
+    for old, descendant in zip(ready.items[index + 1:], corrected.items[index + 1:], strict=True):
+        assert descendant.source == old.source and descendant.source_revision == old.source_revision
+        assert descendant.candidate is None and descendant.base_hash is None
+        assert descendant.attempts == () and descendant.candidate_revision > old.candidate_revision
+    assert store.correct_collection_item(
+        ready.preparation_id, command=command, idempotency_key="correct-item",
+    ) == corrected
+    restored = PreparationStore(store.database_path).get(ready.preparation_id)
+    assert restored == corrected
+    assert preparation_candidate_review(restored, index).evidence_hash == (
+        item.candidate.evidence_hash
+    )
+
+
+@pytest.mark.parametrize("field", ["account", "source", "candidate_hash", "version"])
+def test_collection_frozen_manifest_rejects_bound_content_tampering(tmp_path, field):
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+
+    store, ready = ready_collection(tmp_path)
+    frozen = frozen_preparation(store.review_and_freeze(
+        ready.preparation_id, command=collection_review_command(ready), idempotency_key="freeze",
+    ))
+    raw = frozen.model_dump(mode="json")
+    if field == "account":
+        raw["account"]["cash"]["balance_fen"] += 1
+    elif field == "source":
+        raw["items"][1]["source"]["text"] += " Tampered."
+    elif field == "version":
+        raw["items"][1]["version"]["snapshot"]["position"]["max_qty"] = 900
+    else:
+        raw["items"][1]["extraction_candidate_hash"] = "f" * 64
+    with pytest.raises(ValueError):
+        type(frozen).model_validate_json(json.dumps(raw))
+
+
+def test_collection_edit_invalidates_freeze_but_keeps_original_review_receipt(tmp_path):
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+
+    store, ready = ready_collection(tmp_path)
+    command = collection_review_command(ready)
+    reviewed = store.review_and_freeze(
+        ready.preparation_id, command=command, idempotency_key="freeze",
+    )
+    frozen = frozen_preparation(reviewed)
+    edited = store.edit_collection(
+        ready.preparation_id, expected_revision=reviewed.revision, idempotency_key="edit-future",
+        source=ready.items[1].source.model_copy(update={"text": "Synthetic revised later plan."}),
+    )
+    assert edited.items[0] == reviewed.items[0]
+    assert edited.review is None and edited.items[1].candidate is None
+    with pytest.raises(ValueError):
+        frozen_preparation(edited)
+    replayed = store.review_and_freeze(
+        ready.preparation_id, command=command, idempotency_key="freeze",
+    )
+    assert replayed == reviewed
+    assert frozen_preparation(replayed).manifest_hash == frozen.manifest_hash
+    assert store.get(ready.preparation_id) == edited
+
+
+def test_collection_review_time_does_not_change_earlier_causal_authority(tmp_path):
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+
+    (tmp_path / "first").mkdir()
+    (tmp_path / "second").mkdir()
+    store, ready = ready_collection(tmp_path / "first")
+    reviewed = store.review_and_freeze(
+        ready.preparation_id, command=collection_review_command(ready),
+        idempotency_key="review-first",
+    )
+    first = frozen_preparation(reviewed)
+    later_store, later_ready = ready_collection(
+        tmp_path / "second", later_text="调整最大仓位为300股，其余规则保留。",
+    )
+    later_store._clock = lambda: NOW + timedelta(hours=1)
+    rereviewed = later_store.review_and_freeze(
+        later_ready.preparation_id, command=collection_review_command(later_ready),
+        idempotency_key="review-later",
+    )
+    second = frozen_preparation(rereviewed)
+    at = ready.items[0].source.available_at
+    assert first.reviewed_at != second.reviewed_at
+    assert first.schedule.select(at).authority_id == second.schedule.select(at).authority_id
+    assert first.items[0].version.version_id == second.items[0].version.version_id
+    assert first.items[1].source.binding_hash != second.items[1].source.binding_hash
+
+
+@pytest.mark.parametrize("field", [
+    "source_revision", "candidate_hash", "evidence_hash", "base_hash",
+])
+def test_collection_correction_rejects_stale_exact_binding(tmp_path, field):
+    from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
+    from trade_plan_monitor.backtest.preparation_review import CollectionItemCorrectionCommand
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    store, ready = ready_collection(tmp_path)
+    item = ready.items[1]
+    update = PlanUpdateExtractionOutput.model_validate_json(json.dumps(
+        json.loads(item.candidate.payload_json)["extraction"]["output"]
+    ))
+    command = CollectionItemCorrectionCommand(
+        expected_revision=ready.revision, binding=item_binding(item), confirmed=True,
+        evidence="Explicit synthetic corrected item.", update=update,
+    )
+    stale = command.model_copy(update={"binding": command.binding.model_copy(update={
+        field: 99 if field.endswith("revision") else "f" * 64,
+    })})
+    with pytest.raises(PreparationConflictError):
+        store.correct_collection_item(
+            ready.preparation_id, command=stale, idempotency_key="correct",
+        )
+    assert store.get(ready.preparation_id) == ready
+    assert store.correct_collection_item(
+        ready.preparation_id, command=command, idempotency_key="correct",
+    ).items[1].candidate.validation == "VALID"
+
+
+@pytest.mark.parametrize("index", [0, 1], ids=["first", "successor"])
+@pytest.mark.parametrize("field", ["source_id", "source_hash", "available_at"])
+def test_collection_correction_rejects_wrong_source_inside_trusted_review(tmp_path, index, field):
+    from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
+    from trade_plan_monitor.backtest.preparation_models import CollectionPreparationCandidate
+    from trade_plan_monitor.backtest.preparation_review import CollectionItemCorrectionCommand
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+    from trade_plan_monitor.backtest.preparation_worker import preparation_candidate_review
+
+    store, ready = ready_collection(tmp_path)
+    item = ready.items[index]
+    review = preparation_candidate_review(ready, index)
+    changes = {
+        "source_id": "forged-other-source", "source_hash": "f" * 64,
+        "available_at": review.available_at + timedelta(minutes=1),
+    }
+    wrong = review.model_copy(update={field: changes[field]})
+    candidate = CollectionPreparationCandidate(
+        **wrong.to_preparation_candidate().model_dump(), source_revision=item.source_revision,
+        source_hash=item.source.binding_hash, base_hash=item.base_hash,
+    )
+    items = list(ready.items)
+    items[index] = item.model_copy(update={"candidate": candidate})
+    if index == 0:
+        # Keep the outer record's chain internally consistent so rejection must inspect
+        # the selected review's exact original source, rather than only its checksum.
+        later = items[1]
+        items[1] = later.model_copy(update={
+            "base_hash": candidate.candidate_hash,
+            "candidate": later.candidate.model_copy(update={"base_hash": candidate.candidate_hash}),
+            "attempts": tuple(attempt.model_copy(update={"base_hash": candidate.candidate_hash})
+                              for attempt in later.attempts),
+        })
+    forged = store._operation(
+        "SYNTHETIC_BAD_REVIEW", ready.preparation_id, {}, "seed-bad-review",
+        lambda record, now: record.model_copy(update={
+            "items": tuple(items), "revision": record.revision + 1, "updated_at": now,
+        }),
+    )
+    kwargs = {"draft": review.draft, "mapping": reviewed_mapping(
+        review.draft, source=item.source.text,
+    )} if index == 0 else {"update": PlanUpdateExtractionOutput.model_validate_json(json.dumps(
+        json.loads(item.candidate.payload_json)["extraction"]["output"],
+    ))}
+    command = CollectionItemCorrectionCommand(
+        expected_revision=forged.revision, binding=item_binding(forged.items[index]),
+        confirmed=True, evidence="Explicit correction cannot repair original-source forgery.",
+        **kwargs,
+    )
+    with pytest.raises(PreparationConflictError):
+        store.correct_collection_item(
+            forged.preparation_id, command=command, idempotency_key="must-reject",
+        )
+    assert store.get(forged.preparation_id) == forged
+
+
+def test_collection_first_raw_extraction_requires_explicit_correction_before_continuing(tmp_path):
+    from tests.integration.test_plan_preparation_worker import collection_claim
+
+    from trade_plan_monitor.ai.loop_plan_extraction import LoopPlanExtractionResult
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+    from trade_plan_monitor.backtest.preparation_review import CollectionItemCorrectionCommand
+    from trade_plan_monitor.backtest.preparation_worker import preparation_candidate_review
+
+    _, original = ready_preparation(tmp_path)
+    proposal = review_command(original)
+    next_source = original.source.model_copy(update={
+        "source_id": "next", "text": "Synthetic future source requires separate extraction.",
+        "authored_at": AVAILABLE + timedelta(days=1),
+        "available_at": AVAILABLE + timedelta(days=1),
+        "effective_trade_date": (AVAILABLE + timedelta(days=1)).date(),
+    })
+    store = PreparationStore(tmp_path / "first-correction.sqlite", clock=lambda: NOW)
+    record = store.create(
+        PlanCollectionPreparationInput(
+            preparation_id="raw-first", sources=(original.source, next_source),
+        ), idempotency_key="create",
+    )
+    claim = collection_claim(record, 0, generation=str(uuid4()))
+    record = store.start_attempt(
+        record.preparation_id, expected_revision=record.revision,
+        idempotency_key="start", work_claim=claim,
+    )
+    record = store.begin_call(
+        record.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
+        expected_revision=record.revision,
+    )
+    raw = LoopPlanExtractionResult.model_validate_json(original.candidate.payload_json)
+    raw = raw.model_copy(update={"request_id": UUID(claim.generation)})
+    ready = store.finish_attempt(
+        record.preparation_id, attempt_id=claim.generation, expected_revision=record.revision,
+        idempotency_key="finish", worker_owner_id=claim.owner_id,
+        candidate=raw.to_preparation_candidate(),
+    )
+    ready = store.clear_work_claim(
+        record.preparation_id, generation=claim.generation, expected_revision=ready.revision,
+    )
+    with pytest.raises(ValueError):
+        preparation_candidate_review(ready, 0)
+    command = CollectionItemCorrectionCommand(
+        expected_revision=ready.revision, binding=item_binding(ready.items[0]), confirmed=True,
+        evidence="Explicit synthetic source correction; no automatic activation.",
+        draft=proposal.draft, mapping=proposal.mapping,
+    )
+    corrected = store.correct_collection_item(
+        ready.preparation_id, command=command, idempotency_key="correct-first",
+    )
+    review = preparation_candidate_review(corrected, 0)
+    assert review.draft == proposal.draft and review.issues == ()
+    assert corrected.items[0].attempts == ready.items[0].attempts
+    assert corrected.items[1].status == "DRAFT"
+    assert corrected.items[1].candidate is None and not corrected.items[1].attempts
+    assert corrected.review is None
 
 
 def ready_preparation(tmp_path, *, source_text=None, opening_snapshot=False, metadata=None):
