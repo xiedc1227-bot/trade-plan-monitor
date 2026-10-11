@@ -42,18 +42,28 @@ def test_public_run_commands_and_results_preserve_explicit_legacy_variants(contr
     _, document = contract
     operation = document["paths"][RUN]["post"]
     command = operation["requestBody"]["content"]["application/json"]["schema"]
-    assert reference_names(command) == {"BacktestRunCommand", "PreparedBacktestRunCommand"}
+    assert reference_names(command) == {
+        "BacktestRunCommand",
+        "PreparedBacktestRunCommand",
+        "ScheduledPreparedBacktestRunCommand",
+    }
     for method in ("get", "patch"):
         result = document["paths"][RUN + "/{run_id}"][method]["responses"]["200"]
         assert reference_names(result["content"]["application/json"]["schema"]) == {
             "BacktestRunView",
             "BacktestLoopRunView",
+            "BacktestScheduledRunView",
         }
     schemas = document["components"]["schemas"]
     items = schemas["BacktestRunPage"]["properties"]["items"]["items"]
-    assert reference_names(items) == {"BacktestRunSummaryView", "BacktestLoopRunSummaryView"}
+    assert reference_names(items) == {
+        "BacktestRunSummaryView",
+        "BacktestLoopRunSummaryView",
+        "BacktestScheduledRunSummaryView",
+    }
     detail = schemas["BacktestDetailPage"]["properties"]["items"]["items"]
     assert "BacktestLoopEventView" in reference_names(resolved(document, detail))
+    assert "BacktestScheduledEventView" in reference_names(resolved(document, detail))
     assert schemas["BacktestLoopEventView"]["properties"]["schemaVersion"]["const"] == (
         "monitor-loop-event-v1"
     )
@@ -78,7 +88,12 @@ def test_loop_contracts_keep_bounds_exact_values_and_unknown_facts(contract):
     for name in ("BacktestRunPage", "BacktestDetailPage", "BacktestFillPage"):
         assert schemas[name]["properties"]["items"]["maxItems"] == 100
         assert schemas[name]["additionalProperties"] is False
-    for name in ("BacktestLoopRunView", "BacktestLoopRunSummaryView"):
+    for name in (
+        "BacktestLoopRunView",
+        "BacktestLoopRunSummaryView",
+        "BacktestScheduledRunView",
+        "BacktestScheduledRunSummaryView",
+    ):
         assert schemas[name]["additionalProperties"] is False
         for field in ("revision", "fillCount"):
             assert schemas[name]["properties"][field]["maximum"] == MAX_SAFE_INTEGER
@@ -134,6 +149,41 @@ def test_result_contract_has_frozen_provenance_without_owned_paths_or_source_tex
     walk(schemas["BacktestLoopRunView"])
     assert {"LoopPlanVersion", "LoopAccountInput", "MonitorLoopReport"} <= visited
     assert {"PreparationSource", "StoredLoopInput", "LoopInputReference"}.isdisjoint(visited)
+    visited.clear()
+    walk(schemas["BacktestScheduledRunView"])
+    assert {"BacktestScheduledReportHeader", "LoopAccountInput", "CollectionVersionView"} <= visited
+    assert {
+        "ScheduledMonitorLoopReport",
+        "ScheduledLoopSchedule",
+        "PreparationSource",
+        "ScheduledStoredLoopInput",
+        "LoopInputReference",
+    }.isdisjoint(visited)
+
+
+def test_scheduled_contract_header_preserves_native_fields_without_full_snapshots(contract):
+    from trade_plan_monitor.backtest.loop_report import ScheduledMonitorLoopReport
+
+    _, document = contract
+    schemas = document["components"]["schemas"]
+    header = schemas["BacktestScheduledReportHeader"]["properties"]
+    assert set(header) == (
+        set(ScheduledMonitorLoopReport.model_fields)
+        - {
+            "schema_version",
+            "schedule",
+        }
+    ) | {"report_schema_version"}
+    assert header["report_schema_version"]["const"] == "backtest-report-v5"
+    command = schemas["ScheduledPreparedBacktestRunCommand"]
+    assert "schemaVersion" in command["required"]
+    assert command["properties"]["schemaVersion"]["const"] == "prepared-loop-plan-v2"
+    root = schemas["BacktestScheduledRunView"]
+    assert root["properties"]["schemaVersion"]["const"] == "monitor-loop-result-v2"
+    assert root["properties"]["versions"]["maxItems"] == 256
+    assert schemas["BacktestScheduledEventView"]["properties"]["schemaVersion"]["const"] == (
+        "monitor-loop-event-v2"
+    )
 
 
 def test_generated_types_narrow_native_events_and_old_new_results(contract, tmp_path):
@@ -153,6 +203,10 @@ type ReadOperation = paths["/api/v1/backtest-runs/{run_id}"]["get"];
 type Read = ReadOperation["responses"][200]["content"]["application/json"];
 export function metric(value: Read): number | string | null {
   if ("schemaVersion" in value) {
+    if (value.schemaVersion === "monitor-loop-result-v2") {
+      const reportVersion: "backtest-report-v5" = value.report.report_schema_version;
+      return value.versions.length + value.provenance.sources.length;
+    }
     const version: "monitor-loop-result-v1" = value.schemaVersion;
     const reportVersion: "backtest-report-v4" = value.report.schema_version ?? "backtest-report-v4";
     return value.metrics.final_equity_fen;
@@ -175,6 +229,9 @@ export const prepared: components["schemas"]["PreparedBacktestRunCommand"] = {
   response: { mode: "OBSERVE_ONLY", responseDelaySeconds: 0 },
   costs: { commissionRate: "0.0003", minimumCommissionFen: 500,
     stampDutyRate: "0.0005", transferFeeRate: "0.00001", buySlippageFen: 1, sellSlippageFen: 1 }
+};
+export const scheduled: components["schemas"]["ScheduledPreparedBacktestRunCommand"] = {
+  ...prepared, schemaVersion: "prepared-loop-plan-v2"
 };
 """
     )

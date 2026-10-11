@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **12 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **13 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -30,6 +30,10 @@ RP-T11 is complete and RP-C04 passes: one distinct v5 report publishes the whole
 RP-T12 allowance under RP05-A03: add `src/trade_plan_monitor/backtest/preparation_store.py` only to reuse the existing immutable receipt lookup for `CORRECT_ITEM` commands before global admission. No new table or receipt format. Root progress/frozen confirmation use bounded references; revision-bound item pages expose original source and typed candidate evidence within the existing 2 MiB projection bound.
 
 RP-T12 is complete: explicit v2 preparation branches support batch creation, exact source/order edits, selected extraction bindings, whole-operation controls, item correction and full-chain review. Revision-bound pages preserve complete text/evidence while adapting to the existing 2 MiB bound; malformed queries and oversized bodies fail before resource acquisition. Exact correction receipts replay under global exclusion. The independent HTTP reproduction initially returned 422 for valid collection creation; five paging preflight side effects were also reproduced and corrected. All 232 API/contract/worker/review checks pass, including both generated profiles and safe nested revisions. Ruff and independent diff review pass. **12 of 20 repair tasks complete.** Next: RP-T13.
+
+RP-T13 allowance under RP05-A03: update only the two collection cases in `tests/integration/test_monitor_loop_submission.py` to use the now-required `schemaVersion: prepared-loop-plan-v2` command; their original cutoff/idempotency assertions remain. Public `monitor-loop-result-v2` carries lightweight ordered version/source bindings and a typed report header with `report_schema_version: backtest-report-v5`, excluding the private full schedule. The immutable full report is still verified before projection; the public header is not a separately hash-recomputable private report codec. This avoids duplicating up to 256 snapshots within the existing 4 MiB result bound.
+
+RP-T13 is complete: a required prepared-loop-plan-v2 command submits one reviewed chain; bounded monitor-loop-result-v2 projects ordered source/version provenance and a typed backtest-report-v5 header, with version-aware event pages. Independent HTTP tests reproduced a legacy-union parser exception; the fix passes all 4 scheduled HTTP cases and 12 old result API cases. The submission suite passes 27 checks. Two unchanged snapshot checks await RP-T14 generation/review. Ruff and independent diff review pass. **13 of 20 repair tasks complete.** Next: RP-T14.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -144,7 +148,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T13. Expose one run and version-aware results
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T12; **Acceptance:** RP-A01, RP-A08, RP-A10.
 - **Allowed files:** `src/trade_plan_monitor/web/backtest_schemas.py`; `src/trade_plan_monitor/web/routers/backtest_runs.py`; `src/trade_plan_monitor/backtest/composition.py`; `tests/integration/test_monitor_loop_result_api.py`; `tests/integration/test_monitor_loop_contract.py`.
 - **Result:** Accept one reviewed-chain submission and return bounded version/calendar/event projections. Preserve old response branches, errors, history and the absence of new exports.

@@ -170,8 +170,12 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestRunPage,
     BacktestRunSummaryView,
     BacktestRunView,
+    BacktestScheduledEventView,
+    BacktestScheduledRunSummaryView,
+    BacktestScheduledRunView,
     BacktestSignalView,
     PreparedBacktestRunCommand,
+    ScheduledPreparedBacktestRunCommand,
 )
 from trade_plan_monitor.web.cursor_keys import load_or_create_cursor_key
 from trade_plan_monitor.web.errors import ApiError
@@ -742,7 +746,9 @@ class _ProductionBacktestService:
         except BacktestServiceUnavailable:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
         if (
-            prepared.preparation_id != command.preparation_id
+            isinstance(prepared, FrozenPreparedCollection)
+            != isinstance(command, ScheduledPreparedBacktestRunCommand)
+            or prepared.preparation_id != command.preparation_id
             or prepared.manifest_hash != command.manifest_hash
         ):
             raise ApiError(ApiErrorCode.CONFLICT)
@@ -1426,7 +1432,9 @@ class _ProductionBacktestService:
         record = await self._run_sync(self._result_store.get_result_run, run_id)
         if record is None:
             return None
-        if record.summary.formula_versions.get("report") == "backtest-report-v4":
+        if record.summary.formula_versions.get("report") in {
+            "backtest-report-v4", "backtest-report-v5",
+        }:
             raise ApiError(ApiErrorCode.CONFLICT)
         if export_kind == "SUMMARY_JSON":
             chunks = iter_export_summary(self._result_store, run_id, cancelled)
@@ -1469,6 +1477,37 @@ class _ProductionBacktestService:
             if report is None:
                 raise RuntimeError("verified loop result is missing its immutable report")
             prepared = stored.prepared
+            if isinstance(prepared, FrozenPreparedCollection):
+                from trade_plan_monitor.web.preparation_schemas import project_collection_frozen
+
+                frozen = project_collection_frozen(prepared)
+                return BacktestScheduledRunView.model_validate(
+                    _run_summary_view(record).canonical_payload() | {
+                        "provenance": {
+                            "preparationId": prepared.preparation_id,
+                            "manifestHash": prepared.manifest_hash,
+                            "inputHash": run_input.input_hash,
+                            "revision": prepared.revision,
+                            "sources": tuple({
+                                "sourceId": item.source.source_id,
+                                "sourceHash": item.source.binding_hash,
+                                "sourceRevision": item.source_revision,
+                                "candidateRevision": item.extraction_candidate_revision,
+                                "candidateHash": item.extraction_candidate_hash,
+                                "evidenceHash": item.extraction_evidence_hash,
+                                "baseHash": item.base_hash,
+                            } for item in prepared.items),
+                        },
+                        "versions": frozen.versions,
+                        "openingAccount": stored.run_input.initial_account,
+                        "response": stored.run_input.response,
+                        "costs": stored.run_input.costs,
+                        "report": report.model_dump(
+                            mode="json", exclude={"schedule", "schema_version"},
+                        )
+                        | {"report_schema_version": report.schema_version},
+                    }
+                )
             return BacktestLoopRunView.model_validate(
                 _run_summary_view(record).canonical_payload()
                 | {
@@ -1758,11 +1797,15 @@ def _run_summary_view(
         "metrics": _public_value(summary.final_metrics),
         "availability": _availability(record),
     }
-    if summary.formula_versions.get("report") == "backtest-report-v4":
-        return BacktestLoopRunSummaryView.model_validate(
+    if summary.formula_versions.get("report") in {"backtest-report-v4", "backtest-report-v5"}:
+        scheduled = summary.formula_versions.get("report") == "backtest-report-v5"
+        model = BacktestScheduledRunSummaryView if scheduled else BacktestLoopRunSummaryView
+        return model.model_validate(
             payload
             | {
-                "schemaVersion": "monitor-loop-result-v1",
+                "schemaVersion": (
+                    "monitor-loop-result-v2" if scheduled else "monitor-loop-result-v1"
+                ),
                 "metrics": json.loads(canonical_json(summary.final_metrics)),
             }
         )
@@ -1887,10 +1930,12 @@ def _detail_view(
 ):
     event_at = format_shanghai_datetime(record.event_at.astimezone(SHANGHAI))
     payload = record.payload
-    if payload.get("schema_version") == "monitor-loop-event-v1":
-        return BacktestLoopEventView.model_validate(
+    if payload.get("schema_version") in {"monitor-loop-event-v1", "monitor-loop-event-v2"}:
+        model = (BacktestScheduledEventView if payload["schema_version"] == "monitor-loop-event-v2"
+                 else BacktestLoopEventView)
+        return model.model_validate(
             {
-                "schemaVersion": "monitor-loop-event-v1",
+                "schemaVersion": payload["schema_version"],
                 "detailId": record.detail_id,
                 "runId": record.run_id,
                 "kind": record.kind.value,

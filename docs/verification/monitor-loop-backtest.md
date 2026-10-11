@@ -70,6 +70,10 @@ RP-T11 is complete and RP-C04 passes: one distinct v5 report publishes the whole
 
 RP-T12 is complete: explicit v2 preparation branches support batch creation, exact source/order edits, selected extraction bindings, whole-operation controls, item correction and full-chain review. Revision-bound pages preserve complete text/evidence while adapting to the existing 2 MiB bound; malformed queries and oversized bodies fail before resource acquisition. Exact correction receipts replay under global exclusion. The independent HTTP reproduction initially returned 422 for valid collection creation; five paging preflight side effects were also reproduced and corrected. All 232 API/contract/worker/review checks pass, including both generated profiles and safe nested revisions. Ruff and independent diff review pass. **12 of 20 repair tasks complete.** Next: RP-T13.
 
+## RP-V13. Bounded continuous result API
+
+RP-T13 is complete: a required prepared-loop-plan-v2 command submits one reviewed chain; bounded monitor-loop-result-v2 projects ordered source/version provenance and a typed backtest-report-v5 header, with version-aware event pages. Independent HTTP tests reproduced a legacy-union parser exception; the fix passes all 4 scheduled HTTP cases and 12 old result API cases. The submission suite passes 27 checks. Two unchanged snapshot checks await RP-T14 generation/review. Ruff and independent diff review pass. **13 of 20 repair tasks complete.** Next: RP-T14.
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

@@ -23,6 +23,189 @@ from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
 from trade_plan_monitor.web.routers import backtest_exports, backtest_results, backtest_runs
 
 
+def test_scheduled_prepared_command_requires_explicit_schema_discriminator():
+    from pydantic import ValidationError
+    from tests.integration.test_monitor_loop_submission import payload
+
+    from trade_plan_monitor.web.backtest_schemas import ScheduledPreparedBacktestRunCommand
+
+    class Prepared:
+        preparation_id = "synthetic-collection"
+        manifest_hash = "a" * 64
+
+    with pytest.raises(ValidationError):
+        ScheduledPreparedBacktestRunCommand.model_validate(payload(Prepared()))
+    command = ScheduledPreparedBacktestRunCommand.model_validate(
+        payload(Prepared(), schemaVersion="prepared-loop-plan-v2"),
+    )
+    assert command.schema_version == "prepared-loop-plan-v2"
+
+
+@pytest.fixture(scope="module")
+def scheduled_published(tmp_path_factory):
+    from tests.integration.test_monitor_loop_input_store import scheduled_frozen_case
+    from tests.unit.test_monitor_loop_schedule import at
+
+    from trade_plan_monitor.backtest.control import CancellationToken
+    from trade_plan_monitor.backtest.loop_replay import run_frozen_loop
+    from trade_plan_monitor.backtest.results import BacktestResultStore
+
+    root = tmp_path_factory.mktemp("scheduled-result-api")
+    _, market, prepared, run_input, dataset = scheduled_frozen_case(root)
+    repository = BacktestJobRepository(root / "results.sqlite3", clock=lambda: at(26, 16))
+    store = BacktestResultStore(repository.database_path)
+    reference = store.record_loop_input(
+        prepared=prepared,
+        run_input=run_input,
+        dataset=dataset,
+        market_source=market,
+    )
+    repository.submit(MonitorLoopJobRequest(input_reference=reference), "scheduled")
+    claim = repository.claim_next()
+    report = run_frozen_loop(
+        store, reference, cancellation_token=CancellationToken(), progress_callback=lambda _: None
+    )
+    assert repository.complete(
+        claim.job_id,
+        claim.claim_token.get_secret_value(),
+        BacktestRunJobResult(run_id=reference.run_id, report_hash=report.report_hash, reused=False),
+    )
+    signer = HmacCursorSigner(b"x" * 32)
+    service = composition._ProductionBacktestService(
+        plan_snapshot_reader=None,
+        market_store=market,
+        repository=repository,
+        result_store=store,
+        dataset_service=BacktestDatasetService(store=market, cursor_signer=signer),
+        result_service=BacktestResultService(store=store, cursor_signer=signer),
+        coordinator=Coordinator(),
+        result_cursor_signer=signer,
+        job_cursor_signer=BacktestApiCursorSigner(b"x" * 32),
+    )
+    app = create_app()
+    app.state.backtest_read_service = service
+    app.state.backtest_operation_service = service
+    for router in (backtest_runs.router, backtest_results.router, backtest_exports.router):
+        app.include_router(router)
+    client = TestClient(app)
+    try:
+        yield client, service, store, reference, report
+    finally:
+        client.close()
+        asyncio.run(service.stop_metadata())
+
+
+def test_scheduled_result_has_exact_bounded_provenance_and_native_report_header(
+    scheduled_published,
+):
+    client, _, store, reference, report = scheduled_published
+    stored = store.get_loop_input(reference)
+    response = client.get(f"/api/v1/backtest-runs/{reference.run_id}")
+    assert response.status_code == 200 and len(response.content) <= 4 * 1024 * 1024
+    value = response.json()
+    assert value["schemaVersion"] == "monitor-loop-result-v2"
+    assert "frozenPlan" not in value and value["planVersionId"] is None
+    expected = report.model_dump(mode="json", exclude={"schedule", "schema_version"})
+    expected["report_schema_version"] = "backtest-report-v5"
+    assert value["report"] == expected
+    assert value["openingAccount"] == stored.run_input.initial_account.model_dump(mode="json")
+    provenance = value["provenance"]
+    assert (
+        provenance["preparationId"],
+        provenance["manifestHash"],
+        provenance["inputHash"],
+        provenance["revision"],
+    ) == (
+        stored.prepared.preparation_id,
+        stored.prepared.manifest_hash,
+        reference.input_hash,
+        stored.prepared.revision,
+    )
+    assert len(provenance["sources"]) == len(value["versions"]) == 2
+    for item, source, version in zip(
+        stored.prepared.items, provenance["sources"], value["versions"], strict=True
+    ):
+        assert source["sourceId"] == item.source.source_id
+        assert source["sourceHash"] == item.source.binding_hash
+        assert source["sourceRevision"] == item.source_revision
+        assert source["candidateRevision"] == item.extraction_candidate_revision
+        assert source["candidateHash"] == item.extraction_candidate_hash
+        assert source["evidenceHash"] == item.extraction_evidence_hash
+        assert source["baseHash"] == item.base_hash
+        assert version["versionId"] == item.version.version_id
+        assert "snapshot" not in version and item.source.text not in response.text
+    summary = client.get("/api/v1/backtest-runs").json()["items"][0]
+    assert summary["schemaVersion"] == "monitor-loop-result-v2"
+    assert summary["runId"] == reference.run_id
+    assert "report" not in summary and "versions" not in summary
+
+
+def test_scheduled_event_pages_bind_each_event_to_its_historical_authority(scheduled_published):
+    client, _, _, reference, report = scheduled_published
+    actual, cursor = [], None
+    while True:
+        params = {"kind": "DECISION", "limit": 100}
+        if cursor:
+            params["cursor"] = cursor
+        response = client.get(f"/api/v1/backtest-runs/{reference.run_id}/details", params=params)
+        assert response.status_code == 200 and len(response.content) <= 4 * 1024 * 1024
+        page = response.json()
+        for item in page["items"]:
+            assert item["schemaVersion"] == "monitor-loop-event-v2"
+            event = item["event"]
+            selected = report.schedule.select(datetime.fromisoformat(event["at"]))
+            assert event["authority_id"] == (None if selected is None else selected.authority_id)
+            assert event["version_id"] == (
+                None if selected is None else selected.version.version_id
+            )
+            actual.append(event)
+        if not page["hasMore"]:
+            break
+        cursor = page["nextCursor"]
+    assert [event["sequence"] for event in actual] == list(range(1, report.event_count + 1))
+    assert any(event["payload"]["kind"] == "REPLACED" for event in actual)
+
+
+def test_scheduled_event_projection_rejects_foreign_identity_and_changed_hash(scheduled_published):
+    from pydantic import ValidationError
+
+    from trade_plan_monitor.web.backtest_schemas import BacktestScheduledEventView
+
+    client, _, _, reference, _ = scheduled_published
+    response = client.get(
+        f"/api/v1/backtest-runs/{reference.run_id}/details", params={"kind": "DECISION", "limit": 1}
+    )
+    assert response.status_code == 200
+    original = response.json()["items"][0]
+    for changed in (
+        original | {"detailId": "foreign"},
+        original | {"event": original["event"] | {"event_id": "f" * 64}},
+        original | {"event": original["event"] | {"authority_id": "f" * 64}},
+    ):
+        with pytest.raises(ValidationError):
+            BacktestScheduledEventView.model_validate(changed)
+
+
+def test_scheduled_pin_replays_and_exports_reject_before_stream_headers(scheduled_published):
+    client, _, _, reference, _ = scheduled_published
+    route = f"/api/v1/backtest-runs/{reference.run_id}"
+    before = client.get(route).json()
+    kwargs = {
+        "json": {"pinned": True, "expectedRevision": before["revision"]},
+        "headers": {"Idempotency-Key": "scheduled-pin"},
+    }
+    first = client.patch(route, **kwargs)
+    assert first.status_code == 200
+    assert client.patch(route, **kwargs).json() == first.json()
+    assert first.json()["pinned"] is True
+    assert first.json()["report"] == before["report"]
+    for kind in ("SUMMARY_JSON", "FILLS_CSV"):
+        rejected = client.get(route + "/exports/" + kind)
+        assert rejected.status_code == 409
+        assert "content-disposition" not in rejected.headers
+        assert "x-export-schema-version" not in rejected.headers
+
+
 @pytest.fixture
 def published(tmp_path):
     store, reference, report, events = publication_case(tmp_path)

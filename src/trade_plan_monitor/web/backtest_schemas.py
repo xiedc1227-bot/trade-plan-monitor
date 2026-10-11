@@ -25,13 +25,25 @@ from pydantic import (
 )
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
-from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt
+from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt, LoopAccountState
 from trade_plan_monitor.backtest.loop_input import LoopAccountInput, LoopCosts, LoopResponsePolicy
-from trade_plan_monitor.backtest.loop_report import LoopAuditEvent, LoopMetrics, MonitorLoopReport
+from trade_plan_monitor.backtest.loop_report import (
+    MAX_AUDIT_EVENTS,
+    LoopAuditEvent,
+    LoopCycleSummary,
+    LoopMetrics,
+    LoopValuation,
+    MonitorLoopReport,
+    ScheduledLoopAuditEvent,
+)
 from trade_plan_monitor.backtest.models import ExecutionStatus, UnfilledReason
 from trade_plan_monitor.backtest.models import StableIdentifier as PreparedIdentifier
-from trade_plan_monitor.backtest.plan_schedule import LoopPlanVersion
-from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
+from trade_plan_monitor.backtest.plan_schedule import (
+    LoopEndBoundary,
+    LoopPlanVersion,
+    LoopTimestamp,
+)
+from trade_plan_monitor.backtest.research_input import ResearchValue, UnifiedResearchInput
 from trade_plan_monitor.backtest.research_report import (
     ResearchDecisionEvent,
     ResearchOperationOutcome,
@@ -65,6 +77,8 @@ from trade_plan_monitor.market_index.models import (
     MarketIndexIssueCode,
     ReturnWindow,
 )
+from trade_plan_monitor.state.daily_state_models import DailyInventoryView
+from trade_plan_monitor.web.preparation_schemas import CollectionVersionView
 from trade_plan_monitor.web.routers.dashboard import (
     IndexConditionEvidenceView,
     MarketIndexIndicatorFactView,
@@ -414,6 +428,10 @@ class PreparedBacktestRunCommand(_BacktestApiInput):
     response: BacktestLoopResponseInput
     costs: BacktestLoopCostsInput
     end_date: ApiDate | None = None
+
+
+class ScheduledPreparedBacktestRunCommand(PreparedBacktestRunCommand):
+    schema_version: Literal["prepared-loop-plan-v2"]
 
 
 class BacktestRunCommand(_BacktestApiInput):
@@ -1956,9 +1974,100 @@ class BacktestLoopRunView(BacktestLoopRunSummaryView):
         return self
 
 
+
+class BacktestScheduledSourceView(_BacktestApiInput):
+    source_id: PreparedIdentifier
+    source_hash: Sha256Hex
+    source_revision: PositiveJavaScriptSafeInteger
+    candidate_revision: PositiveJavaScriptSafeInteger
+    candidate_hash: Sha256Hex
+    evidence_hash: Sha256Hex
+    base_hash: Sha256Hex | None
+
+
+class BacktestScheduledProvenanceView(_BacktestApiInput):
+    preparation_id: PreparedIdentifier
+    manifest_hash: Sha256Hex
+    input_hash: Sha256Hex
+    revision: PositiveJavaScriptSafeInteger
+    sources: tuple[BacktestScheduledSourceView, ...] = Field(min_length=1, max_length=256)
+
+
+class BacktestScheduledReportHeader(ResearchValue):
+    """Bounded projection of an already verified immutable report, not its private codec."""
+
+    report_schema_version: Literal["backtest-report-v5"]
+    run_id: Sha256Hex
+    input_hash: Sha256Hex
+    dataset_hash: Sha256Hex
+    symbol: str
+    boundary: LoopEndBoundary
+    cycle: LoopCycleSummary
+    event_count: int = Field(ge=1, le=MAX_AUDIT_EVENTS)
+    event_set_hash: Sha256Hex
+    opening_valuation: LoopValuation
+    final_valuation: LoopValuation
+    final_account: LoopAccountState
+    final_inventory: DailyInventoryView
+    last_evidence_at: LoopTimestamp | None
+    last_valuation_at: LoopTimestamp
+    metrics: LoopMetrics
+    report_hash: Sha256Hex
+
+
+class BacktestScheduledRunSummaryView(BacktestLoopRunSummaryView):
+    schema_version: Literal["monitor-loop-result-v2"]
+
+
+class BacktestScheduledRunView(BacktestScheduledRunSummaryView):
+    provenance: BacktestScheduledProvenanceView
+    versions: tuple[CollectionVersionView, ...] = Field(min_length=1, max_length=256)
+    opening_account: LoopAccountInput
+    response: LoopResponsePolicy
+    costs: LoopCosts
+    report: BacktestScheduledReportHeader
+
+    @field_validator("opening_account", "response", "costs", "report", mode="before")
+    @classmethod
+    def native_values(cls, value, info: ValidationInfo):
+        model = {"opening_account": LoopAccountInput, "response": LoopResponsePolicy,
+                 "costs": LoopCosts, "report": BacktestScheduledReportHeader}[info.field_name]
+        return _native_loop_value(value, model)
+
+    @field_validator("versions", mode="before")
+    @classmethod
+    def native_versions(cls, value):
+        if not isinstance(value, (tuple, list)):
+            raise ValueError("versions must be an array")
+        return tuple(_native_loop_value(item, CollectionVersionView) for item in value)
+
+    @model_validator(mode="after")
+    def bind_header(self):
+        report = self.report
+        if ((report.run_id, report.report_hash, report.dataset_hash, report.symbol)
+                != (self.run_id, self.report_hash, self.dataset_hash, self.symbol)
+                or report.input_hash != self.provenance.input_hash
+                or report.metrics != self.metrics or report.cycle.fills != self.fill_count
+                or report.boundary.started_at.date() != self.event_start
+                or report.boundary.resolved_end_date != self.event_end
+                or report.boundary.evidence_cutoff != self.completed_at
+                or self.versions[0].plan_hash != self.plan_hash
+                or len(self.versions) != len(self.provenance.sources)):
+            raise ValueError("scheduled result must bind its verified header and versions")
+        for source, version in zip(self.provenance.sources, self.versions, strict=True):
+            if (source.source_id, source.source_revision, source.candidate_revision) != (
+                version.source_id, version.source_revision, version.candidate_revision,
+            ):
+                raise ValueError("scheduled version reference differs from its frozen source")
+        if len(self.model_dump_json().encode()) >= MAX_RESULT_PAGE_BYTES:
+            raise ValueError("encoded loop result must be below 4 MiB")
+        return self
+
 def _native_loop_value(value, model):
     if isinstance(value, model):
         return value
+    if isinstance(value, BaseModel):
+        return model.model_validate_json(value.model_dump_json())
     return model.model_validate_json(json.dumps(value, ensure_ascii=False))
 
 
@@ -1982,6 +2091,17 @@ class BacktestLoopEventView(_BacktestDetailBase):
             raise ValueError("loop event must match its public row identity")
         _require_max_item_bytes(self)
         return self
+
+
+
+class BacktestScheduledEventView(BacktestLoopEventView):
+    schema_version: Literal["monitor-loop-event-v2"]
+    event: ScheduledLoopAuditEvent
+
+    @field_validator("event", mode="before")
+    @classmethod
+    def native_event(cls, value):
+        return _native_loop_value(value, ScheduledLoopAuditEvent)
 
 
 class BacktestLoopFillView(_BacktestApiInput):
@@ -2015,6 +2135,7 @@ type BacktestDetailView = (
     | ResearchDecisionView
     | ResearchOperationView
     | BacktestLoopEventView
+    | BacktestScheduledEventView
 )
 
 
@@ -2229,7 +2350,8 @@ class BacktestJobPage(_BacktestApiInput):
 class BacktestRunPage(_BacktestApiInput):
     filters: BacktestRunFiltersView
     items: Annotated[
-        tuple[BacktestRunSummaryView | BacktestLoopRunSummaryView, ...], Field(max_length=100)
+        tuple[BacktestRunSummaryView | BacktestLoopRunSummaryView
+              | BacktestScheduledRunSummaryView, ...], Field(max_length=100)
     ]
     limit: Annotated[int, Field(strict=True, ge=1, le=100)]
     next_cursor: CursorToken | None

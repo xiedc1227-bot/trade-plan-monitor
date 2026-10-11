@@ -24,6 +24,7 @@ from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
 from trade_plan_monitor.web.backtest_schemas import (
     BacktestDatasetVerificationCommand,
     PreparedBacktestRunCommand,
+    ScheduledPreparedBacktestRunCommand,
 )
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.schemas import ApiErrorCode, MutationContext
@@ -112,7 +113,9 @@ def test_scheduled_submission_keeps_original_cutoff_complete_chain_and_same_job(
         monkeypatch,
         scheduled=True,
     )
-    command = PreparedBacktestRunCommand.model_validate(payload(prepared))
+    command = ScheduledPreparedBacktestRunCommand.model_validate(
+                        payload(prepared) | {"schemaVersion": "prepared-loop-plan-v2"}
+                    )
 
     async def run():
         try:
@@ -173,7 +176,9 @@ def test_scheduled_source_edit_rejects_stale_manifest_before_market_access(tmp_p
         try:
             with pytest.raises(ApiError) as error:
                 await service.submit_run(
-                    command=PreparedBacktestRunCommand.model_validate(payload(prepared)),
+                    command=ScheduledPreparedBacktestRunCommand.model_validate(
+                        payload(prepared) | {"schemaVersion": "prepared-loop-plan-v2"}
+                    ),
                     context=context(),
                 )
             assert error.value.code == ApiErrorCode.CONFLICT

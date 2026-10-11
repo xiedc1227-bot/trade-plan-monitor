@@ -16,7 +16,9 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestRunFiltersView,
     BacktestRunPage,
     BacktestRunView,
+    BacktestScheduledRunView,
     PreparedBacktestRunCommand,
+    ScheduledPreparedBacktestRunCommand,
 )
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.schemas import (
@@ -117,7 +119,9 @@ class BacktestRunReadService(Protocol):
         cursor: str | None,
     ) -> BacktestRunPage: ...
 
-    async def get_run(self, *, run_id: str) -> BacktestRunView | BacktestLoopRunView | None: ...
+    async def get_run(self, *, run_id: str) -> (
+        BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | None
+    ): ...
 
 
 class BacktestRunOperationService(Protocol):
@@ -126,7 +130,8 @@ class BacktestRunOperationService(Protocol):
     async def submit_run(
         self,
         *,
-        command: BacktestRunCommand | PreparedBacktestRunCommand,
+        command: (BacktestRunCommand | PreparedBacktestRunCommand
+                  | ScheduledPreparedBacktestRunCommand),
         context: MutationContext,
     ) -> BacktestRunSubmissionOutcome: ...
 
@@ -136,7 +141,7 @@ class BacktestRunOperationService(Protocol):
         run_id: str,
         command: BacktestRunPinCommand,
         context: MutationContext,
-    ) -> BacktestRunView | BacktestLoopRunView: ...
+    ) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView: ...
 
 
 def get_backtest_run_read_service(request: Request) -> BacktestRunReadService:
@@ -208,11 +213,12 @@ async def list_backtest_runs(
     return page
 
 
-@router.get("/backtest-runs/{run_id}", response_model=BacktestRunView | BacktestLoopRunView)
+@router.get("/backtest-runs/{run_id}",
+            response_model=BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView)
 async def get_backtest_run(
     run_id: RunIdPath,
     service: BacktestRunReadServiceDependency,
-) -> BacktestRunView | BacktestLoopRunView:
+) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView:
     value = await service.get_run(run_id=run_id)
     if value is None:
         raise ApiError(ApiErrorCode.NOT_FOUND)
@@ -228,7 +234,7 @@ async def get_backtest_run(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def submit_backtest_run(
-    command: BacktestRunCommand | PreparedBacktestRunCommand,
+    command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
     context: MutationContextDependency,
     service: BacktestRunOperationServiceDependency,
     response: Response,
@@ -255,13 +261,14 @@ async def submit_backtest_run(
     return receipt
 
 
-@router.patch("/backtest-runs/{run_id}", response_model=BacktestRunView | BacktestLoopRunView)
+@router.patch("/backtest-runs/{run_id}",
+              response_model=BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView)
 async def pin_backtest_run(
     run_id: RunIdPath,
     command: BacktestRunPinCommand,
     context: MutationContextDependency,
     service: BacktestRunOperationServiceDependency,
-) -> BacktestRunView | BacktestLoopRunView:
+) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView:
     run = _validated_run(
         await service.pin_run(run_id=run_id, command=command, context=context),
     )
@@ -270,7 +277,13 @@ async def pin_backtest_run(
     return run
 
 
-def _validated_run(value: object) -> BacktestRunView | BacktestLoopRunView:
+def _validated_run(value: object) -> (
+    BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView
+):
+    if isinstance(value, BacktestScheduledRunView) or (
+        isinstance(value, dict) and value.get("schemaVersion") == "monitor-loop-result-v2"
+    ):
+        return validate_api_response(value, BacktestScheduledRunView)
     if isinstance(value, BacktestLoopRunView) or (
         isinstance(value, dict) and value.get("schemaVersion") == "monitor-loop-result-v1"
     ):
