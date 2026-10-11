@@ -94,6 +94,16 @@ RP-T17 allowance under RP05-A03: add `web/src/views/BacktestNewView.vue` only to
 
 RP-T17 is complete and RP-C06 passes at controller/component level: one reviewed collection yields exactly one prepared-loop-plan-v2 request with one manifest, opening account, response/end settings and costs. The immutable original command/key survives unknown outcomes even if the external reviewed selection changes. All 41 run-form/new-view checks pass, including 22 run-form cases. Independent review found no additional blocker. Full browser acceptance remains RP-T19; known result-event consumers remain RP-T18. **17 of 20 repair tasks complete.** Next: RP-T18.
 
+## RP-V18. Continuous result and complete equity
+
+RP-T18 is complete: one continuous result shows the ordered version calendar, exact source/review bindings, replacement/continuation/no-authority events, account discrepancies and closed intents. A previously missing v5 curve now projects opening plus last daily valuations only after full event-chain verification in one read snapshot; unknowns and expiry remain explicit and v4 behavior is unchanged. All 37 result/publication checks and 61 result-component checks pass, along with full frontend type checking. Independent review passes. Fixture corrections use canonical timestamps, public equity projection and the existing 1,000-row retention batch; no assertion or limit is weakened. The earlier review-test helper type is corrected without behavioral changes. **18 of 20 repair tasks complete.** Next: RP-T19; full browser/business acceptance remains pending.
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_monitor_loop_publication.py -q -m "not live" --basetemp=.pytest_cache/rpt18-curve-2
+npm --prefix web run test -- --run tests/unit/MonitorLoopResults.spec.ts tests/unit/BacktestRunDetailView.spec.ts
+npm --prefix web run type-check
+```
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

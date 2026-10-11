@@ -1,5 +1,5 @@
 import { isResearchDetail, isResearchInput } from "./researchValues";
-import { validLoopRun, validLoopRunSummary, validLoopEvent, validLoopFill } from "./monitorLoopValues";
+import { validLoopRun, validLoopRunSummary, validLoopEvent, validLoopFill, validScheduledRun, validScheduledEvent } from "./monitorLoopValues";
 import type { ResearchMetricsView, ResearchEquityView } from "./generated";
 import type {
   BacktestAssumptionsView,
@@ -43,6 +43,7 @@ import type {
   BacktestRunSummaryView,
   BacktestRunView,
   BacktestLoopRunView,
+  BacktestScheduledRunView,
   BacktestExecutionConfigInput,
   BacktestExecutionConfigView,
   BacktestExecutionOutcomeView,
@@ -93,7 +94,7 @@ export type BacktestMarketIndexSeriesQuery = NonNullable<
 export interface BacktestRequestOptions {
   readonly signal?: AbortSignal;
 }
-export type BacktestRunResult = BacktestRunView | BacktestLoopRunView;
+export type BacktestRunResult = BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView;
 
 export interface BacktestMutationResponse<T> {
   readonly body: T;
@@ -2055,6 +2056,7 @@ function datasetMatchesFilters(
 }
 
 function isRun(value: unknown): value is BacktestRunResult {
+  if (isRecord(value) && value.schemaVersion === "monitor-loop-result-v2") return validScheduledRun(value);
   if (isRecord(value) && value.schemaVersion === "monitor-loop-result-v1") return validLoopRun(value);
   if (!isRecord(value) || !hasExactKeys(value, runViewKeys)) return false;
   if (
@@ -2456,6 +2458,7 @@ function isDetailPage(value: unknown): value is BacktestDetailPage {
 }
 
 function isDetail(value: unknown): value is BacktestDetailView {
+  if (isRecord(value) && value.schemaVersion === "monitor-loop-event-v2") return validScheduledEvent(value);
   if (isRecord(value) && value.schemaVersion === "monitor-loop-event-v1") return validLoopEvent(value);
   if (!isRecord(value)) return false;
   if (isResearchDetail(value)) return isDetailBase(value) && isBoundedItem(value);

@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **17 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **18 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -52,6 +52,8 @@ RP-T17 is complete and RP-C06 passes at controller/component level: one reviewed
 RP-T18 allowances under RP05-A03: add `web/src/api/monitorLoopValues.ts` and `web/src/api/backtests.ts` for the approved v2 transport; `src/trade_plan_monitor/backtest/loop_publication.py`, `src/trade_plan_monitor/backtest/results.py`, `src/trade_plan_monitor/backtest/composition.py` and `tests/integration/test_monitor_loop_result_api.py` to project a complete verified v5 daily equity series through the existing bounded curve contract. Keep v4 behavior, unknown values, expiry, 2,000 points and 4 MiB limits. Correct only the review-test helper parameter type in `web/tests/unit/PlanPreparationReview.spec.ts`. RP-T19 also includes `tests/integration/test_monitor_loop_production_composition.py` solely for the real-browser fake-provider fixture. These are necessary repairs to RP-A08/original ML07–ML09, not new product scope.
 
 RP-T19 reproduction allowance under RP05-A03: real complete-source extraction exposed missing SOURCE support for explicitly empty rule collections and false unsupported-capability warnings on an exact negative sentence. Add `src/trade_plan_monitor/ai/daily_review.py`, `src/trade_plan_monitor/ai/loop_plan_extraction.py`, and `src/trade_plan_monitor/ai/update_review.py` only for narrow literal evidence handling, with positive/negative tests in the existing production-composition fixture. No AI approval, inferred empty policy or unsupported trading capability is introduced. A later opening-account snapshot must also be verified against actual collection submission before any scoped start-time correction.
+
+RP-T18 is complete: one continuous result shows the ordered version calendar, exact source/review bindings, replacement/continuation/no-authority events, account discrepancies and closed intents. A previously missing v5 curve now projects opening plus last daily valuations only after full event-chain verification in one read snapshot; unknowns and expiry remain explicit and v4 behavior is unchanged. All 37 result/publication checks and 61 result-component checks pass, along with full frontend type checking. Independent review passes. Fixture corrections use canonical timestamps, public equity projection and the existing 1,000-row retention batch; no assertion or limit is weakened. The earlier review-test helper type is corrected without behavioral changes. **18 of 20 repair tasks complete.** Next: RP-T19; full browser/business acceptance remains pending.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -206,7 +208,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T18. Display the continuous result
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T17; **Acceptance:** RP-A08, RP-A10.
 - **Allowed files:** `web/src/components/backtests/MonitorLoopTimeline.vue`; `web/src/components/backtests/MonitorLoopSummary.vue`; `web/src/views/BacktestRunDetailView.vue`; `web/tests/unit/MonitorLoopResults.spec.ts`.
 - **Result:** Show version transitions and account-context/old-intent explanations in the existing report with one continuous curve; keep old result rendering.

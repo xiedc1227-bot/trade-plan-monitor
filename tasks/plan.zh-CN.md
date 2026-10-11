@@ -1,6 +1,6 @@
 # 修复方案：恢复按日计划连续回测
 
-状态：受限实施已授权，2026-10-10，Asia/Shanghai。**20 项修复任务，完成 17 项。** 具体 API 审查已通过 RP-T14/U11。[英文权威版](plan.md)；修复任务：[todo.zh-CN.md](todo.zh-CN.md)，`RP-T01`–`RP-T20`。
+状态：受限实施已授权，2026-10-10，Asia/Shanghai。**20 项修复任务，完成 18 项。** 具体 API 审查已通过 RP-T14/U11。[英文权威版](plan.md)；修复任务：[todo.zh-CN.md](todo.zh-CN.md)，`RP-T01`–`RP-T20`。
 
 
 实施进度，2026-10-10：用户已在当前会话授权本受限修复。RP-T01 完成：恢复原始 ML01–ML13、具体编解码/顺序编辑矩阵；11 项夹具检查及 14 项夹具/旧格式兼容检查通过；故意将账本预期 899500 改为 899501 后失败，已恢复精确字节。Ruff、双语章节/链接检查和差异审阅通过。这里只验证基准，不代表运行时连续性通过。**20 项修复任务，完成 1 项。** 下一项 RP-T02。下文历史仅规划授权措辞由本指令覆盖，具体 API 审查仍待完成。
@@ -26,6 +26,8 @@ RP-T10 完成：独立的存储输入编解码复制完整审核链及不可变�
 RP05-A03 下 RP-T18 的必要文件补充：增加 `web/src/api/monitorLoopValues.ts` 和 `web/src/api/backtests.ts` 以读取已批准的 v2 契约；增加 `src/trade_plan_monitor/backtest/loop_publication.py`、`src/trade_plan_monitor/backtest/results.py`、`src/trade_plan_monitor/backtest/composition.py` 和 `tests/integration/test_monitor_loop_result_api.py`，通过现有有界曲线契约投影完整、已验证的 v5 每日权益。保持 v4 行为、未知值、过期状态、2,000 点及 4 MiB 上限。`web/tests/unit/PlanPreparationReview.spec.ts` 仅修正审核测试辅助函数的参数类型。RP-T19 另补充 `tests/integration/test_monitor_loop_production_composition.py`，仅用于真实浏览器的伪供应商夹具。这些是 RP-A08／原 ML07–ML09 所需修复，不扩展产品范围。
 
 RP05-A03 下 RP-T19 的复现补充：真实完整原文提取暴露出显式空规则集合无法使用 SOURCE 证据、明确否定能力的整句被误报不支持两处缺口。仅补充 `src/trade_plan_monitor/ai/daily_review.py`、`src/trade_plan_monitor/ai/loop_plan_extraction.py` 和 `src/trade_plan_monitor/ai/update_review.py`，处理严格的字面证据，并在现有生产组合夹具中加入正反例。不会引入 AI 自行批准、推断空策略或不支持的交易能力。较晚的期初账户快照还必须先通过真实整链提交复现，再做受限的开始时间修正。
+
+RP-T18 已完成：一个连续结果展示有序版本日历、准确的原文与审核绑定、替换／延续／无有效权限事件、账户差异和已关闭意图。此前缺失的 v5 曲线现在先在同一读取快照内验证完整事件链，再投影期初及每日最后估值；保留未知值和过期状态，v4 行为不变。37 项结果／发布检查和 61 项结果组件检查全部通过，完整前端类型检查通过。独立审查通过。测试夹具修正使用规范时间格式、公开权益投影及原有 1,000 行保留批次；没有降低断言或上限。此前审核测试的辅助函数仅修正参数类型。**20 项修复任务，完成 18 项。** 下一项：RP-T19；完整浏览器和业务验收仍待完成。
 
 ## RP01. 基准与依据
 

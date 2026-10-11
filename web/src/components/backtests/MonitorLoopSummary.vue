@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, type DeepReadonly } from "vue";
-import type { BacktestLoopRunView } from "../../api/generated";
+import type { BacktestLoopRunView, BacktestScheduledRunView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 import { choiceLabels, fieldLabels } from "../plans/planSchema";
 
-const props = defineProps<{ run: DeepReadonly<BacktestLoopRunView> }>();
+const props = defineProps<{ run: DeepReadonly<BacktestLoopRunView | BacktestScheduledRunView> }>();
 const money = (value: number | null) => value === null ? "不可用 / 未知" : `${formatFenAsYuan(String(value))} 元`;
 const ratio = (value: string | null) => value === null ? "不可用" : value;
 function rows(value: unknown, path = ""): { path: string; value: string }[] {
@@ -16,7 +16,9 @@ function rows(value: unknown, path = ""): { path: string; value: string }[] {
 function label(path: string): string {
   return path.split(".").map(part => { const key = part.replace(/\[\d+\]/g, ""); return (fieldLabels[key] ?? key) + part.slice(key.length); }).join(" / ");
 }
-const planRows = computed(() => rows(props.run.frozenPlan.snapshot));
+const legacy = computed(() => props.run.schemaVersion === "monitor-loop-result-v1" ? props.run : null);
+const scheduled = computed(() => props.run.schemaVersion === "monitor-loop-result-v2" ? props.run : null);
+const planRows = computed(() => legacy.value ? rows(legacy.value.frozenPlan.snapshot) : []);
 const financialMetrics = computed(() => [
   ["期初权益", money(props.run.metrics.initial_equity_fen)], ["期末权益", money(props.run.metrics.final_equity_fen)],
   ["权益变化", money(props.run.metrics.equity_change_fen)], ["成本口径损益", money(props.run.metrics.cost_pnl_fen)],
@@ -28,12 +30,12 @@ const financialMetrics = computed(() => [
 </script>
 
 <template>
-  <section class="loop-summary" data-testid="monitor-loop-summary" aria-label="单计划监控闭环汇总">
-    <h3>{{ run.symbol }} · 一份冻结计划的监控闭环</h3>
+  <section class="loop-summary" data-testid="monitor-loop-summary" :aria-label="scheduled ? '连续监控闭环汇总' : '单计划监控闭环汇总'">
+    <h3>{{ run.symbol }} · {{ scheduled ? '多版本连续监控闭环' : '一份冻结计划的监控闭环' }}</h3>
     <dl>
       <dt>计划准备记录</dt><dd>{{ run.provenance.preparationId }}</dd>
-      <dt>原文 / 提取修订</dt><dd>{{ run.provenance.sourceRevision }} / {{ run.provenance.candidateRevision }}</dd>
-      <dt>历史可用时间</dt><dd>{{ formatDisplayDateTime(run.frozenPlan.available_at) }}</dd>
+      <template v-if="legacy"><dt>原文 / 提取修订</dt><dd>{{ legacy.provenance.sourceRevision }} / {{ legacy.provenance.candidateRevision }}</dd>
+      <dt>历史可用时间</dt><dd>{{ formatDisplayDateTime(legacy.frozenPlan.available_at) }}</dd></template>
       <dt>期初账户快照</dt><dd>{{ formatDisplayDateTime(run.openingAccount.snapshot_at) }}</dd>
       <dt>运行结束日期</dt><dd>{{ run.report.boundary.resolved_end_date }} · {{ run.report.boundary.origin === 'DEFAULTED' ? '服务端默认' : '明确指定' }}</dd>
       <dt>提交冻结时间</dt><dd>{{ formatDisplayDateTime(run.report.boundary.submitted_at) }}</dd>
@@ -48,21 +50,34 @@ const financialMetrics = computed(() => [
     <p>{{ run.metrics.valuation_valid ? '估值有效' : '估值受限，缺失项保持不可用' }}。比例按服务端原始精度展示。</p>
     <ul v-if="run.metrics.blockers.length"><li v-for="blocker in run.metrics.blockers" :key="blocker">{{ blocker }}</li></ul>
     <dl><template v-for="[title, value] in financialMetrics" :key="title"><dt>{{ title }}</dt><dd>{{ value }}</dd></template></dl>
-    <details><summary>已审核的完整计划</summary>
-      <p>审核时间 {{ formatDisplayDateTime(run.frozenPlan.review.reviewed_at) }} · {{ run.frozenPlan.review.evidence }}</p>
+    <section v-if="scheduled" aria-label="冻结版本日历">
+      <h4>冻结版本日历</h4>
+      <p>按生效日期沿用或替换计划，整个运行共用一个账户。后续持仓陈述只用于核对。</p>
+      <ol><li v-for="version in scheduled.versions" :key="version.versionId">
+        <p>{{ version.effectiveTradeDate }} 生效 · 历史可用 {{ formatDisplayDateTime(version.availableAt) }}</p>
+        <dl><dt>原文 / 修订 / 提取修订</dt><dd>{{ version.sourceId }} / {{ version.sourceRevision }} / {{ version.candidateRevision }}</dd>
+          <dt>版本</dt><dd>{{ version.versionId }}</dd><dt>计划</dt><dd>{{ version.planHash }}</dd><dt>审核证据</dt><dd>{{ version.evidenceHash }}</dd></dl>
+        <p v-if="version.accountContext">持仓陈述：核心 {{ version.accountContext.core_qty ?? '未知' }} 股 / 机动 {{ version.accountContext.tactical_qty ?? '未知' }} 股 · {{ version.accountContext.evidence }}</p>
+      </li></ol>
+    </section>
+    <details v-if="legacy"><summary>已审核的完整计划</summary>
+      <p>审核时间 {{ formatDisplayDateTime(legacy.frozenPlan.review.reviewed_at) }} · {{ legacy.frozenPlan.review.evidence }}</p>
       <dl><template v-for="row in planRows" :key="row.path"><dt>{{ label(row.path) }}</dt><dd>{{ row.value }}</dd></template></dl>
     </details>
     <details><summary>冻结来源与核对标识</summary>
       <dl><dt>计划</dt><dd>{{ run.planHash }}</dd><dt>准备清单</dt><dd>{{ run.provenance.manifestHash }}</dd>
         <dt>输入</dt><dd>{{ run.provenance.inputHash }}</dd><dt>数据集</dt><dd>{{ run.datasetHash }}</dd>
-        <dt>报告</dt><dd>{{ run.reportHash }}</dd><dt>原文证据</dt><dd v-for="source in run.frozenPlan.source_hashes" :key="source">{{ source }}</dd></dl>
+        <dt>报告</dt><dd>{{ run.reportHash }}</dd><template v-if="legacy"><dt>原文证据</dt><dd v-for="source in legacy.frozenPlan.source_hashes" :key="source">{{ source }}</dd></template>
+        <template v-if="scheduled"><template v-for="source in scheduled.provenance.sources" :key="source.sourceId"><dt>{{ source.sourceId }} 原文 / 提取 / 证据</dt><dd>{{ source.sourceHash }}<br>{{ source.candidateHash }}<br>{{ source.evidenceHash }}</dd></template></template></dl>
     </details>
   </section>
 </template>
 
 <style scoped>
 .loop-summary { display: grid; gap: var(--space-4); min-width: 0; padding: var(--space-4); border: var(--border-technical); border-radius: var(--radius-control); background: var(--color-surface-raised); }
-h3, h4, p { margin: 0; }
+h3, h4, p { margin: 0; overflow-wrap: anywhere; }
+ol { display: grid; gap: var(--space-4); padding-inline-start: var(--space-5); }
+li { min-width: 0; }
 dl { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr); gap: var(--space-2) var(--space-4); margin: 0; }
 dt { color: var(--color-text-silt); }
 dd { margin: 0; overflow-wrap: anywhere; }

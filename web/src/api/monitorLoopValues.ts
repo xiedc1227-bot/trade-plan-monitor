@@ -1,4 +1,4 @@
-import type { BacktestLoopRunView, BacktestLoopRunSummaryView, BacktestLoopEventView, BacktestLoopFillView } from "./generated";
+import type { BacktestLoopRunView, BacktestLoopRunSummaryView, BacktestLoopEventView, BacktestLoopFillView, BacktestScheduledRunView, BacktestScheduledRunSummaryView, BacktestScheduledEventView } from "./generated";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
 
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -98,18 +98,18 @@ function receipt(v: unknown): boolean {
 const summaryKeys = ["availability", "completedAt", "datasetHash", "eventEnd", "eventStart", "fillCount", "metrics", "pinned", "planHash",
   "planVersionId", "reportHash", "revision", "runId", "schemaVersion", "status", "symbol"];
 function summary(v: Record<string, unknown>): boolean {
-  return v.schemaVersion === "monitor-loop-result-v1" && [v.runId, v.reportHash, v.datasetHash, v.planHash].every(hash) &&
+  return ["monitor-loop-result-v1", "monitor-loop-result-v2"].includes(String(v.schemaVersion)) && [v.runId, v.reportHash, v.datasetHash, v.planHash].every(hash) &&
     v.planVersionId === null && v.status === "COMPLETED" && symbol(v.symbol) &&
     isCalendarDate(v.eventStart) && isCalendarDate(v.eventEnd) && v.eventStart <= v.eventEnd && isShanghaiDateTime(v.completedAt) &&
     integer(v.fillCount) && integer(v.revision) && typeof v.pinned === "boolean" && metrics(v.metrics) && record(v.availability) &&
     keys(v.availability, ["decisionDetails", "signalDetails", "executionOutcomeDetails", "equitySeries"]) &&
     Object.values(v.availability).every(item => ["AVAILABLE", "EXPIRED", "NOT_RECORDED"].includes(String(item)));
 }
-export function validLoopRunSummary(v: unknown): v is BacktestLoopRunSummaryView {
+export function validLoopRunSummary(v: unknown): v is BacktestLoopRunSummaryView | BacktestScheduledRunSummaryView {
   return record(v) && keys(v, summaryKeys) && bounded(v) && summary(v) && bytes(v, 32 * 1024);
 }
 export function validLoopRun(v: unknown): v is BacktestLoopRunView {
-  if (!record(v) || !keys(v, [...summaryKeys, "costs", "frozenPlan", "openingAccount", "provenance", "report", "response"]) ||
+  if (!record(v) || v.schemaVersion !== "monitor-loop-result-v1" || !keys(v, [...summaryKeys, "costs", "frozenPlan", "openingAccount", "provenance", "report", "response"]) ||
       !bounded(v) || !bytes(v, 4 * 1024 * 1024) || !summary(v) || !opening(v.openingAccount) || !costs(v.costs) ||
       !record(v.provenance) || !record(v.report) || !record(v.frozenPlan) || !record(v.response)) return false;
   const provenance = v.provenance, report = v.report, plan = v.frozenPlan, response = v.response;
@@ -136,6 +136,53 @@ export function validLoopRun(v: unknown): v is BacktestLoopRunView {
   const boundary = report.boundary, cycle = report.cycle;
   return keys(boundary, ["evidence_cutoff", "origin", "requested_end_date", "resolved_end_date", "started_at", "submitted_at"]) &&
     [boundary.started_at, boundary.submitted_at, boundary.evidence_cutoff].every(isShanghaiDateTime) &&
+    nullable(boundary.requested_end_date, isCalendarDate) && boundary.resolved_end_date === v.eventEnd &&
+    ["EXPLICIT", "DEFAULTED"].includes(String(boundary.origin)) && keys(cycle, ["attempts", "evaluations", "fills", "intents", "unfilled_intents"]) &&
+    Object.values(cycle).every(item => integer(item)) && cycle.fills === v.fillCount;
+}
+export function validScheduledRun(v: unknown): v is BacktestScheduledRunView {
+  if (!record(v) || v.schemaVersion !== "monitor-loop-result-v2" ||
+      !keys(v, [...summaryKeys, "costs", "versions", "openingAccount", "provenance", "report", "response"]) ||
+      !bounded(v) || !bytes(v, 4 * 1024 * 1024) || !summary(v) || !opening(v.openingAccount) || !costs(v.costs) ||
+      !record(v.provenance) || !record(v.report) || !record(v.response)) return false;
+  const provenance = v.provenance, report = v.report, response = v.response;
+  if (!keys(provenance, ["preparationId", "revision", "inputHash", "manifestHash", "sources"]) ||
+      !identifier(provenance.preparationId) || !integer(provenance.revision, 1) || !hash(provenance.inputHash) || !hash(provenance.manifestHash) ||
+      !Array.isArray(provenance.sources) || provenance.sources.length < 1 || provenance.sources.length > 256 ||
+      !Array.isArray(v.versions) || v.versions.length !== provenance.sources.length ||
+      !keys(response, ["mode"], ["response_delay_seconds", "fill_model"]) || !["FOLLOW_REMINDERS", "OBSERVE_ONLY", "RECORDED_ACTIONS"].includes(String(response.mode)) ||
+      !(response.response_delay_seconds === undefined || integer(response.response_delay_seconds)) ||
+      !(response.fill_model === undefined || response.fill_model === "NEXT_ELIGIBLE_MINUTE_CLOSE")) return false;
+  const seenSources = new Set(), seenVersions = new Set();
+  for (let i = 0; i < v.versions.length; i++) {
+    const source = provenance.sources[i], version = v.versions[i], previous = provenance.sources[i - 1];
+    if (!record(source) || !record(version) ||
+        !keys(source, ["sourceId", "sourceRevision", "candidateRevision", "sourceHash", "candidateHash", "evidenceHash", "baseHash"]) ||
+        !identifier(source.sourceId) || !integer(source.sourceRevision, 1) || !integer(source.candidateRevision, 1) ||
+        ![source.sourceHash, source.candidateHash, source.evidenceHash].every(hash) ||
+        source.baseHash !== (i === 0 ? null : previous.candidateHash) || seenSources.has(source.sourceId) ||
+        !keys(version, ["sourceId", "sourceRevision", "candidateRevision", "versionId", "planHash", "evidenceHash", "effectiveTradeDate", "availableAt", "accountContext"]) ||
+        version.sourceId !== source.sourceId || version.sourceRevision !== source.sourceRevision || version.candidateRevision !== source.candidateRevision ||
+        !identifier(version.versionId) || seenVersions.has(version.versionId) || !hash(version.planHash) || !hash(version.evidenceHash) ||
+        !isCalendarDate(version.effectiveTradeDate) || !isShanghaiDateTime(version.availableAt) ||
+        (i === 0 ? version.planHash !== v.planHash : version.effectiveTradeDate <= v.versions[i - 1].effectiveTradeDate)) return false;
+    const context = version.accountContext;
+    if (context !== null && (!record(context) || !keys(context, ["evidence"], ["core_qty", "tactical_qty", "dependent_rule_ids"]) ||
+        !text(context.evidence) || ![context.core_qty, context.tactical_qty].every(q => q === undefined || nullable(q, integer)) ||
+        !(context.dependent_rule_ids === undefined || Array.isArray(context.dependent_rule_ids) && context.dependent_rule_ids.length <= 2 && context.dependent_rule_ids.every(identifier)))) return false;
+    seenSources.add(source.sourceId); seenVersions.add(version.versionId);
+  }
+  if (!keys(report, ["report_schema_version", "boundary", "cycle", "dataset_hash", "event_count", "event_set_hash", "final_account", "final_inventory",
+      "final_valuation", "input_hash", "last_evidence_at", "last_valuation_at", "metrics", "opening_valuation", "report_hash", "run_id", "symbol"]) ||
+      report.report_schema_version !== "backtest-report-v5" || report.run_id !== v.runId || report.dataset_hash !== v.datasetHash || report.report_hash !== v.reportHash ||
+      report.input_hash !== provenance.inputHash || report.symbol !== v.symbol || !hash(report.event_set_hash) || !integer(report.event_count, 1) ||
+      !account(report.final_account) || !inventory(report.final_inventory) || !valuation(report.final_valuation) || !valuation(report.opening_valuation) ||
+      !same(report.metrics, v.metrics) || !nullable(report.last_evidence_at, isShanghaiDateTime) || !isShanghaiDateTime(report.last_valuation_at) ||
+      !record(report.boundary) || !record(report.cycle)) return false;
+  const boundary = report.boundary, cycle = report.cycle;
+  return keys(boundary, ["evidence_cutoff", "origin", "requested_end_date", "resolved_end_date", "started_at", "submitted_at"]) &&
+    [boundary.started_at, boundary.submitted_at, boundary.evidence_cutoff].every(isShanghaiDateTime) &&
+    String(boundary.started_at).slice(0, 10) === v.eventStart && sameTime(boundary.evidence_cutoff, v.completedAt) &&
     nullable(boundary.requested_end_date, isCalendarDate) && boundary.resolved_end_date === v.eventEnd &&
     ["EXPLICIT", "DEFAULTED"].includes(String(boundary.origin)) && keys(cycle, ["attempts", "evaluations", "fills", "intents", "unfilled_intents"]) &&
     Object.values(cycle).every(item => integer(item)) && cycle.fills === v.fillCount;
@@ -175,6 +222,23 @@ export function validLoopEvent(v: unknown): v is BacktestLoopEventView {
     (event.schema_version === undefined || event.schema_version === "monitor-loop-event-v1") && event.run_id === v.runId && sameTime(event.at, v.eventAt) &&
     hash(event.event_id) && nullable(event.cause_event_id, hash) && integer(event.sequence, 1) &&
     v.detailId === `loop-${String(event.sequence).padStart(6, "0")}-${v.runId.slice(0, 16)}` && payload(event.payload);
+}
+export function validScheduledEvent(v: unknown): v is BacktestScheduledEventView {
+  if (!record(v) || !keys(v, ["detailId", "event", "eventAt", "kind", "runId", "schemaVersion"]) || v.schemaVersion !== "monitor-loop-event-v2" ||
+      v.kind !== "DECISION" || !hash(v.runId) || !isShanghaiDateTime(v.eventAt) || !record(v.event) || !bounded(v) || !bytes(v, 32 * 1024)) return false;
+  const event = v.event;
+  if (!keys(event, ["at", "cause_event_id", "event_id", "payload", "run_id", "sequence", "version_id", "authority_id"], ["schema_version"]) ||
+      !(event.schema_version === undefined || event.schema_version === "monitor-loop-event-v2") || event.run_id !== v.runId || !sameTime(event.at, v.eventAt) ||
+      !hash(event.event_id) || !nullable(event.cause_event_id, hash) || !integer(event.sequence, 1) || !nullable(event.version_id, identifier) || !nullable(event.authority_id, hash) ||
+      v.detailId !== `loop-${String(event.sequence).padStart(6, "0")}-${v.runId.slice(0, 16)}` || !record(event.payload)) return false;
+  const p = event.payload;
+  if (!["REPLACED", "CONTINUED", "NO_AUTHORITY"].includes(String(p.kind))) return payload(p);
+  return keys(p, ["kind", "at", "from_version_id", "version_id", "authority_id"], ["context_mismatches", "blocked_rule_ids", "closed_intent_ids"]) &&
+    sameTime(p.at, event.at) && identifier(p.from_version_id) && p.version_id === event.version_id && p.authority_id === event.authority_id &&
+    (p.context_mismatches === undefined || Array.isArray(p.context_mismatches) && p.context_mismatches.length <= 2 && p.context_mismatches.every(item =>
+      record(item) && keys(item, ["bucket", "stated_qty", "actual_qty"]) && ["CORE", "TACTICAL"].includes(String(item.bucket)) && integer(item.stated_qty) && nullable(item.actual_qty, integer))) &&
+    (p.blocked_rule_ids === undefined || Array.isArray(p.blocked_rule_ids) && p.blocked_rule_ids.length <= 2 && p.blocked_rule_ids.every(identifier)) &&
+    (p.closed_intent_ids === undefined || Array.isArray(p.closed_intent_ids) && p.closed_intent_ids.every(hash));
 }
 export function validLoopFill(v: unknown): v is BacktestLoopFillView {
   return record(v) && keys(v, ["eventId", "fillId", "filledAt", "receipt", "runId", "schemaVersion"]) &&

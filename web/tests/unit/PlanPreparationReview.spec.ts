@@ -45,7 +45,7 @@ function preview(preparation = fresh()) {
   wrappers.push(wrapper);
   return wrapper;
 }
-async function confirmPreview(wrapper: VueWrapper) {
+async function confirmPreview(wrapper: Pick<VueWrapper, "get">) {
   await wrapper.get('[data-testid="review-evidence"]').setValue(evidence);
   for (const [index, choice] of fixture.choices.entries()) await wrapper.get(`[data-testid="review-supplement-${index}"]`).setValue(choice.reason);
   await wrapper.get('[data-testid="review-confirmation"]').setValue(true);

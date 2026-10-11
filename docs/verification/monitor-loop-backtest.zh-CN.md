@@ -94,6 +94,16 @@ RP-T17 按 RP05-A03 增补：仅增加 `web/src/views/BacktestNewView.vue`，把
 
 RP-T17 已完成，RP-C06 在控制器/组件层通过：一条已复核集合只生成一次 prepared-loop-plan-v2 请求，绑定唯一清单、期初账户、响应/结束设置及费用。即使外部复核选择变化，未知结果也继续使用不可变的原命令与 key。41 项回测表单/创建页面检查全部通过，其中回测表单 22 项；独立审查无新增阻塞。完整浏览器验收仍待 RP-T19，已知结果事件使用处仍由 RP-T18 适配。**20 项修复任务，完成 17 项。** 下一项：RP-T18。
 
+## RP-V18. 连续结果与完整权益
+
+RP-T18 已完成：一个连续结果展示有序版本日历、准确的原文与审核绑定、替换／延续／无有效权限事件、账户差异和已关闭意图。此前缺失的 v5 曲线现在先在同一读取快照内验证完整事件链，再投影期初及每日最后估值；保留未知值和过期状态，v4 行为不变。37 项结果／发布检查和 61 项结果组件检查全部通过，完整前端类型检查通过。独立审查通过。测试夹具修正使用规范时间格式、公开权益投影及原有 1,000 行保留批次；没有降低断言或上限。此前审核测试的辅助函数仅修正参数类型。**20 项修复任务，完成 18 项。** 下一项：RP-T19；完整浏览器和业务验收仍待完成。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_result_api.py tests/integration/test_monitor_loop_publication.py -q -m "not live" --basetemp=.pytest_cache/rpt18-curve-2
+npm --prefix web run test -- --run tests/unit/MonitorLoopResults.spec.ts tests/unit/BacktestRunDetailView.spec.ts
+npm --prefix web run type-check
+```
+
 ## MV01. 已实现边界
 
 历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。

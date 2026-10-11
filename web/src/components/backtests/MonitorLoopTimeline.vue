@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { DeepReadonly } from "vue";
-import type { BacktestLoopEventView } from "../../api/generated";
+import type { BacktestLoopEventView, BacktestScheduledEventView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
-defineProps<{ items: readonly DeepReadonly<BacktestLoopEventView>[] }>();
+defineProps<{ items: readonly (BacktestLoopEventView | BacktestScheduledEventView | DeepReadonly<BacktestLoopEventView | BacktestScheduledEventView>)[] }>();
 const money = (v: number | null) => v === null ? "未知 / 不可用" : `${formatFenAsYuan(String(v))} 元`;
-const labels = { EVALUATED: "监控评估", REMINDED: "提醒", REQUESTED: "响应意图", EXECUTED: "执行尝试", STATE: "账户状态", VALUATION: "估值" };
+const labels = { REPLACED: "计划替换", CONTINUED: "计划延续", NO_AUTHORITY: "无有效计划权限", EVALUATED: "监控评估", REMINDED: "提醒", REQUESTED: "响应意图", EXECUTED: "执行尝试", STATE: "账户状态", VALUATION: "估值" };
 </script>
 
 <template>
@@ -17,7 +17,15 @@ const labels = { EVALUATED: "监控评估", REMINDED: "提醒", REQUESTED: "响�
         <h4>第 {{ item.event.sequence }} 条 · {{ labels[item.event.payload.kind] }}</h4>
         <time :datetime="item.eventAt">{{ formatDisplayDateTime(item.eventAt) }}</time>
         <p class="identity">事件 {{ item.event.event_id }}<span v-if="item.event.cause_event_id"><br>原因事件 {{ item.event.cause_event_id }}</span></p>
-        <template v-if="item.event.payload.kind === 'EVALUATED'">
+        <p v-if="item.schemaVersion === 'monitor-loop-event-v2'" class="identity">版本 {{ item.event.version_id ?? '无有效版本' }} · 权限 {{ item.event.authority_id ?? '无有效权限' }}</p>
+        <template v-if="item.event.payload.kind === 'REPLACED' || item.event.payload.kind === 'CONTINUED' || item.event.payload.kind === 'NO_AUTHORITY'">
+          <p>此前版本 {{ item.event.payload.from_version_id }} → {{ item.event.payload.version_id ?? '无有效版本' }}</p>
+          <p>{{ item.event.payload.kind === 'REPLACED' ? '以新计划接续同一账户，原普通权限已关闭。' : item.event.payload.kind === 'CONTINUED' ? '继续沿用同一版本和账户，不重新激活。' : '当前无有效计划权限，不产生新的普通交易权限。' }}</p>
+          <p v-for="difference in item.event.payload.context_mismatches ?? []" :key="difference.bucket">持仓核对差异：{{ difference.bucket === 'CORE' ? '核心' : '机动' }} · 原文 {{ difference.stated_qty }} 股 / 实际 {{ difference.actual_qty ?? '未知' }} 股；账户未被覆盖。</p>
+          <p v-for="rule in item.event.payload.blocked_rule_ids ?? []" :key="rule">账户依赖规则阻断：{{ rule }}</p>
+          <p v-for="intent in item.event.payload.closed_intent_ids ?? []" :key="intent">已关闭旧意图：{{ intent }}</p>
+        </template>
+        <template v-else-if="item.event.payload.kind === 'EVALUATED'">
           <p>持仓 {{ item.event.payload.inventory.total_qty ?? '未知' }} 股；{{ item.event.payload.signals.length ? '普通信号已记录' : '持仓观察，未记录普通信号' }}。</p>
           <p v-for="signal in item.event.payload.signals" :key="signal.signal_id">{{ signal.side === 'BUY' ? '买入' : '卖出' }} · {{ signal.state }} · 计划 {{ signal.planned_qty }} 股 / 当前可执行 {{ signal.executable_qty }} 股 / 已模拟 {{ signal.simulated_qty }} 股</p>
           <p v-for="risk in item.event.payload.risks" :key="risk.kind">风险 {{ risk.kind }} · {{ risk.status }}</p>
