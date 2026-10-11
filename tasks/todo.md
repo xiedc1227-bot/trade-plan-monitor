@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **19 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **20 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -68,6 +68,8 @@ Add `tests/integration/test_plan_preparation_review.py` only for independent fir
 RP-T19 real-browser suffix retry reproduced HTTP 409 PREPARATION_ITEM_BINDING_CONFLICT after editing the third source. Add `web/src/composables/usePlanPreparation.ts` and `web/tests/unit/PlanPreparation.spec.ts` under RP05-A03 only to bind extraction to the current validated predecessor candidate from the complete revision-bound item list, rather than the invalidated item's cleared historical baseHash. Keep server checks, uncertain-command identity and retry limits unchanged.
 
 RP-T19 is complete: the final real Chrome suite passes all 3 journeys (4.0 minutes), including four complete sources, middle-item retry, unchanged prefix/suffix invalidation, rejection of a competing unfinished operation, one chain review/submission, the literal continuous ledger and all 7 equity points. Console/page errors are empty. Full frontend: 1,028 passed; original 600/600-second load gates pass with 5 replay jobs. Independent review passes. **19 of 20 repair tasks complete.** Next: RP-T20 documentation reconciliation; no push.
+
+RP-T20 is complete and RP-C07 passes: the operating guide now describes one ordered preparation, explicit whole-chain review, one continuous account/run, exact API discriminators, recovery and complete equity. RP-V20 maps RP-B01–RP-B10 to the original ML gates, including ML-A07/ML-A11/ML-A13/ML-A16–ML-A18 without cancellations. Independent bilingual review, section/literal/numeric/command/link parity and diff checks pass; both generated API profiles and the four U11 hashes remain exact. Historical failures and unrelated files are preserved. **20 of 20 repair tasks complete.** All required repair work is complete with local commits only; no push or deployment.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -238,7 +240,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T20. Reconcile evidence and operating guidance
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T19; **Acceptance:** RP-A12.
 - **Allowed files:** `docs/operations/monitor-loop-backtest.md`; `docs/operations/monitor-loop-backtest.zh-CN.md`; `docs/verification/monitor-loop-backtest.md`; `docs/verification/monitor-loop-backtest.zh-CN.md`; `docs/specifications/monitoring/SPEC-unified-plan.md`; `docs/specifications/monitoring/SPEC-unified-plan.zh-CN.md`.
 - **Result:** Document one-upload/one-run behavior and exact evidence/limits; reconcile original ML gates and both language/API versions through the existing concrete contract-review process. No invented approval or completion. Documentation may be split by pair.
@@ -254,7 +256,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 | RP-C04 | RP-T11 | Frozen data/input through one worker to atomic continuous report and old compatibility. |
 | RP-C05 | RP-T14 | Actual API and both generated profiles match the bounded design; approval is not inferred from generation. |
 | RP-C06 | RP-T17 | Grouped preparation/calendar/review leads to exactly one run. |
-| RP-C07 | RP-T20 | Original business acceptance, browser/fault/compatibility evidence and bilingual instructions reconciled. |
+| RP-C07 | RP-T20 | Passed: RP-V20. Original business acceptance, browser/fault/compatibility evidence and bilingual instructions reconciled. |
 
 ## RP-CHECKS. Verification commands
 

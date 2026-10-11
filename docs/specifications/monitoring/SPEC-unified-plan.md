@@ -54,7 +54,7 @@ Remove the separate daily route, page and extraction workspace, current target-c
 
 ## U07. Documentation parity
 
-Both language versions preserve U01–U09, field names, format numbers, API paths, timing, boundaries and acceptance criteria. Current indexes point here. Keep useful frozen compatibility constraints and necessary acceptance evidence; remove superseded specifications and completed process records from the maintained tree. Historical Git evidence never authorizes current behavior.
+Both language versions preserve U01–U12, field names, format numbers, API paths, timing, boundaries and acceptance criteria. Current indexes point here. Keep useful frozen compatibility constraints and necessary acceptance evidence; remove superseded specifications and completed process records from the maintained tree. Historical Git evidence never authorizes current behavior.
 
 ## U08. Persistent ordinary rules (2026-10-03 scoped design)
 
@@ -117,3 +117,9 @@ The 36 new schemas cover bounded collection creation/progress/pages, item correc
 `monitor-loop-result-v2` exposes ordered versions/provenance and a typed `backtest-report-v5` header through `report_schema_version`. The public header excludes the private complete schedule and raw sources, and is not independently hash-recomputable as a full private report. Backend immutable report/input verification remains mandatory. Legacy v1 preparation, v4 report bytes/hashes, supported exports, one unfinished operation, cancellation/unknown drain exclusion, one same-process worker and latest-30 retention remain. Loop exports still return 409. No new global resource, quota, live monitoring control, production migration or deployment is approved.
 
 Independent review reproduced the optional-create-discriminator mismatch in both profiles before repair; the public subclass now matches actual HTTP dispatch while the private default remains exact. Both generated TypeScript files match their renderers. Actual contract gates and remaining UI acceptance are recorded under RP-V14; this API approval does not claim completion of RP-T15–RP-T20.
+
+## U12. Daily continuity operational closure (2026-10-11)
+
+RP-T01–RP-T20 and RP-C01–RP-C07 are complete under RP05-A03. The original ML-A07, ML-A11, ML-A13 and ML-A16–ML-A18 remain active acceptance and pass the recorded offline checks. One ordered source collection is extracted sequentially, reviewed as a chain and submitted once; daily replacement/continuation uses one continuous account and one result. Later account assertions cannot overwrite the ledger. Exact literal-source review and first-day opening-time repairs preserve the reviewed evidence boundaries and original server authority.
+
+The [operations guide](../../operations/monitor-loop-backtest.md) and [verification report](../../verification/monitor-loop-backtest.md) RP-V19/RP-V20 record real Chrome business/retry/edit/exclusion coverage, complete equity, compatibility/fault tests and unchanged 600/600-second load gates. They distinguish synthetic AI/market inputs and measured shared-process limits from live-provider or maximum-capacity certification. U09/U10/U11 retain their historical scope; U11's four approved hashes remain exact and both generated profiles pass. This closure changes no public API shape or approval identity, performs no production migration/deployment and does not authorize new platform scope. Changes are local commits; no push occurs in this run.
