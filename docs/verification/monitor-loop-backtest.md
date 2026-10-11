@@ -46,6 +46,14 @@ RP-T08 is complete and RP-C03 passes: explicit item correction validates origina
 .venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_review.py tests/integration/test_plan_preparation_store.py tests/integration/test_plan_preparation_worker.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt08-reviewed-final
 ```
 
+## RP-V09. Scheduled evidence requirements and cutoff
+
+RP-T09 is complete: distinct scheduled dataset codecs freeze relevant plan bindings and the union of evidence requirements without changing v1 bytes. Each version checks history available at its activation; successor minute shortages stay visible without adding an admission gate. Frames follow only the currently selected version, and end-later sources do not affect the frozen dataset. 51 dataset/cutoff/publication/legacy checks pass, including 13 new cases. The missing successor minute warning was reproduced before repair. Ruff and independent diff review pass. **9 of 20 repair tasks complete.** Next: RP-T10.
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py tests/integration/test_monitor_loop_publication.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt09-compatible
+```
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

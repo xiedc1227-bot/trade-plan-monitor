@@ -4,6 +4,7 @@ Selection reads existing content-addressed artifacts. It adds no catalog rows;
 run-input storage copies its referenced artifacts before acknowledging admission.
 """
 
+from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from hashlib import sha256
 from typing import Literal, Self
@@ -11,7 +12,11 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from trade_plan_monitor.backtest.canonical import canonical_json
-from trade_plan_monitor.backtest.control import check_cancelled, report_progress
+from trade_plan_monitor.backtest.control import (
+    check_cancelled,
+    report_progress,
+    validate_operation_controls,
+)
 from trade_plan_monitor.backtest.dataset import (
     DatasetItem,
     DatasetScope,
@@ -20,7 +25,13 @@ from trade_plan_monitor.backtest.dataset import (
 )
 from trade_plan_monitor.backtest.loop_input import MAX_LOOP_RECORDS
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
-from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary, LoopSchedule, LoopTimestamp
+from trade_plan_monitor.backtest.plan_schedule import (
+    MAX_SCHEDULED_ENTRIES,
+    LoopEndBoundary,
+    LoopSchedule,
+    LoopTimestamp,
+    ScheduledLoopSchedule,
+)
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.backtest.time import SHANGHAI
 from trade_plan_monitor.domain.daily_plan_models import required_daily_observations
@@ -98,6 +109,37 @@ class LoopDatasetRequest(ResearchValue):
         return self
 
 
+class ScheduledLoopDatasetRequest(ResearchValue):
+    scope: DatasetScope
+    schedule: ScheduledLoopSchedule
+    boundary: LoopEndBoundary
+
+    @model_validator(mode="after")
+    def bound(self):
+        LoopDatasetRequest.one_bound_plan(self)
+        if self.scope.start != self.schedule.entries[0].effective_trade_date:
+            raise ValueError("scheduled dataset must start with its initial account version")
+        return self
+
+
+def relevant_schedule_entries(schedule, boundary):
+    return tuple(row for row in schedule.entries if row.effective_trade_date <=
+                 boundary.resolved_end_date and max(row.version.available_at, datetime.combine(
+                     row.effective_trade_date, time.min, SHANGHAI,
+                 )) <= boundary.evidence_cutoff)
+
+
+def scheduled_dataset_requirements(schedule, boundary):
+    values = tuple(loop_dataset_requirements(row.version.snapshot)
+                   for row in relevant_schedule_entries(schedule, boundary))
+    return LoopDatasetRequirements(
+        requires_minutes=any(value.requires_minutes for value in values),
+        requires_daily=any(value.requires_daily for value in values),
+        daily_observations=max((value.daily_observations for value in values), default=0),
+        minute_observations=max((value.minute_observations for value in values), default=0),
+    )
+
+
 class LoopMinuteReference(ResearchValue):
     artifact_hash: Sha256Hex
     bar_end: LoopTimestamp
@@ -137,9 +179,10 @@ class LoopDatasetManifest(ResearchValue):
 
     @classmethod
     def build(cls, **values) -> Self:
-        identity = {"schema_version": LOOP_DATASET_VERSION, **values}
+        domain = cls.model_fields["schema_version"].default
+        identity = {"schema_version": domain, **values}
         digest = sha256(
-            (LOOP_DATASET_VERSION + "\0" + canonical_json(identity)).encode()
+            (domain + "\0" + canonical_json(identity)).encode()
         ).hexdigest()
         return cls(dataset_hash=digest, **identity)
 
@@ -224,16 +267,49 @@ class LoopDatasetManifest(ResearchValue):
             raise ValueError("LOOP_EVIDENCE_RECORD_LIMIT_EXCEEDED")
         identity = self.model_dump(mode="python", exclude={"dataset_hash"})
         expected_hash = sha256(
-            (LOOP_DATASET_VERSION + "\0" + canonical_json(identity)).encode()
+            (self.schema_version + "\0" + canonical_json(identity)).encode()
         ).hexdigest()
         if self.dataset_hash != expected_hash:
             raise ValueError("loop dataset identity is invalid")
         return self
 
 
+class LoopDatasetPlanBinding(ResearchValue):
+    effective_trade_date: date
+    version_id: StableIdentifier
+    plan_hash: Sha256Hex
+
+
+class ScheduledLoopDatasetManifest(ResearchValue):
+    schema_version: Literal["monitor-loop-dataset-v2"] = "monitor-loop-dataset-v2"
+    dataset_hash: Sha256Hex
+    scope: DatasetScope
+    boundary: LoopEndBoundary
+    plan_bindings: tuple[LoopDatasetPlanBinding, ...] = Field(
+        min_length=1, max_length=MAX_SCHEDULED_ENTRIES,
+    )
+    requirements: LoopDatasetRequirements
+    days: tuple[LoopDaySelection, ...]
+    warmup_blockers: tuple[str, ...] = ()
+
+    @classmethod
+    def build(cls, **values):
+        return LoopDatasetManifest.build.__func__(cls, **values)
+
+    @model_validator(mode="after")
+    def bound(self):
+        LoopDatasetManifest.bound(self)
+        dates = tuple(binding.effective_trade_date for binding in self.plan_bindings)
+        if dates != tuple(sorted(set(dates))) or dates[0] != self.scope.start or (
+            dates[-1] > self.scope.end
+        ):
+            raise ValueError("scheduled dataset bindings must match ordered relevant days")
+        return self
+
+
 class LoopDatasetFreezeResult(ResearchValue):
     ready: bool
-    manifest: LoopDatasetManifest | None
+    manifest: LoopDatasetManifest | ScheduledLoopDatasetManifest | None
     blockers: tuple[str, ...]
 
     @model_validator(mode="after")
@@ -287,6 +363,23 @@ def _minute_from_row(row, profile):
     return bar
 
 
+def _available_minute_warmup(days, at):
+    count = 0
+    for day in reversed(days):
+        if day.state == "CLOSED" or day.trade_date > at.date():
+            continue
+        present = {ref.bar_end for ref in day.minutes if ref.available_at < at}
+        ends = expected_minute_ends(day.trade_date, is_open=True)
+        for offset in range(len(ends) - 5, -1, -5):
+            group = ends[offset:offset + 5]
+            if group[-1] >= at:
+                continue
+            if not all(end in present for end in group):
+                return count
+            count += 1
+    return count
+
+
 def select_loop_dataset(
     connection, request: LoopDatasetRequest, *, cancellation_token=None, progress_callback=None
 ):
@@ -298,10 +391,13 @@ def select_loop_dataset(
         _decode_minute_payload,
     )
 
-    request = LoopDatasetRequest.model_validate(request.model_dump(mode="python"))
+    scheduled = isinstance(request, ScheduledLoopDatasetRequest)
+    request_type = ScheduledLoopDatasetRequest if scheduled else LoopDatasetRequest
+    request = request_type.model_validate(request.model_dump(mode="python"))
     scope, boundary = request.scope, request.boundary
     symbol, exchange = scope.symbols[0], exchange_for_symbol(scope.symbols[0])
-    requirements = loop_dataset_requirements(request.schedule.entries[0].version.snapshot)
+    requirements = (scheduled_dataset_requirements(request.schedule, boundary) if scheduled else
+                    loop_dataset_requirements(request.schedule.entries[0].version.snapshot))
     days, calendars, blockers = [], [], []
     warmup_daily, warmup_groups = set(), []
     total_records = 0
@@ -465,7 +561,17 @@ def select_loop_dataset(
         )
         day += timedelta(days=1)
     blockers.extend(_calendar_chain_blockers(calendars))
-    if len(warmup_daily) < requirements.daily_observations:
+    if scheduled:
+        for row in relevant_schedule_entries(request.schedule, boundary):
+            needed = loop_dataset_requirements(row.version.snapshot)
+            activation = max(boundary.started_at, row.version.available_at, datetime.combine(
+                row.effective_trade_date, time.min, SHANGHAI,
+            ))
+            available = sum(any(ref.available_at < activation for ref in day.daily) for day in days)
+            if available < needed.daily_observations:
+                blockers.append("LOOP_DAILY_WARMUP_INSUFFICIENT:"
+                                f"{row.version.version_id}:{available}:{needed.daily_observations}")
+    elif len(warmup_daily) < requirements.daily_observations:
         blockers.append(
             f"LOOP_DAILY_WARMUP_INSUFFICIENT:{len(warmup_daily)}:{requirements.daily_observations}"
         )
@@ -485,16 +591,36 @@ def select_loop_dataset(
         if not complete:
             break
         warmup_count += 1
-    if warmup_count < requirements.minute_observations:
+    initial_requirements = (loop_dataset_requirements(request.schedule.entries[0].version.snapshot)
+                            if scheduled else requirements)
+    if warmup_count < initial_requirements.minute_observations:
         warmup_blockers = (
-            f"LOOP_INITIAL_MINUTE_WARMUP_INSUFFICIENT:{warmup_count}:{requirements.minute_observations}",
+            "LOOP_INITIAL_MINUTE_WARMUP_INSUFFICIENT:"
+            f"{warmup_count}:{initial_requirements.minute_observations}",
         )
+    if scheduled:
+        for row in relevant_schedule_entries(request.schedule, boundary)[1:]:
+            activation = max(row.version.available_at, datetime.combine(
+                row.effective_trade_date, time.min, SHANGHAI,
+            ))
+            needed = loop_dataset_requirements(row.version.snapshot).minute_observations
+            available = _available_minute_warmup(days, activation)
+            if available < needed:
+                warmup_blockers += ("LOOP_VERSION_MINUTE_WARMUP_INSUFFICIENT:"
+                                    f"{row.version.version_id}:{available}:{needed}",)
     version = request.schedule.entries[0].version
-    manifest = LoopDatasetManifest.build(
+    binding = dict(plan_version_id=version.version_id, plan_hash=version.plan_hash)
+    manifest_type = LoopDatasetManifest
+    if scheduled:
+        manifest_type = ScheduledLoopDatasetManifest
+        binding = dict(plan_bindings=tuple(LoopDatasetPlanBinding(
+            effective_trade_date=row.effective_trade_date,
+            version_id=row.version.version_id, plan_hash=row.version.plan_hash,
+        ) for row in relevant_schedule_entries(request.schedule, boundary)))
+    manifest = manifest_type.build(
         scope=scope,
         boundary=boundary,
-        plan_version_id=version.version_id,
-        plan_hash=version.plan_hash,
+        **binding,
         requirements=requirements,
         days=tuple(days),
         warmup_blockers=warmup_blockers,
@@ -552,3 +678,31 @@ def read_loop_day(
         daily_limits=tuple(limits),
         daily_bars=tuple(daily),
     )
+
+
+def freeze_scheduled_loop_dataset(
+    market_store, request, *, cancellation_token=None, progress_callback=None,
+):
+    """Use the existing market snapshot with the distinct scheduled request codec."""
+    if not isinstance(request, ScheduledLoopDatasetRequest):
+        raise TypeError("request must be ScheduledLoopDatasetRequest")
+    request = ScheduledLoopDatasetRequest.model_validate_json(request.model_dump_json())
+    validate_operation_controls(cancellation_token, progress_callback)
+    with market_store._connect() as connection:
+        connection.execute("BEGIN")
+        result = select_loop_dataset(connection, request, cancellation_token=cancellation_token,
+                                     progress_callback=progress_callback)
+        check_cancelled(cancellation_token, "FREEZE_VERIFY")
+        connection.commit()
+    return result
+
+
+@contextmanager
+def open_frozen_scheduled_loop_dataset(market_store, manifest):
+    """Stream existing immutable artifacts; do not rewrite the legacy market catalog."""
+    if not isinstance(manifest, ScheduledLoopDatasetManifest):
+        raise TypeError("manifest must be ScheduledLoopDatasetManifest")
+    manifest = ScheduledLoopDatasetManifest.model_validate_json(manifest.model_dump_json())
+    with market_store._connect() as connection:
+        connection.execute("BEGIN")
+        yield (read_loop_day(connection, manifest, day) for day in manifest.days)

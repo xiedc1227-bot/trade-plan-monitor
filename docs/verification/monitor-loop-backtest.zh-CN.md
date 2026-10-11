@@ -46,6 +46,14 @@ RP-T08 完成，RP-C03 通过：显式逐项纠正校验原始来源/前项证�
 .venv/Scripts/python.exe -m pytest tests/integration/test_plan_preparation_review.py tests/integration/test_plan_preparation_store.py tests/integration/test_plan_preparation_worker.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt08-reviewed-final
 ```
 
+## RP-V09. 版本链证据需求与截止
+
+RP-T09 完成：独立的版本链数据编解码冻结相关版本绑定及证据需求并集，不改变 v1 字节。每个版本检查生效时已可用的历史，后续分钟历史不足保留可见提示，不增加准入门槛。回放帧仅跟随当前选中版本，截止范围之后的原文不影响冻结数据集。51 项数据/截止/发布/旧格式检查通过，包含 13 项新增用例；后续分钟历史提示缺失已先复现再修复。Ruff 和独立差异审阅通过。**20 项修复任务，完成 9 项。** 下一项 RP-T10。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py tests/integration/test_monitor_loop_publication.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt09-compatible
+```
+
 ## MV01. 已实现边界
 
 历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。

@@ -13,7 +13,7 @@ from tests.integration.test_backtest_market_store import (
     _scope,
     _seed_complete,
 )
-from tests.unit.test_monitor_loop_cutoff import daily_plan, request
+from tests.unit.test_monitor_loop_cutoff import daily_plan, request, scheduled_request
 from tests.unit.test_monitor_loop_schedule import at, row, version
 
 from trade_plan_monitor.backtest.control import BacktestOperationCancelled, CancellationToken
@@ -318,3 +318,146 @@ def test_cutoff_selection_does_not_change_existing_manifest_bytes_or_catalog(tmp
     assert store.freeze_dataset(_scope()) == legacy
     assert store.dataset_manifest(legacy.dataset_hash).model_dump_json() == before
     assert store.list_dataset_summaries(limit=20) == catalog
+
+
+def seed_scheduled_market(store, *, successor_daily=True, initial_daily=True):
+    store.record_minute_batch(_minute_batch())
+    store.record_trading_days((_calendar(),))
+    store.record_daily_limits((_limit(),))
+    if initial_daily:
+        store.record_daily_bars((_daily(),))
+    store.record_trading_days((_calendar().model_copy(update={
+        "cal_date": at(25).date(), "previous_trade_date": at(24).date(),
+    }),))
+    store.record_daily_limits((_limit().model_copy(update={
+        "trade_date": at(25).date(), "received_at": at(25, 9, 30),
+    }),))
+    store.record_minute_batch(_minute_batch(trade_date=at(25).date()))
+    if successor_daily:
+        store.record_daily_bars((_daily().model_copy(update={
+            "trade_date": at(25).date(), "received_at": at(25, 15, 20),
+        }),))
+
+
+def test_scheduled_successor_daily_warmup_accumulates_during_run_and_missing_close_blocks(tmp_path):
+    from trade_plan_monitor.backtest.loop_dataset import freeze_scheduled_loop_dataset
+
+    store = BacktestMarketStore(tmp_path / "scheduled-market.sqlite")
+    seed_scheduled_market(store, successor_daily=False)
+    value = scheduled_request()
+    missing = freeze_scheduled_loop_dataset(store, value)
+    assert not missing.ready and missing.manifest is None
+    assert any("OFFICIAL_CLOSE_NOT_AVAILABLE" in reason and "2026-08-25" in reason
+               for reason in missing.blockers)
+    assert not any("DAILY_WARMUP" in reason for reason in missing.blockers)
+    store.record_daily_bars((_daily().model_copy(update={
+        "trade_date": at(25).date(), "received_at": at(25, 15, 20),
+    }),))
+    result = freeze_scheduled_loop_dataset(store, value)
+    assert result.ready and result.blockers == ()
+    assert result.manifest.requirements.daily_observations == 1
+    assert result.manifest.requirements.minute_observations == 1
+    assert [binding.version_id for binding in result.manifest.plan_bindings] == [
+        "scheduled-24", "scheduled-25",
+    ]
+    assert [binding.effective_trade_date for binding in result.manifest.plan_bindings] == [
+        at(24).date(), at(25).date(),
+    ]
+
+
+def test_scheduled_cutoff_and_later_plans_do_not_change_earlier_manifest_or_v1_bytes(tmp_path):
+    from trade_plan_monitor.backtest.loop_dataset import (
+        freeze_scheduled_loop_dataset,
+        open_frozen_scheduled_loop_dataset,
+    )
+
+    store = BacktestMarketStore(tmp_path / "scheduled-market.sqlite")
+    seed_scheduled_market(store)
+    legacy = store.freeze_loop_dataset(request()).manifest.model_dump_json()
+    value = scheduled_request(cutoff=at(24, 9, 35, 12))
+    original = freeze_scheduled_loop_dataset(store, value).manifest
+    assert original.schema_version == "monitor-loop-dataset-v2"
+    assert len(original.plan_bindings) == 1 and not original.requirements.requires_daily
+    changed = scheduled_request(cutoff=at(24, 9, 35, 12), future_plan=daily_plan())
+    assert freeze_scheduled_loop_dataset(store, changed).manifest == original
+    bar = _minute_batch().bars[0]
+    store.record_completed_loop_minutes((bar.model_copy(update={
+        "close_fen": 1001, "received_at": at(24, 10),
+    }),), historical_profile=PROFILE)
+    assert freeze_scheduled_loop_dataset(store, value).manifest == original
+    with open_frozen_scheduled_loop_dataset(store, original) as reader:
+        (day,) = reader
+        assert len(day.minutes) == 5 and day.minutes[0].close_fen == 1000
+    assert store.freeze_loop_dataset(request()).manifest.model_dump_json() == legacy
+    assert store.list_dataset_summaries(limit=20) == ()
+
+
+@pytest.mark.parametrize("field", ["plan_hash", "version_id", "requirements", "artifact"])
+def test_scheduled_manifest_rejects_content_hash_tampering_and_v1_decoder(tmp_path, field):
+    from trade_plan_monitor.backtest.loop_dataset import (
+        ScheduledLoopDatasetManifest,
+        freeze_scheduled_loop_dataset,
+    )
+
+    store = BacktestMarketStore(tmp_path / "scheduled-market.sqlite")
+    seed_scheduled_market(store)
+    manifest = freeze_scheduled_loop_dataset(store, scheduled_request()).manifest
+    assert ScheduledLoopDatasetManifest.model_validate_json(manifest.model_dump_json()) == manifest
+    with pytest.raises(ValueError):
+        LoopDatasetManifest.model_validate_json(manifest.model_dump_json())
+    raw = manifest.model_dump(mode="python")
+    if field in {"plan_hash", "version_id"}:
+        raw["plan_bindings"][1][field] = "f" * 64 if field == "plan_hash" else "forged-version"
+    elif field == "requirements":
+        raw["requirements"]["daily_observations"] = 2
+    else:
+        raw["days"][0]["minutes"][0]["artifact_hash"] = "f" * 64
+    with pytest.raises(ValueError):
+        ScheduledLoopDatasetManifest.model_validate(raw)
+
+
+def test_scheduled_cancelled_selection_does_not_publish_and_reader_rejects_corruption(tmp_path):
+    from trade_plan_monitor.backtest.loop_dataset import (
+        freeze_scheduled_loop_dataset,
+        open_frozen_scheduled_loop_dataset,
+    )
+
+    store = BacktestMarketStore(tmp_path / "scheduled-market.sqlite")
+    seed_scheduled_market(store)
+    token = CancellationToken()
+    token.cancel()
+    with pytest.raises(BacktestOperationCancelled):
+        freeze_scheduled_loop_dataset(store, scheduled_request(), cancellation_token=token)
+    assert store.list_dataset_summaries(limit=20) == ()
+    manifest = freeze_scheduled_loop_dataset(store, scheduled_request()).manifest
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            "UPDATE market_minute_artifact SET content_json = ? WHERE artifact_hash = ?",
+            ("{}", manifest.days[0].minutes[0].artifact_hash),
+        )
+    with pytest.raises((RuntimeError, ValueError)):
+        with open_frozen_scheduled_loop_dataset(store, manifest) as reader:
+            tuple(reader)
+
+
+def test_scheduled_successor_warmup_excludes_its_later_official_close(tmp_path):
+    from trade_plan_monitor.backtest.loop_dataset import freeze_scheduled_loop_dataset
+
+    store = BacktestMarketStore(tmp_path / "scheduled-market.sqlite")
+    seed_scheduled_market(store, initial_daily=False)
+    result = freeze_scheduled_loop_dataset(store, scheduled_request())
+    assert not result.ready
+    assert any("DAILY_WARMUP" in reason and "scheduled-25" in reason for reason in result.blockers)
+
+
+def test_scheduled_successor_minute_warmup_shortage_is_visible_without_extra_gate(tmp_path):
+    from trade_plan_monitor.backtest.loop_dataset import freeze_scheduled_loop_dataset
+
+    store = BacktestMarketStore(tmp_path / "scheduled-market.sqlite")
+    seed_scheduled_market(store)
+    long_window = scheduled_request().schedule.entries[2].version.snapshot
+    result = freeze_scheduled_loop_dataset(store, scheduled_request(successor_plan=long_window))
+    assert result.ready and not result.blockers
+    # One complete prior trading day supplies exactly 48 five-minute bars.
+    assert any("scheduled-25" in reason and "48:501" in reason
+               for reason in result.manifest.warmup_blockers)

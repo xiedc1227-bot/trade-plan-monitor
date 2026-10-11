@@ -1,6 +1,6 @@
 # Repair Plan: Restore Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **8 of 20 repair tasks complete.** Concrete API approval remains pending at RP-T14. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **9 of 20 repair tasks complete.** Concrete API approval remains pending at RP-T14. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -18,6 +18,8 @@ RP-T06 is complete and RP-C02 passes: deterministic full replacement and explici
 RP-T07 is complete. The user approved RP05-A01 on 2026-10-11; the two cancellation invariant regressions now pass. One owned operation processes items serially with source/base/generation fences, per-item retry budgets, explicit unknown recovery and exact edit receipts. Cancellation preserves validated predecessors and original attempt bindings, retains global exclusion until physical work ends, and rejects late completion. 169 preparation service/worker/store checks pass, including restart and real blocked fake-provider cancellation. Ruff, bilingual checks and independent diff review pass. **7 of 20 repair tasks complete.** Next: RP-T08.
 
 RP-T08 is complete and RP-C03 passes: explicit item correction validates original source/base evidence, preserves the prefix and invalidates descendants; a separate explicit chain review freezes complete versions, provenance, schedule and one opening account. The frozen chain review hash binds account and extraction identities independently of causal version identity. Independent tests reproduced account/candidate tampering and six trusted-candidate source mismatches; all are fixed. 194 review/store/worker/legacy checks pass, including 30 collection cases. Ruff and independent diff review pass. **8 of 20 repair tasks complete.** Next: RP-T09; public collection endpoints remain RP-T12.
+
+RP-T09 is complete: distinct scheduled dataset codecs freeze relevant plan bindings and the union of evidence requirements without changing v1 bytes. Each version checks history available at its activation; successor minute shortages stay visible without adding an admission gate. Frames follow only the currently selected version, and end-later sources do not affect the frozen dataset. 51 dataset/cutoff/publication/legacy checks pass, including 13 new cases. The missing successor minute warning was reproduced before repair. Ruff and independent diff review pass. **9 of 20 repair tasks complete.** Next: RP-T10.
 
 ## RP01. Baseline and authority
 

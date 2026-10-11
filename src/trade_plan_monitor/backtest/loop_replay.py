@@ -12,6 +12,8 @@ from tempfile import TemporaryDirectory
 
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.control import BacktestProgress, CancellationToken
+from trade_plan_monitor.backtest.loop_dataset import loop_dataset_requirements
+from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
 from trade_plan_monitor.backtest.loop_publication import stage_loop_report
 from trade_plan_monitor.backtest.loop_report import LoopAuditEvent, LoopReportWriter
 from trade_plan_monitor.backtest.loop_runner import LoopFrame, LoopRunner
@@ -215,6 +217,12 @@ class _Frames:
             self.target = max(self.target, target) if self.target is not None else target
 
     def _inputs(self, now, official):
+        if isinstance(self.run, ScheduledLoopInput):
+            selection = self.run.schedule.select(now)
+            self.daily_needed = (selection is not None and
+                                 loop_dataset_requirements(selection.version.snapshot).requires_daily)
+            if selection is not None:
+                self.plan = selection.version.snapshot
         past = tuple(day for day in self.calendar if day.cal_date <= now.date())
         future = []
         for day in self.calendar:

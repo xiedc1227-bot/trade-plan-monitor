@@ -115,3 +115,102 @@ def test_full_supported_minute_window_is_not_narrowed_by_dataset_requirements():
     rule = plan.ordinary_rules[0].model_copy(update={"condition": condition})
     plan = plan.model_copy(update={"ordinary_rules": (rule,)})
     assert loop_dataset_requirements(plan).minute_observations == 501
+
+
+def scheduled_request(
+    *, cutoff=None, warmup_start=TRADE_DATE, future_plan=None, successor_plan=None,
+):
+    from trade_plan_monitor.backtest.loop_dataset import ScheduledLoopDatasetRequest
+    from trade_plan_monitor.backtest.plan_schedule import (
+        ScheduledLoopSchedule,
+        ScheduledPlanVersion,
+        ScheduledScheduleEntry,
+    )
+
+    base = research_plan().model_copy(update={"symbol": SYMBOL})
+    condition = MinuteVolumeToMeanGte(
+        type="MINUTE_VOLUME_TO_MEAN_GTE", timeframe_minutes=5, window_bars=500,
+        minimum_ratio=Decimal("1.5"), history_scope="CONTIGUOUS_TRADING_BARS",
+    )
+    future = future_plan or base.model_copy(update={"ordinary_rules": (
+        base.ordinary_rules[0].model_copy(update={"condition": condition}),
+    )})
+    schedule = ScheduledLoopSchedule(entries=tuple(ScheduledScheduleEntry(
+        effective_trade_date=at(day).date(),
+        version=ScheduledPlanVersion.model_validate(version(
+            f"scheduled-{day}", plan=plan, available=at(day, 8),
+        ).model_dump(mode="python")),
+    ) for day, plan in ((24, base), (25, successor_plan or daily_plan()), (26, future))))
+    boundary = LoopEndBoundary.resolve(
+        started_at=at(24, 9), submitted_at=cutoff or at(25, 15, 20),
+    )
+    return ScheduledLoopDatasetRequest(
+        scope=DatasetScope(
+            symbols=(SYMBOL,), start=TRADE_DATE, end=boundary.resolved_end_date,
+            warmup_start=warmup_start, historical_profile=PROFILE,
+        ), schedule=schedule, boundary=boundary,
+    )
+
+
+def test_scheduled_requirements_union_only_versions_relevant_before_end():
+    from trade_plan_monitor.backtest.loop_dataset import scheduled_dataset_requirements
+
+    value = scheduled_request()
+    requirements = scheduled_dataset_requirements(value.schedule, value.boundary)
+    assert requirements.requires_minutes and requirements.minute_observations == 1
+    assert requirements.requires_daily and requirements.daily_observations == 1
+    earlier = scheduled_request(cutoff=at(24, 9, 35, 12))
+    requirements = scheduled_dataset_requirements(earlier.schedule, earlier.boundary)
+    assert requirements.requires_minutes and requirements.minute_observations == 1
+    assert not requirements.requires_daily and requirements.daily_observations == 0
+
+
+def test_scheduled_same_day_unavailable_successor_does_not_contribute_requirements():
+    from trade_plan_monitor.backtest.loop_dataset import scheduled_dataset_requirements
+
+    value = scheduled_request(cutoff=at(25, 7))
+    requirements = scheduled_dataset_requirements(value.schedule, value.boundary)
+    assert requirements.requires_minutes and requirements.minute_observations == 1
+    assert not requirements.requires_daily and requirements.daily_observations == 0
+
+
+def test_scheduled_request_keeps_v1_type_boundary_and_first_account_date_anchor():
+    from trade_plan_monitor.backtest.loop_dataset import ScheduledLoopDatasetRequest
+
+    value = scheduled_request()
+    with pytest.raises(ValueError):
+        LoopDatasetRequest.model_validate(value.model_dump(mode="python"))
+    with pytest.raises(ValueError):
+        LoopDatasetRequest(scope=value.scope, schedule=value.schedule, boundary=value.boundary)
+    with pytest.raises(ValueError):
+        ScheduledLoopDatasetRequest(
+            scope=value.scope.model_copy(update={"start": at(25).date()}),
+            schedule=value.schedule,
+            boundary=LoopEndBoundary.resolve(started_at=at(25, 9), submitted_at=at(25, 15, 20)),
+        )
+
+
+def test_frames_use_current_plan_daily_requirements_without_exposing_future_plan():
+    from tests.integration.test_backtest_market_store import _calendar
+    from tests.unit.test_monitor_loop_input import scheduled_input
+
+    from trade_plan_monitor.backtest.control import CancellationToken
+    from trade_plan_monitor.backtest.loop_replay import _Frames
+
+    value = scheduled_request()
+    run = scheduled_input().model_copy(update={
+        "schedule": value.schedule,
+        "boundary": LoopEndBoundary.resolve(
+            started_at=at(24, 9), submitted_at=at(27), end_date=at(25).date(),
+        ),
+    })
+    calendar = (_calendar(), _calendar().model_copy(update={
+        "cal_date": at(25).date(), "previous_trade_date": at(24).date(),
+    }))
+    frames = _Frames(None, value.schedule.entries[0].version.snapshot,
+                     run, calendar, CancellationToken(), lambda progress: None)
+    earlier = frames._inputs(at(24, 9, 35, 12), None)
+    assert earlier.data_blockers == ()
+    later = frames._inputs(at(25, 9, 35, 12), None)
+    assert "PRICE_BASIS_UNVERIFIED" in later.data_blockers
+    assert earlier.official_trade_date is None and earlier.series is None
