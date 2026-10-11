@@ -8,7 +8,7 @@ from threading import Event, current_thread, get_ident
 import pytest
 from pydantic import ValidationError
 from tests.integration.test_backtest_run_api import _client
-from tests.integration.test_monitor_loop_input_store import frozen_case
+from tests.integration.test_monitor_loop_input_store import frozen_case, scheduled_frozen_case
 from tests.unit.test_monitor_loop_schedule import at
 
 import trade_plan_monitor.backtest.composition as composition_module
@@ -48,10 +48,15 @@ class Coordinator:
         self.authorized.append(identity)
 
 
-def services(tmp_path, monkeypatch):
-    monkeypatch.setattr("tests.integration.test_plan_preparation_review.NOW", at(24, 10))
-    preparation, market, prepared, _, _ = frozen_case(tmp_path)
+def services(tmp_path, monkeypatch, *, scheduled=False):
+    day = 20 if scheduled else 24
+    monkeypatch.setattr("tests.integration.test_plan_preparation_review.NOW", at(day, 10))
+    if scheduled:
+        monkeypatch.setattr("tests.integration.test_plan_preparation_store.NOW", at(day, 10))
+    fixture = scheduled_frozen_case if scheduled else frozen_case
+    preparation, market, prepared, _, _ = fixture(tmp_path)
     clock = Clock()
+    clock.value = at(day, 10, 0, 12)
     repository = BacktestJobRepository(tmp_path / "submission.sqlite3", clock=clock)
     results = BacktestResultStore(repository.database_path)
     preparations = PreparationService(preparation, repository)
@@ -97,6 +102,86 @@ def payload(prepared, **changes):
 
 def context(key="one"):
     return MutationContext(idempotency_key=key, request_id="a" * 32)
+
+
+def test_scheduled_submission_keeps_original_cutoff_complete_chain_and_same_job(
+    tmp_path, monkeypatch
+):
+    service, preparations, prepared, _, results, clock, calls, coordinator = services(
+        tmp_path,
+        monkeypatch,
+        scheduled=True,
+    )
+    command = PreparedBacktestRunCommand.model_validate(payload(prepared))
+
+    async def run():
+        try:
+            first = await service.submit_run(command=command, context=context("scheduled"))
+            reference = results.get_loop_input_reference(first.receipt.run_id)
+            stored = results.get_loop_input(reference)
+            assert stored.schema_version == "monitor-loop-stored-input-v2"
+            assert stored.prepared == prepared
+            assert stored.run_input.boundary.started_at == at(19)
+            assert stored.run_input.boundary.evidence_cutoff == at(20, 10, 0, 12)
+            assert stored.run_input.boundary.origin == "DEFAULTED"
+            assert len(stored.dataset.plan_bindings) == len(stored.day_hashes) == 2
+            original = preparations._store.get(prepared.preparation_id)
+            preparations._store.edit_collection(
+                original.preparation_id,
+                source=original.items[1].source.model_copy(
+                    update={"text": "Synthetic edit after submission."},
+                ),
+                expected_revision=original.revision,
+                idempotency_key="edited-after-submission",
+            )
+            clock.value = at(21, 0, 5)
+            replay = await service.submit_run(command=command, context=context("scheduled"))
+            assert replay == first
+            assert calls == [prepared.preparation_id]
+            assert coordinator.authorized == [first.receipt.job_id]
+            assert results.get_loop_input(reference) == stored
+            with pytest.raises(ApiError) as error:
+                await service.submit_run(command=command, context=context("another"))
+            assert error.value.code == ApiErrorCode.CONFLICT
+        finally:
+            await service.stop_metadata()
+            await preparations.stop()
+
+    asyncio.run(run())
+
+
+def test_scheduled_source_edit_rejects_stale_manifest_before_market_access(tmp_path, monkeypatch):
+    service, preparations, prepared, _, results, _, _, _ = services(
+        tmp_path,
+        monkeypatch,
+        scheduled=True,
+    )
+    record = preparations._store.get(prepared.preparation_id)
+    preparations._store.edit_collection(
+        record.preparation_id,
+        source=record.items[1].source.model_copy(update={"text": "Synthetic revised source."}),
+        expected_revision=record.revision,
+        idempotency_key="edit",
+    )
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("stale collection review must fail before copying market evidence")
+
+    monkeypatch.setattr(results, "record_loop_input", unexpected)
+
+    async def run():
+        try:
+            with pytest.raises(ApiError) as error:
+                await service.submit_run(
+                    command=PreparedBacktestRunCommand.model_validate(payload(prepared)),
+                    context=context(),
+                )
+            assert error.value.code == ApiErrorCode.CONFLICT
+        finally:
+            await service.stop_metadata()
+            await preparations.stop()
+
+    asyncio.run(run())
 
 
 def test_default_cutoff_is_original_reservation_and_midnight_replay_does_no_lookup(

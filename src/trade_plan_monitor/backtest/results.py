@@ -679,7 +679,7 @@ class BacktestResultStore:
             market_source=market_source,
         )
         reference = stored.reference
-        snapshot = stored.prepared.version.snapshot
+        snapshot = stored.run_input.schedule.entries[0].version.snapshot
         snapshot_json = dump_plan_json(snapshot)
         digest = plan_sha256(snapshot)
         input_json = canonical_json(reference)
@@ -762,7 +762,7 @@ class BacktestResultStore:
         ):
             raise RuntimeError("durable loop input binding is damaged")
         stored = self.loop_input_store.load(reference)
-        snapshot = stored.prepared.version.snapshot
+        snapshot = stored.run_input.schedule.entries[0].version.snapshot
         if str(row[0]) != plan_sha256(snapshot) or str(row[3]) != dump_plan_json(snapshot):
             raise RuntimeError("durable loop plan snapshot is damaged")
         return stored

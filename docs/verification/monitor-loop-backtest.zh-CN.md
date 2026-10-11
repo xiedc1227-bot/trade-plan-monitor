@@ -54,6 +54,14 @@ RP-T09 完成：独立的版本链数据编解码冻结相关版本绑定及证�
 .venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py tests/integration/test_monitor_loop_publication.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt09-compatible
 ```
 
+## RP-V10. 不可变集合输入验证
+
+RP-T10 完成：独立的存储输入编解码复制完整审核链及不可变行情日，校验账户/日程/需求精确绑定，拒绝行情日顺序调换，并保留 v1 哈希。组装流程在既有预留下使用初始原文和相关需求并集。用户于 2026-10-11 批准 RP05-A02 及后续授权 RP05-A03，两处首项快照读取现已支持集合登记与重新读取。50 项输入存储/提交/旧格式检查全部通过，包含此前失败的两项登记与提交用例。Ruff 和独立差异审阅通过。**20 项修复任务，完成 10 项。** 下一项 RP-T11。
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt10-pending-anchor
+```
+
 ## MV01. 已实现边界
 
 历史 ML-T30–ML-T32 建立无副作用启动、共享受保护初始化、分离元数据／执行能力、有界自有线程及排空后替换。取消等待者不取消物理工作；慢初始化返回带 `Retry-After` 的 503。当时待办的恢复、控制及界面工作已在 MV18–MV46 完成。当前行为及复现步骤维护于 [ML-O01–ML-O09](../operations/monitor-loop-backtest.zh-CN.md)。

@@ -9,21 +9,33 @@ from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, TypeAdapter, model_validator
 
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.dataset import LoopFrozenSymbolDay
 from trade_plan_monitor.backtest.jobs.models import LoopInputReference
-from trade_plan_monitor.backtest.loop_dataset import LoopDatasetManifest, loop_dataset_requirements
+from trade_plan_monitor.backtest.loop_dataset import (
+    LoopDatasetManifest,
+    LoopDatasetPlanBinding,
+    ScheduledLoopDatasetManifest,
+    loop_dataset_requirements,
+    open_frozen_scheduled_loop_dataset,
+    relevant_schedule_entries,
+    scheduled_dataset_requirements,
+)
 from trade_plan_monitor.backtest.loop_input import (
     MAX_LOOP_RECORDS,
     MAX_SOURCE_BYTES,
     MonitorLoopInput,
+    ScheduledLoopInput,
 )
 from trade_plan_monitor.backtest.models import Sha256Hex
-from trade_plan_monitor.backtest.preparation_review import FrozenPreparedPlan
+from trade_plan_monitor.backtest.preparation_review import (
+    FrozenPreparedCollection,
+    FrozenPreparedPlan,
+)
 from trade_plan_monitor.backtest.research_input import ResearchValue
 
 if TYPE_CHECKING:
@@ -71,8 +83,44 @@ class StoredLoopInput(ResearchValue):
             run_id=self.run_input.run_id,
             input_hash=self.run_input.input_hash,
             dataset_hash=self.dataset.dataset_hash,
-            bundle_hash=_digest(_BUNDLE_DOMAIN, canonical_json(self).encode()),
+            bundle_hash=_digest(self.schema_version, canonical_json(self).encode()),
         )
+
+
+class ScheduledStoredLoopInput(ResearchValue):
+    schema_version: Literal["monitor-loop-stored-input-v2"] = "monitor-loop-stored-input-v2"
+    prepared: FrozenPreparedCollection
+    run_input: ScheduledLoopInput
+    dataset: ScheduledLoopDatasetManifest
+    day_hashes: tuple[Sha256Hex, ...]
+
+    @model_validator(mode="after")
+    def bound(self):
+        bindings = tuple(LoopDatasetPlanBinding(
+            effective_trade_date=row.effective_trade_date,
+            version_id=row.version.version_id, plan_hash=row.version.plan_hash,
+        ) for row in relevant_schedule_entries(self.prepared.schedule, self.run_input.boundary))
+        if (self.run_input.schedule != self.prepared.schedule
+            or self.run_input.initial_account != self.prepared.account
+            or self.run_input.dataset_hash != self.dataset.dataset_hash
+            or self.run_input.boundary != self.dataset.boundary
+            or self.dataset.plan_bindings != bindings
+            or self.dataset.requirements != scheduled_dataset_requirements(
+                self.prepared.schedule, self.run_input.boundary,
+            )
+            or self.dataset.scope.symbols != (self.prepared.schedule.symbol,)
+            or len(self.day_hashes) != len(self.dataset.days)):
+            raise ValueError("stored collection must bind the exact chain/account/dataset")
+        return self
+
+    @property
+    def reference(self):
+        return StoredLoopInput.reference.fget(self)
+
+
+_STORED_LOOP_CODEC = TypeAdapter(Annotated[
+    StoredLoopInput | ScheduledStoredLoopInput, Field(discriminator="schema_version"),
+])
 
 
 def _verify_day(dataset: LoopDatasetManifest, index: int, day: LoopFrozenSymbolDay) -> None:
@@ -222,7 +270,7 @@ class LoopInputStore:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
 
-    def _read(self, path: Path, domain: str, digest: str) -> bytes:
+    def _read(self, path: Path, domain: str | tuple[str, ...], digest: str) -> bytes:
         if path.is_symlink() or path.is_junction():
             raise RuntimeError("loop input object cannot be a link")
         try:
@@ -232,20 +280,25 @@ class LoopInputStore:
                 payload = file.read(_MAX_OBJECT_BYTES + 1)
         except FileNotFoundError:
             raise RuntimeError("immutable loop input object is missing") from None
-        if len(payload) > _MAX_OBJECT_BYTES or _digest(domain, payload) != digest:
+        domains = (domain,) if isinstance(domain, str) else domain
+        if len(payload) > _MAX_OBJECT_BYTES or not any(
+            _digest(value, payload) == digest for value in domains
+        ):
             raise RuntimeError("immutable loop input content hash is invalid")
         return payload
 
     def persist(
         self,
         *,
-        prepared: FrozenPreparedPlan,
-        run_input: MonitorLoopInput,
-        dataset: LoopDatasetManifest,
+        prepared: FrozenPreparedPlan | FrozenPreparedCollection,
+        run_input: MonitorLoopInput | ScheduledLoopInput,
+        dataset: LoopDatasetManifest | ScheduledLoopDatasetManifest,
         market_source: BacktestMarketStore,
-    ) -> StoredLoopInput:
+    ) -> StoredLoopInput | ScheduledStoredLoopInput:
         # Validate all authority bindings before creating the directory or copying evidence.
-        candidate = StoredLoopInput(
+        scheduled = isinstance(prepared, FrozenPreparedCollection)
+        stored_type = ScheduledStoredLoopInput if scheduled else StoredLoopInput
+        candidate = stored_type(
             prepared=prepared,
             run_input=run_input,
             dataset=dataset,
@@ -253,7 +306,9 @@ class LoopInputStore:
         )
         self._owned_root(create=True)
         hashes = []
-        with market_source.open_frozen_loop_dataset(dataset) as reader:
+        stream = (open_frozen_scheduled_loop_dataset(market_source, dataset) if scheduled
+                  else market_source.open_frozen_loop_dataset(dataset))
+        with stream as reader:
             for index, day in enumerate(reader):
                 if index >= len(dataset.days):
                     raise RuntimeError("loop market source contains extra days")
@@ -266,11 +321,16 @@ class LoopInputStore:
         self._publish(self.bundle_path(stored.reference), canonical_json(stored).encode())
         return self.load(stored.reference)
 
-    def load(self, reference: LoopInputReference, *, verify_days: bool = True) -> StoredLoopInput:
+    def load(
+        self, reference: LoopInputReference, *, verify_days: bool = True,
+    ) -> StoredLoopInput | ScheduledStoredLoopInput:
         reference = LoopInputReference.model_validate(reference.model_dump(mode="python"))
         self._owned_root(create=False)
-        payload = self._read(self.bundle_path(reference), _BUNDLE_DOMAIN, reference.bundle_hash)
-        stored = StoredLoopInput.model_validate_json(payload)
+        payload = self._read(
+            self.bundle_path(reference), (_BUNDLE_DOMAIN, "monitor-loop-stored-input-v2"),
+            reference.bundle_hash,
+        )
+        stored = _STORED_LOOP_CODEC.validate_json(payload)
         if canonical_json(stored).encode() != payload or stored.reference != reference:
             raise RuntimeError("immutable loop input reference is inconsistent")
         if verify_days:

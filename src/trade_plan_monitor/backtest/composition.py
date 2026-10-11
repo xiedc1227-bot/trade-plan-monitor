@@ -58,13 +58,27 @@ from trade_plan_monitor.backtest.jobs.repository import (
     BacktestRunSubmissionReservation,
     JobAdmissionError,
 )
-from trade_plan_monitor.backtest.loop_dataset import LoopDatasetRequest, loop_dataset_requirements
-from trade_plan_monitor.backtest.loop_input import LoopCosts, LoopResponsePolicy, MonitorLoopInput
+from trade_plan_monitor.backtest.loop_dataset import (
+    LoopDatasetRequest,
+    ScheduledLoopDatasetRequest,
+    freeze_scheduled_loop_dataset,
+    loop_dataset_requirements,
+    scheduled_dataset_requirements,
+)
+from trade_plan_monitor.backtest.loop_input import (
+    LoopCosts,
+    LoopResponsePolicy,
+    MonitorLoopInput,
+    ScheduledLoopInput,
+)
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.pagination import HmacCursorSigner, InvalidCursorError
 from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary
-from trade_plan_monitor.backtest.preparation_review import FrozenPreparedPlan
+from trade_plan_monitor.backtest.preparation_review import (
+    FrozenPreparedCollection,
+    FrozenPreparedPlan,
+)
 from trade_plan_monitor.backtest.preparation_service import PreparationService
 from trade_plan_monitor.backtest.preparation_store import PreparationConflictError, PreparationStore
 from trade_plan_monitor.backtest.reference_projection import (
@@ -749,33 +763,37 @@ class _ProductionBacktestService:
 
     def _freeze_prepared_input(
         self,
-        prepared: FrozenPreparedPlan,
+        prepared: FrozenPreparedPlan | FrozenPreparedCollection,
         command: PreparedBacktestRunCommand,
         reservation: BacktestRunSubmissionReservation,
     ) -> LoopInputReference:
+        scheduled = isinstance(prepared, FrozenPreparedCollection)
+        source = prepared.items[0].source if scheduled else prepared.source
+        version = prepared.schedule.entries[0].version
         start = max(
-            prepared.source.available_at,
-            datetime.combine(prepared.source.effective_trade_date, time.min, SHANGHAI),
+            source.available_at,
+            datetime.combine(source.effective_trade_date, time.min, SHANGHAI),
         )
         boundary = LoopEndBoundary.resolve(
             started_at=start,
             submitted_at=reservation.claimed_at,
             end_date=command.end_date,
         )
-        requirements = loop_dataset_requirements(prepared.version.snapshot)
-        warmup_start = min(start.date(), prepared.source.effective_trade_date)
+        requirements = (scheduled_dataset_requirements(prepared.schedule, boundary) if scheduled
+                        else loop_dataset_requirements(version.snapshot))
+        warmup_start = min(start.date(), source.effective_trade_date)
         needed = max(
             requirements.daily_observations,
             (max(requirements.minute_observations - 1, 0) + 47) // 48,
         )
         calendar = self._market_store.current_trading_day(
-            prepared.version.snapshot.market, start.date()
+            version.snapshot.market, start.date()
         )
         for _ in range(needed):
             if calendar is None:
                 break
             previous = self._market_store.current_trading_day(
-                prepared.version.snapshot.market,
+                version.snapshot.market,
                 calendar.previous_trade_date,
             )
             if previous is None:
@@ -784,19 +802,20 @@ class _ProductionBacktestService:
                 raise RuntimeError("loop warmup calendar chain is inconsistent")
             warmup_start = min(warmup_start, previous.cal_date)
             calendar = previous
-        result = self._market_store.freeze_loop_dataset(
-            LoopDatasetRequest(
-                scope=DatasetScope(
-                    symbols=(prepared.version.snapshot.symbol,),
-                    start=start.date(),
-                    end=boundary.resolved_end_date,
-                    warmup_start=warmup_start,
-                    historical_profile=HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1,
-                ),
-                schedule=prepared.schedule,
-                boundary=boundary,
-            )
+        request_type = ScheduledLoopDatasetRequest if scheduled else LoopDatasetRequest
+        request = request_type(
+            scope=DatasetScope(
+                symbols=(version.snapshot.symbol,),
+                start=start.date(),
+                end=boundary.resolved_end_date,
+                warmup_start=warmup_start,
+                historical_profile=HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1,
+            ),
+            schedule=prepared.schedule,
+            boundary=boundary,
         )
+        result = (freeze_scheduled_loop_dataset(self._market_store, request) if scheduled
+                  else self._market_store.freeze_loop_dataset(request))
         if not result.ready:
             raise ApiError(
                 ApiErrorCode.CONFLICT,
@@ -809,7 +828,8 @@ class _ProductionBacktestService:
                     for blocker in result.blockers
                 ),
             )
-        run_input = MonitorLoopInput(
+        input_type = ScheduledLoopInput if scheduled else MonitorLoopInput
+        run_input = input_type(
             schedule=prepared.schedule,
             initial_account=prepared.account,
             boundary=boundary,

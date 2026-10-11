@@ -54,6 +54,14 @@ RP-T09 is complete: distinct scheduled dataset codecs freeze relevant plan bindi
 .venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_dataset.py tests/unit/test_monitor_loop_cutoff.py tests/integration/test_monitor_loop_publication.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt09-compatible
 ```
 
+## RP-V10. Immutable collection input verification
+
+RP-T10 is complete: the distinct stored-input codec copies the entire reviewed chain and immutable days, verifies exact account/schedule/requirements bindings, rejects copied-day swaps, and preserves v1 hashes. Composition uses the initial source and relevant requirement union under the existing reservation. The user approved RP05-A02 and standing authorization RP05-A03 on 2026-10-11; the two initial-snapshot lookups now support collection registration and reload. All 50 input-store/submission/legacy checks pass, including the two previously failing registration/submission cases. Ruff and independent diff review pass. **10 of 20 repair tasks complete.** Next: RP-T11.
+
+```text
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt10-pending-anchor
+```
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).
