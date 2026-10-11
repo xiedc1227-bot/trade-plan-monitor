@@ -88,6 +88,12 @@ RP-T16 allowance under RP05-A03: `web/src/api/preparationReview.ts` receives onl
 
 RP-T16 is complete: grouped entry preserves every source/date and file boundary, progress shows ordered item attempts, and review exposes complete materialized plans, inherited evidence, differences and comparison-only holdings. Initial supplements use explicit item correction; a corrected first item requires one explicitly entered opening account with unknown acknowledgement. Existing one-source entry remains selectable. Independent review reproduced uploaded files deleting a dated blank source; the fix preserves all authored rows. All 145 preparation/review/new-view checks pass, including 44 review-component cases. T16 has no type errors; known result-event consumers remain RP-T18. Independent diff review passes. **16 of 20 repair tasks complete.** Next: RP-T17.
 
+## RP-V17. One reviewed-chain submission
+
+RP-T17 allowance under RP05-A03: add `web/src/views/BacktestNewView.vue` only to bind its reviewed collection confirmation to the existing run form.
+
+RP-T17 is complete and RP-C06 passes at controller/component level: one reviewed collection yields exactly one prepared-loop-plan-v2 request with one manifest, opening account, response/end settings and costs. The immutable original command/key survives unknown outcomes even if the external reviewed selection changes. All 41 run-form/new-view checks pass, including 22 run-form cases. Independent review found no additional blocker. Full browser acceptance remains RP-T19; known result-event consumers remain RP-T18. **17 of 20 repair tasks complete.** Next: RP-T18.
+
 ## MV01. Implemented boundary
 
 Historical ML-T30–ML-T32 established inert startup, shared guarded initialization, separate metadata/execution capabilities, bounded owned threads and drain-before-replacement. Cancelled waiters do not cancel physical work; slow initialization returns 503 with `Retry-After`. The then-pending recovery, controls and UI work is completed in MV18–MV46. Current behavior and reproduction steps are maintained in [ML-O01–ML-O09](../operations/monitor-loop-backtest.md).

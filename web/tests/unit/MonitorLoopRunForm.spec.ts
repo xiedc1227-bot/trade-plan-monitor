@@ -3,13 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
-import type { PreparationFrozenView, PreparationView, PreparedBacktestRunCommand } from "../../src/api/generated";
+import type { CollectionPreparationFrozenView, PreparationFrozenView, PreparationView, PreparedBacktestRunCommand, ScheduledPreparedBacktestRunCommand } from "../../src/api/generated";
 import { createBacktestApi, type BacktestApi } from "../../src/api/backtests";
 import { createPreparationApi } from "../../src/api/preparations";
 import { createPlanApi } from "../../src/api/plans";
 import { ApiClientError } from "../../src/api/transport";
 import { useBacktestRunForm } from "../../src/composables/useBacktestRunForm";
 import BacktestNewView from "../../src/views/BacktestNewView.vue";
+import BacktestRunForm from "../../src/components/backtests/BacktestRunForm.vue";
 
 const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.json", "utf8")) as {
   reviewed: PreparationView;
@@ -38,7 +39,7 @@ function accepted() {
 function api() {
   return { ...createBacktestApi(vi.fn<typeof fetch>()), submitRun: vi.fn<BacktestApi["submitRun"]>().mockResolvedValue(accepted()) };
 }
-function controller(backtest = api(), prepared: () => PreparationFrozenView | null = frozen) {
+function controller(backtest = api(), prepared: () => PreparationFrozenView | CollectionPreparationFrozenView | null = frozen) {
   let form!: ReturnType<typeof useBacktestRunForm>;
   const wrapper = mount(defineComponent({ setup() {
     form = useBacktestRunForm({ api: backtest, prepared, preparedMode: () => true,
@@ -52,6 +53,109 @@ function controller(backtest = api(), prepared: () => PreparationFrozenView | nu
   }
   return { form, backtest };
 }
+
+function collectionFrozen(): CollectionPreparationFrozenView {
+  const base = frozen();
+  return { schemaVersion: "prepared-loop-plan-v2", preparationId: "daily-preparation", manifestHash: "c".repeat(64), revision: 12,
+    account: structuredClone(base.frozen.account), accountOrigin: "SOURCE", reviewedAt: "2026-08-25T20:00:00+08:00",
+    versions: ["2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25"].map((date, index) => ({
+      sourceId: `daily-${index + 1}`, sourceRevision: index + 1, candidateRevision: index + 2,
+      versionId: `daily-version-${index + 1}`, planHash: String(index + 1).repeat(64), evidenceHash: String(index + 5).repeat(64),
+      effectiveTradeDate: date, availableAt: `${date}T08:30:00+08:00`, accountContext: null,
+    })) };
+}
+function collectionCommand(): ScheduledPreparedBacktestRunCommand {
+  return { ...command(), schemaVersion: "prepared-loop-plan-v2", preparationId: collectionFrozen().preparationId,
+    manifestHash: collectionFrozen().manifestHash };
+}
+
+describe("one run from an ordered reviewed collection", () => {
+  it("posts exactly one versioned chain manifest to the existing run route", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(accepted().body), {
+      status: 202, headers: { Location: accepted().location, "Retry-After": "2" },
+    }));
+    const response = await createBacktestApi(fetcher).submitRun(collectionCommand(), "one-chain");
+    expect(response.body.runId).toBe(accepted().body.runId);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0]![0]).toBe("/api/v1/backtest-runs");
+    expect(JSON.parse(String(fetcher.mock.calls[0]![1]?.body))).toEqual(collectionCommand());
+  });
+
+  it("submits one account and one frozen chain without looping over daily versions", async () => {
+    const { form, backtest } = controller(api(), collectionFrozen);
+    await form.submit(); await form.submit();
+    expect(backtest.submitRun).toHaveBeenCalledTimes(1);
+    expect(backtest.submitRun.mock.calls[0]![0]).toEqual(collectionCommand());
+    expect(backtest.submitRun.mock.calls[0]![1]).toBe("loop-run-key");
+    expect(form.submissionState.value).toBe("ACCEPTED");
+    expect(backtest.submitRun.mock.calls[0]![0]).not.toHaveProperty("account");
+    expect(backtest.submitRun.mock.calls[0]![0]).not.toHaveProperty("versions");
+  });
+
+  it("keeps the original chain and settings when retrying an uncertain submission", async () => {
+    const backtest = api(); let prepared: CollectionPreparationFrozenView | null = collectionFrozen();
+    backtest.submitRun.mockRejectedValueOnce(new ApiClientError({ code: "NETWORK_ERROR", message: "lost receipt", status: 0 }));
+    const { form } = controller(backtest, () => prepared);
+    form.updateField("endDate", "2026-08-28"); form.updateField("responseMode", "OBSERVE_ONLY");
+    form.updateField("responseDelaySeconds", "30");
+    await form.submit();
+    const original = structuredClone(backtest.submitRun.mock.calls[0]!.slice(0, 2));
+    expect(original[0]).toMatchObject({ schemaVersion: "prepared-loop-plan-v2", endDate: "2026-08-28",
+      response: { mode: "OBSERVE_ONLY", responseDelaySeconds: 30 } });
+    prepared.manifestHash = "e".repeat(64); prepared = null;
+    form.updateField("endDate", "2026-09-30"); form.updateField("responseMode", "FOLLOW_REMINDERS");
+    await form.submit(); expect(backtest.submitRun).toHaveBeenCalledTimes(1);
+    await form.retrySubmission();
+    expect(backtest.submitRun).toHaveBeenCalledTimes(2);
+    expect(backtest.submitRun.mock.calls[1]!.slice(0, 2)).toEqual(original);
+    expect(form.submissionState.value).toBe("ACCEPTED");
+  });
+
+  it("keeps end-date, delay and exact-cost validation on the collection branch", async () => {
+    const { form, backtest } = controller(api(), collectionFrozen);
+    form.updateField("endDate", "2026-02-30"); form.updateField("responseDelaySeconds", "-1");
+    form.updateField("sellSlippageFen", "0.5"); form.updateField("commissionRate", "1.1");
+    await form.submit();
+    expect(backtest.submitRun).not.toHaveBeenCalled();
+    for (const field of ["endDate", "responseDelaySeconds", "sellSlippageFen", "commissionRate"]) expect(form.errors.value[field]).toBeTruthy();
+    form.updateField("endDate", "2026-08-28"); form.updateField("responseDelaySeconds", "0");
+    form.updateField("sellSlippageFen", "0"); form.updateField("commissionRate", "0");
+    await form.submit();
+    expect(backtest.submitRun.mock.calls[0]![0]).toMatchObject({ schemaVersion: "prepared-loop-plan-v2", endDate: "2026-08-28",
+      response: { responseDelaySeconds: 0 }, costs: { commissionRate: "0", sellSlippageFen: 0 } });
+  });
+
+  it.each([
+    { schemaVersion: "prepared-loop-plan-v3" }, { account: collectionFrozen().account },
+    { versions: collectionFrozen().versions }, { manifestHash: "not-a-hash" },
+    { endDate: "2026-02-30" }, { response: { mode: "RECORDED_ACTIONS", responseDelaySeconds: 0 } },
+  ])("rejects malformed collection commands before network access: %o", async changed => {
+    const fetcher = vi.fn<typeof fetch>();
+    await expect(createBacktestApi(fetcher).submitRun({ ...collectionCommand(), ...changed } as ScheduledPreparedBacktestRunCommand, "chain"))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("shows four reviewed daily versions beside exactly one opening account", async () => {
+    const { form } = controller(api(), collectionFrozen);
+    const wrapper = mount(BacktestRunForm, { props: {
+      preparedMode: true, prepared: collectionFrozen(), draft: form.draft.value, errors: form.errors.value,
+      errorRevision: 0, planVersionError: null, planVersionPage: null, planVersionState: "IDLE",
+      selectedPlanVersion: null, submissionState: "IDLE",
+    } });
+    wrappers.push(wrapper);
+    expect(wrapper.findAll('[data-testid="prepared-run-account"]')).toHaveLength(1);
+    expect(wrapper.get('[data-testid="prepared-run-account"]').text()).toContain("4010.50");
+    const versions = wrapper.get('[data-testid="prepared-run-versions"]');
+    expect(versions.findAll("li")).toHaveLength(4);
+    for (const version of collectionFrozen().versions) expect(versions.text()).toContain(version.sourceId);
+    expect(wrapper.find("#initial-cash-fen").exists()).toBe(false);
+    expect(wrapper.find("#research-input-json").exists()).toBe(false);
+    expect(wrapper.get("#end-date").attributes("required")).toBeUndefined();
+    await wrapper.get('[data-testid="submit-backtest-run"]').trigger("click");
+    expect(wrapper.emitted("submit")).toHaveLength(1);
+  });
+});
 
 describe("one prepared monitoring-loop run", () => {
   it("posts the exact prepared variant to the existing route with optional end omitted", async () => {

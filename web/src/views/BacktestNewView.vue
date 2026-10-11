@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch, type DeepReadonly } from "vue";
 import { isNavigationFailure, useRoute, useRouter } from "vue-router";
 
-import type { BacktestJobReceipt, PreparationFrozenView } from "../api/generated";
+import type { BacktestJobReceipt, PreparationFrozenView, CollectionPreparationFrozenView } from "../api/generated";
 import type { BacktestApi } from "../api/backtests";
 import type { PlanApi } from "../api/plans";
 import BacktestRunForm from "../components/backtests/BacktestRunForm.vue";
@@ -50,7 +50,9 @@ watch(() => preparation.preparationId.value, (identity) => {
     void router.replace({ path: route.path, query: { ...route.query, preparationId: identity } });
   }
 });
-const reviewedPrepared = computed<DeepReadonly<PreparationFrozenView> | null>(() => {
+const reviewedPrepared = computed<DeepReadonly<PreparationFrozenView | CollectionPreparationFrozenView> | null>(() => {
+  const chain = preparation.collection.value;
+  if (chain && preparation.canUsePrepared.value) return chain.frozen;
   const value = preparation.preparation.value;
   if (!preparation.canUsePrepared.value || value?.candidate?.kind !== "FROZEN") return null;
   return { preparationId: value.preparationId, manifestHash: value.candidate.candidateHash,

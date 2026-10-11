@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **16 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **17 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -44,6 +44,10 @@ RP-T15 is complete: the existing controller supports one ordered collection, rev
 RP-T16 allowance under RP05-A03: `web/src/api/preparationReview.ts` receives only a readonly-compatible inspection parameter type so Vue projections can reuse the existing inspection without cloning or changing validation.
 
 RP-T16 is complete: grouped entry preserves every source/date and file boundary, progress shows ordered item attempts, and review exposes complete materialized plans, inherited evidence, differences and comparison-only holdings. Initial supplements use explicit item correction; a corrected first item requires one explicitly entered opening account with unknown acknowledgement. Existing one-source entry remains selectable. Independent review reproduced uploaded files deleting a dated blank source; the fix preserves all authored rows. All 145 preparation/review/new-view checks pass, including 44 review-component cases. T16 has no type errors; known result-event consumers remain RP-T18. Independent diff review passes. **16 of 20 repair tasks complete.** Next: RP-T17.
+
+RP-T17 allowance under RP05-A03: add `web/src/views/BacktestNewView.vue` only to bind its reviewed collection confirmation to the existing run form.
+
+RP-T17 is complete and RP-C06 passes at controller/component level: one reviewed collection yields exactly one prepared-loop-plan-v2 request with one manifest, opening account, response/end settings and costs. The immutable original command/key survives unknown outcomes even if the external reviewed selection changes. All 41 run-form/new-view checks pass, including 22 run-form cases. Independent review found no additional blocker. Full browser acceptance remains RP-T19; known result-event consumers remain RP-T18. **17 of 20 repair tasks complete.** Next: RP-T18.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -190,7 +194,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T17. Submit once from the reviewed collection
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T16; **Acceptance:** RP-A01, RP-A07, RP-A11.
 - **Allowed files:** `web/src/api/backtests.ts`; `web/src/composables/useBacktestRunForm.ts`; `web/src/components/backtests/BacktestRunForm.vue`; `web/tests/unit/MonitorLoopRunForm.spec.ts`.
 - **Result:** Bind one reviewed-chain manifest, dataset/response/end settings and one submit action. No per-item replay loop; retries reuse the same accepted run.

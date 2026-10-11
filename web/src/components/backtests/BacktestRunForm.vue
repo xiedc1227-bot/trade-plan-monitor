@@ -46,6 +46,9 @@ const props = withDefaults(defineProps<Props>(), { preparedMode: false, prepared
 const emit = defineEmits<Emits>();
 const errorSummary = useTemplateRef<HTMLDivElement>("errorSummary");
 
+const preparedAccount = computed(() => props.prepared ? "account" in props.prepared ? props.prepared.account : props.prepared.frozen.account : null);
+const preparedVersions = computed(() => props.prepared && "versions" in props.prepared ? props.prepared.versions : null);
+const preparedSymbol = computed(() => props.prepared && "frozen" in props.prepared ? props.prepared.frozen.version.snapshot.symbol : null);
 const fieldDefinitions = [
   { id: "dataset-hash", field: "datasetHash", label: "数据集哈希", help: "64 位小写 SHA-256", inputmode: "text" },
   { id: "initial-cash-fen", field: "initialCashFen", label: "初始现金（分）", help: "正整数分", inputmode: "numeric" },
@@ -168,17 +171,18 @@ function focusErrorField(field: string, event: MouseEvent): void {
         @select="emit('selectPlanVersion', $event)"
       />
 
-      <div v-else-if="prepared" class="run-form__field" data-testid="prepared-run-account">
-        <h3>一份已审核计划 · {{ prepared.frozen.version.snapshot.symbol }}</h3>
-        <p>初始账户快照：{{ formatDisplayDateTime(prepared.frozen.account.snapshot_at) }}</p>
-        <p>现金：{{ prepared.frozen.account.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(prepared.frozen.account.cash.balance_fen))} 元` : '未知；不会推断为零' }}</p>
-        <p>库存：{{ prepared.frozen.account.inventory_known ? '已知' : '未知；不会推断为空仓' }}</p>
+      <div v-else-if="prepared && preparedAccount" class="run-form__field" data-testid="prepared-run-account">
+        <h3>{{ preparedVersions ? `${preparedVersions.length} 份已复核计划 · 一次连续回测` : `一份已审核计划 · ${preparedSymbol}` }}</h3>
+        <ol v-if="preparedVersions" data-testid="prepared-run-versions"><li v-for="version in preparedVersions" :key="version.sourceId">{{ version.effectiveTradeDate }} · 来源 {{ version.sourceId }} · 可用 {{ formatDisplayDateTime(version.availableAt) }}</li></ol>
+        <p>初始账户快照：{{ formatDisplayDateTime(preparedAccount.snapshot_at) }}</p>
+        <p>现金：{{ preparedAccount.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(preparedAccount.cash.balance_fen))} 元` : '未知；不会推断为零' }}</p>
+        <p>库存：{{ preparedAccount.inventory_known ? '已知' : '未知；不会推断为空仓' }}</p>
         <ul>
-          <li v-for="lot in prepared.frozen.account.lots" :key="lot.lot_key">
+          <li v-for="lot in preparedAccount.lots" :key="lot.lot_key">
             {{ lot.bucket }} · {{ lot.quantity }} 股；总成本 {{ lot.cost_basis_fen === null ? '未知' : `${formatFenAsYuan(String(lot.cost_basis_fen))} 元` }}；可卖 {{ lot.sellable_quantity ?? '未知' }} 股
           </li>
         </ul>
-        <p>计划和初始账户由已审核原文冻结；此处只设置回放响应及费用。</p>
+        <p>计划和唯一期初账户由已审核原文冻结；提交一次，逐日沿用同一个账户。此处只设置回放响应、结束日期及费用。</p>
       </div>
       <p v-else role="status">请先完成当前计划的审核，之后才能提交回测。</p>
 

@@ -6,6 +6,8 @@ import type {
   BacktestReferenceMarketCoverageView,
   BacktestRunCommand,
   PreparedBacktestRunCommand,
+  ScheduledPreparedBacktestRunCommand,
+  CollectionPreparationFrozenView,
   PreparationFrozenView,
 } from "../api/generated";
 import { isResearchInput } from "../api/researchValues";
@@ -85,7 +87,7 @@ export interface BacktestRunDraft {
 }
 
 export type BacktestRunFormErrors = Readonly<Record<string, string>>;
-export type PreparedRunSnapshot = PreparationFrozenView | DeepReadonly<PreparationFrozenView>;
+export type PreparedRunSnapshot = PreparationFrozenView | DeepReadonly<PreparationFrozenView> | CollectionPreparationFrozenView | DeepReadonly<CollectionPreparationFrozenView>;
 
 export interface UseBacktestRunFormOptions {
   readonly prepared?: () => PreparedRunSnapshot | null;
@@ -96,7 +98,7 @@ export interface UseBacktestRunFormOptions {
 }
 
 interface SubmissionIntent {
-  readonly command: BacktestRunCommand | PreparedBacktestRunCommand;
+  readonly command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand;
   readonly key: string;
 }
 
@@ -452,7 +454,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     });
   }
 
-  function validatePreparedDraft(): PreparedBacktestRunCommand | null {
+  function validatePreparedDraft(): PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | null {
     const prepared = options.prepared?.() ?? null;
     const current = draft.value;
     const nextErrors: Record<string, string> = {};
@@ -478,6 +480,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
       return null;
     }
     return deepFreeze({
+      ...("schemaVersion" in prepared && prepared.schemaVersion === "prepared-loop-plan-v2" ? { schemaVersion: "prepared-loop-plan-v2" as const } : {}),
       preparationId: prepared.preparationId, manifestHash: prepared.manifestHash,
       response: { mode: current.responseMode, responseDelaySeconds },
       costs: { commissionRate: current.commissionRate, minimumCommissionFen,

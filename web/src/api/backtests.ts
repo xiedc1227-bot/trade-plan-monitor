@@ -34,6 +34,7 @@ import type {
   BacktestResultAvailabilityView,
   BacktestRunCommand,
   PreparedBacktestRunCommand,
+  ScheduledPreparedBacktestRunCommand,
   BacktestRunCoverageView,
   BacktestRunFiltersView,
   BacktestRunJobResultView,
@@ -156,7 +157,7 @@ export interface BacktestApi {
     options?: BacktestRequestOptions,
   ): Promise<BacktestMutationResponse<BacktestRunResult>>;
   submitRun(
-    command: BacktestRunCommand | PreparedBacktestRunCommand,
+    command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
     idempotencyKey: string,
     options?: BacktestRequestOptions,
   ): Promise<BacktestMutationResponse<BacktestJobReceipt>>;
@@ -1143,7 +1144,7 @@ export function createBacktestApi(
     },
 
     async submitRun(
-      command: BacktestRunCommand | PreparedBacktestRunCommand,
+      command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
       idempotencyKey: string,
       options?: BacktestRequestOptions,
     ) {
@@ -2957,7 +2958,7 @@ function marketIndexSeriesSearch(query: BacktestMarketIndexSeriesQuery): URLSear
   return search;
 }
 
-function normalizeRunCommand(value: unknown): BacktestRunCommand | PreparedBacktestRunCommand {
+function normalizeRunCommand(value: unknown): BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand {
   if (isRecord(value) && "preparationId" in value) return normalizePreparedRunCommand(value);
   if (
     !isRecord(value) ||
@@ -2999,8 +3000,9 @@ function normalizeRunCommand(value: unknown): BacktestRunCommand | PreparedBackt
   };
 }
 
-function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBacktestRunCommand {
+function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand {
   const keys = ["preparationId", "manifestHash", "response", "costs"];
+  if (value.schemaVersion === "prepared-loop-plan-v2") keys.push("schemaVersion");
   if (value.endDate !== undefined) keys.push("endDate");
   const response = value.response;
   const costs = value.costs;
@@ -3021,6 +3023,7 @@ function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBa
     throw invalidRequest();
   }
   return {
+    ...(value.schemaVersion === "prepared-loop-plan-v2" ? { schemaVersion: "prepared-loop-plan-v2" as const } : {}),
     preparationId: value.preparationId,
     manifestHash: value.manifestHash,
     response: { mode: response.mode, responseDelaySeconds },
