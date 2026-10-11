@@ -65,6 +65,8 @@ RP-T19 now reproduces HTTP 409 during whole-chain review with the original prior
 
 Add `tests/integration/test_plan_preparation_review.py` only for independent first-day snapshot, later-day rejection and unavailable-opening-mark regressions for that RP-T19 start-time correction.
 
+RP-T19 real-browser suffix retry reproduced HTTP 409 PREPARATION_ITEM_BINDING_CONFLICT after editing the third source. Add `web/src/composables/usePlanPreparation.ts` and `web/tests/unit/PlanPreparation.spec.ts` under RP05-A03 only to bind extraction to the current validated predecessor candidate from the complete revision-bound item list, rather than the invalidated item's cleared historical baseHash. Keep server checks, uncertain-command identity and retry limits unchanged.
+
 ## RP-TASK-RULES. Execution boundary
 
 2026-10-10 parity erratum: the Chinese historical ML-T35/ML-T36 file counts are corrected to 5/6, matching their existing exact file lists and the English record. Historical completion and verification evidence are unchanged.

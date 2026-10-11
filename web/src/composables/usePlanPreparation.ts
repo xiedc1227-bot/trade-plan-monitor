@@ -251,8 +251,10 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     const id = preparationId.value!;
     const command = { ...collectionSchema(), expectedRevision: progress.value!.revision };
     const item = nextExtraction.value;
+    const index = item ? items.value.indexOf(item) : -1;
     const bound = collection.value && item ? { ...command, schemaVersion: "backtest-preparation-v2" as const,
-      sourceId: item.sourceId, expectedSourceRevision: item.sourceRevision, expectedBaseHash: item.baseHash } : command;
+      sourceId: item.sourceId, expectedSourceRevision: item.sourceRevision,
+      expectedBaseHash: index > 0 ? items.value[index - 1]!.candidateHash : null } : command;
     return start("EXTRACT", (key, signal) => api.extract(id, bound, key, { signal }));
   }
   function cancel(): Promise<void> {

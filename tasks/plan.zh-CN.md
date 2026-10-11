@@ -39,6 +39,8 @@ RP-T19 已实际复现整链审核 HTTP 409：原始原文前夜可用，期初�
 
 仅为该 RP-T19 开始时间修正，补充 `tests/integration/test_plan_preparation_review.py` 中独立的首日期初快照、跨日拒绝及不可用期初估值回归。
 
+RP-T19 真实浏览器复现：修改第三份原文后重提取返回 HTTP 409 PREPARATION_ITEM_BINDING_CONFLICT。按 RP05-A03 仅补充 `web/src/composables/usePlanPreparation.ts` 和 `web/tests/unit/PlanPreparation.spec.ts`，从同一修订的完整条目列表取得当前已验证前项候选，作为提取绑定，而不是使用已失效条目被清空的历史 baseHash。服务端检查、未知命令身份与重试次数保持不变。
+
 ## RP01. 基准与依据
 
 业务基准为提交 [e95de03](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/e95de03ec809517cc0a3b2484c6145675418960c/docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md) 中的 ML01–ML13，收窄前的 `0db69c9` 仍保留该流程。同一提交的实施方案提供 IP04–IP06 技术细节，受下述明确保留的后续限制约束。2026-10-10 用户要求针对已确认偏离制定受限修复方案，没有授权扩展产品范围。

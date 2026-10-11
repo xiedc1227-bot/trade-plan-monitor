@@ -256,6 +256,27 @@ describe("one ordered collection preparation controller", () => {
     expect(state.canExtract.value).toBe(false);
   });
 
+  it.each([0, 2])("binds invalidated source %i to the current validated predecessor", async index => {
+    const api = collectionApi(); const { details } = reviewableCollection();
+    const fresh = collectionDetails();
+    for (let offset = index; offset < details.length; offset++) details[offset] = {
+      ...fresh[offset]!, status: offset === index ? "DRAFT" : "WAITING", sourceRevision: 2,
+    };
+    const root = collection({ revision: 10, items: details.map(({ source, attempts, candidate, ...summary }) => summary) });
+    api.get.mockResolvedValue(collectionReceipt(root));
+    api.items.mockResolvedValue(itemPage(details, { revision: 10 }));
+    vi.mocked(api.extract).mockRejectedValue(new ApiClientError({ code: "NETWORK_ERROR", status: 0, message: "lost receipt" }));
+    const { state } = controller(api); await flushPromises();
+    expect(state.canExtract.value).toBe(true);
+    await state.extract();
+    const original = vi.mocked(api.extract).mock.calls[0]!;
+    expect(original[1]).toEqual({ schemaVersion: "backtest-preparation-v2", expectedRevision: 10,
+      sourceId: `daily-${index + 1}`, expectedSourceRevision: 2,
+      expectedBaseHash: index === 0 ? null : "2".repeat(64) });
+    await state.retryMutation();
+    expect(vi.mocked(api.extract).mock.calls[1]!.slice(0, 3)).toEqual(original.slice(0, 3));
+  });
+
   it("persists an exact reorder with the current root revision", async () => {
     const api = collectionApi(); const { state } = controller(api); await flushPromises();
     await state.reorderSources(["daily-1", "daily-3", "daily-2", "daily-4"]);

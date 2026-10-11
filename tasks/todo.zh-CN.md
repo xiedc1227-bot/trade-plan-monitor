@@ -65,6 +65,8 @@ RP-T19 已实际复现整链审核 HTTP 409：原始原文前夜可用，期初�
 
 仅为该 RP-T19 开始时间修正，补充 `tests/integration/test_plan_preparation_review.py` 中独立的首日期初快照、跨日拒绝及不可用期初估值回归。
 
+RP-T19 真实浏览器复现：修改第三份原文后重提取返回 HTTP 409 PREPARATION_ITEM_BINDING_CONFLICT。按 RP05-A03 仅补充 `web/src/composables/usePlanPreparation.ts` 和 `web/tests/unit/PlanPreparation.spec.ts`，从同一修订的完整条目列表取得当前已验证前项候选，作为提取绑定，而不是使用已失效条目被清空的历史 baseHash。服务端检查、未知命令身份与重试次数保持不变。
+
 ## RP-TASK-RULES. 执行边界
 
 2026-10-10 双语勘误：历史 ML-T35/ML-T36 的中文文件计数纠正为 5/6，与既有确切文件清单及英文记录一致。历史完成状态和验证证据不变。

@@ -39,6 +39,8 @@ RP-T19 now reproduces HTTP 409 during whole-chain review with the original prior
 
 Add `tests/integration/test_plan_preparation_review.py` only for independent first-day snapshot, later-day rejection and unavailable-opening-mark regressions for that RP-T19 start-time correction.
 
+RP-T19 real-browser suffix retry reproduced HTTP 409 PREPARATION_ITEM_BINDING_CONFLICT after editing the third source. Add `web/src/composables/usePlanPreparation.ts` and `web/tests/unit/PlanPreparation.spec.ts` under RP05-A03 only to bind extraction to the current validated predecessor candidate from the complete revision-bound item list, rather than the invalidated item's cleared historical baseHash. Keep server checks, uncertain-command identity and retry limits unchanged.
+
 ## RP01. Baseline and authority
 
 The business baseline is ML01–ML13 in commit [e95de03](https://github.com/xiedc1227-bot/trade-plan-monitor/blob/e95de03ec809517cc0a3b2484c6145675418960c/docs/specifications/backtesting/PROPOSAL-monitor-loop-backtest.md), still present before narrowing in `0db69c9`. The implementation proposal at that commit supplies IP04–IP06 details, subject to the expressly retained constraints below. The 2026-10-10 user request requires a bounded repair of identified deviations. It does not authorize product expansion.
