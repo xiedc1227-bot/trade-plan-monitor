@@ -1,6 +1,6 @@
 # Repair Plan: Restore Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **10 of 20 repair tasks complete.** Concrete API approval remains pending at RP-T14. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **11 of 20 repair tasks complete.** Concrete API approval remains pending at RP-T14. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -138,6 +138,10 @@ Follow RP-T01–RP-T20 and the checkpoints in [todo.md](todo.md). Prove offline 
 Verification commands are recorded with each task. Use fake AI/providers, private stores and declared data. Changed assertions need an original-ML/RP reason; expected values cannot come from the same implementation under test. Final checks include focused chain tests, existing shared-runtime/accounting and frozen compatibility checks, generated-contract drift, frontend tests/type-check/build and the actual browser journey. Repeat the existing load experiment at unchanged thresholds when the changed batch/loop workload affects its measured assumptions; do not invent a larger capacity project.
 
 A task is complete only with its acceptance evidence and reviewed diff. Checkpoints are verification points, not repeated permission requests. No task is currently complete. The earlier 37 completed tasks/20-item delivery remain a narrower historical implementation record; they do not count toward repair completion. Implementation starts only on a user instruction to implement this reviewed plan; this planning request alone is not recorded as that instruction.
+
+RP-T11 allowance under RP05-A03: add `src/trade_plan_monitor/backtest/loop_replay.py` only to dispatch the persisted event codec for v1/v2 replay publication. Report/event domains remain distinct; no new production module or resource owner is introduced.
+
+RP-T11 is complete and RP-C04 passes: one distinct v5 report publishes the whole schedule, continuous valuation/account and version-aware causal events through the existing atomic job completion. Old v4 bytes/readers and latest-30 artifact retention remain supported. Independent review reproduced a forged trail that omitted intermediate versions despite recomputed hashes; exact scheduled crossing checks now reject it. The six-file report/publication/retention/switch/worker/legacy suite passes 51 checks; the final crossing repair passes all 7 scheduled fast checks. Ruff and independent diff review pass. **11 of 20 repair tasks complete.** Next: RP-T12.
 
 ## RP-HISTORY. Superseded fixed-version delivery record
 

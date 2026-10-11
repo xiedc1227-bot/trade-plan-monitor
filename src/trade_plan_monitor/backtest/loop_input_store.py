@@ -215,22 +215,28 @@ class LoopInputStore:
 
     def persist_report(self, report):
         """Publish a typed immutable header without enlarging SQLite row bounds."""
-        from trade_plan_monitor.backtest.loop_report import MonitorLoopReport
+        from trade_plan_monitor.backtest.loop_report import decode_loop_report
 
-        report = MonitorLoopReport.model_validate_json(report.model_dump_json())
+        report = decode_loop_report(report.model_dump_json())
         self._owned_root(create=False)
         payload = canonical_json(report.model_dump(mode="python", exclude={"report_hash"})).encode()
         self._publish(self.report_path(report.report_hash), payload)
         return self.load_report(report.report_hash)
 
     def load_report(self, digest: str):
-        from trade_plan_monitor.backtest.loop_report import LOOP_REPORT_VERSION, MonitorLoopReport
+        from trade_plan_monitor.backtest.loop_report import (
+            LOOP_REPORT_VERSION,
+            SCHEDULED_LOOP_REPORT_VERSION,
+            decode_loop_report,
+        )
 
         self._owned_root(create=False)
-        payload = self._read(self.report_path(digest), LOOP_REPORT_VERSION, digest)
+        payload = self._read(
+            self.report_path(digest), (LOOP_REPORT_VERSION, SCHEDULED_LOOP_REPORT_VERSION), digest,
+        )
         import json
 
-        report = MonitorLoopReport.model_validate_json(
+        report = decode_loop_report(
             canonical_json(json.loads(payload) | {"report_hash": digest})
         )
         if (

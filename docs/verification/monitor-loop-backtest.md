@@ -59,8 +59,12 @@ RP-T09 is complete: distinct scheduled dataset codecs freeze relevant plan bindi
 RP-T10 is complete: the distinct stored-input codec copies the entire reviewed chain and immutable days, verifies exact account/schedule/requirements bindings, rejects copied-day swaps, and preserves v1 hashes. Composition uses the initial source and relevant requirement union under the existing reservation. The user approved RP05-A02 and standing authorization RP05-A03 on 2026-10-11; the two initial-snapshot lookups now support collection registration and reload. All 50 input-store/submission/legacy checks pass, including the two previously failing registration/submission cases. Ruff and independent diff review pass. **10 of 20 repair tasks complete.** Next: RP-T11.
 
 ```text
-.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt10-pending-anchor
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt10-approved-anchor
 ```
+
+## RP-V11. Continuous causal publication
+
+RP-T11 is complete and RP-C04 passes: one distinct v5 report publishes the whole schedule, continuous valuation/account and version-aware causal events through the existing atomic job completion. Old v4 bytes/readers and latest-30 artifact retention remain supported. Independent review reproduced a forged trail that omitted intermediate versions despite recomputed hashes; exact scheduled crossing checks now reject it. The six-file report/publication/retention/switch/worker/legacy suite passes 51 checks; the final crossing repair passes all 7 scheduled fast checks. Ruff and independent diff review pass. **11 of 20 repair tasks complete.** Next: RP-T12.
 
 ## MV01. Implemented boundary
 

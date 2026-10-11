@@ -873,7 +873,9 @@ class BacktestResultStore:
             if row is None:
                 return None
             summary = _load_summary_row(row, expected_run_id=run_id)
-            if summary.assumptions.get("reportSchemaVersion") != "backtest-report-v4":
+            if summary.assumptions.get("reportSchemaVersion") not in {
+                "backtest-report-v4", "backtest-report-v5",
+            }:
                 return None
             reference, _ = _publication_run_input(connection, run_id)
             return verify_loop_publication(
@@ -1889,7 +1891,7 @@ class BacktestResultStore:
             str(payload["reportHash"])
             for row in connection.execute("SELECT summary_json FROM backtest_run")
             if (payload := json.loads(str(row[0]))["assumptions"]).get("reportSchemaVersion")
-            == "backtest-report-v4"
+            in {"backtest-report-v4", "backtest-report-v5"}
         )
         deleted, has_more = self.loop_input_store.prune_unreferenced(
             stored,
@@ -2003,7 +2005,9 @@ class BacktestResultStore:
 
             stored_metadata = row[10:16]
             already_materialized = bool(row[9])
-            if summary.assumptions.get("reportSchemaVersion") == "backtest-report-v4":
+            if summary.assumptions.get("reportSchemaVersion") in {
+                "backtest-report-v4", "backtest-report-v5",
+            }:
                 from trade_plan_monitor.backtest.loop_publication import verify_loop_publication
 
                 verify_loop_publication(

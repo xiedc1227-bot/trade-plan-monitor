@@ -14,8 +14,14 @@ from trade_plan_monitor.backtest.loop_account import LoopAccountState
 from trade_plan_monitor.backtest.loop_input_store import StoredLoopInput
 from trade_plan_monitor.backtest.loop_report import (
     LOOP_REPORT_VERSION,
+    SCHEDULED_LOOP_REPORT_VERSION,
+    LoopAccountDiscrepancy,
     LoopAuditEvent,
+    LoopPlanTransition,
     MonitorLoopReport,
+    ScheduledMonitorLoopReport,
+    decode_loop_event,
+    decode_loop_report,
     project_loop_valuation,
     verify_loop_events,
 )
@@ -35,7 +41,7 @@ from trade_plan_monitor.domain.plan_hash import plan_sha256
 
 def report_summary(stored: StoredLoopInput, report: MonitorLoopReport) -> BacktestRunSummary:
     """Keep only bounded lookup/coverage fields in the existing summary envelope."""
-    run, plan = stored.run_input, stored.prepared.version.snapshot
+    run, plan = stored.run_input, stored.run_input.schedule.entries[0].version.snapshot
     return BacktestRunSummary(
         run_id=run.run_id,
         plan_sha256=plan_sha256(plan),
@@ -53,7 +59,7 @@ def report_summary(stored: StoredLoopInput, report: MonitorLoopReport) -> Backte
             "dailyEquityCount": 0,
         },
         assumptions={
-            "reportSchemaVersion": LOOP_REPORT_VERSION,
+            "reportSchemaVersion": report.schema_version,
             "reportHash": report.report_hash,
             "inputReference": json.loads(canonical_json(stored.reference)),
         },
@@ -63,7 +69,7 @@ def report_summary(stored: StoredLoopInput, report: MonitorLoopReport) -> Backte
             else "daily-ta-v2",
             "execution": run.costs.formula_version,
             "runner": run.run_formula_version,
-            "report": LOOP_REPORT_VERSION,
+            "report": report.schema_version,
         },
         final_metrics=json.loads(canonical_json(report.metrics)),
         blockers=report.metrics.blockers,
@@ -74,7 +80,9 @@ def validate_reference_summary(summary: BacktestRunSummary, reference: LoopInput
     if (
         summary.run_id != reference.run_id
         or summary.dataset_hash != reference.dataset_hash
-        or summary.assumptions.get("reportSchemaVersion") != LOOP_REPORT_VERSION
+        or summary.assumptions.get("reportSchemaVersion") not in {
+            LOOP_REPORT_VERSION, SCHEDULED_LOOP_REPORT_VERSION,
+        }
         or summary.assumptions.get("inputReference") != json.loads(canonical_json(reference))
     ):
         raise ValueError("summary identity must match frozen loop input reference")
@@ -83,22 +91,18 @@ def validate_reference_summary(summary: BacktestRunSummary, reference: LoopInput
 def validate_report_input(stored: StoredLoopInput, report: MonitorLoopReport) -> None:
     run = stored.run_input
     selected = run.schedule.select(run.boundary.started_at)
-    if (
-        report.run_id,
-        report.input_hash,
-        report.dataset_hash,
-        report.plan_hash,
-        report.authority_id,
-        report.symbol,
-        report.boundary,
-    ) != (
-        run.run_id,
-        run.input_hash,
-        run.dataset_hash,
-        selected.version.plan_hash,
-        selected.authority_id,
-        selected.version.snapshot.symbol,
-        run.boundary,
+    from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
+
+    scheduled = isinstance(run, ScheduledLoopInput)
+    if (isinstance(report, ScheduledMonitorLoopReport) != scheduled or (
+        report.run_id, report.input_hash, report.dataset_hash, report.symbol, report.boundary,
+    ) != (run.run_id, run.input_hash, run.dataset_hash, run.schedule.symbol, run.boundary)):
+        raise ValueError("report does not match frozen loop input")
+    if scheduled:
+        if report.schedule != run.schedule:
+            raise ValueError("report schedule does not match frozen loop input")
+    elif (report.plan_hash, report.authority_id) != (
+        selected.version.plan_hash, selected.authority_id,
     ):
         raise ValueError("report does not match frozen loop input")
     opening = run.initial_account.opening_mark
@@ -151,7 +155,7 @@ def stage_loop_report(
     """A failed source can leave staged rows, never a materialized partial result."""
     token = cancellation_token or CancellationToken()
     token.raise_if_cancelled("RUN_REPORT_HANDOFF")
-    report = MonitorLoopReport.model_validate_json(report.model_dump_json())
+    report = decode_loop_report(report.model_dump_json())
     stored = store.get_loop_input(reference)
     validate_report_input(stored, report)
     summary = report_summary(stored, report)
@@ -171,7 +175,7 @@ def stage_loop_report(
     def checked():
         for value in events:
             token.raise_if_cancelled("RUN_REPORT_HANDOFF")
-            event = LoopAuditEvent.model_validate_json(value.model_dump_json())
+            event = decode_loop_event(value.model_dump_json())
             details.append(audit_record(event))
             fill = fill_record(event)
             if fill is not None:
@@ -202,9 +206,27 @@ def verify_loop_publication(store, connection, summary, reference, *, materializ
     account = LoopAccountState.from_opening(stored.run_input.initial_account)
     day_index = {day.trade_date: index for index, day in enumerate(stored.dataset.days)}
     current_date, minutes = None, {}
+    mismatches, blocked_rules = (), ()
+
+    def account_context(at):
+        selected = stored.run_input.schedule.select(at)
+        context = None if selected is None else selected.version.account_context
+        differences = []
+        if context is not None:
+            for bucket, stated in (("CORE", context.core_qty), ("TACTICAL", context.tactical_qty)):
+                actual = (sum(lot.quantity for lot in account.lots if lot.bucket == bucket)
+                          if account.inventory_known else None)
+                if stated is not None and stated != actual:
+                    differences.append(LoopAccountDiscrepancy(
+                        bucket=bucket, stated_qty=stated, actual_qty=actual,
+                    ))
+        return tuple(differences), context.dependent_rule_ids if differences else ()
+
+    if isinstance(report, ScheduledMonitorLoopReport):
+        mismatches, blocked_rules = account_context(report.boundary.started_at)
 
     def checked():
-        nonlocal account, current_date, minutes
+        nonlocal account, current_date, minutes, mismatches, blocked_rules
         cursor = connection.execute(
             "SELECT detail_id, run_id, kind, event_at, content_domain, content_hash, payload_json "
             "FROM backtest_detail WHERE run_id = ? ORDER BY detail_id",
@@ -213,10 +235,17 @@ def verify_loop_publication(store, connection, summary, reference, *, materializ
         while rows := cursor.fetchmany(1000):
             for row in rows:
                 detail = _load_detail_row(tuple(row), expected_run_id=reference.run_id)
-                event = LoopAuditEvent.model_validate_json(canonical_json(detail.payload))
+                event = decode_loop_event(canonical_json(detail.payload))
                 if detail != audit_record(event):
                     raise ValueError("loop audit row identity mismatch")
                 payload = event.payload
+                if isinstance(payload, LoopPlanTransition):
+                    if payload.kind == "REPLACED":
+                        mismatches, blocked_rules = account_context(payload.at)
+                    if (payload.context_mismatches, payload.blocked_rule_ids) != (
+                        mismatches, blocked_rules,
+                    ):
+                        raise ValueError("loop transition context does not match account")
                 if payload.kind == "EXECUTED":
                     minute = payload.attempt.minute
                     if current_date != minute.bar_end.date():

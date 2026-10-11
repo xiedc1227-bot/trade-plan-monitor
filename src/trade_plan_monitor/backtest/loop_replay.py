@@ -15,7 +15,7 @@ from trade_plan_monitor.backtest.control import BacktestProgress, CancellationTo
 from trade_plan_monitor.backtest.loop_dataset import loop_dataset_requirements
 from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
 from trade_plan_monitor.backtest.loop_publication import stage_loop_report
-from trade_plan_monitor.backtest.loop_report import LoopAuditEvent, LoopReportWriter
+from trade_plan_monitor.backtest.loop_report import LoopReportWriter, decode_loop_event
 from trade_plan_monitor.backtest.loop_runner import LoopFrame, LoopRunner
 from trade_plan_monitor.backtest.loop_session import LoopSession
 from trade_plan_monitor.backtest.time import SHANGHAI, format_shanghai_datetime
@@ -94,7 +94,7 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
                         store,
                         reference=reference,
                         report=report,
-                        events=(LoopAuditEvent.model_validate_json(line) for line in audit),
+                        events=(decode_loop_event(line) for line in audit),
                         cancellation_token=cancellation_token,
                     )
                     progress_callback(

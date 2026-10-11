@@ -59,8 +59,12 @@ RP-T09 完成：独立的版本链数据编解码冻结相关版本绑定及证�
 RP-T10 完成：独立的存储输入编解码复制完整审核链及不可变行情日，校验账户/日程/需求精确绑定，拒绝行情日顺序调换，并保留 v1 哈希。组装流程在既有预留下使用初始原文和相关需求并集。用户于 2026-10-11 批准 RP05-A02 及后续授权 RP05-A03，两处首项快照读取现已支持集合登记与重新读取。50 项输入存储/提交/旧格式检查全部通过，包含此前失败的两项登记与提交用例。Ruff 和独立差异审阅通过。**20 项修复任务，完成 10 项。** 下一项 RP-T11。
 
 ```text
-.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt10-pending-anchor
+.venv/Scripts/python.exe -m pytest tests/integration/test_monitor_loop_input_store.py tests/integration/test_monitor_loop_submission.py tests/integration/test_backtest_compatibility.py -q --basetemp=.pytest_cache/rpt10-approved-anchor
 ```
+
+## RP-V11. 连续因果结果发布
+
+RP-T11 完成，RP-C04 通过：独立 v5 报告通过既有原子任务完成流程发布完整日程、连续估值/账户和带版本的因果事件。保留 v4 字节/读取及最新 30 次产物留存。独立审阅复现了重算哈希后仍可隐藏中间版本的伪造轨迹，逐个日程生效边界检查现已拒绝该轨迹。报告/发布/留存/切换/工作线程/旧格式六文件测试共 51 项通过，最终边界修复后的 7 项版本链快速检查全部通过。Ruff 和独立差异审阅通过。**20 项修复任务，完成 11 项。** 下一项 RP-T12。
 
 ## MV01. 已实现边界
 

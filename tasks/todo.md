@@ -1,6 +1,6 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **10 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
+Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **11 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API approval remains pending at RP-T14.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.
@@ -22,6 +22,10 @@ RP-T08 is complete and RP-C03 passes: explicit item correction validates origina
 RP-T09 is complete: distinct scheduled dataset codecs freeze relevant plan bindings and the union of evidence requirements without changing v1 bytes. Each version checks history available at its activation; successor minute shortages stay visible without adding an admission gate. Frames follow only the currently selected version, and end-later sources do not affect the frozen dataset. 51 dataset/cutoff/publication/legacy checks pass, including 13 new cases. The missing successor minute warning was reproduced before repair. Ruff and independent diff review pass. **9 of 20 repair tasks complete.** Next: RP-T10.
 
 RP-T10 is complete: the distinct stored-input codec copies the entire reviewed chain and immutable days, verifies exact account/schedule/requirements bindings, rejects copied-day swaps, and preserves v1 hashes. Composition uses the initial source and relevant requirement union under the existing reservation. The user approved RP05-A02 and standing authorization RP05-A03 on 2026-10-11; the two initial-snapshot lookups now support collection registration and reload. All 50 input-store/submission/legacy checks pass, including the two previously failing registration/submission cases. Ruff and independent diff review pass. **10 of 20 repair tasks complete.** Next: RP-T11.
+
+RP-T11 allowance under RP05-A03: add `src/trade_plan_monitor/backtest/loop_replay.py` only to dispatch the persisted event codec for v1/v2 replay publication. Report/event domains remain distinct; no new production module or resource owner is introduced.
+
+RP-T11 is complete and RP-C04 passes: one distinct v5 report publishes the whole schedule, continuous valuation/account and version-aware causal events through the existing atomic job completion. Old v4 bytes/readers and latest-30 artifact retention remain supported. Independent review reproduced a forged trail that omitted intermediate versions despite recomputed hashes; exact scheduled crossing checks now reject it. The six-file report/publication/retention/switch/worker/legacy suite passes 51 checks; the final crossing repair passes all 7 scheduled fast checks. Ruff and independent diff review pass. **11 of 20 repair tasks complete.** Next: RP-T12.
 
 ## RP-TASK-RULES. Execution boundary
 
@@ -120,7 +124,7 @@ RP-T01 restores cancelled ML requirements without rewriting historical completio
 
 ### RP-T11. Publish continuous causal results
 
-- [ ] Implemented, verified and diff reviewed.
+- [x] Implemented, verified and diff reviewed.
 - **Dependencies:** RP-T10; **Acceptance:** RP-A07, RP-A08, RP-A10.
 - **Allowed files:** `src/trade_plan_monitor/backtest/loop_report.py`; `src/trade_plan_monitor/backtest/loop_publication.py`; `src/trade_plan_monitor/backtest/results.py`; `src/trade_plan_monitor/backtest/loop_input_store.py`; `tests/integration/test_monitor_loop_publication.py`.
 - **Result:** Publish one version-aware report with continuous valuation and causal event identity. Preserve atomic completion, bounds, old readers and latest-30 retention.

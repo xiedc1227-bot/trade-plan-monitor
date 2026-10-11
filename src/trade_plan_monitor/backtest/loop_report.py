@@ -1,12 +1,12 @@
 """Typed streamed loop audit and market valuations, separate from accounting cost."""
 
 from collections.abc import Callable, Iterable
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
 from hashlib import sha256
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt, LoopAccountState, SignedFen
@@ -18,7 +18,11 @@ from trade_plan_monitor.backtest.loop_input import (
     ScheduledLoopInput,
 )
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
-from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary, LoopTimestamp
+from trade_plan_monitor.backtest.plan_schedule import (
+    LoopEndBoundary,
+    LoopTimestamp,
+    ScheduledLoopSchedule,
+)
 from trade_plan_monitor.backtest.reminder_capture import CapturedReminder
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.backtest.research_report import ResearchReminder, ResearchRuleEvidence
@@ -32,6 +36,7 @@ from trade_plan_monitor.state.daily_state_models import (
 )
 
 LOOP_REPORT_VERSION = "backtest-report-v4"
+SCHEDULED_LOOP_REPORT_VERSION = "backtest-report-v5"
 LOOP_EVENT_VERSION = "monitor-loop-event-v1"
 MAX_AUDIT_EVENTS = 6 * MAX_LOOP_RECORDS + 1
 _EVENT_SET_DOMAIN = b"monitor-loop-event-set-v1\0"
@@ -371,7 +376,7 @@ class MonitorLoopReport(ResearchValue):
     def integrity(self):
         expected = sha256(
             (
-                LOOP_REPORT_VERSION
+                self.schema_version
                 + "\0"
                 + canonical_json(self.model_dump(mode="python", exclude={"report_hash"}))
             ).encode()
@@ -430,6 +435,57 @@ class MonitorLoopReport(ResearchValue):
         return self
 
 
+class ScheduledMonitorLoopReport(ResearchValue):
+    """Whole-chain identity with continuous account metrics; distinct from legacy v4."""
+
+    schema_version: Literal["backtest-report-v5"] = SCHEDULED_LOOP_REPORT_VERSION
+    run_id: Sha256Hex
+    input_hash: Sha256Hex
+    dataset_hash: Sha256Hex
+    schedule: ScheduledLoopSchedule
+    symbol: str
+    boundary: LoopEndBoundary
+    cycle: LoopCycleSummary
+    event_count: int = Field(ge=1, le=MAX_AUDIT_EVENTS)
+    event_set_hash: Sha256Hex
+    opening_valuation: LoopValuation
+    final_valuation: LoopValuation
+    final_account: LoopAccountState
+    final_inventory: DailyInventoryView
+    last_evidence_at: LoopTimestamp | None
+    last_valuation_at: LoopTimestamp
+    metrics: LoopMetrics
+    report_hash: Sha256Hex
+
+    @model_validator(mode="after")
+    def integrity(self):
+        MonitorLoopReport.integrity(self)
+        if (self.symbol != self.schedule.symbol
+                or self.schedule.select(self.boundary.started_at) is None):
+            raise ValueError("scheduled report does not bind its opening authority")
+        return self
+
+
+_REPORT_CODEC = TypeAdapter(Annotated[
+    MonitorLoopReport | ScheduledMonitorLoopReport, Field(discriminator="schema_version"),
+])
+_EVENT_CODEC = TypeAdapter(Annotated[
+    LoopAuditEvent | ScheduledLoopAuditEvent, Field(discriminator="schema_version"),
+])
+
+
+def decode_loop_report(raw):
+    return _REPORT_CODEC.validate_json(raw)
+
+
+def decode_loop_event(raw):
+    return _EVENT_CODEC.validate_json(raw)
+
+
+def _event_set_domain(scheduled):
+    return b"monitor-loop-event-set-v2\0" if scheduled else _EVENT_SET_DOMAIN
+
+
 class LoopReportWriter:
     """Stream event bytes to the caller; only finite causal indexes and metrics stay in memory."""
 
@@ -438,7 +494,7 @@ class LoopReportWriter:
             raise TypeError("loop audit sink must be callable")
         self.session, self.sink = session, sink
         self._sequence = 0
-        self._digest = sha256(_EVENT_SET_DOMAIN)
+        self._digest = sha256(_event_set_domain(isinstance(session.run_input, ScheduledLoopInput)))
         self._reminders, self._requests = {}, {}
         self._evaluation_id = self._state_id = self._last_event_id = None
         self._last_evidence_at = None
@@ -692,9 +748,15 @@ class LoopReportWriter:
             last_valuation_at=self.final.at,
             metrics=metrics,
         )
-        report = MonitorLoopReport(
+        report_type = MonitorLoopReport
+        if isinstance(run, ScheduledLoopInput):
+            report_type = ScheduledMonitorLoopReport
+            values.pop("plan_hash")
+            values.pop("authority_id")
+            values.update(schema_version=SCHEDULED_LOOP_REPORT_VERSION, schedule=run.schedule)
+        report = report_type(
             report_hash=sha256(
-                (LOOP_REPORT_VERSION + "\0" + canonical_json(values)).encode()
+                (values["schema_version"] + "\0" + canonical_json(values)).encode()
             ).hexdigest(),
             **values,
         )
@@ -704,8 +766,9 @@ class LoopReportWriter:
 
 def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEvent]) -> None:
     """Verify ordered canonical bytes and causal ancestry without collecting the trail."""
-    report = MonitorLoopReport.model_validate_json(report.model_dump_json())
-    digest = sha256(_EVENT_SET_DOMAIN)
+    report = decode_loop_report(report.model_dump_json())
+    scheduled = isinstance(report, ScheduledMonitorLoopReport)
+    digest = sha256(_event_set_domain(scheduled))
     seen, counts = (
         {},
         {kind: 0 for kind in ("EVALUATED", "REMINDED", "REQUESTED", "EXECUTED", "FILLED")},
@@ -720,8 +783,22 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
         "EXECUTED": "REQUESTED",
         "STATE": "EXECUTED",
     }
+    selection = report.schedule.select(report.boundary.started_at) if scheduled else None
+    active_version = None if selection is None else selection.version.version_id
+    active_authority = None if selection is None else selection.authority_id
+    last_transition_at = None
+    lifecycle_day = report.boundary.started_at.date()
+    risk_requests = set()
+    crossings = () if not scheduled else tuple(sorted({
+        max(datetime.combine(row.effective_trade_date, time.min, report.boundary.started_at.tzinfo),
+            row.version.available_at)
+        for row in report.schedule.entries
+    } - {report.boundary.started_at}))
+    crossing_index = 0
     for event in events:
-        event = LoopAuditEvent.model_validate_json(event.model_dump_json())
+        event = decode_loop_event(event.model_dump_json())
+        if isinstance(event, ScheduledLoopAuditEvent) != scheduled:
+            raise ValueError("LOOP_AUDIT_CODEC_MISMATCH")
         sequence += 1
         if (
             event.run_id != report.run_id
@@ -736,6 +813,44 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
         if kind in parents and seen.get(event.cause_event_id) != parents[kind]:
             raise ValueError("LOOP_AUDIT_CAUSE_KIND_MISMATCH")
         payload = event.payload
+        if scheduled:
+            while crossing_index < len(crossings) and crossings[crossing_index] <= event.at:
+                point = crossings[crossing_index]
+                crossing_index += 1
+                if point <= report.boundary.started_at:
+                    continue
+                required = report.schedule.select(point)
+                if (required is not None and required.authority_id != active_authority
+                        and (point != event.at or not isinstance(payload, LoopPlanTransition))):
+                    raise ValueError("LOOP_AUDIT_TRANSITION_MISSING")
+            selected = report.schedule.select(event.at)
+            expected = (None, None) if selected is None else (
+                selected.version.version_id, selected.authority_id,
+            )
+            if (event.version_id, event.authority_id) != expected:
+                raise ValueError("LOOP_AUDIT_VERSION_AUTHORITY_MISMATCH")
+            if isinstance(payload, LoopPlanTransition):
+                expected_kind = (
+                    "NO_AUTHORITY" if selected is None else
+                    "REPLACED" if selected.authority_id != active_authority else "CONTINUED"
+                )
+                if (payload.from_version_id != active_version or kind != expected_kind
+                        or (last_transition_at is not None and event.at <= last_transition_at)
+                        or (kind == "CONTINUED" and event.at.date() <= lifecycle_day)
+                        or (kind == "NO_AUTHORITY" and active_authority is None
+                            and event.at.date() <= lifecycle_day)):
+                    raise ValueError("LOOP_AUDIT_TRANSITION_MISMATCH")
+                closed = tuple(sorted(set(requests) - terminal - risk_requests))
+                if payload.closed_intent_ids != (closed if kind != "CONTINUED" else ()):
+                    raise ValueError("LOOP_AUDIT_TRANSITION_INTENTS_MISMATCH")
+                terminal.update(payload.closed_intent_ids)
+                active_authority = event.authority_id
+                if selected is not None:
+                    active_version = selected.version.version_id
+                last_transition_at = event.at
+                lifecycle_day = event.at.date()
+            elif event.authority_id != active_authority or event.at.date() != lifecycle_day:
+                raise ValueError("LOOP_AUDIT_TRANSITION_MISSING")
         if kind == "REMINDED":
             reminder = payload.reminder
             if reminder.sequence in reminders:
@@ -747,9 +862,10 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
                 reminder.event.cause_id,
                 reminder.execution_candidate,
                 reminder.captured_at,
+                reminder.event.signal_type == "RISK_EXIT",
             )
         elif kind == "REQUESTED":
-            cause, eligible, captured_at = causal_inputs[event.cause_event_id]
+            cause, eligible, captured_at, risk = causal_inputs[event.cause_event_id]
             if (
                 not eligible
                 or payload.cause_id != cause
@@ -758,6 +874,8 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
             ):
                 raise ValueError("LOOP_AUDIT_REQUEST_AUTHORITY_MISMATCH")
             requests[payload.intent_id] = (event.event_id, payload.cause_id, payload.ready_at)
+            if risk:
+                risk_requests.add(payload.intent_id)
         elif kind == "EXECUTED":
             attempt = payload.attempt
             request = requests.get(attempt.intent_id)
