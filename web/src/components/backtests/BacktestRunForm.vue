@@ -173,9 +173,10 @@ function focusErrorField(field: string, event: MouseEvent): void {
 
       <div v-else-if="prepared && preparedAccount" class="run-form__field" data-testid="prepared-run-account">
         <h3>{{ preparedVersions ? `${preparedVersions.length} 份已复核计划 · 一次连续回测` : `一份已审核计划 · ${preparedSymbol}` }}</h3>
-        <ol v-if="preparedVersions" data-testid="prepared-run-versions"><li v-for="version in preparedVersions" :key="version.sourceId">{{ version.effectiveTradeDate }} · 来源 {{ version.sourceId }} · 可用 {{ formatDisplayDateTime(version.availableAt) }}</li></ol>
+        <ol v-if="preparedVersions" data-testid="prepared-run-versions"><li v-for="version in preparedVersions" :key="version.sourceId">{{ version.effectiveTradeDate }} · 来源 {{ version.sourceId }} · 执行起点 {{ formatDisplayDateTime(version.availableAt) }}</li></ol>
+        <p>预置计划未声明历史可用时间时，从生效交易日开盘起执行。</p>
         <p>初始账户快照：{{ formatDisplayDateTime(preparedAccount.snapshot_at) }}</p>
-        <p>现金：{{ preparedAccount.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(preparedAccount.cash.balance_fen))} 元` : '未知；不会推断为零' }}</p>
+        <p>资金模式：{{ preparedAccount.cash.kind === 'POSITION_LIMIT_ONLY' ? '按计划最大持仓执行，无现金限制' : preparedAccount.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(preparedAccount.cash.balance_fen))} 元（历史资金模式）` : '未知（历史资金模式）' }}</p>
         <p>库存：{{ preparedAccount.inventory_known ? '已知' : '未知；不会推断为空仓' }}</p>
         <ul>
           <li v-for="lot in preparedAccount.lots" :key="lot.lot_key">

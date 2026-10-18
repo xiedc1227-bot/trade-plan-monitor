@@ -1,0 +1,521 @@
+{
+  "schemaVersion": "monitor-loop-result-v2",
+  "runId": "92edcbaa73bf9e445834b2c5ef5a22a4da4499d82c76fa412e05b92e62bb84d1",
+  "reportHash": "81ef60f0279f9346a835dff69e11f1ccf3c430e0fdea40be6202bc959ffc1423",
+  "planVersionId": null,
+  "planHash": "4dbc6c2ab79868e7c08dba0a67eb53946602e91500819f6f4f9083136de3b516",
+  "datasetHash": "cd0d12b80b0f8e5b2e214fd17487cc49c8eab30f7770e16acef79cfaabebc21c",
+  "symbol": "002240.SZ",
+  "status": "COMPLETED",
+  "eventStart": "2026-09-24",
+  "eventEnd": "2026-10-09",
+  "completedAt": "2026-10-09T23:59:59.999999+08:00",
+  "pinned": false,
+  "revision": 0,
+  "fillCount": 0,
+  "metrics": {
+    "initial_equity_fen": null,
+    "final_equity_fen": null,
+    "equity_change_fen": null,
+    "interval_return": null,
+    "maximum_drawdown": null,
+    "turnover": null,
+    "cost_pnl_fen": 0,
+    "realized_pnl_fen": 0,
+    "unrealized_pnl_fen": 0,
+    "paid_fees_fen": 0,
+    "slippage_fen": 0,
+    "valuation_valid": false,
+    "blockers": [
+      "OPENING_VALUATION_UNKNOWN",
+      "FINAL_VALUATION_UNKNOWN",
+      "INCOMPLETE_VALUATION_PATH"
+    ]
+  },
+  "availability": {
+    "decisionDetails": "AVAILABLE",
+    "signalDetails": "NOT_RECORDED",
+    "executionOutcomeDetails": "NOT_RECORDED",
+    "equitySeries": "AVAILABLE"
+  },
+  "provenance": {
+    "preparationId": "four-source-confirmed-composition",
+    "manifestHash": "0960fdc0212b74fa484f7c4b228fe543ca9a2c0161b4fac70d8016e48886cba2",
+    "inputHash": "16cd86f769eb414eb981d65d83d0977f4d6d406e27cfdb644b5fa810c85f00ff",
+    "revision": 1,
+    "sources": [
+      {
+        "sourceId": "01-20260924-104506",
+        "sourceHash": "d5bf144f35959025245e92e6677453eba20177c373fe81ee97d121d6f02283cf",
+        "sourceRevision": 1,
+        "candidateRevision": 2,
+        "candidateHash": "7cfadb6dad7ce9641e219510fdad3a0664c2e2a2959519841644d397925c09c2",
+        "evidenceHash": "071ecfd52d1159b2388f1b8120df42a288183f046701b3c9ca89a49a653b3674",
+        "baseHash": null
+      },
+      {
+        "sourceId": "02-20260928-092555",
+        "sourceHash": "08c9a6bfbede9c5f0b17ace2bb755ab1a12a281757c93ca354c1bbd91fa530f5",
+        "sourceRevision": 1,
+        "candidateRevision": 3,
+        "candidateHash": "12c0b0ccbbbcb18d62640427313a710b9c2d0ced1496f1d75b05d06f5d7a9c35",
+        "evidenceHash": "b725a8e1e569bcf9ec2cef63d9bdc2bd970f01fef6409047eb792bc8ea8d1f91",
+        "baseHash": null
+      },
+      {
+        "sourceId": "03-20260930-095728",
+        "sourceHash": "99dfc06dc89a79d588697298a629bcc2702e5405f5a76cea5170cb77f45e52a3",
+        "sourceRevision": 1,
+        "candidateRevision": 2,
+        "candidateHash": "66adb7d8965fdd285bdfc88f194df68a7a7c9a00fcba3732d20a245d7d63ac69",
+        "evidenceHash": "8245d6efa4d27216b6e79049f811633c16662a63bc47477883d784febb270acf",
+        "baseHash": null
+      },
+      {
+        "sourceId": "04-20261009-091956",
+        "sourceHash": "47dcf4f16f6d112f09c2e341059c2dd40c9f07b25c5cc310b6eff5098ba70881",
+        "sourceRevision": 1,
+        "candidateRevision": 3,
+        "candidateHash": "f54e51a4dff4e99e67ce582fa2211ebf227736c22339eaa9d56fc2080a518991",
+        "evidenceHash": "61f9f634746d423dba0dd64cda2b340750dde2e6684d1847bff3d148274b6eff",
+        "baseHash": "66adb7d8965fdd285bdfc88f194df68a7a7c9a00fcba3732d20a245d7d63ac69"
+      }
+    ]
+  },
+  "versions": [
+    {
+      "sourceId": "01-20260924-104506",
+      "sourceRevision": 1,
+      "candidateRevision": 2,
+      "versionId": "prepared-b4c54c31621a7e4485478a550fc728b951556e8126dd2d560105139b1fdc5760",
+      "planHash": "4dbc6c2ab79868e7c08dba0a67eb53946602e91500819f6f4f9083136de3b516",
+      "evidenceHash": "b4c54c31621a7e4485478a550fc728b951556e8126dd2d560105139b1fdc5760",
+      "effectiveTradeDate": "2026-09-24",
+      "availableAt": "2026-09-24T09:30:00+08:00",
+      "accountContext": null
+    },
+    {
+      "sourceId": "02-20260928-092555",
+      "sourceRevision": 1,
+      "candidateRevision": 3,
+      "versionId": "prepared-b725a8e1e569bcf9ec2cef63d9bdc2bd970f01fef6409047eb792bc8ea8d1f91",
+      "planHash": "7077394431e22eda7e886062ce0f125b66fca703ddc86a3b67b78a6fc9f10bee",
+      "evidenceHash": "b725a8e1e569bcf9ec2cef63d9bdc2bd970f01fef6409047eb792bc8ea8d1f91",
+      "effectiveTradeDate": "2026-09-28",
+      "availableAt": "2026-09-28T09:30:00+08:00",
+      "accountContext": null
+    },
+    {
+      "sourceId": "03-20260930-095728",
+      "sourceRevision": 1,
+      "candidateRevision": 2,
+      "versionId": "prepared-9e85966bd26d046f58384d4f7f10e437966659f90d087b9200d93be3714bfba7",
+      "planHash": "320a07e411d83bb41490e974303eb599407a5ffb94e7a8b7c7aabc203c401bb3",
+      "evidenceHash": "9e85966bd26d046f58384d4f7f10e437966659f90d087b9200d93be3714bfba7",
+      "effectiveTradeDate": "2026-09-30",
+      "availableAt": "2026-09-30T09:30:00+08:00",
+      "accountContext": null
+    },
+    {
+      "sourceId": "04-20261009-091956",
+      "sourceRevision": 1,
+      "candidateRevision": 3,
+      "versionId": "prepared-61f9f634746d423dba0dd64cda2b340750dde2e6684d1847bff3d148274b6eff",
+      "planHash": "cde2394a39822b89a59d8e35650a63acbe00217e5ae7d69330983a9a65bc7b64",
+      "evidenceHash": "61f9f634746d423dba0dd64cda2b340750dde2e6684d1847bff3d148274b6eff",
+      "effectiveTradeDate": "2026-10-09",
+      "availableAt": "2026-10-09T09:30:00+08:00",
+      "accountContext": null
+    }
+  ],
+  "openingAccount": {
+    "snapshot_at": "2026-09-24T09:30:00+08:00",
+    "inventory_known": true,
+    "cash": {
+      "kind": "POSITION_LIMIT_ONLY"
+    },
+    "lots": [],
+    "opening_mark": null,
+    "evidence": "Source-bound opening account: d5bf144f35959025245e92e6677453eba20177c373fe81ee97d121d6f02283cf"
+  },
+  "response": {
+    "mode": "FOLLOW_REMINDERS",
+    "response_delay_seconds": 0,
+    "fill_model": "NEXT_ELIGIBLE_MINUTE_CLOSE"
+  },
+  "costs": {
+    "formula_version": "monitor-loop-costs-v1",
+    "commission_rate": "0.0003",
+    "minimum_commission_fen": 500,
+    "stamp_duty_rate": "0.0005",
+    "transfer_fee_rate": "0.00001",
+    "buy_slippage_fen": 1,
+    "sell_slippage_fen": 1
+  },
+  "report": {
+    "report_schema_version": "backtest-report-v5",
+    "run_id": "92edcbaa73bf9e445834b2c5ef5a22a4da4499d82c76fa412e05b92e62bb84d1",
+    "input_hash": "16cd86f769eb414eb981d65d83d0977f4d6d406e27cfdb644b5fa810c85f00ff",
+    "dataset_hash": "cd0d12b80b0f8e5b2e214fd17487cc49c8eab30f7770e16acef79cfaabebc21c",
+    "symbol": "002240.SZ",
+    "boundary": {
+      "started_at": "2026-09-24T09:30:00+08:00",
+      "submitted_at": "2026-10-17T01:40:10.357636+08:00",
+      "requested_end_date": "2026-10-09",
+      "resolved_end_date": "2026-10-09",
+      "origin": "EXPLICIT",
+      "evidence_cutoff": "2026-10-09T23:59:59.999999+08:00"
+    },
+    "cycle": {
+      "evaluations": 1468,
+      "intents": 0,
+      "attempts": 0,
+      "fills": 0,
+      "unfilled_intents": 0
+    },
+    "event_count": 2956,
+    "event_set_hash": "2d7f64678f2315e6b4c03eb0e741c348a90aa6c58a23a66f83112364ec2242af",
+    "opening_valuation": {
+      "at": "2026-09-24T09:30:00+08:00",
+      "account_revision": 1,
+      "price_fen": null,
+      "price_at": null,
+      "available_at": null,
+      "cash_fen": null,
+      "position_quantity": 0,
+      "market_value_fen": 0,
+      "equity_fen": null,
+      "accounting_cost_fen": 0,
+      "realized_pnl_fen": 0,
+      "unrealized_pnl_fen": 0,
+      "cost_pnl_fen": 0,
+      "valuation_valid": false,
+      "blockers": [
+        "CAPITAL_NOT_MODELED"
+      ]
+    },
+    "final_valuation": {
+      "at": "2026-10-09T23:59:59.999999+08:00",
+      "account_revision": 1,
+      "price_fen": 2535,
+      "price_at": "2026-10-09T15:00:00+08:00",
+      "available_at": "2026-10-09T15:00:12+08:00",
+      "cash_fen": null,
+      "position_quantity": 0,
+      "market_value_fen": 0,
+      "equity_fen": null,
+      "accounting_cost_fen": 0,
+      "realized_pnl_fen": 0,
+      "unrealized_pnl_fen": 0,
+      "cost_pnl_fen": 0,
+      "valuation_valid": false,
+      "blockers": [
+        "CAPITAL_NOT_MODELED"
+      ]
+    },
+    "final_account": {
+      "revision": 1,
+      "cash": {
+        "kind": "POSITION_LIMIT_ONLY"
+      },
+      "inventory_known": true,
+      "lots": [],
+      "realized_pnl_fen": 0,
+      "paid_fees_fen": 0
+    },
+    "final_inventory": {
+      "symbol": "002240.SZ",
+      "revision": 1,
+      "known": true,
+      "total_qty": 0,
+      "core_qty": 0,
+      "tactical_qty": 0,
+      "sellable_core": 0,
+      "sellable_tactical": 0
+    },
+    "last_evidence_at": "2026-10-09T15:20:00+08:00",
+    "last_valuation_at": "2026-10-09T23:59:59.999999+08:00",
+    "metrics": {
+      "initial_equity_fen": null,
+      "final_equity_fen": null,
+      "equity_change_fen": null,
+      "interval_return": null,
+      "maximum_drawdown": null,
+      "turnover": null,
+      "cost_pnl_fen": 0,
+      "realized_pnl_fen": 0,
+      "unrealized_pnl_fen": 0,
+      "paid_fees_fen": 0,
+      "slippage_fen": 0,
+      "valuation_valid": false,
+      "blockers": [
+        "OPENING_VALUATION_UNKNOWN",
+        "FINAL_VALUATION_UNKNOWN",
+        "INCOMPLETE_VALUATION_PATH"
+      ]
+    },
+    "report_hash": "81ef60f0279f9346a835dff69e11f1ccf3c430e0fdea40be6202bc959ffc1423"
+  },
+  "planDiagnostics": {
+    "availability": "AVAILABLE",
+    "plans": [
+      {
+        "source_id": "01-20260924-104506",
+        "version_id": "prepared-b4c54c31621a7e4485478a550fc728b951556e8126dd2d560105139b1fdc5760",
+        "effective_trade_date": "2026-09-24",
+        "buy_rule_count": 1,
+        "fill_count": 0,
+        "evaluation_count": 245,
+        "unmet_count": 245,
+        "missing_count": 0,
+        "satisfied_count": 0,
+        "review_status": "PASSED",
+        "categories": [
+          "MARKET_UNMET",
+          "QUALITATIVE_UNRESOLVED"
+        ],
+        "examples": [
+          {
+            "category": "MARKET_UNMET",
+            "rule_id": "first-lot-after-stabilization-reclaim",
+            "at": "2026-09-24T15:20:00+08:00",
+            "sequence": 484,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "连续 2 个收盘逐次不下移",
+            "actual": "收盘序列：26.62 元、25.69 元",
+            "reason": ""
+          },
+          {
+            "category": "MARKET_UNMET",
+            "rule_id": "first-lot-after-stabilization-reclaim",
+            "at": "2026-09-24T15:20:00+08:00",
+            "sequence": 484,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "收盘价高于 26.70 元",
+            "actual": "2026-09-24 收盘价 25.69 元",
+            "reason": ""
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "first-lot-after-stabilization-reclaim",
+            "at": "2026-09-24T15:20:00+08:00",
+            "sequence": 484,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "明显下影或止跌阳线",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "first-lot-after-stabilization-reclaim",
+            "at": "2026-09-24T15:20:00+08:00",
+            "sequence": 484,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "量能不能异常放大",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          }
+        ],
+        "sampled": false
+      },
+      {
+        "source_id": "02-20260928-092555",
+        "version_id": "prepared-b725a8e1e569bcf9ec2cef63d9bdc2bd970f01fef6409047eb792bc8ea8d1f91",
+        "effective_trade_date": "2026-09-28",
+        "buy_rule_count": 0,
+        "fill_count": 0,
+        "evaluation_count": 485,
+        "unmet_count": 0,
+        "missing_count": 0,
+        "satisfied_count": 0,
+        "review_status": "PASSED",
+        "categories": [
+          "DATA_UNAVAILABLE",
+          "NO_BUY_RULE"
+        ],
+        "examples": [
+          {
+            "category": "DATA_UNAVAILABLE",
+            "rule_id": "",
+            "at": "2026-09-29T00:00:00+08:00",
+            "sequence": 985,
+            "root_outcome": null,
+            "requirement": "",
+            "actual": "该时点日线价格基准尚未可用，仅影响该时点的判断",
+            "reason": "PRICE_BASIS_UNVERIFIED"
+          },
+          {
+            "category": "NO_BUY_RULE",
+            "rule_id": "",
+            "at": "2026-09-29T15:20:00+08:00",
+            "sequence": 1470,
+            "root_outcome": null,
+            "requirement": "本版本没有直接买入规则；观察或风险退出不构成买入授权",
+            "actual": "最新行情价 25.05 元（09-29 15:00）",
+            "reason": ""
+          },
+          {
+            "category": "NO_BUY_RULE",
+            "rule_id": "",
+            "at": "2026-09-28T15:20:00+08:00",
+            "sequence": 983,
+            "root_outcome": null,
+            "requirement": "本版本没有直接买入规则；观察或风险退出不构成买入授权",
+            "actual": "最新行情价 24.44 元（09-28 15:00）",
+            "reason": ""
+          }
+        ],
+        "sampled": false
+      },
+      {
+        "source_id": "03-20260930-095728",
+        "version_id": "prepared-9e85966bd26d046f58384d4f7f10e437966659f90d087b9200d93be3714bfba7",
+        "effective_trade_date": "2026-09-30",
+        "buy_rule_count": 1,
+        "fill_count": 0,
+        "evaluation_count": 492,
+        "unmet_count": 491,
+        "missing_count": 1,
+        "satisfied_count": 0,
+        "review_status": "PASSED",
+        "categories": [
+          "MARKET_UNMET",
+          "QUALITATIVE_UNRESOLVED",
+          "DATA_UNAVAILABLE"
+        ],
+        "examples": [
+          {
+            "category": "MARKET_UNMET",
+            "rule_id": "buy-first-100",
+            "at": "2026-10-08T15:20:00+08:00",
+            "sequence": 2465,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "自 2026-09-30 起，先有更早交易日完整收盘不低于 25.99 元，再判断回踩",
+            "actual": "先行收盘：25.01 元；当时最新行情价 25.14 元（10-08 15:00，不作先行收盘确认）",
+            "reason": "PRIOR_CLOSE_NOT_SATISFIED"
+          },
+          {
+            "category": "MARKET_UNMET",
+            "rule_id": "buy-first-100",
+            "at": "2026-09-30T15:20:00+08:00",
+            "sequence": 1957,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "自 2026-09-30 起，先有更早交易日完整收盘不低于 25.99 元，再判断回踩",
+            "actual": "尚无窗口内更早交易日的合格收盘；当时最新行情价 25.01 元（09-30 15:00，不作先行收盘确认）",
+            "reason": "PRIOR_CLOSE_NOT_SATISFIED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-first-100",
+            "at": "2026-10-08T15:20:00+08:00",
+            "sequence": 2465,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "之后至少一次回踩25.5—26.0不破，并再次收回向上；同时成交不异常放大、相对深证成指不再转弱",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-first-100",
+            "at": "2026-10-08T15:20:00+08:00",
+            "sequence": 2465,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "成交不异常放大",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-first-100",
+            "at": "2026-10-08T15:20:00+08:00",
+            "sequence": 2465,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "相对深证成指不再转弱",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-first-100",
+            "at": "2026-09-30T15:20:00+08:00",
+            "sequence": 1957,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "之后至少一次回踩25.5—26.0不破，并再次收回向上；同时成交不异常放大、相对深证成指不再转弱",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-first-100",
+            "at": "2026-09-30T15:20:00+08:00",
+            "sequence": 1957,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "成交不异常放大",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-first-100",
+            "at": "2026-09-30T15:20:00+08:00",
+            "sequence": 1957,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "相对深证成指不再转弱",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          }
+        ],
+        "sampled": true
+      },
+      {
+        "source_id": "04-20261009-091956",
+        "version_id": "prepared-61f9f634746d423dba0dd64cda2b340750dde2e6684d1847bff3d148274b6eff",
+        "effective_trade_date": "2026-10-09",
+        "buy_rule_count": 2,
+        "fill_count": 0,
+        "evaluation_count": 243,
+        "unmet_count": 243,
+        "missing_count": 243,
+        "satisfied_count": 0,
+        "review_status": "PASSED",
+        "categories": [
+          "MARKET_UNMET",
+          "QUALITATIVE_UNRESOLVED"
+        ],
+        "examples": [
+          {
+            "category": "MARKET_UNMET",
+            "rule_id": "buy-first-100",
+            "at": "2026-10-09T15:20:00+08:00",
+            "sequence": 2953,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "自 2026-10-09 起，先有更早交易日完整收盘高于 25.99 元，再判断回踩",
+            "actual": "尚无窗口内更早交易日的合格收盘；当时最新行情价 25.35 元（10-09 15:00，不作先行收盘确认）",
+            "reason": "PRIOR_CLOSE_NOT_SATISFIED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-first-100",
+            "at": "2026-10-09T23:59:59.999999+08:00",
+            "sequence": 2955,
+            "root_outcome": "UNSATISFIED",
+            "requirement": "随后出现一次回踩25.7—26.0附近不破并重新收起；先收复25.99，再回踩，再重新收起，顺序不可颠倒",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          },
+          {
+            "category": "QUALITATIVE_UNRESOLVED",
+            "rule_id": "buy-second-100",
+            "at": "2026-10-09T23:59:59.999999+08:00",
+            "sequence": 2955,
+            "root_outcome": "MISSING_INPUT",
+            "requirement": "进一步站稳26.40，并且回踩确认；须在前一笔买入完成后",
+            "actual": "尚无该条件的已核验证据；不假定已满足",
+            "reason": "REVIEWED_FACT_REQUIRED"
+          }
+        ],
+        "sampled": false
+      }
+    ]
+  }
+}

@@ -8,12 +8,15 @@ import { ApiClientError } from "../api/transport";
 import { buildPreparationReview, inspectPreparationReview, isReviewedPreparation, type ReviewChoice, buildCollectionReview, inspectCollectionReview, collectionBinding } from "../api/preparationReview";
 
 import type { CollectionItemView, CollectionPreparationView, CollectionItemCorrectionInput, LoopAccountInput } from "../api/generated-runtime-status";
+import type { ReviewedPlanReference } from "../api/generated-runtime-status";
 
 export type PreparationMutationState = "IDLE" | "SUBMITTING" | "UNCERTAIN";
 export interface UsePlanPreparationOptions {
   readonly api?: PreparationApi;
   readonly initialPreparationId?: string | null;
   readonly createId?: () => string;
+  readonly singleMode?: boolean;
+  readonly reviewedBase?: () => ReviewedPlanReference | null;
 }
 type IntentKind = "CREATE" | "EDIT" | "EXTRACT" | "CANCEL" | "RECOVER" | "REVIEW" | "CORRECT";
 interface MutationIntent {
@@ -47,6 +50,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let mounted = false;
   let readGeneration = 0;
+  let initialReadRetries = 0;
   const draftDirty = shallowRef(false);
   const reviewRevisionFloor = shallowRef<number | null>(null);
 
@@ -60,11 +64,23 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   const current = computed(() => progress.value !== null &&
     ["READY", "REFRESHING"].includes(requestState.value) && mutationState.value === "IDLE");
   const canSubmitSource = computed(() => !isBusy.value &&
+    (collection.value?.workflow !== "SINGLE" || collection.value.status !== "REVIEWED" && draft.value.source_id === collection.value.editableSourceId) &&
+    collection.value?.workflow !== "COMPOSITION" &&
     (preparationId.value === null || current.value) &&
     (collection.value === null || items.value.length === collection.value.itemCount));
   const nextExtraction = computed(() => items.value.find(item => item.validation !== "VALID"));
+  const extractionBlockers = computed(() => {
+    const saved = collection.value ? collection.value.items.map(item => item.effectiveTradeDate)
+      : preparation.value ? [preparation.value.source.effective_trade_date] : [];
+    const seen = new Set<string>();
+    return saved.flatMap((day, index) => {
+      if (!day) return [`第 ${index + 1} 份生效交易日不明确，请先确认日期并保存，再提取计划。`];
+      if (seen.has(day)) return [`${day} 存在多份计划，请先确认各份生效交易日并保存。`];
+      seen.add(day); return [];
+    });
+  });
   const canExtract = computed(() => {
-    if (!current.value || workPending.value || draftDirty.value) return false;
+    if (!current.value || workPending.value || draftDirty.value || extractionBlockers.value.length) return false;
     if (collection.value) {
       const item = nextExtraction.value;
       return items.value.length === collection.value.itemCount && !!item && item.attemptCount < 3 &&
@@ -93,10 +109,10 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     readPromise = null;
     clearTimer();
   }
-  function schedule(): void {
+  function schedule(retryInitialRead = false): void {
     clearTimer();
     if (!mounted || typeof document !== "undefined" && document.hidden ||
-        !workPending.value || readPromise !== null || mutationPromise !== null) return;
+        !workPending.value && !retryInitialRead || readPromise !== null || mutationPromise !== null) return;
     timer = setTimeout(() => { timer = null; void refresh(); }, 2000);
   }
   function apply(response: PreparationReceipt): boolean {
@@ -104,6 +120,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
         reviewRevisionFloor.value !== null && response.body.revision < reviewRevisionFloor.value) return false;
     if (progress.value?.revision !== response.body.revision) items.value = [];
     progress.value = response.body;
+    initialReadRetries = 0;
     reviewRevisionFloor.value = null;
     if (!draftDirty.value && !isCollection(response.body)) draft.value = { ...response.body.source };
     requestState.value = "READY";
@@ -132,7 +149,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     } while (offset < value.itemCount);
     items.value = loaded;
     if (!draftDirty.value) sources.value = loaded.map(item => ({ ...item.source }));
-    if (!selectedSourceId.value || !loaded.some(item => item.sourceId === selectedSourceId.value)) selectedSourceId.value = loaded[0]!.sourceId;
+    if (!selectedSourceId.value || !loaded.some(item => item.sourceId === selectedSourceId.value)) selectedSourceId.value = value.editableSourceId ?? (value.workflow === "SINGLE" ? loaded.at(-1)!.sourceId : loaded[0]!.sourceId);
     if (!draftDirty.value) draft.value = { ...loaded.find(item => item.sourceId === selectedSourceId.value)!.source };
   }
   function refresh(): Promise<void> {
@@ -144,18 +161,24 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     readController = controller;
     requestState.value = progress.value === null ? "LOADING" : "REFRESHING";
     let operation!: Promise<void>;
+    let retryInitialRead = false;
     operation = (async () => {
       try {
         const response = await api.get(preparationId.value!, { signal: controller.signal });
         if (!mounted || generation !== readGeneration || controller.signal.aborted) return;
         if (!apply(response)) { requestState.value = "READY"; readError.value = null; }
         else if (isCollection(response.body)) await loadItems(response.body, controller.signal, generation);
-      } catch {
+      } catch (error) {
         if (!mounted || generation !== readGeneration || controller.signal.aborted) return;
         requestState.value = "FAILED";
         readError.value = "未能读取最新进度，请重新读取；原文和上次状态已保留。";
+        if (progress.value === null && error instanceof ApiClientError &&
+            error.status === 503 && initialReadRetries < 3) {
+          initialReadRetries += 1;
+          retryInitialRead = true;
+        }
       } finally {
-        if (readPromise === operation) { readPromise = null; readController = null; schedule(); }
+        if (readPromise === operation) { readPromise = null; readController = null; schedule(retryInitialRead); }
       }
     })();
     readPromise = operation;
@@ -204,7 +227,13 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
             preparationId.value = null;
             requestState.value = "IDLE";
           }
-          commandError.value = error.code === "CONFLICT"
+          commandError.value = error.details.some(detail => detail.code === "REVIEWED_RISK_SCOPE_RECHECK_REQUIRED")
+            ? "前序旧版本的风险退出范围需要重新提取核对，暂不能继续继承。历史结果仍可查看，无需补填原文已有的信息。"
+            : error.details.some(detail => detail.code === "SOURCE_DATE_REQUIRED")
+            ? "生效交易日不明确，请先确认日期并保存，再提取计划。"
+            : error.details.some(detail => detail.code === "SOURCE_DATE_CONFLICT")
+            ? "生效交易日存在冲突，请先确认各份日期并保存。"
+            : error.code === "CONFLICT"
             ? "状态已变化或有其他任务未完成，请读取最新状态后再试。"
             : "请求未被接受，请检查原文并重试；原文已保留。";
           needsRefresh = error.code === "CONFLICT";
@@ -239,6 +268,10 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     if (preparationId.value === null) {
       const id = createId();
       preparationId.value = id;
+      if (options.singleMode && api.createSingle) {
+        const command = { preparation_id: id, source, reviewed_base: options.reviewedBase?.() ?? null };
+        return start("CREATE", (key, signal) => api.createSingle!(command, key, { signal }));
+      }
       const command = { input: { preparation_id: id, sources: [source] } };
       return start("CREATE", (key, signal) => api.create(command, key, { signal }));
     }
@@ -322,6 +355,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   function correctItem(id: string, evidence: string, changes: Pick<CollectionItemCorrectionInput["review"], "draft" | "mapping" | "update">): Promise<void> {
     const value = collection.value, item = items.value.find(item => item.sourceId === id);
     if (!value || !item || !current.value || isBusy.value || draftDirty.value || !api.correct) return Promise.resolve();
+    if (value.workflow === "SINGLE" && id !== value.editableSourceId || value.workflow === "COMPOSITION") return Promise.resolve();
     try {
       const command: CollectionItemCorrectionInput = { schemaVersion: "backtest-preparation-v2", kind: "ITEM_CORRECTION", review: {
         ...structuredClone(changes), expected_revision: value.revision, binding: collectionBinding(item), confirmed: true, evidence,
@@ -332,6 +366,13 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   function visibilityChanged(): void {
     if (document.hidden) stopRead();
     else if (workPending.value) void refresh();
+  }
+  function newSource(): void {
+    if (isBusy.value || draftDirty.value) return;
+    stopRead(); preparationId.value = null; progress.value = null; items.value = []; sources.value = [];
+    initialReadRetries = 0;
+    selectedSourceId.value = null; draft.value = { source_id: createId(), text: "" };
+    requestState.value = "IDLE"; commandError.value = null; readError.value = null;
   }
   onMounted(() => {
     mounted = true;
@@ -347,9 +388,9 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   return {
     preparation: readonly(preparation), collection: readonly(collection), items: readonly(items), sources: readonly(sources), selectedSourceId: readonly(selectedSourceId), preparationId: readonly(preparationId), draft: readonly(draft),
     requestState: readonly(requestState), mutationState: readonly(mutationState), errorMessage, isBusy,
-    canSubmitSource, canExtract, canCancel, canRecover, canRetryMutation, canReview, canUsePrepared,
+    canSubmitSource, canExtract, extractionBlockers, canCancel, canRecover, canRetryMutation, canReview, canUsePrepared,
     sourceDirty: readonly(draftDirty),
     updateSources, submitSources, selectSource, reorderSources, reviewCollection, correctItem,
-    updateSource, submitSource, extract, cancel, recover, retryMutation, refresh, review,
+    updateSource, submitSource, extract, cancel, recover, retryMutation, refresh, review, newSource,
   } as const;
 }

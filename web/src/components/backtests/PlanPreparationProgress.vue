@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch, type DeepReadonly } from "vue";
-import type { CollectionPreparationView } from "../../api/generated-runtime-status";
+import type { CollectionPreparationView, CollectionItemView } from "../../api/generated-runtime-status";
+import { preparationItemStatus, preparationFailureMessage } from "../../api/preparationStatus";
 import type { PreparationView } from "../../api/preparations";
 import type { PreparationMutationState, usePlanPreparation } from "../../composables/usePlanPreparation";
 
 type ProgressPreparation = Readonly<Pick<PreparationView,
   "status" | "generation" | "revision" | "workPhase" | "sourceEditPending">> & {
-  readonly attempts: readonly Readonly<PreparationView["attempts"][number]>[];
+  readonly attempts: readonly DeepReadonly<PreparationView["attempts"][number]>[];
 };
 const props = withDefaults(defineProps<{
   preparation: ProgressPreparation | null;
@@ -18,7 +19,9 @@ const props = withDefaults(defineProps<{
   canRecover: boolean;
   canRetryMutation: boolean;
   errorMessage?: string | null;
-}>(), { errorMessage: null, collection: null });
+  items?: readonly DeepReadonly<CollectionItemView>[];
+  extractionBlockers?: readonly string[];
+}>(), { errorMessage: null, collection: null, items: () => [], extractionBlockers: () => [] });
 const emit = defineEmits<{
   selectSource: [id: string];
   extract: []; cancel: []; refresh: []; retryMutation: []; recover: [confirmedEnded: true];
@@ -45,10 +48,12 @@ function recover(): void {
   <section class="preparation-progress" :aria-labelledby="`${id}-title`">
     <h2 :id="`${id}-title`">准备进度</h2>
     <p role="status" aria-live="polite" class="status">{{ statusText }}</p>
+    <ul v-if="extractionBlockers.length" role="alert"><li v-for="message in extractionBlockers" :key="message">{{ message }}</li></ul>
     <ol v-if="collection" class="collection-progress" aria-label="逐条准备进度">
-      <li v-for="(item, index) in collection.items" :key="item.sourceId">
+      <li v-for="(item, index) in (collection.workflow === 'SINGLE' ? collection.items.slice(-1) : collection.items)" :key="item.sourceId">
         <button type="button" :data-testid="`select-source-${item.sourceId}`" @click="emit('selectSource', item.sourceId)">第 {{ index + 1 }} 份 · {{ item.effectiveTradeDate ?? '交易日待补齐' }} · 已提取 {{ item.attemptCount }} / 3 次</button>
-        <span>{{ item.status === 'WAITING' ? '等待前项完成' : labels[item.status] }}</span>
+        <span>{{ preparationItemStatus(item) }}</span>
+        <p v-if="item.status === 'FAILED'" class="error">{{ preparationFailureMessage(items.find(detail => detail.sourceId === item.sourceId)?.attempts.at(-1)?.error_code) }}</p>
         <span v-if="item.validation && item.validation !== 'VALID'"> · 需修正后继续</span>
         <span v-if="collection.currentSourceId === item.sourceId"> · 当前条目</span>
       </li>
@@ -59,7 +64,7 @@ function recover(): void {
       <p v-if="preparation.status === 'CANCEL_REQUESTED'" class="notice">已请求取消，正在等待提取结束。完成前不能开启新任务或修改原文。</p>
       <p v-else-if="unfinished && !unknown" class="notice">当前工作仍在进行或结束中。完成前不能开启新任务或修改原文。</p>
       <p v-if="preparation.status === 'CANDIDATE'" class="hint">候选计划仍需人工审核，确认后才能用于回测。</p>
-      <p v-if="preparation.status === 'FAILED'" class="hint">{{ preparation.attempts.at(-1)?.retryable && preparation.attempts.length < 3 ? '本次提取失败，可以手动重试提取。' : '本次提取失败，请检查并修正原文。' }}</p>
+      <p v-if="preparation.status === 'FAILED'" class="error">{{ preparationFailureMessage(preparation.attempts.at(-1)?.error_code) }}</p>
     </template>
     <div v-if="unknown" class="recovery">
       <p :id="`${id}-recovery-help`">暂时无法确认此前提取是否结束。请先核实；确认结束后才能恢复准备状态。恢复不会自动重新提取。</p>
@@ -73,7 +78,7 @@ function recover(): void {
     <p v-else-if="mutationState === 'SUBMITTING'" role="status" class="hint">正在提交操作…</p>
     <p v-if="errorMessage" role="alert" class="error">{{ errorMessage }}</p>
     <div class="actions">
-      <button v-if="canExtract" type="button" data-testid="extract-preparation" @click="emit('extract')">{{ collection ? '按顺序提取 / 继续' : preparation?.status === 'FAILED' ? '重试提取' : '提取计划' }}</button>
+      <button v-if="canExtract" type="button" data-testid="extract-preparation" @click="emit('extract')">{{ collection && collection.workflow !== 'SINGLE' ? '按顺序提取 / 继续' : active?.status === 'FAILED' ? '重试提取' : '提取计划' }}</button>
       <button v-if="canCancel" type="button" data-testid="cancel-preparation" @click="emit('cancel')">请求取消</button>
       <button v-if="canRetryMutation" type="button" data-testid="retry-preparation-mutation" @click="emit('retryMutation')">安全重试同一次操作</button>
       <button type="button" data-testid="refresh-preparation" :disabled="mutationState === 'SUBMITTING' || requestState === 'LOADING' || requestState === 'REFRESHING'" @click="emit('refresh')">刷新状态</button>

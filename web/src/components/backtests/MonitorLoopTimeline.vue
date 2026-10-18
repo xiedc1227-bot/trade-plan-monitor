@@ -28,7 +28,8 @@ const labels = { REPLACED: "计划替换", CONTINUED: "计划延续", NO_AUTHORI
         <template v-else-if="item.event.payload.kind === 'EVALUATED'">
           <p>持仓 {{ item.event.payload.inventory.total_qty ?? '未知' }} 股；{{ item.event.payload.signals.length ? '普通信号已记录' : '持仓观察，未记录普通信号' }}。</p>
           <p v-for="signal in item.event.payload.signals" :key="signal.signal_id">{{ signal.side === 'BUY' ? '买入' : '卖出' }} · {{ signal.state }} · 计划 {{ signal.planned_qty }} 股 / 当前可执行 {{ signal.executable_qty }} 股 / 已模拟 {{ signal.simulated_qty }} 股</p>
-          <p v-for="risk in item.event.payload.risks" :key="risk.kind">风险 {{ risk.kind }} · {{ risk.status }}</p>
+          <p v-for="risk in item.event.payload.risks" :key="risk.rule_id ?? risk.kind">风险 {{ risk.kind }} · {{ risk.status }}<template v-if="risk.holding_scope"> · {{ risk.holding_scope.mode === 'BEFORE_TRADE_DATE' ? '仅限旧仓：取得日期早于' : '仅限新仓：取得日期自' }} {{ risk.holding_scope.trade_date }}</template></p>
+          <p v-for="allocation in item.event.payload.risk_action.lot_allocations ?? []" :key="allocation.id">可执行退出批次 {{ allocation.id }} · {{ allocation.bucket === 'CORE' ? '核心仓' : '机动仓' }} {{ allocation.quantity }} 股</p>
           <p v-for="(condition, i) in item.event.payload.conditions" :key="i">规则 {{ condition.rule_id }}：{{ condition.evidence.outcome === 'SATISFIED' ? '满足' : condition.evidence.outcome === 'UNSATISFIED' ? '不满足' : '缺少输入' }} · {{ condition.evidence.reason ?? '' }}</p>
           <p v-for="blocker in item.event.payload.blockers" :key="blocker">阻断：{{ blocker }}</p>
         </template>
@@ -44,6 +45,7 @@ const labels = { REPLACED: "计划替换", CONTINUED: "计划延续", NO_AUTHORI
           <p>意图 {{ item.event.payload.attempt.intent_id }}</p>
           <template v-if="item.event.payload.attempt.receipt">
             <p>{{ item.event.payload.attempt.receipt.authority_receipt.side === 'BUY' ? '买入' : '卖出' }} {{ item.event.payload.attempt.receipt.authority_receipt.quantity }} 股 · 每股 {{ money(item.event.payload.attempt.receipt.settlement.fill_price_fen) }} · 费用 {{ money(item.event.payload.attempt.receipt.settlement.total_fees_fen) }}</p>
+            <p v-for="allocation in item.event.payload.attempt.receipt.authority_receipt.lot_allocations ?? []" :key="allocation.id">实际退出批次 {{ allocation.id }} · {{ allocation.bucket === 'CORE' ? '核心仓' : '机动仓' }} {{ allocation.quantity }} 股；范围外持仓按各自规则处理。</p>
           </template>
         </template>
         <template v-else-if="item.event.payload.kind === 'STATE'">

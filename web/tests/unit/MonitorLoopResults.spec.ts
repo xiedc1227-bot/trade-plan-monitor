@@ -205,6 +205,17 @@ describe("owned native loop results", () => {
     expect(listDetails).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="monitor-loop-timeline"]').exists()).toBe(false);
   });
+  it("labels position-only funding without asking for missing cash", async () => {
+    const { default: Summary } = await import("../../src/components/backtests/MonitorLoopSummary.vue");
+    const run = structuredClone(fixture.run);
+    run.openingAccount.cash = { kind: "POSITION_LIMIT_ONLY" };
+    run.report.final_account.cash = { kind: "POSITION_LIMIT_ONLY" };
+    const summary = mount(Summary, { props: { run } }); wrappers.push(summary);
+    expect(summary.text()).toContain("本次回测不限制现金");
+    expect(summary.text()).toContain("不计算本金收益率或净值回撤");
+    expect(summary.text()).not.toContain("期初现金");
+    expect(summary.text()).not.toContain("期末现金");
+  });
   it("renders unknown and zero metrics distinctly, and labels blocked and closed attempts", async () => {
     const { default: Summary } = await import("../../src/components/backtests/MonitorLoopSummary.vue");
     const unknown = structuredClone(fixture.run);
@@ -230,6 +241,7 @@ describe("owned native loop results", () => {
 });
 
 describe("owned scheduled loop results", () => {
+
   it("accepts the bounded v2 result header with all four immutable version bindings", async () => {
     const run = scheduledRun();
     expect(await createBacktestApi(vi.fn<typeof fetch>().mockResolvedValue(json(run))).getRun(run.runId)).toEqual(run);

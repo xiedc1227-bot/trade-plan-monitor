@@ -1,5 +1,6 @@
 import type { BacktestLoopRunView, BacktestLoopRunSummaryView, BacktestLoopEventView, BacktestLoopFillView, BacktestScheduledRunView, BacktestScheduledRunSummaryView, BacktestScheduledEventView } from "./generated";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
+import { validPlanDiagnostics } from "./planDiagnostics";
 
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const integer = (v: unknown, min = 0): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= min;
@@ -30,14 +31,15 @@ function same(a: unknown, b: unknown): boolean {
   return record(a) && record(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => same(a[k], b[k]));
 }
 function cash(v: unknown): boolean {
-  return record(v) && (v.kind === "UNKNOWN" ? keys(v, ["kind"]) :
+  return record(v) && (["UNKNOWN", "POSITION_LIMIT_ONLY"].includes(String(v.kind)) ? keys(v, ["kind"]) :
     v.kind === "KNOWN" && keys(v, ["kind", "balance_fen"]) && integer(v.balance_fen));
 }
 function lots(v: unknown, opening = false): boolean {
   return Array.isArray(v) && v.length <= 200 && v.every(lot => record(lot) &&
-    keys(lot, ["lot_key", "bucket", "quantity", "cost_basis_fen", "acquired_trade_date", ...(opening ? ["evidence", "sellable_quantity"] : [])]) &&
+    keys(lot, ["lot_key", "bucket", "quantity", "cost_basis_fen", "acquired_trade_date", ...(opening ? ["evidence", "sellable_quantity"] : [])], opening ? [] : ["plan_version_id"]) &&
     identifier(lot.lot_key) && ["CORE", "TACTICAL"].includes(String(lot.bucket)) && integer(lot.quantity, 1) &&
     nullable(lot.cost_basis_fen, integer) && nullable(lot.acquired_trade_date, isCalendarDate) &&
+    (lot.plan_version_id === undefined || identifier(lot.plan_version_id)) &&
     (!opening || text(lot.evidence) && nullable(lot.sellable_quantity, integer)));
 }
 function account(v: unknown): boolean {
@@ -87,9 +89,13 @@ function receipt(v: unknown): boolean {
   return keys(command, ["cause_id", "expected_cause_revision", "expected_inventory_revision", "plan_version_id", "quantity"]) &&
     identifier(command.cause_id) && identifier(command.plan_version_id) && integer(command.expected_cause_revision) &&
     integer(command.expected_inventory_revision) && integer(command.quantity, 1) &&
-    keys(authority, ["inventory", "inventory_revision", "price_fen", "quantity", "side", "signal_id", "simulated_at", "simulation_id"]) &&
+    keys(authority, ["inventory", "inventory_revision", "price_fen", "quantity", "side", "signal_id", "simulated_at", "simulation_id"], ["lot_allocations"]) &&
     inventory(authority.inventory) && integer(authority.inventory_revision) && integer(authority.price_fen, 1) && integer(authority.quantity, 1) &&
     ["BUY", "SELL"].includes(String(authority.side)) && nullable(authority.signal_id, identifier) && isShanghaiDateTime(authority.simulated_at) && identifier(authority.simulation_id) &&
+    (authority.lot_allocations === undefined || authority.side === "SELL" && Array.isArray(authority.lot_allocations) &&
+      authority.lot_allocations.length <= 500 && authority.lot_allocations.every(a => record(a) && keys(a, ["id", "bucket", "quantity"]) &&
+        identifier(a.id) && ["CORE", "TACTICAL"].includes(String(a.bucket)) && integer(a.quantity, 100) && a.quantity % 100 === 0) &&
+      authority.lot_allocations.reduce((sum: number, a: { quantity: number }) => sum + a.quantity, 0) === authority.quantity) &&
     keys(settlement, ["commission_fen", "fill_price_fen", "notional_fen", "quantity", "quote_fen", "side", "stamp_duty_fen", "total_fees_fen", "transfer_fee_fen"]) &&
     [settlement.commission_fen, settlement.fill_price_fen, settlement.notional_fen, settlement.quantity, settlement.quote_fen,
       settlement.stamp_duty_fen, settlement.total_fees_fen, settlement.transfer_fee_fen].every(item => integer(item)) &&
@@ -109,10 +115,11 @@ export function validLoopRunSummary(v: unknown): v is BacktestLoopRunSummaryView
   return record(v) && keys(v, summaryKeys) && bounded(v) && summary(v) && bytes(v, 32 * 1024);
 }
 export function validLoopRun(v: unknown): v is BacktestLoopRunView {
-  if (!record(v) || v.schemaVersion !== "monitor-loop-result-v1" || !keys(v, [...summaryKeys, "costs", "frozenPlan", "openingAccount", "provenance", "report", "response"]) ||
+  if (!record(v) || v.schemaVersion !== "monitor-loop-result-v1" || !keys(v, [...summaryKeys, "costs", "frozenPlan", "openingAccount", "provenance", "report", "response"], ["planDiagnostics"]) ||
       !bounded(v) || !bytes(v, 4 * 1024 * 1024) || !summary(v) || !opening(v.openingAccount) || !costs(v.costs) ||
       !record(v.provenance) || !record(v.report) || !record(v.frozenPlan) || !record(v.response)) return false;
   const provenance = v.provenance, report = v.report, plan = v.frozenPlan, response = v.response;
+  if (!validPlanDiagnostics(v.planDiagnostics, [String(plan.version_id)], Number(v.fillCount))) return false;
   if (!keys(provenance, ["candidateHash", "candidateRevision", "inputHash", "manifestHash", "preparationId", "sourceRevision"]) ||
       ![provenance.candidateHash, provenance.inputHash, provenance.manifestHash].every(hash) || !identifier(provenance.preparationId) ||
       !integer(provenance.candidateRevision, 1) || !integer(provenance.sourceRevision, 1) ||
@@ -142,7 +149,7 @@ export function validLoopRun(v: unknown): v is BacktestLoopRunView {
 }
 export function validScheduledRun(v: unknown): v is BacktestScheduledRunView {
   if (!record(v) || v.schemaVersion !== "monitor-loop-result-v2" ||
-      !keys(v, [...summaryKeys, "costs", "versions", "openingAccount", "provenance", "report", "response"]) ||
+      !keys(v, [...summaryKeys, "costs", "versions", "openingAccount", "provenance", "report", "response"], ["planDiagnostics"]) ||
       !bounded(v) || !bytes(v, 4 * 1024 * 1024) || !summary(v) || !opening(v.openingAccount) || !costs(v.costs) ||
       !record(v.provenance) || !record(v.report) || !record(v.response)) return false;
   const provenance = v.provenance, report = v.report, response = v.response;
@@ -160,7 +167,7 @@ export function validScheduledRun(v: unknown): v is BacktestScheduledRunView {
         !keys(source, ["sourceId", "sourceRevision", "candidateRevision", "sourceHash", "candidateHash", "evidenceHash", "baseHash"]) ||
         !identifier(source.sourceId) || !integer(source.sourceRevision, 1) || !integer(source.candidateRevision, 1) ||
         ![source.sourceHash, source.candidateHash, source.evidenceHash].every(hash) ||
-        source.baseHash !== (i === 0 ? null : previous.candidateHash) || seenSources.has(source.sourceId) ||
+        (source.baseHash !== null && (i === 0 || source.baseHash !== previous.candidateHash)) || seenSources.has(source.sourceId) ||
         !keys(version, ["sourceId", "sourceRevision", "candidateRevision", "versionId", "planHash", "evidenceHash", "effectiveTradeDate", "availableAt", "accountContext"]) ||
         version.sourceId !== source.sourceId || version.sourceRevision !== source.sourceRevision || version.candidateRevision !== source.candidateRevision ||
         !identifier(version.versionId) || seenVersions.has(version.versionId) || !hash(version.planHash) || !hash(version.evidenceHash) ||
@@ -172,6 +179,9 @@ export function validScheduledRun(v: unknown): v is BacktestScheduledRunView {
         !(context.dependent_rule_ids === undefined || Array.isArray(context.dependent_rule_ids) && context.dependent_rule_ids.length <= 2 && context.dependent_rule_ids.every(identifier)))) return false;
     seenSources.add(source.sourceId); seenVersions.add(version.versionId);
   }
+  const versions = v.versions;
+  if (!validPlanDiagnostics(v.planDiagnostics, versions.map(version => String(version.versionId)), Number(v.fillCount))) return false;
+  if (v.planDiagnostics?.plans.some((p, i) => p.source_id !== versions[i].sourceId || p.effective_trade_date !== versions[i].effectiveTradeDate)) return false;
   if (!keys(report, ["report_schema_version", "boundary", "cycle", "dataset_hash", "event_count", "event_set_hash", "final_account", "final_inventory",
       "final_valuation", "input_hash", "last_evidence_at", "last_valuation_at", "metrics", "opening_valuation", "report_hash", "run_id", "symbol"]) ||
       report.report_schema_version !== "backtest-report-v5" || report.run_id !== v.runId || report.dataset_hash !== v.datasetHash || report.report_hash !== v.reportHash ||

@@ -4,6 +4,8 @@ import type { BacktestLoopRunView, BacktestScheduledRunView } from "../../api/ge
 import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 import { choiceLabels, fieldLabels } from "../plans/planSchema";
+import PlanExecutionDiagnostics from "./PlanExecutionDiagnostics.vue";
+import ResultRuleChanges from "./ResultRuleChanges.vue";
 
 const props = defineProps<{ run: DeepReadonly<BacktestLoopRunView | BacktestScheduledRunView> }>();
 const money = (value: number | null) => value === null ? "不可用 / 未知" : `${formatFenAsYuan(String(value))} 元`;
@@ -32,20 +34,26 @@ const financialMetrics = computed(() => [
 <template>
   <section class="loop-summary" data-testid="monitor-loop-summary" :aria-label="scheduled ? '连续监控闭环汇总' : '单计划监控闭环汇总'">
     <h3>{{ run.symbol }} · {{ scheduled ? '多版本连续监控闭环' : '一份冻结计划的监控闭环' }}</h3>
+    <p>预置计划未声明历史可用时间时，按生效交易日开盘起执行；该执行假设不代表计划在历史上已发布。</p>
+    <p v-if="run.openingAccount.cash.kind === 'POSITION_LIMIT_ONLY'">本次回测不限制现金，买入仍受规则授权及最大持仓限制。记录成交盈亏和费用，不计算本金收益率或净值回撤。</p>
     <dl>
       <dt>计划准备记录</dt><dd>{{ run.provenance.preparationId }}</dd>
       <template v-if="legacy"><dt>原文 / 提取修订</dt><dd>{{ legacy.provenance.sourceRevision }} / {{ legacy.provenance.candidateRevision }}</dd>
-      <dt>历史可用时间</dt><dd>{{ formatDisplayDateTime(legacy.frozenPlan.available_at) }}</dd></template>
+      <dt>计划可执行起点</dt><dd>{{ formatDisplayDateTime(legacy.frozenPlan.available_at) }}</dd></template>
       <dt>期初账户快照</dt><dd>{{ formatDisplayDateTime(run.openingAccount.snapshot_at) }}</dd>
       <dt>运行结束日期</dt><dd>{{ run.report.boundary.resolved_end_date }} · {{ run.report.boundary.origin === 'DEFAULTED' ? '服务端默认' : '明确指定' }}</dd>
       <dt>提交冻结时间</dt><dd>{{ formatDisplayDateTime(run.report.boundary.submitted_at) }}</dd>
       <dt>实际证据截止（上海时间）</dt><dd data-testid="loop-evidence-cutoff">{{ formatDisplayDateTime(run.report.boundary.evidence_cutoff) }}</dd>
       <dt>响应方式</dt><dd>{{ run.response.mode === 'FOLLOW_REMINDERS' ? '跟随有效提醒' : run.response.mode === 'OBSERVE_ONLY' ? '仅观察提醒' : '记录动作' }} · 延迟 {{ run.response.response_delay_seconds ?? 0 }} 秒</dd>
-      <dt>期初现金</dt><dd>{{ run.openingAccount.cash.kind === 'KNOWN' ? money(run.openingAccount.cash.balance_fen) : '未知，未作为零处理' }}</dd>
-      <dt>期末现金</dt><dd>{{ run.report.final_account.cash.kind === 'KNOWN' ? money(run.report.final_account.cash.balance_fen) : '未知，未作为零处理' }}</dd>
+      <template v-if="run.openingAccount.cash.kind !== 'POSITION_LIMIT_ONLY'">
+        <dt>期初现金</dt><dd>{{ run.openingAccount.cash.kind === 'KNOWN' ? money(run.openingAccount.cash.balance_fen) : '未知，未作为零处理' }}</dd>
+        <dt>期末现金</dt><dd>{{ run.report.final_account.cash.kind === 'KNOWN' ? money(run.report.final_account.cash.balance_fen) : '未知，未作为零处理' }}</dd>
+      </template>
       <dt>期末持仓</dt><dd>{{ run.report.final_inventory.total_qty ?? '未知' }} 股；可卖核心 {{ run.report.final_inventory.sellable_core ?? '未知' }} 股 / 机动 {{ run.report.final_inventory.sellable_tactical ?? '未知' }} 股</dd>
       <dt>闭环记录</dt><dd>{{ run.report.cycle.evaluations }} 次评估 · {{ run.report.cycle.intents }} 个响应意图 · {{ run.report.cycle.fills }} 次成交 · {{ run.report.cycle.unfilled_intents }} 个未成交意图</dd>
     </dl>
+    <PlanExecutionDiagnostics :diagnostics="run.planDiagnostics ?? null" :response-mode="run.response.mode" />
+    <ResultRuleChanges v-if="scheduled" :run="scheduled" />
     <h4>服务端已验证指标</h4>
     <p>{{ run.metrics.valuation_valid ? '估值有效' : '估值受限，缺失项保持不可用' }}。比例按服务端原始精度展示。</p>
     <ul v-if="run.metrics.blockers.length"><li v-for="blocker in run.metrics.blockers" :key="blocker">{{ blocker }}</li></ul>
@@ -54,7 +62,7 @@ const financialMetrics = computed(() => [
       <h4>冻结版本日历</h4>
       <p>按生效日期沿用或替换计划，整个运行共用一个账户。后续持仓陈述只用于核对。</p>
       <ol><li v-for="version in scheduled.versions" :key="version.versionId">
-        <p>{{ version.effectiveTradeDate }} 生效 · 历史可用 {{ formatDisplayDateTime(version.availableAt) }}</p>
+        <p>{{ version.effectiveTradeDate }} 生效 · 执行起点 {{ formatDisplayDateTime(version.availableAt) }}</p>
         <dl><dt>原文 / 修订 / 提取修订</dt><dd>{{ version.sourceId }} / {{ version.sourceRevision }} / {{ version.candidateRevision }}</dd>
           <dt>版本</dt><dd>{{ version.versionId }}</dd><dt>计划</dt><dd>{{ version.planHash }}</dd><dt>审核证据</dt><dd>{{ version.evidenceHash }}</dd></dl>
         <p v-if="version.accountContext">持仓陈述：核心 {{ version.accountContext.core_qty ?? '未知' }} 股 / 机动 {{ version.accountContext.tactical_qty ?? '未知' }} 股 · {{ version.accountContext.evidence }}</p>

@@ -40,24 +40,24 @@ function draft(value: unknown): boolean {
     ["SSE", "SZSE", "BSE"].includes(String(value.market)) && record(value.metadata) && record(value.position) &&
     [value.activation, value.levels, value.monitoring, value.execution_policy].every(item => item === null || record(item)) &&
     Array.isArray(value.ordinary_rules) && value.ordinary_rules.length <= 2 && value.ordinary_rules.every(record) &&
-    Array.isArray(value.risk_branches) && value.risk_branches.length <= 2 && value.risk_branches.every(record) &&
+    Array.isArray(value.risk_branches) && value.risk_branches.length <= 64 && value.risk_branches.every(record) &&
     (value.alert_rules === undefined || Array.isArray(value.alert_rules) && value.alert_rules.length <= 10 && value.alert_rules.every(record));
 }
 function mapping(value: unknown, source?: readonly string[]): boolean {
   return record(value) && value.mapping_version === "daily-mapping-v1" && hash(value.candidate_content_hash) &&
     Array.isArray(value.clauses) && value.clauses.length <= 512 && value.clauses.every(clause => record(clause) &&
       text(clause.clause_id, 128) && (source === undefined || span(clause, source)) &&
-      ["POLICY", "INVENTORY_ASSERTION", "BACKGROUND", "UNRESOLVED", "UNSUPPORTED"].includes(String(clause.disposition)) &&
+      ["POLICY", "INVENTORY_ASSERTION", "BACKGROUND", "CONTEXT", "UNRESOLVED", "UNSUPPORTED"].includes(String(clause.disposition)) &&
       Array.isArray(clause.paths) && clause.paths.every(path => text(path, 512)) && text(clause.reason)) &&
     Array.isArray(value.bindings) && value.bindings.length <= 2000 && value.bindings.every(binding => record(binding) &&
-      text(binding.path, 512) && ["SOURCE", "HUMAN_SUPPLEMENT", "PRODUCT_CONTRACT"].includes(String(binding.origin)) &&
+      text(binding.path, 512) && ["SOURCE", "SOURCE_INTERPRETATION", "SOURCE_SEMANTIC", "HUMAN_SUPPLEMENT", "PRODUCT_CONTRACT"].includes(String(binding.origin)) &&
       Array.isArray(binding.clause_ids) && binding.clause_ids.every(id => text(id, 128))) &&
     Array.isArray(value.supplements) && value.supplements.length <= 2000 && value.supplements.every(supplement => record(supplement) &&
       text(supplement.supplement_id, 128) && text(supplement.path, 512) && text(supplement.reason) && hash(supplement.candidate_content_hash));
 }
-function account(value: unknown): boolean {
+export function account(value: unknown): boolean {
   return record(value) && isShanghaiDateTime(value.snapshot_at) && typeof value.inventory_known === "boolean" &&
-    record(value.cash) && (value.cash.kind === "UNKNOWN" || value.cash.kind === "KNOWN" && integer(value.cash.balance_fen)) &&
+    record(value.cash) && (["UNKNOWN", "POSITION_LIMIT_ONLY"].includes(String(value.cash.kind)) || value.cash.kind === "KNOWN" && integer(value.cash.balance_fen)) &&
     text(value.evidence) && Array.isArray(value.lots) && value.lots.length <= 200 && value.lots.every(lot => record(lot) &&
       text(lot.lot_key, 128) && ["CORE", "TACTICAL"].includes(String(lot.bucket)) && integer(lot.quantity, 1) &&
       nullable(lot.cost_basis_fen, integer) && nullable(lot.acquired_trade_date, isCalendarDate) && nullable(lot.sellable_quantity, integer)) &&
@@ -77,8 +77,8 @@ export function validReviewCandidate(value: unknown, source: string): value is N
   return value.validation === "VALID" && frozen.schema_version === "prepared-loop-plan-v1" && text(frozen.preparation_id, 128) &&
     integer(frozen.source_revision, 1) && integer(frozen.extraction_candidate_revision, 1) &&
     hash(frozen.extraction_candidate_hash) && hash(frozen.extraction_evidence_hash) &&
-    record(frozen.source) && frozen.source.text === source && isShanghaiDateTime(frozen.source.authored_at) &&
-    isShanghaiDateTime(frozen.source.available_at) && isCalendarDate(frozen.source.effective_trade_date) &&
+    record(frozen.source) && frozen.source.text === source && nullable(frozen.source.authored_at, isShanghaiDateTime) &&
+    nullable(frozen.source.available_at, isShanghaiDateTime) && isCalendarDate(frozen.source.effective_trade_date) &&
     opening(frozen.opening_evidence, points) && mapping(frozen.mapping, points) && account(frozen.account) &&
     ["SOURCE", "HUMAN_REVIEW"].includes(String(frozen.account_origin)) && record(frozen.version) && draft(frozen.version.snapshot) &&
     text(frozen.version.version_id, 128) && hash(frozen.version.plan_hash);
@@ -126,13 +126,14 @@ export function inspectPreparationReview(preparation: ReviewPreparation) {
   if (!validReviewCandidate(candidate, preparation.source.text) || candidate.kind !== "EXTRACTION" || preparation.status !== "CANDIDATE") {
     return { blockers: ["尚无可审核的完整候选"], unknownFacts, supplements };
   }
-  if (!preparation.source.authored_at || !preparation.source.available_at || !preparation.source.effective_trade_date) blockers.push("原文编写时间、可用时间和生效交易日必须明确");
-  if (candidate.openingAccount.snapshot_at === null) blockers.push("期初账户快照时间缺失，请修正原文");
+  if (!preparation.source.effective_trade_date) blockers.push("原文的生效交易日不明确，请确认日期");
+  if (candidate.openingAccount.snapshot_at === null && !preparation.source.effective_trade_date) blockers.push("请确认生效交易日，以确定模拟账户起点");
   if (candidate.openingAccount.lots.some(lot => lot.bucket === null)) blockers.push("期初持仓归属缺失，请修正原文");
   if (candidate.openingAccount.inventory_quantity === null && candidate.openingAccount.lots.length > 0) blockers.push("实际持仓总量缺失，请修正原文");
   if (candidate.validation === "INVALID") blockers.push("候选验证未通过");
   if (candidate.mapping.clauses.some(clause => ["UNRESOLVED", "UNSUPPORTED"].includes(clause.disposition))) blockers.push("原文仍有未解决或不支持的条款，请修正后重新提取");
   for (const issue of candidate.issues) {
+    if (issue === "LOOP_ACCOUNT_FACT_REQUIRED: opening_account.cash_fen") continue;
     const match = /^DAILY_SOURCE_BINDING_REQUIRED: (.+)$/.exec(issue);
     if (match) {
       const path = match[1]!; const value = valueAtPath(candidate.draft, path);
@@ -141,7 +142,7 @@ export function inspectPreparationReview(preparation: ReviewPreparation) {
     } else if (/^LOOP_ACCOUNT_FACT_REQUIRED: opening_account\.(cash_fen|inventory_quantity|lots\[\d+\]\.(unit_cost_yuan|acquired_trade_date|sellable_quantity|cost_basis_fen))$/.test(issue)) unknownFacts.push(issue.split(": ")[1]!);
     else blockers.push(issue);
   }
-  for (const field of ["cash_fen", "inventory_quantity"] as const) {
+  for (const field of ["inventory_quantity"] as const) {
     const path = `opening_account.${field}`;
     if (candidate.openingAccount[field] === null && !unknownFacts.includes(path)) unknownFacts.push(path);
   }
@@ -229,24 +230,35 @@ export function inspectCollectionReview(value: DeepReadonly<CollectionPreparatio
     return !summary || item.sourceId !== summary.sourceId || item.sourceRevision !== summary.sourceRevision ||
       item.candidateRevision !== summary.candidateRevision || item.candidateHash !== summary.candidateHash || item.evidenceHash !== summary.evidenceHash || item.baseHash !== summary.baseHash;
   })) blockers.push("请读取当前修订的全部原文和候选后再复核");
+  const seenDates = new Set<string>();
   for (const [index, item] of items.entries()) {
-    if (!item.source.authored_at || !item.source.available_at || !item.source.effective_trade_date) blockers.push(`第 ${index + 1} 份原文的历史时间与交易日仍不完整`);
-    if (!item.candidate || item.validation !== "VALID" || item.candidate.issues.length) blockers.push(`第 ${index + 1} 份候选仍需修正`);
+    if (!item.source.effective_trade_date) blockers.push(`第 ${index + 1} 份原文的生效交易日不明确，请确认日期`);
+    else {
+      const day = item.source.effective_trade_date;
+      if (seenDates.has(day)) blockers.push(`${day} 存在多份计划，请确认各份生效交易日`);
+      seenDates.add(day);
+    }
+    if (!item.candidate) blockers.push(`第 ${index + 1} 份原文尚未提取计划`);
+    else {
+      const cashOnly = item.candidate.kind === "INITIAL" && item.validation === "UNRESOLVED" &&
+        item.candidate.issues.length > 0 && item.candidate.issues.every(issue => issue === "LOOP_ACCOUNT_FACT_REQUIRED: opening_account.cash_fen");
+      if (!cashOnly && (item.validation !== "VALID" || item.candidate.issues.length)) blockers.push(`第 ${index + 1} 份候选仍需修正`);
+    }
   }
-  const first = items[0]?.candidate;
+  const first = value.baseAccount ? null : items[0]?.candidate;
   if (first?.kind === "INITIAL" && first.openingAccount) {
     const facts = first.openingAccount;
-    if (!facts.snapshot_at) blockers.push("期初账户快照时间缺失");
-    if (!facts.cash_fen) unknownFacts.push("期初现金未知");
+    if (!facts.snapshot_at && !items[0]?.source.effective_trade_date) blockers.push("请确认生效交易日，以确定模拟账户起点");
     if (!facts.inventory_quantity) unknownFacts.push("期初持仓总量未知");
     for (const lot of facts.lots) if (!lot.unit_cost_yuan || !lot.acquired_trade_date || !lot.sellable_quantity) unknownFacts.push(`${lot.lot_key} 的成本、取得日期或可卖数量未知`);
   }
-  return { blockers, unknownFacts, requiresAccount: first?.kind === "CORRECTED" };
+  return { blockers, unknownFacts, requiresAccount: !value.baseAccount && first?.kind === "CORRECTED" };
 }
 export function buildCollectionReview(value: CollectionPreparationView, items: readonly CollectionItemView[], evidence: string,
   unknownConfirmed: boolean, reviewedAccount?: LoopAccountInput): CollectionReviewInput {
   const inspection = inspectCollectionReview(value, items);
-  if (inspection.blockers.length || !text(evidence) || inspection.unknownFacts.length && !unknownConfirmed ||
+  const remainingUnknown = inspection.unknownFacts.filter(fact => !(fact === "期初现金未知" && reviewedAccount?.cash.kind === "KNOWN"));
+  if (inspection.blockers.length || !text(evidence) || remainingUnknown.length && !unknownConfirmed ||
       inspection.requiresAccount && !reviewedAccount || reviewedAccount !== undefined && !account(reviewedAccount)) throw new Error("整链复核尚不完整");
   return { schemaVersion: "backtest-preparation-v2", kind: "CHAIN_REVIEW", review: {
     confirmed: true, expected_revision: value.revision, evidence: evidence.trim(), items: items.map(collectionBinding),

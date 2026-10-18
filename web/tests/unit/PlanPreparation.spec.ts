@@ -11,13 +11,32 @@ import PlanPreparationSourceForm from "../../src/components/backtests/PlanPrepar
 import PlanPreparationProgress from "../../src/components/backtests/PlanPreparationProgress.vue";
 
 const BASE = "/api/v1/backtest-preparations";
-const SOURCE = { source_id: "source-1", text: "完整计划原文" };
+const SOURCE = { source_id: "source-1", text: "完整计划原文", effective_trade_date: "2026-09-24" };
 const COLLECTION_SOURCES = ["初始计划", "次日跟踪", "第三日跟踪", "第四日跟踪"].map((text, index) => ({
   source_id: `daily-${index + 1}`, text: `  ${text}\n保留原文边界  `,
   available_at: `2026-10-${12 + index}T08:30:00+08:00`, effective_trade_date: `2026-10-${12 + index}`,
 }));
 const wrappers: VueWrapper[] = [];
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); vi.useRealTimers(); vi.restoreAllMocks(); });
+
+it("recovers an initial unavailable progress read without repeating extraction", async () => {
+  vi.useFakeTimers(); const api = mockApi();
+  vi.mocked(api.get).mockRejectedValueOnce(new ApiClientError({ code: "SERVICE_UNAVAILABLE", status: 503, message: "Starting" }));
+  const { state } = controller(api); await flushPromises();
+  expect(state.isBusy.value).toBe(true);
+  await vi.advanceTimersByTimeAsync(2000); await flushPromises();
+  expect(state.requestState.value).toBe("READY"); expect(state.isBusy.value).toBe(false);
+  expect(api.get).toHaveBeenCalledTimes(2); expect(api.extract).not.toHaveBeenCalled();
+});
+it("bounds unavailable initial reads and cancels their timer on unmount", async () => {
+  vi.useFakeTimers(); const api = mockApi();
+  vi.mocked(api.get).mockRejectedValue(new ApiClientError({ code: "SERVICE_UNAVAILABLE", status: 503, message: "Unavailable" }));
+  const { state, wrapper } = controller(api); await flushPromises();
+  await vi.advanceTimersByTimeAsync(20_000); await flushPromises();
+  expect(api.get).toHaveBeenCalledTimes(4); expect(state.requestState.value).toBe("FAILED");
+  wrapper.unmount(); await vi.advanceTimersByTimeAsync(20_000);
+  expect(api.get).toHaveBeenCalledTimes(4); expect(api.extract).not.toHaveBeenCalled();
+});
 
 function result(body = preparation(), status: 200 | 201 | 202 = 200): PreparationReceipt {
   return { body, status, retryAfterSeconds: status === 202 ? 2 : null };
@@ -681,7 +700,7 @@ describe("one-source input and progress components", () => {
   it("emits controlled source changes and validates before submitting", async () => {
     const wrapper = sourceForm();
     await wrapper.get("textarea").setValue("新的完整原文");
-    expect(wrapper.emitted("update:source")?.[0]?.[0]).toEqual({ ...SOURCE, text: "新的完整原文" });
+    expect(wrapper.emitted("update:source")?.[0]?.[0]).toEqual({ ...SOURCE, effective_trade_date: null, text: "新的完整原文" });
     await wrapper.setProps({ source: { ...SOURCE, text: "   " } });
     await wrapper.get("form").trigger("submit");
     expect(wrapper.emitted("submit")).toBeUndefined(); expect(wrapper.get('[role="alert"]').text()).toContain("原文");
@@ -693,7 +712,7 @@ describe("one-source input and progress components", () => {
   it("reads exactly one UTF-8 Markdown file without changing its evidence whitespace", async () => {
     const wrapper = sourceForm();
     await chooseFile(wrapper, [fileWithBytes(new TextEncoder().encode("  原文\n完整计划  "), "plan.md")]);
-    expect(wrapper.emitted("update:source")?.at(-1)?.[0]).toEqual({ ...SOURCE, text: "  原文\n完整计划  " });
+    expect(wrapper.emitted("update:source")?.at(-1)?.[0]).toEqual({ ...SOURCE, effective_trade_date: null, text: "  原文\n完整计划  " });
   });
 
   it.each(["multiple", "encoding", "extension", "oversize"])("preserves pasted text after invalid file %s", async kind => {
@@ -713,7 +732,7 @@ describe("one-source input and progress components", () => {
     const file = new File(["old"], "old.txt"); Object.defineProperty(file, "arrayBuffer", { value: () => pending.promise, configurable: true });
     await chooseFile(wrapper, [file]); await wrapper.get("textarea").setValue("手动更正");
     pending.resolve(new TextEncoder().encode("过时文件").buffer); await flushPromises();
-    expect(wrapper.emitted("update:source")).toEqual([[{ ...SOURCE, text: "手动更正" }]]);
+    expect(wrapper.emitted("update:source")).toEqual([[{ ...SOURCE, effective_trade_date: null, text: "手动更正" }]]);
     const another = deferred<ArrayBuffer>(); Object.defineProperty(file, "arrayBuffer", { value: () => another.promise, configurable: true });
     await chooseFile(wrapper, [file]); wrapper.unmount(); another.resolve(new TextEncoder().encode("晚到").buffer); await flushPromises();
     expect(changes).toHaveBeenCalledTimes(1);
@@ -745,10 +764,10 @@ describe("one-source input and progress components", () => {
     expect(wrapper.emitted("retryMutation")).toHaveLength(1);
   });
 
-  it("records optional times in Shanghai and rejects reversed chronology", async () => {
+  it("records a confirmed effective date and rejects reversed legacy provenance", async () => {
     const wrapper = sourceForm();
-    await wrapper.get('input[type="datetime-local"]').setValue("2026-10-08T09:30:00");
-    expect(wrapper.emitted("update:source")?.at(-1)?.[0]).toEqual({ ...SOURCE, authored_at: "2026-10-08T09:30:00.000000+08:00" });
+    await wrapper.get('input[type="date"]').setValue("2026-10-08");
+    expect(wrapper.emitted("update:source")?.at(-1)?.[0]).toEqual({ ...SOURCE, effective_trade_date: "2026-10-08" });
     await wrapper.setProps({ source: { ...SOURCE, authored_at: "2026-10-08T09:30:00+08:00", available_at: "2026-10-08T09:00:00+08:00" } });
     await wrapper.get("form").trigger("submit"); expect(wrapper.emitted("submit")).toBeUndefined();
     expect(wrapper.get('[role="alert"]').text()).toContain("不能晚于");
@@ -775,4 +794,20 @@ describe("one-source input and progress components", () => {
     await wrapper.setProps({ preparation: preparation({ status: "EXTRACTING", workPhase: "UNKNOWN", generation: "g2", revision: 2 }) });
     expect(wrapper.get('[data-testid="recover-preparation"]').attributes("disabled")).toBeDefined();
   });
+});
+
+
+it("requires all saved dates before extracting any item", async () => {
+  const api = collectionApi();
+  const items = collectionDetails();
+  items[2]!.effectiveTradeDate = null;
+  items[2]!.source.effective_trade_date = null;
+  api.items.mockResolvedValue(itemPage(items));
+  api.get.mockResolvedValue(collectionReceipt(collection({ items })));
+  const { state } = controller(api);
+  await flushPromises();
+  expect(state.canExtract.value).toBe(false);
+  expect(state.extractionBlockers.value.join(" ")).toContain("第 3 份");
+  await state.extract();
+  expect(api.extract).not.toHaveBeenCalled();
 });

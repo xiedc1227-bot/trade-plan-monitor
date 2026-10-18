@@ -64,13 +64,10 @@ test.afterEach(async () => {
 async function source(page: Page) {
   await page.goto(url + "/backtests/new");
   await page.getByTestId("choose-prepared-plan").click();
-  await page.getByRole("button", { name: "只准备一份原文", exact: true }).click();
   await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({ name: "one.txt", mimeType: "text/plain", buffer: Buffer.from(fixture.source.text) });
   await expect(page.getByLabel("完整原文", { exact: true })).toHaveValue(fixture.source.text);
-  await page.getByText("补充原文日期（可选）", { exact: true }).click();
-  await page.getByLabel("原文成文时间", { exact: true }).fill("2026-08-20T09:00");
-  await page.getByLabel("原文可用时间", { exact: true }).fill("2026-08-20T09:00");
-  await page.getByLabel("计划交易日", { exact: true }).fill("2026-08-20");
+  await expect(page.locator('input[type="datetime-local"]')).toHaveCount(0);
+  await page.getByLabel("生效交易日（留空自动识别，必要时确认）", { exact: true }).fill("2026-08-20");
 }
 
 async function candidate(page: Page) {
@@ -81,21 +78,21 @@ async function candidate(page: Page) {
 test("real upload/retry/edit/review/run journey retains original 503 intent and causal results", async ({ page }) => {
   test.setTimeout(60000); await start("retry", true);
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
-  const creates: { body: string | null; key: string | undefined }[] = [];
-  page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/v1/backtest-preparations") creates.push({ body: request.postData(), key: request.headers()["idempotency-key"] }); });
-  await source(page); await page.getByRole("button", { name: "保存原文", exact: true }).click();
-  await expect(page.getByTestId("retry-preparation-mutation")).toBeVisible();
-  await expect(page.getByLabel("完整原文", { exact: true })).toHaveValue(fixture.source.text);
+  const legacyCommand = { headers: { Origin: url, "Idempotency-Key": "legacy-original" }, data: { input: { preparation_id: "legacy-one", sources: [fixture.source] } } };
+  expect((await page.request.post(url+"/api/v1/backtest-preparations",legacyCommand)).status()).toBe(503);
+  await page.goto(url+"/backtests/new");
   await page.getByRole("button", { name: "刷新服务状态", exact: true }).click();
   await page.getByRole("button", { name: "重新准备回测服务", exact: true }).click();
   await expect(page.getByText("回测历史可读取", { exact: true })).toBeVisible({ timeout: 10000 });
   expect((await (await page.request.get(url + "/fixture/counters")).json()).monitorStopped).toBe(false);
-  await page.getByTestId("retry-preparation-mutation").click(); await expect(page.getByText("待提取", { exact: true })).toBeVisible();
-  expect(creates).toHaveLength(2); expect(creates[1]).toEqual(creates[0]);
+  expect((await page.request.post(url+"/api/v1/backtest-preparations",legacyCommand)).status()).toBe(201);
+  await page.goto(url+"/backtests/new?preparationId=legacy-one");
+  await expect(page.getByLabel("完整原文",{exact:true})).toHaveValue(fixture.source.text);
   await expect(page).toHaveURL(/preparationId=/);
   await page.getByTestId("extract-preparation").click(); await expect(page.getByText("提取失败", { exact: true })).toBeVisible({ timeout: 10000 });
   await candidate(page);
   await page.getByLabel("完整原文", { exact: true }).fill(fixture.source.text + "\n");
+  await page.getByLabel("生效交易日（留空自动识别，必要时确认）", { exact: true }).fill("2026-08-20");
   await page.getByRole("button", { name: "保存原文", exact: true }).click(); await expect(page.getByText("待提取", { exact: true })).toBeVisible();
   await candidate(page);
   const supplements = page.locator('[data-testid^="review-supplement-"]');
@@ -139,23 +136,48 @@ test("unknown extraction cancellation survives navigation and requires explicit 
   await expect(page.getByText("待提取", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/preparationId=/); const preparedUrl = page.url();
   await page.getByTestId("extract-preparation").click(); await expect(page.getByTestId("recover-preparation")).toBeVisible({ timeout: 10000 });
-  await page.getByTestId("cancel-preparation").click(); await expect(page.getByText("等待提取结束", { exact: true })).toBeVisible();
+  await page.getByTestId("cancel-preparation").click(); await expect(page.getByText("等待提取结束", { exact: true }).first()).toBeVisible();
   expect(await page.getByLabel("完整原文", { exact: true }).isDisabled()).toBe(true);
   const create = await page.request.post(url + "/api/v1/backtest-preparations", { headers: { Origin: url, "Idempotency-Key": "other" }, data: { input: { preparation_id: "other", sources: [fixture.source] } } });
   expect(create.status()).toBe(409);
   await page.getByRole("link", { name: "监控总览", exact: true }).click(); await expect(page.getByRole("heading", { name: "监控测试页面" })).toBeVisible();
   expect((await (await page.request.get(url + "/fixture/counters")).json()).monitorStopped).toBe(false);
-  await page.goto(preparedUrl); await expect(page.getByText("等待提取结束", { exact: true })).toBeVisible();
+  await page.goto(preparedUrl); await expect(page.getByText("等待提取结束", { exact: true }).first()).toBeVisible();
   const recover = page.getByTestId("recover-preparation"); expect(await recover.isDisabled()).toBe(true);
   await page.getByLabel("我已核实此前提取已结束").check(); await recover.click();
-  await expect(page.getByText("已取消", { exact: true })).toBeVisible();
+  await expect(page.getByText("已取消", { exact: true }).first()).toBeVisible();
   expect((await (await page.request.get(url + "/fixture/counters")).json()).extractions).toBe(1);
 });
 
 test("four complete plans produce one continuous account and one run in real Chrome", async ({ page }, testInfo) => {
   test.setTimeout(600000); await start("continuity-retry");
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
-  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  const consoleErrors: { text: string; url: string }[] = [];
+  const revisionConflicts = new Set<string>();
+  const startingReads = new Set<string>();
+  const responseChecks: Promise<void>[] = [];
+  page.on("console", message => { if (message.type() === "error") consoleErrors.push({ text: message.text(), url: message.location().url }); });
+  page.on("response", response => {
+    if (response.status() === 503 && response.request().method() === "GET" &&
+        (new URL(response.url()).pathname === "/api/v1/backtest-plan-library" ||
+         /^\/api\/v1\/backtest-preparations\/[^/]+$/.test(new URL(response.url()).pathname))) {
+      responseChecks.push((async () => {
+        expect((await response.json()).error.code).toBe("SERVICE_UNAVAILABLE");
+        startingReads.add(response.url());
+      })());
+    }
+    // Serial extraction can advance the revision between progress and item reads.
+    // Allow only this verified read conflict; all other console errors still fail.
+    if (response.status() === 409 && response.request().method() === "GET" &&
+        /^\/api\/v1\/backtest-preparations\/[^/]+\/items$/.test(new URL(response.url()).pathname)) {
+      responseChecks.push((async () => {
+        const body = await response.json();
+        expect(body.error.code).toBe("CONFLICT");
+        expect(body.error.details.map((detail: { code: string }) => detail.code)).toEqual(["PREPARATION_REVISION_CONFLICT"]);
+        revisionConflicts.add(response.url());
+      })());
+    }
+  });
   const creates: unknown[] = [], submissions: unknown[] = [];
   page.on("request", request => {
     if (request.method() !== "POST") return;
@@ -166,77 +188,52 @@ test("four complete plans produce one continuous account and one run in real Chr
   const inputs = await (await page.request.get(url + "/fixture/continuity-sources")).json() as {
     sources: { source_id: string; text: string; authored_at: string; available_at: string; effective_trade_date: string }[];
   };
+  inputs.sources.forEach(source => { source.text += `\n生效交易日：${source.effective_trade_date}`; });
   await page.goto(url + "/backtests/new"); await page.getByTestId("choose-prepared-plan").click();
-  await page.getByLabel("一次选择多份文本文件（每份保留独立边界）").setInputFiles(inputs.sources.map((source, index) => ({
-    name: `day-${index + 1}.txt`, mimeType: "text/plain", buffer: Buffer.from(source.text),
-  })));
-  const rows = page.locator('[data-testid^="source-item-"]'); await expect(rows).toHaveCount(4);
+  let previousId = "";
   for (const [index, source] of inputs.sources.entries()) {
-    const row = rows.nth(index);
-    await expect(row.locator("textarea")).toHaveValue(source.text);
-    await row.getByLabel("原文成文时间（上海时间）").fill(source.authored_at.slice(0, 16));
-    await row.getByLabel("历史可用时间（上海时间）").fill(source.available_at.slice(0, 16));
-    await row.getByLabel("生效交易日").fill(source.effective_trade_date);
+    if (index) {
+      await page.getByTestId("prepare-next-source").click();
+      await page.getByRole("radio", { name: "修改型计划", exact: true }).check();
+      await page.getByLabel("关联上一份已审核计划", { exact: true }).selectOption(previousId);
+    }
+    await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({ name: `day-${index+1}.txt`, mimeType: "text/plain", buffer: Buffer.from(source.text) });
+    const saved = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/backtest-plan-library/preparations");
+    await page.getByRole("button", { name: "保存原文", exact: true }).click();
+    const response = await saved; expect(response.status(), await response.text()).toBe(201);
+    const record = await response.json(); previousId = record.preparationId;
+    expect(record.itemCount).toBe(index+1);
+    expect(record.items.at(-1).effectiveTradeDate).toBe(source.effective_trade_date);
+    await page.getByTestId("extract-preparation").click();
+    if (index === 1) {
+      await expect(page.getByText("提取失败", { exact: true }).first()).toBeVisible({ timeout: 20000 });
+      await page.getByTestId("extract-preparation").click();
+      await expect.poll(async () => (await (await page.request.get(url + "/fixture/counters")).json()).retryEntered).toBe(true);
+      await page.request.post(url + "/fixture/release-retry");
+    }
+    await expect(page.getByLabel("本份核对说明", { exact: true })).toBeEnabled({ timeout: 20000 });
+    await page.getByLabel("本份核对说明", { exact: true }).fill("核对本份完整规则、生效日期和已审核前序；保留连续账户与真实模拟成交。");
+    await page.getByTestId("review-confirmation").check();
+    await page.getByRole("button", { name: "审核并保存这一份计划", exact: true }).click();
+    await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "已审核计划库" }).getByRole("checkbox")).toHaveCount(index+1);
+    expect(await page.getByLabel("完整原文", { exact: true }).isDisabled()).toBe(true);
   }
-  for (const width of [320, 768, 1024, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
+  expect((await (await page.request.get(url + "/fixture/counters")).json()).sourceCalls).toEqual([0,1,1,2,3]);
+  await page.reload();
+  const choices = page.getByRole("region", { name: "已审核计划库" }).getByRole("checkbox");
+  await expect(choices).toHaveCount(4);
+  await expect(choices.first()).toBeEnabled({timeout:15000});
+  for (let i=0;i<4;i++) await choices.nth(i).check();
+  const composed = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/backtest-plan-library/compositions");
+  await page.getByTestId("compose-reviewed-plans").click();
+  const composition = await composed; expect(composition.status(), await composition.text()).toBe(201);
+  const preparationId = (await composition.json()).preparationId;
+  for (const width of [320,768,1024,1440]) {
+    await page.setViewportSize({width,height:900});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`continuity-input-${width}.png`), fullPage: true });
+    await page.screenshot({path:testInfo.outputPath(`single-library-${width}.png`),fullPage:true});
   }
-  await page.getByRole("button", { name: "保存全部原文", exact: true }).click();
-  await expect(page).toHaveURL(/preparationId=/);
-  expect(creates).toHaveLength(1);
-  expect(creates[0]).toMatchObject({ input: { schema_version: "backtest-preparation-v2" } });
-  const createdSources = (creates[0] as { input: { sources: { text: string }[] } }).input.sources;
-  expect(createdSources.map(source => source.text)).toEqual(inputs.sources.map(source => source.text));
-  const preparationId = new URL(page.url()).searchParams.get("preparationId")!;
-  await page.getByTestId("extract-preparation").click();
-  await expect.poll(async () => {
-    const response = await page.request.get(url + "/api/v1/backtest-preparations/" + preparationId);
-    return response.status() === 200 ? (await response.json()).status : null;
-  }, { timeout: 20000 }).toBe("FAILED");
-  expect((await (await page.request.get(url + "/fixture/counters")).json()).sourceCalls).toEqual([0, 1]);
-  await expect(page.getByTestId("extract-preparation")).toBeEnabled({ timeout: 10000 });
-  await page.getByTestId("extract-preparation").click();
-  await expect.poll(async () => (await (await page.request.get(url + "/fixture/counters")).json()).retryEntered).toBe(true);
-  const competing = await page.request.post(url + "/api/v1/backtest-preparations", {
-    headers: { Origin: url, "Idempotency-Key": "competing-four-chain" },
-    data: { input: { schema_version: "backtest-preparation-v2", preparation_id: "competing", sources: inputs.sources } },
-  });
-  expect(competing.status(), await competing.text()).toBe(409);
-  await page.request.post(url + "/fixture/release-retry");
-  await expect.poll(async () => {
-    const response = await page.request.get(url + "/api/v1/backtest-preparations/" + preparationId);
-    const value = await response.json();
-    if (response.status() === 503) return [];
-    expect(response.status(), JSON.stringify(value)).toBe(200);
-    return value.items.map((item: { validation: string; status: string }) => ({ validation: item.validation, status: item.status }));
-  }, { timeout: 20000 }).toEqual(Array(4).fill({ validation: "VALID", status: "CANDIDATE" }));
-  await expect(page.getByLabel("整链核对说明"), output).toBeEnabled({ timeout: 20000 });
-  const progress = await (await page.request.get(url + "/api/v1/backtest-preparations/" + preparationId)).json();
-  expect(progress.items.map((item: { validation: string }) => item.validation)).toEqual(["VALID", "VALID", "VALID", "VALID"]);
-  expect((await (await page.request.get(url + "/fixture/counters")).json()).sourceCalls).toEqual([0, 1, 1, 2, 3]);
-  await page.getByRole("button", { name: /^第 3 份 ·/ }).click();
-  await expect(page.getByLabel("完整原文", { exact: true })).toHaveValue(inputs.sources[2]!.text);
-  await page.getByLabel("完整原文", { exact: true }).fill(inputs.sources[2]!.text + "\n");
-  const editedPromise = page.waitForResponse(response => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith("/source"));
-  await page.getByRole("button", { name: "保存原文", exact: true }).click();
-  const edited = await editedPromise; expect(edited.status(), await edited.text()).toBe(200);
-  const changed = await edited.json();
-  expect(changed.items.slice(0, 2).map((item: { candidateHash: string }) => item.candidateHash)).toEqual(progress.items.slice(0, 2).map((item: { candidateHash: string }) => item.candidateHash));
-  expect(changed.items.slice(2).map((item: { candidateHash: string | null }) => item.candidateHash)).toEqual([null, null]);
-  await expect(page.getByLabel("整链核对说明")).toBeDisabled();
-  const resumedPromise = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/extractions"));
-  await page.getByTestId("extract-preparation").click();
-  const resumed = await resumedPromise;
-  expect(resumed.status(), JSON.stringify({ request: resumed.request().postDataJSON(), response: await resumed.json() })).toBe(202);
-  await expect(page.getByLabel("整链核对说明")).toBeEnabled({ timeout: 20000 });
-  expect((await (await page.request.get(url + "/fixture/counters")).json()).sourceCalls).toEqual([0, 1, 1, 2, 3, 2, 3]);
-  await page.getByLabel("整链核对说明").fill("逐份核对四个完整计划、日期、持仓声明与唯一期初账户；以后仅按真实模拟成交延续账户。");
-  await page.getByTestId("review-confirmation").check();
-  const reviewedPromise = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/v1/backtest-preparations/${preparationId}/reviews`);
-  await page.getByRole("button", { name: "审核并冻结整条计划链", exact: true }).click();
-  const reviewed = await reviewedPromise; expect(reviewed.status(), await reviewed.text()).toBe(200);
   await expect(page.getByTestId("prepared-run-versions").locator("li")).toHaveCount(4);
   await expect(page.getByTestId("prepared-run-account")).toContainText("10000.00");
   for (const [id, value] of Object.entries({ "commission-rate": "0", "minimum-commission-fen": "500", "stamp-duty-rate": "0", "transfer-fee-rate": "0", "buy-slippage-fen": "0", "sell-slippage-fen": "0", "end-date": "2026-08-25" })) await page.locator("#" + id).fill(value);
@@ -279,5 +276,39 @@ test("four complete plans produce one continuous account and one run in real Chr
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`continuity-equity-${width}.png`) });
   }
+  await Promise.all(responseChecks);
+  expect(consoleErrors.filter(error => !(revisionConflicts.has(error.url) &&
+    error.text === "Failed to load resource: the server responded with a status of 409 (Conflict)") &&
+    !(startingReads.has(error.url) && error.text === "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"))).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+
+test("actual originals are prepared individually and require date confirmation before AI", async ({ page }, testInfo) => {
+  test.setTimeout(60000); await start("retry");
+  const filenames = ["01-20260924-104506.txt", "02-20260928-092555.txt", "03-20260930-095728.txt", "04-20261009-091956.txt"];
+  const dates = ["2026-09-24","2026-09-28","2026-09-30","2026-10-09"];
+  await page.goto(url + "/backtests/new"); await page.getByTestId("choose-prepared-plan").click();
+  for (const [index,name] of filenames.entries()) {
+    if (index) await page.getByTestId("prepare-next-source").click();
+    await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({name,mimeType:"text/plain",buffer:await readFile(join(root,"tests/fixtures/shengxin_sources",name))});
+    const created = page.waitForResponse(r => r.request().method()==="POST" && new URL(r.url()).pathname==="/api/v1/backtest-plan-library/preparations");
+    await page.getByRole("button",{name:"保存原文",exact:true}).click();
+    const response = await created; expect(response.status()).toBe(201); const record = await response.json();
+    expect(record.itemCount).toBe(1);
+    await expect(page.getByRole("region",{name:"准备进度"})).toContainText("请先确认日期并保存");
+    await expect(page.getByTestId("extract-preparation")).toHaveCount(0);
+    expect((await (await page.request.get(url+"/fixture/counters")).json()).extractions).toBe(0);
+    const denied = await page.request.post(url+`/api/v1/backtest-preparations/${record.preparationId}/extractions`,{
+      headers:{Origin:url,"Idempotency-Key":`missing-${index}`},data:{schemaVersion:"backtest-preparation-v2",expectedRevision:record.revision,sourceId:record.items[0].sourceId,expectedSourceRevision:1,expectedBaseHash:null}});
+    expect(denied.status()).toBe(409); expect((await denied.json()).error.details[0].code).toBe("SOURCE_DATE_REQUIRED");
+    await page.getByLabel("生效交易日（留空自动识别，必要时确认）",{exact:true}).fill(dates[index]!);
+    const saved = page.waitForResponse(r => r.request().method()==="PUT" && new URL(r.url()).pathname.endsWith("/source"));
+    await page.getByRole("button",{name:"保存原文",exact:true}).click(); expect((await saved).status()).toBe(200);
+    await expect(page.getByTestId("extract-preparation")).toBeEnabled();
+  }
+  await page.getByTestId("extract-preparation").click();
+  await expect(page.getByRole("region",{name:"准备进度"})).toContainText("AI 服务限流",{timeout:15000});
+  expect((await (await page.request.get(url+"/fixture/counters")).json()).extractions).toBe(1);
+  for (const width of [320,1440]) { await page.setViewportSize({width,height:900}); expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); await page.screenshot({path:testInfo.outputPath(`actual-single-${width}.png`),fullPage:true}); }
 });

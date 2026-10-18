@@ -3,11 +3,12 @@ import type {
   CollectionSourceCommand, CollectionRevisionCommand, CollectionExtractionCommand, CollectionRecoveryCommand, CollectionReviewInput, CollectionItemCorrectionInput,
   PreparationCreateCommand, PreparationRecoveryCommand, PreparationRevisionCommand,
   PreparationSource, PreparationSourceCommand, PreparationView, PreparationReviewInput, PreparationFrozenView,
+  SingleSourcePreparationInput,
 } from "./generated-runtime-status";
 import { resolveApiFetch } from "./context";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
-import { validReviewCandidate, validPreparationReviewInput, validPreparationFrozenView, validCollectionFrozen, validCollectionCandidate, validCollectionReviewInput } from "./preparationReview";
+import { account, validReviewCandidate, validPreparationReviewInput, validPreparationFrozenView, validCollectionFrozen, validCollectionCandidate, validCollectionReviewInput } from "./preparationReview";
 
 export type { PreparationSource, PreparationView } from "./generated-runtime-status";
 export type PreparationProgress = PreparationView | CollectionPreparationView;
@@ -24,6 +25,7 @@ export interface PreparationFrozenReceipt {
   readonly status: 200;
 }
 export interface PreparationApi {
+  createSingle?(command: SingleSourcePreparationInput, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   create(command: PreparationCreateCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   get(id: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
   edit(id: string, command: PreparationSourceCommand | CollectionSourceCommand, key: string, options?: PreparationRequestOptions): Promise<PreparationReceipt>;
@@ -98,7 +100,10 @@ function validSummary(value: unknown): value is CollectionItemSummary & Record<s
     (value.validation === null || ["VALID", "INVALID", "UNRESOLVED"].includes(String(value.validation)));
 }
 export function validCollectionProgress(value: unknown): value is CollectionPreparationView {
-  return record(value) && keys(value, ["schemaVersion", "preparationId", "revision", "reviewRevision", "status", "itemCount", "items", "workPhase", "generation", "currentSourceId", "frozen"]) &&
+  return record(value) && keys(value, ["workflow", "editableSourceId", "baseAccount", "schemaVersion", "preparationId", "revision", "reviewRevision", "status", "itemCount", "items", "workPhase", "generation", "currentSourceId", "frozen"]) &&
+    (value.workflow === undefined || ["LEGACY", "SINGLE", "COMPOSITION"].includes(String(value.workflow))) &&
+    (value.editableSourceId == null || identifier(value.editableSourceId)) &&
+    (value.baseAccount == null || account(value.baseAccount)) &&
     value.schemaVersion === "backtest-preparation-v2" && identifier(value.preparationId) && integer(value.revision, 1) && integer(value.reviewRevision) &&
     ["DRAFT", "EXTRACTING", "CANCEL_REQUESTED", "CANDIDATE", "REVIEWED", "FAILED", "CANCELLED"].includes(String(value.status)) &&
     integer(value.itemCount, 1) && value.itemCount <= 256 && Array.isArray(value.items) && value.items.length === value.itemCount && value.items.every(validSummary) &&
@@ -117,10 +122,12 @@ function validItem(value: unknown): value is CollectionItemView {
   if (value.candidate === null) return value.candidateHash === null && value.evidenceHash === null && value.validation === null;
   if (!record(value.candidate) || value.candidate.candidateHash !== value.candidateHash || value.candidate.evidenceHash !== value.evidenceHash || value.candidate.validation !== value.validation) return false;
   const review = value.candidate.review;
+  const available = value.source.available_at ?? (value.source.effective_trade_date
+    ? `${value.source.effective_trade_date}T09:30:00+08:00` : null);
   return review == null || record(review) && review.source_id === value.sourceId &&
-    (review.available_at === null && value.source.available_at == null ||
-      isShanghaiDateTime(review.available_at) && isShanghaiDateTime(value.source.available_at) &&
-      shanghaiDateTimeKey(review.available_at) === shanghaiDateTimeKey(value.source.available_at));
+    (review.available_at === null && available === null ||
+      isShanghaiDateTime(review.available_at) && isShanghaiDateTime(available) &&
+      shanghaiDateTimeKey(review.available_at) === shanghaiDateTimeKey(available));
 }
 function validProgress(value: unknown): value is PreparationProgress {
   if (validCollectionProgress(value)) return true;
@@ -150,7 +157,7 @@ export function createPreparationApi(fetcher: typeof fetch = resolveApiFetch()):
     const init: RequestInit = { method, headers, cache: "no-store", credentials: "same-origin", redirect: "error" };
     if (options?.signal !== undefined) init.signal = options.signal;
     if (command !== undefined) { if (!size(command, 4 * 1024 * 1024)) throw invalidRequest(); init.body = JSON.stringify(command); }
-    const path = suffix === "CREATE" ? BASE : `${BASE}/${encodeURIComponent(id)}${suffix}`;
+    const path = suffix === "SINGLE" ? "/api/v1/backtest-plan-library/preparations" : suffix === "CREATE" ? BASE : `${BASE}/${encodeURIComponent(id)}${suffix}`;
     const response = await requestJson(fetcher, path, init);
     const { body, status } = response;
     const retry = response.headers.get("Retry-After");
@@ -164,6 +171,11 @@ export function createPreparationApi(fetcher: typeof fetch = resolveApiFetch()):
     if (!record(command) || !integer(command.expectedRevision, 1)) throw invalidRequest();
   }
   return Object.freeze<PreparationApi>({
+    async createSingle(command, key, options) {
+      if (!identifier(command.preparation_id) || !validPreparationSource(command.source) ||
+          command.reviewed_base != null && (!identifier(command.reviewed_base.preparation_id) || !hash(command.reviewed_base.manifest_hash))) throw invalidRequest();
+      return request(command.preparation_id, "SINGLE", "POST", [201], command, key, options);
+    },
     async create(command, key, options) {
       if (!record(command) || !record(command.input) || !identifier(command.input.preparation_id) ||
           !Array.isArray(command.input.sources) || !validPreparationSources(command.input.sources) ||

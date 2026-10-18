@@ -14,6 +14,8 @@ import type { ReviewChoice } from "../api/preparationReview";
 import { usePlanPreparation } from "../composables/usePlanPreparation";
 import PlanPreparationSourceForm from "../components/backtests/PlanPreparationSourceForm.vue";
 import PlanPreparationProgress from "../components/backtests/PlanPreparationProgress.vue";
+import ReviewedPlanLibrary from "../components/backtests/ReviewedPlanLibrary.vue";
+import { usePlanLibrary } from "../composables/usePlanLibrary";
 import PlanPreparationReview from "../components/backtests/PlanPreparationReview.vue";
 
 interface Props {
@@ -39,20 +41,26 @@ async function navigateToAcceptedRun(receipt: BacktestJobReceipt): Promise<void>
   if (isNavigationFailure(failure)) throw new Error("accepted run navigation failed");
 }
 
+const library = usePlanLibrary();
 const preparation = usePlanPreparation({
+  singleMode: true, reviewedBase: () => library.reviewedBase.value,
   ...(props.preparationApi === undefined ? {} : { api: props.preparationApi }),
   ...(props.initialPreparationId === undefined ? {} : { initialPreparationId: props.initialPreparationId }),
 });
-const groupedEntry = ref(true);
 const mode = ref<"LEGACY" | "PREPARED">(props.initialPreparationId ? "PREPARED" : "LEGACY");
 watch(() => preparation.preparationId.value, (identity) => {
   if (identity && route.path === "/backtests/new" && route.query.preparationId !== identity) {
     void router.replace({ path: route.path, query: { ...route.query, preparationId: identity } });
+  } else if (!identity && route.path === "/backtests/new" && route.query.preparationId) {
+    const { preparationId: _previous, ...query } = route.query;
+    void router.replace({ path: route.path, query });
   }
 });
 const reviewedPrepared = computed<DeepReadonly<PreparationFrozenView | CollectionPreparationFrozenView> | null>(() => {
+  if (preparation.isBusy.value || preparation.sourceDirty.value) return null;
+  if (library.composition.value) return library.composition.value;
   const chain = preparation.collection.value;
-  if (chain && preparation.canUsePrepared.value) return chain.frozen;
+  if (chain && chain.workflow !== "SINGLE" && preparation.canUsePrepared.value) return chain.frozen;
   const value = preparation.preparation.value;
   if (!preparation.canUsePrepared.value || value?.candidate?.kind !== "FROZEN") return null;
   return { preparationId: value.preparationId, manifestHash: value.candidate.candidateHash,
@@ -71,7 +79,14 @@ const plans = useBacktestPlanVersions({
   ...(props.planApi === undefined ? {} : { api: props.planApi }),
 });
 const runLocked = computed(() => ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(form.submissionState.value));
-const modeLocked = computed(() => preparation.isBusy.value || runLocked.value);
+const modeLocked = computed(() => preparation.isBusy.value || library.locked.value || runLocked.value);
+watch(() => preparation.canUsePrepared.value, (ready) => { if (ready) void library.refresh(); });
+async function prepareNext(): Promise<void> {
+  if (library.loading.value || modeLocked.value || preparation.sourceDirty.value) return;
+  const previousId = preparation.canUsePrepared.value ? preparation.preparationId.value ?? undefined : undefined;
+  await library.prepareNext(previousId);
+  preparation.newSource();
+}
 function chooseMode(value: "LEGACY" | "PREPARED"): void {
   if (!modeLocked.value) mode.value = value;
 }
@@ -79,13 +94,6 @@ function reviewPrepared(value: { evidence: string; choices: ReviewChoice[]; unkn
   if (!runLocked.value) void preparation.review(value.evidence, value.choices, value.unknownConfirmed);
 }
 
-const entrySources = computed(() => preparation.sources.value.length ? preparation.sources.value : [preparation.draft.value]);
-function movePreparedSource(index: number, delta: number): void {
-  if (runLocked.value) return;
-  const order = preparation.collection.value?.items.map(item => item.sourceId) ?? [], next = index + delta;
-  if (next < 0 || next >= order.length) return;
-  [order[index], order[next]] = [order[next]!, order[index]!]; void preparation.reorderSources(order);
-}
 function selectPlanVersion(versionId: string): void {
   const selected = plans.selectVersion(versionId);
   form.updateField("planVersionId", selected?.id ?? "");
@@ -122,20 +130,15 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-if="mode === 'PREPARED'" class="backtest-new-view__preparation" aria-label="计划原文准备">
-      <div v-if="preparation.preparationId.value === null" class="entry-kind" aria-label="原文数量">
-        <button type="button" :disabled="modeLocked" :aria-pressed="groupedEntry" @click="groupedEntry = true">准备多份按日原文</button>
-        <button type="button" :disabled="modeLocked" :aria-pressed="!groupedEntry" @click="groupedEntry = false">只准备一份原文</button>
-      </div>
-      <PlanPreparationSourceForm v-if="preparation.preparationId.value === null && groupedEntry" :source="preparation.draft.value" :sources="entrySources"
-        :disabled="runLocked || !preparation.canSubmitSource.value" @update:sources="preparation.updateSources" @submit="preparation.submitSources" />
-      <p v-if="preparation.collection.value && preparation.sourceDirty.value" role="status">请先保存当前原文修改，再切换查看其他条目。</p>
-      <details v-if="preparation.collection.value"><summary>查看并调整已保存原文顺序</summary><ol><li v-for="(item, index) in preparation.collection.value.items" :key="item.sourceId">第 {{ index + 1 }} 份 · {{ item.effectiveTradeDate ?? '日期待补齐' }}
-        <button type="button" :disabled="runLocked || !preparation.canSubmitSource.value || preparation.sourceDirty.value || index === 0" @click="movePreparedSource(index, -1)">上移</button>
-        <button type="button" :disabled="runLocked || !preparation.canSubmitSource.value || preparation.sourceDirty.value || index === preparation.collection.value.itemCount - 1" @click="movePreparedSource(index, 1)">下移</button>
-      </li></ol><p>调整顺序将使受影响条目及后续候选失效，需要重新提取和复核。</p></details>
-      <PlanPreparationSourceForm v-if="preparation.preparationId.value !== null || !groupedEntry" :source="preparation.draft.value" :disabled="runLocked || !preparation.canSubmitSource.value"
-        @update:source="preparation.updateSource" @submit="preparation.submitSource" />
+      <ReviewedPlanLibrary :items="library.items.value" :selected="library.selected.value" :base-id="library.baseId.value" :needs-base="library.needsBase.value"
+        :creating="preparation.preparationId.value === null" :disabled="preparation.isBusy.value || runLocked" :loading="library.loading.value"
+        :pending="library.locked.value" :uncertain="library.uncertain.value" :error="library.error.value" :can-start="!preparation.sourceDirty.value"
+        @base="library.chooseBase" @toggle="library.toggle" @compose="library.compose" @refresh="library.refresh" @new="prepareNext" />
+      <p v-if="preparation.collection.value?.workflow === 'SINGLE' && preparation.collection.value.itemCount > 1">前序版本已审核并锁定，只能编辑和提取当前这一份原文。</p>
+      <PlanPreparationSourceForm :source="preparation.draft.value" :disabled="runLocked || library.locked.value || !preparation.canSubmitSource.value || (!preparation.preparationId.value && (library.loading.value || library.needsBase.value))"
+        @update:source="preparation.updateSource" @submit="!library.needsBase.value && preparation.submitSource()" />
       <PlanPreparationProgress :preparation="preparation.preparation.value" :collection="preparation.collection.value" :request-state="preparation.requestState.value"
+        :items="preparation.items.value" :extraction-blockers="preparation.extractionBlockers.value"
         :mutation-state="preparation.mutationState.value" :can-extract="!runLocked && preparation.canExtract.value"
         :can-cancel="!runLocked && preparation.canCancel.value" :can-recover="!runLocked && preparation.canRecover.value"
         :can-retry-mutation="!runLocked && preparation.canRetryMutation.value" :error-message="preparation.errorMessage.value"

@@ -84,20 +84,20 @@ describe("exact single preparation review", () => {
   it.each(["", " ", "x".repeat(2001)])("rejects invalid general review evidence", value => {
     expect(() => buildPreparationReview(fixture.candidate, value, fixture.choices, true)).toThrow();
   });
-  it("preserves unknown cash separately from zero and requires an explicit unknown acknowledgement", () => {
+  it("preserves source cash evidence without making it an execution prerequisite", () => {
     const value = fresh();
     if (value.candidate?.kind !== "EXTRACTION") throw new Error("fixture variant");
     value.candidate.openingAccount.cash_fen = null;
     value.candidate.issues.push("LOOP_ACCOUNT_FACT_REQUIRED: opening_account.cash_fen");
-    expect(inspectPreparationReview(value).unknownFacts).toContain("opening_account.cash_fen");
-    expect(() => buildPreparationReview(value, evidence, fixture.choices, false)).toThrow();
+    expect(inspectPreparationReview(value).unknownFacts).not.toContain("opening_account.cash_fen");
+    expect(buildPreparationReview(value, evidence, fixture.choices, false).review.account).toBeUndefined();
     expect(buildPreparationReview(value, evidence, fixture.choices, true).review.account).toBeUndefined();
     value.candidate.openingAccount.cash_fen = { value: 0, start: 0, end: 1, excerpt: value.source.text[0]! };
     value.candidate.issues = value.candidate.issues.filter(issue => !issue.includes("cash_fen"));
     expect(inspectPreparationReview(value).unknownFacts).not.toContain("opening_account.cash_fen");
   });
   it("blocks missing chronology, missing technical parameters and unresolved source clauses", () => {
-    const time = fresh(); time.source.available_at = null;
+    const time = fresh(); time.source.effective_trade_date = null;
     expect(inspectPreparationReview(time).blockers.length).toBeGreaterThan(0);
     const parameter = fresh();
     if (parameter.candidate?.kind !== "EXTRACTION") throw new Error("fixture variant");
@@ -255,7 +255,8 @@ describe("readable complete prepared plan review", () => {
   });
   it("preserves unknown facts visibly and requires acknowledging their consequences", async () => {
     const value = fresh(); if (value.candidate?.kind !== "EXTRACTION") throw new Error("fixture variant");
-    value.candidate.openingAccount.cash_fen = null;
+    value.candidate.openingAccount.inventory_quantity = null;
+    value.candidate.openingAccount.lots = [];
     const wrapper = preview(value); await confirmPreview(wrapper);
     expect(wrapper.text()).toContain("未知"); expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeDefined();
     await wrapper.get('[data-testid="review-unknown-confirmation"]').setValue(true);
@@ -348,12 +349,12 @@ describe("ordered collection preparation interface", () => {
     wrappers.push(wrapper);
     expect(wrapper.findAll("textarea").map(item => (item.element as HTMLTextAreaElement).value)).toEqual(sources.map(item => item.text));
     expect(wrapper.findAll('input[type="date"]')).toHaveLength(2);
-    expect(wrapper.findAll('input[type="datetime-local"]')).toHaveLength(4);
+    expect(wrapper.findAll('input[type="datetime-local"]')).toHaveLength(0);
   });
   it("emits edits, additions, removals and reorderings with stable source identities", async () => {
     const { sources } = collectionReviewFixture(); const original = structuredClone(sources); const wrapper = batchForm(sources);
     await wrapper.findAll("textarea")[1]!.setValue("后续原文更正");
-    expect(wrapper.emitted("update:sources")!.at(-1)![0]).toEqual([sources[0], { ...sources[1], text: "后续原文更正" }]);
+    expect(wrapper.emitted("update:sources")!.at(-1)![0]).toEqual([sources[0], { ...sources[1], text: "后续原文更正", effective_trade_date: null }]);
     await wrapper.get(`[data-testid="source-up-${sources[1]!.source_id}"]`).trigger("click");
     expect(wrapper.emitted("update:sources")!.at(-1)![0]).toEqual([sources[1], sources[0]]);
     await wrapper.get(`[data-testid="source-remove-${sources[0]!.source_id}"]`).trigger("click");
@@ -458,14 +459,31 @@ describe("ordered collection preparation interface", () => {
     await confirmCollection(wrapper); expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeDefined();
     await wrapper.get("form").trigger("submit"); expect(wrapper.emitted("reviewCollection")).toBeUndefined();
   });
-  it("keeps unknown opening cash explicit until acknowledged", async () => {
+  it("does not require cash confirmation when reviewing source inventory", async () => {
     const value = collectionReviewFixture(); value.details[0]!.candidate!.openingAccount!.cash_fen = null;
     const { wrapper } = collectionPreview(value); await confirmCollection(wrapper);
-    expect(wrapper.get('[data-testid="opening-account"]').text()).toContain("未知");
-    expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeDefined();
-    await wrapper.get('[data-testid="review-unknown-confirmation"]').setValue(true);
+    expect(wrapper.find('[data-testid="review-unknown-confirmation"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="opening-cash"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeUndefined();
-    await wrapper.get("form").trigger("submit"); expect(wrapper.emitted("reviewCollection")![0]![0]).toEqual({ evidence, unknownConfirmed: true });
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("reviewCollection")![0]![0]).toEqual({ evidence, unknownConfirmed: false });
+    expect(value.details[0]!.candidate!.openingAccount!.cash_fen).toBeNull();
+  });
+  it("accepts a source-bound empty account without inventing cash or a timestamp", async () => {
+    const value = collectionReviewFixture(), first = value.details[0]!;
+    const opening = first.candidate!.openingAccount!;
+    opening.cash_fen = null; opening.snapshot_at = null; opening.lots = [];
+    opening.inventory_quantity = { value: 0, start: 0, end: 1, excerpt: "0" };
+    first.source.available_at = null;
+    const { wrapper } = collectionPreview(value);
+    await confirmCollection(wrapper);
+    expect(wrapper.find('[data-testid="set-opening-cash"]').exists()).toBe(false);
+    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="review-unknown-confirmation"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="review-submit"]').attributes("disabled")).toBeUndefined();
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("reviewCollection")![0]![0]).toEqual({ evidence, unknownConfirmed: false });
+    expect(opening.cash_fen).toBeNull(); expect(opening.snapshot_at).toBeNull();
   });
   it("emits explicit initial supplements as an item correction without freezing its successors", async () => {
     const value = collectionReviewFixture(), original = fresh();
@@ -494,21 +512,18 @@ describe("ordered collection preparation interface", () => {
     const button = wrapper.get('[data-testid="review-submit"]');
     expect(button.attributes("disabled")).toBeDefined();
     expect((labelledControl(wrapper, "账户快照时间").element as HTMLInputElement).value).toBe("");
-    expect((labelledControl(wrapper, "现金是否已知").element as HTMLSelectElement).value).toBe("UNKNOWN");
+    expect(wrapper.text()).toContain("无需填写现金金额");
     expect((labelledControl(wrapper, "实际持仓总量已知").element as HTMLInputElement).checked).toBe(false);
     await labelledControl(wrapper, "账户快照时间").setValue("2026-08-20T09:00:00");
     expect(button.attributes("disabled")).toBeDefined();
     await wrapper.get('[data-testid="review-unknown-confirmation"]').setValue(true);
     expect(button.attributes("disabled")).toBeUndefined(); await wrapper.get("form").trigger("submit");
     expect(wrapper.emitted("reviewCollection")![0]![0]).toEqual({ evidence, unknownConfirmed: true, account: {
-      snapshot_at: "2026-08-20T09:00:00.000000+08:00", cash: { kind: "UNKNOWN" }, inventory_known: false,
+      snapshot_at: "2026-08-20T09:00:00.000000+08:00", cash: { kind: "POSITION_LIMIT_ONLY" }, inventory_known: false,
       lots: [], opening_mark: null, evidence,
     } });
-    await labelledControl(wrapper, "现金是否已知").setValue("KNOWN");
-    expect((labelledControl(wrapper, "现金余额").element as HTMLInputElement).value).toBe("");
-    expect(button.attributes("disabled")).toBeDefined();
-    await labelledControl(wrapper, "现金余额").setValue("0"); await labelledControl(wrapper, "实际持仓总量已知").setValue(true);
+    await labelledControl(wrapper, "实际持仓总量已知").setValue(true);
     expect(button.attributes("disabled")).toBeUndefined(); await wrapper.get("form").trigger("submit");
-    expect(wrapper.emitted("reviewCollection")!.at(-1)![0]).toMatchObject({ account: { cash: { kind: "KNOWN", balance_fen: 0 }, inventory_known: true, lots: [] } });
+    expect(wrapper.emitted("reviewCollection")!.at(-1)![0]).toMatchObject({ account: { cash: { kind: "POSITION_LIMIT_ONLY" }, inventory_known: true, lots: [] } });
   });
 });

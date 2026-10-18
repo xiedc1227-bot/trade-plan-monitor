@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { MAX_PREPARATION_SOURCE_CHARACTERS, validPreparationSource, validPreparationSources, type PreparationSource } from "../../api/preparations";
-import { normalizeShanghaiDateTime } from "../../api/shanghaiTime";
 
 const props = withDefaults(defineProps<{
   source: PreparationSource;
@@ -26,14 +25,10 @@ onBeforeUnmount(() => { disposed = true; invalidateFile(); });
 function update(field: keyof PreparationSource, value: string | null): void {
   if (props.disabled) return;
   invalidateFile(); localError.value = null;
-  emit("update:source", { ...props.source, [field]: value });
+  emit("update:source", { ...props.source, [field]: value,
+    ...(field === "text" && props.source.effective_trade_date ? { effective_trade_date: null } : {}) });
 }
 function inputValue(event: Event): string { return (event.target as HTMLInputElement).value; }
-function updateTime(field: "authored_at" | "available_at", event: Event): void {
-  const value = inputValue(event);
-  const shanghai = value.length === 16 ? `${value}:00+08:00` : `${value}+08:00`;
-  update(field, value ? normalizeShanghaiDateTime(shanghai) ?? shanghai : null);
-}
 function submit(): void {
   if (props.disabled || fileLoading.value) return;
   const values = props.sources;
@@ -71,7 +66,8 @@ async function readFile(event: Event): Promise<void> {
       localError.value = "文件原文不能为空，且不能超过 150000 字符。";
       return;
     }
-    emit("update:source", { ...props.source, text });
+    emit("update:source", { ...props.source, text,
+      ...(props.source.effective_trade_date ? { effective_trade_date: null } : {}) });
   } catch {
     if (!disposed && !props.disabled && generation === fileGeneration) {
       localError.value = "无法读取文件，请检查 UTF-8 编码，或直接粘贴完整原文。";
@@ -85,11 +81,9 @@ function emitSources(values: PreparationSource[]): void {
   invalidateFile(); localError.value = null; emit("update:sources", values);
 }
 function updateItem(index: number, field: keyof PreparationSource, value: string | null): void {
-  emitSources((props.sources ?? []).map((source, position) => position === index ? { ...source, [field]: value } : { ...source }));
-}
-function updateItemTime(index: number, field: "authored_at" | "available_at", event: Event): void {
-  const value = inputValue(event), timestamp = value.length === 16 ? `${value}:00+08:00` : `${value}+08:00`;
-  updateItem(index, field, value ? normalizeShanghaiDateTime(timestamp) ?? timestamp : null);
+  emitSources((props.sources ?? []).map((source, position) => position === index
+    ? { ...source, [field]: value, ...(field === "text" && source.effective_trade_date ? { effective_trade_date: null } : {}) }
+    : { ...source }));
 }
 function addSource(): void {
   if ((props.sources?.length ?? 0) >= 256) return;
@@ -132,16 +126,14 @@ async function readBatch(files: File[]): Promise<void> {
     <fieldset :disabled="disabled">
       <legend>{{ sources === undefined ? '单份计划原文' : '按日分组录入原文' }}</legend>
       <template v-if="sources !== undefined">
-        <p class="hint">第一份是完整计划，后续每份是对应交易日的跟踪原文。按历史顺序录入，日期不明确时请留空，复核前必须补齐。</p>
+        <p class="hint">可导入 1–256 份计划原文。第一份是完整计划，后续为按日期排列的跟踪原文。保存时自动识别生效交易日，只有日期不明确时才需确认；无需填写成文时间和历史可用时间。</p>
         <fieldset v-for="(item, index) in sources" :key="item.source_id" class="source-item" :data-testid="`source-item-${item.source_id}`">
           <legend>第 {{ index + 1 }} 份 · {{ index === 0 ? '初始完整计划' : '后续跟踪' }}</legend>
           <label :for="`${id}-${index}-text`">第 {{ index + 1 }} 份完整原文</label>
           <textarea :id="`${id}-${index}-text`" :value="item.text" rows="7" required @input="updateItem(index, 'text', inputValue($event))" />
           <p class="hint count">{{ Array.from(item.text).length }} / 150000 字符</p>
           <div class="dates">
-            <div><label :for="`${id}-${index}-authored`">原文成文时间（上海时间）</label><input :id="`${id}-${index}-authored`" type="datetime-local" step="1" :value="item.authored_at?.slice(0, 19) ?? ''" @input="updateItemTime(index, 'authored_at', $event)" /></div>
-            <div><label :for="`${id}-${index}-available`">历史可用时间（上海时间）</label><input :id="`${id}-${index}-available`" type="datetime-local" step="1" :value="item.available_at?.slice(0, 19) ?? ''" @input="updateItemTime(index, 'available_at', $event)" /></div>
-            <div><label :for="`${id}-${index}-effective`">生效交易日</label><input :id="`${id}-${index}-effective`" type="date" :value="item.effective_trade_date ?? ''" @input="updateItem(index, 'effective_trade_date', inputValue($event) || null)" /></div>
+            <div><label :for="`${id}-${index}-effective`">生效交易日（留空自动识别，必要时确认）</label><input :id="`${id}-${index}-effective`" type="date" :value="item.effective_trade_date ?? ''" @input="updateItem(index, 'effective_trade_date', inputValue($event) || null)" /></div>
           </div>
           <div class="source-actions">
             <button type="button" :data-testid="`source-up-${item.source_id}`" :disabled="index === 0" @click="moveSource(index, -1)">上移第 {{ index + 1 }} 份</button>
@@ -157,6 +149,7 @@ async function readBatch(files: File[]): Promise<void> {
       </template>
       <template v-else>
       <p :id="`${id}-help`" class="hint">粘贴完整原文，或读取一份文本文件。修改原文后，请先保存，再重新提取和审核。</p>
+      <p class="hint">提取会将原文和已审核前序规则发送给当前 AI；自动纠正时还会发送上一轮候选及校验诊断，最多纠正两次。未提及规则默认保留，真正不明确的内容集中确认。</p>
       <label :for="`${id}-text`">完整原文</label>
       <textarea :id="`${id}-text`" :value="source.text" rows="10" required
         :aria-describedby="`${id}-help ${id}-count${error ? ` ${id}-error` : ''}`"
@@ -165,18 +158,13 @@ async function readBatch(files: File[]): Promise<void> {
       <label :for="`${id}-file`">从文件读取（UTF-8 的 .txt 或 .md）</label>
       <input :id="`${id}-file`" type="file" accept=".txt,.md,text/plain,text/markdown" :disabled="fileLoading" @change="readFile" />
       <p v-if="fileLoading" role="status" class="hint">正在读取原文…</p>
-      <details>
-        <summary>补充原文日期（可选）</summary>
-        <p class="hint">日期时间按上海时区记录；未明确的信息请留空。</p>
+      <div class="date-confirmation">
+        <p class="hint">保存时从原文自动识别生效交易日；无法确定时请在此确认日期。未声明历史可用时间的计划，从生效日开盘起执行。</p>
         <div class="dates">
-          <div><label :for="`${id}-authored`">原文成文时间</label>
-            <input :id="`${id}-authored`" type="datetime-local" step="1" :value="source.authored_at?.slice(0, 19) ?? ''" @input="updateTime('authored_at', $event)" /></div>
-          <div><label :for="`${id}-available`">原文可用时间</label>
-            <input :id="`${id}-available`" type="datetime-local" step="1" :value="source.available_at?.slice(0, 19) ?? ''" @input="updateTime('available_at', $event)" /></div>
-          <div><label :for="`${id}-effective`">计划交易日</label>
+          <div><label :for="`${id}-effective`">生效交易日（留空自动识别，必要时确认）</label>
             <input :id="`${id}-effective`" type="date" :value="source.effective_trade_date ?? ''" @input="update('effective_trade_date', inputValue($event) || null)" /></div>
         </div>
-      </details>
+      </div>
       <button type="submit" :disabled="fileLoading">{{ submitLabel }}</button>
       </template>
     </fieldset>
