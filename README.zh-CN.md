@@ -251,6 +251,7 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 风险退出现已按新旧持仓批次执行。明确排除新仓时，旧批次继续保留继承退出规则；新批次按新计划处理，准确扣减对应批次并遵守 T+1、核算对应成本。结果页在规则变更和价格诊断旁展示适用范围及退出批次。修正后的四份实际原文继承链另行完成 1468 次评估的连续回测、0 成交；实际价格未满足买入前提，未量化条件仍明确展示。参见[持仓批次验证](docs/verification/2026-10-18-cohort-risk-execution.zh-CN.md)，它替代先前的执行限制和第四份错误取消结论。
 
+结果页顶部现展示收益汇总：总盈亏、已实现盈亏、浮动盈亏及已确定的回测截止日期。金额保留报告的成本／费用口径，区分零与数据不可用。切换结果标签页仍可查看汇总，不新增本金收益率。参见[收益汇总操作说明](docs/operations/monitor-loop-backtest.zh-CN.md#ml-o20-顶部收益汇总)。
 
 运行摘要、假设、最终指标和成交账本长期保留。成功运行的判断/信号/每日权益详情只保留最新 100 次且最多 90 天；失败、取消及按需调试详情保留 14 天；置顶运行豁免。结果发布先把规范行 staged 到 `backtest-results.sqlite3`；普通读取和统计看不到任何 staged 行。只有完整 `reportHash`、预期成交/详情数量和规范 identity/内容集合哈希都匹配时，一个事务才会设置内部 `materialized` 可见性标记。首次发布会持久化这些数量和集合哈希，已发布运行的每次重试都必须精确匹配；普通摘要/成交/详情读取还会在应用任何 detail-kind 过滤前，根据已哈希 payload 校验每个 SQL identity。Web/API 从已持久化结果导出经过校验的 JSON 和 CSV。`materialized` 是唯一发布闸门，但不是公开运行状态；公开状态仍为 `COMPLETED`、`FAILED` 或 `CANCELLED`。有界 `prune` 维护会在 14 天后移除未置顶的废弃 staged 摘要/成交/详情，近期 stage 仍可恢复。文件缺失或损坏时，可以根据长期摘要/成交行重建，不联网、不重放、也不重复成交；已清理的判断/信号/结果/权益详情按设计不可重建。`reportHash` 继续作为原始完整运行的审计 identity，并不是文件字节哈希。Web/API 支持置顶和初始持仓批次。不保存完整逐分钟账户快照，也不重复保存行情行。隔离、禁止未来数据、报告及保留契约详见 [SPEC-backtest.zh-CN.md](docs/specifications/backtesting/SPEC-backtest.zh-CN.md)。
 

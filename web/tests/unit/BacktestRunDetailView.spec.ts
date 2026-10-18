@@ -280,7 +280,8 @@ describe("BacktestRunDetailView", () => {
     expect(getJob).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("90071992547409939.99");
     expect(wrapper.text()).toContain("0.1234567890123456789012345678");
-    expect(wrapper.get("time").attributes("datetime")).toBe(COMPLETED_AT);
+    expect(wrapper.get(`time[datetime="${COMPLETED_AT}"]`).attributes("datetime")).toBe(COMPLETED_AT);
+    expect(wrapper.get('[data-testid="profit-cutoff"] time').attributes("datetime")).toBe("2026-08-28");
     wrapper.unmount();
   });
 

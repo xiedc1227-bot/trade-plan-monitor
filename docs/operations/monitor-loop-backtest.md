@@ -181,3 +181,11 @@ In “逐份规则对照”, expand a source to see “风险退出适用持仓�
 The full comparison now accepts at most 192 entries so that up to 64 old/new risk identities and policy sections can be displayed completely; the 64-operation proposal bound is unchanged. Risk comparisons use explicit `rule_id` when present, otherwise branch kind.
 
 The corrected chain was reviewed and replayed as a new immutable run; old results are retained. See [the actual-source and mixed-lot verification](../verification/2026-10-18-cohort-risk-execution.md).
+
+## ML-O20. Top-of-page profit summary
+
+At the top of a loaded result, “收益汇总” shows “总盈亏”, “已实现盈亏”, “浮动盈亏” and “回测截止日期”. It stays above actions, tabs, rule comparisons and per-plan diagnostics, including while viewing fills or details. The first three values are yuan amounts with explicit positive/negative signs; zero remains `0.00 元`. Loop results read the saved report's `cost_pnl_fen`, `realized_pnl_fen` and `unrealized_pnl_fen`. Fees already included in cost are not deducted again. Missing capital does not hide known cost PnL.
+
+The cutoff date is the resolved replay end date (`eventEnd`), not the job completion date or today's date. Loop results also show `evidence_cutoff` in Shanghai time. This is historical replay PnL, not a live account valuation. Missing PnL is `暂不可用`; partial known values remain visible and unknown values are never replaced with zero. The summary includes no principal return percentage.
+
+The existing result request supplies the panel without another API call, replay, AI extraction, new approval or stored-report change. Classic legacy results with explicit realized/unrealized values use their exact integer-fen sum. Old research results without these fields show unavailable. Wide displays use four columns, smaller displays two, and very narrow displays one. See [verification](../verification/2026-10-18-result-profit-summary.md).

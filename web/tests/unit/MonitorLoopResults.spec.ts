@@ -241,6 +241,18 @@ describe("owned native loop results", () => {
 });
 
 describe("owned scheduled loop results", () => {
+  it("keeps the profit summary above tabs and diagnoses without another request", async () => {
+    const { wrapper, fetcher, router, run } = await scheduledPage();
+    const summary = wrapper.get('[data-testid="backtest-profit-summary"]');
+    const tabs = wrapper.get('[aria-label="回测结果资源"]');
+    expect(summary.element.compareDocumentPosition(tabs.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(summary.get('[data-testid="profit-cutoff"]').text()).toBe(run.eventEnd);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await router.push({ path: router.currentRoute.value.path, query: { tab: "fills" } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="backtest-profit-summary"]').isVisible()).toBe(true);
+    expect(fetcher.mock.calls.filter(([url]) => !String(url).includes("/fills?")).length).toBe(1);
+  });
 
   it("accepts the bounded v2 result header with all four immutable version bindings", async () => {
     const run = scheduledRun();

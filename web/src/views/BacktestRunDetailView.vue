@@ -23,6 +23,7 @@ import BacktestFillTable from "../components/backtests/BacktestFillTable.vue";
 import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
 import BacktestMarketIndexPanel from "../components/backtests/BacktestMarketIndexPanel.vue";
 import BacktestMetricsSummary from "../components/backtests/BacktestMetricsSummary.vue";
+import BacktestProfitSummary from "../components/backtests/BacktestProfitSummary.vue";
 import BacktestResultActions from "../components/backtests/BacktestResultActions.vue";
 import MonitorLoopSummary from "../components/backtests/MonitorLoopSummary.vue";
 import MonitorLoopTimeline from "../components/backtests/MonitorLoopTimeline.vue";
@@ -491,6 +492,8 @@ onBeforeUnmount(() => {
       class="run-detail-view__results"
       aria-labelledby="result-review-title"
     >
+      <BacktestProfitSummary :run="results.summary.value" />
+
       <div class="run-detail-view__results-heading">
         <div>
           <h2 id="result-review-title">结果审阅</h2>
