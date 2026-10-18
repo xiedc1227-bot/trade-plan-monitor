@@ -182,8 +182,8 @@ function correctInitial(item: CollectionItemView | DeepReadonly<CollectionItemVi
       <form v-if="candidate?.kind === 'EXTRACTION'" @submit.prevent="submit">
         <fieldset :disabled="!canReview || sourceDirty">
           <legend>明确审核当前候选</legend>
-          <p v-if="!candidate.confirmationSummary">请逐项核对。以下参数缺少来源绑定，填写说明即表示人工补充确认所展示的值。</p>
-          <div v-for="(item, index) in candidate.confirmationSummary ? [] : inspection.supplements" :key="item.path" class="review-choice">
+          <p v-if="inspection.supplements.length">此旧候选仍有缺少来源绑定的参数。请核对下列值；填写说明表示人工补充确认，不代表原文已明确。</p>
+          <div v-for="(item, index) in inspection.supplements" :key="item.path" class="review-choice">
             <label :for="`${id}-supplement-${index}`">{{ label(item.path) }}：{{ display(item.value) }} · 确认说明</label>
             <textarea :id="`${id}-supplement-${index}`" v-model="reasons[item.path]" :data-testid="`review-supplement-${index}`" rows="2" maxlength="4000" required />
           </div>

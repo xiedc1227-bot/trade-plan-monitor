@@ -271,6 +271,8 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 ## Historical Backtesting
 
+History reads recover from short contention with bounded read-only retries. Preparation progress accepts the published confirmation/correction details and recovers temporary detail-read failures after completion; it never repeats extraction or approval automatically. See [read reliability verification](docs/verification/2026-10-18-backtest-read-reliability.md).
+
 Run-record filters contain stock, inclusive backtest cutoff dates and pin status. Dataset hash and plan version ID are absent from the filter UI; old page links drop these conditions and their cursor before reading records. Their internal API and stored identifiers remain available for diagnosis. Dates compare coverage end, while the fixed result-time order is explained in text; replay cutoff is not actual program completion. See [filter operations](docs/operations/monitor-loop-backtest.md#ml-o21-run-record-filters-and-time-meaning) and [verification](docs/verification/2026-10-18-run-record-filters.md).
 
 Normal backtest pages show one compact status and `服务管理`; refresh, pending-task lookup and service stop are inside that panel. Interrupted jobs and service faults expand it, while task progress, cancellation and retries remain in their original pages. Discovery does not resume a task. See [service controls and verification](docs/verification/2026-10-18-compact-backtest-service.md).

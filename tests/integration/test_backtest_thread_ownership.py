@@ -193,3 +193,73 @@ def test_execution_failure_preserves_already_healthy_history_capability() -> Non
         assert not manager.snapshot.allows(BacktestCapability.METADATA)
 
     asyncio.run(scenario())
+
+
+def test_metadata_reads_serialize_short_overlap_without_rejecting_normal_page_reads() -> None:
+    entered, release = Event(), Event()
+    calls = []
+
+    def first():
+        entered.set()
+        assert release.wait(2)
+        calls.append("first")
+        return 1
+
+    async def scenario():
+        thread = BacktestMetadataThread()
+        active = asyncio.create_task(thread.run(first))
+        try:
+            while not entered.is_set():
+                await asyncio.sleep(0)
+            readers = [
+                asyncio.create_task(thread.read(lambda: calls.append("read"))) for _ in range(4)
+            ]
+            await asyncio.sleep(0)
+            assert thread.outstanding_work == 1
+            assert not any(task.done() for task in readers)
+            release.set()
+            assert await active == 1
+            await asyncio.gather(*readers)
+            assert calls == ["first", "read", "read", "read", "read"]
+        finally:
+            release.set()
+            await thread.stop()
+    asyncio.run(scenario())
+
+
+def test_metadata_read_wait_is_bounded_and_cancelled_read_never_executes() -> None:
+    entered, release = Event(), Event()
+    calls = []
+
+    def block():
+        entered.set()
+        assert release.wait(2)
+
+    async def scenario():
+        thread = BacktestMetadataThread(max_waiting_reads=1, read_wait_seconds=0.03)
+        active = asyncio.create_task(thread.run(block))
+        try:
+            while not entered.is_set():
+                await asyncio.sleep(0)
+            waiting = asyncio.create_task(thread.read(lambda: calls.append("cancelled")))
+            await asyncio.sleep(0)
+            with pytest.raises(BacktestServiceUnavailable):
+                await thread.read(lambda: calls.append("overflow"))
+            waiting.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await waiting
+            with pytest.raises(BacktestServiceUnavailable):
+                await thread.read(lambda: calls.append("expired"))
+            with pytest.raises(BacktestServiceUnavailable):
+                await thread.run(lambda: calls.append("mutation"))
+            release.set()
+            await active
+            await thread.read(lambda: calls.append("fresh"))
+            assert calls == ["fresh"]
+            await thread.stop()
+            with pytest.raises(BacktestServiceUnavailable):
+                await thread.read(lambda: calls.append("stopped"))
+        finally:
+            release.set()
+            await thread.stop()
+    asyncio.run(scenario())

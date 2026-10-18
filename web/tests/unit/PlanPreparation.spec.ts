@@ -427,6 +427,35 @@ describe("one ordered collection preparation controller", () => {
 });
 
 describe("one-source preparation transport", () => {
+  it("accepts the published confirmation summary without rejecting a completed candidate", async () => {
+    const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.json", "utf8")) as { candidate: PreparationView };
+    const body = fixture.candidate;
+    body.candidate!.confirmationSummary = { automaticFacts: ["原文明示"], questions: [{ questionId: "q1", category: "SOURCE", message: "待核对", excerpts: ["原文"] }], processingIssues: [] };
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(receipt(body)));
+    expect((await api.get(body.preparationId)).body.status).toBe("CANDIDATE");
+  });
+
+  it("accepts bounded correction diagnostics on a failed attempt", async () => {
+    const body = preparation({ status: "FAILED", attempts: [{
+      attempt_id: "a1", source_revision: 1, source_hash: "a".repeat(64), status: "FAILED",
+      started_at: "2026-09-24T09:00:00+08:00", finished_at: "2026-09-24T09:00:01+08:00", error_code: "MAPPING_INVALID", retryable: true,
+      repair_feedback: ["需纠正映射"], repair_context_json: "{}",
+    }] });
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(receipt(body)));
+    expect((await api.get(body.preparationId)).body.status).toBe("FAILED");
+  });
+
+  it.each([
+    { automaticFacts: [1], questions: [], processingIssues: [] },
+    { automaticFacts: [], questions: [{ questionId: "q", category: "SOURCE", message: 3 }], processingIssues: [] },
+    { automaticFacts: [], questions: [], processingIssues: [], privateOwner: "not-public" },
+  ])("rejects malformed confirmation summaries: %j", async summary => {
+    const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.json", "utf8"));
+    fixture.candidate.candidate.confirmationSummary = summary;
+    const api = createPreparationApi(vi.fn<typeof fetch>().mockResolvedValue(receipt(fixture.candidate)));
+    await expect(api.get(fixture.candidate.preparationId)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
   it("sends one embedded source, revision and stable mutation key without following redirects", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(receipt(preparation(), 201));
     const api = createPreparationApi(fetcher);
@@ -483,6 +512,38 @@ describe("one-source preparation transport", () => {
 });
 
 describe("one preparation controller", () => {
+  it("retries temporary detail reads after the summary has already reached candidate", async () => {
+    vi.useFakeTimers();
+    const { root: value, details } = reviewableCollection();
+    const api = collectionApi();
+    vi.mocked(api.get).mockResolvedValue(collectionReceipt(value));
+    vi.mocked(api.items!).mockRejectedValueOnce(new ApiClientError({ code: "SERVICE_UNAVAILABLE", status: 503, message: "busy" }))
+      .mockResolvedValue(itemPage(details, { revision: value.revision }));
+    const { state } = controller(api); await flushPromises();
+    expect(state.canReview.value).toBe(false);
+    await vi.advanceTimersByTimeAsync(2000); await flushPromises();
+    expect(state.items.value).toHaveLength(4);
+    expect(state.errorMessage.value).toBeNull();
+    expect(api.extract).not.toHaveBeenCalled();
+  });
+
+  it("bounds detail recovery even when every summary read succeeds", async () => {
+    vi.useFakeTimers();
+    const { root } = reviewableCollection();
+    const api = collectionApi();
+    vi.mocked(api.get).mockResolvedValue(collectionReceipt(root));
+    vi.mocked(api.items!).mockRejectedValue(new ApiClientError({ code: "SERVICE_UNAVAILABLE", status: 503, message: "busy" }));
+    const { state, wrapper } = controller(api); await flushPromises();
+    await vi.advanceTimersByTimeAsync(20_000); await flushPromises();
+    expect(api.get).toHaveBeenCalledTimes(4);
+    expect(api.items).toHaveBeenCalledTimes(4);
+    expect(state.canReview.value).toBe(false);
+    expect(state.errorMessage.value).toContain("未能读取最新进度");
+    wrapper.unmount(); await vi.advanceTimersByTimeAsync(20_000);
+    expect(api.get).toHaveBeenCalledTimes(4);
+    expect(api.extract).not.toHaveBeenCalled();
+  });
+
   it("creates only on explicit intent and keeps one source editable after validation rejection", async () => {
     const { api, state } = controller(mockApi(), null);
     await flushPromises();

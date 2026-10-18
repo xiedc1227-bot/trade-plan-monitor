@@ -50,7 +50,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let mounted = false;
   let readGeneration = 0;
-  let initialReadRetries = 0;
+  let transientReadRetries = 0;
   const draftDirty = shallowRef(false);
   const reviewRevisionFloor = shallowRef<number | null>(null);
 
@@ -120,7 +120,6 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
         reviewRevisionFloor.value !== null && response.body.revision < reviewRevisionFloor.value) return false;
     if (progress.value?.revision !== response.body.revision) items.value = [];
     progress.value = response.body;
-    initialReadRetries = 0;
     reviewRevisionFloor.value = null;
     if (!draftDirty.value && !isCollection(response.body)) draft.value = { ...response.body.source };
     requestState.value = "READY";
@@ -168,13 +167,14 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
         if (!mounted || generation !== readGeneration || controller.signal.aborted) return;
         if (!apply(response)) { requestState.value = "READY"; readError.value = null; }
         else if (isCollection(response.body)) await loadItems(response.body, controller.signal, generation);
+        transientReadRetries = 0;
       } catch (error) {
         if (!mounted || generation !== readGeneration || controller.signal.aborted) return;
         requestState.value = "FAILED";
         readError.value = "未能读取最新进度，请重新读取；原文和上次状态已保留。";
-        if (progress.value === null && error instanceof ApiClientError &&
-            error.status === 503 && initialReadRetries < 3) {
-          initialReadRetries += 1;
+        if (error instanceof ApiClientError &&
+            (error.code === "SERVICE_UNAVAILABLE" && error.status === 503 || error.code === "CONFLICT" && error.status === 409) && transientReadRetries < 3) {
+          transientReadRetries += 1;
           retryInitialRead = true;
         }
       } finally {
@@ -205,7 +205,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
           needsRefresh = !apply({ body: response.body, status: response.status, retryAfterSeconds: "retryAfterSeconds" in response ? response.retryAfterSeconds : null });
           if (!needsRefresh && isCollection(response.body)) {
             try { await loadItems(response.body, controller.signal, readGeneration); }
-            catch { readError.value = "原文详情尚未完整读取，请刷新后复核。"; }
+            catch { readError.value = "原文详情尚未完整读取，请刷新后复核。"; needsRefresh = true; }
           }
         } else {
           reviewRevisionFloor.value = saved.reviewRevisionFloor;
@@ -370,7 +370,7 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
   function newSource(): void {
     if (isBusy.value || draftDirty.value) return;
     stopRead(); preparationId.value = null; progress.value = null; items.value = []; sources.value = [];
-    initialReadRetries = 0;
+    transientReadRetries = 0;
     selectedSourceId.value = null; draft.value = { source_id: createId(), text: "" };
     requestState.value = "IDLE"; commandError.value = null; readError.value = null;
   }

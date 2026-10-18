@@ -176,6 +176,31 @@ def test_collection_pages_adapt_to_byte_cap_without_omitting_sources(tmp_path):
         assert seen == [item["source_id"] for item in body["input"]["sources"]]
 
 
+def test_collection_page_respects_existing_browser_node_budget_below_byte_cap():
+    from trade_plan_monitor.web.preparation_schemas import CollectionItemsPage, CollectionItemView
+
+    def item(source_id):
+        return CollectionItemView.model_validate_json(json.dumps({
+            "sourceId": source_id, "sourceRevision": 1, "candidateRevision": 1,
+            "baseHash": None, "candidateHash": "a" * 64, "evidenceHash": "b" * 64,
+            "validation": "INVALID", "status": "CANDIDATE", "attemptCount": 0,
+            "effectiveTradeDate": "2026-09-24", "source": {
+                "source_id": source_id, "text": "Original", "effective_trade_date": "2026-09-24",
+            }, "attempts": [], "candidate": {
+                "kind": "UNAVAILABLE", "candidateHash": "a" * 64,
+                "evidenceHash": "b" * 64, "validation": "INVALID", "issues": [],
+                "confirmationSummary": {"automaticFacts": ["fact"] * 25000,
+                                        "processingIssues": [], "questions": []},
+            },
+        }))
+    first, second = item("one"), item("two")
+    fields = dict(preparation_id="node-page", revision=1, offset=0, limit=20, total=2)
+    page = CollectionItemsPage(**fields, next_offset=1, items=(first,))
+    assert len(page.model_dump_json().encode()) < 2 * 1024 * 1024
+    with pytest.raises(ValueError, match="JSON node"):
+        CollectionItemsPage(**fields, next_offset=None, items=(first, second))
+
+
 @pytest.mark.parametrize("case", ["duplicate", "too-many", "empty", "partial-binding", "oversize"])
 def test_collection_invalid_input_is_rejected_before_resources(tmp_path, case):
     from fastapi.testclient import TestClient

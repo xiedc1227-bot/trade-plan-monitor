@@ -56,19 +56,35 @@ export function validPreparationSource(value: unknown): value is PreparationSour
 }
 
 function validAttempt(value: unknown): boolean {
-  if (!record(value) || !keys(value, ["attempt_id", "error_code", "finished_at", "retryable", "source_hash", "source_revision", "started_at", "status"]) ||
+  if (!record(value) || !keys(value, ["attempt_id", "error_code", "finished_at", "retryable", "source_hash", "source_revision", "started_at", "status", "repair_feedback", "repair_context_json"]) ||
       !identifier(value.attempt_id) || !hash(value.source_hash) || !integer(value.source_revision, 1) ||
       !isShanghaiDateTime(value.started_at) || typeof value.retryable !== "boolean" ||
       !["RUNNING", "CANCEL_REQUESTED", "SUCCEEDED", "FAILED", "CANCELLED"].includes(String(value.status))) return false;
+  if (value.repair_feedback !== undefined && (!Array.isArray(value.repair_feedback) || value.repair_feedback.length > 64 ||
+      !value.repair_feedback.every(item => typeof item === "string" && Array.from(item).length >= 1 && Array.from(item).length <= 512) ||
+      value.repair_feedback.length > 0 && value.status !== "FAILED")) return false;
+  if (value.repair_context_json != null && (typeof value.repair_context_json !== "string" || Array.from(value.repair_context_json).length > 32000 ||
+      !Array.isArray(value.repair_feedback) || value.repair_feedback.length === 0)) return false;
   const active = value.status === "RUNNING" || value.status === "CANCEL_REQUESTED";
   return (active ? value.finished_at === null : isShanghaiDateTime(value.finished_at)) &&
     (value.status === "FAILED" ? typeof value.error_code === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(value.error_code) : value.error_code === null) &&
     (!value.retryable || value.status === "FAILED");
 }
 
+function validConfirmationSummary(value: unknown): boolean {
+  if (value == null) return true;
+  return record(value) && keys(value, ["automaticFacts", "processingIssues", "questions"]) &&
+    [value.automaticFacts, value.processingIssues].every(items => Array.isArray(items) && items.every(item => typeof item === "string")) &&
+    Array.isArray(value.questions) && value.questions.every(question => record(question) &&
+      keys(question, ["questionId", "category", "message", "excerpts"]) &&
+      [question.questionId, question.category, question.message].every(item => typeof item === "string") &&
+      (question.excerpts === undefined || Array.isArray(question.excerpts) && question.excerpts.length <= 20 && question.excerpts.every(item => typeof item === "string")));
+}
+
 function validCandidate(value: unknown): boolean {
   if (value === null) return true;
-  if (!record(value) || !keys(value, ["kind", "candidateHash", "evidenceHash", "validation", "issues", "draft", "mapping", "openingAccount", "frozen"]) ||
+  if (!record(value) || !keys(value, ["kind", "candidateHash", "evidenceHash", "validation", "issues", "draft", "mapping", "openingAccount", "frozen", "confirmationSummary"]) ||
+      !validConfirmationSummary(value.confirmationSummary) ||
       !hash(value.candidateHash) || !hash(value.evidenceHash) ||
       !["VALID", "INVALID", "UNRESOLVED"].includes(String(value.validation)) ||
       !Array.isArray(value.issues) || value.issues.length > 128 ||

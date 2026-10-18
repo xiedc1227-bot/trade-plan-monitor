@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from typing import Protocol
 from uuid import uuid4
@@ -13,6 +14,8 @@ from trade_plan_monitor.backtest.service_contract import (
     BacktestServiceState,
 )
 from trade_plan_monitor.backtest.thread_ownership import BacktestThreadOwner
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class BacktestServiceUnavailable(RuntimeError):
@@ -141,6 +144,9 @@ class LazyBacktestLifecycle:
                     asyncio.shield(future), self._config.initialization_watchdog_seconds,
                 )
             except TimeoutError:
+                _LOGGER.warning(
+                    "Backtest metadata preparation watchdog expired; owned work is still draining"
+                )
                 self._state = BacktestServiceState.DEGRADED
                 # Keep the physical call and any late acquired resources owned.
                 self._instance = await asyncio.shield(future)
@@ -154,7 +160,8 @@ class LazyBacktestLifecycle:
             if not self._stopping and generation == self._generation:
                 self._metadata_ready = True
                 self._state = BacktestServiceState.READ_READY
-        except Exception:
+        except Exception as error:
+            _LOGGER.warning("Backtest metadata preparation failed: %s", type(error).__name__)
             self._state = BacktestServiceState.DEGRADED
             raise BacktestServiceUnavailable() from None
 

@@ -38,6 +38,8 @@ Evidence: `actual-browser.json`, `actual-browser-final.log`, `actual-page.txt`, 
 
 ## SC-V04 — Remaining verification limits
 
+Follow-up: the preparation-progress failure below was diagnosed and repaired by [BR-V01–BR-V04](2026-10-18-backtest-read-reliability.md). Its full production journey now passes; other historical browser/capacity limits remain. The original observations below are preserved.
+
 Broader browser checks are not all green. The existing 320/768/1024/1440 and 200% layout journey reached its strict request-failure audit with navigation-aborted reads. The same journey also failed that audit on an isolated archive of the unchanged `e7ead0c` baseline, using the same corrected contract fixture. A keyboard journey intermittently reported aborted result/detail reads; it passed in the baseline comparison. No request-failure assertion was disabled or reclassified.
 
 The older complete upload/retry/edit/review/run Chrome journey also failed its unchanged 10000 ms candidate-ready checkpoint: the page retained the last extracting state with a read error, while the temporary backend record had already reached `CANDIDATE`. An explicit progress reread did not resolve that run within the same gate. The same failure reproduced with the prior service component/composable on the isolated `e7ead0c` baseline; the corresponding production-path integration passed. This is retained as existing browser/progress-read verification work, not evidence that the full end-to-end suite passed or that this simplification repaired it.

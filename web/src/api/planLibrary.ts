@@ -1,6 +1,7 @@
 import type { ReviewedPlanLibraryPage, ReviewedPlanReference, PreparedPlanCompositionInput, CollectionPreparationFrozenView } from "./generated-runtime-status";
 import { resolveApiFetch } from "./context";
-import { invalidResponse, requestJson } from "./transport";
+import { invalidResponse } from "./transport";
+import { requestBacktestJson as requestJson } from "./backtestRead";
 import { validCollectionFrozen } from "./preparationReview";
 import { isCalendarDate } from "./shanghaiTime";
 

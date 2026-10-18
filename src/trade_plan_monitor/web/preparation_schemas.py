@@ -194,8 +194,21 @@ class PreparationView(ApiValue):
 
     @model_validator(mode="after")
     def bounded(self):
-        if len(self.model_dump_json().encode("utf-8")) > 2 * 1024 * 1024:
+        encoded = self.model_dump_json()
+        if len(encoded.encode("utf-8")) > 2 * 1024 * 1024:
             raise ValueError("preparation projection exceeds 2 MiB")
+        pending = [(json.loads(encoded), 0)]
+        nodes = 1
+        while pending:
+            value, depth = pending.pop()
+            children = value.values() if isinstance(value, dict) else value
+            if not isinstance(value, (dict, list)):
+                continue
+            for child in children:
+                nodes += 1
+                if nodes > 50_000 or depth + 1 > 32:
+                    raise ValueError("preparation projection exceeds JSON node/depth budget")
+                pending.append((child, depth + 1))
         return self
 
 

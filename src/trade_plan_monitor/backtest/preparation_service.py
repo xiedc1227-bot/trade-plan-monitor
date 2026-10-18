@@ -110,11 +110,11 @@ class PreparationService:
             self._jobs.release_run_submission(reservation)
 
     async def get(self, preparation_id: str) -> PreparationRecord | None:
-        return await self._metadata.run(self._store.get, preparation_id)
+        return await self._metadata.read(self._store.get, preparation_id)
 
     async def list_reviewed(self, *, offset=0, limit=20):
         from trade_plan_monitor.backtest.plan_library import list_reviewed_plans
-        return await self._metadata.run(
+        return await self._metadata.read(
             list_reviewed_plans, self._store, offset=offset, limit=limit,
         )
 
@@ -389,9 +389,8 @@ class PreparationService:
                 outcome = await asyncio.shield(asyncio.wrap_future(future))
             except PreparationConflictError:
                 outcome = PreparationCallOutcome(unknown=not token.cancelled)
-            # Queries/mutations have a single bounded metadata owner; do not queue them.
-            # The completion owner waits for the existing local transaction to drain.
-            while self._metadata.outstanding_work:
+            # Completion waits for admitted reads as well as the physical transaction.
+            while self._metadata.occupied:
                 await asyncio.sleep(0.005)
             previous = record
             record = await self._metadata.run(self._complete, record, outcome, retries, token)
@@ -741,7 +740,7 @@ class PreparationService:
                 *(asyncio.shield(task) for task in tuple(self._tasks)),
                 return_exceptions=True,
             )
-        while self._metadata.outstanding_work:
+        while self._metadata.occupied:
             await asyncio.sleep(0.005)
         if self._preparation_id is not None:
             await self._metadata.run(self._cancel_owned_work)

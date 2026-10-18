@@ -69,7 +69,8 @@ import {
   normalizeShanghaiDateTime,
   parseShanghaiResponseDateTime,
 } from "./shanghaiTime";
-import { ApiClientError, invalidResponse, requestJson } from "./transport";
+import { ApiClientError, invalidResponse } from "./transport";
+import { requestBacktestJson as requestJson } from "./backtestRead";
 
 export type BacktestJobListQuery = NonNullable<
   paths["/api/v1/backtest-jobs"]["get"]["parameters"]["query"]

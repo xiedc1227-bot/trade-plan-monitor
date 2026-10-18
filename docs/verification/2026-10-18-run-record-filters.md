@@ -45,6 +45,8 @@ The retained run is `9050185da63d7961aa29228542fa024d127ac4d754af10e3066cbc26e09
 
 ## RF-V04 — Boundaries
 
+Follow-up: [BR-V01–BR-V04](2026-10-18-backtest-read-reliability.md) repairs ordinary read contention and preparation progress, with bounded read-only retries. The original filter-only evidence and broader limits below remain historical.
+
 Production CSP correctly blocked inline accessibility-tool injection during the first local check. It was not weakened; the isolated Chrome journey performs the accessibility audit, while the final production check verifies real controls, responses, layout and runtime errors without injection. This does not claim a production-injected accessibility audit.
 
 The whole browser suite and capacity tests were not recertified. Previously reproduced baseline navigation-abort and preparation-progress read failures remain recorded in [SC-V04](2026-10-18-compact-backtest-service.md#sc-v04--remaining-verification-limits); no audit assertion, timeout or acceptance threshold was reduced. This increment covers read-only filtering and presentation, not new AI, market evidence, trading policy or replay correctness. The [functional acceptance record](2026-10-18-backtest-functional-acceptance.md) keeps its original scope.

@@ -245,3 +245,13 @@ The UI contains stock, coverage-end dates and pin status. Following the user's f
 OpenAPI snapshot SHA-256: `a94974a7d4b7ec26239b72574d87b4a97fd3dbda353833b5a7eb7056e398d67b`
 
 Canonical monitor v2 OpenAPI snapshot SHA-256: `a3833f1fac7735528866dd2ab3a6989ce519657c45c9e044871a626d51784e7d`
+
+## U24. Reliable history reads and preparation progress (2026-10-18)
+
+Read-only metadata calls may wait for the existing owned thread: at most 8 waiting reads, each with a 5-second admission deadline. There is still at most one physical call per metadata owner. Mutations retain immediate occupied-slot rejection; heavy-job admission, thread counts, control acknowledgement, initialization watchdog and physical-drain rules are unchanged. Waiting cancellation/timeout never submits later work, and cancelling an active HTTP waiter does not release its physical thread. Completion/cleanup observes admitted readers before acquiring the metadata slot. SQL BUSY/LOCKED, overload and stopped services retain their existing 503 contracts.
+
+Backtest history and library GET transport retries only a classified `SERVICE_UNAVAILABLE` / 503, at most 3 total attempts separated by 1 second, with abortable waits. It never retries POST/PUT, other errors or invalid success payloads. Preparation polling stays separate: every 2 seconds during existing work; initial or incomplete terminal-detail reads get at most 3 additional refreshes for transient 503/revision 409. Only a complete successful summary/detail read resets that recovery count. Navigation/unmount aborts timers and stale reads. No GET repeats extraction, review, cancellation or execution.
+
+Frontend preparation validation accepts the existing optional `confirmationSummary`, `repair_feedback` and `repair_context_json`, preserving closed keys, source/revision binding and diagnostic bounds (64 feedback strings, 512 characters each; context 32000 characters). Preparation projections also enforce the frontend's existing 50000-node/32-depth budget alongside 2 MiB; adaptive detail pages return remaining complete items through `nextOffset` without truncating source evidence or raising limits. It does not create new source facts or bypass semantic review. A legacy candidate's required supplement controls remain visible even with a confirmation summary; a display-only summary cannot hide an outstanding review requirement. Preparation initialization logs distinguish watchdog expiry from failure class without recording source bodies or credentials.
+
+Public schemas, OpenAPI snapshots, hashes, stored candidates and frozen reports remain unchanged. See [BR-01–BR-03](../../../tasks/backtest-read-reliability.md) and [verification](../../verification/2026-10-18-backtest-read-reliability.md).

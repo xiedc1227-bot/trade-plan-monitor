@@ -225,6 +225,8 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 ## 历史回测
 
+历史读取对短暂竞争进行有界只读重试。准备进度接收已发布的确认／纠正详情，完成后临时读取详情失败也可恢复，不自动重发提取或审核。参见[读取可靠性验证](docs/verification/2026-10-18-backtest-read-reliability.zh-CN.md)。
+
 运行记录筛选保留股票代码、包含边界当天的回测截止日期和固定状态。筛选界面已移除数据集哈希和计划版本 ID；旧页面链接先清除这两个条件及其游标，再读取记录。内部 API 和存储标识继续用于排查。日期比较覆盖截止日，固定的结果时间排序以文字说明；回放截止时间不是程序实际完成时间。参见[筛选操作说明](docs/operations/monitor-loop-backtest.zh-CN.md#ml-o21-运行记录筛选与时间含义)和[验证记录](docs/verification/2026-10-18-run-record-filters.zh-CN.md)。
 
 正常回测页面只显示简短状态及 `服务管理`，刷新、待恢复任务查询和停止服务收进面板。中断任务或服务异常时展开，任务进度、取消和重试仍在原页面，发现任务不会自动恢复。参见[服务操作及验证](docs/verification/2026-10-18-compact-backtest-service.zh-CN.md)。

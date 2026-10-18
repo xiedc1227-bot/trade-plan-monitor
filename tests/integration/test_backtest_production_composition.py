@@ -612,6 +612,40 @@ def test_production_busy_operation_returns_conflict(tmp_path) -> None:
     assert error.retry_after_seconds is None
 
 
+def test_production_read_waits_for_overlap_without_starting_execution(tmp_path) -> None:
+    composition = create_backtest_composition_factory(
+        config_path=Path("config/app.yaml"), plan_snapshot_reader=None,
+        market_database=tmp_path / "market.sqlite3", results_database=tmp_path / "results.sqlite3",
+        cursor_key_path=tmp_path / "cursor.key",
+    )()
+    entered, release = Event(), Event()
+
+    def slow_metadata():
+        entered.set()
+        assert release.wait(2)
+
+    async def scenario():
+        service = composition.read_service
+        occupied = asyncio.create_task(service._run_sync(slow_metadata))
+        try:
+            while not entered.is_set():
+                await asyncio.sleep(0)
+            reads = [
+                asyncio.create_task(service.get_job(job_id=f"missing-{index}"))
+                for index in range(4)
+            ]
+            await asyncio.sleep(0)
+            assert not any(read.done() for read in reads)
+            release.set()
+            await occupied
+            assert await asyncio.gather(*reads) == [None] * 4
+            assert not composition.authorized_job_ids
+        finally:
+            release.set()
+            await composition.stop()
+    asyncio.run(scenario())
+
+
 def test_production_mutations_fail_closed_after_coordinator_failure(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,

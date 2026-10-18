@@ -525,10 +525,12 @@ class _ProductionBacktestService:
         await self._reservation_thread.stop()
 
     async def _run_sync[ResultT](
-        self, function: Callable[..., ResultT], /, *args: object, **kwargs: object,
+        self, function: Callable[..., ResultT], /, *args: object,
+        _read_only: bool = False, **kwargs: object,
     ) -> ResultT:
         try:
-            return await self._metadata_thread.run(function, *args, **kwargs)
+            runner = self._metadata_thread.read if _read_only else self._metadata_thread.run
+            return await runner(function, *args, **kwargs)
         except BacktestServiceUnavailable:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
         except sqlite3.OperationalError as error:
@@ -537,6 +539,11 @@ class _ProductionBacktestService:
             }:
                 raise
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+
+    async def _read_sync[ResultT](
+        self, function: Callable[..., ResultT], /, *args: object, **kwargs: object,
+    ) -> ResultT:
+        return await self._run_sync(function, *args, _read_only=True, **kwargs)
 
     async def submit_data_sync(
         self,
@@ -720,7 +727,7 @@ class _ProductionBacktestService:
                 await asyncio.gather(reservation_heartbeat, return_exceptions=True)
             if reservation is not None:
                 # A cancelled waiter cannot release admission while its owned copy still runs.
-                while self._metadata_thread.outstanding_work:
+                while self._metadata_thread.occupied:
                     await sleep(_RUN_CLAIM_POLL_SECONDS)
                 await self._run_sync(
                     self._repository.release_run_submission,
@@ -955,7 +962,7 @@ class _ProductionBacktestService:
             adjustment_policy=filters.adjustment_policy,
         )
         try:
-            page = await self._run_sync(
+            page = await self._read_sync(
                 self._datasets.list_datasets,
                 filters=domain_filters,
                 limit=limit,
@@ -976,7 +983,7 @@ class _ProductionBacktestService:
 
     async def get_dataset(self, *, dataset_hash: str) -> BacktestDatasetView | None:
         try:
-            value = await self._run_sync(self._datasets.get_dataset, dataset_hash)
+            value = await self._read_sync(self._datasets.get_dataset, dataset_hash)
         except DatasetNotFoundError:
             return None
         return _dataset_view(value)
@@ -1002,7 +1009,7 @@ class _ProductionBacktestService:
             raise RuntimeError("plan snapshot reader returned a mismatched version")
         plan = load_plan_json(snapshot.plan_json)
         try:
-            manifest = await self._run_sync(
+            manifest = await self._read_sync(
                 self._market_store.dataset_manifest,
                 dataset_hash,
             )
@@ -1057,7 +1064,7 @@ class _ProductionBacktestService:
             )
         if manifest.market_index_data_hash is None:  # pragma: no cover - manifest guard
             raise RuntimeError("v2 dataset is missing its market-index data hash")
-        _revision, bars = await self._run_sync(
+        _revision, bars = await self._read_sync(
             _read_frozen_market_index_membership,
             self._market_store,
             dataset_hash,
@@ -1104,7 +1111,7 @@ class _ProductionBacktestService:
         filter_payload = filters.canonical_payload()
         membership_sensitive = filters.status is not None or filters.dataset_hash is not None
         current_revision = (
-            await self._run_sync(self._repository.current_membership_revision)
+            await self._read_sync(self._repository.current_membership_revision)
             if membership_sensitive
             else None
         )
@@ -1123,7 +1130,7 @@ class _ProductionBacktestService:
             if cursor_state.last_seen is None:
                 raise ApiError(ApiErrorCode.VALIDATION_ERROR)
             after = _job_position(cursor_state.last_seen)
-        result = await self._run_sync(
+        result = await self._read_sync(
             self._repository.query_jobs,
             kinds=tuple(BacktestJobKind(value) for value in (filters.kind or ())),
             statuses=tuple(BacktestJobStatus(value) for value in (filters.status or ())),
@@ -1180,7 +1187,7 @@ class _ProductionBacktestService:
         )
 
     async def get_job(self, *, job_id: str) -> BacktestJobView | None:
-        value = await self._run_sync(self._repository.get, job_id)
+        value = await self._read_sync(self._repository.get, job_id)
         return None if value is None else _job_view(value)
 
     async def list_runs(
@@ -1201,7 +1208,7 @@ class _ProductionBacktestService:
             pinned=filters.pinned,
         )
         try:
-            page = await self._run_sync(
+            page = await self._read_sync(
                 self._results.list_runs,
                 filters=domain_filters,
                 limit=limit,
@@ -1219,7 +1226,7 @@ class _ProductionBacktestService:
             last_seen=None,
             snapshot=page.snapshot,
         )
-        return await self._run_sync(
+        return await self._read_sync(
             lambda: BacktestRunPage.model_validate(
                 {
                     "filters": filters.canonical_payload(),
@@ -1236,13 +1243,13 @@ class _ProductionBacktestService:
 
     async def get_run(self, *, run_id: str) -> BacktestRunView | BacktestLoopRunView | None:
         try:
-            record = await self._run_sync(self._results.get_run, run_id)
+            record = await self._read_sync(self._results.get_run, run_id)
         except BacktestResultNotFoundError:
             return None
         return await self._run_view(record)
 
     async def get_rule_changes(self, *, run_id: str, source_id: str):
-        return await self._run_sync(self._project_rule_changes, run_id, source_id)
+        return await self._read_sync(self._project_rule_changes, run_id, source_id)
 
     def _project_rule_changes(self, run_id: str, source_id: str):
         from trade_plan_monitor.web.result_rule_changes import project_rule_changes
@@ -1267,7 +1274,7 @@ class _ProductionBacktestService:
         cursor: str | None,
     ) -> BacktestFillPage:
         try:
-            page = await self._run_sync(
+            page = await self._read_sync(
                 self._results.list_fills,
                 run_id,
                 limit=limit,
@@ -1285,7 +1292,7 @@ class _ProductionBacktestService:
             high_water=high_water,
             last_seen=None,
         )
-        return await self._run_sync(
+        return await self._read_sync(
             lambda: BacktestFillPage.model_validate(
                 {
                     "filters": BacktestFillFiltersView().canonical_payload(),
@@ -1308,7 +1315,7 @@ class _ProductionBacktestService:
     ) -> BacktestDetailPage:
         domain_filters = BacktestDetailFilters(kind=BacktestDetailKind(filters.kind))
         try:
-            page = await self._run_sync(
+            page = await self._read_sync(
                 self._results.list_details,
                 run_id,
                 filters=domain_filters,
@@ -1328,7 +1335,7 @@ class _ProductionBacktestService:
             high_water=high_water,
             last_seen=None,
         )
-        return await self._run_sync(
+        return await self._read_sync(
             lambda: BacktestDetailPage.model_validate(
                 {
                     "kind": filters.kind,
@@ -1344,7 +1351,7 @@ class _ProductionBacktestService:
         )
 
     async def get_equity_series(self, *, run_id: str) -> BacktestEquitySeries:
-        return await self._run_sync(self._equity_series_view, run_id)
+        return await self._read_sync(self._equity_series_view, run_id)
 
     def _equity_series_view(self, run_id: str) -> BacktestEquitySeries:
         try:
@@ -1369,7 +1376,7 @@ class _ProductionBacktestService:
         limit: int,
     ) -> BacktestMarketIndexSeriesView:
         try:
-            record = await self._run_sync(self._results.get_run, run_id)
+            record = await self._read_sync(self._results.get_run, run_id)
         except BacktestResultNotFoundError:
             raise ApiError(ApiErrorCode.NOT_FOUND) from None
         reference = _reference_market_view(record)
@@ -1383,13 +1390,13 @@ class _ProductionBacktestService:
                     "conditionSummaries": [],
                 }
             )
-        run_input = await self._run_sync(self._result_store.get_run_input, run_id)
+        run_input = await self._read_sync(self._result_store.get_run_input, run_id)
         if run_input is None:
             raise RuntimeError("index-bearing run is missing its immutable input")
         requirement = build_backtest_index_requirement(run_input.plan_snapshot)
         if not requirement.required or requirement.binding is None:
             raise RuntimeError("stored reference-market identity contradicts the run input")
-        dataset_revision, bars = await self._run_sync(
+        dataset_revision, bars = await self._read_sync(
             _read_frozen_market_index_membership,
             self._market_store,
             run_input.dataset_hash,
@@ -1456,7 +1463,7 @@ class _ProductionBacktestService:
         export_kind: BacktestExportKind,
         cancelled: Callable[[], bool],
     ) -> PreparedBacktestExport | None:
-        record = await self._run_sync(self._result_store.get_result_run, run_id)
+        record = await self._read_sync(self._result_store.get_result_run, run_id)
         if record is None:
             return None
         if record.summary.formula_versions.get("report") in {
@@ -1492,7 +1499,7 @@ class _ProductionBacktestService:
         return _run_summary_view(record)
 
     async def _run_view(self, record: BacktestRunRecord) -> BacktestRunView | BacktestLoopRunView:
-        return await self._run_sync(self._project_run, record)
+        return await self._read_sync(self._project_run, record)
 
     def _project_run(self, record: BacktestRunRecord) -> BacktestRunView | BacktestLoopRunView:
         run_input = self._result_store.get_run_input(record.summary.run_id)

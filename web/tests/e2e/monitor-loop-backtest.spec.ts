@@ -14,6 +14,7 @@ let vite: ViteDevServer;
 let url: string;
 let temporary: string;
 let output: string;
+let preparationReads: object[];
 
 async function freePort(): Promise<number> {
   const server = createSocketServer();
@@ -27,6 +28,7 @@ async function start(mode = "retry", fail = false) {
   const webPort = await freePort(), apiPort = await freePort();
   temporary = await mkdtemp(join(tmpdir(), "monitor-loop-browser-"));
   output = "";
+  preparationReads = [];
   backend = spawn(join(root, ".venv/Scripts/python.exe"), ["-X", "utf8", "-m", "tests.integration.test_monitor_loop_production_composition",
     "--root", temporary, "--port", String(apiPort), "--web-port", String(webPort), "--mode", mode, ...(fail ? ["--fail-first"] : [])],
     { cwd: root, env: { ...process.env, PYTHONPATH: root }, windowsHide: true });
@@ -51,8 +53,15 @@ await router.push(window.location.pathname+window.location.search);await router.
   await vite.listen(); url = `http://127.0.0.1:${webPort}`;
 }
 
-test.afterEach(async () => {
+test.afterEach(async ({ page }, testInfo) => {
   try {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      const readsPath = testInfo.outputPath("preparation-reads.json");
+      await writeFile(readsPath, JSON.stringify(preparationReads, null, 2));
+      await testInfo.attach("preparation-reads", { path: readsPath, contentType: "application/json" });
+      await testInfo.attach("page-state", { body: await page.locator("body").innerText(), contentType: "text/plain" });
+      await testInfo.attach("backend-output", { body: output, contentType: "text/plain" });
+    }
     if (vite && backend && backend.exitCode === null) {
       await fetch(url + "/fixture/shutdown", { method: "POST", headers: { Origin: url } });
       await expect.poll(() => backend.exitCode, { timeout: 10000 }).toBe(0);
@@ -73,10 +82,16 @@ async function source(page: Page) {
 async function candidate(page: Page) {
   await page.getByTestId("extract-preparation").click();
   await expect(page.getByText("待审核", { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByLabel("完整原文", { exact: true })).toBeEnabled();
 }
 
 test("real upload/retry/edit/review/run journey retains original 503 intent and causal results", async ({ page }) => {
   test.setTimeout(60000); await start("retry", true);
+  page.on("response", async response => {
+    if (response.request().method() === "GET" && new URL(response.url()).pathname.startsWith("/api/v1/backtest-preparations/")) {
+      preparationReads.push({ url: response.url(), status: response.status(), headers: response.headers(), body: await response.text().catch(() => "aborted") });
+    }
+  });
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   const legacyCommand = { headers: { Origin: url, "Idempotency-Key": "legacy-original" }, data: { input: { preparation_id: "legacy-one", sources: [fixture.source] } } };
   expect((await page.request.post(url+"/api/v1/backtest-preparations",legacyCommand)).status()).toBe(503);
@@ -112,11 +127,18 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   const runId = new URL(page.url()).pathname.split("/").at(-1)!;
   const run = await (await page.request.get(url + "/api/v1/backtest-runs/" + runId)).json();
   expect(run.report.cycle.fills).toBe(fixture.expected.fills);
-  expect(run.report.final_account.cash.balance_fen).toBe(fixture.expected.cash_fen);
+  expect(run.report.final_account.cash).toEqual({ kind: "POSITION_LIMIT_ONLY" });
+  expect(run.report.metrics.paid_fees_fen).toBe(fixture.expected.paid_fees_fen);
+  // Exact source lot cost + causal buy/slippage/fees, valued at the final 40.20 mark.
+  expect(run.report.metrics.cost_pnl_fen).toBe(200 * 4020 - 401050 - 100 * 3971 - fixture.expected.paid_fees_fen);
+  expect(run.report.metrics.realized_pnl_fen).toBe(0);
+  expect(run.report.metrics.unrealized_pnl_fen).toBe(5346);
+  expect(run.report.metrics.interval_return).toBeNull();
   expect(run.report.final_inventory.total_qty).toBe(fixture.expected.inventory_qty);
   expect(run.report.boundary.evidence_cutoff).toBe(fixture.cutoff);
   expect(run.provenance.sourceRevision).toBe(2);
-  await expect(page.getByTestId("monitor-loop-summary")).toContainText("1023.96 元");
+  await expect(page.getByTestId("monitor-loop-summary")).toContainText("不限制现金");
+  await expect(page.getByTestId("backtest-profit-summary")).toContainText("+53.46 元");
   await page.getByTestId("result-tab-details").click(); await expect(page.getByTestId("monitor-loop-timeline")).toBeVisible();
   expect(await page.locator("li[data-event-id]").count()).toBe(run.report.event_count);
   await page.getByTestId("result-tab-fills").click(); await expect(page.getByRole("table")).toContainText("39.71");

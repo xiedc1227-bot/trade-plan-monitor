@@ -57,6 +57,15 @@ function receipt(body = frozenView()) {
 }
 
 describe("exact single preparation review", () => {
+  it("keeps required legacy supplement controls visible when a confirmation summary is present", async () => {
+    const value = fresh();
+    value.candidate!.confirmationSummary = { automaticFacts: ["已确定日期"], questions: [], processingIssues: [] };
+    const wrapper = preview(value);
+    expect(wrapper.findAll('[data-testid^="review-supplement-"]')).toHaveLength(fixture.choices.length);
+    await confirmPreview(wrapper);
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("review")?.[0]?.[0]).toMatchObject({ choices: fixture.choices });
+  });
   it("accepts real backend extraction and frozen projections with exact original spans", () => {
     expect(validReviewCandidate(fixture.candidate.candidate, fixture.candidate.source.text)).toBe(true);
     expect(validReviewCandidate(fixture.reviewed.candidate, fixture.reviewed.source.text)).toBe(true);
