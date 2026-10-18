@@ -8,7 +8,11 @@ from trade_plan_monitor.decision.unified_conditions import (
     requires_daily,
     requires_minutes,
 )
-from trade_plan_monitor.domain.unified_plan_models import UnifiedResetPolicy
+from trade_plan_monitor.domain.unified_plan_models import (
+    AfterRuleCompleted,
+    OncePerRule,
+    UnifiedResetPolicy,
+)
 from trade_plan_monitor.state.daily_repository import daily_hash
 
 
@@ -27,14 +31,46 @@ def confirm_signal(
     trading_calendar=(),
 ):
     daily = rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+    staged = isinstance(rule.independent_signal, OncePerRule | AfterRuleCompleted)
+    if staged and any(s["rule_id"] == rule.rule_id for s in previous):
+        return None
+    if isinstance(rule.independent_signal, AfterRuleCompleted) and not any(
+        s["rule_id"] == rule.independent_signal.prior_rule_id
+        and s["state"] == "SIMULATED"
+        and s["simulated_qty"] == s["planned_qty"]
+        for s in previous
+    ):
+        return None
     if daily and series is None or not daily and (target is None or not bars):
         return None
     day = series.bars[-1].trade_date if daily else target.date()
+    if isinstance(rule.independent_signal, AfterRuleCompleted):
+        predecessor = next(
+            s
+            for s in previous
+            if s["rule_id"] == rule.independent_signal.prior_rule_id
+            and s["state"] == "SIMULATED"
+            and s["simulated_qty"] == s["planned_qty"]
+        )
+        if not predecessor.get("execution_date") or str(day) < predecessor["execution_date"]:
+            return None
+        # Intraday fills need a known completion timestamp; never backfill an
+        # earlier bar merely because the predecessor is filled at evaluation time.
+        if not daily and str(day) == predecessor["execution_date"]:
+            completed = predecessor.get("simulated_at")
+            if completed is None or datetime.fromisoformat(completed) >= target:
+                return None
     if daily and requires_minutes(rule.condition) and (target is None or target.date() != day):
         return None
     if not daily and requires_daily(rule.condition):
-        last_official_day = next((session for session in reversed(session_dates)
-            if datetime.combine(session, time(15), target.tzinfo) <= target), None)
+        last_official_day = next(
+            (
+                session
+                for session in reversed(session_dates)
+                if datetime.combine(session, time(15), target.tzinfo) <= target
+            ),
+            None,
+        )
         if series is None or series.bars[-1].trade_date != last_official_day:
             return None
     if rule.validity.mode == "DATE_RANGE" and not (
@@ -59,7 +95,7 @@ def confirm_signal(
         price = series.bars[-1].close if daily else bars[-1].close_fen
         if not zone.contains(price):
             return None
-    old = tuple(s for s in previous if s["side"] == rule.side)
+    old = () if staged else tuple(s for s in previous if s["side"] == rule.side)
     independent = None
     if old:
         prior = old[-1]
@@ -98,6 +134,7 @@ def confirm_signal(
         },
     )
     return {
+        **({"occurrence_mode": rule.independent_signal.mode} if staged else {}),
         "signal_id": identity,
         "rule_id": rule.rule_id,
         "side": rule.side,

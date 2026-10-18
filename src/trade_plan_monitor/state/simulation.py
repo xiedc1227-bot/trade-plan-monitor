@@ -8,10 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from trade_plan_monitor.decision.unified_lifecycle import check_execution
 from trade_plan_monitor.domain.daily_plan_models import PositiveWholeQty, Qty
+from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_fulfilled
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
-from trade_plan_monitor.state.daily_state_models import DailyInventoryView
+from trade_plan_monitor.state.daily_state_models import DailyInventoryView, RiskLotAllocation
 from trade_plan_monitor.state.repositories import PlanVersionNotFoundError, RevisionConflictError
 
 
@@ -41,6 +42,8 @@ class SimulationReceipt(_SimulationValue):
     inventory_revision: Qty
     inventory: DailyInventoryView
     signal_id: str | None
+    lot_allocations: tuple[RiskLotAllocation, ...] = Field(
+        default=(), max_length=500, exclude_if=lambda v: not v)
 
 
 class SimulationAuthorityError(ValueError):
@@ -143,6 +146,8 @@ def simulate_inventory(
         for r in work.daily.list(symbol=symbol, kind="RISK")
     )
     signal_id = None
+    lot_allocations = None
+    lots = accounting.lots(symbol, now.date())
     if cause["kind"] == "SIGNAL":
         signal = cause["payload"]
         if state["data_blockers"]:
@@ -158,7 +163,7 @@ def simulate_inventory(
             quote_fen=quote.price_fen,
             evaluated_at=now,
             tradable=tradable,
-            risk_blocked=any(r["status"] in {"PENDING", "OBSERVATION", "CONFIRMED"} for r in risks),
+            risk_blocked=any(blocks_new_entry(r, now.date()) for r in risks),
             risk_known=state.get(
                 "risk_input_known",
                 state.get("daily_evidence") is not None or not plan.risk_branches,
@@ -173,11 +178,14 @@ def simulate_inventory(
         signal_id = cause["id"]
     else:
         action = risk_execution(
-            risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable
+            risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable, lots=lots
         )
         if action.get("cause_id") != cause["id"] or action["status"] != "RISK_EXIT":
             _reject("DAILY_SIMULATION_RISK_NOT_EXECUTABLE")
         quantities = {"CORE": action["core_qty"], "TACTICAL": action["tactical_qty"]}
+        lot_allocations = action.get("lot_allocations")
+        if action != state["risk_action"]:
+            _reject("DAILY_SIMULATION_RISK_NOT_EXECUTABLE")
         if any(q is None for q in quantities.values()) or not sum(quantities.values()):
             _reject("DAILY_SIMULATION_RISK_NOT_EXECUTABLE")
         quantity, side = sum(quantities.values()), "SELL"
@@ -191,6 +199,8 @@ def simulate_inventory(
         quantities=quantities,
         expected_revision=command.expected_inventory_revision,
         now=now,
+        lot_allocations=lot_allocations,
+        plan_version_id=details.id,
     )
     if signal_id is not None:
         work.daily.save(
@@ -211,8 +221,7 @@ def simulate_inventory(
     for risk in risks:
         if (
             risk["status"] == "CONFIRMED"
-            and inventory["tactical_qty"] <= risk["target_tactical_qty"]
-            and (not risk["involves_core"] or inventory["core_qty"] <= risk["target_core_qty"])
+            and risk_fulfilled(risk, inventory, accounting.lots(symbol, now.date()))
         ):
             current = work.daily.get(risk["risk_id"])
             work.daily.save(
@@ -241,6 +250,7 @@ def simulate_inventory(
         inventory_revision=position["revision"],
         inventory=DailyInventoryView.model_validate(inventory),
         signal_id=signal_id,
+        lot_allocations=tuple(RiskLotAllocation.model_validate(a) for a in lot_allocations or ()),
     )
     work.daily.save(
         identity,
@@ -261,6 +271,7 @@ def simulate_inventory(
             "inventory_revision": position["revision"],
             "inventory": inventory,
             "signal_id": signal_id,
+            **({"lot_allocations": lot_allocations} if lot_allocations else {}),
         },
     )
     return result

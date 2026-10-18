@@ -254,9 +254,14 @@ class ConfiguredAIWebLifecycle:
         secret_store = self._secret_store
         factory = self._client_factory
         slots = self._extraction_slots
-        config = binding.config.model_copy(update={"max_retries": 0})
+        config = binding.config.model_copy(update={"max_retries": 0,
+            "max_output_tokens": self._settings.backtest_max_output_tokens,
+            "timeout_seconds": self._settings.backtest_timeout_seconds})
 
-        def call(identity, source, token, *, context: PlanUpdateContext | None = None):
+        def call(
+            identity, source, token, *, context: PlanUpdateContext | None = None,
+            feedback=(), repair_context=None,
+        ):
             while not slots.acquire(timeout=0.05):
                 if token.cancelled:
                     return None
@@ -277,17 +282,22 @@ class ConfiguredAIWebLifecycle:
                         if context is not None:
                             return await extract_plan_update(
                                 request_id=identity, source=source, context=context,
-                                config=config, provider=provider,
+                                config=config, provider=provider, compact=True,
+                                feedback=feedback,
+                                repair_context=repair_context,
                             )
                         return await extract_loop_plan(
                             request_id=identity, source=source, config=config, provider=provider,
+                            compact=True,
+                            feedback=feedback,
+                            repair_context=repair_context,
                         )
 
                 return asyncio.run(extract())
             finally:
                 slots.release()
 
-        return PreparationExtractor(call, max_retries=binding.config.max_retries)
+        return PreparationExtractor(call, max_retries=binding.config.max_retries, max_repairs=2)
 
     @asynccontextmanager
     async def _extraction_slot(self):

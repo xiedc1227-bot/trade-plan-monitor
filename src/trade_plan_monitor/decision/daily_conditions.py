@@ -52,6 +52,7 @@ def evaluate_daily_condition(
     facts: tuple[dict, ...] = (),
     signal_id: str | None = None,
     macd_min_observations: int = 500,
+    evidence_model=DailyConditionEvidence,
 ) -> DailyConditionEvidence:
     """Evaluate all children; missing branches remain visible even on a decisive root."""
     raw = condition.model_dump(mode="json")
@@ -63,6 +64,7 @@ def evaluate_daily_condition(
                 facts=facts,
                 signal_id=signal_id,
                 macd_min_observations=macd_min_observations,
+                evidence_model=evidence_model,
             )
             for c in condition.conditions
         )
@@ -79,11 +81,11 @@ def evaluate_daily_condition(
             if "MISSING_INPUT" in statuses
             else otherwise
         )
-        return DailyConditionEvidence(outcome=outcome, condition=raw, children=children)
+        return evidence_model(outcome=outcome, condition=raw, children=children)
     base = {"condition": raw, "basis_id": None if series is None else series.basis_id}
 
     def missing(reason):
-        return DailyConditionEvidence(outcome="MISSING_INPUT", reason=reason, **base)
+        return evidence_model(outcome="MISSING_INPUT", reason=reason, **base)
 
     if series is None:
         return missing("PRICE_BASIS_UNVERIFIED")
@@ -107,7 +109,7 @@ def evaluate_daily_condition(
         ]
         if not matching:
             return missing("REVIEWED_FACT_REQUIRED")
-        return DailyConditionEvidence(
+        return evidence_model(
             outcome="SATISFIED",
             fact_ids=tuple(f["id"] for f in matching),
             bar_ids=(series.bars[-1].bar_id,),
@@ -219,7 +221,7 @@ def evaluate_daily_condition(
     else:
         return missing("UNSUPPORTED_DAILY_CONDITION")
     unique = {b.bar_id: b for b in used}
-    return DailyConditionEvidence(
+    return evidence_model(
         outcome="SATISFIED" if satisfied else "UNSATISFIED",
         operands=tuple(str(v) for v in operands),
         bar_ids=tuple(unique),

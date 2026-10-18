@@ -154,7 +154,8 @@ def project_loop_valuation(
     )
     blockers = []
     if cash is None:
-        blockers.append("CASH_UNKNOWN")
+        blockers.append("CAPITAL_NOT_MODELED" if account.cash.kind == 'POSITION_LIMIT_ONLY'
+                        else "CASH_UNKNOWN")
     if quantity is None:
         blockers.append("INVENTORY_UNKNOWN")
     elif quantity and price_fen is None:
@@ -188,7 +189,7 @@ class LoopEvaluation(ResearchValue):
     minute_target: LoopTimestamp | None
     inventory: DailyInventoryView
     signals: tuple[DailySignalState, ...] = Field(max_length=500)
-    risks: tuple[DailyRiskState, ...] = Field(max_length=2)
+    risks: tuple[DailyRiskState, ...] = Field(max_length=64)
     alerts: tuple[ResearchReminder, ...] = Field(max_length=10)
     risk_action: DailyRiskAction
     conditions: tuple[ResearchRuleEvidence, ...] = Field(max_length=12)
@@ -762,6 +763,24 @@ class LoopReportWriter:
         )
         self._finished = True
         return report
+
+
+def verify_published_loop_event_set(report, events) -> None:
+    """Bind read projections to an already published audit, without replaying decisions.
+
+    Publication performed full semantic verification. Exact stream bytes, ordering,
+    run identity and the verified report digest must still agree on every read.
+    Callers decode/hash-check each event before yielding it.
+    """
+    digest = sha256(_event_set_domain(isinstance(report, ScheduledMonitorLoopReport)))
+    count = 0
+    for event in events:
+        count += 1
+        if event.sequence != count or event.run_id != report.run_id:
+            raise ValueError("published loop diagnostic event identity mismatch")
+        _digest_event(digest, event)
+    if count != report.event_count or digest.hexdigest() != report.event_set_hash:
+        raise ValueError("published loop diagnostic event set mismatch")
 
 
 def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEvent]) -> None:

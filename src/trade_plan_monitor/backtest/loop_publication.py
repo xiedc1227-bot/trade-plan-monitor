@@ -370,13 +370,16 @@ def _verify_settlement(before, receipt, costs):
             if expected_pnl is None or released is None
             else expected_pnl + cash_delta - released
         )
+    cash_continues = (
+        before.cash.kind == after.cash.kind == 'POSITION_LIMIT_ONLY'
+        or before.cash.kind == after.cash.kind == 'KNOWN'
+        and after.cash.balance_fen == before.cash.balance_fen + cash_delta
+    )
     if (
         receipt.costs != costs
-        or before.cash.kind != "KNOWN"
-        or after.cash.kind != "KNOWN"
+        or not cash_continues
         or after.revision != before.revision + 1
         or after.inventory_known != before.inventory_known
-        or after.cash.balance_fen != before.cash.balance_fen + cash_delta
         or after.paid_fees_fen != before.paid_fees_fen + settlement.total_fees_fen
         or new_quantity != old_quantity + (settlement.quantity if buy else -settlement.quantity)
         or after.realized_pnl_fen != expected_pnl

@@ -18,6 +18,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
     WholeQty,
 )
 from trade_plan_monitor.domain.daily_scope import require_technical_text
+from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
 from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime
@@ -87,6 +88,7 @@ class DailyFactState(DailyValue):
 
 
 class DailySignalState(DailyValue):
+    occurrence_mode: Literal["ONCE_PER_RULE", "AFTER_RULE_COMPLETED"] | None = None
     signal_id: str
     rule_id: str
     side: Literal["BUY", "SELL"]
@@ -171,6 +173,8 @@ class DailyRiskState(DailyValue):
     consumed_evidence_ids: tuple[str, ...] = ()
     fulfilled_at: ShanghaiDatetime | None = None
     technical_evidence: tuple[UnifiedConditionEvidence, ...] = ()
+    rule_id: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    holding_scope: RiskHoldingScope | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def branch(self):
@@ -205,12 +209,19 @@ class DailyObsoleteRisk(DailyValue):
     scope_evidence: str = Field(max_length=2000)
 
 
+class RiskLotAllocation(DailyValue):
+    id: str
+    bucket: Literal["CORE", "TACTICAL"]
+    quantity: PositiveWholeQty
+
+
 class DailySimulationBatch(DailyValue):
     id: str
     bucket: Literal["CORE", "TACTICAL"]
     quantity: PositiveWholeQty
     acquired_trade_date: date
     baseline: bool = Field(strict=True)
+    plan_version_id: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class DailyOpeningSimulationBatch(DailyValue):
@@ -258,6 +269,8 @@ class DailySimulationState(DailyValue):
     inventory_revision: Qty
     inventory: DailyInventoryView
     signal_id: str | None
+    lot_allocations: tuple[RiskLotAllocation, ...] = Field(
+        default=(), max_length=500, exclude_if=lambda v: not v)
 
 
 class DailyReviewBinding(DailyValue):
@@ -383,6 +396,8 @@ class DailyRiskAction(DailyValue):
     target_core_qty: WholeQty | None = None
     target_tactical_qty: WholeQty | None = None
     blockers: tuple[str, ...]
+    lot_allocations: tuple[RiskLotAllocation, ...] = Field(
+        default=(), max_length=500, exclude_if=lambda v: not v)
 
 
 class DailyFactRevision(DailyValue):
@@ -414,7 +429,7 @@ class DailyEvaluationState(DailyValue):
     fact_revisions: tuple[DailyFactRevision, ...]
     signals: tuple[DailySignalState, ...] = Field(max_length=500)
     alerts: tuple[DailyRuleReminderState, ...] = Field(default=(), max_length=10)
-    risks: tuple[DailyRiskState, ...] = Field(max_length=2)
+    risks: tuple[DailyRiskState, ...] = Field(max_length=64)
     risk_action: DailyRiskAction
     risk_input_known: bool | None = None
     data_blockers: tuple[str, ...]

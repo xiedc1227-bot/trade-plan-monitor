@@ -29,7 +29,8 @@ class DailyRepository:
     def lock_symbol(self, symbol):
         """Acquire SQLite's write transaction without touching shared actual inventory."""
         self.session.execute(
-            update(DailyRecord).where(DailyRecord.symbol == symbol)
+            update(DailyRecord)
+            .where(DailyRecord.symbol == symbol)
             .values(revision=DailyRecord.revision)
         )
 
@@ -72,7 +73,12 @@ class DailyRepository:
         latest = {}
         for row in self.iter_records(symbol=symbol, kind="SIGNAL"):
             signal = row["payload"]
-            latest[signal["side"]] = row
+            key = (
+                (signal["side"], signal["rule_id"])
+                if signal.get("occurrence_mode")
+                else signal["side"]
+            )
+            latest[key] = row
             if signal["state"] in {"CONFIRMED", "READY"}:
                 current[row["id"]] = row
         current.update((row["id"], row) for row in latest.values())

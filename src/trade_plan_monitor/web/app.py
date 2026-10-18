@@ -60,6 +60,7 @@ from trade_plan_monitor.web.routers.manual_event_risk import ManualEventRiskOper
 from trade_plan_monitor.web.routers.manual_event_risk import router as manual_event_risk_router
 from trade_plan_monitor.web.routers.market_indexes import MarketIndexReadService
 from trade_plan_monitor.web.routers.market_indexes import router as market_indexes_router
+from trade_plan_monitor.web.routers.plan_library import router as plan_library_router
 from trade_plan_monitor.web.routers.plans import PlanOperationService
 from trade_plan_monitor.web.routers.plans import router as plans_router
 from trade_plan_monitor.web.routers.positions import PositionOperationService
@@ -103,8 +104,10 @@ async def _prepare_backtest_request(request: Request) -> None:
 
     if not request.url.path.startswith("/api/v1/backtest-"):
         return
-    preparation_request = request.url.path.startswith("/api/v1/backtest-preparations")
-    if preparation_request:
+    preparation_request = request.url.path.startswith((
+        "/api/v1/backtest-preparations", "/api/v1/backtest-plan-library",
+    ))
+    if request.url.path.startswith("/api/v1/backtest-preparations"):
         require_preparation_request(request)
     manager = getattr(request.app.state, "backtest_lifecycle", None)
     if manager is None:
@@ -401,6 +404,7 @@ def create_app(
     for backtest_router in (
         backtest_data_router, backtest_jobs_router, backtest_runs_router,
         backtest_results_router, backtest_exports_router, backtest_preparations_router,
+        plan_library_router,
     ):
         app.include_router(backtest_router, dependencies=[Depends(_prepare_backtest_request)])
     if static_files is not None:

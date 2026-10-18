@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from trade_plan_monitor.decision.daily_conditions import compare
 from trade_plan_monitor.decision.daily_lifecycle import next_session
+from trade_plan_monitor.domain.risk_scope import risk_identity, scope_contains, scoped_inventory
 
 
 def _condition_evidence_ids(evidence):
@@ -31,9 +32,9 @@ def advance_daily_risks(
     severe_evidence=None,
 ):
     results = []
-    by_kind = {r["kind"]: r for r in previous}
+    by_kind = {risk_identity(r): r for r in previous}
     for branch in sorted(plan.risk_branches, key=lambda b: b.priority):
-        old = by_kind.get(branch.kind)
+        old = by_kind.get(risk_identity(branch))
         cutover_at = (
             None
             if old is None or old.get("cause_cutover_at") is None
@@ -66,6 +67,10 @@ def advance_daily_risks(
                 "blockers": [],
             }
         )
+        if getattr(branch, "rule_id", None) is not None:
+            state["rule_id"] = branch.rule_id
+        if getattr(branch, "holding_scope", None) is not None:
+            state["holding_scope"] = branch.holding_scope.model_dump(mode="json")
         if old is not None:
             for field in (
                 "reassessment_id",
@@ -116,16 +121,18 @@ def advance_daily_risks(
                 for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION")
             ]
             quantitative = hasattr(branch, "condition")
-            confirmed = (severe_evidence is not None and severe_evidence.outcome == "SATISFIED"
+            evidence = (severe_evidence.get(risk_identity(branch))
+                if isinstance(severe_evidence, dict) else severe_evidence)
+            confirmed = (evidence is not None and evidence.outcome == "SATISFIED"
                 if quantitative else all(found))
             if confirmed:
                 execution = next_session(close_date, session_dates)
                 state.update(
                     status="CONFIRMED",
                     confirmed_trade_date=str(close_date),
-                    evidence_ids=(_condition_evidence_ids(severe_evidence)
+                    evidence_ids=(_condition_evidence_ids(evidence)
                         if quantitative else [f["id"] for f in found]),
-                    **({"technical_evidence": [severe_evidence.model_dump(mode="json")]}
+                    **({"technical_evidence": [evidence.model_dump(mode="json")]}
                         if quantitative else {}),
                     earliest_execution_date=None if execution is None else str(execution),
                 )
@@ -134,8 +141,10 @@ def advance_daily_risks(
         elif (
             branch.kind == "ORDINARY_TECHNICAL" and close_date is not None and close_fen is not None
         ):
-            line = state.get("risk_line_fen", plan.levels.risk_line_fen)
-            op = state.get("risk_comparison", plan.levels.risk_comparison)
+            line = state.get("risk_line_fen", getattr(branch, "risk_line_fen", None)
+                or plan.levels.risk_line_fen)
+            op = state.get("risk_comparison", getattr(branch, "risk_comparison", None)
+                or plan.levels.risk_comparison)
             below = compare(Decimal(close_fen), op, Decimal(line))
             if state.get("basis_id", basis_id) != basis_id:
                 state["blockers"] = ["PERSISTED_RISK_BASIS_EQUIVALENCE_REQUIRED"]
@@ -199,7 +208,7 @@ def advance_daily_risks(
     return tuple(results)
 
 
-def risk_execution(risks, *, plan, inventory, evaluated_at, tradable):
+def risk_execution(risks, *, plan, inventory, evaluated_at, tradable, lots=None):
     """Combine targets by minimum retained amount; never weaken a latched obligation."""
     confirmed = [r for r in risks if r["status"] == "CONFIRMED"]
     eligible = [
@@ -217,6 +226,8 @@ def risk_execution(risks, *, plan, inventory, evaluated_at, tradable):
             "unavailable_tactical_qty": 0,
             "blockers": [],
         }
+    if any(r.get("holding_scope") is not None for r in eligible):
+        return _cohort_execution(eligible, inventory, lots, tradable)
     result = {
         "status": "RISK_EXIT",
         "branch": min(eligible, key=lambda r: r["priority"])["kind"],
@@ -246,4 +257,60 @@ def risk_execution(risks, *, plan, inventory, evaluated_at, tradable):
         result["blockers"].append("WAIT_FOR_CERTIFIED_TRADABILITY")
     if any(inventory.get("sellable_" + b) is None for b in ("core", "tactical")):
         result["blockers"].append("SELLABLE_QUANTITY_UNKNOWN")
+    return result
+
+
+def _cohort_execution(eligible, inventory, lots, tradable):
+    """Allocate obligations to exact lots; excluded shares cannot substitute."""
+    cause = min(eligible, key=lambda r: r["priority"])
+    result = dict(status="RISK_EXIT", branch=cause["kind"],
+        cause_id=cause.get("risk_id"), cause_revision=cause.get("revision"),
+        blockers=[], lot_allocations=[])
+    lots = () if lots is None else lots
+    if not inventory["known"]:
+        result["blockers"].append("POSITION_UNKNOWN_RISK_REMAINS_CONFIRMED")
+    if not tradable:
+        result["blockers"].append("WAIT_FOR_CERTIFIED_TRADABILITY")
+    for bucket in ("core", "tactical"):
+        own = [lot for lot in lots if lot["bucket"] == bucket.upper()]
+        affected = [r for r in eligible if bucket != "core" or r["involves_core"]]
+        views = [(r, scoped_inventory(r, inventory, lots)) for r in affected]
+        valid = (inventory["known"]
+            and sum(lot["quantity"] for lot in own) == inventory[bucket + "_qty"]
+            and all(view[bucket + "_qty"] is not None for _, view in views))
+        if not valid:
+            result[bucket + "_qty"] = result["unavailable_" + bucket + "_qty"] = None
+            result["blockers"].append("RISK_COHORT_UNVERIFIED")
+            continue
+        required = {lot["id"]: 0 for lot in own}
+        # Narrow scopes reserve their necessary exits before wider obligations;
+        # already allocated shares satisfy every overlapping obligation.
+        views.sort(key=lambda pair: (pair[1][bucket + "_qty"], pair[0]["priority"]))
+        ordered = sorted(own, key=lambda lot: (bool(lot.get("sellable_quantity")),
+            lot.get("acquired_trade_date") or "", lot["id"]), reverse=True)
+        for risk, view in views:
+            selected = [lot for lot in ordered if scope_contains(risk.get("holding_scope"), lot)]
+            needed = max(0, view[bucket + "_qty"] - risk["target_" + bucket + "_qty"]
+                - sum(required[lot["id"]] for lot in selected))
+            for lot in selected:
+                take = min(needed, lot["quantity"] - required[lot["id"]])
+                required[lot["id"]] += take
+                needed -= take
+        unknown = any(required[lot["id"]] and lot.get("sellable_quantity") is None
+                      for lot in own)
+        executable = 0
+        for lot in own:
+            available = lot.get("sellable_quantity")
+            debit = (min(required[lot["id"]], available or 0) // 100) * 100 if tradable else 0
+            if debit and not unknown:
+                result["lot_allocations"].append(dict(id=lot["id"], bucket=lot["bucket"],
+                    quantity=debit))
+                executable += debit
+        result[bucket + "_qty"] = None if unknown else executable
+        result["unavailable_" + bucket + "_qty"] = (
+            None if unknown else sum(required.values()) - executable)
+        result["target_" + bucket + "_qty"] = inventory[bucket + "_qty"] - sum(required.values())
+        if unknown:
+            result["blockers"].append("SELLABLE_QUANTITY_UNKNOWN")
+    result["blockers"] = list(dict.fromkeys(result["blockers"]))
     return result

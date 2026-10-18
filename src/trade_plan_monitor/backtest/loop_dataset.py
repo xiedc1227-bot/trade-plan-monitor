@@ -17,6 +17,7 @@ from trade_plan_monitor.backtest.control import (
     report_progress,
     validate_operation_controls,
 )
+from trade_plan_monitor.backtest.daily_basis import HistoricalAdjustmentFactor, factors_for_request
 from trade_plan_monitor.backtest.dataset import (
     DatasetItem,
     DatasetScope,
@@ -176,6 +177,9 @@ class LoopDatasetManifest(ResearchValue):
     requirements: LoopDatasetRequirements
     days: tuple[LoopDaySelection, ...]
     warmup_blockers: tuple[str, ...] = ()
+    adjustment_factors: tuple[HistoricalAdjustmentFactor, ...] = Field(
+        default=(), max_length=2500, exclude_if=lambda value: not value,
+    )
 
     @classmethod
     def build(cls, **values) -> Self:
@@ -265,6 +269,14 @@ class LoopDatasetManifest(ResearchValue):
             count += len(day.minutes) + len(day.daily) + len(day.limits)
         if count > MAX_LOOP_RECORDS:
             raise ValueError("LOOP_EVIDENCE_RECORD_LIMIT_EXCEEDED")
+        factor_dates = tuple(value.trade_date for value in self.adjustment_factors)
+        if factor_dates != tuple(sorted(set(factor_dates))) or any(
+            value.symbol != self.scope.symbols[0]
+            or not self.scope.warmup_start <= value.trade_date <= self.scope.end
+            or value.available_at > self.boundary.evidence_cutoff
+            for value in self.adjustment_factors
+        ):
+            raise ValueError('loop daily basis must bind the symbol, scope and cutoff')
         identity = self.model_dump(mode="python", exclude={"dataset_hash"})
         expected_hash = sha256(
             (self.schema_version + "\0" + canonical_json(identity)).encode()
@@ -291,6 +303,9 @@ class ScheduledLoopDatasetManifest(ResearchValue):
     requirements: LoopDatasetRequirements
     days: tuple[LoopDaySelection, ...]
     warmup_blockers: tuple[str, ...] = ()
+    adjustment_factors: tuple[HistoricalAdjustmentFactor, ...] = Field(
+        default=(), max_length=2500, exclude_if=lambda value: not value,
+    )
 
     @classmethod
     def build(cls, **values):
@@ -381,7 +396,8 @@ def _available_minute_warmup(days, at):
 
 
 def select_loop_dataset(
-    connection, request: LoopDatasetRequest, *, cancellation_token=None, progress_callback=None
+    connection, request: LoopDatasetRequest, *, cancellation_token=None, progress_callback=None,
+    adjustment_factors=(),
 ):
     """Read a stable caller-owned SQLite snapshot; do not publish or mutate it."""
     import json
@@ -624,6 +640,7 @@ def select_loop_dataset(
         requirements=requirements,
         days=tuple(days),
         warmup_blockers=warmup_blockers,
+        **({'adjustment_factors': adjustment_factors} if adjustment_factors else {}),
     )
     return LoopDatasetFreezeResult(ready=True, manifest=manifest, blockers=())
 
@@ -691,7 +708,8 @@ def freeze_scheduled_loop_dataset(
     with market_store._connect() as connection:
         connection.execute("BEGIN")
         result = select_loop_dataset(connection, request, cancellation_token=cancellation_token,
-                                     progress_callback=progress_callback)
+                                     progress_callback=progress_callback,
+                                     adjustment_factors=factors_for_request(market_store, request))
         check_cancelled(cancellation_token, "FREEZE_VERIFY")
         connection.commit()
     return result

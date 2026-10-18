@@ -123,3 +123,113 @@ OpenAPI 快照 SHA-256：`7fc0340a8b2a07414f09dc09f2fd894f4be6aeb3aa4401323cea8c
 RP-T01–RP-T20 及 RP-C01–RP-C07 已依据 RP05-A03 完成。原 ML-A07、ML-A11、ML-A13 和 ML-A16–ML-A18 仍是有效验收，并通过已记录离线检查。一个有序原文集合串行提取、整链审核并提交一次；每日替换／延续使用一个连续账户和一份结果。后续账户陈述不能覆盖账本。精确字面原文审核及首日期初时点修复保留已审核证据边界和原服务端权限。
 
 [操作指南](../../operations/monitor-loop-backtest.zh-CN.md)与[验证报告](../../verification/monitor-loop-backtest.zh-CN.md) RP-V19/RP-V20 记录真实 Chrome 业务／重试／编辑／互斥、完整权益、兼容／故障测试及未降低的 600/600 秒负载门槛，并区分合成 AI／行情输入、实测同进程边界与真实供应商或最大容量认证。U09/U10/U11 保留历史范围；U11 四个批准哈希保持精确一致，两套生成契约均通过。本收尾不改变公开 API 形状或批准身份，不进行生产迁移／部署，也不授权新平台范围。修改为本地提交，本轮不推送。
+
+## U13. 已授权的单份计划库契约（2026-10-16）
+
+用户明确要求一次准备一份、组合已审核计划，因此授权两个监控配置中的以下具体路径：`GET /api/v1/backtest-plan-library`、`POST /api/v1/backtest-plan-library/preparations`、`POST /api/v1/backtest-plan-library/compositions`。保留准确路径白名单和现有公开错误结构。不修改监控启用契约。
+
+创建请求为 `SingleSourcePreparationInput`（`preparation_id`、一份 `source`、可选准确 `reviewed_base`）。组合接受 `PreparedPlanCompositionInput`（`preparation_id`、1–256 个不重复 `plans` 引用）。两类写入均要求来源／幂等保护并返回 201。计划库读取使用 `offset`、`limit`（1–100）和 `no-store`，返回已审核身份、哈希、来源 ID、生效日期、代码／名称、前序引用和审核时间。集合进度增加 `workflow`、`editableSourceId` 及可选 `baseAccount`。保存时来源日期仍可选；提取前执行生效日期预检。审核和回测路由保留原有版本契约。
+
+时间顺序、不可变前序证据、审核、组合及连续账户权限均由服务端负责。原始写入回执可准确幂等重放。已确认行为、边界和验证见 ML21、SP01–SP05。中英文版本描述相同字段和路径。
+
+OpenAPI 快照 SHA-256：`dfdf2e1a1d33cc1f7023720c814b03ce8e8b982f6bb42ec8faeb79abfb2957be`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`c436a671a1734240fce9c4c758d366afb50e4e0f16e4b218117ff288a9ce41fb`
+
+## U14. 原文确认契约（2026-10-16）
+
+用户授权修复来源支持的信息并集中确认。新增可选 `confirmationSummary` 投影（`automaticFacts`、`questions`、`processingIssues`）、`CONTEXT` 分类、待审核 `SOURCE_INTERPRETATION`、可为空的停用区间及固定价格引用日期、分笔信号顺序。旧版格式保持原编解码，不推定审核或执行授权。参见 [SC-01–SC-03](../../../tasks/source-confirmations.zh-CN.md) 及验证报告。
+
+OpenAPI 快照 SHA-256：`2d1a16ef1d13d3112abc4c3635f033ee8377c782c0c3679b97f8330b3f0a94e3`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`34d509fab8aa647e3404f74060d721c2cf0a2267bd6fc70738e3fa6e29b9bded`
+
+## U15. 统一准备与规则变更（2026-10-16）
+
+用户授权移除完整／修改类型选项。准备下一份默认关联刚审核的前序；新页面可默认关联单一标的、最新生效日唯一的版本，计划库存在歧义时才需选择。仍可明确开始新计划链。沿用可选的 `reviewed_base` 固定准确的不可变前序，API 路径和模式不变。
+
+审核展示 `RETAIN`、`MODIFY`、`ADD`、`REVOKE` 及前后值和依据。具备来源绑定的重述可以确认变更，无需原文包含内部规则编号。未提及的每个策略字段必须具有明确继承范围，或由当前有效依据重述相同值，或属于相同的固定产品常量，否则继承仍待确认。取消必须唯一对应前序规则，不能从未提及推断。同一 compact-wire 操作重复出现时合并依据，冲突动作仍报错。账户上下文只有在没有事实、依赖和额外键时才能将空对象视为 null。已表达的未核验条件仍保持未核验；描述这些条件或停用区间的提示不会单独阻止审核。
+
+仅现金未知不再使已审核策略失去后续提取资格。来源／候选哈希、原始证据、整体审核和连续账户规则仍为权威。参见 [UP01–UP03](../../../tasks/unified-preparation.zh-CN.md) 和[验证报告](../../verification/2026-10-16-unified-preparation.zh-CN.md)。
+
+## U16. 仅按仓位约束的研究资金模式与日线依据（2026-10-17）
+
+OpenAPI 快照 SHA-256：`de10c595c26c0ae375e3d895f28ba2b2cab8e929dba412de4aa005d1efd0f7fa`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`07d2b38c4eda309f402fa7540b944aaf7c92e08e2953ea082089efcb9e20763d`
+
+用户明确要求取消期初现金要求。新原文审核在原现金判别字段中使用 `PositionLimitFunding`，`kind: POSITION_LIMIT_ONLY`，不增加接口或资金模式选择控件。历史 `KNOWN`、`UNKNOWN` 输入及其来源证据校验仍按原语义读取。新买入仍严格执行计划授权、最大持仓、T+1 和数量规则。费用／成本及成交盈亏连续保留，不计算本金收益率／净值回撤。冻结回放数据集可选嵌入有界复权因子依据；省略时保留旧哈希。参见[操作指南 ML-O14](../../operations/monitor-loop-backtest.zh-CN.md)及[验证记录](../../verification/2026-10-17-daily-basis.zh-CN.md)。
+
+## U17. 原文明确的先行收盘条件（2026-10-17）
+
+用户要求分析零成交并自动处理原文明确信息，授权增量添加 Schema 5 条件 `DailyPriorClose`（`type: DAILY_PRIOR_CLOSE`、`since_date`、`price_fen`、`comparator: GT | GTE`）。不修改接口路径。仅从 `since_date` 当日开始、更早交易日的完整收盘可满足先行条件；最新日线所属交易日用于后续判断，不能同时证明两个阶段。必须有已准入的价格基准和历史依据。历史缺失或截断保持 `MISSING_INPUT`；完整窗口内没有合格先行收盘则为 `UNSATISFIED`，原因 `PRIOR_CLOSE_NOT_SATISFIED`。
+
+自动规范化要求原文明确唯一的收复门槛、先收复再回踩的顺序、尚未收复的现状，以及已确认生效日。该日期作为准备元数据界定新的收复窗口；未修改的继承规则保留原窗口。收复条款和回踩条款均绑定原文证据；不为回踩、蜡烛形态、量能和相对指数描述补造数值阈值。已知不满足的前置条件决定 `ALL` 结果时，未知子条件仍可见。审核把已知前提展示为自动处理事实，业务问题仅保留待明确口径。已审核版本和结果保持不可变，采用新表达需要重新提取、审核和回测。
+
+请求压缩移除重复的 schema 标题和判别注解，保留联合类型约束、原文、字面值及服务器校验。两份生成契约及 TypeScript 类型均包含新条件。验证另见 [ZF-V01–ZF-V04](../../verification/2026-10-17-zero-fill-audit.zh-CN.md)。
+
+OpenAPI 快照 SHA-256：`fb3f08ff3826ae1d07be99c994565bea70d1667344280b966afe5579b9845df5`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`172d21503bca7283c5a6eea6d0279770187c0c16e43317854e0ed0ba828e41ba`
+
+## U18. 逐份计划结果诊断（2026-10-17）
+
+用户的结果页需求授权在已有 `BacktestLoopRunView`、`BacktestScheduledRunView` 中增加可选 `planDiagnostics: LoopDiagnostics | null`；接口路径、冻结报告格式、报告哈希及执行行为不变。诊断内部字段沿用原生 snake_case。`availability` 为 `AVAILABLE | EXPIRED | UNAVAILABLE`；`plans` 按冻结顺序包含 1–256 份身份。每份包含来源／版本／生效日、买入规则及成交／评估数量、根条件结果统计、`review_status: PASSED`、分类、示例和抽样标识。保留的审计明细不可用时，逐份成交数为 null，不补造成零。
+
+示例将审计序号／时间及根条件结果，与要求、实际依据和原因绑定。分类区分 `MARKET_UNMET`、`QUALITATIVE_UNRESOLVED`、`PROCESSING_ERROR`、`DATA_UNAVAILABLE`、`EXECUTION_BLOCKED`、`NO_BUY_RULE`、`NO_EVALUATION`、`CONDITION_MET`。每份最多八条示例，总计最多 256 条；统计所有保留评估，合并按日重复条件，示例排除旧日线的重复延续。十进制价格保留不足一分的精度。先行收盘要求旁的当前行情价明确标注，不得当作合格先行收盘。`ANY` 已有备选满足时，不把未采用分支的未知条件展示成阻断。
+
+在同一只读事务内读取结果持有的不可变输入和保留审计，校验记录／事件身份和已发布完整事件流摘要后返回有界投影；发布阶段的语义校验保持权威。失败／未审核准备记录不属于已完成回测，不能将其缺席诊断为当前提取失败。明细缺失时明确返回可用性。读取诊断不调用 AI、不修改策略、不要求手工确认、不新建回测。原生视图校验版本、来源日期和成交总数绑定；前端也支持合法 `POSITION_LIMIT_ONLY` 及独立审核计划库成员的 null `baseHash`，非空前序关联校验保留。参见 [RD01–RD03](../../../tasks/result-plan-diagnostics.zh-CN.md)。
+
+OpenAPI 快照 SHA-256：`4875f2c9c4404909ea78e285bccb0d92896675e0ad5dc7554acfdf3931f016d2`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`1a38659bbb064a60c9c604089d2b8479d0f51bda1eff8bed36da11662a67786d`
+
+## U19. 通用前序继承与有界纠正（2026-10-17）
+
+用户的通用流程请求授权有版本的 `PREDECESSOR_PATCH` 解释：准确的已审核前序默认提供全部未提及规则和字段。仅对新增量候选替代 U15 的明确保留要求；历史冻结输入保留原解释。引用原文的语义变化按稳定身份表达 `RETAIN`、`MODIFY`、`ADD`、`REVOKE`，不增加接口或自动审核权限。
+
+增量可选元信息包括操作的 `intent`／`rationale`、条款的 `semantic_role`、`SOURCE_SEMANTIC` 绑定及准备解释契约。每次失败的准备调用可保留最多 64 条、每条最多 512 字符的 `repair_feedback`，以及最多 32000 字符的 `repair_context_json`。最多两次自动纠正与原三次调用上限共享预算；每次仍绑定原文、前序和工作进程占用。诊断描述处理错误。真实原文歧义仍是业务问题，未提及的未变规则无需确认。前次未审核候选仍是不可信纠正上下文，不能自行批准。
+
+内部 AI 传输现请求 `monitor-loop-delta-wire-v3`，包含执行授权和时间先后结构检查，不增加公开接口。候选存储使用无损 `source-clause-pool-v2` 证据／路径去重，限制展开体积并兼容历史读取；公开格式及下方哈希不变。明确撤销的规则在最终数量校验及证据索引解析前移除。
+
+两套生成接口及前端契约均反映这些增量内容。此处记录契约范围，不代表真实模型验收通过或已部署。参见 [GI-01–GI-02](../../../tasks/generic-plan-inheritance.zh-CN.md) 和[验证记录](../../verification/2026-10-17-generic-inheritance.zh-CN.md)。
+
+OpenAPI 快照 SHA-256：`f0a049aaacea9bf5d9371bc6402c5954cd8bb4c83097cf9aa18d55e63432d0c8`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`bfeab749334df8adbd2324be09ab2b3e1153d3b8d6928c53928f06a49e9f44b1`
+
+
+## U20 — 冻结结果规则对照
+
+已完成的连续回测提供只读、单份响应 `GET /api/v1/backtest-runs/{run_id}/rule-changes/{source_id}`。`BacktestRuleChangesView` 绑定 `runId`、`manifestHash`、`sourceId`、`versionId`、`previousSourceId` 和 `previousVersionId`；`relationship` 为 `INITIAL`、`INHERITED` 或 `INDEPENDENT`。`changes` 最多包含 64 项 `PlanChange`，提供完整 `before`／`after` 值及 `RETAIN`／`MODIFY`／`ADD`／`REVOKE` 分类。比较最终冻结的政策区块和稳定规则标识（风险分支使用 kind），忽略计划身份字段及列表重排。不重新解读原文，也不依赖纠正前已过期的变更清单。旧独立版本比较相邻政策，但不宣称审核继承。运行、原文不存在或不支持的单计划运行返回 404。
+
+结果界面一次加载一份，校验运行／清单／版本／前序标识，拒绝过期响应，并提供明确重试。显示所有分类和完整字段，区分修改规则中的未变化字段，将整数分值和固定 FEN 参照换算为元。现有结果汇总大小边界及冻结报告身份不变。不调用 AI、不回放、不迁移数据库、不新增交易授权。验收及双语验证遵循 `tasks/result-rule-comparisons.zh-CN.md`。
+
+OpenAPI 快照 SHA-256：`cbc73be169c2f0a9b2758f8f93655813a6b8d17279a1340457ac30a4a320ae38`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`6dd7e9edf672b427782a9714e86e5bf364d50381a85b1963301914639a2b5f2c`
+
+
+## U21 — 风险取消的适用范围
+
+本次原文复核授权为 `PlanUpdateOperation` 增加可选 `scope_assessment`：`ENTIRE_RULE | PARTIAL_RULE | CONTEXT_ONLY | UNCLEAR`。旧序列化未提供时继续省略。新的私有 `monitor-loop-delta-wire-v4` 要求逐条判断前序风险分支的适用范围；缺少判断属于次数受限的 AI 自动纠正，不是原文缺失问题。携带适用范围的保留操作不能在背景归一化时丢失。整体取消需要整条规则的授权，排除新仓不等于删除所有持仓的保护。当部分范围无法表达时，在不可执行候选中保留前序风险／价格证据。`UPDATE_PARTIAL_SCOPE_UNSUPPORTED` 表示系统执行能力限制，不是需要手工补填的事实，也不授权不加限制地执行继承退出。
+
+历史冻结读取保留原哈希。新计划库前序／组合使用重新校验，旧范围问题返回 `REVIEWED_RISK_SCOPE_RECHECK_REQUIRED`。仅已审核记录可请求历史校验。本次不增加端点或按持仓范围执行的引擎。参见 [RW-01–RW-03](../../../tasks/risk-withdrawal-scope.zh-CN.md) 和[原文核对](../../verification/2026-10-17-risk-scope-audit.zh-CN.md)。
+
+OpenAPI 快照 SHA-256：`ddeb1af3aec464d7ac62410df7b3fba991994626555c12b8eb104897d474fe28`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`dff005b984e4c76406c7529306f7fbb88f3bd75a17036cbf2966dc1f6725c891`
+
+## U22. 按持仓批次执行风险退出（2026-10-18）
+
+用户授权补齐 U21 记录的范围执行边界。Schema 5 风险分支增加可选 `holding_scope`（`mode: BEFORE_TRADE_DATE | FROM_TRADE_DATE`、`trade_date`、可选且不包含该日的 `end_trade_date`）、稳定 `rule_id`，以及普通风险成对的 `risk_line_fen` / `risk_comparison`。最多支持 64 个不同风险标识。Schema 4 契约不变；可选字段缺省时保留历史序列化。后续限制取持仓日期窗口的交集，不能悄悄扩大继承保护的范围。
+
+原文明示排除新仓时，转换为有原文证据的适用范围修改，保留前序价格、目标、确认及停牌政策。未提到旧仓指令时继承已审核前序。`scope_change: EXISTING_POSITIONS_ONLY | NEW_POSITIONS_ONLY` 为可选操作元数据。私有 `monitor-loop-delta-wire-v5` 和次数受限的专项范围纠正区分新旧仓适用性与整条规则取消。缺少方向属于自动处理的提取纠正；真正的原文歧义单独保留。不要求用户手工确认以弥补引擎限制。不为新仓编造止损。
+
+风险判断、买入阻断及义务完成只针对适用持仓。初始持仓可以通过更早的期初观察时间归类，不编造买入日期。新模拟批次及回测批次可选记录 `plan_version_id`。风险动作、模拟状态及回执可选保留 `lot_allocations`（`id`、`bucket`、`quantity`），沿用最多 500 批次的边界。执行时原子重算授权分配，遵守 T+1 和已知可卖数量，扣减准确批次并释放对应实际成本。旧批次不可卖时不能改卖被排除的新仓。计划切换保留已锁定确认；适用持仓退出后，即使还有其他持仓，该义务也正常完成。
+
+既有 API 路径提供这些增量字段；不增加端点或交易审批。结果页在完整规则对照旁展示适用范围及实际退出批次。完整对照边界为 192 项，覆盖最多 64 个风险分支中新旧标识互不相同及政策区块的情况；变更提案仍最多 64 个操作。历史冻结结果保持原样；修改后的已审核政策产生新的输入／运行身份。参见 [CR-01–CR-03](../../../tasks/cohort-risk-execution.zh-CN.md) 和[实际验证](../../verification/2026-10-18-cohort-risk-execution.zh-CN.md)。
+
+OpenAPI 快照 SHA-256：`5d6dff24961ae06dafe422211775851ff1fc55cbb91267e9d5b79f8a58261404`
+
+规范监控 v2 OpenAPI 快照 SHA-256：`4c033709abf001c88e6a1ae9ee667b90359b51a3f34b6d34ad63edc9ef3b73d9`

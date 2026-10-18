@@ -21,6 +21,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     ScheduledPreparedBacktestRunCommand,
 )
 from trade_plan_monitor.web.errors import ApiError
+from trade_plan_monitor.web.result_rule_changes import BacktestRuleChangesView
 from trade_plan_monitor.web.schemas import (
     ApiErrorCode,
     ApiValue,
@@ -121,6 +122,10 @@ class BacktestRunReadService(Protocol):
 
     async def get_run(self, *, run_id: str) -> (
         BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | None
+    ): ...
+
+    async def get_rule_changes(self, *, run_id: str, source_id: str) -> (
+        BacktestRuleChangesView | None
     ): ...
 
 
@@ -226,6 +231,23 @@ async def get_backtest_run(
     if run.run_id != run_id:
         raise RuntimeError("backtest run service returned a mismatched run")
     return run
+
+
+@router.get("/backtest-runs/{run_id}/rule-changes/{source_id}",
+            response_model=BacktestRuleChangesView)
+async def get_backtest_rule_changes(
+    run_id: RunIdPath,
+    source_id: Annotated[str, Path(min_length=1, max_length=128,
+                                 pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")],
+    service: BacktestRunReadServiceDependency,
+) -> BacktestRuleChangesView:
+    value = await service.get_rule_changes(run_id=run_id, source_id=source_id)
+    if value is None:
+        raise ApiError(ApiErrorCode.NOT_FOUND)
+    result = validate_api_response(value, BacktestRuleChangesView)
+    if result.run_id != run_id or result.source_id != source_id:
+        raise RuntimeError("rule comparison differs from requested frozen source")
+    return result
 
 
 @router.post(

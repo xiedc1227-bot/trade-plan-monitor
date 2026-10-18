@@ -26,6 +26,7 @@ from pydantic import (
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
 from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt, LoopAccountState
+from trade_plan_monitor.backtest.loop_diagnostics import LoopDiagnostics
 from trade_plan_monitor.backtest.loop_input import LoopAccountInput, LoopCosts, LoopResponsePolicy
 from trade_plan_monitor.backtest.loop_report import (
     MAX_AUDIT_EVENTS,
@@ -1934,6 +1935,7 @@ class BacktestLoopRunView(BacktestLoopRunSummaryView):
     response: LoopResponsePolicy
     costs: LoopCosts
     report: MonitorLoopReport
+    plan_diagnostics: LoopDiagnostics | None = None
 
     @field_validator("frozen_plan", "opening_account", "response", "costs", "report", mode="before")
     @classmethod
@@ -1969,6 +1971,9 @@ class BacktestLoopRunView(BacktestLoopRunSummaryView):
             or self.frozen_plan.snapshot.symbol != self.symbol
         ):
             raise ValueError("loop result must bind its native header and frozen plan")
+        _bind_loop_diagnostics(
+            self.plan_diagnostics, [self.frozen_plan.version_id], self.fill_count,
+        )
         if len(self.model_dump_json().encode()) >= MAX_RESULT_PAGE_BYTES:
             raise ValueError("encoded loop result must be below 4 MiB")
         return self
@@ -2026,6 +2031,7 @@ class BacktestScheduledRunView(BacktestScheduledRunSummaryView):
     response: LoopResponsePolicy
     costs: LoopCosts
     report: BacktestScheduledReportHeader
+    plan_diagnostics: LoopDiagnostics | None = None
 
     @field_validator("opening_account", "response", "costs", "report", mode="before")
     @classmethod
@@ -2059,9 +2065,29 @@ class BacktestScheduledRunView(BacktestScheduledRunSummaryView):
                 version.source_id, version.source_revision, version.candidate_revision,
             ):
                 raise ValueError("scheduled version reference differs from its frozen source")
+        _bind_loop_diagnostics(self.plan_diagnostics, [v.version_id for v in self.versions],
+                               self.fill_count)
+        if self.plan_diagnostics is not None:
+            for diagnostic, version in zip(self.plan_diagnostics.plans, self.versions, strict=True):
+                if (diagnostic.source_id, diagnostic.effective_trade_date) != (
+                    version.source_id, version.effective_trade_date,
+                ):
+                    raise ValueError("diagnostic source identity differs from frozen version")
         if len(self.model_dump_json().encode()) >= MAX_RESULT_PAGE_BYTES:
             raise ValueError("encoded loop result must be below 4 MiB")
         return self
+
+def _bind_loop_diagnostics(diagnostics, versions, fills):
+    if diagnostics is None:
+        return
+    if [p.version_id for p in diagnostics.plans] != versions:
+        raise ValueError("diagnostic versions differ from the report")
+    if diagnostics.availability == "AVAILABLE" and (
+        any(p.fill_count is None for p in diagnostics.plans)
+        or sum(p.fill_count for p in diagnostics.plans) != fills
+    ):
+        raise ValueError("diagnostic fills differ from the report")
+
 
 def _native_loop_value(value, model):
     if isinstance(value, model):

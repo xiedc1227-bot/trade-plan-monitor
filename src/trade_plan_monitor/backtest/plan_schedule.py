@@ -122,8 +122,6 @@ class LoopPlanVersion(ResearchValue):
             raise ValueError("review does not match the frozen sources/evidence")
         if len(set(self.source_hashes)) != len(self.source_hashes):
             raise ValueError("source hashes must be unique")
-        if self.authored_at is None and self.authored_date is None:
-            raise ValueError("authoring date or exact timestamp is required")
         if self.authored_at is not None and self.authored_date not in (
             None,
             self.authored_at.date(),
@@ -137,7 +135,7 @@ class LoopPlanVersion(ResearchValue):
     def retrospective(self) -> bool:
         if self.authored_at is not None:
             return self.authored_at > self.available_at
-        return self.authored_date > self.available_at.date()
+        return self.authored_date is not None and self.authored_date > self.available_at.date()
 
     def permits_date(self, day: date) -> bool:
         """Scheduling cannot widen the plan's activation envelope or rule validity."""

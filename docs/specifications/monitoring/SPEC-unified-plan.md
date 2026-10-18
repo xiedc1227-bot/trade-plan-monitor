@@ -123,3 +123,113 @@ Independent review reproduced the optional-create-discriminator mismatch in both
 RP-T01–RP-T20 and RP-C01–RP-C07 are complete under RP05-A03. The original ML-A07, ML-A11, ML-A13 and ML-A16–ML-A18 remain active acceptance and pass the recorded offline checks. One ordered source collection is extracted sequentially, reviewed as a chain and submitted once; daily replacement/continuation uses one continuous account and one result. Later account assertions cannot overwrite the ledger. Exact literal-source review and first-day opening-time repairs preserve the reviewed evidence boundaries and original server authority.
 
 The [operations guide](../../operations/monitor-loop-backtest.md) and [verification report](../../verification/monitor-loop-backtest.md) RP-V19/RP-V20 record real Chrome business/retry/edit/exclusion coverage, complete equity, compatibility/fault tests and unchanged 600/600-second load gates. They distinguish synthetic AI/market inputs and measured shared-process limits from live-provider or maximum-capacity certification. U09/U10/U11 retain their historical scope; U11's four approved hashes remain exact and both generated profiles pass. This closure changes no public API shape or approval identity, performs no production migration/deployment and does not authorize new platform scope. Changes are local commits; no push occurs in this run.
+
+## U13. Authorized single-plan library contract (2026-10-16)
+
+The user's explicit single-source preparation / reviewed composition request authorizes these concrete paths in both monitor profiles: `GET /api/v1/backtest-plan-library`, `POST /api/v1/backtest-plan-library/preparations`, and `POST /api/v1/backtest-plan-library/compositions`. Preserve the exact path allowlist and existing public error envelopes. No monitoring activation contract changes.
+
+The create body is `SingleSourcePreparationInput` (`preparation_id`, one `source`, optional exact `reviewed_base`). Composition accepts `PreparedPlanCompositionInput` (`preparation_id`, 1–256 unique `plans` references). Both writes require origin/idempotency guards and return 201. Library reads use `offset` and `limit` (1–100) and `no-store`, returning reviewed identities, hashes, source IDs, effective dates, symbol/name, predecessor reference and review time. Collection progress adds `workflow`, `editableSourceId`, and optional `baseAccount`. Existing source dates remain optional on save; effective-date preflight applies before extraction. Review and run routes retain existing versioned contracts.
+
+The server owns chronology, immutable predecessor evidence, review, composition and continuous-account authority. Exact original write receipts remain replayable. See ML21 and SP01–SP05 for approved behavior, bounds and verification. English and Chinese copies describe the same fields and paths.
+
+OpenAPI snapshot SHA-256: `dfdf2e1a1d33cc1f7023720c814b03ce8e8b982f6bb42ec8faeb79abfb2957be`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `c436a671a1734240fce9c4c758d366afb50e4e0f16e4b218117ff288a9ce41fb`
+
+## U14. Source-confirmation contract (2026-10-16)
+
+The user authorized source-backed repair and consolidated confirmation. Added optional `confirmationSummary` projections (`automaticFacts`, `questions`, `processingIssues`), `CONTEXT` classification, reviewable `SOURCE_INTERPRETATION`, nullable inactive zones/fixed-price reference dates, and ordered tranche signal modes. Legacy schemas retain their codecs; no review or execution approval is inferred. See [SC-01–SC-03](../../../tasks/source-confirmations.md) and the verification report.
+
+OpenAPI snapshot SHA-256: `2d1a16ef1d13d3112abc4c3635f033ee8377c782c0c3679b97f8330b3f0a94e3`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `34d509fab8aa647e3404f74060d721c2cf0a2267bd6fc70738e3fa6e29b9bded`
+
+## U15. Unified preparation and rule changes (2026-10-16)
+
+The user authorized removal of the complete/update UI choice. Preparation defaults to the just-reviewed predecessor, with a unique latest single-asset fallback on a fresh page; ambiguous libraries require selection. Explicit new-chain selection remains available. The existing optional `reviewed_base` pins the exact immutable predecessor; API paths and schemas do not change.
+
+Review presents `RETAIN`, `MODIFY`, `ADD` and `REVOKE` with values and evidence. Source-backed restatements can establish changes without internal rule IDs. Every unmentioned policy leaf must either have explicit retention scope, be restated unchanged with validated current evidence, or be an identical fixed product constant; otherwise inheritance remains unresolved. Cancellation must identify a unique prior rule and cannot be inferred from silence. Repeated identical compact-wire operations merge their evidence; conflicting actions remain errors. An empty account context is null only when it contains no facts, dependencies or extra keys. Represented unverified conditions remain unverified; warnings describing those conditions or inactive zones do not independently prohibit review.
+
+Cash-only unknowns do not invalidate a previously reviewed policy for successor extraction. Source/candidate hashes, origin evidence, whole-plan review and continuous-account rules remain authoritative. See [UP01–UP03](../../../tasks/unified-preparation.md) and [verification](../../verification/2026-10-16-unified-preparation.md).
+
+## U16. Position-only research funding and daily evidence (2026-10-17)
+
+OpenAPI snapshot SHA-256: `de10c595c26c0ae375e3d895f28ba2b2cab8e929dba412de4aa005d1efd0f7fa`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `07d2b38c4eda309f402fa7540b944aaf7c92e08e2953ea082089efcb9e20763d`
+
+The user explicitly requested removing initial-cash requirements. New source reviews use `PositionLimitFunding` with `kind: POSITION_LIMIT_ONLY` in the existing cash discriminator. No new endpoint or funding UI selector is added. Historical `KNOWN` and `UNKNOWN` inputs and their source-evidence validation remain readable with their original semantics. New buys still enforce plan authority, position limits, T+1 and quantity rules. Fees/costs and trade PnL persist; capital return/equity drawdown remain unavailable. Frozen loop datasets optionally embed bounded adjustment-factor evidence; omission preserves legacy hashes. See [operations ML-O14](../../operations/monitor-loop-backtest.md) and [verification](../../verification/2026-10-17-daily-basis.md).
+
+## U17. Source-backed prior-close prerequisite (2026-10-17)
+
+The user's request to diagnose zero fills and automatically handle explicit source conditions authorizes the additive Schema 5 `DailyPriorClose` condition (`type: DAILY_PRIOR_CLOSE`, `since_date`, `price_fen`, `comparator: GT | GTE`). No endpoint changes. Only complete earlier-session closes in the inclusive `since_date` window can satisfy this prerequisite; the latest daily bar is the subsequent evaluation session and cannot establish both stages. Certified price-basis/history evidence is mandatory. Missing or truncated history stays `MISSING_INPUT`; a covered window without a qualifying earlier close is `UNSATISFIED` with `PRIOR_CLOSE_NOT_SATISFIED`.
+
+Source normalization requires an explicit, unique recovery threshold, explicit recovery-before-retest order, a statement that recovery has not occurred, and a confirmed effective date. That date bounds the new recovery window as preparation metadata. Unchanged inherited rules keep their existing window. The original recovery clause and retest clause remain evidence-bound; retest, candle, volume and relative-index wording is not assigned invented thresholds. Unknown children remain visible even when a known false prerequisite determines the `ALL` result. Review presents the known prerequisite as an automatic fact, keeping only unresolved criteria in the business question. Existing reviewed versions/results remain immutable and need a new extraction/review/run to adopt this representation.
+
+Prompt compaction removes redundant schema titles/discriminator annotations while preserving union constraints, source text, literal values and server validation. Both generated profiles and their TypeScript types include the new condition. Verification is recorded separately in [ZF-V01–ZF-V04](../../verification/2026-10-17-zero-fill-audit.md).
+
+OpenAPI snapshot SHA-256: `fb3f08ff3826ae1d07be99c994565bea70d1667344280b966afe5579b9845df5`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `172d21503bca7283c5a6eea6d0279770187c0c16e43317854e0ed0ba828e41ba`
+
+## U18. Per-plan result diagnostics (2026-10-17)
+
+The user's result-page request authorizes optional `planDiagnostics: LoopDiagnostics | null` on existing `BacktestLoopRunView` and `BacktestScheduledRunView`; endpoint paths, frozen report codecs, report hashes and execution behavior remain unchanged. Nested diagnostic fields use the native snake_case convention. `availability` is `AVAILABLE | EXPIRED | UNAVAILABLE`; `plans` contains 1–256 identities in frozen order. Each item includes source/version/effective date, buy-rule and fill/evaluation counts, root-outcome counts, `review_status: PASSED`, categories, examples and a sampling marker. Per-plan fills are null if the retained audit is unavailable; they are never fabricated as zero.
+
+Examples bind an audit sequence/time and root outcome to a requirement, actual evidence and reason. Categories distinguish `MARKET_UNMET`, `QUALITATIVE_UNRESOLVED`, `PROCESSING_ERROR`, `DATA_UNAVAILABLE`, `EXECUTION_BLOCKED`, `NO_BUY_RULE`, `NO_EVALUATION` and `CONDITION_MET`. Bound examples to eight per plan and 256 total; aggregate every retained evaluation, merge repeated daily criteria and exclude stale daily repetitions from examples. Exact decimal prices retain fractional-fen precision. A current quote alongside a prior-close requirement is explicitly labelled and cannot be presented as a qualifying prior close. Satisfied `ANY` alternatives do not expose unused unknown branches as blockers.
+
+Read from the result-owned immutable input and retained audit in one read transaction. Verify row/event identities and the exact published stream digest before returning the bounded projection; publication's semantic validation remains authoritative. Failed/unreviewed preparations are absent from completed results, so their absence cannot be diagnosed as a current extraction failure. Missing detail produces an explicit availability state. Reading diagnostics triggers no AI call, strategy mutation, manual confirmation or new run. Native view validators bind versions, source dates and fill totals; frontend validation also accepts the legitimate `POSITION_LIMIT_ONLY` mode and null `baseHash` for independently reviewed library members while retaining non-null predecessor checks. See [RD01–RD03](../../../tasks/result-plan-diagnostics.md).
+
+OpenAPI snapshot SHA-256: `4875f2c9c4404909ea78e285bccb0d92896675e0ad5dc7554acfdf3931f016d2`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `1a38659bbb064a60c9c604089d2b8479d0f51bda1eff8bed36da11662a67786d`
+
+## U19. Generic predecessor inheritance and bounded correction (2026-10-17)
+
+The user's generic-flow request authorizes a versioned `PREDECESSOR_PATCH` interpretation: the exact reviewed predecessor supplies all unmentioned rules and fields by default. This supersedes U15's explicit-retention requirement only for new patch candidates; legacy frozen inputs keep their original interpretation. Source-cited semantic changes identify `RETAIN`, `MODIFY`, `ADD` and `REVOKE` by stable identity. No new endpoint or automatic review authority is introduced.
+
+Additive optional metadata includes operation `intent`/`rationale`, clause `semantic_role`, `SOURCE_SEMANTIC` bindings and the preparation interpretation contract. Each failed preparation attempt may retain up to 64 `repair_feedback` entries of at most 512 characters and `repair_context_json` of at most 32000 characters. At most two automatic corrections share the existing three-attempt limit; each remains bound to the source, predecessor and worker ownership. Feedback describes processing failures. Genuine source ambiguity remains a business question, while an omitted unchanged rule needs no confirmation. Previous unapproved candidates remain untrusted correction context and cannot approve themselves.
+
+Private AI transport now requests `monitor-loop-delta-wire-v3`, including execution-authority and temporal-order checks. These fields do not add public endpoints. Candidate storage uses lossless `source-clause-pool-v2` evidence/path deduplication with bounded expansion and backward readers; public schemas and the hashes below are unchanged. Explicitly revoked rules are removed before final collection limits and evidence-index resolution.
+
+Both generated profiles and frontend contracts reflect these additions. This records contract scope, not successful live-model acceptance or deployment. See [GI-01–GI-02](../../../tasks/generic-plan-inheritance.md) and the [verification record](../../verification/2026-10-17-generic-inheritance.md).
+
+OpenAPI snapshot SHA-256: `f0a049aaacea9bf5d9371bc6402c5954cd8bb4c83097cf9aa18d55e63432d0c8`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `bfeab749334df8adbd2324be09ab2b3e1153d3b8d6928c53928f06a49e9f44b1`
+
+
+## U20 — Frozen result rule comparison
+
+A completed continuous run exposes `GET /api/v1/backtest-runs/{run_id}/rule-changes/{source_id}` as a read-only, one-source response. `BacktestRuleChangesView` binds `runId`, `manifestHash`, `sourceId`, `versionId`, `previousSourceId`, and `previousVersionId`; `relationship` is `INITIAL`, `INHERITED`, or `INDEPENDENT`. `changes` contains at most 64 `PlanChange` values with complete `before`/`after` values and `RETAIN`/`MODIFY`/`ADD`/`REVOKE` actions. Compare final frozen policy sections and stable rule identities (risk branches use kind); ignore plan identity fields and list reordering. Do not interpret new source text or trust stale pre-correction change lists. Independent legacy versions compare adjacent policies without claiming inherited review lineage. Missing runs, sources or unsupported single-plan runs return 404.
+
+The result UI loads one source at a time, validates run/manifest/version/predecessor identity, rejects stale responses and offers explicit retry. Show all groups and full fields, distinguish unchanged fields within modified rules, and convert integer fen values and fixed FEN references to yuan. Existing result summary limits and frozen report identities remain unchanged. No AI, replay, database migration or new trading authority is involved. Acceptance and bilingual verification follow `tasks/result-rule-comparisons.md`.
+
+OpenAPI snapshot SHA-256: `cbc73be169c2f0a9b2758f8f93655813a6b8d17279a1340457ac30a4a320ae38`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `6dd7e9edf672b427782a9714e86e5bf364d50381a85b1963301914639a2b5f2c`
+
+
+## U21 — Risk withdrawal applicability
+
+The source recheck authorizes an optional `scope_assessment` on `PlanUpdateOperation`: `ENTIRE_RULE | PARTIAL_RULE | CONTEXT_ONLY | UNCLEAR`. Omitted values remain omitted in legacy serialization. New private `monitor-loop-delta-wire-v4` requires applicability assessment of every predecessor risk branch; missing assessment is a bounded AI correction, not a missing-source question. Scope-bearing retention must survive context normalization. Whole-rule withdrawal requires entire-rule authority; a new-position exclusion cannot delete protection for all holdings. Preserve prior risk/price evidence in a non-executable candidate when partial applicability cannot be represented. `UPDATE_PARTIAL_SCOPE_UNSUPPORTED` describes a system execution limitation, not manual source facts or permission to apply an unrestricted inherited exit.
+
+Historical frozen reads retain original hashes. New library predecessor/composition use is revalidated; outdated scope returns `REVIEWED_RISK_SCOPE_RECHECK_REQUIRED`. Only already reviewed records may request historical validation. No endpoint or scoped holding-execution engine is added. See [RW-01–RW-03](../../../tasks/risk-withdrawal-scope.md) and the [source audit](../../verification/2026-10-17-risk-scope-audit.md).
+
+OpenAPI snapshot SHA-256: `ddeb1af3aec464d7ac62410df7b3fba991994626555c12b8eb104897d474fe28`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `dff005b984e4c76406c7529306f7fbb88f3bd75a17036cbf2966dc1f6725c891`
+
+## U22. Risk execution by holding cohort (2026-10-18)
+
+The user authorized completing the scope execution boundary recorded in U21. Schema 5 risk branches add optional `holding_scope` (`mode: BEFORE_TRADE_DATE | FROM_TRADE_DATE`, `trade_date`, optional exclusive `end_trade_date`), stable `rule_id`, and paired ordinary-risk `risk_line_fen` / `risk_comparison`. At most 64 distinct risk identities are supported. Schema 4 contracts remain unchanged; absent optional fields retain historical serialization. Exact lot windows intersect later restrictions and cannot silently widen inherited protection.
+
+An explicit exclusion of new positions becomes a source-bound scope modification, retaining the prior price, target, confirmation and suspension policy. Omitted old-position instructions inherit the reviewed predecessor. `scope_change: EXISTING_POSITIONS_ONLY | NEW_POSITIONS_ONLY` is optional operation metadata. Private `monitor-loop-delta-wire-v5` and bounded focused scope correction distinguish existing/new applicability from whole-rule revocation. A missing direction is an automatic processing correction; genuine source ambiguity stays distinct. No manual confirmation is required to compensate for engine limitations. No new stop is invented for new entries.
+
+Risk evaluation, entry blocking and fulfillment use eligible holdings. Initial holdings can be classified by their earlier opening observation without inventing an acquisition date. New simulation batches and loop lots optionally record `plan_version_id`. Risk actions, simulation state and receipts optionally retain `lot_allocations` (`id`, `bucket`, `quantity`), bounded by the existing 500-lot limit. Execution atomically recomputes authorized allocations, enforces T+1 and known sellability, debits exact batches and releases their actual costs. Excluded lots cannot substitute for unavailable old lots. Confirmation remains latched across plan switches; clearing the eligible cohort fulfills its obligation while other holdings remain.
+
+Existing API paths expose these additive fields; no new endpoint or trading approval is introduced. Results display applicability and lot-specific exits beside full rule comparisons. The complete comparison bound is 192 entries, accommodating disjoint old/new identities and policy sections within the 64-risk limit; operation proposals remain bounded to 64. Prior frozen runs remain historical; revised reviewed policy produces a new input/run identity. See [CR-01–CR-03](../../../tasks/cohort-risk-execution.md) and [actual verification](../../verification/2026-10-18-cohort-risk-execution.md).
+
+OpenAPI snapshot SHA-256: `5d6dff24961ae06dafe422211775851ff1fc55cbb91267e9d5b79f8a58261404`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `4c033709abf001c88e6a1ae9ee667b90359b51a3f34b6d34ad63edc9ef3b73d9`

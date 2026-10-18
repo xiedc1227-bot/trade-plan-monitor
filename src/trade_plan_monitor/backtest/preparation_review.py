@@ -32,6 +32,7 @@ from trade_plan_monitor.backtest.loop_input import (
     KnownLoopCash,
     LoopAccountInput,
     LoopInitialLot,
+    PositionLimitFunding,
     UnknownLoopCash,
 )
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
@@ -125,14 +126,7 @@ class FrozenPreparedPlan(ResearchValue):
 
     @model_validator(mode="after")
     def bound(self):
-        if any(
-            value is None
-            for value in (
-                self.source.authored_at,
-                self.source.available_at,
-                self.source.effective_trade_date,
-            )
-        ):
+        if self.source.effective_trade_date is None:
             raise ValueError("frozen source chronology is incomplete")
         validate_opening_evidence(self.opening_evidence, self.source.text)
         review = build_daily_review(
@@ -162,17 +156,18 @@ class FrozenPreparedPlan(ResearchValue):
             or self.version.version_id != "prepared-" + digest
             or self.version.source_hashes != (self.source.binding_hash,)
             or self.version.authored_at != self.source.authored_at
-            or self.version.available_at != self.source.available_at
-            or self.version.information_cutoff != self.source.available_at
+            or self.version.available_at != self.source.execution_available_at
+            or self.version.information_cutoff != self.source.execution_available_at
         ):
             raise ValueError("frozen plan does not bind the exact source/account/review")
         if self.account_origin == "SOURCE" and self.account != _source_account(
             self.opening_evidence,
             self.source,
+            position_limit_only=self.account.cash.kind == "POSITION_LIMIT_ONLY",
         ):
             raise ValueError("source account differs from its exact original facts")
         start = max(
-            self.source.available_at,
+            self.source.execution_available_at,
             datetime.combine(self.source.effective_trade_date, time.min, SHANGHAI),
         )
         if self.schedule.select(start) is None or self.account.snapshot_at > start:
@@ -247,16 +242,27 @@ def _original_extraction(record: PreparationRecord) -> LoopPlanExtractionResult:
         raise PreparationSemanticError("EXTRACTION_BINDING_CONFLICT") from None
 
 
-def _source_account(facts: OpeningAccountFacts, source: PreparationSource) -> LoopAccountInput:
-    if facts.snapshot_at is None or (facts.inventory_quantity is None and facts.lots):
+def _source_account(
+    facts: OpeningAccountFacts,
+    source: PreparationSource,
+    *,
+    position_limit_only: bool = True,
+) -> LoopAccountInput:
+    if (facts.snapshot_at is None and source.effective_trade_date is None) or (
+        facts.inventory_quantity is None and facts.lots
+    ):
         raise PreparationSemanticError("ACCOUNT_REVIEW_REQUIRED")
     if any(lot.bucket is None for lot in facts.lots):
         raise PreparationSemanticError("ACCOUNT_REVIEW_REQUIRED")
     return LoopAccountInput(
-        snapshot_at=facts.snapshot_at.value,
+        snapshot_at=facts.snapshot_at.value if facts.snapshot_at else source.execution_available_at,
         inventory_known=facts.inventory_quantity is not None,
         cash=(
-            KnownLoopCash(balance_fen=facts.cash_fen.value) if facts.cash_fen else UnknownLoopCash()
+            PositionLimitFunding()
+            if position_limit_only
+            else KnownLoopCash(balance_fen=facts.cash_fen.value)
+            if facts.cash_fen
+            else UnknownLoopCash()
         ),
         lots=tuple(
             LoopInitialLot(
@@ -296,14 +302,7 @@ def prepare_frozen_plan(
     ):
         raise PreparationSemanticError("REVIEW_BINDING_CONFLICT")
     original = _original_extraction(record)
-    if any(
-        value is None
-        for value in (
-            record.source.authored_at,
-            record.source.available_at,
-            record.source.effective_trade_date,
-        )
-    ):
+    if record.source.effective_trade_date is None:
         raise PreparationSemanticError("SOURCE_TIME_REQUIRED")
     draft = command.draft or original.draft
     if (draft.symbol, draft.market) != (original.draft.symbol, original.draft.market):
@@ -336,8 +335,8 @@ def prepare_frozen_plan(
         source_hashes=(record.source.binding_hash,),
         evidence_hash=digest,
         authored_at=record.source.authored_at,
-        available_at=record.source.available_at,
-        information_cutoff=record.source.available_at,
+        available_at=record.source.execution_available_at,
+        information_cutoff=record.source.execution_available_at,
         review=LoopPlanReview(
             content_hash=reviewed.content_hash,
             reviewed_at=reviewed_at,
@@ -409,9 +408,12 @@ def collection_item_binding(item):
     if item.candidate is None:
         raise PreparationSemanticError("REVIEW_REQUIRED")
     return PreparationItemReview(
-        source_id=item.source.source_id, source_revision=item.source_revision,
-        candidate_revision=item.candidate_revision, candidate_hash=item.candidate.candidate_hash,
-        evidence_hash=item.candidate.evidence_hash, base_hash=item.base_hash,
+        source_id=item.source.source_id,
+        source_revision=item.source_revision,
+        candidate_revision=item.candidate_revision,
+        candidate_hash=item.candidate.candidate_hash,
+        evidence_hash=item.candidate.evidence_hash,
+        base_hash=item.base_hash,
     )
 
 
@@ -420,24 +422,33 @@ def _update_original(record, index, base):
     payload = item.candidate.payload_json
     try:
         import json
+
         schema = json.loads(payload).get("schema_version")
         if schema == "monitor-loop-materialized-update-v1":
             materialized = MaterializedUpdateCandidate.model_validate_json(payload)
             original = materialized.extraction
-            if (materialize_extraction(base, item.base_hash, item.source, original) != materialized
-                or item.candidate.evidence_hash != materialized.review.evidence_hash):
+            if (
+                materialize_extraction(base, item.base_hash, item.source, original) != materialized
+                or item.candidate.evidence_hash != materialized.review.evidence_hash
+            ):
                 raise ValueError("materialized candidate evidence changed")
         else:
             original = PlanUpdateExtractionResult.model_validate_json(payload)
             if item.candidate.evidence_hash != original.evidence_hash:
                 raise ValueError("original candidate evidence changed")
         context = context_from_review(base, item.base_hash)
-        digest = sha256(canonical_json({
-            "domain": "monitor-loop-update-evidence-v1",
-            "source_binding_hash": item.source.binding_hash,
-            "context": context, "output": original.output,
-        }).encode()).hexdigest()
-        if (original.evidence_hash != digest
+        digest = sha256(
+            canonical_json(
+                {
+                    "domain": "monitor-loop-update-evidence-v1",
+                    "source_binding_hash": item.source.binding_hash,
+                    "context": context,
+                    "output": original.output,
+                }
+            ).encode()
+        ).hexdigest()
+        if (
+            original.evidence_hash != digest
             or original.base_hash != item.base_hash
             or original.source_id != item.source.source_id
             or original.source_binding_hash != item.source.binding_hash
@@ -445,7 +456,8 @@ def _update_original(record, index, base):
             or original.available_at != item.source.available_at
             or original.authored_at != item.source.authored_at
             or original.effective_trade_date != item.source.effective_trade_date
-            or str(original.request_id) != item.attempts[-1].attempt_id):
+            or str(original.request_id) != item.attempts[-1].attempt_id
+        ):
             raise ValueError("update extraction binding changed")
         return original
     except ValueError:
@@ -461,10 +473,19 @@ def correct_collection_candidate(record, command):
         raise PreparationSemanticError("WORKER_CLAIM_PENDING")
     if record.status in {"CANCELLED", "CANCEL_REQUESTED"}:
         raise PreparationSemanticError("REVIEW_REQUIRED")
-    index = next((i for i, item in enumerate(record.items)
-                  if item.source.source_id == command.binding.source_id), None)
-    if (index is None or command.expected_revision != record.revision
-        or collection_item_binding(record.items[index]) != command.binding):
+    index = next(
+        (
+            i
+            for i, item in enumerate(record.items)
+            if item.source.source_id == command.binding.source_id
+        ),
+        None,
+    )
+    if (
+        index is None
+        or command.expected_revision != record.revision
+        or collection_item_binding(record.items[index]) != command.binding
+    ):
         raise PreparationSemanticError("REVIEW_BINDING_CONFLICT")
     item = record.items[index]
     if not index:
@@ -508,6 +529,7 @@ def correct_collection_candidate(record, command):
 
 
 class FrozenCollectionItem(ResearchValue):
+    independent: bool = Field(default=False, exclude_if=lambda value: not value)
     source: PreparationSource
     source_revision: int = Field(ge=1)
     extraction_candidate_revision: int = Field(ge=1)
@@ -520,11 +542,14 @@ class FrozenCollectionItem(ResearchValue):
     @model_validator(mode="after")
     def bound(self):
         if self.mapping.issues or (
-            self.mapping.source_id, self.mapping.source_hash, self.mapping.available_at
-        ) != (self.source.source_id, self.source.binding_hash, self.source.available_at):
+            self.mapping.source_id,
+            self.mapping.source_hash,
+            self.mapping.available_at,
+        ) != (self.source.source_id, self.source.binding_hash, self.source.execution_available_at):
             raise ValueError("frozen item mapping is unresolved or bound to another source")
-        expected = _collection_version(self.source, self.mapping, self.version.review.reviewed_at,
-                                       self.version.review.evidence)
+        expected = _collection_version(
+            self.source, self.mapping, self.version.review.reviewed_at, self.version.review.evidence
+        )
         if expected != self.version:
             raise ValueError("frozen version differs from reviewed evidence")
         return self
@@ -532,25 +557,36 @@ class FrozenCollectionItem(ResearchValue):
 
 def _collection_version(source, mapping, reviewed_at, evidence):
     snapshot = mapping.draft.to_executable()
-    if snapshot is None or any(value is None for value in (
-        source.authored_at, source.available_at, source.effective_trade_date,
-    )):
+    if snapshot is None or source.effective_trade_date is None:
         raise PreparationSemanticError("SOURCE_TIME_REQUIRED")
     hashes = tuple(dict.fromkeys((source.binding_hash, *(b.source_hash for b in mapping.bindings))))
     context = mapping.account_context
-    account_context = None if context is None else LoopAccountContext(
-        core_qty=context.core_qty.value if context.core_qty else None,
-        tactical_qty=context.tactical_qty.value if context.tactical_qty else None,
-        dependent_rule_ids=context.dependent_rule_ids, evidence=canonical_json(context),
+    account_context = (
+        None
+        if context is None
+        else LoopAccountContext(
+            core_qty=context.core_qty.value if context.core_qty else None,
+            tactical_qty=context.tactical_qty.value if context.tactical_qty else None,
+            dependent_rule_ids=context.dependent_rule_ids,
+            evidence=canonical_json(context),
+        )
     )
     return ScheduledPlanVersion(
-        version_id="prepared-" + mapping.evidence_hash, plan_hash=plan_sha256(snapshot),
-        snapshot=snapshot, source_hashes=hashes, evidence_hash=mapping.evidence_hash,
-        authored_at=source.authored_at, available_at=source.available_at,
-        information_cutoff=source.available_at, account_context=account_context,
+        version_id="prepared-" + mapping.evidence_hash,
+        plan_hash=plan_sha256(snapshot),
+        snapshot=snapshot,
+        source_hashes=hashes,
+        evidence_hash=mapping.evidence_hash,
+        authored_at=source.authored_at,
+        available_at=source.execution_available_at,
+        information_cutoff=source.execution_available_at,
+        account_context=account_context,
         review=LoopPlanReview(
-            content_hash=daily_plan_content_sha256(snapshot), reviewed_at=reviewed_at,
-            confirmed=True, evidence=evidence, source_hashes=hashes,
+            content_hash=daily_plan_content_sha256(snapshot),
+            reviewed_at=reviewed_at,
+            confirmed=True,
+            evidence=evidence,
+            source_hashes=hashes,
             evidence_hash=mapping.evidence_hash,
         ),
     )
@@ -558,6 +594,7 @@ def _collection_version(source, mapping, reviewed_at, evidence):
 
 class FrozenPreparedCollection(ResearchValue):
     schema_version: Literal["prepared-loop-plan-v2"] = "prepared-loop-plan-v2"
+    reused_reviews: bool = Field(default=False, exclude_if=lambda value: not value)
     preparation_id: StableIdentifier
     revision: int = Field(ge=1)
     items: tuple[FrozenCollectionItem, ...] = Field(min_length=1, max_length=MAX_SCHEDULED_ENTRIES)
@@ -583,42 +620,75 @@ class FrozenPreparedCollection(ResearchValue):
             source = item.source
             if source.source_id in sources:
                 raise ValueError("duplicate frozen source")
-            if previous is not None and (item.base_hash != previous.extraction_candidate_hash
-                or source.available_at < previous.source.available_at
-                or source.authored_at < previous.source.authored_at
-                or source.effective_trade_date <= previous.source.effective_trade_date):
+            if previous is not None and (
+                item.base_hash != (None if item.independent else previous.extraction_candidate_hash)
+                or source.execution_available_at < previous.source.execution_available_at
+                or (
+                    source.authored_at is not None
+                    and previous.source.authored_at is not None
+                    and source.authored_at < previous.source.authored_at
+                )
+                or source.effective_trade_date <= previous.source.effective_trade_date
+            ):
                 raise ValueError("frozen chain source/base chronology changed")
             if previous is None and item.base_hash is not None:
                 raise ValueError("initial item cannot have a predecessor")
             sources[source.source_id] = source
             for bound in item.mapping.bindings:
                 original = sources.get(bound.source_id)
-                if original is None or original.binding_hash != bound.source_hash or any(
-                    original.text[c.start:c.end] != c.excerpt for c in bound.clauses
+                if (
+                    original is None
+                    or original.binding_hash != bound.source_hash
+                    or any(original.text[c.start : c.end] != c.excerpt for c in bound.clauses)
                 ):
                     raise ValueError("frozen inherited evidence differs from past source")
-            if item.version.review.reviewed_at != self.reviewed_at:
+            if (
+                item.version.review.reviewed_at > self.reviewed_at
+                or not self.reused_reviews
+                and item.version.review.reviewed_at != self.reviewed_at
+            ):
                 raise ValueError("frozen item differs from chain review time")
             previous = item
-        expected = ScheduledLoopSchedule(entries=tuple(ScheduledScheduleEntry(
-            effective_trade_date=item.source.effective_trade_date, version=item.version,
-        ) for item in self.items))
+        expected = ScheduledLoopSchedule(
+            entries=tuple(
+                ScheduledScheduleEntry(
+                    effective_trade_date=item.source.effective_trade_date,
+                    version=item.version,
+                )
+                for item in self.items
+            )
+        )
         if expected != self.schedule:
             raise ValueError("frozen schedule differs from reviewed items")
         first = self.items[0]
         if self.opening_evidence is not None:
             validate_opening_evidence(self.opening_evidence, first.source.text)
-        if self.account_origin == "SOURCE" and (self.opening_evidence is None or
-            self.account != _source_account(self.opening_evidence, first.source)):
+        if self.account_origin == "SOURCE" and (
+            self.opening_evidence is None
+            or self.account
+            != _source_account(
+                self.opening_evidence,
+                first.source,
+                position_limit_only=self.account.cash.kind == "POSITION_LIMIT_ONLY",
+            )
+        ):
             raise ValueError("initial account differs from original first-source evidence")
-        start = max(first.source.available_at, self.account.snapshot_at, datetime.combine(
-            first.source.effective_trade_date, time.min, SHANGHAI,
-        ))
+        start = max(
+            first.source.execution_available_at,
+            self.account.snapshot_at,
+            datetime.combine(
+                first.source.effective_trade_date,
+                time.min,
+                SHANGHAI,
+            ),
+        )
         if (
             start.date() != first.source.effective_trade_date
             or self.schedule.select(start) is None
-            or (self.account.opening_mark is not None
-                and self.account.opening_mark.available_at > start)
+            or (
+                self.account.opening_mark is not None
+                and self.account.opening_mark.available_at > start
+            )
         ):
             raise ValueError("opening account or plan is unavailable at start")
         if sum(lot.quantity for lot in self.account.lots) > first.version.snapshot.position.max_qty:
@@ -630,7 +700,7 @@ def _collection_review_hash(value):
     return sha256(("prepared-loop-chain-review-v2\0" + canonical_json(value)).encode()).hexdigest()
 
 
-def prepare_frozen_collection(record, command, reviewed_at):
+def prepare_frozen_collection(record, command, reviewed_at, *, reviewed_parent=None):
     from trade_plan_monitor.backtest.preparation_worker import preparation_candidate_review
 
     record = CollectionPreparationRecord.model_validate_json(record.model_dump_json())
@@ -644,16 +714,28 @@ def prepare_frozen_collection(record, command, reviewed_at):
         raise PreparationSemanticError("REVIEW_BINDING_CONFLICT")
     frozen = []
     for index, item in enumerate(record.items):
+        if reviewed_parent is not None and index < len(reviewed_parent.items):
+            frozen.append(reviewed_parent.items[index])
+            continue
         mapping = preparation_candidate_review(record, index)
-        frozen.append(FrozenCollectionItem(
-            source=item.source, source_revision=item.source_revision,
-            extraction_candidate_revision=item.candidate_revision,
-            extraction_candidate_hash=item.candidate.candidate_hash,
-            extraction_evidence_hash=item.candidate.evidence_hash, base_hash=item.base_hash,
-            mapping=mapping, version=_collection_version(
-                item.source, mapping, reviewed_at, command.evidence,
-            ),
-        ))
+        frozen.append(
+            FrozenCollectionItem(
+                independent=item.independent,
+                source=item.source,
+                source_revision=item.source_revision,
+                extraction_candidate_revision=item.candidate_revision,
+                extraction_candidate_hash=item.candidate.candidate_hash,
+                extraction_evidence_hash=item.candidate.evidence_hash,
+                base_hash=item.base_hash,
+                mapping=mapping,
+                version=_collection_version(
+                    item.source,
+                    mapping,
+                    reviewed_at,
+                    command.evidence,
+                ),
+            )
+        )
     first = record.items[0]
     try:
         PlanCandidateReview.model_validate_json(first.candidate.payload_json)
@@ -666,13 +748,30 @@ def prepare_frozen_collection(record, command, reviewed_at):
     account = command.account or _source_account(opening, first.source)
     values = dict(
         schema_version="prepared-loop-plan-v2",
-        preparation_id=record.preparation_id, revision=record.revision + 1,
-        items=tuple(frozen), schedule=ScheduledLoopSchedule(entries=tuple(ScheduledScheduleEntry(
-            effective_trade_date=item.source.effective_trade_date, version=item.version,
-        ) for item in frozen)), account=account,
+        preparation_id=record.preparation_id,
+        revision=record.revision + 1,
+        items=tuple(frozen),
+        schedule=ScheduledLoopSchedule(
+            entries=tuple(
+                ScheduledScheduleEntry(
+                    effective_trade_date=item.source.effective_trade_date,
+                    version=item.version,
+                )
+                for item in frozen
+            )
+        ),
+        account=account,
         account_origin="HUMAN_REVIEW" if command.account is not None else "SOURCE",
-        opening_evidence=opening, reviewed_at=reviewed_at,
+        opening_evidence=opening,
+        reviewed_at=reviewed_at,
     )
+    if reviewed_parent is not None:
+        values.update(
+            reused_reviews=True,
+            account=reviewed_parent.account,
+            account_origin=reviewed_parent.account_origin,
+            opening_evidence=reviewed_parent.opening_evidence,
+        )
     return FrozenPreparedCollection(**values, review_hash=_collection_review_hash(values))
 
 
@@ -686,17 +785,24 @@ def frozen_collection(record):
         raise PreparationSemanticError("WORKER_CLAIM_PENDING")
     try:
         manifest = FrozenPreparedCollection.model_validate_json(record.review.manifest_json)
-        if (manifest.preparation_id != record.preparation_id or manifest.revision != record.revision
+        if (
+            manifest.preparation_id != record.preparation_id
+            or manifest.revision != record.revision
             or manifest.reviewed_at != record.review.reviewed_at
-            or len(manifest.items) != len(record.items)):
+            or len(manifest.items) != len(record.items)
+        ):
             raise ValueError("frozen collection identity changed")
         for index, (frozen, item) in enumerate(zip(manifest.items, record.items, strict=True)):
-            if (frozen.source != item.source or frozen.source_revision != item.source_revision
+            if (
+                frozen.source != item.source
+                or frozen.source_revision != item.source_revision
                 or frozen.extraction_candidate_revision != item.candidate_revision
                 or frozen.extraction_candidate_hash != item.candidate.candidate_hash
                 or frozen.extraction_evidence_hash != item.candidate.evidence_hash
                 or frozen.base_hash != item.base_hash
-                or frozen.mapping != preparation_candidate_review(record, index)):
+                or frozen.independent != item.independent
+                or frozen.mapping != preparation_candidate_review(record, index, historical=True)
+            ):
                 raise ValueError("frozen item differs from exact collection binding")
         return manifest
     except ValueError:

@@ -19,6 +19,7 @@ from trade_plan_monitor.backtest.control import (
     report_progress,
     validate_operation_controls,
 )
+from trade_plan_monitor.backtest.daily_basis import DailyBasisStore
 from trade_plan_monitor.backtest.dataset import DatasetScope, exchange_for_symbol
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProvider
@@ -220,6 +221,43 @@ class BacktestSyncService:
         completed_minutes = 0
         for symbol, _symbol_open_dates, missing_daily, missing_minutes in symbol_work:
             check_cancelled(cancellation_token, "SYNC_DAILY")
+            fetch_factors = getattr(self._provider, "historical_adjustment_factors", None)
+            basis_store = DailyBasisStore(self._store.database_path)
+            known_factors = {
+                v.trade_date
+                for v in basis_store.read(
+                    symbol,
+                    scope.warmup_start,
+                    scope.end,
+                )
+            }
+            missing_factors = tuple(
+                day for day in _symbol_open_dates if refresh or day not in known_factors
+            )
+            if callable(fetch_factors) and missing_factors:
+                factors = tuple(
+                    await self._execute(
+                        TushareOperation.DAILY_BARS,
+                        lambda fetch=fetch_factors, asset=symbol, days=missing_factors: fetch(
+                            asset, days[0], days[-1]
+                        ),
+                        work_key=f"backtest:adj-factor:{symbol}:{missing_factors[0]}:{missing_factors[-1]}",
+                        cancellation_token=cancellation_token,
+                        phase="SYNC_DAILY",
+                    )
+                )
+                _require_exact_identities(
+                    factors,
+                    expected=frozenset(
+                        (symbol, day)
+                        for day in _symbol_open_dates
+                        if missing_factors[0] <= day <= missing_factors[-1]
+                    ),
+                    identity=lambda item: (item.symbol, item.trade_date),
+                    surface="adj_factor",
+                )
+                basis_store.record(factors)
+                network_calls += 1
             if missing_daily:
                 daily = tuple(
                     await self._execute(
@@ -364,9 +402,7 @@ class BacktestSyncService:
             # The existing single worker serializes sync. Pace inside its callback
             # so controller admission delays (or existing retries) cannot bunch starts.
             if self._last_request_started_at is not None:
-                deadline = (
-                    self._last_request_started_at + LIVE_TUSHARE_MIN_INTERVAL.total_seconds()
-                )
+                deadline = self._last_request_started_at + LIVE_TUSHARE_MIN_INTERVAL.total_seconds()
                 while (remaining := deadline - monotonic()) > 0:
                     check_cancelled(cancellation_token, phase)
                     sleep(min(remaining, 0.05))
@@ -420,7 +456,9 @@ class BlockingBacktestSyncCore:
         # Production creates a fresh core for each job on the same owned worker.
         # Carry only its request-start time across jobs, including failed/cancelled syncs.
         self._service._last_request_started_at = getattr(
-            self._worker_pacing, "last_request_started_at", None,
+            self._worker_pacing,
+            "last_request_started_at",
+            None,
         )
         try:
             return asyncio.run(

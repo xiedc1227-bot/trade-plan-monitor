@@ -13,8 +13,10 @@ from trade_plan_monitor.domain.daily_plan_models import (
 from trade_plan_monitor.domain.daily_plan_validation import (
     DailyDraftLevels,
     DailyDraftRisk,
+    DailyDraftZone,
     DailyPlanDraft,
 )
+from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
 from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedCondition,
     UnifiedConfirmation,
@@ -44,6 +46,12 @@ class UnifiedDraftRule(DailyValue):
 
 class UnifiedDraftRisk(DailyDraftRisk):
     condition: UnifiedCondition | None
+    rule_id: Identifier | None = Field(default=None, exclude_if=lambda v: v is None)
+    holding_scope: RiskHoldingScope | None = Field(default=None, exclude_if=lambda v: v is None)
+    risk_line_fen: int | None = Field(default=None, strict=True, gt=0,
+                                      exclude_if=lambda v: v is None)
+    risk_comparison: Literal["LT", "LTE"] | None = Field(
+        default=None, exclude_if=lambda v: v is None)
 
 
 class UnifiedDraftAlertRule(DailyValue):
@@ -62,17 +70,22 @@ class UnifiedDraftPosition(UnifiedPositionPolicy):
         return self
 
 
+class UnifiedDraftLevels(DailyDraftLevels):
+    low_buy: DailyDraftZone | None
+    pressure: DailyDraftZone | None
+
+
 class UnifiedPlanDraft(DailyPlanDraft):
     schema_version: Literal[5] = 5
     execution_mode: Literal["CONDITION_PLAN"] = "CONDITION_PLAN"
     execution_version: Literal["condition-plan-v1"] = "condition-plan-v1"
     activation: DailyActivation | None
-    levels: DailyDraftLevels | None
+    levels: UnifiedDraftLevels | None
     position: UnifiedDraftPosition
     monitoring: UnifiedMonitoring | None
     ordinary_rules: tuple[UnifiedDraftRule, ...] = Field(max_length=2)
     alert_rules: tuple[UnifiedDraftAlertRule, ...] = Field(default=(), max_length=10)
-    risk_branches: tuple[UnifiedDraftRisk, ...] = Field(max_length=2)
+    risk_branches: tuple[UnifiedDraftRisk, ...] = Field(max_length=64)
     execution_policy: UnifiedExecutionPolicy | None
 
     def executable_payload(self):
@@ -97,6 +110,10 @@ def unified_plan_issues(draft):
         errors = []
         for item in error.errors(include_url=False, include_context=False, include_input=True):
             location = list(item["loc"])
+            if (len(location) == 2 and location[0] == "risk_branches"
+                    and "ordinary risk needs an explicit suspension policy" in item["msg"]):
+                location.append("suspension_confirmation_policy")
+                item = {**item, "input": None}
             if "validity" in location and "ordinary_rules" in location:
                 index = location.index("validity")
                 branch = location[index + 1] if len(location) > index + 1 else None

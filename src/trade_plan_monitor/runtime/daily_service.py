@@ -28,6 +28,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
 )
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_fulfilled, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedResetPolicy,
     UnifiedRule,
@@ -447,6 +448,7 @@ class DailyRuntimeEvaluationService:
                 )
             inventory = (_alert_inventory(plan.symbol) if _alert_only(plan)
                 else accounting.snapshot(plan.symbol, now.date()))
+            lots = accounting.lots(plan.symbol, now.date())
             fact_rows = work.daily.list(symbol=plan.symbol, kind="FACT")
             facts = tuple(
                 {**row["payload"], "id": row["id"]}
@@ -505,20 +507,21 @@ class DailyRuntimeEvaluationService:
             )
             risks = previous_risks
             for completed in completed_series or (None,):
-                severe = next((b for b in plan.risk_branches
-                    if b.kind == "SEVERE_TECHNICAL"), None)
+                severe_branches = [b for b in plan.risk_branches if b.kind == "SEVERE_TECHNICAL"]
                 severe_minute_target = (inputs.minute_target
                     if completed is not None and inputs.minute_target is not None
                     and inputs.minute_target.date() == completed.bars[-1].trade_date
                     else None)
-                severe_evidence = (evaluate_unified_condition(severe.condition, completed,
+                severe_evidence = ({risk_identity(severe): evaluate_unified_condition(
+                    severe.condition, completed,
                     facts=facts, bars=inputs.five_minute_bars
                         if severe_minute_target is not None else (),
                     target=severe_minute_target,
                     trading_calendar=inputs.trading_calendar,
                     macd_min_observations=(500 if plan.monitoring is None
                         else plan.monitoring.macd_min_observations))
-                    if isinstance(plan, UnifiedTradePlan) and severe is not None else None)
+                    for severe in severe_branches}
+                    if isinstance(plan, UnifiedTradePlan) else None)
                 risks = advance_daily_risks(
                     plan,
                     previous=risks,
@@ -536,12 +539,7 @@ class DailyRuntimeEvaluationService:
             for risk in risks:
                 if (
                     risk["status"] == "CONFIRMED"
-                    and inventory["known"]
-                    and inventory["tactical_qty"] <= risk["target_tactical_qty"]
-                    and (
-                        not risk["involves_core"]
-                        or inventory["core_qty"] <= risk["target_core_qty"]
-                    )
+                    and risk_fulfilled(risk, inventory, lots)
                 ):
                     risk = {
                         **risk,
@@ -561,7 +559,7 @@ class DailyRuntimeEvaluationService:
             saved_risks = []
             for risk in risks:
                 risk_id = daily_hash(
-                    "daily-risk-obligation-v1", {"symbol": plan.symbol, "kind": risk["kind"]}
+                    "daily-risk-obligation-v1", {"symbol": plan.symbol, "kind": risk_identity(risk)}
                 )
                 old = work.daily.get(risk_id)
                 risk = {**risk, "risk_id": risk_id}
@@ -576,13 +574,16 @@ class DailyRuntimeEvaluationService:
                     )
                 saved_risks.append({**risk, "revision": old["revision"]})
             risk_blocked = any(
-                r["status"] in {"PENDING", "OBSERVATION", "CONFIRMED"} for r in risks
+                blocks_new_entry(r, now.date()) for r in risks
             )
-            risk_known = series is not None or not plan.risk_branches
+            active_risk_branches = [b for b in plan.risk_branches if blocks_new_entry(
+                {"status": "PENDING", "holding_scope": getattr(b, "holding_scope", None)},
+                now.date())]
+            risk_known = series is not None or not active_risk_branches
             if isinstance(plan, UnifiedTradePlan) and plan.risk_branches:
-                severe = next((b for b in plan.risk_branches
-                    if b.kind == "SEVERE_TECHNICAL"), None)
-                if severe is not None:
+                for severe in (b for b in plan.risk_branches if b.kind == "SEVERE_TECHNICAL"
+                               and blocks_new_entry({"status": "PENDING",
+                                   "holding_scope": b.holding_scope}, now.date())):
                     risk_minute_target = (inputs.minute_target
                         if series is not None and inputs.minute_target is not None
                         and inputs.minute_target.date() == series.bars[-1].trade_date
@@ -608,6 +609,7 @@ class DailyRuntimeEvaluationService:
                 signal = expire_daily_signal(signal, now)
                 if any(
                     r["status"] in {"CONFIRMED", "FULFILLED"}
+                    and blocks_new_entry({**r, "status": "CONFIRMED"}, now.date())
                     and r.get("confirmed_trade_date", "") >= signal["confirmed_trade_date"]
                     for r in risks
                 ):
@@ -624,7 +626,7 @@ class DailyRuntimeEvaluationService:
                         r
                         for r in plan.ordinary_rules
                         if isinstance(r, (DailyEnabledRule, UnifiedRule))
-                        and r.side == signal["side"]
+                        and r.rule_id == signal["rule_id"]
                     ),
                     None,
                 )
@@ -634,6 +636,7 @@ class DailyRuntimeEvaluationService:
                     for completed in completed_series:
                         if any(
                             r["status"] in {"CONFIRMED", "FULFILLED"}
+                            and blocks_new_entry({**r, "status": "CONFIRMED"}, now.date())
                             and r.get("confirmed_trade_date", "")
                             >= str(completed.bars[-1].trade_date)
                             for r in risks
@@ -796,7 +799,8 @@ class DailyRuntimeEvaluationService:
                     s["executable_qty"] = 0
                     s["blockers"] = [*s["blockers"], "ORDINARY_CONFLICT_BLOCK_BOTH"]
             risk_action = risk_execution(
-                saved_risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable
+                saved_risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable,
+                lots=lots,
             )
             alerts = []
             if (isinstance(plan, UnifiedTradePlan) and not ordinary_authority_ended
@@ -907,7 +911,7 @@ class DailyRuntimeEvaluationService:
                         )
                     )
             if risk_action["status"] == "RISK_EXIT":
-                confirmed = next(r for r in saved_risks if r["kind"] == risk_action["branch"])
+                confirmed = next(r for r in saved_risks if r["risk_id"] == risk_action["cause_id"])
                 quantities = [risk_action["core_qty"], risk_action["tactical_qty"]]
                 quantity = None if any(q is None for q in quantities) else sum(quantities)
                 if quantity is None or quantity > 0:
@@ -1152,6 +1156,7 @@ def daily_delivery_allowed(session, event, now):
             inventory=inventory,
             evaluated_at=now,
             tradable=tradable,
+            lots=accounting.lots(event.symbol, now.date()),
         )
         return (
             current == event.risk_scope
@@ -1171,7 +1176,7 @@ def daily_delivery_allowed(session, event, now):
     if time(11, 30) <= now.time().replace(tzinfo=None) < time(13):
         return False
     risks = repo.list(symbol=event.symbol, kind="RISK")
-    if any(r["payload"]["status"] in {"PENDING", "OBSERVATION", "CONFIRMED"} for r in risks):
+    if any(blocks_new_entry(r["payload"], now.date()) for r in risks):
         return False
     inventory = DailyAccounting(repo).snapshot(event.symbol, now.date())
     if not inventory["known"]:

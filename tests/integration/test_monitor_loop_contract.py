@@ -99,7 +99,9 @@ def test_loop_contracts_keep_bounds_exact_values_and_unknown_facts(contract):
             assert schemas[name]["properties"][field]["maximum"] == MAX_SAFE_INTEGER
     opening = schemas["LoopAccountInput"]
     assert opening["properties"]["lots"]["maxItems"] == 200
-    assert set(opening["properties"]["cash"]["discriminator"]["mapping"]) == {"KNOWN", "UNKNOWN"}
+    assert set(opening["properties"]["cash"]["discriminator"]["mapping"]) == {
+        "KNOWN", "UNKNOWN", "POSITION_LIMIT_ONLY",
+    }
     metrics = schemas["LoopMetrics"]["properties"]
     for field in ("initial_equity_fen", "final_equity_fen"):
         values = metrics[field]["anyOf"]

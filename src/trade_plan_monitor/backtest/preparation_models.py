@@ -1,7 +1,7 @@
 """Strict, private persistence values for preparing one supplied plan."""
 
 import json
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 from hashlib import sha256
 from typing import Annotated, Literal, Self
@@ -16,6 +16,7 @@ from trade_plan_monitor.ai.extraction import (
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.loop_input import (
     MAX_EXTRACTION_ATTEMPTS,
+    LoopAccountInput,
     LoopSource,
     LoopSourceBatch,
     LoopSourceCollection,
@@ -23,6 +24,7 @@ from trade_plan_monitor.backtest.loop_input import (
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
 from trade_plan_monitor.backtest.plan_schedule import MAX_SCHEDULED_ENTRIES, LoopTimestamp
 from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.backtest.time import SHANGHAI
 
 PREPARATION_DOMAIN = "backtest-preparation-v1"
 PREPARATION_SCHEMA_VERSION = 1
@@ -42,6 +44,25 @@ class PreparationSource(LoopSource):
     @property
     def binding_hash(self) -> str:
         return _hash("preparation-source-v1", self)
+
+    @property
+    def execution_available_at(self) -> datetime | None:
+        """Preloaded plans are usable at the effective day's open, not import time."""
+        if self.available_at is not None:
+            return self.available_at
+        if self.effective_trade_date is not None:
+            return datetime.combine(self.effective_trade_date, time(9, 30), SHANGHAI)
+        return None
+
+    def with_inferred_date(self) -> Self:
+        """Resolve at write boundaries only; never mutate a stored source on read."""
+        from trade_plan_monitor.backtest.preparation_dates import infer_effective_trade_date
+
+        if self.effective_trade_date is not None:
+            return self
+        return self.model_copy(update={
+            "effective_trade_date": infer_effective_trade_date(self.text),
+        })
 
 
 class SinglePlanPreparationInput(LoopSourceBatch):
@@ -75,6 +96,14 @@ class PreparationCandidateInput(ResearchValue):
     issues: tuple[Annotated[str, Field(min_length=1, max_length=512)], ...] = Field(
         default=(), max_length=128,
     )
+
+    @property
+    def policy_ready(self) -> bool:
+        """Account cash is reviewed separately; this never grants plan approval."""
+        return self.validation == "VALID" or (
+            self.validation == "UNRESOLVED"
+            and self.issues == ("LOOP_ACCOUNT_FACT_REQUIRED: opening_account.cash_fen",)
+        )
 
     @field_validator("payload_json")
     @classmethod
@@ -127,6 +156,11 @@ class PreparationAttempt(ResearchValue):
     finished_at: LoopTimestamp | None = None
     error_code: Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$")] | None = None
     retryable: bool = False
+    repair_context_json: str | None = Field(default=None, max_length=32000,
+                                           exclude_if=lambda value: value is None)
+    repair_feedback: tuple[Annotated[str, Field(min_length=1, max_length=512)], ...] = Field(
+        default=(), max_length=64, exclude_if=lambda value: not value,
+    )
 
     @model_validator(mode="after")
     def coherent(self) -> Self:
@@ -138,6 +172,10 @@ class PreparationAttempt(ResearchValue):
             raise ValueError("attempt error contradicts status")
         if self.retryable and self.status != "FAILED":
             raise ValueError("only a classified failure can be retryable")
+        if self.repair_feedback and self.status != "FAILED":
+            raise ValueError("only failed attempts carry correction feedback")
+        if self.repair_context_json is not None and not self.repair_feedback:
+            raise ValueError("correction context requires classified correction feedback")
         return self
 
 
@@ -289,6 +327,11 @@ class CollectionPreparationAttempt(ResearchValue):
     finished_at: LoopTimestamp | None = None
     error_code: Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$")] | None = None
     retryable: bool = False
+    repair_context_json: str | None = Field(default=None, max_length=32000,
+                                           exclude_if=lambda value: value is None)
+    repair_feedback: tuple[Annotated[str, Field(min_length=1, max_length=512)], ...] = Field(
+        default=(), max_length=64, exclude_if=lambda value: not value,
+    )
 
     @model_validator(mode="after")
     def coherent(self) -> Self:
@@ -296,6 +339,7 @@ class CollectionPreparationAttempt(ResearchValue):
 
 
 class PreparationItem(ResearchValue):
+    independent: bool = Field(default=False, exclude_if=lambda value: not value)
     source: PreparationSource
     source_revision: int = Field(default=1, ge=1)
     candidate_revision: int = Field(default=0, ge=0)
@@ -381,7 +425,38 @@ class CollectionPreparationReview(ResearchValue):
         return PreparationReview.explicit_confirmation(value)
 
 
+class ReviewedPlanReference(ResearchValue):
+    preparation_id: StableIdentifier
+    manifest_hash: Sha256Hex
+
+
+class SingleSourcePreparationInput(ResearchValue):
+    preparation_id: StableIdentifier
+    source: PreparationSource
+    reviewed_base: ReviewedPlanReference | None = None
+
+
+class PreparedPlanCompositionInput(ResearchValue):
+    preparation_id: StableIdentifier
+    plans: tuple[ReviewedPlanReference, ...] = Field(min_length=1, max_length=MAX_SCHEDULED_ENTRIES)
+
+    @model_validator(mode="after")
+    def unique(self):
+        if len({plan.preparation_id for plan in self.plans}) != len(self.plans):
+            raise ValueError("selected preparations must be unique")
+        return self
+
+
 class CollectionPreparationRecord(ResearchValue):
+    workflow: Literal["LEGACY", "SINGLE", "COMPOSITION"] = Field(
+        default="LEGACY", exclude_if=lambda value: value == "LEGACY",
+    )
+    reviewed_base: ReviewedPlanReference | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
+    base_account: LoopAccountInput | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
     schema_version: Literal["backtest-preparation-v2"] = "backtest-preparation-v2"
     preparation_id: StableIdentifier
     revision: int = Field(ge=1)
@@ -404,11 +479,15 @@ class CollectionPreparationRecord(ResearchValue):
             raise ValueError("collection update precedes creation")
         previous, running = None, []
         for index, item in enumerate(self.items):
-            expected_base = None if previous is None else previous.candidate_hash
+            expected_base = (
+                None if previous is None or item.independent else previous.candidate_hash
+            )
             if item.status not in {"WAITING", "DRAFT", "CANCELLED"} or (
                 item.status == "CANCELLED" and item.attempts
             ):
-                if index and (previous is None or previous.validation != "VALID"):
+                if index and not item.independent and (
+                    previous is None or not previous.policy_ready
+                ):
                     raise ValueError("item depends on an unresolved predecessor")
                 if item.base_hash != expected_base:
                     raise ValueError("item base differs from the predecessor candidate")
@@ -451,7 +530,7 @@ class CollectionPreparationRecord(ResearchValue):
             ) for item in self.items)
             if (self.review.items != bindings or self.review_revision == 0
                 or self.review.reviewed_at > self.updated_at
-                or any(item.candidate.validation != "VALID" for item in self.items)):
+                or any(not item.candidate.policy_ready for item in self.items)):
                 raise ValueError("collection review is not bound to the exact valid chain")
         return self
 

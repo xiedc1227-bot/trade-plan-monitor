@@ -197,6 +197,20 @@ class TushareHistoricalMinuteProvider:
             for value in values
         )
 
+    def historical_adjustment_factors(self, symbol: str, start: date, end: date):
+        """Preserve provider receipt and declare the historical session-open convention."""
+        from trade_plan_monitor.backtest.daily_basis import HistoricalAdjustmentFactor
+
+        normalized_symbol = _validated_symbol(symbol)
+        factors, received_at = self._reference_provider.daily_adjustment_factors(
+            normalized_symbol, start, end,
+        )
+        return tuple(HistoricalAdjustmentFactor(
+            symbol=normalized_symbol, trade_date=day, factor=factor,
+            available_at=datetime.combine(day, time(9, 30), _SHANGHAI),
+            collected_at=received_at,
+        ) for day, factor in sorted(factors.items()))
+
     def _fetch_frame(self, *, symbol: str, trade_date: date) -> pd.DataFrame:
         provider_error: TushareProviderError | None = None
         frame: object | None = None

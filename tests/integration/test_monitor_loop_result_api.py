@@ -108,6 +108,13 @@ def test_scheduled_result_has_exact_bounded_provenance_and_native_report_header(
     expected = report.model_dump(mode="json", exclude={"schedule", "schema_version"})
     expected["report_schema_version"] = "backtest-report-v5"
     assert value["report"] == expected
+    diagnostics = value["planDiagnostics"]
+    assert diagnostics["availability"] == "AVAILABLE"
+    assert [p["version_id"] for p in diagnostics["plans"]] == [
+        item.version.version_id for item in stored.prepared.items
+    ]
+    assert sum(p["fill_count"] for p in diagnostics["plans"]) == report.cycle.fills
+    assert all(p["review_status"] == "PASSED" for p in diagnostics["plans"])
     assert value["openingAccount"] == stored.run_input.initial_account.model_dump(mode="json")
     provenance = value["provenance"]
     assert (
@@ -138,6 +145,38 @@ def test_scheduled_result_has_exact_bounded_provenance_and_native_report_header(
     assert summary["schemaVersion"] == "monitor-loop-result-v2"
     assert summary["runId"] == reference.run_id
     assert "report" not in summary and "versions" not in summary
+
+
+def test_rule_comparison_reads_frozen_sources_without_preparation_or_replay(scheduled_published):
+    client, service, store, reference, _ = scheduled_published
+    prepared = store.get_loop_input(reference).prepared
+    service._prepared_plan_reader = None
+    for index, item in enumerate(prepared.items):
+        response = client.get(
+            f"/api/v1/backtest-runs/{reference.run_id}/rule-changes/{item.source.source_id}"
+        )
+        assert response.status_code == 200
+        value = response.json()
+        assert value["runId"] == reference.run_id
+        assert value["manifestHash"] == prepared.manifest_hash
+        assert value["versionId"] == item.version.version_id
+        assert value["sourceId"] == item.source.source_id
+        assert value["previousSourceId"] == (
+            prepared.items[index - 1].source.source_id if index else None
+        )
+        assert value["changes"]
+        if index == 0:
+            assert value["relationship"] == "INITIAL"
+            assert all(change["action"] == "ADD" for change in value["changes"])
+        else:
+            assert value["relationship"] == ("INDEPENDENT" if item.independent else "INHERITED")
+        assert len(response.content) < 4 * 1024 * 1024
+    assert client.get(
+        f"/api/v1/backtest-runs/{reference.run_id}/rule-changes/not-a-source"
+    ).status_code == 404
+    assert client.get(
+        f"/api/v1/backtest-runs/{'0' * 64}/rule-changes/not-a-source"
+    ).status_code == 404
 
 
 def test_scheduled_equity_route_returns_whole_run_opening_and_daily_closes(scheduled_published):
@@ -469,6 +508,23 @@ def test_expired_events_keep_typed_header_and_provenance(published):
     assert header.status_code == 200
     assert header.json()["report"] == report.model_dump(mode="json")
     assert header.json()["availability"]["decisionDetails"] == "EXPIRED"
+    assert header.json()["planDiagnostics"]["availability"] == "EXPIRED"
+    assert header.json()["planDiagnostics"]["plans"][0]["fill_count"] is None
+    assert header.json()["planDiagnostics"]["plans"][0]["examples"] == []
+
+
+def test_diagnostics_reject_incomplete_retained_audit(published):
+    import sqlite3
+
+    _, _, store, reference, _, _ = published
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            "DELETE FROM backtest_detail WHERE detail_id = "
+            "(SELECT max(detail_id) FROM backtest_detail WHERE run_id = ?)",
+            (reference.run_id,),
+        )
+    with pytest.raises(RuntimeError, match="available backtest artifact count is inconsistent"):
+        store.get_loop_diagnostics(reference.run_id)
 
 
 def test_native_event_identity_and_hash_are_revalidated(published):

@@ -112,6 +112,50 @@ class PreparationService:
     async def get(self, preparation_id: str) -> PreparationRecord | None:
         return await self._metadata.run(self._store.get, preparation_id)
 
+    async def list_reviewed(self, *, offset=0, limit=20):
+        from trade_plan_monitor.backtest.plan_library import list_reviewed_plans
+        return await self._metadata.run(
+            list_reviewed_plans, self._store, offset=offset, limit=limit,
+        )
+
+    async def library_write(self, command, *, idempotency_key):
+        from trade_plan_monitor.backtest.preparation_models import (
+            PreparedPlanCompositionInput,
+            SingleSourcePreparationInput,
+        )
+        if not isinstance(command, (SingleSourcePreparationInput, PreparedPlanCompositionInput)):
+            raise TypeError("library command required")
+        command = type(command).model_validate_json(command.model_dump_json())
+        return await self._metadata.run(self._library_write, command, idempotency_key)
+
+    def _library_write(self, command, key):
+        from trade_plan_monitor.backtest.plan_library import (
+            compose_reviewed_plans,
+            create_single_preparation,
+        )
+        from trade_plan_monitor.backtest.preparation_models import SingleSourcePreparationInput
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        intent = canonical_json({"domain": "plan-library-write-v1",
+            "command_hash": sha256(canonical_json(command).encode()).hexdigest()})
+        admission_key = "library-" + sha256(key.encode()).hexdigest()
+        single = isinstance(command, SingleSourcePreparationInput)
+        operation_name = "CREATE_SINGLE" if single else "COMPOSE_REVIEWED"
+        replay = self._store.replay_create(command, idempotency_key=key, operation=operation_name)
+        if replay is not None:
+            reservation = self._jobs.get_run_submission_reservation(intent, admission_key)
+            if reservation is not None:
+                self._jobs.release_run_submission(reservation)
+            return replay
+        reservation = self._jobs.claim_run_submission(intent, admission_key)
+        if not isinstance(reservation, BacktestRunSubmissionReservation):
+            raise JobAdmissionError("BACKTEST_BUSY")
+        try:
+            operation = create_single_preparation if single else compose_reviewed_plans
+            return operation(self._store, command, idempotency_key=key)
+        finally:
+            self._jobs.release_run_submission(reservation)
+
     async def get_frozen(self, preparation_id: str) -> FrozenPreparedPlan:
         return await self._metadata.run(self._read_frozen, preparation_id)
 
@@ -229,7 +273,8 @@ class PreparationService:
         else:
             index, item = PreparationStore.next_collection_item(record)
             expected = (item.source.source_id, item.source_revision,
-                        record.items[index - 1].candidate.candidate_hash if index else None)
+                        record.items[index - 1].candidate.candidate_hash
+                        if index and not item.independent else None)
         if binding != expected:
             raise PreparationConflictError("PREPARATION_ITEM_BINDING_CONFLICT")
 
@@ -246,6 +291,12 @@ class PreparationService:
             self._extraction_binding(replay, item_binding, collection_mode, replay=True)
             return replay, False
         record = self._store._require_revision(self._store.get(preparation_id), expected_revision)
+        sources = (tuple(item.source for item in record.items)
+                   if isinstance(record, CollectionPreparationRecord) else (record.source,))
+        if any(source.effective_trade_date is None for source in sources):
+            raise PreparationConflictError("SOURCE_DATE_REQUIRED")
+        if len({source.effective_trade_date for source in sources}) != len(sources):
+            raise PreparationConflictError("SOURCE_DATE_CONFLICT")
         self._extraction_binding(record, item_binding, collection_mode)
         collection = isinstance(record, CollectionPreparationRecord)
         if collection:
@@ -287,7 +338,8 @@ class PreparationService:
         claim_type = CollectionPreparationWorkClaim if collection else PreparationWorkClaim
         extra = {} if not collection else {
             "source_id": item.source.source_id,
-            "base_hash": record.items[index - 1].candidate.candidate_hash if index else None,
+            "base_hash": (record.items[index - 1].candidate.candidate_hash
+                          if index and not item.independent else None),
         }
         claim = claim_type(
             generation=str(uuid4()),
@@ -349,6 +401,12 @@ class PreparationService:
                        else retries - 1)
 
     def _complete(self, original, outcome, retries, token):
+        from trade_plan_monitor.backtest.preparation_repairs import (
+            REPAIR_ERRORS,
+            correction_context,
+            correction_feedback,
+        )
+
         identity = original.preparation_id
         record = self._store.get(identity)
         claim = original.work_claim
@@ -363,6 +421,17 @@ class PreparationService:
             "idempotency_key": f"{claim.generation}.complete",
             "worker_owner_id": claim.owner_id,
         }
+        item = (self._store._collection_active_item(record, claim.generation)[1]
+                if isinstance(record, CollectionPreparationRecord) else record)
+        can_repair = (len(item.attempts) <= self._extractor.max_repairs
+                      and len(item.attempts) < MAX_EXTRACTION_ATTEMPTS)
+        candidate = outcome.candidate
+        if candidate is None and isinstance(outcome.result, LoopPlanExtractionResult):
+            candidate = outcome.result.to_preparation_candidate()
+        feedback = correction_feedback(candidate)
+        semantic = (getattr(outcome.result, "preparation_contract", None) == "SEMANTIC_PATCH"
+                    or getattr(getattr(outcome.result, "output", None), "inheritance_mode", None)
+                    == "PREDECESSOR_PATCH")
         if outcome.unknown:
             self._store.mark_unknown(
                 identity,
@@ -374,7 +443,14 @@ class PreparationService:
         if record.status == "CANCEL_REQUESTED":
             ended = self._store.acknowledge_cancellation(identity, **common)
         elif outcome.error_code is not None:
-            ended = self._store.finish_attempt(identity, **common, error_code=outcome.error_code)
+            repair = can_repair and outcome.error_code in REPAIR_ERRORS
+            ended = self._store.finish_attempt(identity, **common, error_code=outcome.error_code,
+                retryable=repair, repair_feedback=(outcome.error_code,) if repair else (),
+                repair_context_json=correction_context(outcome.result) if repair else None)
+        elif feedback and can_repair and semantic:
+            ended = self._store.finish_attempt(identity, **common, error_code="AI_REPAIR_REQUIRED",
+                retryable=True, repair_feedback=feedback,
+                repair_context_json=correction_context(outcome.result))
         elif outcome.candidate is not None:
             ended = self._store.finish_attempt(identity, **common, candidate=outcome.candidate)
         elif isinstance(outcome.result, LoopPlanExtractionResult):
@@ -394,18 +470,29 @@ class PreparationService:
                 )
                 return None
             code = result.diagnostic.provider_error_code if result.diagnostic else None
+            if code is None:
+                # Preserve server-owned actionable reasons, never raw provider text.
+                safe_codes = {"AI_INPUT_TOO_LARGE", "AI_FIELD_EVIDENCE_INVALID",
+                              "AI_OUTPUT_INVALID", "AI_OUTPUT_TRUNCATED"}
+                code = next((issue.code for issue in result.validation_issues
+                             if issue.code in safe_codes), "INVALID_OUTPUT")
+                if result.diagnostic and result.diagnostic.finish_reason == "length":
+                    code = "AI_OUTPUT_TRUNCATED"
             ended = self._store.finish_attempt(
                 identity,
                 **common,
                 error_code=code or "INVALID_OUTPUT",
-                retryable=code in {"TRANSIENT", "RATE_LIMITED"},
+                retryable=(code in {"TRANSIENT", "RATE_LIMITED", "AI_INPUT_TOO_LARGE"}
+                           or (can_repair and code in REPAIR_ERRORS)),
+                repair_feedback=(code,) if can_repair and code in REPAIR_ERRORS else (),
             )
         if isinstance(ended, CollectionPreparationRecord):
             return self._advance_collection(ended, retries, token)
         if (
             ended.status == "FAILED"
             and ended.attempts[-1].retryable
-            and retries > 0
+            and ended.attempts[-1].error_code != "AI_INPUT_TOO_LARGE"
+            and (retries > 0 or ended.attempts[-1].repair_feedback)
             and len(ended.attempts) < MAX_EXTRACTION_ATTEMPTS
             and not token.cancelled
             and not self._closed
@@ -422,7 +509,9 @@ class PreparationService:
     def _advance_collection(self, ended, retries, token):
         claim = ended.work_claim
         index, item = self._store._collection_active_item(ended, claim.generation)
-        retry = (item.status == "FAILED" and item.attempts[-1].retryable and retries > 0
+        retry = (item.status == "FAILED" and item.attempts[-1].retryable
+                 and (retries > 0 or item.attempts[-1].repair_feedback)
+                 and item.attempts[-1].error_code != "AI_INPUT_TOO_LARGE"
                  and len(item.attempts) < MAX_EXTRACTION_ATTEMPTS)
         successor = (item.candidate is not None and item.candidate.validation == "VALID"
                      and index + 1 < len(ended.items))

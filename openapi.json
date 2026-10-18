@@ -271,6 +271,29 @@
         "title": "ActivePlanView",
         "type": "object"
       },
+      "AfterRuleCompleted": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "AFTER_RULE_COMPLETED",
+            "title": "Mode",
+            "type": "string"
+          },
+          "prior_rule_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Prior Rule Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "prior_rule_id"
+        ],
+        "title": "AfterRuleCompleted",
+        "type": "object"
+      },
       "AlertAcknowledgementCommand": {
         "additionalProperties": false,
         "properties": {
@@ -3828,6 +3851,16 @@
             "title": "Pinned",
             "type": "boolean"
           },
+          "planDiagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "planHash": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Planhash",
@@ -4573,6 +4606,92 @@
           "equitySeries"
         ],
         "title": "BacktestResultAvailabilityView",
+        "type": "object"
+      },
+      "BacktestRuleChangesView": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PlanChange"
+            },
+            "maxItems": 192,
+            "title": "Changes",
+            "type": "array"
+          },
+          "manifestHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifesthash",
+            "type": "string"
+          },
+          "previousSourceId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previoussourceid"
+          },
+          "previousVersionId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previousversionid"
+          },
+          "relationship": {
+            "enum": [
+              "INITIAL",
+              "INHERITED",
+              "INDEPENDENT"
+            ],
+            "title": "Relationship",
+            "type": "string"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "sourceId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "versionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Versionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "manifestHash",
+          "sourceId",
+          "versionId",
+          "previousSourceId",
+          "previousVersionId",
+          "relationship",
+          "changes"
+        ],
+        "title": "BacktestRuleChangesView",
         "type": "object"
       },
       "BacktestRunCommand": {
@@ -5541,6 +5660,16 @@
             "title": "Pinned",
             "type": "boolean"
           },
+          "planDiagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "planHash": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Planhash",
@@ -6410,6 +6539,29 @@
             ],
             "title": "Finished At"
           },
+          "repair_context_json": {
+            "anyOf": [
+              {
+                "maxLength": 32000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Context Json"
+          },
+          "repair_feedback": {
+            "default": [],
+            "items": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Repair Feedback",
+            "type": "array"
+          },
           "retryable": {
             "default": false,
             "title": "Retryable",
@@ -6461,6 +6613,16 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Candidatehash",
             "type": "string"
+          },
+          "confirmationSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreparationConfirmationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "draft": {
             "anyOf": [
@@ -7247,6 +7409,16 @@
       "CollectionPreparationView": {
         "additionalProperties": false,
         "properties": {
+          "baseAccount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopAccountInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "currentSourceId": {
             "anyOf": [
               {
@@ -7260,6 +7432,20 @@
               }
             ],
             "title": "Currentsourceid"
+          },
+          "editableSourceId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editablesourceid"
           },
           "frozen": {
             "anyOf": [
@@ -7354,6 +7540,16 @@
               }
             ],
             "title": "Workphase"
+          },
+          "workflow": {
+            "default": "LEGACY",
+            "enum": [
+              "LEGACY",
+              "SINGLE",
+              "COMPOSITION"
+            ],
+            "title": "Workflow",
+            "type": "string"
           }
         },
         "required": [
@@ -8524,6 +8720,7 @@
               "POLICY",
               "INVENTORY_ASSERTION",
               "BACKGROUND",
+              "CONTEXT",
               "UNRESOLVED",
               "UNSUPPORTED"
             ],
@@ -8572,6 +8769,24 @@
             "maxItems": 51,
             "title": "Remainders",
             "type": "array"
+          },
+          "semantic_role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "DIRECTIVE",
+                  "HISTORICAL",
+                  "ACCOUNT",
+                  "COMMENTARY",
+                  "AMBIGUOUS"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Semantic Role"
           },
           "start": {
             "minimum": 0.0,
@@ -8905,52 +9120,6 @@
           "trading_day"
         ],
         "title": "DailyDayActivation",
-        "type": "object"
-      },
-      "DailyDraftLevels": {
-        "additionalProperties": false,
-        "properties": {
-          "low_buy": {
-            "$ref": "#/components/schemas/DailyDraftZone"
-          },
-          "pressure": {
-            "$ref": "#/components/schemas/DailyDraftZone"
-          },
-          "risk_comparison": {
-            "anyOf": [
-              {
-                "enum": [
-                  "LT",
-                  "LTE"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Risk Comparison"
-          },
-          "risk_line_fen": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Risk Line Fen"
-          }
-        },
-        "required": [
-          "low_buy",
-          "pressure",
-          "risk_line_fen",
-          "risk_comparison"
-        ],
-        "title": "DailyDraftLevels",
         "type": "object"
       },
       "DailyDraftZone": {
@@ -9416,6 +9585,8 @@
           "origin": {
             "enum": [
               "SOURCE",
+              "SOURCE_INTERPRETATION",
+              "SOURCE_SEMANTIC",
               "HUMAN_SUPPLEMENT",
               "PRODUCT_CONTRACT"
             ],
@@ -9912,38 +10083,6 @@
         "title": "DailyInventoryView",
         "type": "object"
       },
-      "DailyLevels": {
-        "additionalProperties": false,
-        "properties": {
-          "low_buy": {
-            "$ref": "#/components/schemas/DailyZone"
-          },
-          "pressure": {
-            "$ref": "#/components/schemas/DailyZone"
-          },
-          "risk_comparison": {
-            "enum": [
-              "LT",
-              "LTE"
-            ],
-            "title": "Risk Comparison",
-            "type": "string"
-          },
-          "risk_line_fen": {
-            "exclusiveMinimum": 0.0,
-            "title": "Risk Line Fen",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "low_buy",
-          "pressure",
-          "risk_line_fen",
-          "risk_comparison"
-        ],
-        "title": "DailyLevels",
-        "type": "object"
-      },
       "DailyManualActivation": {
         "additionalProperties": false,
         "properties": {
@@ -10326,70 +10465,6 @@
         "title": "DailyPriceCompare",
         "type": "object"
       },
-      "DailyPriceCompareInput": {
-        "additionalProperties": false,
-        "properties": {
-          "comparator": {
-            "enum": [
-              "LT",
-              "LTE",
-              "EQ",
-              "GTE",
-              "GT"
-            ],
-            "title": "Comparator",
-            "type": "string"
-          },
-          "field": {
-            "enum": [
-              "open",
-              "high",
-              "low",
-              "close"
-            ],
-            "title": "Field",
-            "type": "string"
-          },
-          "offset": {
-            "maximum": 499.0,
-            "minimum": 0.0,
-            "title": "Offset",
-            "type": "integer"
-          },
-          "reference": {
-            "discriminator": {
-              "mapping": {
-                "DYNAMIC": "#/components/schemas/DynamicDailyReference",
-                "FIXED": "#/components/schemas/FixedDailyReferenceInput"
-              },
-              "propertyName": "mode"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/FixedDailyReferenceInput"
-              },
-              {
-                "$ref": "#/components/schemas/DynamicDailyReference"
-              }
-            ],
-            "title": "Reference"
-          },
-          "type": {
-            "const": "DAILY_PRICE_COMPARE",
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "type",
-          "field",
-          "offset",
-          "comparator",
-          "reference"
-        ],
-        "title": "DailyPriceCompare",
-        "type": "object"
-      },
       "DailyPriceInRange": {
         "additionalProperties": false,
         "properties": {
@@ -10425,6 +10500,43 @@
           "range"
         ],
         "title": "DailyPriceInRange",
+        "type": "object"
+      },
+      "DailyPriorClose": {
+        "additionalProperties": false,
+        "description": "A completed earlier session in a reviewed, explicitly bounded recovery window.",
+        "properties": {
+          "comparator": {
+            "enum": [
+              "GT",
+              "GTE"
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "price_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Price Fen",
+            "type": "integer"
+          },
+          "since_date": {
+            "format": "date",
+            "title": "Since Date",
+            "type": "string"
+          },
+          "type": {
+            "const": "DAILY_PRIOR_CLOSE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "since_date",
+          "price_fen",
+          "comparator"
+        ],
+        "title": "DailyPriorClose",
         "type": "object"
       },
       "DailyRangeActivation": {
@@ -10650,6 +10762,15 @@
             ],
             "title": "Core Qty"
           },
+          "lot_allocations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RiskLotAllocation"
+            },
+            "maxItems": 500,
+            "title": "Lot Allocations",
+            "type": "array"
+          },
           "status": {
             "enum": [
               "WAITING",
@@ -10802,6 +10923,15 @@
               }
             ],
             "title": "Coreqty"
+          },
+          "lotAllocations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RiskLotAllocation"
+            },
+            "maxItems": 500,
+            "title": "Lotallocations",
+            "type": "array"
           },
           "status": {
             "enum": [
@@ -11002,6 +11132,16 @@
             ],
             "title": "Fulfilledat"
           },
+          "holdingScope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskHoldingScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "involvesCore": {
             "title": "Involvescore",
             "type": "boolean"
@@ -11080,6 +11220,17 @@
               }
             ],
             "title": "Risklinefen"
+          },
+          "ruleId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ruleid"
           },
           "scopeEvidence": {
             "title": "Scopeevidence",
@@ -11357,6 +11508,16 @@
             ],
             "title": "Fulfilled At"
           },
+          "holding_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskHoldingScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "involves_core": {
             "title": "Involves Core",
             "type": "boolean"
@@ -11435,6 +11596,17 @@
               }
             ],
             "title": "Risk Line Fen"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
           },
           "scope_evidence": {
             "title": "Scope Evidence",
@@ -11788,6 +11960,21 @@
             "title": "Lineage",
             "type": "string"
           },
+          "occurrenceMode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ONCE_PER_RULE",
+                  "AFTER_RULE_COMPLETED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrencemode"
+          },
           "planVersionId": {
             "title": "Planversionid",
             "type": "string"
@@ -11984,6 +12171,21 @@
           "lineage": {
             "title": "Lineage",
             "type": "string"
+          },
+          "occurrence_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ONCE_PER_RULE",
+                  "AFTER_RULE_COMPLETED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Mode"
           },
           "plan_version_id": {
             "title": "Plan Version Id",
@@ -14676,6 +14878,7 @@
             "discriminator": {
               "mapping": {
                 "KNOWN": "#/components/schemas/KnownLoopCash",
+                "POSITION_LIMIT_ONLY": "#/components/schemas/PositionLimitFunding",
                 "UNKNOWN": "#/components/schemas/UnknownLoopCash"
               },
               "propertyName": "kind"
@@ -14686,6 +14889,9 @@
               },
               {
                 "$ref": "#/components/schemas/UnknownLoopCash"
+              },
+              {
+                "$ref": "#/components/schemas/PositionLimitFunding"
               }
             ],
             "title": "Cash"
@@ -14796,6 +15002,9 @@
               },
               {
                 "$ref": "#/components/schemas/UnknownLoopCash"
+              },
+              {
+                "$ref": "#/components/schemas/PositionLimitFunding"
               }
             ],
             "title": "Cash"
@@ -15104,6 +15313,112 @@
         "title": "LoopCycleSummary",
         "type": "object"
       },
+      "LoopDiagnosticExample": {
+        "additionalProperties": false,
+        "properties": {
+          "actual": {
+            "maxLength": 400,
+            "title": "Actual",
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "MARKET_UNMET",
+              "QUALITATIVE_UNRESOLVED",
+              "PROCESSING_ERROR",
+              "DATA_UNAVAILABLE",
+              "EXECUTION_BLOCKED",
+              "NO_BUY_RULE",
+              "NO_EVALUATION",
+              "CONDITION_MET"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 200,
+            "title": "Reason",
+            "type": "string"
+          },
+          "requirement": {
+            "maxLength": 400,
+            "title": "Requirement",
+            "type": "string"
+          },
+          "root_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SATISFIED",
+                  "UNSATISFIED",
+                  "MISSING_INPUT"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Outcome"
+          },
+          "rule_id": {
+            "maxLength": 160,
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category",
+          "rule_id",
+          "at",
+          "sequence",
+          "root_outcome",
+          "requirement",
+          "actual",
+          "reason"
+        ],
+        "title": "LoopDiagnosticExample",
+        "type": "object"
+      },
+      "LoopDiagnostics": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "UNAVAILABLE"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/LoopPlanDiagnostic"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Plans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "availability",
+          "plans"
+        ],
+        "title": "LoopDiagnostics",
+        "type": "object"
+      },
       "LoopEndBoundary": {
         "additionalProperties": false,
         "description": "Resolve only within submission reservation; later readers use stored values.",
@@ -15243,7 +15558,7 @@
             "items": {
               "$ref": "#/components/schemas/DailyRiskState"
             },
-            "maxItems": 2,
+            "maxItems": 64,
             "title": "Risks",
             "type": "array"
           },
@@ -15492,6 +15807,17 @@
             "title": "Lot Key",
             "type": "string"
           },
+          "plan_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Version Id"
+          },
           "quantity": {
             "exclusiveMinimum": 0.0,
             "maximum": 9007199254740991.0,
@@ -15703,6 +16029,115 @@
           "evidence"
         ],
         "title": "LoopOpeningMark",
+        "type": "object"
+      },
+      "LoopPlanDiagnostic": {
+        "additionalProperties": false,
+        "properties": {
+          "buy_rule_count": {
+            "minimum": 0.0,
+            "title": "Buy Rule Count",
+            "type": "integer"
+          },
+          "categories": {
+            "items": {
+              "enum": [
+                "MARKET_UNMET",
+                "QUALITATIVE_UNRESOLVED",
+                "PROCESSING_ERROR",
+                "DATA_UNAVAILABLE",
+                "EXECUTION_BLOCKED",
+                "NO_BUY_RULE",
+                "NO_EVALUATION",
+                "CONDITION_MET"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Categories",
+            "type": "array"
+          },
+          "effective_trade_date": {
+            "format": "date",
+            "title": "Effective Trade Date",
+            "type": "string"
+          },
+          "evaluation_count": {
+            "minimum": 0.0,
+            "title": "Evaluation Count",
+            "type": "integer"
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/LoopDiagnosticExample"
+            },
+            "maxItems": 8,
+            "title": "Examples",
+            "type": "array"
+          },
+          "fill_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fill Count"
+          },
+          "missing_count": {
+            "minimum": 0.0,
+            "title": "Missing Count",
+            "type": "integer"
+          },
+          "review_status": {
+            "const": "PASSED",
+            "default": "PASSED",
+            "title": "Review Status",
+            "type": "string"
+          },
+          "sampled": {
+            "title": "Sampled",
+            "type": "boolean"
+          },
+          "satisfied_count": {
+            "minimum": 0.0,
+            "title": "Satisfied Count",
+            "type": "integer"
+          },
+          "source_id": {
+            "maxLength": 160,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "unmet_count": {
+            "minimum": 0.0,
+            "title": "Unmet Count",
+            "type": "integer"
+          },
+          "version_id": {
+            "maxLength": 160,
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "version_id",
+          "effective_trade_date",
+          "buy_rule_count",
+          "fill_count",
+          "evaluation_count",
+          "unmet_count",
+          "missing_count",
+          "satisfied_count",
+          "categories",
+          "examples",
+          "sampled"
+        ],
+        "title": "LoopPlanDiagnostic",
         "type": "object"
       },
       "LoopPlanReview": {
@@ -17721,6 +18156,21 @@
         "title": "OfficialDailyConfirmation",
         "type": "object"
       },
+      "OncePerRule": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "ONCE_PER_RULE",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "OncePerRule",
+        "type": "object"
+      },
       "OpeningAccountFacts": {
         "additionalProperties": false,
         "properties": {
@@ -19043,6 +19493,15 @@
           "draft": {
             "$ref": "#/components/schemas/UnifiedPlanDraft"
           },
+          "inheritance_mode": {
+            "default": "LEGACY",
+            "enum": [
+              "LEGACY",
+              "PREDECESSOR_PATCH"
+            ],
+            "title": "Inheritance Mode",
+            "type": "string"
+          },
           "operations": {
             "items": {
               "$ref": "#/components/schemas/PlanUpdateOperation"
@@ -19152,6 +19611,15 @@
           "draft": {
             "$ref": "#/components/schemas/UnifiedPlanDraftInput"
           },
+          "inheritance_mode": {
+            "default": "LEGACY",
+            "enum": [
+              "LEGACY",
+              "PREDECESSOR_PATCH"
+            ],
+            "title": "Inheritance Mode",
+            "type": "string"
+          },
           "operations": {
             "items": {
               "$ref": "#/components/schemas/PlanUpdateOperation"
@@ -19244,6 +19712,35 @@
             "title": "Clause Ids",
             "type": "array"
           },
+          "intent": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ASSERTED",
+                  "AMBIGUOUS",
+                  "CONTEXT"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
           "rule_id": {
             "anyOf": [
               {
@@ -19257,6 +19754,38 @@
               }
             ],
             "title": "Rule Id"
+          },
+          "scope_assessment": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ENTIRE_RULE",
+                  "PARTIAL_RULE",
+                  "CONTEXT_ONLY",
+                  "UNCLEAR"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Assessment"
+          },
+          "scope_change": {
+            "anyOf": [
+              {
+                "enum": [
+                  "EXISTING_POSITIONS_ONLY",
+                  "NEW_POSITIONS_ONLY"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Change"
           },
           "target": {
             "enum": [
@@ -19790,6 +20319,20 @@
         "title": "PositionInventoryView",
         "type": "object"
       },
+      "PositionLimitFunding": {
+        "additionalProperties": false,
+        "description": "No capital budget: shared plan authority still limits every simulated position.",
+        "properties": {
+          "kind": {
+            "const": "POSITION_LIMIT_ONLY",
+            "default": "POSITION_LIMIT_ONLY",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "PositionLimitFunding",
+        "type": "object"
+      },
       "PositionLotPage": {
         "additionalProperties": false,
         "properties": {
@@ -20026,6 +20569,29 @@
             ],
             "title": "Finished At"
           },
+          "repair_context_json": {
+            "anyOf": [
+              {
+                "maxLength": 32000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Context Json"
+          },
+          "repair_feedback": {
+            "default": [],
+            "items": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Repair Feedback",
+            "type": "array"
+          },
           "retryable": {
             "default": false,
             "title": "Retryable",
@@ -20069,6 +20635,39 @@
         "title": "PreparationAttemptView",
         "type": "object"
       },
+      "PreparationConfirmationSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "automaticFacts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Automaticfacts",
+            "type": "array"
+          },
+          "processingIssues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Processingissues",
+            "type": "array"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/PreparationQuestion"
+            },
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "automaticFacts",
+          "questions",
+          "processingIssues"
+        ],
+        "title": "PreparationConfirmationSummary",
+        "type": "object"
+      },
       "PreparationCreateCommand": {
         "additionalProperties": false,
         "properties": {
@@ -20097,6 +20696,16 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Candidatehash",
             "type": "string"
+          },
+          "confirmationSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreparationConfirmationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "draft": {
             "$ref": "#/components/schemas/UnifiedPlanDraft"
@@ -20160,6 +20769,16 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Candidatehash",
             "type": "string"
+          },
+          "confirmationSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreparationConfirmationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "draft": {
             "title": "Draft",
@@ -20319,6 +20938,39 @@
           "frozen"
         ],
         "title": "PreparationFrozenView",
+        "type": "object"
+      },
+      "PreparationQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "excerpts": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Excerpts",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "questionId": {
+            "title": "Questionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "category",
+          "message"
+        ],
+        "title": "PreparationQuestion",
         "type": "object"
       },
       "PreparationRecoveryCommand": {
@@ -20552,6 +21204,16 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Candidatehash",
             "type": "string"
+          },
+          "confirmationSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreparationConfirmationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "draft": {
             "title": "Draft",
@@ -20787,6 +21449,33 @@
           "costs"
         ],
         "title": "PreparedBacktestRunCommand",
+        "type": "object"
+      },
+      "PreparedPlanCompositionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewedPlanReference"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "title": "Plans",
+            "type": "array"
+          },
+          "preparation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preparation_id",
+          "plans"
+        ],
+        "title": "PreparedPlanCompositionInput",
         "type": "object"
       },
       "ProductSourceTreatmentView": {
@@ -21115,8 +21804,9 @@
                 "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                 "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                 "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                 "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                 "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                 "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                 "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -21127,7 +21817,7 @@
             },
             "oneOf": [
               {
-                "$ref": "#/components/schemas/DailyPriceCompare"
+                "$ref": "#/components/schemas/UnifiedPriceCompare"
               },
               {
                 "$ref": "#/components/schemas/DailyPriceInRange"
@@ -21143,6 +21833,9 @@
               },
               {
                 "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
               },
               {
                 "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -22504,6 +23197,199 @@
         "title": "ReviewedDailyFact",
         "type": "object"
       },
+      "ReviewedPlanLibraryItem": {
+        "additionalProperties": false,
+        "properties": {
+          "effectiveTradeDate": {
+            "format": "date",
+            "title": "Effectivetradedate",
+            "type": "string"
+          },
+          "manifestHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifesthash",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "title": "Name",
+            "type": "string"
+          },
+          "preparationId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparationid",
+            "type": "string"
+          },
+          "reviewedAt": {
+            "format": "date-time",
+            "title": "Reviewedat",
+            "type": "string"
+          },
+          "reviewedBase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewedPlanReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "symbol": {
+            "maxLength": 32,
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preparationId",
+          "manifestHash",
+          "sourceId",
+          "effectiveTradeDate",
+          "symbol",
+          "name",
+          "reviewedBase",
+          "reviewedAt"
+        ],
+        "title": "ReviewedPlanLibraryItem",
+        "type": "object"
+      },
+      "ReviewedPlanLibraryPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewedPlanLibraryItem"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "offset",
+          "limit",
+          "total"
+        ],
+        "title": "ReviewedPlanLibraryPage",
+        "type": "object"
+      },
+      "ReviewedPlanReference": {
+        "additionalProperties": false,
+        "properties": {
+          "manifest_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Manifest Hash",
+            "type": "string"
+          },
+          "preparation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "preparation_id",
+          "manifest_hash"
+        ],
+        "title": "ReviewedPlanReference",
+        "type": "object"
+      },
+      "RiskHoldingScope": {
+        "additionalProperties": false,
+        "properties": {
+          "end_trade_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Trade Date"
+          },
+          "mode": {
+            "enum": [
+              "BEFORE_TRADE_DATE",
+              "FROM_TRADE_DATE"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "trade_date"
+        ],
+        "title": "RiskHoldingScope",
+        "type": "object"
+      },
+      "RiskLotAllocation": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "enum": [
+              "CORE",
+              "TACTICAL"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "bucket",
+          "quantity"
+        ],
+        "title": "RiskLotAllocation",
+        "type": "object"
+      },
       "RiskStatus": {
         "description": "Pure official-close risk lifecycle used by the decision boundary.",
         "enum": [
@@ -23039,6 +23925,15 @@
             "title": "Inventory Revision",
             "type": "integer"
           },
+          "lot_allocations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RiskLotAllocation"
+            },
+            "maxItems": 500,
+            "title": "Lot Allocations",
+            "type": "array"
+          },
           "price_fen": {
             "exclusiveMinimum": 0.0,
             "title": "Price Fen",
@@ -23118,6 +24013,37 @@
           "preparation_id"
         ],
         "title": "SinglePlanPreparationInput",
+        "type": "object"
+      },
+      "SingleSourcePreparationInput": {
+        "additionalProperties": false,
+        "properties": {
+          "preparation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Preparation Id",
+            "type": "string"
+          },
+          "reviewed_base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewedPlanReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/PreparationSource"
+          }
+        },
+        "required": [
+          "preparation_id",
+          "source"
+        ],
+        "title": "SingleSourcePreparationInput",
         "type": "object"
       },
       "SmaIndicatorFactView": {
@@ -24059,8 +24985,9 @@
                 "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                 "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                 "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                 "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                 "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                 "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                 "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24071,7 +24998,7 @@
             },
             "oneOf": [
               {
-                "$ref": "#/components/schemas/DailyPriceCompare"
+                "$ref": "#/components/schemas/UnifiedPriceCompare"
               },
               {
                 "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24087,6 +25014,9 @@
               },
               {
                 "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
               },
               {
                 "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24161,8 +25091,9 @@
                   "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                   "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                   "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                   "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                   "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                   "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                   "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24173,7 +25104,7 @@
               },
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/DailyPriceCompare"
+                  "$ref": "#/components/schemas/UnifiedPriceCompare"
                 },
                 {
                   "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24189,6 +25120,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DailyCloseSequence"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriorClose"
                 },
                 {
                   "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24240,8 +25174,9 @@
                   "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
                   "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
                   "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
-                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompareInput",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
                   "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                   "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
                   "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                   "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24252,7 +25187,7 @@
               },
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/DailyPriceCompareInput"
+                  "$ref": "#/components/schemas/UnifiedPriceCompareInput"
                 },
                 {
                   "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24268,6 +25203,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DailyCloseSequenceInput"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriorClose"
                 },
                 {
                   "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24319,8 +25257,9 @@
                   "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                   "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                   "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                   "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                   "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                   "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                   "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24331,7 +25270,7 @@
               },
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/DailyPriceCompare"
+                  "$ref": "#/components/schemas/UnifiedPriceCompare"
                 },
                 {
                   "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24347,6 +25286,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DailyCloseSequence"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriorClose"
                 },
                 {
                   "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24398,8 +25340,9 @@
                   "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
                   "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
                   "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
-                  "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompareInput",
+                  "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
                   "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                  "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                   "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
                   "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                   "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24410,7 +25353,7 @@
               },
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/DailyPriceCompareInput"
+                  "$ref": "#/components/schemas/UnifiedPriceCompareInput"
                 },
                 {
                   "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24426,6 +25369,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DailyCloseSequenceInput"
+                },
+                {
+                  "$ref": "#/components/schemas/DailyPriorClose"
                 },
                 {
                   "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24503,8 +25449,9 @@
                 "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                 "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                 "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                 "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                 "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                 "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                 "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24515,7 +25462,7 @@
             },
             "oneOf": [
               {
-                "$ref": "#/components/schemas/DailyPriceCompare"
+                "$ref": "#/components/schemas/UnifiedPriceCompare"
               },
               {
                 "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24531,6 +25478,9 @@
               },
               {
                 "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
               },
               {
                 "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24616,8 +25566,9 @@
                     "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                     "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                     "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                    "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                     "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                     "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                     "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                     "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24628,7 +25579,7 @@
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/DailyPriceCompare"
+                    "$ref": "#/components/schemas/UnifiedPriceCompare"
                   },
                   {
                     "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24644,6 +25595,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DailyCloseSequence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
                   },
                   {
                     "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24745,8 +25699,9 @@
                     "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
                     "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
                     "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
-                    "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompareInput",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
                     "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                     "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
                     "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                     "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24757,7 +25712,7 @@
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/DailyPriceCompareInput"
+                    "$ref": "#/components/schemas/UnifiedPriceCompareInput"
                   },
                   {
                     "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24773,6 +25728,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DailyCloseSequenceInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
                   },
                   {
                     "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -24859,6 +25817,66 @@
           "confirmation"
         ],
         "title": "UnifiedDraftAlertRule",
+        "type": "object"
+      },
+      "UnifiedDraftLevels": {
+        "additionalProperties": false,
+        "properties": {
+          "low_buy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyDraftZone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyDraftZone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LT",
+                  "LTE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Comparison"
+          },
+          "risk_line_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Line Fen"
+          }
+        },
+        "required": [
+          "low_buy",
+          "pressure",
+          "risk_line_fen",
+          "risk_comparison"
+        ],
+        "title": "UnifiedDraftLevels",
         "type": "object"
       },
       "UnifiedDraftPosition": {
@@ -24954,8 +25972,9 @@
                     "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                     "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                     "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                    "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                     "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                     "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                     "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                     "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -24966,7 +25985,7 @@
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/DailyPriceCompare"
+                    "$ref": "#/components/schemas/UnifiedPriceCompare"
                   },
                   {
                     "$ref": "#/components/schemas/DailyPriceInRange"
@@ -24982,6 +26001,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DailyCloseSequence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
                   },
                   {
                     "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -25024,6 +26046,16 @@
             ],
             "title": "Evidence Mode"
           },
+          "holding_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskHoldingScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "involves_core": {
             "anyOf": [
               {
@@ -25055,6 +26087,47 @@
               }
             ],
             "title": "Priority"
+          },
+          "risk_comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LT",
+                  "LTE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Comparison"
+          },
+          "risk_line_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Line Fen"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
           },
           "scope_evidence": {
             "anyOf": [
@@ -25140,8 +26213,9 @@
                     "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
                     "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
                     "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
-                    "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompareInput",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
                     "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                     "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
                     "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                     "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -25152,7 +26226,7 @@
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/DailyPriceCompareInput"
+                    "$ref": "#/components/schemas/UnifiedPriceCompareInput"
                   },
                   {
                     "$ref": "#/components/schemas/DailyPriceInRange"
@@ -25168,6 +26242,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DailyCloseSequenceInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
                   },
                   {
                     "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -25210,6 +26287,16 @@
             ],
             "title": "Evidence Mode"
           },
+          "holding_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskHoldingScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "involves_core": {
             "anyOf": [
               {
@@ -25241,6 +26328,47 @@
               }
             ],
             "title": "Priority"
+          },
+          "risk_comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LT",
+                  "LTE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Comparison"
+          },
+          "risk_line_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Line Fen"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
           },
           "scope_evidence": {
             "anyOf": [
@@ -25338,8 +26466,9 @@
                     "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                     "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                     "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                    "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                     "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                     "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                     "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                     "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -25350,7 +26479,7 @@
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/DailyPriceCompare"
+                    "$ref": "#/components/schemas/UnifiedPriceCompare"
                   },
                   {
                     "$ref": "#/components/schemas/DailyPriceInRange"
@@ -25366,6 +26495,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DailyCloseSequence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
                   },
                   {
                     "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -25438,7 +26570,9 @@
               {
                 "discriminator": {
                   "mapping": {
+                    "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
                     "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicy",
+                    "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
                     "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
                   },
                   "propertyName": "mode"
@@ -25449,6 +26583,12 @@
                   },
                   {
                     "$ref": "#/components/schemas/UnifiedResetPolicy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OncePerRule"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AfterRuleCompleted"
                   }
                 ]
               },
@@ -25590,8 +26730,9 @@
                     "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
                     "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
                     "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
-                    "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompareInput",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
                     "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                     "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
                     "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                     "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -25602,7 +26743,7 @@
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/DailyPriceCompareInput"
+                    "$ref": "#/components/schemas/UnifiedPriceCompareInput"
                   },
                   {
                     "$ref": "#/components/schemas/DailyPriceInRange"
@@ -25618,6 +26759,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DailyCloseSequenceInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
                   },
                   {
                     "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -25690,7 +26834,9 @@
               {
                 "discriminator": {
                   "mapping": {
+                    "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
                     "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicyInput",
+                    "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
                     "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
                   },
                   "propertyName": "mode"
@@ -25701,6 +26847,12 @@
                   },
                   {
                     "$ref": "#/components/schemas/UnifiedResetPolicyInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OncePerRule"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AfterRuleCompleted"
                   }
                 ]
               },
@@ -25844,6 +26996,174 @@
         "title": "UnifiedExecutionPolicy",
         "type": "object"
       },
+      "UnifiedFixedReference": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "mode": {
+            "const": "FIXED",
+            "title": "Mode",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "FEN",
+              "INDICATOR"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "value",
+          "unit",
+          "as_of",
+          "source"
+        ],
+        "title": "UnifiedFixedReference",
+        "type": "object"
+      },
+      "UnifiedFixedReferenceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "mode": {
+            "const": "FIXED",
+            "title": "Mode",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "FEN",
+              "INDICATOR"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "mode",
+          "value",
+          "unit",
+          "as_of",
+          "source"
+        ],
+        "title": "UnifiedFixedReference",
+        "type": "object"
+      },
+      "UnifiedLevels": {
+        "additionalProperties": false,
+        "description": "Observation zones and a liquidation line are independently optional.",
+        "properties": {
+          "low_buy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyZone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pressure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyZone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LT",
+                  "LTE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Comparison"
+          },
+          "risk_line_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Line Fen"
+          }
+        },
+        "required": [
+          "low_buy",
+          "pressure",
+          "risk_line_fen",
+          "risk_comparison"
+        ],
+        "title": "UnifiedLevels",
+        "type": "object"
+      },
       "UnifiedMonitoring": {
         "additionalProperties": false,
         "properties": {
@@ -25950,7 +27270,7 @@
           "levels": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DailyDraftLevels"
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
               },
               {
                 "type": "null"
@@ -26007,7 +27327,7 @@
             "items": {
               "$ref": "#/components/schemas/UnifiedDraftRisk"
             },
-            "maxItems": 2,
+            "maxItems": 64,
             "title": "Risk Branches",
             "type": "array"
           },
@@ -26115,7 +27435,7 @@
           "levels": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DailyDraftLevels"
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
               },
               {
                 "type": "null"
@@ -26172,7 +27492,7 @@
             "items": {
               "$ref": "#/components/schemas/UnifiedDraftRiskInput"
             },
-            "maxItems": 2,
+            "maxItems": 64,
             "title": "Risk Branches",
             "type": "array"
           },
@@ -26288,6 +27608,134 @@
         "title": "UnifiedPositionPolicy",
         "type": "object"
       },
+      "UnifiedPriceCompare": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "enum": [
+              "LT",
+              "LTE",
+              "EQ",
+              "GTE",
+              "GT"
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "field": {
+            "enum": [
+              "open",
+              "high",
+              "low",
+              "close"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "reference": {
+            "discriminator": {
+              "mapping": {
+                "DYNAMIC": "#/components/schemas/DynamicDailyReference",
+                "FIXED": "#/components/schemas/UnifiedFixedReference"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedFixedReference"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicDailyReference"
+              }
+            ],
+            "title": "Reference"
+          },
+          "type": {
+            "const": "DAILY_PRICE_COMPARE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "field",
+          "offset",
+          "comparator",
+          "reference"
+        ],
+        "title": "UnifiedPriceCompare",
+        "type": "object"
+      },
+      "UnifiedPriceCompareInput": {
+        "additionalProperties": false,
+        "properties": {
+          "comparator": {
+            "enum": [
+              "LT",
+              "LTE",
+              "EQ",
+              "GTE",
+              "GT"
+            ],
+            "title": "Comparator",
+            "type": "string"
+          },
+          "field": {
+            "enum": [
+              "open",
+              "high",
+              "low",
+              "close"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "offset": {
+            "maximum": 499.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "reference": {
+            "discriminator": {
+              "mapping": {
+                "DYNAMIC": "#/components/schemas/DynamicDailyReference",
+                "FIXED": "#/components/schemas/UnifiedFixedReferenceInput"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedFixedReferenceInput"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicDailyReference"
+              }
+            ],
+            "title": "Reference"
+          },
+          "type": {
+            "const": "DAILY_PRICE_COMPARE",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "field",
+          "offset",
+          "comparator",
+          "reference"
+        ],
+        "title": "UnifiedPriceCompare",
+        "type": "object"
+      },
       "UnifiedResearchInput": {
         "additionalProperties": false,
         "properties": {
@@ -26387,8 +27835,9 @@
                 "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                 "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                 "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                 "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                 "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                 "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                 "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -26399,7 +27848,7 @@
             },
             "oneOf": [
               {
-                "$ref": "#/components/schemas/DailyPriceCompare"
+                "$ref": "#/components/schemas/UnifiedPriceCompare"
               },
               {
                 "$ref": "#/components/schemas/DailyPriceInRange"
@@ -26415,6 +27864,9 @@
               },
               {
                 "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
               },
               {
                 "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -26461,8 +27913,9 @@
                 "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
                 "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
                 "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
-                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompareInput",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
                 "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                 "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
                 "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                 "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -26473,7 +27926,7 @@
             },
             "oneOf": [
               {
-                "$ref": "#/components/schemas/DailyPriceCompareInput"
+                "$ref": "#/components/schemas/UnifiedPriceCompareInput"
               },
               {
                 "$ref": "#/components/schemas/DailyPriceInRange"
@@ -26489,6 +27942,9 @@
               },
               {
                 "$ref": "#/components/schemas/DailyCloseSequenceInput"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
               },
               {
                 "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -26532,8 +27988,9 @@
                     "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                     "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                     "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                    "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                     "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                     "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                     "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                     "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -26544,7 +28001,7 @@
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/DailyPriceCompare"
+                    "$ref": "#/components/schemas/UnifiedPriceCompare"
                   },
                   {
                     "$ref": "#/components/schemas/DailyPriceInRange"
@@ -26560,6 +28017,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DailyCloseSequence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
                   },
                   {
                     "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -26595,6 +28055,16 @@
             "title": "Evidence Mode",
             "type": "string"
           },
+          "holding_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskHoldingScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "involves_core": {
             "title": "Involves Core",
             "type": "boolean"
@@ -26612,6 +28082,47 @@
             "minimum": 1.0,
             "title": "Priority",
             "type": "integer"
+          },
+          "risk_comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LT",
+                  "LTE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Comparison"
+          },
+          "risk_line_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Line Fen"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
           },
           "scope_evidence": {
             "maxLength": 2000,
@@ -26678,8 +28189,9 @@
                 "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
                 "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
                 "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
-                "DAILY_PRICE_COMPARE": "#/components/schemas/DailyPriceCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
                 "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
                 "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
                 "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
                 "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
@@ -26690,7 +28202,7 @@
             },
             "oneOf": [
               {
-                "$ref": "#/components/schemas/DailyPriceCompare"
+                "$ref": "#/components/schemas/UnifiedPriceCompare"
               },
               {
                 "$ref": "#/components/schemas/DailyPriceInRange"
@@ -26706,6 +28218,9 @@
               },
               {
                 "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
               },
               {
                 "$ref": "#/components/schemas/ReviewedDailyFact"
@@ -26757,7 +28272,9 @@
           "independent_signal": {
             "discriminator": {
               "mapping": {
+                "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
                 "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicy",
+                "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
                 "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
               },
               "propertyName": "mode"
@@ -26768,6 +28285,12 @@
               },
               {
                 "$ref": "#/components/schemas/UnifiedResetPolicy"
+              },
+              {
+                "$ref": "#/components/schemas/OncePerRule"
+              },
+              {
+                "$ref": "#/components/schemas/AfterRuleCompleted"
               }
             ],
             "title": "Independent Signal"
@@ -26900,7 +28423,7 @@
           "levels": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DailyLevels"
+                "$ref": "#/components/schemas/UnifiedLevels"
               },
               {
                 "type": "null"
@@ -26957,7 +28480,7 @@
             "items": {
               "$ref": "#/components/schemas/UnifiedRiskBranch"
             },
-            "maxItems": 2,
+            "maxItems": 64,
             "title": "Risk Branches",
             "type": "array"
           },
@@ -29562,6 +31085,473 @@
         "summary": "Get Backtest Job",
         "tags": [
           "backtest-jobs"
+        ]
+      }
+    },
+    "/api/v1/backtest-plan-library": {
+      "get": {
+        "operationId": "list_plans_api_v1_backtest_plan_library_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewedPlanLibraryPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Plans",
+        "tags": [
+          "backtest-plan-library"
+        ]
+      }
+    },
+    "/api/v1/backtest-plan-library/compositions": {
+      "post": {
+        "operationId": "compose_api_v1_backtest_plan_library_compositions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreparedPlanCompositionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPreparationFrozenView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Compose",
+        "tags": [
+          "backtest-plan-library"
+        ]
+      }
+    },
+    "/api/v1/backtest-plan-library/preparations": {
+      "post": {
+        "operationId": "prepare_one_api_v1_backtest_plan_library_preparations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SingleSourcePreparationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPreparationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Prepare One",
+        "tags": [
+          "backtest-plan-library"
         ]
       }
     },
@@ -32877,6 +34867,163 @@
         "summary": "Get Backtest Market Index Series",
         "tags": [
           "backtest-results"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs/{run_id}/rule-changes/{source_id}": {
+      "get": {
+        "operationId": "get_backtest_rule_changes_api_v1_backtest_runs__run_id__rule_changes__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestRuleChangesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest Rule Changes",
+        "tags": [
+          "backtest-runs"
         ]
       }
     },

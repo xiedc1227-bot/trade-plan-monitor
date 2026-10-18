@@ -83,6 +83,12 @@ class UnknownLoopCash(ResearchValue):
     kind: Literal["UNKNOWN"] = "UNKNOWN"
 
 
+class PositionLimitFunding(ResearchValue):
+    """No capital budget: shared plan authority still limits every simulated position."""
+
+    kind: Literal["POSITION_LIMIT_ONLY"] = "POSITION_LIMIT_ONLY"
+
+
 class LoopInitialLot(ResearchValue):
     lot_key: StableIdentifier
     bucket: Literal["CORE", "TACTICAL"]
@@ -115,7 +121,9 @@ class LoopOpeningMark(ResearchValue):
 class LoopAccountInput(ResearchValue):
     snapshot_at: LoopTimestamp
     inventory_known: bool
-    cash: Annotated[KnownLoopCash | UnknownLoopCash, Field(discriminator="kind")]
+    cash: Annotated[
+        KnownLoopCash | UnknownLoopCash | PositionLimitFunding, Field(discriminator="kind")
+    ]
     lots: tuple[LoopInitialLot, ...] = Field(max_length=MAX_INITIAL_LOTS)
     opening_mark: LoopOpeningMark | None
     evidence: Text

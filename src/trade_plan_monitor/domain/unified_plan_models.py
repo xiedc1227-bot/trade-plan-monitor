@@ -1,5 +1,6 @@
 """Current condition-driven plan contract; historical schemas retain their exact codecs."""
 
+from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal, Self
 
@@ -11,7 +12,6 @@ from trade_plan_monitor.domain.daily_plan_models import (
     DailyCloseSequence,
     DailyIndependentEvent,
     DailyIndicatorCompare,
-    DailyLevels,
     DailyMetadata,
     DailyPriceCompare,
     DailyPriceInRange,
@@ -21,7 +21,10 @@ from trade_plan_monitor.domain.daily_plan_models import (
     DailyValidity,
     DailyValue,
     DailyVolumeRatio,
+    DailyZone,
+    DynamicDailyReference,
     Fen,
+    FixedDailyReference,
     Identifier,
     PositiveQty,
     PositiveWholeQty,
@@ -30,6 +33,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
     WholeQty,
     required_daily_observations,
 )
+from trade_plan_monitor.domain.risk_scope import RiskHoldingScope, risk_identity
 
 
 class MinuteCloseInRange(DailyValue):
@@ -71,13 +75,32 @@ class UnifiedAny(DailyValue):
     conditions: tuple[UnifiedCondition, ...] = Field(min_length=1, max_length=50)
 
 
+class UnifiedFixedReference(FixedDailyReference):
+    # A literal threshold is not an observation that needs a made-up quote date.
+    as_of: date | None
+
+
+class UnifiedPriceCompare(DailyPriceCompare):
+    reference: Annotated[UnifiedFixedReference | DynamicDailyReference, Field(discriminator="mode")]
+
+
+class DailyPriorClose(DailyValue):
+    """A completed earlier session in a reviewed, explicitly bounded recovery window."""
+
+    type: Literal["DAILY_PRIOR_CLOSE"]
+    since_date: date
+    price_fen: Fen
+    comparator: Literal["GT", "GTE"]
+
+
 UnifiedCondition = Annotated[
-    DailyPriceCompare
+    UnifiedPriceCompare
     | DailyPriceInRange
     | DailyVolumeRatio
     | DailyCandleRatio
     | DailyIndicatorCompare
     | DailyCloseSequence
+    | DailyPriorClose
     | ReviewedDailyFact
     | MinuteCloseInRange
     | MinuteCloseBelow
@@ -115,8 +138,18 @@ class UnifiedResetPolicy(DailyValue):
     reset_condition: UnifiedCondition
 
 
+class OncePerRule(DailyValue):
+    mode: Literal["ONCE_PER_RULE"]
+
+
+class AfterRuleCompleted(DailyValue):
+    mode: Literal["AFTER_RULE_COMPLETED"]
+    prior_rule_id: Identifier
+
+
 UnifiedIndependentSignal = Annotated[
-    DailyIndependentEvent | UnifiedResetPolicy, Field(discriminator="mode")
+    DailyIndependentEvent | UnifiedResetPolicy | OncePerRule | AfterRuleCompleted,
+    Field(discriminator="mode"),
 ]
 
 
@@ -196,12 +229,30 @@ class UnifiedPositionPolicy(DailyValue):
 
 class UnifiedRiskBranch(DailyRiskBranch):
     condition: UnifiedCondition | None
+    rule_id: Identifier | None = Field(default=None, exclude_if=lambda v: v is None)
+    holding_scope: RiskHoldingScope | None = Field(default=None, exclude_if=lambda v: v is None)
+    risk_line_fen: Fen | None = Field(default=None, exclude_if=lambda v: v is None)
+    risk_comparison: Literal["LT", "LTE"] | None = Field(
+        default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def explicit_severe_condition(self) -> Self:
         if (self.kind == "SEVERE_TECHNICAL") != (self.condition is not None):
             raise ValueError("severe risk requires its explicit reviewed condition")
+        if (self.risk_line_fen is None) != (self.risk_comparison is None):
+            raise ValueError("branch risk price and comparator must be supplied together")
+        if self.risk_line_fen is not None and self.kind != "ORDINARY_TECHNICAL":
+            raise ValueError("only ordinary technical risk uses a price line")
         return self
+
+
+class UnifiedLevels(DailyValue):
+    """Observation zones and a liquidation line are independently optional."""
+
+    low_buy: DailyZone | None
+    pressure: DailyZone | None
+    risk_line_fen: Fen | None
+    risk_comparison: Literal["LT", "LTE"] | None
 
 
 class UnifiedTradePlan(DailyTradePlan):
@@ -215,13 +266,13 @@ class UnifiedTradePlan(DailyTradePlan):
     market: Literal["SSE", "SZSE", "BSE"]
     metadata: DailyMetadata
     activation: DailyActivation
-    levels: DailyLevels | None
+    levels: UnifiedLevels | None
     position: UnifiedPositionPolicy
     trading_rules: DailyTradingRules
     monitoring: UnifiedMonitoring | None
     ordinary_rules: tuple[UnifiedRule, ...] = Field(max_length=2)
     alert_rules: tuple[UnifiedAlertRule, ...] = Field(default=(), max_length=10)
-    risk_branches: tuple[UnifiedRiskBranch, ...] = Field(max_length=2)
+    risk_branches: tuple[UnifiedRiskBranch, ...] = Field(max_length=64)
     execution_policy: UnifiedExecutionPolicy
 
     @model_validator(mode="before")
@@ -258,17 +309,44 @@ class UnifiedTradePlan(DailyTradePlan):
         if not self.ordinary_rules and not self.risk_branches and not self.alert_rules:
             raise ValueError("plan requires an explicit condition or risk branch")
         if len({r.side for r in self.ordinary_rules}) != len(self.ordinary_rules):
-            raise ValueError("duplicate ordinary side")
+            first, second = self.ordinary_rules
+            if not (
+                isinstance(first.independent_signal, OncePerRule)
+                and isinstance(second.independent_signal, AfterRuleCompleted)
+                and second.independent_signal.prior_rule_id == first.rule_id
+            ):
+                raise ValueError("duplicate ordinary side requires an explicit ordered tranche")
         identified_rules = (*self.ordinary_rules, *self.alert_rules)
         if len({r.rule_id for r in identified_rules}) != len(identified_rules):
             raise ValueError("duplicate rule identity")
-        if len({r.kind for r in self.risk_branches}) != len(self.risk_branches):
+        if len({risk_identity(r) for r in self.risk_branches}) != len(self.risk_branches):
             raise ValueError("duplicate risk branch")
         if self.levels is None and (
             any(r.zone for r in self.ordinary_rules)
-            or any(r.kind == "ORDINARY_TECHNICAL" for r in self.risk_branches)
+            or any(r.kind == "ORDINARY_TECHNICAL" and r.risk_line_fen is None
+                   for r in self.risk_branches)
         ):
             raise ValueError("referenced price zones/risk line require explicit levels")
+        for rule in self.ordinary_rules:
+            if isinstance(rule.independent_signal, AfterRuleCompleted):
+                predecessors = [
+                    r
+                    for r in self.ordinary_rules
+                    if r.rule_id == rule.independent_signal.prior_rule_id
+                ]
+                if (
+                    len(predecessors) != 1
+                    or predecessors[0] is rule
+                    or not isinstance(predecessors[0].independent_signal, OncePerRule)
+                ):
+                    raise ValueError("tranche predecessor must be a distinct once-only rule")
+            if rule.zone and getattr(self.levels, rule.zone.lower()) is None:
+                raise ValueError("an executable rule cannot reference an inactive observation zone")
+        if any(r.kind == "ORDINARY_TECHNICAL" and r.risk_line_fen is None
+               for r in self.risk_branches) and (
+            self.levels.risk_line_fen is None or self.levels.risk_comparison is None
+        ):
+            raise ValueError("ordinary liquidation requires an explicit downside risk line")
         for branch in self.risk_branches:
             if (
                 not branch.involves_core

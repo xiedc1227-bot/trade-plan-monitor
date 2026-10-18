@@ -26,7 +26,9 @@ NOW = datetime(2026, 10, 8, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
 AVAILABLE = datetime(2026, 8, 20, 9, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
-def ready_collection(tmp_path, *, later_text=None, first_available=None):
+def ready_collection(
+    tmp_path, *, later_text=None, first_available=None, without_source_times=False,
+):
     from tests.integration.test_plan_preparation_worker import (
         collection_claim,
         collection_update_result,
@@ -48,7 +50,10 @@ def ready_collection(tmp_path, *, later_text=None, first_available=None):
         authored_at=first_available or at(19), available_at=first_available or at(19),
         effective_trade_date=at(19).date(),
     )
-    if first_available is not None:
+    if without_source_times:
+        first = first.model_copy(update={"authored_at": None, "available_at": None})
+        source = source.model_copy(update={"authored_at": None, "available_at": None})
+    if first_available is not None or without_source_times:
         draft = UnifiedPlanDraft.from_executable(research_plan())
         base = build_initial_review(draft, reviewed_mapping(draft, first.text), first)
     store = PreparationStore(tmp_path / "collection-review.sqlite", clock=lambda: NOW)
@@ -99,7 +104,7 @@ def collection_review_command(record, **changes):
         expected_revision=record.revision, items=tuple(item_binding(item) for item in record.items),
         confirmed=True, evidence="Explicit synthetic review of every source and opening account.",
         account=LoopAccountInput(
-            snapshot_at=record.items[0].source.available_at, inventory_known=True,
+            snapshot_at=record.items[0].source.execution_available_at, inventory_known=True,
             cash=KnownLoopCash(balance_fen=1_000_000), lots=(), opening_mark=None,
             evidence="Synthetic human opening cash 1000000 fen and zero shares.",
         ),
@@ -583,7 +588,7 @@ def test_review_rejects_stale_revision_or_evidence_without_consuming_key(tmp_pat
     )
 
 
-@pytest.mark.parametrize("changes", [{"draft": None}, {"mapping": None}, {"account": None}])
+@pytest.mark.parametrize("changes", [{"draft": None}, {"mapping": None}])
 def test_confirmation_cannot_acknowledge_unresolved_plan_evidence_or_account(tmp_path, changes):
     from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
 
@@ -593,6 +598,20 @@ def test_confirmation_cannot_acknowledge_unresolved_plan_evidence_or_account(tmp
             "one", command=review_command(ready, **changes), idempotency_key="review"
         )
     assert store.get("one") == ready
+
+
+def test_review_derives_preloaded_account_time_without_inventing_source_facts(tmp_path):
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+
+    store, ready = ready_preparation(tmp_path)
+    reviewed = store.review_and_freeze(
+        "one", command=review_command(ready, account=None), idempotency_key="review"
+    )
+    frozen = frozen_preparation(reviewed)
+    assert frozen.opening_evidence.snapshot_at is None
+    assert frozen.account.snapshot_at == ready.source.execution_available_at
+    assert frozen.account.cash.kind == "POSITION_LIMIT_ONLY"
+    assert frozen.account_origin == "SOURCE"
 
 
 @pytest.mark.parametrize("field", ["account", "source", "mapping", "extraction_candidate_hash"])
@@ -670,7 +689,7 @@ def test_source_account_preserves_unknown_cash_dates_sellability_and_mark(tmp_pa
     frozen = frozen_preparation(reviewed)
     assert frozen.account_origin == "SOURCE"
     assert frozen.account.snapshot_at == AVAILABLE
-    assert frozen.account.cash.kind == "UNKNOWN"
+    assert frozen.account.cash.kind == "POSITION_LIMIT_ONLY"
     assert frozen.account.opening_mark is None
     (lot,) = frozen.account.lots
     assert lot.bucket == "CORE" and lot.quantity == 100 and lot.cost_basis_fen == 401050
@@ -678,7 +697,7 @@ def test_source_account_preserves_unknown_cash_dates_sellability_and_mark(tmp_pa
     assert frozen.account.opening_equity_fen is None
 
 
-@pytest.mark.parametrize("field", ["authored_at", "available_at", "effective_trade_date"])
+@pytest.mark.parametrize("field", ["effective_trade_date"])
 def test_missing_source_chronology_needs_explicit_correction_before_freeze(tmp_path, field):
     from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
 
@@ -686,6 +705,17 @@ def test_missing_source_chronology_needs_explicit_correction_before_freeze(tmp_p
     with pytest.raises(PreparationConflictError, match="SOURCE_TIME_REQUIRED"):
         store.review_and_freeze("one", command=review_command(ready), idempotency_key="review")
     assert store.get("one") == ready
+
+
+@pytest.mark.parametrize("field", ["authored_at", "available_at"])
+def test_optional_source_provenance_does_not_block_freeze(tmp_path, field):
+    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+
+    store, ready = ready_preparation(tmp_path, metadata={field: None})
+    reviewed = store.review_and_freeze(
+        "one", command=review_command(ready), idempotency_key="review",
+    )
+    assert getattr(frozen_preparation(reviewed).source, field) is None
 
 
 def test_human_review_cannot_reclassify_unsupported_execution_as_background(tmp_path):

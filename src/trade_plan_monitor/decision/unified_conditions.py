@@ -84,6 +84,8 @@ def evaluate_unified_condition(
             fact_ids=tuple(f["id"] for f in current),
             reason=("REVIEWED_FACT_REQUIRED" if not matching else
                 "CONFLICTING_REVIEWED_FACT" if len(outcomes) != 1 else None))
+    if tag == "DAILY_PRIOR_CLOSE":
+        return _prior_close(condition, series)
     if not tag.startswith("MINUTE_"):
         evidence = evaluate_daily_condition(
             condition,
@@ -91,6 +93,7 @@ def evaluate_unified_condition(
             facts=facts,
             signal_id=signal_id,
             macd_min_observations=macd_min_observations,
+            evidence_model=UnifiedConditionEvidence,
         )
         return UnifiedConditionEvidence.model_validate(evidence.model_dump())
     if target is None or not bars:
@@ -124,6 +127,34 @@ def requires_daily(root):
     if root.type in {"ALL", "ANY"}:
         return any(requires_daily(c) for c in root.conditions)
     return root.type != "REVIEWED_FACT" and not root.type.startswith("MINUTE_")
+
+
+def _prior_close(condition, series):
+    """Certify a prior stage without treating a current close as a later retest."""
+    from decimal import Decimal
+
+    from trade_plan_monitor.decision.daily_conditions import compare
+
+    base = dict(condition=condition, basis_id=None if series is None else series.basis_id)
+    if series is None:
+        return UnifiedConditionEvidence(**base, outcome="MISSING_INPUT",
+                                        reason="PRICE_BASIS_UNVERIFIED")
+    # A truncated history cannot establish absence of a previous recovery.
+    if series.bars[0].trade_date > condition.since_date:
+        return UnifiedConditionEvidence(**base, outcome="MISSING_INPUT",
+                                        reason="PRIOR_CLOSE_HISTORY_REQUIRED")
+    earlier = tuple(b for b in series.bars
+                    if condition.since_date <= b.trade_date < series.bars[-1].trade_date)
+    matched = tuple(b for b in earlier
+                    if compare(b.close, condition.comparator, Decimal(condition.price_fen)))
+    evidence = matched[:1] or earlier
+    return UnifiedConditionEvidence(
+        **base, outcome="SATISFIED" if matched else "UNSATISFIED",
+        reason=None if matched else "PRIOR_CLOSE_NOT_SATISFIED",
+        bar_ids=tuple(b.bar_id for b in evidence),
+        session_dates=tuple(b.trade_date for b in evidence),
+        operands=tuple(str(b.close) for b in evidence) + (str(condition.price_fen),),
+    )
 
 
 def requires_minutes(root):

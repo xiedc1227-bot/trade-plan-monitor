@@ -21,7 +21,11 @@ from trade_plan_monitor.backtest.loop_session import LoopSession
 from trade_plan_monitor.backtest.time import SHANGHAI, format_shanghai_datetime
 from trade_plan_monitor.decision.unified_conditions import requires_daily
 from trade_plan_monitor.market_data.aggregation import aggregate_five_minute_bar
-from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
+from trade_plan_monitor.market_data.daily_data import (
+    DailyAdmissionError,
+    DailyExecutionQuote,
+    admit_qfq_daily,
+)
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar
 from trade_plan_monitor.runtime.daily_service import DailyRuntimeInputs
 
@@ -66,6 +70,14 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
                                 identity=identity,
                             )
             run = stored.run_input
+            for factor in stored.dataset.adjustment_factors:
+                _insert(
+                    spool,
+                    factor.available_at,
+                    "BASIS",
+                    str(factor.trade_date),
+                    identity=factor.evidence_hash,
+                )
             for at in (run.boundary.started_at, run.boundary.evidence_cutoff):
                 _insert(spool, at, "BOUNDARY", "")
             spool.commit()
@@ -83,6 +95,7 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
                         tuple(calendar),
                         cancellation_token,
                         progress_callback,
+                        adjustment_factors=stored.dataset.adjustment_factors,
                     )
                     cycle = LoopRunner(session, report_writer=writer).run(
                         frames, cancellation_token=cancellation_token
@@ -123,10 +136,12 @@ def _insert(spool, at, kind, payload, *, identity=None):
 class _Frames:
     """One bounded rolling context, with no scripted trade/fact/response operations."""
 
-    def __init__(self, spool, plan, run, calendar, token, progress):
+    def __init__(self, spool, plan, run, calendar, token, progress, *, adjustment_factors=()):
         self.spool, self.plan, self.run, self.calendar = spool, plan, run, calendar
         self.token, self.progress = token, progress
         self.minutes, self.fives, self.limits = {}, {}, {}
+        self.daily = {}
+        self.adjustment_factors = adjustment_factors
         self.latest, self.target = None, None
         self.daily_needed = bool(plan.risk_branches) or any(
             requires_daily(rule.condition) for rule in (*plan.ordinary_rules, *plan.alert_rules)
@@ -164,7 +179,11 @@ class _Frames:
                         self.limits = dict(sorted(self.limits.items())[-512:])
                     elif kind == "DAILY":
                         daily = DailyBar.model_validate_json(payload)
+                        self.daily[daily.trade_date] = daily
+                        self.daily = dict(sorted(self.daily.items())[-500:])
                         official = daily.trade_date
+                    elif kind == "BASIS" and self.daily:
+                        official = max(self.daily)
                 if now < self.run.boundary.started_at:
                     continue
                 minute = max(arrived, key=lambda value: value.bar_end, default=None)
@@ -219,8 +238,10 @@ class _Frames:
     def _inputs(self, now, official):
         if isinstance(self.run, ScheduledLoopInput):
             selection = self.run.schedule.select(now)
-            self.daily_needed = (selection is not None and
-                                 loop_dataset_requirements(selection.version.snapshot).requires_daily)
+            self.daily_needed = (
+                selection is not None
+                and loop_dataset_requirements(selection.version.snapshot).requires_daily
+            )
             if selection is not None:
                 self.plan = selection.version.snapshot
         past = tuple(day for day in self.calendar if day.cal_date <= now.date())
@@ -252,14 +273,15 @@ class _Frames:
                 liquidity_available=minute.volume_shares > 0,
                 special_state_verified=minute.bar_end.date() in self.limits,
             )
+        series, blockers = self._daily_series(now, calendar)
         return DailyRuntimeInputs(
             evaluated_at=now,
             official_trade_date=official,
-            series=None,
+            series=series,
             session_dates=tuple(day.cal_date for day in calendar if day.is_open),
             suspended_dates=(),
             quote=quote,
-            data_blockers=("PRICE_BASIS_UNVERIFIED",) if self.daily_needed else (),
+            data_blockers=blockers if self.daily_needed else (),
             minute_prefix=prefix,
             five_minute_bars=()
             if target is None
@@ -267,3 +289,29 @@ class _Frames:
             minute_target=target,
             trading_calendar=calendar,
         )
+
+    def _daily_series(self, now, calendar):
+        sessions = tuple(
+            day.cal_date for day in calendar if day.is_open and day.cal_date <= now.date()
+        )
+        eligible = {
+            p.trade_date: p.factor
+            for p in self.adjustment_factors
+            if p.symbol == self.plan.symbol and p.available_at <= now and p.trade_date <= now.date()
+        }
+        if not sessions or sessions[-1] not in eligible or not self.daily:
+            return None, ("PRICE_BASIS_UNVERIFIED",)
+        try:
+            series = admit_qfq_daily(
+                raw_bars=tuple(self.daily.values()),
+                factors=eligible,
+                adjustment_as_of=sessions[-1],
+                quote_basis_factor=eligible[sessions[-1]],
+                provider="TUSHARE",
+                session_dates=sessions,
+                suspended_dates=(),
+                cutoff=now,
+            )
+        except DailyAdmissionError as error:
+            return None, (error.code,)
+        return series, ()

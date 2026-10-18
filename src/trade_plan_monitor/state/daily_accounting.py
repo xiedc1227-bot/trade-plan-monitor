@@ -111,6 +111,17 @@ class DailyAccounting:
     def _position(self, symbol):
         return self.repo.get("simulation-position-" + symbol)
 
+    def lots(self, symbol, trade_date):
+        row = self._position(symbol)
+        if row is None:
+            return ()
+        exchange = {"SH": "SSE", "SZ": "SZSE", "BJ": "BSE"}[symbol[-2:]]
+        current = self.repo.session.get(TradingCalendar, (exchange, trade_date))
+        return tuple({**batch, "sellable_quantity": (
+            self._available(batch, trade_date, exchange)
+            if current is not None and current.is_open else None)}
+            for batch in row["payload"]["batches"])
+
     def snapshot(self, symbol, trade_date):
         row = self._position(symbol)
         result = {"symbol": symbol, "revision": 0 if row is None else row["revision"],
@@ -201,7 +212,8 @@ class DailyAccounting:
             },
         )
 
-    def simulate(self, *, symbol, identity, side, quantities, expected_revision, now):
+    def simulate(self, *, symbol, identity, side, quantities, expected_revision, now,
+                 lot_allocations=None, plan_version_id=None):
         """Apply the server-authorized full quantity; only acquisition-day batches persist."""
         row = self._position(symbol)
         if row is None or row["revision"] != expected_revision:
@@ -209,12 +221,22 @@ class DailyAccounting:
         payload = row["payload"]
         batches = [dict(b) for b in payload["batches"]]
         exchange = {"SH": "SSE", "SZ": "SZSE", "BJ": "BSE"}[symbol[-2:]]
+        allocations = None
+        if lot_allocations is not None:
+            allocations = {(a["id"], a["bucket"]): a["quantity"] for a in lot_allocations}
+            keys = {(b["id"], b["bucket"]) for b in batches}
+            if (len(allocations) != len(lot_allocations) or not allocations.keys() <= keys
+                or any(type(q) is not int or q <= 0 or q % 100 for q in allocations.values())
+                or side != "SELL" or any(sum(q for (_, b), q in allocations.items() if b == bucket)
+                    != quantity for bucket, quantity in quantities.items())):
+                raise ValueError("RISK_LOT_ALLOCATION_CHANGED")
         for bucket, quantity in quantities.items():
             if quantity == 0:
                 continue
             if side == "BUY":
                 batches.append({"id": identity, "bucket": bucket, "quantity": quantity,
-                    "acquired_trade_date": str(now.date()), "baseline": False})
+                    "acquired_trade_date": str(now.date()), "baseline": False,
+                    **({"plan_version_id": plan_version_id} if plan_version_id else {})})
             else:
                 left = quantity
                 for batch in sorted(
@@ -223,7 +245,10 @@ class DailyAccounting:
                     available = self._available(batch, now.date(), exchange)
                     if batch["bucket"] != bucket or not available:
                         continue
-                    debit = min(left, available)
+                    debit = (min(left, available) if allocations is None
+                        else allocations.get((batch["id"], bucket), 0))
+                    if debit > available or debit > left:
+                        raise ValueError("RISK_LOT_ALLOCATION_CHANGED")
                     batch["quantity"] -= debit
                     if batch.get("origin") == "monitor-loop-opening-v1" and (
                         batch["sellable_quantity"] is not None

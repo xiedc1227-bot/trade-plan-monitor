@@ -7,8 +7,10 @@ from pydantic import Field, JsonValue
 
 from trade_plan_monitor.ai.daily_review import semantic_values
 from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
+from trade_plan_monitor.ai.risk_withdrawal_scope import risk_scope_issue
 from trade_plan_monitor.backtest.models import StableIdentifier
 from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 
@@ -46,7 +48,7 @@ class MaterializedPlanUpdate(ResearchValue):
 
 
 def _identity(target, rule):
-    value = rule.get("kind" if target == "risk_branches" else "rule_id")
+    value = risk_identity(rule) if target == "risk_branches" else rule.get("rule_id")
     if not value:
         raise ValueError("update rules need an explicit stable identity")
     return value
@@ -82,6 +84,8 @@ def _change(target, key, before, after, clauses, action=None):
 def materialize_plan_update(
     base: UnifiedTradePlan,
     output: PlanUpdateExtractionOutput,
+    *,
+    historical: bool = False,
 ) -> MaterializedPlanUpdate:
     """Resolve whole sections or stable rules; undeclared draft fields have no effect."""
     if not isinstance(base, UnifiedTradePlan) or not isinstance(output, PlanUpdateExtractionOutput):
@@ -95,6 +99,18 @@ def materialize_plan_update(
     prior = UnifiedPlanDraft.from_executable(base).model_dump(mode="json")
     proposed = output.draft.model_dump(mode="json")
     changes = []
+    protected_risks = {
+        op.rule_id for op in output.operations
+        if not historical and risk_scope_issue(op)
+        and op.rule_id in {risk_identity(r) for r in base.risk_branches}
+    }
+    # This is an unapproved candidate baseline, never authorization to apply the
+    # old whole-position exit to new holdings. Review retains the scope blocker.
+    if "ORDINARY_TECHNICAL" in protected_risks and prior["levels"] is not None:
+        if proposed["levels"] is None:
+            proposed["levels"] = dict(prior["levels"])
+        for field in ("risk_line_fen", "risk_comparison"):
+            proposed["levels"][field] = prior["levels"][field]
     # Origins are chosen at the complete section/rule level, then expanded into field paths.
     sections = {key: ("BASE", key) for key in prior}
     rule_origins = {}
@@ -134,6 +150,15 @@ def materialize_plan_update(
             merged[target] = list(prior[target])
         merged["version"] = base.version + 1
         for op in output.operations:
+            if op.target == "risk_branches" and op.rule_id in protected_risks:
+                op = op.model_copy(update={"action": "RETAIN"})
+            if output.inheritance_mode == "PREDECESSOR_PATCH" and op.action == "MODIFY":
+                before_value = (_rules(op.target, prior[op.target]).get(op.rule_id)
+                                if op.target in COLLECTIONS else prior[op.target])
+                after_value = (_rules(op.target, proposed[op.target]).get(op.rule_id)
+                               if op.target in COLLECTIONS else proposed[op.target])
+                if before_value is not None and before_value == after_value:
+                    op = op.model_copy(update={"action": "RETAIN"})
             if op.target not in COLLECTIONS:
                 before = prior[op.target]
                 after = before if op.action == "RETAIN" else proposed[op.target]
@@ -205,4 +230,27 @@ def materialize_plan_update(
                 )
             )
         origins = tuple(origins)
+        if output.inheritance_mode == "PREDECESSOR_PATCH":
+            # Whole-rule edits retain evidence for unchanged leaves by identity,
+            # including when preceding rules were removed or reordered.
+            previous_values = semantic_values(UnifiedPlanDraft.from_executable(base))
+            current_values = semantic_values(draft)
+            preserved = []
+            for origin in origins:
+                path = origin.path
+                old_path = path
+                target = path.split(".", 1)[0].split("[", 1)[0]
+                if target in COLLECTIONS and path.startswith(target + "["):
+                    prefix = path.split("]", 1)[0] + "]"
+                    key = _identity(target, merged[target][int(prefix.split("[")[1][:-1])])
+                    old_index = next((i for i, r in enumerate(prior[target])
+                                      if _identity(target, r) == key), None)
+                    old_path = (f"{target}[{old_index}]" + path[len(prefix):]
+                                if old_index is not None else "")
+                if (origin.origin == "CURRENT" and old_path in previous_values
+                        and type(current_values[path]) is type(previous_values[old_path])
+                        and current_values[path] == previous_values[old_path]):
+                    origin = PlanFieldOrigin(path=path, origin="BASE", original_path=old_path)
+                preserved.append(origin)
+            origins = tuple(preserved)
     return MaterializedPlanUpdate(draft=draft, changes=tuple(changes), origins=origins)

@@ -344,6 +344,9 @@ def required_daily_observations(condition, macd_min_observations):
             return macd_min_observations
         return {"MA20": 20, "MA60": 60, "RSI14": 15, "ATR14": 14}.get(indicator, 20)
 
+    if condition.type == "DAILY_PRIOR_CLOSE":
+        # Variable history is bounded by since_date and checked by its evaluator.
+        return 1
     offset = condition.offset
     needed = offset + 1
     if isinstance(condition, DailyIndicatorCompare):

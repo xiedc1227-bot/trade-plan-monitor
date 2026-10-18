@@ -721,6 +721,7 @@ class BacktestMarketStore:
         progress_callback: BacktestProgressCallback | None = None,
     ) -> LoopDatasetFreezeResult:
         """Freeze a cutoff selection without changing the legacy dataset catalog."""
+        from trade_plan_monitor.backtest.daily_basis import factors_for_request
         from trade_plan_monitor.backtest.loop_dataset import LoopDatasetRequest, select_loop_dataset
 
         if not isinstance(request, LoopDatasetRequest):
@@ -734,6 +735,7 @@ class BacktestMarketStore:
                 request,
                 cancellation_token=cancellation_token,
                 progress_callback=progress_callback,
+                adjustment_factors=factors_for_request(self, request),
             )
             check_cancelled(cancellation_token, "FREEZE_VERIFY")
             connection.commit()

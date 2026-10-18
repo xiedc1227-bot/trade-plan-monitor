@@ -216,8 +216,9 @@ def test_authoring_date_only_is_preserved_without_an_invented_timestamp():
     assert dated.retrospective is False
     later = dated.model_copy(update={"authored_date": date(2026, 8, 25)})
     assert later.retrospective is True
-    with pytest.raises(ValidationError):
-        dated.model_copy(update={"authored_date": None})
+    unknown = dated.model_copy(update={"authored_date": None})
+    assert unknown.authored_at is unknown.authored_date is None
+    assert unknown.retrospective is False
     with pytest.raises(ValidationError):
         original.model_copy(update={"authored_date": date(2026, 8, 25)})
 

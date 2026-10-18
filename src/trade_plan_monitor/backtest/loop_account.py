@@ -9,6 +9,7 @@ from sqlalchemy import Column, Integer, MetaData, String, Table, Text, select
 from trade_plan_monitor.backtest.loop_input import (
     KnownLoopCash,
     LoopCosts,
+    PositionLimitFunding,
     SafeFen,
     SafePositiveFen,
     SafePositiveShares,
@@ -102,11 +103,12 @@ class LoopLedgerLot(ResearchValue):
     quantity: SafePositiveShares
     cost_basis_fen: SafeFen | None
     acquired_trade_date: date | None
+    plan_version_id: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class LoopAccountState(ResearchValue):
     revision: int = Field(ge=1, le=MAX_SAFE_INTEGER)
-    cash: KnownLoopCash | UnknownLoopCash
+    cash: KnownLoopCash | UnknownLoopCash | PositionLimitFunding
     inventory_known: bool
     lots: tuple[LoopLedgerLot, ...] = Field(max_length=500)
     realized_pnl_fen: SignedFen | None
@@ -227,7 +229,7 @@ class LoopAccountParticipant:
             raise ValueError("LOOP_PLAN_VERSION_NOT_FOUND")
         self.work.daily.lock_symbol(details.symbol)
         before = self.state()
-        if before.cash.kind != "KNOWN":
+        if before.cash.kind == "UNKNOWN":
             raise ValueError("LOOP_CASH_UNKNOWN")
         head = self.work.daily.get("evaluation-head-" + details.symbol)
         cause = self.work.daily.get(command.cause_id)
@@ -252,9 +254,11 @@ class LoopAccountParticipant:
             if side == "BUY"
             else settlement.notional_fen - settlement.total_fees_fen
         )
-        if before.cash.balance_fen + cash_delta < 0:
-            raise ValueError("LOOP_CASH_INSUFFICIENT")
-        cash = KnownLoopCash(balance_fen=before.cash.balance_fen + cash_delta)
+        cash = before.cash
+        if isinstance(cash, KnownLoopCash):
+            if cash.balance_fen + cash_delta < 0:
+                raise ValueError("LOOP_CASH_INSUFFICIENT")
+            cash = KnownLoopCash(balance_fen=cash.balance_fen + cash_delta)
         position = self.work.daily.get("simulation-position-" + details.symbol)
         old_quantities = (
             {} if position is None else self._quantities(position["payload"]["batches"])
@@ -297,6 +301,7 @@ class LoopAccountParticipant:
                     quantity=command.quantity,
                     cost_basis_fen=settlement.notional_fen + settlement.total_fees_fen,
                     acquired_trade_date=now.date(),
+                    plan_version_id=str(command.plan_version_id),
                 )
             )
         if new_quantities != {(lot.lot_key, lot.bucket): lot.quantity for lot in lots}:

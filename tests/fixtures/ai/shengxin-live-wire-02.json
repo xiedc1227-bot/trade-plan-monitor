@@ -1,0 +1,644 @@
+{
+  "draft": {
+    "plan_id": "shengxin-lithium-20260928",
+    "version": 1,
+    "symbol": "002240.SZ",
+    "name": "盛新锂能",
+    "market": "SZSE",
+    "metadata": {
+      "report_at": null,
+      "reference_price_fen": null
+    },
+    "activation": {
+      "mode": "MANUAL"
+    },
+    "levels": {
+      "low_buy": {
+        "low_fen": null,
+        "high_fen": null,
+        "include_low": null,
+        "include_high": null
+      },
+      "pressure": {
+        "low_fen": 2640,
+        "high_fen": 2670,
+        "include_low": true,
+        "include_high": true
+      },
+      "risk_line_fen": 2599,
+      "risk_comparison": "LTE"
+    },
+    "position": {
+      "max_qty": 300,
+      "core_target_qty": null,
+      "tactical_target_qty": null,
+      "allocation_provenance": "PROPOSED",
+      "allocation_evidence": "最大计划300股"
+    },
+    "trading_rules": {
+      "settlement": "NEXT_EXCHANGE_SESSION",
+      "tick_size_fen": 1,
+      "special_state_restrictions": "BLOCK_UNVERIFIED"
+    },
+    "monitoring": {
+      "indicator_formula_version": "daily-ta-v2",
+      "price_basis": "QFQ",
+      "source_requirement": "ONE_VERIFIED_PROVIDER",
+      "comparability_requirement": "CURRENT_QUOTE_BASIS",
+      "macd_min_observations": 26
+    },
+    "ordinary_rules": [
+      {
+        "status": "ENABLED",
+        "side": "BUY",
+        "rule_id": "rebuy-after-reclaim-2640-2670",
+        "quantity": 100,
+        "bucket": "TACTICAL",
+        "condition": {
+          "type": "ALL",
+          "conditions": [
+            {
+              "type": "DAILY_PRICE_IN_RANGE",
+              "field": "close",
+              "offset": 0,
+              "range": {
+                "low_fen": 2640,
+                "high_fen": 2670,
+                "include_low": true,
+                "include_high": true
+              }
+            },
+            {
+              "type": "REVIEWED_FACT",
+              "fact_kind": "PRICE_STRUCTURE",
+              "evidence_requirement": "回踩不破26.40—26.70且成交不异常放大",
+              "validity_scope": "TRADE_DATE"
+            }
+          ]
+        },
+        "confirmation": {
+          "kind": "OFFICIAL_DAILY_CLOSE"
+        },
+        "execution_window": "NEXT_EXCHANGE_SESSION_ONLY",
+        "zone": "LOW_BUY",
+        "validity": {
+          "mode": "PLAN_ACTIVE"
+        },
+        "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+        "independent_signal": null
+      }
+    ],
+    "risk_branches": [
+      {
+        "kind": "ORDINARY_TECHNICAL",
+        "involves_core": true,
+        "scope_evidence": "25.99为本轮核心底部防线，24日首次收盘跌破",
+        "target_core_qty": null,
+        "target_tactical_qty": null,
+        "priority": 1,
+        "evidence_mode": "TWO_OFFICIAL_CLOSES",
+        "suspension_confirmation_policy": null,
+        "condition": {
+          "type": "ALL",
+          "conditions": [
+            {
+              "type": "DAILY_PRICE_COMPARE",
+              "field": "close",
+              "offset": 0,
+              "comparator": "LTE",
+              "reference": {
+                "mode": "FIXED",
+                "value": 2599,
+                "unit": "FEN",
+                "as_of": "2026-09-24",
+                "source": "24日首次收盘跌破25.99核心风险线"
+              }
+            },
+            {
+              "type": "DAILY_PRICE_COMPARE",
+              "field": "close",
+              "offset": 1,
+              "comparator": "LTE",
+              "reference": {
+                "mode": "FIXED",
+                "value": 2599,
+                "unit": "FEN",
+                "as_of": "2026-09-24",
+                "source": "下一交易日收盘若仍未收回25.99，才确认普通风险退出"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "execution_policy": {
+      "same_signal": "ONE_PLANNED_QUANTITY",
+      "risk_priority": "SEVERE_THEN_ORDINARY",
+      "ordinary_conflict": "BLOCK_BOTH"
+    },
+    "alert_rules": []
+  },
+  "clauses": [
+    {
+      "clause_id": "clause-3814cdae1f58fef6",
+      "disposition": "BACKGROUND",
+      "reason": "Section heading, no trade condition."
+    },
+    {
+      "clause_id": "clause-56fb2e68945700a1",
+      "disposition": "BACKGROUND",
+      "reason": "Summary conclusion, no binding condition."
+    },
+    {
+      "clause_id": "clause-73269f306c28b88a",
+      "disposition": "INVENTORY_ASSERTION",
+      "reason": "States current holdings of 0 shares."
+    },
+    {
+      "clause_id": "clause-384dedeb2fa82dea",
+      "disposition": "POLICY",
+      "reason": "Maximum planned position of 300 shares."
+    },
+    {
+      "clause_id": "clause-54d12acb8bc2f9b2",
+      "disposition": "BACKGROUND",
+      "reason": "No buy point on 24th; no actionable condition."
+    },
+    {
+      "clause_id": "clause-6e4938caed8421f9",
+      "disposition": "BACKGROUND",
+      "reason": "Reason for no sell point; no condition."
+    },
+    {
+      "clause_id": "clause-0eba03468805325c",
+      "disposition": "BACKGROUND",
+      "reason": "No executable sell point; no condition."
+    },
+    {
+      "clause_id": "clause-34ff6bc9aeb340f9",
+      "disposition": "BACKGROUND",
+      "reason": "Transitional phrase."
+    },
+    {
+      "clause_id": "clause-92ecf72a14fffb8d",
+      "disposition": "POLICY",
+      "reason": "First close below 25.99 core risk line."
+    },
+    {
+      "clause_id": "clause-dbe8fa6b55a8f5fe",
+      "disposition": "POLICY",
+      "reason": "Original 26.40-26.70 low-buy plan cancelled."
+    },
+    {
+      "clause_id": "clause-e44e504a01b9724e",
+      "disposition": "BACKGROUND",
+      "reason": "Formatting marker."
+    },
+    {
+      "clause_id": "clause-0773ccaae6faf955",
+      "disposition": "BACKGROUND",
+      "reason": "Historical price data for 24th."
+    },
+    {
+      "clause_id": "clause-301f238cd43cb4e3",
+      "disposition": "BACKGROUND",
+      "reason": "Historical percentage change."
+    },
+    {
+      "clause_id": "clause-541b49ce3b988f20",
+      "disposition": "BACKGROUND",
+      "reason": "Historical volume data."
+    },
+    {
+      "clause_id": "clause-384a0f9435a6081d",
+      "disposition": "BACKGROUND",
+      "reason": "Index comparison data."
+    },
+    {
+      "clause_id": "clause-5036e3192c2778d7",
+      "disposition": "BACKGROUND",
+      "reason": "Index percentage change."
+    },
+    {
+      "clause_id": "clause-005a1b69be9771e4",
+      "disposition": "BACKGROUND",
+      "reason": "Relative performance observation."
+    },
+    {
+      "clause_id": "clause-e18bdb8dde2af1a5",
+      "disposition": "BACKGROUND",
+      "reason": "Reference marker."
+    },
+    {
+      "clause_id": "clause-c1a8bda851d2bf2a",
+      "disposition": "BACKGROUND",
+      "reason": "Volume comparison with prior day."
+    },
+    {
+      "clause_id": "clause-548722487ae50d0b",
+      "disposition": "BACKGROUND",
+      "reason": "No significant volume increase."
+    },
+    {
+      "clause_id": "clause-18347e60c8723992",
+      "disposition": "BACKGROUND",
+      "reason": "Structural breakdown observation."
+    },
+    {
+      "clause_id": "clause-82c8d74886c90eb6",
+      "disposition": "BACKGROUND",
+      "reason": "Ordinary technical breakdown classification."
+    },
+    {
+      "clause_id": "clause-7b8f5c2b3e37c8de",
+      "disposition": "BACKGROUND",
+      "reason": "Not severe breakdown with volume."
+    },
+    {
+      "clause_id": "clause-f55318adee7d3a54",
+      "disposition": "POLICY",
+      "reason": "25.99 listed as core bottom defense line."
+    },
+    {
+      "clause_id": "clause-7ea41cdb46bf7865",
+      "disposition": "BACKGROUND",
+      "reason": "Reference marker."
+    },
+    {
+      "clause_id": "clause-42bddb24622870f1",
+      "disposition": "BACKGROUND",
+      "reason": "Section heading."
+    },
+    {
+      "clause_id": "clause-bb7e2d00c6c1302e",
+      "disposition": "BACKGROUND",
+      "reason": "Table header."
+    },
+    {
+      "clause_id": "clause-79a71177a12f0013",
+      "disposition": "BACKGROUND",
+      "reason": "Table separator."
+    },
+    {
+      "clause_id": "clause-d3d5fc6d2647d0be",
+      "disposition": "POLICY",
+      "reason": "Pressure zone 26.40-26.70."
+    },
+    {
+      "clause_id": "clause-bbb347085e666081",
+      "disposition": "BACKGROUND",
+      "reason": "Explanation of pressure zone."
+    },
+    {
+      "clause_id": "clause-be35fc906f1c221d",
+      "disposition": "POLICY",
+      "reason": "Low-buy observation zone not set."
+    },
+    {
+      "clause_id": "clause-b3f58696147f49ce",
+      "disposition": "POLICY",
+      "reason": "Original low-buy logic invalidated."
+    },
+    {
+      "clause_id": "clause-dacd78743a9e3c16",
+      "disposition": "BACKGROUND",
+      "reason": "No new reliable bottom structure."
+    },
+    {
+      "clause_id": "clause-d7cba77cdec98646",
+      "disposition": "POLICY",
+      "reason": "Do not artificially lower buy zone."
+    },
+    {
+      "clause_id": "clause-93deb520fb746441",
+      "disposition": "POLICY",
+      "reason": "Core risk line 25.99."
+    },
+    {
+      "clause_id": "clause-dddf761fce548357",
+      "disposition": "POLICY",
+      "reason": "First close below on 24th."
+    },
+    {
+      "clause_id": "clause-77c90ff89bdf159f",
+      "disposition": "BACKGROUND",
+      "reason": "Risk reason not yet resolved."
+    },
+    {
+      "clause_id": "clause-77a6815913f9dc14",
+      "disposition": "BACKGROUND",
+      "reason": "Section heading."
+    },
+    {
+      "clause_id": "clause-5cd7a516fc884f04",
+      "disposition": "BACKGROUND",
+      "reason": "No buy point."
+    },
+    {
+      "clause_id": "clause-0fa930129426840c",
+      "disposition": "BACKGROUND",
+      "reason": "Cannot buy more clearly than 23rd."
+    },
+    {
+      "clause_id": "clause-5c335f03ecc2b138",
+      "disposition": "BACKGROUND",
+      "reason": "Formatting marker."
+    },
+    {
+      "clause_id": "clause-4dc34593bcbfe504",
+      "disposition": "BACKGROUND",
+      "reason": "Historical context."
+    },
+    {
+      "clause_id": "clause-87ddfe01dc4ad87c",
+      "disposition": "BACKGROUND",
+      "reason": "Historical price movement."
+    },
+    {
+      "clause_id": "clause-23086275a05196db",
+      "disposition": "POLICY",
+      "reason": "Close below 25.99."
+    },
+    {
+      "clause_id": "clause-e8922d4e35679f15",
+      "disposition": "BACKGROUND",
+      "reason": "Premise invalidated."
+    },
+    {
+      "clause_id": "clause-31fdc3b8f461b21a",
+      "disposition": "BACKGROUND",
+      "reason": "Transitional phrase."
+    },
+    {
+      "clause_id": "clause-cd7da2d66f35f986",
+      "disposition": "POLICY",
+      "reason": "Buy 0 shares on 24th."
+    },
+    {
+      "clause_id": "clause-244cb0b97376b9b2",
+      "disposition": "POLICY",
+      "reason": "Do not lower buy zone due to lower price."
+    },
+    {
+      "clause_id": "clause-459918ee2e528dcd",
+      "disposition": "BACKGROUND",
+      "reason": "Formatting marker."
+    },
+    {
+      "clause_id": "clause-e6d1567c05617372",
+      "disposition": "BACKGROUND",
+      "reason": "No sell point for current account."
+    },
+    {
+      "clause_id": "clause-424f01f4caf76b64",
+      "disposition": "INVENTORY_ASSERTION",
+      "reason": "States 0 shares held."
+    },
+    {
+      "clause_id": "clause-371a1d1d306bc0c2",
+      "disposition": "BACKGROUND",
+      "reason": "Hypothetical condition."
+    },
+    {
+      "clause_id": "clause-16fd69bd53026e83",
+      "disposition": "POLICY",
+      "reason": "First ordinary close below 25.99."
+    },
+    {
+      "clause_id": "clause-352141e8ce7ec460",
+      "disposition": "POLICY",
+      "reason": "Stop adding positions."
+    },
+    {
+      "clause_id": "clause-0d14bfa7cbb3ceb5",
+      "disposition": "POLICY",
+      "reason": "Next trading day close if still below 25.99."
+    },
+    {
+      "clause_id": "clause-134931c29de6e855",
+      "disposition": "POLICY",
+      "reason": "Confirm ordinary risk exit."
+    },
+    {
+      "clause_id": "clause-d5a871d5c9d4e9ea",
+      "disposition": "BACKGROUND",
+      "reason": "No significant volume deterioration."
+    },
+    {
+      "clause_id": "clause-a9cd45cbb27d650e",
+      "disposition": "BACKGROUND",
+      "reason": "Not upgraded to severe breakdown."
+    },
+    {
+      "clause_id": "clause-2753f102e886db3c",
+      "disposition": "BACKGROUND",
+      "reason": "Section heading."
+    },
+    {
+      "clause_id": "clause-5c85dc49d919c9ab",
+      "disposition": "POLICY",
+      "reason": "Continue 0 shares below 25.99."
+    },
+    {
+      "clause_id": "clause-2c0092a098f67d4f",
+      "disposition": "POLICY",
+      "reason": "Do not catch falling knife."
+    },
+    {
+      "clause_id": "clause-a5839d44e444abb8",
+      "disposition": "POLICY",
+      "reason": "Original low-buy plan cancelled."
+    },
+    {
+      "clause_id": "clause-7a15ebb4ca39b267",
+      "disposition": "POLICY",
+      "reason": "If close reclaims 25.99."
+    },
+    {
+      "clause_id": "clause-868070a86eda22f4",
+      "disposition": "BACKGROUND",
+      "reason": "Risk reason begins to ease."
+    },
+    {
+      "clause_id": "clause-a73062958bd73999",
+      "disposition": "POLICY",
+      "reason": "Still do not buy immediately."
+    },
+    {
+      "clause_id": "clause-63beafeaa834a96a",
+      "disposition": "POLICY",
+      "reason": "Need new stabilization platform and volume-price confirmation."
+    },
+    {
+      "clause_id": "clause-644023bd77ca2475",
+      "disposition": "POLICY",
+      "reason": "If further reclaim and stabilize 26.40-26.70."
+    },
+    {
+      "clause_id": "clause-5aea7daee3fc3fc2",
+      "disposition": "POLICY",
+      "reason": "Pullback not breaking and volume not abnormally increasing."
+    },
+    {
+      "clause_id": "clause-f0364f72f8d0e9f5",
+      "disposition": "POLICY",
+      "reason": "Re-set low-buy zone and evaluate first 100 shares."
+    },
+    {
+      "clause_id": "clause-8d27b16b5b6e85ff",
+      "disposition": "POLICY",
+      "reason": "If new lows continue."
+    },
+    {
+      "clause_id": "clause-0fdf4728dc759c8d",
+      "disposition": "POLICY",
+      "reason": "Maintain empty position."
+    },
+    {
+      "clause_id": "clause-bc2c535ee95a4138",
+      "disposition": "POLICY",
+      "reason": "Wait for new structural bottom."
+    },
+    {
+      "clause_id": "clause-034f3698cb0d3f88",
+      "disposition": "POLICY",
+      "reason": "Do not lower 25.99 risk line to create buy point."
+    },
+    {
+      "clause_id": "clause-f57b95784fb5d7f7",
+      "disposition": "BACKGROUND",
+      "reason": "No new major fundamental announcement."
+    },
+    {
+      "clause_id": "clause-e857540d84050ee3",
+      "disposition": "BACKGROUND",
+      "reason": "Recent financing arrangements."
+    },
+    {
+      "clause_id": "clause-b02eaf2775af6892",
+      "disposition": "BACKGROUND",
+      "reason": "Core change is price structure damage."
+    },
+    {
+      "clause_id": "clause-7f2ce1871f7ce83a",
+      "disposition": "BACKGROUND",
+      "reason": "Not triggered by new announcement."
+    },
+    {
+      "clause_id": "clause-af73869572bf2723",
+      "disposition": "BACKGROUND",
+      "reason": "Reference marker."
+    },
+    {
+      "clause_id": "clause-7addf286a8ad12ba",
+      "disposition": "BACKGROUND",
+      "reason": "Summary statement."
+    },
+    {
+      "clause_id": "clause-4723d772e9b2b61b",
+      "disposition": "BACKGROUND",
+      "reason": "Empty position is appropriate."
+    },
+    {
+      "clause_id": "clause-dc0a14305af4ffe5",
+      "disposition": "BACKGROUND",
+      "reason": "Temporarily stop seeking left-side buy points near 26."
+    },
+    {
+      "clause_id": "clause-89e7acab84ddde63",
+      "disposition": "BACKGROUND",
+      "reason": "Wait for price to prove false breakdown."
+    },
+    {
+      "clause_id": "clause-0a411e0fa91f0b8f",
+      "disposition": "BACKGROUND",
+      "reason": "Formatting marker."
+    }
+  ],
+  "bindings": [
+    {
+      "path": "levels.pressure",
+      "clause_ids": [
+        "clause-d3d5fc6d2647d0be"
+      ]
+    },
+    {
+      "path": "levels.risk_line_fen",
+      "clause_ids": [
+        "clause-93deb520fb746441",
+        "clause-92ecf72a14fffb8d"
+      ]
+    },
+    {
+      "path": "position.max_qty",
+      "clause_ids": [
+        "clause-384dedeb2fa82dea"
+      ]
+    },
+    {
+      "path": "ordinary_rules[0].quantity",
+      "clause_ids": [
+        "clause-f0364f72f8d0e9f5"
+      ]
+    },
+    {
+      "path": "ordinary_rules[0].condition",
+      "clause_ids": [
+        "clause-644023bd77ca2475",
+        "clause-5aea7daee3fc3fc2"
+      ]
+    },
+    {
+      "path": "risk_branches[0].condition",
+      "clause_ids": [
+        "clause-92ecf72a14fffb8d",
+        "clause-0d14bfa7cbb3ceb5",
+        "clause-134931c29de6e855"
+      ]
+    }
+  ],
+  "warnings": [
+    {
+      "path": "symbol",
+      "message": "Ticker 002240.SZ inferred from company name 盛新锂能; not explicitly stated in source.",
+      "material": true
+    },
+    {
+      "path": "activation",
+      "message": "Activation mode MANUAL assumed; no explicit activation date in source.",
+      "material": true
+    },
+    {
+      "path": "levels.low_buy",
+      "message": "Low-buy zone explicitly not set; all fields null.",
+      "material": false
+    },
+    {
+      "path": "position.core_target_qty",
+      "message": "CORE/TACTICAL split not specified in source.",
+      "material": false
+    },
+    {
+      "path": "risk_branches[0].target_core_qty",
+      "message": "Target quantities for risk exit not specified.",
+      "material": false
+    },
+    {
+      "path": "monitoring.macd_min_observations",
+      "message": "MACD minimum observations set to 26 as default; not specified in source.",
+      "material": false
+    }
+  ],
+  "schema_version": "monitor-loop-wire-v1",
+  "opening_account": {
+    "inventory_quantity": {
+      "value": 0,
+      "start": 22,
+      "end": 34,
+      "excerpt": "**你目前**0股持仓，"
+    },
+    "lots": [],
+    "cash_fen": null,
+    "snapshot_at": null
+  }
+}

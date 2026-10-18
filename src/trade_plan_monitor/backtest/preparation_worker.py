@@ -35,12 +35,15 @@ class PreparationExtractor:
     call: Callable[..., LoopPlanExtractionResult | PlanUpdateExtractionResult
                    | PlanExtractionResult | None]
     max_retries: int = 0
+    max_repairs: int = 0
 
     def __post_init__(self):
         if not callable(self.call):
             raise TypeError("call must be callable")
         if type(self.max_retries) is not int or not 0 <= self.max_retries <= 2:
             raise ValueError("max_retries must be between 0 and 2")
+        if type(self.max_repairs) is not int or not 0 <= self.max_repairs <= 2:
+            raise ValueError("max_repairs must be between 0 and 2")
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,29 +56,40 @@ class PreparationCallOutcome:
     error_code: str | None = None
 
 
-def preparation_candidate_review(record: CollectionPreparationRecord, index: int):
+def preparation_candidate_review(
+    record: CollectionPreparationRecord, index: int, *, historical=False,
+):
     """Revalidate the stored prefix against original sources, never future items."""
+    if historical and record.status != "REVIEWED":
+        raise ValueError("historical validation requires an already frozen review")
     base = None
     for offset, item in enumerate(record.items[:index + 1]):
         candidate = item.candidate
-        if candidate is None or candidate.validation != "VALID":
+        if candidate is None or candidate.validation == "INVALID":
             raise ValueError("unresolved predecessor")
         # This separate server evidence codec can be written by explicit review, not AI.
         schema = json.loads(candidate.payload_json).get("schema_version")
         if schema == "monitor-loop-candidate-evidence-v1":
+            if candidate.validation != "VALID":
+                raise ValueError("unresolved predecessor")
             reviewed = PlanCandidateReview.model_validate_json(candidate.payload_json)
             if reviewed.evidence_hash != candidate.evidence_hash:
                 raise ValueError("reviewed predecessor evidence changed")
-        elif offset == 0:
+        elif offset == 0 or item.independent:
             original = _original_extraction(item)
-            if original.validation_issues:
+            if any(issue.code != "LOOP_ACCOUNT_FACT_REQUIRED"
+                   or issue.path != "opening_account.cash_fen"
+                   for issue in original.validation_issues):
                 raise ValueError("unresolved initial extraction")
             reviewed = build_initial_review(original.draft, original.daily_mapping, item.source)
         else:
+            if candidate.validation != "VALID":
+                raise ValueError("unresolved predecessor")
             materialized = MaterializedUpdateCandidate.model_validate_json(candidate.payload_json)
             expected = materialize_extraction(
                 base, record.items[offset - 1].candidate.candidate_hash,
                 item.source, materialized.extraction,
+                historical=historical,
             )
             if expected != materialized or (
                 str(materialized.extraction.request_id) != item.attempts[-1].attempt_id
@@ -85,7 +99,7 @@ def preparation_candidate_review(record: CollectionPreparationRecord, index: int
             reviewed = expected.review
         if reviewed.issues or (
             reviewed.source_id, reviewed.source_hash, reviewed.available_at
-        ) != (item.source.source_id, item.source.binding_hash, item.source.available_at):
+        ) != (item.source.source_id, item.source.binding_hash, item.source.execution_available_at):
             raise ValueError("stored predecessor is unresolved or bound to another source")
         base = reviewed
     if base is None:
@@ -126,16 +140,23 @@ def run_attempt(
             0, record,
         )
         source, context, base = item.source, None, None
-        if collection and index:
+        if collection and index and not item.independent:
             try:
                 base = preparation_candidate_review(record, index - 1)
                 context = context_from_review(base, claim.base_hash)
-                if source.available_at is None or context.available_at > source.available_at:
+                if (source.execution_available_at is None
+                        or context.available_at > source.execution_available_at):
                     raise ValueError("predecessor context is unavailable")
             except ValueError:
                 return PreparationCallOutcome(error_code="PREDECESSOR_UNRESOLVED")
-        result = (extractor.call(UUID(claim.generation), source, token, context=context)
-                  if context is not None else extractor.call(UUID(claim.generation), source, token))
+        kwargs = {"context": context} if context is not None else {}
+        if extractor.max_repairs and len(item.attempts) > 1:
+            previous = item.attempts[-2]
+            if previous.repair_feedback:
+                kwargs["feedback"] = previous.repair_feedback
+                if previous.repair_context_json is not None:
+                    kwargs["repair_context"] = previous.repair_context_json
+        result = extractor.call(UUID(claim.generation), source, token, **kwargs)
         if result is None:
             return PreparationCallOutcome(unknown=not token.cancelled)
         if not isinstance(result, (

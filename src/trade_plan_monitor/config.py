@@ -155,6 +155,8 @@ class AIConfiguration(_ConfigurationModel):
     max_retries: int = Field(default=2, ge=0, le=2)
     max_input_chars: int = Field(default=50_000, ge=1, le=200_000)
     max_output_tokens: int = Field(default=8_192, ge=1, le=16_384)
+    backtest_max_output_tokens: int = Field(default=16_384, ge=1, le=16_384)
+    backtest_timeout_seconds: int = Field(default=120, ge=1, le=120)
     temperature: float = Field(default=0, ge=0, le=0.3)
     prompt_version: Literal["plan-extract-v8", "plan-extract-v9"] = "plan-extract-v9"
     additional_models: tuple[AIModelConfiguration, ...] = Field(

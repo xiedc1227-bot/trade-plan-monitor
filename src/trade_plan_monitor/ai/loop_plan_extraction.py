@@ -203,6 +203,13 @@ def _check_fact(fact, kind, source, clauses):
         raise ValueError("nonactual source context cannot initialize an account")
     if kind in _FACT_PATTERNS:
         numbers = re.findall(_FACT_PATTERNS[kind], fact.excerpt, re.IGNORECASE)
+        if kind == "quantity":
+            numbers.extend(re.findall(
+                rf"{_NUMBER}\s*(?:股|shares)\s*(?:持仓|库存|holdings|inventory)",
+                fact.excerpt, re.IGNORECASE,
+            ))
+            if re.search(r"你(?:本身|目前|当前)?(?:已经|仍是|仍|已)?\s*\*{0,2}0股", fact.excerpt):
+                numbers.append("0")
         multiplier = 100 if kind == "cash_fen" else 1
         for number in numbers:
             amount = Decimal(number)
@@ -268,6 +275,9 @@ class LoopPlanExtractionResult(CurrentPlanExtractionResult):
     effective_trade_date: date | None
     opening_account: OpeningAccountFacts
     evidence_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preparation_contract: Literal["LEGACY", "SEMANTIC_PATCH"] = Field(
+        default="LEGACY", exclude_if=lambda value: value == "LEGACY",
+    )
 
     def to_preparation_candidate(self) -> PreparationCandidateInput:
         issues = tuple(f"{issue.code}: {issue.path}"[:512] for issue in self.validation_issues)
@@ -281,11 +291,12 @@ class LoopPlanExtractionResult(CurrentPlanExtractionResult):
         )
 
 
-def _missing_account_issues(account):
+def _missing_account_issues(account, source=None):
     paths = [
         path
-        for path in ("inventory_quantity", "cash_fen", "snapshot_at")
+        for path in ("inventory_quantity", "snapshot_at")
         if getattr(account, path) is None
+        and not (path == "snapshot_at" and source is not None and source.effective_trade_date)
     ]
     for index, lot in enumerate(account.lots):
         paths.extend(
@@ -308,7 +319,7 @@ def _missing_account_issues(account):
 
 def encode_untrusted_plan_data(value) -> str:
     """Keep source and prior evidence inside one literal JSON data boundary."""
-    data = json.dumps(value, ensure_ascii=False)
+    data = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     data = data.replace("<", "\\u003c").replace(">", "\\u003e")
     for marker in ("UNTRUSTED_PLAN_DATA_START", "UNTRUSTED_PLAN_DATA_END"):
         data = data.replace(marker, "\\u0055" + marker[1:])
@@ -316,9 +327,11 @@ def encode_untrusted_plan_data(value) -> str:
 
 
 def build_loop_plan_prompt(source: str) -> str:
-    clauses = [c.model_dump(mode="json") for c in server_source_clauses(source)]
+    from trade_plan_monitor.ai.prompt_encoding import compact_schema, source_clause_evidence
+
+    clauses = source_clause_evidence(source)
     data = encode_untrusted_plan_data({"source_text": source, "clauses": clauses})
-    schema = json.dumps(LoopPlanExtractionOutput.model_json_schema(), ensure_ascii=False)
+    schema = compact_schema(LoopPlanExtractionOutput.model_json_schema())
     return (
         LOOP_PROMPT_VERSION + ": Return one JSON object matching this complete Schema 5 "
         "plan and opening-account schema. One original source only; no predecessor context, "
@@ -369,23 +382,48 @@ async def extract_loop_plan(
     source: PreparationSource,
     config: AIProviderConfig,
     provider: AIProvider,
+    compact: bool = False,
+    feedback: tuple[str, ...] = (),
+    repair_context: str | None = None,
 ) -> LoopPlanExtractionResult | PlanExtractionResult:
     """One private extraction call; no persistence, worker, retry loop or activation."""
     if not isinstance(source, PreparationSource):
         raise TypeError("source must be one PreparationSource")
     source = PreparationSource.model_validate(source.model_dump(mode="python"))
     config = config.model_copy(update={"prompt_version": LOOP_PROMPT_VERSION})
+    from trade_plan_monitor.ai.preparation_wire import (
+        CompactInitialOutput,
+        build_compact_prompt,
+        expand_compact_output,
+        response_model,
+    )
     parsed = await _extract_output(
         request_id=request_id,
         source_text=source.text,
         config=config,
         provider=provider,
-        prompt=build_loop_plan_prompt(source.text),
-        output_model=LoopPlanExtractionOutput,
+        prompt=(build_compact_prompt(source, feedback=feedback, repair_context=repair_context)
+                if compact else build_loop_plan_prompt(source.text)),
+        output_model=response_model() if compact else LoopPlanExtractionOutput,
     )
     if isinstance(parsed, PlanExtractionResult):
         return parsed
     output, raw = parsed
+    preparation_contract = ("SEMANTIC_PATCH" if compact and
+                            getattr(output.root, "schema_version", "") == "monitor-loop-wire-v2"
+                            else "LEGACY")
+    if compact:
+        output = output.root
+        if isinstance(output, CompactInitialOutput):
+            try:
+                output = expand_compact_output(output, source)
+            except ValueError:
+                return _failure_result(request_id=request_id, config=config,
+                    source_text_sha256=source.source_hash,
+                    status=PlanExtractionStatus.INVALID_OUTPUT,
+                    issue_code="AI_FIELD_EVIDENCE_INVALID", issue_path="mapping",
+                    issue_message="AI referenced an unknown or duplicate source/field.", raw=raw,
+                    stage="mapping", reason="MAPPING")
     reviewed = _review_current_output(output, source.text, request_id, config, raw)
     if isinstance(reviewed, PlanExtractionResult):
         return reviewed
@@ -405,14 +443,20 @@ async def extract_loop_plan(
             reason="MAPPING",
         )
     issues = list(reviewed.validation_issues)
-    issues.extend(_missing_account_issues(output.opening_account))
-    for field in ("available_at", "effective_trade_date"):
+    if preparation_contract == "SEMANTIC_PATCH":
+        from trade_plan_monitor.ai.semantic_validation import semantic_representation_issues
+
+        issues.extend(_blocking_warning(code, path,
+            "Represent computable tests as condition nodes, not names inside REVIEWED_FACT.")
+            for code, path in semantic_representation_issues(output.draft))
+    issues.extend(_missing_account_issues(output.opening_account, source))
+    for field in ("effective_trade_date",):
         if getattr(source, field) is None:
             issues.append(
                 _blocking_warning(
                     "LOOP_SOURCE_TIME_REQUIRED",
                     "source." + field,
-                    "Source availability/effectiveness is unknown; "
+                    "Confirm the plan's effective trading date; "
                     "never infer it from extraction time.",
                 )
             )
@@ -447,6 +491,7 @@ async def extract_loop_plan(
         effective_trade_date=source.effective_trade_date,
         opening_account=output.opening_account,
         evidence_hash=evidence_hash,
+        preparation_contract=preparation_contract,
     )
     try:
         result.to_preparation_candidate()  # Derived evidence/issues must fit the storage guard too.

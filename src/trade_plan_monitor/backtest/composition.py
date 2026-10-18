@@ -777,7 +777,7 @@ class _ProductionBacktestService:
         source = prepared.items[0].source if scheduled else prepared.source
         version = prepared.schedule.entries[0].version
         start = max(
-            source.available_at,
+            source.execution_available_at,
             datetime.combine(source.effective_trade_date, time.min, SHANGHAI),
         )
         if scheduled:
@@ -1239,6 +1239,24 @@ class _ProductionBacktestService:
             return None
         return await self._run_view(record)
 
+    async def get_rule_changes(self, *, run_id: str, source_id: str):
+        return await self._run_sync(self._project_rule_changes, run_id, source_id)
+
+    def _project_rule_changes(self, run_id: str, source_id: str):
+        from trade_plan_monitor.web.result_rule_changes import project_rule_changes
+
+        try:
+            self._results.get_run(run_id)
+        except BacktestResultNotFoundError:
+            return None
+        reference = self._result_store.get_run_input(run_id)
+        if not isinstance(reference, LoopInputReference):
+            return None
+        stored = self._result_store.get_loop_input(reference)
+        if not isinstance(stored.prepared, FrozenPreparedCollection):
+            return None
+        return project_rule_changes(run_id, stored.prepared, source_id)
+
     async def list_fills(
         self,
         *,
@@ -1484,6 +1502,7 @@ class _ProductionBacktestService:
             if report is None:
                 raise RuntimeError("verified loop result is missing its immutable report")
             prepared = stored.prepared
+            diagnostics = self._result_store.get_loop_diagnostics(record.summary.run_id)
             if isinstance(prepared, FrozenPreparedCollection):
                 from trade_plan_monitor.web.preparation_schemas import project_collection_frozen
 
@@ -1506,6 +1525,7 @@ class _ProductionBacktestService:
                             } for item in prepared.items),
                         },
                         "versions": frozen.versions,
+                        "planDiagnostics": diagnostics,
                         "openingAccount": stored.run_input.initial_account,
                         "response": stored.run_input.response,
                         "costs": stored.run_input.costs,
@@ -1527,6 +1547,7 @@ class _ProductionBacktestService:
                         "inputHash": run_input.input_hash,
                     },
                     "frozenPlan": prepared.version,
+                    "planDiagnostics": diagnostics,
                     "openingAccount": stored.run_input.initial_account,
                     "response": stored.run_input.response,
                     "costs": stored.run_input.costs,

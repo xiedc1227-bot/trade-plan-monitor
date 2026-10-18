@@ -3,6 +3,7 @@
 import asyncio
 import json
 import time
+from datetime import date
 from threading import Event
 
 import pytest
@@ -49,7 +50,8 @@ def api_app(tmp_path, *, ai=None, preparation_path=None, bind_port=8765):
 def command():
     return SinglePlanPreparationInput(
         preparation_id="one",
-        sources=(PreparationSource(source_id="source-one", text="One supplied original source."),),
+        sources=(PreparationSource(source_id="source-one", text="One supplied original source.",
+                                   effective_trade_date=date(2026, 8, 20)),),
     )
 
 
@@ -1233,8 +1235,10 @@ def test_collection_service_stops_after_unresolved_first_item_without_dispatchin
     command = PlanCollectionPreparationInput(
         preparation_id="chain",
         sources=(
-            PreparationSource(source_id="first", text=CASES[0]["source"]),
-            PreparationSource(source_id="future", text="Future source must not reach this call."),
+            PreparationSource(source_id="first", text=CASES[0]["source"],
+                              effective_trade_date=date(2026, 8, 20)),
+            PreparationSource(source_id="future", text="Future source must not reach this call.",
+                              effective_trade_date=date(2026, 8, 21)),
         ),
     )
 

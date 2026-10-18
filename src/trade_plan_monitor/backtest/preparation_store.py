@@ -170,7 +170,11 @@ class PreparationStore:
                 (preparation_id,),
             ).fetchone() is not None:
                 raise PreparationConflictError("PREPARATION_BUSY")
-            record = change(self._read(connection, preparation_id), self._clock())
+            existing = self._read(connection, preparation_id)
+            if (isinstance(existing, CollectionPreparationRecord) and existing.workflow != "LEGACY"
+                    and existing.status == "REVIEWED"):
+                raise PreparationConflictError("REVIEWED_PLAN_IMMUTABLE")
+            record = change(existing, self._clock())
             encoded = record.model_dump_json()
             connection.execute(
                 "INSERT INTO backtest_preparation VALUES (?, ?) "
@@ -195,18 +199,22 @@ class PreparationStore:
         def change(previous, now):
             if previous is not None:
                 raise PreparationConflictError("PREPARATION_EXISTS")
+            sources = tuple(source.with_inferred_date() for source in command.sources)
             if isinstance(command, PlanCollectionPreparationInput):
-                self.validate_collection_chronology(command.sources)
+                if (all(source.effective_trade_date is not None for source in sources)
+                        and any(source.effective_trade_date is None for source in command.sources)):
+                    sources = tuple(sorted(sources, key=lambda source: source.effective_trade_date))
+                self.validate_collection_chronology(sources)
                 return CollectionPreparationRecord(
                     preparation_id=command.preparation_id, revision=1,
                     items=tuple(PreparationItem(
                         source=source, status="DRAFT" if index == 0 else "WAITING",
-                    ) for index, source in enumerate(command.sources)),
+                    ) for index, source in enumerate(sources)),
                     created_at=now, updated_at=now,
                 )
             return PreparationRecord(
                 preparation_id=command.preparation_id, revision=1,
-                source=command.sources[0], source_revision=1, created_at=now, updated_at=now,
+                source=sources[0], source_revision=1, created_at=now, updated_at=now,
             )
 
         return self._operation(
@@ -233,6 +241,10 @@ class PreparationStore:
             record = self._require_revision(previous, expected_revision)
             if not isinstance(record, CollectionPreparationRecord):
                 raise PreparationConflictError("PREPARATION_SCHEMA_CONFLICT")
+            if record.workflow != "LEGACY" and (record.status == "REVIEWED"
+                or source_order is not None or source is None
+                or source.source_id != record.items[-1].source.source_id):
+                raise PreparationConflictError("REVIEWED_PLAN_IMMUTABLE")
             if record.status in {"EXTRACTING", "CANCEL_REQUESTED"} or record.work_claim is not None:
                 raise PreparationConflictError("PREPARATION_BUSY")
             if record.status == "CANCELLED":
@@ -244,8 +256,9 @@ class PreparationStore:
             if source is not None and source.source_id not in original:
                 raise PreparationConflictError("SOURCE_ID_CONFLICT")
             by_id = {item.source.source_id: item for item in record.items}
+            resolved = source.with_inferred_date() if source is not None else None
             changed = [index for index, identity in enumerate(order) if identity != original[index]]
-            if source is not None and source != by_id[source.source_id].source:
+            if resolved is not None and resolved != by_id[resolved.source_id].source:
                 changed.append(order.index(source.source_id))
             if not changed:
                 return record
@@ -253,10 +266,12 @@ class PreparationStore:
             for index, identity in enumerate(order):
                 item = by_id[identity]
                 if index >= first:
-                    replacement = (source if source is not None and source.source_id == identity
-                                   else item.source)
+                    replacement = (
+                        resolved if resolved is not None and resolved.source_id == identity
+                        else item.source
+                    )
                     ready = index == 0 or (index == first and items[-1].candidate is not None
-                                           and items[-1].candidate.validation == "VALID")
+                                           and items[-1].candidate.policy_ready)
                     item = item.model_copy(update={
                         "source": replacement,
                         "source_revision": item.source_revision + int(replacement != item.source),
@@ -285,10 +300,10 @@ class PreparationStore:
             raise PreparationConflictError("REVISION_CONFLICT")
         return record
 
-    def replay_create(self, command, *, idempotency_key):
+    def replay_create(self, command, *, idempotency_key, operation="CREATE"):
         """Read the original create receipt without changing the current source."""
         key = _IDENTIFIER.validate_python(idempotency_key)
-        expected = _request_hash("CREATE", command.preparation_id, command)
+        expected = _request_hash(operation, command.preparation_id, command)
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT request_hash, response_json FROM backtest_preparation_idempotency "
@@ -318,14 +333,15 @@ class PreparationStore:
             record = self._require_revision(previous, expected_revision)
             if source.source_id != record.source.source_id:
                 raise PreparationConflictError("SOURCE_ID_CONFLICT")
-            if source == record.source:
+            resolved = source.with_inferred_date()
+            if resolved == record.source:
                 return record
             pending = record.status in {"EXTRACTING", "CANCEL_REQUESTED"}
             attempts = () if not pending else (record.attempts[-1].model_copy(update={
                 "status": "CANCEL_REQUESTED",
             }),)
             return self._updated(
-                record, now, source=source, source_revision=record.source_revision + 1,
+                record, now, source=resolved, source_revision=record.source_revision + 1,
                 status="CANCEL_REQUESTED" if pending else "DRAFT",
                 attempts=attempts, candidate=None, review=None, source_edit_pending=pending,
                 candidate_revision=record.candidate_revision + 1,
@@ -438,7 +454,7 @@ class PreparationStore:
     def next_collection_item(record):
         """Earliest unresolved item only; no caller can skip a failed predecessor."""
         for index, item in enumerate(record.items):
-            if item.candidate is None or item.candidate.validation != "VALID":
+            if item.candidate is None or not item.candidate.policy_ready:
                 return index, item
         raise PreparationConflictError("PREPARATION_COMPLETE")
 
@@ -458,9 +474,9 @@ class PreparationStore:
         if record.status == "CANCELLED":
             raise PreparationConflictError("PREPARATION_CANCELLED")
         index, item = self.next_collection_item(record)
-        base = None if index == 0 else record.items[index - 1].candidate
+        base = None if index == 0 or item.independent else record.items[index - 1].candidate
         expected_base = base.candidate_hash if base else None
-        if index and (base is None or base.validation != "VALID"):
+        if index and not item.independent and (base is None or not base.policy_ready):
             raise PreparationConflictError("PREDECESSOR_UNRESOLVED")
         if claim.phase != "READY" or (
             claim.source_id, claim.source_revision, claim.source_hash, claim.base_hash
@@ -498,13 +514,15 @@ class PreparationStore:
                 return index, item
         raise PreparationConflictError("STALE_ATTEMPT")
 
-    def _finish_collection_attempt(self, record, now, attempt_id, candidate, error_code, retryable):
+    def _finish_collection_attempt(self, record, now, attempt_id, candidate, error_code, retryable,
+                                   repair_feedback=(), repair_context_json=None):
         index, item = self._collection_active_item(record, attempt_id)
         if record.status != "EXTRACTING" or item.status != "EXTRACTING":
             raise PreparationConflictError("STALE_ATTEMPT")
         attempt = item.attempts[-1].model_copy(update={
             "status": "SUCCEEDED" if candidate is not None else "FAILED", "finished_at": now,
-            "error_code": error_code, "retryable": retryable,
+            "error_code": error_code, "retryable": retryable, "repair_feedback": repair_feedback,
+            "repair_context_json": repair_context_json,
         })
         bound = None if candidate is None else CollectionPreparationCandidate(
             **candidate.model_dump(), source_revision=item.source_revision,
@@ -623,6 +641,8 @@ class PreparationStore:
         candidate: PreparationCandidateInput | None = None, error_code: str | None = None,
         retryable: bool = False,
         worker_owner_id: str | None = None,
+        repair_feedback: tuple[str, ...] = (),
+        repair_context_json: str | None = None,
     ) -> PreparationRecord:
         if candidate is not None and not isinstance(candidate, PreparationCandidateInput):
             raise TypeError("candidate must be PreparationCandidateInput")
@@ -640,13 +660,16 @@ class PreparationStore:
                     raise PreparationConflictError("STALE_WORKER")
             if isinstance(record, CollectionPreparationRecord):
                 return self._finish_collection_attempt(
-                    record, now, attempt_id, candidate, error_code, retryable,
+                    record, now, attempt_id, candidate, error_code, retryable, repair_feedback,
+                    repair_context_json,
                 )
             if record.status != "EXTRACTING" or record.attempts[-1].attempt_id != attempt_id:
                 raise PreparationConflictError("STALE_ATTEMPT")
             attempt = record.attempts[-1].model_copy(update={
                 "status": "SUCCEEDED" if candidate is not None else "FAILED",
                 "finished_at": now, "error_code": error_code, "retryable": retryable,
+                "repair_feedback": repair_feedback,
+                "repair_context_json": repair_context_json,
             })
             bound = None if candidate is None else PreparationCandidate(
                 **candidate.model_dump(), source_revision=record.source_revision,
@@ -666,6 +689,10 @@ class PreparationStore:
         }
         if worker_owner_id is not None:
             payload["worker_owner_id"] = worker_owner_id
+        if repair_feedback:
+            payload["repair_feedback"] = repair_feedback
+        if repair_context_json is not None:
+            payload["repair_context_json"] = repair_context_json
         return self._operation("FINISH_ATTEMPT", preparation_id, payload, idempotency_key, change)
 
     def cancel(
@@ -850,6 +877,9 @@ class PreparationStore:
             record = self._require_revision(previous, command.expected_revision)
             if not isinstance(record, CollectionPreparationRecord):
                 raise PreparationConflictError("REVIEW_SEMANTIC_CONFLICT")
+            if (record.workflow == "SINGLE"
+                    and command.binding.source_id != record.items[-1].source.source_id):
+                raise PreparationConflictError("REVIEWED_PLAN_IMMUTABLE")
             try:
                 index, reviewed = correct_collection_candidate(record, command)
             except PreparationSemanticError as error:
@@ -888,8 +918,21 @@ class PreparationStore:
             record = self._require_revision(previous, command.expected_revision)
             if not isinstance(record, CollectionPreparationRecord):
                 raise PreparationConflictError("REVIEW_SEMANTIC_CONFLICT")
+            effective_command = command
+            parent = None
+            if record.reviewed_base is not None:
+                from trade_plan_monitor.backtest.plan_library import reviewed_entry
+                parent_record, parent = reviewed_entry(self, record.reviewed_base)
+                if (record.items[:-1] != parent_record.items
+                        or record.base_account != parent.account):
+                    raise PreparationConflictError("REVIEWED_BASE_CHANGED")
+                if command.account is not None and command.account != parent.account:
+                    raise PreparationConflictError("INITIAL_ACCOUNT_IMMUTABLE")
+                effective_command = command.model_copy(update={"account": parent.account})
             try:
-                manifest = prepare_frozen_collection(record, command, now)
+                manifest = prepare_frozen_collection(
+                    record, effective_command, now, reviewed_parent=parent,
+                )
             except PreparationSemanticError as error:
                 raise PreparationConflictError(error.code) from None
             except ValueError:

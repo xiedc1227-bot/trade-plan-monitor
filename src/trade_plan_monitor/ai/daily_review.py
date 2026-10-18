@@ -48,11 +48,18 @@ class DailyClause(DailyValue):
     start: int = Field(strict=True, ge=0)
     end: int = Field(strict=True, gt=0)
     excerpt: str = Field(min_length=1, max_length=512)
-    disposition: Literal["POLICY", "INVENTORY_ASSERTION", "BACKGROUND", "UNRESOLVED", "UNSUPPORTED"]
+    disposition: Literal[
+        "POLICY", "INVENTORY_ASSERTION", "BACKGROUND", "CONTEXT", "UNRESOLVED", "UNSUPPORTED"
+    ]
     paths: tuple[str, ...] = Field(max_length=512)
     reason: Text
     exclusions: tuple[DailySourceExclusion, ...] = Field(default=(), max_length=50)
     remainders: tuple[DailyTechnicalRemainder, ...] = Field(default=(), max_length=51)
+    semantic_role: Literal[
+        "DIRECTIVE", "HISTORICAL", "ACCOUNT", "COMMENTARY", "AMBIGUOUS"
+    ] | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
 
 def daily_source_clauses(source, selections=()):
@@ -167,7 +174,9 @@ class DailySupplement(DailyValue):
 class DailyFieldBinding(DailyValue):
     path: str = Field(min_length=1, max_length=512)
     value: JsonValue
-    origin: Literal["SOURCE", "HUMAN_SUPPLEMENT", "PRODUCT_CONTRACT"]
+    origin: Literal[
+        "SOURCE", "SOURCE_INTERPRETATION", "SOURCE_SEMANTIC", "HUMAN_SUPPLEMENT", "PRODUCT_CONTRACT"
+    ]
     unit: Literal["JSON", "FEN_FROM_YUAN", "SHARES", "RATIO", "TEXT", "STRUCTURE"]
     clause_ids: tuple[Identifier, ...] = Field(max_length=50)
     supplement_id: Identifier | None
@@ -214,7 +223,9 @@ def semantic_values(draft):
                 values[path] = []
             for index, child in enumerate(value):
                 visit(child, f"{path}[{index}]")
-        elif value is not None:
+        elif value is not None or (
+            draft.schema_version == 5 and path in {"levels.low_buy", "levels.pressure"}
+        ):
             values[path] = value
 
     visit(data, "")
@@ -258,11 +269,27 @@ def _contract_values(draft):
         "schema_version": 5,
         "execution_mode": "CONDITION_PLAN",
         "execution_version": "condition-plan-v1",
-        **({"activation.mode": "MANUAL"}
-           if draft.activation is not None and draft.activation.mode == "MANUAL" else {}),
-        **{f"ordinary_rules[{index}].validity.mode": "PLAN_ACTIVE"
-           for index, rule in enumerate(draft.ordinary_rules)
-           if rule.validity is not None and rule.validity.mode == "PLAN_ACTIVE"},
+        "monitoring.macd_min_observations": 26,
+        **{
+            f"risk_branches[{index}].priority":
+                {"ORDINARY_TECHNICAL": 3, "SEVERE_TECHNICAL": 2}[branch.kind]
+            for index, branch in enumerate(draft.risk_branches)
+        },
+        **{
+            path: []
+            for path in ("ordinary_rules", "risk_branches", "alert_rules")
+            if not getattr(draft, path)
+        },
+        **(
+            {"activation.mode": "MANUAL"}
+            if draft.activation is not None and draft.activation.mode == "MANUAL"
+            else {}
+        ),
+        **{
+            f"ordinary_rules[{index}].validity.mode": "PLAN_ACTIVE"
+            for index, rule in enumerate(draft.ordinary_rules)
+            if rule.validity is not None and rule.validity.mode == "PLAN_ACTIVE"
+        },
     }
 
 
@@ -275,9 +302,11 @@ def _persistent_deadline_issues(draft, mapping):
     """
     if draft.schema_version != 5:
         return ()
-    paths = {f"ordinary_rules[{i}].validity.mode": rule.side
-             for i, rule in enumerate(draft.ordinary_rules)
-             if rule.validity is not None and rule.validity.mode == "PLAN_ACTIVE"}
+    paths = {
+        f"ordinary_rules[{i}].validity.mode": rule.side
+        for i, rule in enumerate(draft.ordinary_rules)
+        if rule.validity is not None and rule.validity.mode == "PLAN_ACTIVE"
+    }
     if not paths:
         return ()
     limit = re.compile(
@@ -293,22 +322,34 @@ def _persistent_deadline_issues(draft, mapping):
         lifetime = re.sub(
             r"(?:计划|规则)?有效(?:期限|期)[：:]?\s*持续有效"
             r"(?:(?:[，,]\s*)?直到人工停用(?:或(?:审核启用新版本替换|新版本正式替换))?"
-            r"|(?!(?:[，,]\s*)?直到人工))(?=[，,。；;\n]|$)", "", clause.excerpt)
+            r"|(?!(?:[，,]\s*)?直到人工))(?=[，,。；;\n]|$)",
+            "",
+            clause.excerpt,
+        )
         lifetime = re.sub(
             r"\buntil\s+(?:(?:manually deactivated|manual deactivation)"
             r"(?: or replaced by a reviewed (?:new )?version)?|"
             r"replaced by a reviewed (?:new )?version)(?=\s*[.;,\n]|$)",
-            "", lifetime, flags=re.I)
+            "",
+            lifetime,
+            flags=re.I,
+        )
         # Remove only a recognized local occurrence window. Never exempt the whole
         # fragment: another cutoff can occur before or after it without punctuation.
         lifetime = re.sub(
             r"单(?:次|个)(?:日线|买入|卖出)?(?:信号|指令)(?:的)?"
             r"(?:有效执行窗口)?(?:仅限|仅|只在)?(?:确认后的)?"
-            r"下一(?:个)?交易日(?:收盘前|收盘)?(?:可执行|执行|有效)", "", lifetime)
+            r"下一(?:个)?交易日(?:收盘前|收盘)?(?:可执行|执行|有效)",
+            "",
+            lifetime,
+        )
         lifetime = re.sub(
             r"\b(?:a )?single(?:[- ](?:buy|sell))?[- ]signal "
             r"(?:executes? )?only (?:for )?next (?:trading day|(?:exchange )?session)\b",
-            "", lifetime, flags=re.I)
+            "",
+            lifetime,
+            flags=re.I,
+        )
         fragments = re.split(r"[。；;,，\n]", lifetime)
         scoped = r"规则|计划|买入|卖出|\brule\b|\bplan\b|\bbuy\b|\bsell\b"
         limited = []
@@ -316,33 +357,44 @@ def _persistent_deadline_issues(draft, mapping):
             cue = limit.search(part)
             if cue is None:
                 continue
-            if (re.search(r"报告|行情|数据|指标|资料|证据|\breport\b|\bevidence\b", part, re.I)
-                    and not re.search(scoped, part, re.I)):
+            if re.search(
+                r"报告|行情|数据|指标|资料|证据|\breport\b|\bevidence\b", part, re.I
+            ) and not re.search(scoped, part, re.I):
                 continue
             limited.append(part)
         unresolved = set()
         for part in limited:
             dates = set(re.findall(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)", part))
-            date_bindings = [b for b in mapping.bindings if b.origin == "SOURCE"
-                             and clause.clause_id in b.clause_ids
-                             and re.fullmatch(
-                                 r"(?:activation|ordinary_rules\[\d+\]\.validity)"
-                                 r"\.(?:start_date|end_date)", b.path)]
+            date_bindings = [
+                b
+                for b in mapping.bindings
+                if b.origin == "SOURCE"
+                and clause.clause_id in b.clause_ids
+                and re.fullmatch(
+                    r"(?:activation|ordinary_rules\[\d+\]\.validity)"
+                    r"\.(?:start_date|end_date)",
+                    b.path,
+                )
+            ]
             # A start date cannot discharge a cutoff; one retained restriction cannot
             # hide a second deadline or an ambiguous relative duration in its clause.
-            sides = {side for side, cue in (("BUY", r"买入|\bbuy\b"),
-                                           ("SELL", r"卖出|\bsell\b"))
-                     if re.search(cue, part, re.I)}
+            sides = {
+                side
+                for side, cue in (("BUY", r"买入|\bbuy\b"), ("SELL", r"卖出|\bsell\b"))
+                if re.search(cue, part, re.I)
+            }
             plan_limit = bool(re.search(r"计划|\bplan\b", part, re.I)) and not (
-                sides or re.search(r"规则|\brule\b", part, re.I))
+                sides or re.search(r"规则|\brule\b", part, re.I)
+            )
             for path, side in paths.items():
                 if sides and side not in sides:
                     continue
                 prefix = "activation" if plan_limit else path.removesuffix(".mode")
                 if dates and (
                     dates <= {b.value for b in date_bindings if b.path.startswith(prefix + ".")}
-                    and any(b.path == prefix + ".end_date" and b.value in dates
-                            for b in date_bindings)
+                    and any(
+                        b.path == prefix + ".end_date" and b.value in dates for b in date_bindings
+                    )
                 ):
                     continue
                 unresolved.add(path)
@@ -352,19 +404,28 @@ def _persistent_deadline_issues(draft, mapping):
         for path in sorted(unresolved):
             binding = next((b for b in mapping.bindings if b.path == path), None)
             supplement = None if binding is None else supplements.get(binding.supplement_id)
-            if (binding is not None and binding.origin == "HUMAN_SUPPLEMENT"
-                    and supplement is not None and clause.excerpt in supplement.reason
-                    and re.search(r"改为持续有效|convert to PLAN_ACTIVE", supplement.reason)):
+            if (
+                binding is not None
+                and binding.origin == "HUMAN_SUPPLEMENT"
+                and supplement is not None
+                and clause.excerpt in supplement.reason
+                and re.search(r"改为持续有效|convert to PLAN_ACTIVE", supplement.reason)
+            ):
                 continue
             pending.append(path)
         if pending:
-            issues.append({"path": "source." + clause.clause_id,
-                           "code": "PLAN_SOURCE_TIME_LIMIT_REQUIRED",
-                           "reason": "受影响参数：" + ", ".join(pending)
-                           + "。保留原文期限为DATE_RANGE或待确认；"
-                           "如需改为持续有效，"
-                           "请在该规则有效期模式的人工补充理由中引用完整原句并写明“改为持续有效”，"
-                           "重新审核后明确启用。"})
+            issues.append(
+                {
+                    "path": "source." + clause.clause_id,
+                    "code": "PLAN_SOURCE_TIME_LIMIT_REQUIRED",
+                    "reason": "受影响参数："
+                    + ", ".join(pending)
+                    + "。保留原文期限为DATE_RANGE或待确认；"
+                    "如需改为持续有效，"
+                    "请在该规则有效期模式的人工补充理由中引用完整原句并写明“改为持续有效”，"
+                    "重新审核后明确启用。",
+                }
+            )
     return tuple(issues)
 
 
@@ -441,6 +502,13 @@ def build_daily_review(draft, mapping, source_text):
                 path for remainder in clause.remainders for path in remainder.paths
             }:
                 raise ValueError("mixed technical remainder must retain its scoped paths")
+        elif clause.disposition == "CONTEXT":
+            from trade_plan_monitor.ai.source_resolution import can_be_context
+
+            semantic_context = (clause.semantic_role in {"HISTORICAL", "ACCOUNT", "COMMENTARY"}
+                                and bool(clause.reason.strip()))
+            if clause.paths or not (semantic_context or can_be_context(clause.excerpt)):
+                raise ValueError("context cannot hide a forward trading instruction")
         elif clause.disposition == "BACKGROUND":
             raise ValueError("BACKGROUND requires a registered exact scope exclusion")
         elif clause.remainders:
@@ -507,7 +575,26 @@ def build_daily_review(draft, mapping, source_text):
                 else:
                     excerpts.append(clause.excerpt)
             excerpt = " ".join(excerpts)
-            if binding.unit == "FEN_FROM_YUAN":
+            if binding.origin == "SOURCE_SEMANTIC":
+                from trade_plan_monitor.ai.semantic_validation import (
+                    semantic_interpretation_matches,
+                )
+
+                if draft.schema_version != 5 or not semantic_interpretation_matches(
+                    binding.path, actual, excerpt, draft,
+                ):
+                    raise ValueError("semantic source value differs from its exact evidence")
+            elif binding.origin == "SOURCE_INTERPRETATION":
+                from trade_plan_monitor.ai.source_resolution import interpretation_matches
+
+                if draft.schema_version != 5 or not interpretation_matches(
+                    binding.path,
+                    actual,
+                    excerpt,
+                    draft,
+                ):
+                    raise ValueError("source interpretation differs from its evidence")
+            elif binding.unit == "FEN_FROM_YUAN":
                 if type(actual) is not int or not any(
                     Decimal(x) * 100 == actual
                     for x in re.findall(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])", excerpt)
@@ -517,22 +604,24 @@ def build_daily_review(draft, mapping, source_text):
                     )
             elif type(actual) is bool and draft.schema_version == 5:
                 literal = excerpt.strip(" \t\r\n。；;.")
-                if (not binding.path.endswith((".include_low", ".include_high"))
-                        or not re.fullmatch(
-                            re.escape(binding.path) + r"\s*=\s*" + str(actual).lower(), literal,
-                        )):
+                if not binding.path.endswith((".include_low", ".include_high")) or not re.fullmatch(
+                    re.escape(binding.path) + r"\s*=\s*" + str(actual).lower(),
+                    literal,
+                ):
                     raise ValueError(
                         "range boundary requires an explicit scoped source declaration"
                     )
             elif actual == [] and type(actual) is list and draft.schema_version == 5:
                 labels = {
-                    "ordinary_rules": "普通规则", "risk_branches": "风险分支",
+                    "ordinary_rules": "普通规则",
+                    "risk_branches": "风险分支",
                     "alert_rules": "提醒规则",
                 }
                 name = labels.get(binding.path)
                 literal = excerpt.strip(" \t\r\n。；;.")
                 if name is None or not re.fullmatch(
-                    rf"(?:{re.escape(binding.path)}\s*=\s*\[\]|无{name})", literal,
+                    rf"(?:{re.escape(binding.path)}\s*=\s*\[\]|无{name})",
+                    literal,
                 ):
                     raise ValueError("empty rules require an explicit scoped source declaration")
             elif isinstance(actual, bool | list) or str(actual) not in excerpt:
@@ -552,6 +641,9 @@ def build_daily_review(draft, mapping, source_text):
             }
         )
     for clause in mapping.clauses:
+        if clause.semantic_role == "AMBIGUOUS":
+            issues.append({"path": "source." + clause.clause_id,
+                           "code": "SOURCE_CONTENT_AMBIGUOUS", "reason": clause.reason})
         if any(path not in values for path in clause.paths):
             raise ValueError("source clause has unknown candidate path")
         if any(r.disposition != "POLICY" or not r.paths for r in clause.remainders):

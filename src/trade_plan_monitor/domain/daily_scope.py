@@ -4,6 +4,7 @@ Only these exact known source fragments may be excluded automatically. Unknown
 wording remains visible for technical review; arbitrary BACKGROUND is not authority.
 """
 
+import re
 from hashlib import sha256
 
 EXCLUSION_REASON = "FUNDAMENTALS_REVIEWED_AT_PLAN_GENERATION"
@@ -82,6 +83,9 @@ def require_nontechnical_exclusion(excerpt):
 
 def require_inventory_assertion(excerpt):
     """Admit explicit holdings context, never common conditional trading instructions."""
+    literal = re.sub(r"[*_`]", "", excerpt).strip(" 。；，,;、.!?！？\n\r\t")
+    if re.fullmatch(r"你(?:本身|目前|当前)?(?:已经|仍是|仍|已)?0股", literal):
+        return
     if not any(
         term in excerpt.casefold()
         for term in ("持仓", "已持有", "成本", "库存", "holdings", "inventory", "cost")

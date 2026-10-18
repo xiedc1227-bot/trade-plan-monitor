@@ -1,0 +1,678 @@
+{
+  "type": "json_object",
+  "draft": {
+    "schema_version": 5,
+    "execution_mode": "CONDITION_PLAN",
+    "execution_version": "condition-plan-v1",
+    "plan_id": "shengxin-lithium-2026-09-24",
+    "version": 1,
+    "symbol": "002240.SZ",
+    "name": "盛新锂能",
+    "market": "SZSE",
+    "metadata": {
+      "report_at": null,
+      "reference_price_fen": null
+    },
+    "activation": {
+      "mode": "MANUAL"
+    },
+    "levels": {
+      "low_buy": {
+        "low_fen": 2640,
+        "high_fen": 2670,
+        "include_low": true,
+        "include_high": true
+      },
+      "pressure": {
+        "low_fen": 2730,
+        "high_fen": 2770,
+        "include_low": true,
+        "include_high": true
+      },
+      "risk_line_fen": 2599,
+      "risk_comparison": "LT"
+    },
+    "position": {
+      "max_qty": null,
+      "core_target_qty": null,
+      "tactical_target_qty": null,
+      "allocation_provenance": null,
+      "allocation_evidence": null
+    },
+    "trading_rules": {
+      "settlement": "NEXT_EXCHANGE_SESSION",
+      "tick_size_fen": 1,
+      "special_state_restrictions": "BLOCK_UNVERIFIED"
+    },
+    "monitoring": {
+      "indicator_formula_version": "daily-ta-v2",
+      "price_basis": "QFQ",
+      "source_requirement": "ONE_VERIFIED_PROVIDER",
+      "comparability_requirement": "CURRENT_QUOTE_BASIS",
+      "macd_min_observations": 26
+    },
+    "ordinary_rules": [
+      {
+        "status": "ENABLED",
+        "side": "BUY",
+        "rule_id": "buy-100-after-stabilization",
+        "quantity": 100,
+        "bucket": "TACTICAL",
+        "condition": {
+          "type": "ALL",
+          "conditions": [
+            {
+              "type": "REVIEWED_FACT",
+              "fact_kind": "PRICE_STRUCTURE",
+              "evidence_requirement": "完整日K止跌：明显下影、止跌阳线或连续两个收盘不再下移",
+              "validity_scope": "TRADE_DATE"
+            },
+            {
+              "type": "REVIEWED_FACT",
+              "fact_kind": "VOLUME_OR_CANDLE",
+              "evidence_requirement": "量能不能异常放大",
+              "validity_scope": "TRADE_DATE"
+            },
+            {
+              "type": "DAILY_PRICE_COMPARE",
+              "field": "close",
+              "offset": 0,
+              "comparator": "GT",
+              "reference": {
+                "mode": "FIXED",
+                "value": "2670",
+                "unit": "FEN",
+                "as_of": "2026-09-23",
+                "source": "收盘重新站上26.70"
+              }
+            }
+          ]
+        },
+        "confirmation": {
+          "kind": "OFFICIAL_DAILY_CLOSE"
+        },
+        "execution_window": "NEXT_EXCHANGE_SESSION_ONLY",
+        "zone": "LOW_BUY",
+        "validity": {
+          "mode": "PLAN_ACTIVE"
+        },
+        "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+        "independent_signal": null
+      }
+    ],
+    "risk_branches": [
+      {
+        "kind": "ORDINARY_TECHNICAL",
+        "involves_core": null,
+        "scope_evidence": null,
+        "target_core_qty": null,
+        "target_tactical_qty": null,
+        "priority": null,
+        "evidence_mode": null,
+        "suspension_confirmation_policy": null,
+        "condition": {
+          "type": "ALL",
+          "conditions": [
+            {
+              "type": "REVIEWED_FACT",
+              "fact_kind": "SEVERE_STRUCTURE",
+              "evidence_requirement": "压力失败：27.45压力区开盘→26.62收盘＋明显跑输深证成指",
+              "validity_scope": "TRADE_DATE"
+            },
+            {
+              "type": "REVIEWED_FACT",
+              "fact_kind": "TECHNICAL",
+              "evidence_requirement": "一项技术指标同步转弱（同口径重算的MACD/RSI）",
+              "validity_scope": "TRADE_DATE"
+            }
+          ]
+        }
+      }
+    ],
+    "execution_policy": {
+      "same_signal": "ONE_PLANNED_QUANTITY",
+      "risk_priority": "SEVERE_THEN_ORDINARY",
+      "ordinary_conflict": "BLOCK_BOTH"
+    },
+    "alert_rules": []
+  },
+  "clauses": [
+    {
+      "clause_id": "clause-85fca38a32181400",
+      "disposition": "BACKGROUND",
+      "reason": "核验时间说明，非交易条件"
+    },
+    {
+      "clause_id": "clause-d07e41dfa5f1e16c",
+      "disposition": "BACKGROUND",
+      "reason": "总体结论等待，非可执行条件"
+    },
+    {
+      "clause_id": "clause-0ec37dddeab0ff77",
+      "disposition": "INVENTORY_ASSERTION",
+      "reason": "声明继续0股持仓"
+    },
+    {
+      "clause_id": "clause-c6575c32c8e1bc35",
+      "disposition": "BACKGROUND",
+      "reason": "23日无确认买点的历史结论"
+    },
+    {
+      "clause_id": "clause-e33a25ba8cb090f2",
+      "disposition": "BACKGROUND",
+      "reason": "23日无可执行卖点的历史结论"
+    },
+    {
+      "clause_id": "clause-3db6aedd0fd551fd",
+      "disposition": "BACKGROUND",
+      "reason": "压力失败与相对宽基转弱的观察，未构成正式规则"
+    },
+    {
+      "clause_id": "clause-b980b5d94df9dd92",
+      "disposition": "BACKGROUND",
+      "reason": "明确不足以认定为正式卖点"
+    },
+    {
+      "clause_id": "clause-9310bbb86726b732",
+      "disposition": "BACKGROUND",
+      "reason": "格式标记"
+    },
+    {
+      "clause_id": "clause-a9397ff59aef4e41",
+      "disposition": "BACKGROUND",
+      "reason": "章节标题"
+    },
+    {
+      "clause_id": "clause-0b98018b6ecf5213",
+      "disposition": "BACKGROUND",
+      "reason": "历史行情数据"
+    },
+    {
+      "clause_id": "clause-82aa37d4fc4eb5b8",
+      "disposition": "BACKGROUND",
+      "reason": "历史涨跌幅"
+    },
+    {
+      "clause_id": "clause-eb4f3ae48a1969f3",
+      "disposition": "BACKGROUND",
+      "reason": "历史开高低数据"
+    },
+    {
+      "clause_id": "clause-1e173be8236f3561",
+      "disposition": "BACKGROUND",
+      "reason": "历史成交量"
+    },
+    {
+      "clause_id": "clause-9bc77f0324084fe1",
+      "disposition": "BACKGROUND",
+      "reason": "前一日收盘价"
+    },
+    {
+      "clause_id": "clause-cfca7250bd84ce6a",
+      "disposition": "BACKGROUND",
+      "reason": "行情描述"
+    },
+    {
+      "clause_id": "clause-50b032b4a874d78f",
+      "disposition": "BACKGROUND",
+      "reason": "行情描述"
+    },
+    {
+      "clause_id": "clause-e8607a47dd7dd707",
+      "disposition": "BACKGROUND",
+      "reason": "引用标记"
+    },
+    {
+      "clause_id": "clause-507fdb86311f06e2",
+      "disposition": "BACKGROUND",
+      "reason": "指数行情数据"
+    },
+    {
+      "clause_id": "clause-3715595c4ad16825",
+      "disposition": "BACKGROUND",
+      "reason": "指数涨跌幅"
+    },
+    {
+      "clause_id": "clause-0d01d32ffd8813bf",
+      "disposition": "BACKGROUND",
+      "reason": "相对表现数据"
+    },
+    {
+      "clause_id": "clause-bae8db7f951fccff",
+      "disposition": "BACKGROUND",
+      "reason": "市场环境描述"
+    },
+    {
+      "clause_id": "clause-3848ba8e5549bc2b",
+      "disposition": "BACKGROUND",
+      "reason": "个股相对弱势描述"
+    },
+    {
+      "clause_id": "clause-faef98e9951c684e",
+      "disposition": "BACKGROUND",
+      "reason": "引用标记"
+    },
+    {
+      "clause_id": "clause-fffaffb0115d616a",
+      "disposition": "BACKGROUND",
+      "reason": "成交量对比描述"
+    },
+    {
+      "clause_id": "clause-a86cdc51086aece5",
+      "disposition": "BACKGROUND",
+      "reason": "非放量杀跌描述"
+    },
+    {
+      "clause_id": "clause-d1c792f959ed81f6",
+      "disposition": "BACKGROUND",
+      "reason": "过渡语"
+    },
+    {
+      "clause_id": "clause-d6b3ec448ce2e562",
+      "disposition": "BACKGROUND",
+      "reason": "价格结构转弱描述"
+    },
+    {
+      "clause_id": "clause-9fb5e734a46792dc",
+      "disposition": "BACKGROUND",
+      "reason": "非放量破位描述"
+    },
+    {
+      "clause_id": "clause-c259580baa57ce6d",
+      "disposition": "BACKGROUND",
+      "reason": "格式标记"
+    },
+    {
+      "clause_id": "clause-9cdabe7425f3d073",
+      "disposition": "POLICY",
+      "reason": "核心风险线25.99元"
+    },
+    {
+      "clause_id": "clause-47c34e186ffaa5f7",
+      "disposition": "POLICY",
+      "reason": "低吸观察区26.40—26.70"
+    },
+    {
+      "clause_id": "clause-2bc716e9f9f758ca",
+      "disposition": "BACKGROUND",
+      "reason": "引用标记"
+    },
+    {
+      "clause_id": "clause-81950ae985d5a4eb",
+      "disposition": "BACKGROUND",
+      "reason": "章节标题"
+    },
+    {
+      "clause_id": "clause-6264125ec0e811e4",
+      "disposition": "BACKGROUND",
+      "reason": "表格表头"
+    },
+    {
+      "clause_id": "clause-e86ce93e17a8a789",
+      "disposition": "BACKGROUND",
+      "reason": "表格分隔"
+    },
+    {
+      "clause_id": "clause-4616dfec12a74a63",
+      "disposition": "POLICY",
+      "reason": "主要压力区27.30—27.70"
+    },
+    {
+      "clause_id": "clause-e9cfba38e2461dac",
+      "disposition": "BACKGROUND",
+      "reason": "历史跌破描述"
+    },
+    {
+      "clause_id": "clause-6f4dfc3e09dc1a6f",
+      "disposition": "POLICY",
+      "reason": "压力区转为反压"
+    },
+    {
+      "clause_id": "clause-571a0f7238ea7d67",
+      "disposition": "POLICY",
+      "reason": "低吸观察区26.40—26.70"
+    },
+    {
+      "clause_id": "clause-6cc472257c76db56",
+      "disposition": "BACKGROUND",
+      "reason": "已进入低吸区描述"
+    },
+    {
+      "clause_id": "clause-2c7c1739d31af175",
+      "disposition": "BACKGROUND",
+      "reason": "尚未企稳描述"
+    },
+    {
+      "clause_id": "clause-3ee2b59d027e08ef",
+      "disposition": "POLICY",
+      "reason": "核心风险线25.99元"
+    },
+    {
+      "clause_id": "clause-5fdc809f05bdca18",
+      "disposition": "POLICY",
+      "reason": "风险线不下移"
+    },
+    {
+      "clause_id": "clause-d1caaa77237ad105",
+      "disposition": "BACKGROUND",
+      "reason": "章节标题"
+    },
+    {
+      "clause_id": "clause-10725e00a510d371",
+      "disposition": "BACKGROUND",
+      "reason": "23日无买点结论"
+    },
+    {
+      "clause_id": "clause-d10abdce2e0f01e8",
+      "disposition": "BACKGROUND",
+      "reason": "格式标记"
+    },
+    {
+      "clause_id": "clause-5e786706a09d9f8c",
+      "disposition": "BACKGROUND",
+      "reason": "进入低吸区描述"
+    },
+    {
+      "clause_id": "clause-02bed90798df48e9",
+      "disposition": "BACKGROUND",
+      "reason": "一路下跌描述"
+    },
+    {
+      "clause_id": "clause-e5d59f6836d50cf0",
+      "disposition": "POLICY",
+      "reason": "低吸确认条件：无长下影回收、止跌阳线或连续不创新低"
+    },
+    {
+      "clause_id": "clause-b4c3dc422ed6835c",
+      "disposition": "BACKGROUND",
+      "reason": "不满足低吸确认条件结论"
+    },
+    {
+      "clause_id": "clause-2e5e6281136e28ee",
+      "disposition": "INVENTORY_ASSERTION",
+      "reason": "23日买入0股"
+    },
+    {
+      "clause_id": "clause-2e10b7870e040c73",
+      "disposition": "BACKGROUND",
+      "reason": "格式标记"
+    },
+    {
+      "clause_id": "clause-db5ef7713527cdcc",
+      "disposition": "BACKGROUND",
+      "reason": "23日无正式卖点结论"
+    },
+    {
+      "clause_id": "clause-98e13451b4bb725b",
+      "disposition": "INVENTORY_ASSERTION",
+      "reason": "实际卖出0股"
+    },
+    {
+      "clause_id": "clause-7d055e574ca7bdff",
+      "disposition": "BACKGROUND",
+      "reason": "格式标记"
+    },
+    {
+      "clause_id": "clause-aa9f628633f6c427",
+      "disposition": "BACKGROUND",
+      "reason": "假设仍持仓的说明"
+    },
+    {
+      "clause_id": "clause-060ef19dae62c887",
+      "disposition": "BACKGROUND",
+      "reason": "压力失败观察描述"
+    },
+    {
+      "clause_id": "clause-8c64a60b87b127b1",
+      "disposition": "POLICY",
+      "reason": "普通卖出规则要求一项技术指标同步转弱"
+    },
+    {
+      "clause_id": "clause-36a6149c644d8e69",
+      "disposition": "BACKGROUND",
+      "reason": "未取得同口径MACD/RSI"
+    },
+    {
+      "clause_id": "clause-61cbfc707e90d5da",
+      "disposition": "BACKGROUND",
+      "reason": "不判为正式卖点结论"
+    },
+    {
+      "clause_id": "clause-f5debdcba21201f1",
+      "disposition": "INVENTORY_ASSERTION",
+      "reason": "0股持仓声明"
+    },
+    {
+      "clause_id": "clause-dab49655460d0eeb",
+      "disposition": "BACKGROUND",
+      "reason": "无实际卖出动作"
+    },
+    {
+      "clause_id": "clause-27ae21e2f4362fb3",
+      "disposition": "BACKGROUND",
+      "reason": "章节标题"
+    },
+    {
+      "clause_id": "clause-8771925ec3445380",
+      "disposition": "POLICY",
+      "reason": "24日若继续在26.40—26.70运行先不买"
+    },
+    {
+      "clause_id": "clause-363557e39e340bae",
+      "disposition": "POLICY",
+      "reason": "先不买"
+    },
+    {
+      "clause_id": "clause-d729b9491883a330",
+      "disposition": "POLICY",
+      "reason": "必须看到完整日K止跌"
+    },
+    {
+      "clause_id": "clause-f89ebc2bb8cdd911",
+      "disposition": "POLICY",
+      "reason": "止跌形态示例：明显下影、止跌阳线或连续两个收盘不再下移"
+    },
+    {
+      "clause_id": "clause-6ebc527d29722efb",
+      "disposition": "POLICY",
+      "reason": "量能不能异常放大"
+    },
+    {
+      "clause_id": "clause-0930b501f6177fa6",
+      "disposition": "POLICY",
+      "reason": "企稳出现条件"
+    },
+    {
+      "clause_id": "clause-956f85ce6e42d49a",
+      "disposition": "POLICY",
+      "reason": "收盘重新站上26.70"
+    },
+    {
+      "clause_id": "clause-345025592f3f91a8",
+      "disposition": "POLICY",
+      "reason": "下一交易日考虑第一笔100股"
+    },
+    {
+      "clause_id": "clause-77e34af40ac73849",
+      "disposition": "POLICY",
+      "reason": "反弹至27.30—27.70不追"
+    },
+    {
+      "clause_id": "clause-3cb611c884d17542",
+      "disposition": "POLICY",
+      "reason": "不追"
+    },
+    {
+      "clause_id": "clause-0de3a4aff4c11d19",
+      "disposition": "BACKGROUND",
+      "reason": "反压区域说明"
+    },
+    {
+      "clause_id": "clause-0f8f88715cd714f1",
+      "disposition": "POLICY",
+      "reason": "收盘跌破25.99继续0股"
+    },
+    {
+      "clause_id": "clause-1a8cc75a5e613eff",
+      "disposition": "POLICY",
+      "reason": "继续0股"
+    },
+    {
+      "clause_id": "clause-0fd65af558fcfc07",
+      "disposition": "POLICY",
+      "reason": "取消左侧低吸计划"
+    },
+    {
+      "clause_id": "clause-fd3238c912cd1be7",
+      "disposition": "BACKGROUND",
+      "reason": "过渡语"
+    },
+    {
+      "clause_id": "clause-2bba70e4eb054e2a",
+      "disposition": "BACKGROUND",
+      "reason": "公司公告信息"
+    },
+    {
+      "clause_id": "clause-aa8903dd561a4cdc",
+      "disposition": "BACKGROUND",
+      "reason": "公告用途说明"
+    },
+    {
+      "clause_id": "clause-527289579002d4e7",
+      "disposition": "BACKGROUND",
+      "reason": "非立即新增净负债说明"
+    },
+    {
+      "clause_id": "clause-0c6a45e50c602d19",
+      "disposition": "BACKGROUND",
+      "reason": "非基本面逻辑失效说明"
+    },
+    {
+      "clause_id": "clause-570450cc0396b305",
+      "disposition": "BACKGROUND",
+      "reason": "结合杠杆水平说明"
+    },
+    {
+      "clause_id": "clause-fb4f33f6f5bc319c",
+      "disposition": "POLICY",
+      "reason": "新增仓位确认要求应提高"
+    },
+    {
+      "clause_id": "clause-2942c50c568d61bc",
+      "disposition": "POLICY",
+      "reason": "而不是降低"
+    },
+    {
+      "clause_id": "clause-41cf537ba8f15f98",
+      "disposition": "BACKGROUND",
+      "reason": "格式与引用标记"
+    },
+    {
+      "clause_id": "clause-ee8ba9f445b2019f",
+      "disposition": "BACKGROUND",
+      "reason": "总结句"
+    },
+    {
+      "clause_id": "clause-f4e45234554e19bc",
+      "disposition": "BACKGROUND",
+      "reason": "所以不买总结"
+    },
+    {
+      "clause_id": "clause-27a9f4e505e9870a",
+      "disposition": "POLICY",
+      "reason": "27.30—27.70重新变成明确反压区"
+    },
+    {
+      "clause_id": "clause-41e300fd2d4d1e2a",
+      "disposition": "BACKGROUND",
+      "reason": "格式标记"
+    }
+  ],
+  "bindings": [
+    {
+      "path": "levels.risk_line_fen",
+      "clause_ids": [
+        "clause-9cdabe7425f3d073",
+        "clause-3ee2b59d027e08ef"
+      ]
+    },
+    {
+      "path": "levels.low_buy",
+      "clause_ids": [
+        "clause-47c34e186ffaa5f7",
+        "clause-571a0f7238ea7d67"
+      ]
+    },
+    {
+      "path": "levels.pressure",
+      "clause_ids": [
+        "clause-4616dfec12a74a63",
+        "clause-6f4dfc3e09dc1a6f",
+        "clause-27a9f4e505e9870a"
+      ]
+    },
+    {
+      "path": "ordinary_rules[0].condition",
+      "clause_ids": [
+        "clause-d729b9491883a330",
+        "clause-f89ebc2bb8cdd911",
+        "clause-6ebc527d29722efb",
+        "clause-956f85ce6e42d49a"
+      ]
+    },
+    {
+      "path": "ordinary_rules[0].quantity",
+      "clause_ids": [
+        "clause-345025592f3f91a8"
+      ]
+    },
+    {
+      "path": "risk_branches[0].condition",
+      "clause_ids": [
+        "clause-060ef19dae62c887",
+        "clause-8c64a60b87b127b1"
+      ]
+    },
+    {
+      "path": "position.max_qty",
+      "clause_ids": [
+        "clause-0ec37dddeab0ff77",
+        "clause-f5debdcba21201f1"
+      ]
+    }
+  ],
+  "warnings": [
+    {
+      "path": "symbol",
+      "message": "证券代码002240.SZ由名称盛新锂能推断，源文本未直接给出代码",
+      "material": true
+    },
+    {
+      "path": "activation",
+      "message": "源文本未明确计划生效日期，采用MANUAL激活",
+      "material": false
+    },
+    {
+      "path": "monitoring.macd_min_observations",
+      "message": "MACD最小观测数26为默认值，源文本未指定",
+      "material": false
+    },
+    {
+      "path": "risk_branches[0]",
+      "message": "普通卖出规则的技术指标同步转弱条件未量化，保留为REVIEWED_FACT",
+      "material": true
+    },
+    {
+      "path": "ordinary_rules[0].condition",
+      "message": "止跌形态与量能条件为定性描述，未量化阈值",
+      "material": true
+    }
+  ],
+  "schema_version": "monitor-loop-wire-v1",
+  "opening_account": {
+    "inventory_quantity": null,
+    "lots": [],
+    "cash_fen": null,
+    "snapshot_at": null
+  }
+}

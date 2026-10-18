@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from hashlib import sha256
 from threading import Event, get_ident
 from uuid import uuid4
@@ -345,7 +345,8 @@ def service_setup(tmp_path, **options):
     store, jobs, initial = stores(tmp_path)
     initial = store.edit_source(
         "one",
-        source=initial.source.model_copy(update={"text": CASES[0]["source"]}),
+        source=initial.source.model_copy(update={"text": CASES[0]["source"],
+                                                 "effective_trade_date": date(2026, 8, 20)}),
         expected_revision=initial.revision,
         idempotency_key="fixture-source",
     )
