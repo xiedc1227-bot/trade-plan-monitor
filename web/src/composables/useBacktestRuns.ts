@@ -16,28 +16,27 @@ import {
   type BacktestApi,
   type BacktestRunListQuery,
 } from "../api/backtests";
-import { normalizeRfc4122Uuid } from "../api/backtestValues";
-import { normalizeShanghaiDateTime } from "../api/shanghaiTime";
+import { isCalendarDate, normalizeShanghaiDateTime } from "../api/shanghaiTime";
 import { ApiClientError } from "../api/transport";
 
 export type BacktestRunsQueryState = "IDLE" | "LOADING" | "READY" | "EMPTY" | "FAILED";
 export type BacktestRunSort = "completedAt_desc";
 
 export interface RunUrlFilters {
+  readonly eventEndFrom?: string | null;
+  readonly eventEndTo?: string | null;
   readonly completedFrom: string | null;
   readonly completedTo: string | null;
-  readonly datasetHash: string | null;
   readonly pinned: boolean | null;
-  readonly planVersionId: string | null;
   readonly symbol: string | null;
 }
 
 export interface RunFilterDraft {
+  readonly eventEndFrom?: string;
+  readonly eventEndTo?: string;
   readonly completedFrom: string;
   readonly completedTo: string;
-  readonly datasetHash: string;
   readonly pinned: string;
-  readonly planVersionId: string;
   readonly symbol: string;
 }
 
@@ -66,7 +65,6 @@ interface ParsedRunUrlState {
 const RUN_PAGE_LIMIT = 20;
 const RUN_SORT: BacktestRunSort = "completedAt_desc";
 const SYMBOL_PATTERN = /^[0-9]{6}\.(?:SH|SZ)$/;
-const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const CURSOR_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const PAGE_PATTERN = /^[1-9][0-9]{0,14}$/;
 
@@ -79,11 +77,6 @@ function scalar(query: LocationQuery, key: string): string | null {
 function normalizeSymbol(value: string): string | null {
   const normalized = value.trim().toUpperCase();
   return SYMBOL_PATTERN.test(normalized) ? normalized : null;
-}
-
-function normalizeDatasetHash(value: string): string | null {
-  const normalized = value.trim().toLowerCase();
-  return SHA256_PATTERN.test(normalized) ? normalized : null;
 }
 
 function normalizeOptionalTime(value: string): string | null {
@@ -103,21 +96,14 @@ function parsePage(value: string | null, hasCursor: boolean): number {
 
 export function validateRunFilterDraft(draft: RunFilterDraft): RunFilterValidation {
   const errors: Partial<Record<keyof RunFilterDraft | "range", string>> = {};
+  const eventEndFrom = draft.eventEndFrom?.trim() || null;
+  const eventEndTo = draft.eventEndTo?.trim() || null;
+  if (eventEndFrom !== null && !isCalendarDate(eventEndFrom)) errors.eventEndFrom = "请输入有效的回测截止开始日期";
+  if (eventEndTo !== null && !isCalendarDate(eventEndTo)) errors.eventEndTo = "请输入有效的回测截止结束日期";
+  if (eventEndFrom !== null && eventEndTo !== null && eventEndFrom > eventEndTo) errors.eventEndFrom = "截止开始日期不得晚于截止结束日期";
   const symbol = draft.symbol.trim().length === 0 ? null : normalizeSymbol(draft.symbol);
   if (draft.symbol.trim().length > 0 && symbol === null) {
     errors.symbol = "股票代码必须是 .SH 或 .SZ A 股代码";
-  }
-  const planVersionId =
-    draft.planVersionId.trim().length === 0
-      ? null
-      : normalizeRfc4122Uuid(draft.planVersionId.trim());
-  if (draft.planVersionId.trim().length > 0 && planVersionId === null) {
-    errors.planVersionId = "计划版本 ID 必须是 RFC 4122 UUID";
-  }
-  const datasetHash =
-    draft.datasetHash.trim().length === 0 ? null : normalizeDatasetHash(draft.datasetHash);
-  if (draft.datasetHash.trim().length > 0 && datasetHash === null) {
-    errors.datasetHash = "数据集哈希必须是 64 位 SHA-256";
   }
   const completedFrom = normalizeOptionalTime(draft.completedFrom);
   if (draft.completedFrom.trim().length > 0 && completedFrom === null) {
@@ -138,11 +124,11 @@ export function validateRunFilterDraft(draft: RunFilterDraft): RunFilterValidati
   return Object.freeze({
     errors: Object.freeze(errors),
     filters: Object.freeze({
+      ...(eventEndFrom === null || errors.eventEndFrom ? {} : { eventEndFrom }),
+      ...(eventEndTo === null || errors.eventEndTo ? {} : { eventEndTo }),
       completedFrom,
       completedTo,
-      datasetHash,
       pinned,
-      planVersionId,
       symbol,
     }),
   });
@@ -158,10 +144,10 @@ function urlQuery(
     sort: RUN_SORT,
   };
   if (filters.symbol !== null) query.symbol = filters.symbol;
-  if (filters.planVersionId !== null) query.planVersionId = filters.planVersionId;
-  if (filters.datasetHash !== null) query.datasetHash = filters.datasetHash;
   if (filters.completedFrom !== null) query.completedFrom = filters.completedFrom;
   if (filters.completedTo !== null) query.completedTo = filters.completedTo;
+  if (filters.eventEndFrom != null) query.eventEndFrom = filters.eventEndFrom;
+  if (filters.eventEndTo != null) query.eventEndTo = filters.eventEndTo;
   if (filters.pinned !== null) query.pinned = filters.pinned ? "true" : "false";
   if (cursor !== null) query.cursor = cursor;
   return Object.freeze(query);
@@ -169,11 +155,11 @@ function urlQuery(
 
 function parseUrlState(query: LocationQuery): ParsedRunUrlState {
   const validation = validateRunFilterDraft({
+    eventEndFrom: scalar(query, "eventEndFrom") ?? "",
+    eventEndTo: scalar(query, "eventEndTo") ?? "",
     completedFrom: scalar(query, "completedFrom") ?? "",
     completedTo: scalar(query, "completedTo") ?? "",
-    datasetHash: scalar(query, "datasetHash") ?? "",
     pinned: scalar(query, "pinned") ?? "",
-    planVersionId: scalar(query, "planVersionId") ?? "",
     symbol: scalar(query, "symbol") ?? "",
   });
   let filters = validation.filters;
@@ -181,7 +167,8 @@ function parseUrlState(query: LocationQuery): ParsedRunUrlState {
     filters = Object.freeze({ ...filters, completedFrom: null, completedTo: null });
   }
   const rawCursor = scalar(query, "cursor")?.trim() ?? null;
-  const cursor = rawCursor !== null && validCursor(rawCursor) ? rawCursor : null;
+  const hasRetiredFilters = Object.hasOwn(query, "datasetHash") || Object.hasOwn(query, "planVersionId");
+  const cursor = !hasRetiredFilters && rawCursor !== null && validCursor(rawCursor) ? rawCursor : null;
   const pageNumber = parsePage(scalar(query, "page"), cursor !== null);
   return Object.freeze({
     canonicalQuery: urlQuery(filters, cursor, pageNumber),
@@ -211,30 +198,28 @@ function queryMatchesCanonical(
 
 function apiQuery(state: ParsedRunUrlState): BacktestRunListQuery {
   return {
+    ...(state.filters.eventEndFrom == null ? {} : { eventEndFrom: state.filters.eventEndFrom }),
+    ...(state.filters.eventEndTo == null ? {} : { eventEndTo: state.filters.eventEndTo }),
     ...(state.filters.completedFrom === null
       ? {}
       : { completedFrom: state.filters.completedFrom }),
     ...(state.filters.completedTo === null ? {} : { completedTo: state.filters.completedTo }),
     ...(state.cursor === null ? {} : { cursor: state.cursor }),
-    ...(state.filters.datasetHash === null ? {} : { datasetHash: state.filters.datasetHash }),
     limit: RUN_PAGE_LIMIT,
     ...(state.filters.pinned === null
       ? {}
       : { pinned: state.filters.pinned ? ("true" as const) : ("false" as const) }),
-    ...(state.filters.planVersionId === null
-      ? {}
-      : { planVersionId: state.filters.planVersionId }),
     ...(state.filters.symbol === null ? {} : { symbol: state.filters.symbol }),
   };
 }
 
 function responseFilters(filters: BacktestRunFiltersView): RunUrlFilters {
   return Object.freeze({
+    ...(filters.eventEndFrom == null ? {} : { eventEndFrom: filters.eventEndFrom }),
+    ...(filters.eventEndTo == null ? {} : { eventEndTo: filters.eventEndTo }),
     completedFrom: filters.completedFrom,
     completedTo: filters.completedTo,
-    datasetHash: filters.datasetHash,
     pinned: filters.pinned,
-    planVersionId: filters.planVersionId,
     symbol: filters.symbol,
   });
 }

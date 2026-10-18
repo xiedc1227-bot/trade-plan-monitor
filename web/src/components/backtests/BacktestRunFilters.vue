@@ -23,10 +23,10 @@ const emit = defineEmits<Emits>();
 const errorSummary = useTemplateRef<HTMLDivElement>("errorSummary");
 
 const symbol = shallowRef("");
-const planVersionId = shallowRef("");
-const datasetHash = shallowRef("");
 const completedFrom = shallowRef("");
 const completedTo = shallowRef("");
+const eventEndFrom = shallowRef("");
+const eventEndTo = shallowRef("");
 const pinned = shallowRef("");
 const errors = shallowRef<Partial<RunFilterErrors>>({});
 
@@ -34,10 +34,10 @@ watch(
   () => props.filters,
   (filters) => {
     symbol.value = filters.symbol ?? "";
-    planVersionId.value = filters.planVersionId ?? "";
-    datasetHash.value = filters.datasetHash ?? "";
     completedFrom.value = filters.completedFrom ?? "";
     completedTo.value = filters.completedTo ?? "";
+    eventEndFrom.value = filters.eventEndFrom ?? "";
+    eventEndTo.value = filters.eventEndTo ?? "";
     pinned.value = filters.pinned === null ? "" : filters.pinned ? "true" : "false";
     errors.value = {};
   },
@@ -46,11 +46,11 @@ watch(
 
 async function apply(): Promise<void> {
   const draft: RunFilterDraft = {
+    eventEndFrom: eventEndFrom.value,
+    eventEndTo: eventEndTo.value,
     completedFrom: completedFrom.value,
     completedTo: completedTo.value,
-    datasetHash: datasetHash.value,
     pinned: pinned.value,
-    planVersionId: planVersionId.value,
     symbol: symbol.value,
   };
   const validation = validateRunFilterDraft(draft);
@@ -65,11 +65,11 @@ async function apply(): Promise<void> {
 
 function errorTarget(field: string): string {
   const targets: Record<string, string> = {
+    eventEndFrom: "run-filter-end-from",
+    eventEndTo: "run-filter-end-to",
     completedFrom: "run-filter-completed-from",
     completedTo: "run-filter-completed-to",
-    datasetHash: "run-filter-dataset-hash",
     pinned: "run-filter-pinned",
-    planVersionId: "run-filter-plan-version",
     range: "run-filter-completed-from",
     symbol: "run-filter-symbol",
   };
@@ -107,6 +107,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
       </ul>
     </div>
 
+    <p class="run-filters__hint">日期统一按回测覆盖的截止日筛选，不是程序实际完成运行的日期。</p>
     <form class="run-filters__grid" @submit.prevent="apply">
       <div class="run-filters__field">
         <label for="run-filter-symbol">股票代码 <span>可选，例如 000001.SZ</span></label>
@@ -122,75 +123,43 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
         </p>
       </div>
       <div class="run-filters__field">
-        <label for="run-filter-plan-version">计划版本 ID <span>可选，RFC 4122 UUID</span></label>
+        <label for="run-filter-end-from">回测截止日期从 <span>可选，包含当天</span></label>
         <input
-          id="run-filter-plan-version"
-          v-model="planVersionId"
-          :aria-invalid="fieldError('planVersionId') === undefined ? undefined : 'true'"
-          :aria-describedby="fieldError('planVersionId') === undefined ? undefined : 'run-filter-plan-version-error'"
+          type="date"
+          id="run-filter-end-from"
+          v-model="eventEndFrom"
+          :aria-invalid="fieldError('eventEndFrom') === undefined ? undefined : 'true'"
+          :aria-describedby="fieldError('eventEndFrom') === undefined ? undefined : 'run-filter-end-from-error'"
           autocomplete="off"
         />
         <p
-          v-if="fieldError('planVersionId')"
-          id="run-filter-plan-version-error"
+          v-if="fieldError('eventEndFrom')"
+          id="run-filter-end-from-error"
           class="run-filters__field-error"
         >
-          {{ fieldError("planVersionId") }}
+          {{ fieldError("eventEndFrom") }}
         </p>
       </div>
       <div class="run-filters__field">
-        <label for="run-filter-dataset-hash">数据集哈希 <span>可选，64 位 SHA-256</span></label>
+        <label for="run-filter-end-to">回测截止日期至 <span>可选，包含当天</span></label>
         <input
-          id="run-filter-dataset-hash"
-          v-model="datasetHash"
-          :aria-invalid="fieldError('datasetHash') === undefined ? undefined : 'true'"
-          :aria-describedby="fieldError('datasetHash') === undefined ? undefined : 'run-filter-dataset-hash-error'"
+          type="date"
+          id="run-filter-end-to"
+          v-model="eventEndTo"
+          :aria-invalid="fieldError('eventEndTo') === undefined ? undefined : 'true'"
+          :aria-describedby="fieldError('eventEndTo') === undefined ? undefined : 'run-filter-end-to-error'"
           autocomplete="off"
         />
         <p
-          v-if="fieldError('datasetHash')"
-          id="run-filter-dataset-hash-error"
+          v-if="fieldError('eventEndTo')"
+          id="run-filter-end-to-error"
           class="run-filters__field-error"
         >
-          {{ fieldError("datasetHash") }}
+          {{ fieldError("eventEndTo") }}
         </p>
       </div>
       <div class="run-filters__field">
-        <label for="run-filter-completed-from">完成开始时间 <span>可选，RFC 3339 +08:00</span></label>
-        <input
-          id="run-filter-completed-from"
-          v-model="completedFrom"
-          :aria-invalid="fieldError('completedFrom') === undefined ? undefined : 'true'"
-          :aria-describedby="fieldError('completedFrom') === undefined ? undefined : 'run-filter-completed-from-error'"
-          autocomplete="off"
-        />
-        <p
-          v-if="fieldError('completedFrom')"
-          id="run-filter-completed-from-error"
-          class="run-filters__field-error"
-        >
-          {{ fieldError("completedFrom") }}
-        </p>
-      </div>
-      <div class="run-filters__field">
-        <label for="run-filter-completed-to">完成结束时间 <span>可选，RFC 3339 +08:00</span></label>
-        <input
-          id="run-filter-completed-to"
-          v-model="completedTo"
-          :aria-invalid="fieldError('completedTo') === undefined ? undefined : 'true'"
-          :aria-describedby="fieldError('completedTo') === undefined ? undefined : 'run-filter-completed-to-error'"
-          autocomplete="off"
-        />
-        <p
-          v-if="fieldError('completedTo')"
-          id="run-filter-completed-to-error"
-          class="run-filters__field-error"
-        >
-          {{ fieldError("completedTo") }}
-        </p>
-      </div>
-      <div class="run-filters__field">
-        <label for="run-filter-pinned">固定状态 <span>可选，服务端成员关系筛选</span></label>
+        <label for="run-filter-pinned">固定状态 <span>可选，仅看已固定或未固定记录</span></label>
         <select
           id="run-filter-pinned"
           v-model="pinned"
@@ -205,14 +174,50 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
           {{ fieldError("pinned") }}
         </p>
       </div>
-      <div class="run-filters__field">
-        <label for="run-filter-sort">排序 <span>服务端固定顺序</span></label>
-        <select id="run-filter-sort" :value="sort" disabled>
-          <option value="completedAt_desc">完成时间降序</option>
-        </select>
-      </div>
-      <div class="run-filters__actions">
-        <button data-testid="apply-run-filters" type="button" @click="apply">应用筛选</button>
+
+      <details v-if="props.filters.completedFrom || props.filters.completedTo" class="run-filters__extra" data-testid="legacy-run-filters" open>
+        <summary>旧链接时间条件</summary>
+        <div v-if="props.filters.completedFrom || props.filters.completedTo" class="run-filters__legacy-times">
+          <p>当前链接保留旧结果时间条件。连续回测的旧结果时间是证据截止时间，不是实际完成时间；可清空后改用上方日期。</p>
+          <div class="run-filters__field">
+            <label for="run-filter-completed-from">旧结果时间从 <span>可选，RFC 3339 +08:00</span></label>
+            <input
+              id="run-filter-completed-from"
+              v-model="completedFrom"
+              :aria-invalid="fieldError('completedFrom') === undefined ? undefined : 'true'"
+              :aria-describedby="fieldError('completedFrom') === undefined ? undefined : 'run-filter-completed-from-error'"
+              autocomplete="off"
+            />
+            <p
+              v-if="fieldError('completedFrom')"
+              id="run-filter-completed-from-error"
+              class="run-filters__field-error"
+            >
+              {{ fieldError("completedFrom") }}
+            </p>
+          </div>
+          <div class="run-filters__field">
+            <label for="run-filter-completed-to">旧结果时间至 <span>可选，RFC 3339 +08:00</span></label>
+            <input
+              id="run-filter-completed-to"
+              v-model="completedTo"
+              :aria-invalid="fieldError('completedTo') === undefined ? undefined : 'true'"
+              :aria-describedby="fieldError('completedTo') === undefined ? undefined : 'run-filter-completed-to-error'"
+              autocomplete="off"
+            />
+            <p
+              v-if="fieldError('completedTo')"
+              id="run-filter-completed-to-error"
+              class="run-filters__field-error"
+            >
+              {{ fieldError("completedTo") }}
+            </p>
+          </div>
+        </div>
+      </details>
+      <div class="run-filters__footer">
+        <p>按结果时间倒序显示。连续回测的结果时间为证据截止时间，不代表程序实际完成时间。</p>
+        <button data-testid="apply-run-filters" type="submit">应用筛选</button>
       </div>
     </form>
   </section>
@@ -244,7 +249,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 
 .run-filters__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
 }
 
@@ -292,9 +297,14 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
   cursor: pointer;
 }
 
-.run-filters select:disabled {
-  opacity: 0.75;
-}
+.run-filters__hint { margin: 0; color: var(--color-text-muted); font-size: .875rem; }
+.run-filters__extra, .run-filters__footer { grid-column: 1 / -1; }
+.run-filters__extra { border-top: var(--border-technical); padding-top: var(--space-3); }
+.run-filters__extra summary { cursor: pointer; min-height: 2.75rem; }
+.run-filters__extra p, .run-filters__footer p { color: var(--color-text-muted); font-size: .875rem; }
+.run-filters__extra .run-filters__field { max-width: 40rem; margin-top: var(--space-3); }
+.run-filters__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.run-filters__footer p { flex: 1 1 18rem; margin: 0; }
 
 .run-filters__actions {
   align-items: end;

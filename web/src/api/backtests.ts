@@ -593,7 +593,7 @@ const runViewKeys = exactKeys<BacktestRunView>()([
   "limitations",
   "referenceMarket",
 ]);
-const runFilterKeys = exactKeys<BacktestRunFiltersView>()([
+const runFilterKeys = exactKeys<Omit<BacktestRunFiltersView, "eventEndFrom" | "eventEndTo">>()([
   "completedFrom",
   "completedTo",
   "datasetHash",
@@ -2250,7 +2250,11 @@ function isRunPage(value: unknown): value is BacktestRunPage {
 function isRunFilters(value: unknown): value is BacktestRunFiltersView {
   return (
     isRecord(value) &&
-    hasExactKeys(value, runFilterKeys) &&
+    hasOnlyKeys(value, [...runFilterKeys, "eventEndFrom", "eventEndTo"]) &&
+    runFilterKeys.every(key => Object.hasOwn(value, key)) &&
+    (value.eventEndFrom == null || isCalendarDate(value.eventEndFrom)) &&
+    (value.eventEndTo == null || isCalendarDate(value.eventEndTo)) &&
+    (value.eventEndFrom == null || value.eventEndTo == null || String(value.eventEndFrom) <= String(value.eventEndTo)) &&
     (value.symbol === null || isAShareSymbol(value.symbol)) &&
     (value.planVersionId === null || isCanonicalUuid(value.planVersionId)) &&
     isNullableSha256(value.datasetHash) &&
@@ -2273,6 +2277,8 @@ function runMatchesFilters(
     (filters.datasetHash === null || run.datasetHash === filters.datasetHash) &&
     (filters.completedFrom === null || run.completedAt >= filters.completedFrom) &&
     (filters.completedTo === null || run.completedAt <= filters.completedTo) &&
+    (filters.eventEndFrom == null || run.eventEnd >= filters.eventEndFrom) &&
+    (filters.eventEndTo == null || run.eventEnd <= filters.eventEndTo) &&
     (filters.pinned === null || run.pinned === filters.pinned)
   );
 }
@@ -2283,6 +2289,8 @@ function normalizeRunQuery(query: BacktestRunListQuery): BacktestRunListQuery {
     !hasOnlyKeys(query, [
       "completedFrom",
       "completedTo",
+      "eventEndFrom",
+      "eventEndTo",
       "cursor",
       "datasetHash",
       "limit",
@@ -2295,6 +2303,9 @@ function normalizeRunQuery(query: BacktestRunListQuery): BacktestRunListQuery {
   }
   const completedFrom = normalizeOptionalRequestTime(query.completedFrom);
   const completedTo = normalizeOptionalRequestTime(query.completedTo);
+  if ((query.eventEndFrom != null && !isCalendarDate(query.eventEndFrom)) ||
+      (query.eventEndTo != null && !isCalendarDate(query.eventEndTo)) ||
+      (query.eventEndFrom != null && query.eventEndTo != null && query.eventEndFrom > query.eventEndTo)) throw invalidRequest();
   const planVersionId =
     query.planVersionId == null ? null : normalizeUuid(query.planVersionId);
   if (
@@ -2311,6 +2322,8 @@ function normalizeRunQuery(query: BacktestRunListQuery): BacktestRunListQuery {
   return {
     ...(completedFrom === null ? {} : { completedFrom }),
     ...(completedTo === null ? {} : { completedTo }),
+    ...(query.eventEndFrom == null ? {} : { eventEndFrom: query.eventEndFrom }),
+    ...(query.eventEndTo == null ? {} : { eventEndTo: query.eventEndTo }),
     ...(query.cursor == null ? {} : { cursor: query.cursor }),
     ...(query.datasetHash == null ? {} : { datasetHash: query.datasetHash }),
     ...(query.limit === undefined ? {} : { limit: query.limit }),
@@ -2327,6 +2340,8 @@ function runSearch(query: BacktestRunListQuery): URLSearchParams {
   appendQuery(search, "datasetHash", query.datasetHash);
   appendQuery(search, "completedFrom", query.completedFrom);
   appendQuery(search, "completedTo", query.completedTo);
+  appendQuery(search, "eventEndFrom", query.eventEndFrom);
+  appendQuery(search, "eventEndTo", query.eventEndTo);
   appendQuery(search, "pinned", query.pinned);
   appendQuery(search, "limit", query.limit);
   appendQuery(search, "cursor", query.cursor);
@@ -2341,6 +2356,8 @@ function runPageMatchesQuery(page: BacktestRunPage, query: BacktestRunListQuery)
     page.filters.datasetHash === (query.datasetHash ?? null) &&
     page.filters.completedFrom === (query.completedFrom ?? null) &&
     page.filters.completedTo === (query.completedTo ?? null) &&
+    (page.filters.eventEndFrom ?? null) === (query.eventEndFrom ?? null) &&
+    (page.filters.eventEndTo ?? null) === (query.eventEndTo ?? null) &&
     page.filters.pinned ===
       (query.pinned == null ? null : query.pinned === "true")
   );

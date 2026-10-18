@@ -225,6 +225,10 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 ## 历史回测
 
+运行记录筛选保留股票代码、包含边界当天的回测截止日期和固定状态。筛选界面已移除数据集哈希和计划版本 ID；旧页面链接先清除这两个条件及其游标，再读取记录。内部 API 和存储标识继续用于排查。日期比较覆盖截止日，固定的结果时间排序以文字说明；回放截止时间不是程序实际完成时间。参见[筛选操作说明](docs/operations/monitor-loop-backtest.zh-CN.md#ml-o21-运行记录筛选与时间含义)和[验证记录](docs/verification/2026-10-18-run-record-filters.zh-CN.md)。
+
+正常回测页面只显示简短状态及 `服务管理`，刷新、待恢复任务查询和停止服务收进面板。中断任务或服务异常时展开，任务进度、取消和重试仍在原页面，发现任务不会自动恢复。参见[服务操作及验证](docs/verification/2026-10-18-compact-backtest-service.zh-CN.md)。
+
 `main` 中基线 `7046d2e` 已完成约定范围内功能验收。[当前验收记录](docs/verification/2026-10-18-backtest-functional-acceptance.zh-CN.md)汇总已完成能力、纠正后的四份原文连续回测及测试依据。原文未量化条件保持未知，实际样本为零成交，不宣称新一轮全量集成／容量认证。历史验证记录保留当时日期和限制。
 
 已批准的回测设计采用混合流程：经明确授权的 `DATA_SYNC` 把 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily` 事实增量下载到 `backtest-market.sqlite3`；本地校验冻结精确 `dataset_hash`；每次正式运行随后完全离线读取该冻结数据集，并且只把结果资产写入 `backtest-results.sqlite3`。

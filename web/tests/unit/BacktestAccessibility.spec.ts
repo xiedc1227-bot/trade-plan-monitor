@@ -261,7 +261,8 @@ describe("BT048 cross-slice accessibility", () => {
       },
     });
 
-    expect(wrapper.get("caption").text()).toContain("按完成时间倒序排列");
+    expect(wrapper.get("caption").text()).toContain("按结果时间倒序排列");
+    expect(wrapper.get("caption").text()).toContain("不代表程序实际完成时间");
     expect(wrapper.get("th[aria-sort]").attributes("aria-sort")).toBe("descending");
     expect(wrapper.get('[role="region"]').attributes()).toMatchObject({
       "aria-label": "回测运行记录，可横向滚动",

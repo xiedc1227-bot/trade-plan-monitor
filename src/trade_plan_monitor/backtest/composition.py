@@ -1191,6 +1191,8 @@ class _ProductionBacktestService:
         cursor: str | None,
     ) -> BacktestRunPage:
         domain_filters = BacktestRunFilters(
+            event_end_from=filters.event_end_from,
+            event_end_to=filters.event_end_to,
             symbol=filters.symbol,
             plan_version_id=filters.plan_version_id,
             dataset_hash=filters.dataset_hash,

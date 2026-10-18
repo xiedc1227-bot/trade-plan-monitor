@@ -79,11 +79,11 @@ function intervalReturn(run: BacktestRunPage["items"][number]): string {
     >
       <table>
         <caption>
-          回测运行记录，按完成时间倒序排列
+          回测运行记录，按结果时间倒序排列；结果时间不代表程序实际完成时间
         </caption>
         <thead>
           <tr>
-            <th scope="col" aria-sort="descending">完成时间</th>
+            <th scope="col" aria-sort="descending">结果时间</th>
             <th scope="col">股票</th>
             <th scope="col">运行 ID</th>
             <th scope="col">区间</th>

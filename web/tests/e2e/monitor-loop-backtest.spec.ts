@@ -122,6 +122,8 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   await page.getByTestId("result-tab-fills").click(); await expect(page.getByRole("table")).toContainText("39.71");
   for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 900 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); }
   expect((await (await page.request.get(url + "/fixture/counters")).json()).extractions).toBe(3);
+  const serviceManagement = page.getByTestId("backtest-service-management-toggle");
+  if (await serviceManagement.getAttribute("aria-expanded") === "false") await serviceManagement.click();
   await page.getByRole("button", { name: "停止回测服务", exact: true }).click();
   await expect(page.getByText("回测服务已停止", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "返回监控总览", exact: true }).click();

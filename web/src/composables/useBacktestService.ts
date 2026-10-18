@@ -13,7 +13,8 @@ export function useBacktestService(options: { api?: BacktestServiceApi; jobApi?:
   const selectionLoaded = shallowRef(false);
   const commandMessage = shallowRef<string | null>(null);
   const readMessage = shallowRef<string | null>(null);
-  const message = computed(() => commandMessage.value ?? readMessage.value);
+  const pendingMessage = shallowRef<string | null>(null);
+  const message = computed(() => commandMessage.value ?? readMessage.value ?? pendingMessage.value);
   const busy = shallowRef(false);
   const uncertain = shallowRef(false);
   const lastChecked = shallowRef<string | null>(null);
@@ -23,7 +24,9 @@ export function useBacktestService(options: { api?: BacktestServiceApi; jobApi?:
   let mutation: AbortController | null = null;
   let jobRead: AbortController | null = null;
   let generation = 0;
+  let checkedPendingIdentity: string | null = null;
   let intent: { key: string; command: BacktestServiceRecoveryCommand | BacktestServiceStopCommand; stop: boolean } | null = null;
+  const pendingIdentity = (value: BacktestServiceView) => JSON.stringify([value.epoch, value.revision, value.generation, value.state, value.authorizedJobIds]);
   const canRepair = computed(() => !busy.value && !uncertain.value && view.value?.epoch !== null && view.value?.physicallyDrained === true && ["DEGRADED", "STOPPED"].includes(view.value?.state ?? ""));
   function schedule() {
     if (timer !== null) clearTimeout(timer);
@@ -40,18 +43,29 @@ export function useBacktestService(options: { api?: BacktestServiceApi; jobApi?:
       const value = await api.getStatus({ signal: controller.signal });
       if (!mounted || controller.signal.aborted || active !== generation) return;
       view.value = value; readMessage.value = null; lastChecked.value = new Date().toLocaleTimeString("zh-CN");
+      if (!value.canRead || value.authorizedJobIds.length > 0) {
+        pendingJob.value = null; pendingMessage.value = null;
+      }
+      if (value.canRead && value.authorizedJobIds.length === 0 && !["STOPPING", "STOPPED"].includes(value.state) && checkedPendingIdentity !== pendingIdentity(value)) void loadPending(false);
     } catch {
       if (mounted && !controller.signal.aborted && active === generation) readMessage.value = "回测服务状态暂不可用，已保留当前页面；可返回监控页面。";
     } finally { if (read === controller) read = null; schedule(); }
   }
-  async function loadPending() {
-    if (!mounted || jobRead !== null || busy.value || uncertain.value) return;
+  async function loadPending(manual = true) {
+    if (!mounted || jobRead !== null || busy.value || uncertain.value || !view.value?.canRead) return;
+    const snapshot = view.value;
+    const identity = pendingIdentity(snapshot);
     const controller = new AbortController(); jobRead = controller;
     try {
       const result = await jobs.listJobs({ status: ["QUEUED", "RUNNING", "CANCEL_REQUESTED"], limit: 1 }, { signal: controller.signal });
-      if (!mounted || controller.signal.aborted) return;
-      pendingJob.value = result.items[0] ?? null; selectionLoaded.value = true;
-    } catch { if (mounted && !controller.signal.aborted) commandMessage.value = "待恢复任务暂不可用，请先修复回测服务后重试。"; }
+      if (!mounted || controller.signal.aborted || !view.value || pendingIdentity(view.value) !== identity) return;
+      pendingJob.value = result.items.find(job => !snapshot.authorizedJobIds.includes(job.jobId)) ?? null;
+      selectionLoaded.value = manual; pendingMessage.value = null; checkedPendingIdentity = identity;
+    } catch (error) {
+      // Metadata reads share a bounded slot; a passive check can wait for the next status poll.
+      if (!manual && error instanceof ApiClientError && error.status === 503 && error.code === "SERVICE_UNAVAILABLE") return;
+      if (mounted && !controller.signal.aborted && view.value && pendingIdentity(view.value) === identity) pendingMessage.value = "待恢复任务暂不可读取，请稍后重试查看；当前任务与输入已保留。";
+    }
     finally { if (jobRead === controller) jobRead = null; }
   }
   async function send() {
@@ -78,6 +92,7 @@ export function useBacktestService(options: { api?: BacktestServiceApi; jobApi?:
     const value = view.value;
     if (busy.value || uncertain.value || value?.epoch == null || action === "RETRY_PREPARATION" && !canRepair.value ||
       action === "RESUME_JOBS" && (selected === undefined || selected !== pendingJob.value?.jobId)) return Promise.resolve();
+    jobRead?.abort();
     const common = { epoch: value.epoch, expectedRevision: value.revision };
     const ids: string[] = action === "RESUME_JOBS" ? [selected!] : [];
     Object.freeze(ids);

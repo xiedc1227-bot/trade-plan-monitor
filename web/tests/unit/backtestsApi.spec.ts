@@ -978,6 +978,18 @@ function runReceipt() {
 }
 
 describe("backtest API runs results and export", () => {
+  it("filters coverage end dates independently of the legacy result timestamp", async () => {
+    const body = runPage();
+    const end = body.items[0]!.eventEnd;
+    const payload = { ...body, filters: { completedFrom: null, completedTo: null, datasetHash: null, planVersionId: null, pinned: null, symbol: null, eventEndFrom: end, eventEndTo: end } };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(payload));
+    const api = createBacktestApi(fetcher);
+    await expect(api.listRuns({ eventEndFrom: end, eventEndTo: end, limit: 20 })).resolves.toMatchObject({ filters: { eventEndFrom: end } });
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain(`eventEndFrom=${end}&eventEndTo=${end}`);
+    fetcher.mockResolvedValueOnce(jsonResponse({ ...payload, items: [{ ...payload.items[0], eventEnd: '2020-01-01' }] }));
+    await expect(api.listRuns({ eventEndFrom: end, eventEndTo: end, limit: 20 })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    await expect(api.listRuns({ eventEndFrom: '2026-02-30' })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
   it("loads server-authored reference-market coverage and frozen run series", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

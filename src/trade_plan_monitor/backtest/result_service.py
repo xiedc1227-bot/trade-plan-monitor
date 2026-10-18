@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Self
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -84,6 +84,8 @@ class BacktestRunFilters(_ServiceValue):
     completed_from: Annotated[datetime, AwareDatetime()] | None = None
     completed_to: Annotated[datetime, AwareDatetime()] | None = None
     pinned: Annotated[bool, Field(strict=True)] | None = None
+    event_end_from: date | None = Field(default=None, exclude_if=lambda v: v is None)
+    event_end_to: date | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @field_validator("completed_from", "completed_to")
     @classmethod
@@ -92,6 +94,10 @@ class BacktestRunFilters(_ServiceValue):
 
     @model_validator(mode="after")
     def validate_completed_range(self) -> Self:
+        if self.event_end_from is not None and self.event_end_to is not None and (
+            self.event_end_from > self.event_end_to
+        ):
+            raise ValueError("event_end_to must not precede event_end_from")
         if (
             self.completed_from is not None
             and self.completed_to is not None
@@ -235,6 +241,8 @@ class BacktestResultService:
             dataset_hash=normalized_filters.dataset_hash,
             completed_from=normalized_filters.completed_from,
             completed_to=normalized_filters.completed_to,
+            event_end_from=normalized_filters.event_end_from,
+            event_end_to=normalized_filters.event_end_to,
             pinned=normalized_filters.pinned,
             high_water=high_water,
             last_seen=last_seen,

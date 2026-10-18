@@ -187,6 +187,32 @@ def _service(store: BacktestResultStore) -> BacktestResultService:
     return BacktestResultService(store=store, cursor_signer=HmacCursorSigner(b"q" * 32))
 
 
+def test_end_date_filters_use_coverage_not_completion_and_bind_pagination(tmp_path: Path) -> None:
+    store = BacktestResultStore(tmp_path / "end-dates.sqlite3")
+    summaries = [
+        _materialize(store, label, completed_at=datetime(2026, 9, day, tzinfo=_SHANGHAI))[0]
+        for label, day in (("first", 1), ("second", 2))
+    ]
+    end = summaries[0].event_end
+    assert all(summary.event_end == end for summary in summaries)
+    service = _service(store)
+    filters = BacktestRunFilters(event_end_from=end, event_end_to=end)
+    first = service.list_runs(filters=filters, limit=1)
+    assert first.has_more and first.next_cursor
+    second = service.list_runs(filters=filters, limit=1, cursor=first.next_cursor)
+    assert {row.summary.run_id for row in first.items + second.items} == {
+        summary.run_id for summary in summaries
+    }
+    assert not second.has_more
+    assert not service.list_runs(filters=BacktestRunFilters(
+        event_end_from=end + timedelta(days=1),
+    )).items
+    with pytest.raises(InvalidCursorError):
+        service.list_runs(filters=BacktestRunFilters(), cursor=first.next_cursor)
+    with pytest.raises(ValueError):
+        BacktestRunFilters(event_end_from=end + timedelta(days=1), event_end_to=end)
+
+
 @pytest.mark.parametrize("limit", [True, 0, 101])
 def test_all_result_page_limits_are_bounded(tmp_path: Path, limit: object) -> None:
     service = _service(BacktestResultStore(tmp_path / "results.sqlite3"))

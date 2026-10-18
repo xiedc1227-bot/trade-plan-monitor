@@ -233,3 +233,15 @@ Existing API paths expose these additive fields; no new endpoint or trading appr
 OpenAPI snapshot SHA-256: `5d6dff24961ae06dafe422211775851ff1fc55cbb91267e9d5b79f8a58261404`
 
 Canonical monitor v2 OpenAPI snapshot SHA-256: `4c033709abf001c88e6a1ae9ee667b90359b51a3f34b6d34ad63edc9ef3b73d9`
+
+## U23. Run-list coverage-date filters (2026-10-18)
+
+The user authorized simplifying run-list filters and separating replay cutoff from actual execution completion. Common dates mean the inclusive coverage end date `eventEnd` for every result kind. `GET /api/v1/backtest-runs` adds optional `eventEndFrom` / `eventEndTo`, each a valid `YYYY-MM-DD`; reversed ranges, invalid dates, duplicate keys and unknown query keys remain rejected. They combine with existing filters using AND and participate in the signed cursor context before SQL pagination. The store compares the canonical summary's `event_end`, not `completed_at`, job completion or today's date.
+
+The existing filter response adds optional nullable date fields, omitted when unused so old unfiltered payloads and cursor contexts remain unchanged. The frontend validates both the echoed date filters and every returned item's coverage. Existing `completedFrom` / `completedTo` retain their original result-timestamp meaning for old API clients/links; they are not redefined as actual task completion. Historical loop `completedAt` is the evidence cutoff. Frozen reports, hashes, stored timestamps, retention and the fixed `completedAt:desc,runId:desc` order do not change. The table labels that value as result time, and static text explains the sort; actual task completion remains a separate job fact.
+
+The UI contains stock, coverage-end dates and pin status. Following the user's further simplification, dataset hash and single-version ID have no filter controls or disclosure entrances. Page URLs drop `datasetHash` / `planVersionId` and their cursor before the first list read, returning to page 1 while retaining other conditions; internal API filters and stored identifiers remain unchanged. Old timestamp link conditions are shown only when present as explicitly labelled old-link time conditions; they are never silently converted to coverage dates. See [RF-01–RF-03](../../../tasks/run-record-filters.md) and [verification](../../verification/2026-10-18-run-record-filters.md).
+
+OpenAPI snapshot SHA-256: `a94974a7d4b7ec26239b72574d87b4a97fd3dbda353833b5a7eb7056e398d67b`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `a3833f1fac7735528866dd2ab3a6989ce519657c45c9e044871a626d51784e7d`

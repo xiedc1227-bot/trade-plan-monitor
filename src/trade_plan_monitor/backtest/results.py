@@ -1364,6 +1364,8 @@ class BacktestResultStore:
         dataset_hash: str | None = None,
         completed_from: datetime | None = None,
         completed_to: datetime | None = None,
+        event_end_from: date | None = None,
+        event_end_to: date | None = None,
         pinned: bool | None = None,
         high_water: tuple[str, str] | None = None,
         last_seen: tuple[str, str] | None = None,
@@ -1400,6 +1402,12 @@ class BacktestResultStore:
         if dataset_hash is not None:
             clauses.append("r.dataset_hash = ?")
             parameters.append(dataset_hash)
+        if event_end_from is not None:
+            clauses.append("json_extract(r.summary_json, '$.event_end') >= ?")
+            parameters.append(event_end_from.isoformat())
+        if event_end_to is not None:
+            clauses.append("json_extract(r.summary_json, '$.event_end') <= ?")
+            parameters.append(event_end_to.isoformat())
         if completed_from is not None:
             clauses.append("r.completed_at >= ?")
             parameters.append(_datetime_text(completed_from, version="v2"))

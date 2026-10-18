@@ -4869,6 +4869,30 @@
             ],
             "title": "Datasethash"
           },
+          "eventEndFrom": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventendfrom"
+          },
+          "eventEndTo": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventendto"
+          },
           "pinned": {
             "anyOf": [
               {
@@ -34963,6 +34987,44 @@
                 }
               ],
               "title": "Completedto"
+            }
+          },
+          {
+            "in": "query",
+            "name": "eventEndFrom",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 10,
+                  "minLength": 10,
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Eventendfrom"
+            }
+          },
+          {
+            "in": "query",
+            "name": "eventEndTo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 10,
+                  "minLength": 10,
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Eventendto"
             }
           },
           {

@@ -2303,6 +2303,17 @@ class BacktestRunFiltersView(_BacktestApiInput):
     completed_from: ShanghaiDatetime | None
     completed_to: ShanghaiDatetime | None
     pinned: bool | None
+    event_end_from: date | None = Field(default=None, exclude_if=lambda v: v is None)
+    event_end_to: date | None = Field(default=None, exclude_if=lambda v: v is None)
+
+    @field_validator("event_end_from", "event_end_to", mode="before")
+    @classmethod
+    def parse_event_end_date(cls, value: object) -> object:
+        if isinstance(value, str):
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+                raise ValueError("event end boundary must be YYYY-MM-DD")
+            return date.fromisoformat(value)
+        return value
 
     @field_validator("pinned", mode="before")
     @classmethod
@@ -2313,6 +2324,10 @@ class BacktestRunFiltersView(_BacktestApiInput):
 
     @model_validator(mode="after")
     def validate_completed_range(self) -> Self:
+        if self.event_end_from is not None and self.event_end_to is not None and (
+            self.event_end_from > self.event_end_to
+        ):
+            raise ValueError("eventEndFrom cannot be after eventEndTo")
         if (
             self.completed_from is not None
             and self.completed_to is not None
@@ -2394,6 +2409,14 @@ class BacktestRunPage(_BacktestApiInput):
         positions = tuple((item.completed_at, item.run_id) for item in self.items)
         _require_ordered_unique_positions(positions, reverse=True, resource="run")
         for item in self.items:
+            if self.filters.event_end_from is not None and (
+                item.event_end < self.filters.event_end_from
+            ):
+                raise ValueError("run item must match eventEndFrom filter")
+            if self.filters.event_end_to is not None and (
+                item.event_end > self.filters.event_end_to
+            ):
+                raise ValueError("run item must match eventEndTo filter")
             if self.filters.symbol is not None and item.symbol != self.filters.symbol:
                 raise ValueError("run item must match symbol filter")
             if (

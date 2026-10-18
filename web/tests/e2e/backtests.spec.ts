@@ -12,6 +12,7 @@ import type {
   BacktestEquitySeries,
   BacktestJobReceipt,
   BacktestJobView,
+  BacktestJobPage,
   BacktestMarketIndexSeriesView,
   BacktestReferenceMarketCoverageView,
   BacktestRunPage,
@@ -508,6 +509,11 @@ function runningJob(): BacktestJobView {
   };
 }
 
+function pendingJobs(items: BacktestJobView[] = []): BacktestJobPage {
+  return { items, limit: 1, hasMore: false, nextCursor: null, highWatermark: "jobs.watermark_001",
+    filters: { kind: null, status: ["CANCEL_REQUESTED", "QUEUED", "RUNNING"], runId: null, datasetHash: null, createdFrom: null, createdTo: null } };
+}
+
 function newAudit(): BrowserAudit {
   return {
     apiFailures: [],
@@ -528,6 +534,7 @@ async function fulfillJson(route: Route, body: unknown): Promise<void> {
   await route.fulfill({
     body: JSON.stringify(body),
     contentType: "application/json; charset=utf-8",
+    headers: { "Cache-Control": "no-store" },
     status: 200,
   });
 }
@@ -576,6 +583,14 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
         await fulfillJson(route, dashboard);
       } else if (key === "GET /api/v1/backtest-service") {
         await fulfillJson(route, serviceStatus);
+      } else if (key === "GET /api/v1/backtest-jobs") {
+        expect(url.searchParams.get("limit")).toBe("1");
+        expect(url.searchParams.getAll("status")).toEqual(["CANCEL_REQUESTED", "QUEUED", "RUNNING"]);
+        await fulfillJson(route, pendingJobs());
+      } else if (key === "GET /api/v1/backtest-plan-library") {
+        expect(url.searchParams.get("offset")).toBe("0");
+        expect(url.searchParams.get("limit")).toBe("100");
+        await fulfillJson(route, { items: [], offset: 0, limit: 100, total: 0 });
       } else if (key === "GET /api/v1/plan-versions") {
         expect(url.searchParams.get("canActivate")).toBe("true");
         await fulfillJson(route, planVersionPage);
@@ -594,7 +609,11 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
           status: 202,
         });
       } else if (key === "GET /api/v1/backtest-runs") {
-        await fulfillJson(route, runPage);
+        const from = url.searchParams.get("eventEndFrom"), to = url.searchParams.get("eventEndTo");
+        await fulfillJson(route, { ...runPage,
+          filters: { ...runPage.filters, ...(from ? { eventEndFrom: from } : {}), ...(to ? { eventEndTo: to } : {}) },
+          items: runPage.items.filter(item => (!from || item.eventEnd >= from) && (!to || item.eventEnd <= to)),
+        });
       } else if (key === "GET /api/v1/backtest-datasets") {
         await fulfillJson(route, datasetPage);
       } else if (key === `GET /api/v1/backtest-runs/${RUN_ID}/equity-series`) {
@@ -636,6 +655,7 @@ async function openPage(browser: Browser, width = 1024): Promise<{ audit: Browse
 }
 
 async function openRoute(page: Page, route: (typeof ROUTES)[number]): Promise<void> {
+  await page.waitForLoadState("networkidle");
   await page.goto(`${baseUrl}${route.path}`);
   await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible();
   await expect(page.getByTestId(route.readyTestId)).toBeVisible();
@@ -696,6 +716,114 @@ function expectCleanAudit(audit: BrowserAudit): void {
   expect(audit.unexpectedRequests).toEqual([]);
   expect([...audit.maxInFlight.values()].every((maximum) => maximum <= 1)).toBe(true);
 }
+
+test("service management stays compact and supports keyboard disclosure at desktop and mobile widths", async ({ browser }, testInfo) => {
+  const { audit, page } = await openPage(browser);
+  await openRoute(page, ROUTES[0]);
+  await expect.poll(() => audit.requestTotals.get("GET /api/v1/backtest-jobs")).toBe(1);
+  const toggle = page.getByTestId("backtest-service-management-toggle");
+  const panel = page.getByTestId("backtest-service-management");
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false"); await expect(panel).toHaveCount(0);
+    await page.getByTestId("backtest-service-state").screenshot({ path: testInfo.outputPath(`compact-service-${width}.png`) });
+    await toggle.focus(); await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    for (const name of ["刷新服务状态", "查看待恢复任务", "停止回测服务"]) await expect(panel.getByRole("button", { name, exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "返回监控总览", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expectNoSeriousAxeViolations(page);
+    await page.getByTestId("backtest-service-state").screenshot({ path: testInfo.outputPath(`expanded-service-${width}.png`) });
+    await toggle.focus(); await page.keyboard.press("Space"); await expect(panel).toHaveCount(0);
+  }
+  expect(audit.requestTotals.get("POST /api/v1/backtest-service/recovery-requests")).toBeUndefined();
+  expect(audit.requestTotals.get("POST /api/v1/backtest-service/stop-requests")).toBeUndefined();
+  expectCleanAudit(audit); await page.close();
+});
+
+test("interrupted jobs and service faults expand management without automatically resuming work", async ({ browser }) => {
+  const { audit, page } = await openPage(browser);
+  const controls: string[] = []; page.on("request", request => { if (request.method() === "POST") controls.push(request.url()); });
+  await page.route(`${baseUrl}/api/v1/backtest-jobs?*`, route => fulfillJson(route, pendingJobs([runningJob()])));
+  await openRoute(page, ROUTES[0]);
+  const toggle = page.getByTestId("backtest-service-management-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const panel = page.getByTestId("backtest-service-management");
+  await expect(panel).toContainText(`待恢复任务：${JOB_ID}`);
+  await expect(panel.getByRole("button", { name: "恢复已选任务", exact: true })).toBeDisabled();
+  await panel.getByLabel("确认只恢复此任务").check();
+  await expect(panel.getByRole("button", { name: "恢复已选任务", exact: true })).toBeEnabled();
+  expect(controls).toEqual([]);
+  await page.route(`${baseUrl}/api/v1/backtest-service`, route => fulfillJson(route, { ...serviceStatus, state: "DEGRADED", canSubmit: false, physicallyDrained: false, reason: "SERVICE_REPAIR_REQUIRED" }));
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(panel).toContainText("正在等待已有工作实际结束");
+  await expect(panel.getByRole("button", { name: "重新准备回测服务", exact: true })).toHaveCount(0);
+  expect(controls).toEqual([]); expectCleanAudit(audit); await page.close();
+});
+
+test("compact service controls preserve job progress, refresh, cancellation and same-request retry", async ({ browser }) => {
+  const { audit, page } = await openPage(browser);
+  let reads = 0, cancellations = 0;
+  const intents: Array<{ body: unknown; key: string | undefined }> = [];
+  const cancellingJob = () => ({ ...runningJob(), status: "CANCEL_REQUESTED", cancelRequestedAt: TIME, revision: 2 });
+  await page.route(`${baseUrl}/api/v1/backtest-service`, route => fulfillJson(route, { ...serviceStatus, authorizedJobIds: [JOB_ID], physicallyDrained: false }));
+  await page.route(`${baseUrl}/api/v1/backtest-jobs/${JOB_ID}`, route => {
+    reads += 1;
+    return fulfillJson(route, reads === 1 ? {} : cancellations > 1 ? cancellingJob() : runningJob());
+  });
+  await page.route(`${baseUrl}/api/v1/backtest-job-cancellations`, async route => {
+    cancellations += 1;
+    intents.push({ body: route.request().postDataJSON(), key: route.request().headers()["idempotency-key"] });
+    await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify(cancellations === 1 ? {} : cancellingJob()),
+      headers: { Location: `/api/v1/backtest-jobs/${JOB_ID}`, "Retry-After": "2" } });
+  });
+  await page.goto(`${baseUrl}/backtests/${RUN_ID}?jobId=${JOB_ID}`);
+  await expect(page.getByTestId("refresh-job-status")).toBeVisible();
+  await page.getByTestId("refresh-job-status").click();
+  await expect(page.getByRole("progressbar")).toHaveAttribute("value", "5");
+  await expect(page.getByRole("progressbar")).toHaveAttribute("max", "20");
+  const toggle = page.getByTestId("backtest-service-management-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click(); await toggle.click();
+  await expect(page.getByTestId("request-job-cancel")).toBeVisible();
+  await page.getByTestId("request-job-cancel").click();
+  await expect(page.getByRole("dialog", { name: "确认请求取消" })).toBeVisible();
+  await page.getByTestId("confirm-job-cancel").click();
+  await expect(page.getByTestId("retry-job-cancel")).toBeVisible();
+  await page.getByTestId("retry-job-cancel").click();
+  await expect(page.getByTestId("job-status-announcement")).toHaveText("取消已请求，等待服务端确认");
+  await expect(page.locator(".backtest-job-status__notice").filter({ hasText: "取消已请求，等待服务端确认" })).toBeVisible();
+  expect(intents).toHaveLength(2); expect(intents[0]?.key).toBeTruthy(); expect(intents[1]).toEqual(intents[0]);
+  expect(intents[0]?.body).toEqual({ jobId: JOB_ID });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expectCleanAudit(audit); await page.close();
+});
+
+test("run filters use inclusive coverage dates without technical lookup conditions", async ({ browser }, testInfo) => {
+  const { audit, page } = await openPage(browser);
+  await openRoute(page, ROUTES[0]);
+  await expect(page.getByTestId("advanced-run-filters")).toHaveCount(0);
+  await expect(page.getByTestId("legacy-run-filters")).toHaveCount(0);
+  await expect(page.locator("#run-filter-dataset-hash")).toHaveCount(0);
+  await expect(page.locator("#run-filter-plan-version")).toHaveCount(0);
+  await expect(page.locator("#run-filter-sort")).toHaveCount(0);
+  await page.locator("#run-filter-end-from").fill("2026-08-28"); await page.locator("#run-filter-end-to").fill("2026-08-28");
+  await page.getByTestId("apply-run-filters").click();
+  await expect(page.getByTestId("backtest-run-row")).toHaveCount(1);
+  await expect(page).toHaveURL(url => url.searchParams.get("eventEndFrom") === "2026-08-28" && !url.searchParams.has("completedFrom"));
+  await page.locator("#run-filter-end-from").fill("2026-08-30"); await page.locator("#run-filter-end-to").fill("2026-08-30");
+  await page.getByTestId("apply-run-filters").click(); await expect(page.getByTestId("backtest-run-row")).toHaveCount(0);
+  await page.locator("#run-filter-end-from").fill("2026-08-28"); await page.locator("#run-filter-end-to").fill("2026-08-28");
+  await page.getByTestId("apply-run-filters").focus(); await page.keyboard.press("Enter");
+  await expect(page.getByTestId("backtest-run-row")).toHaveCount(1);
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator(".run-filters").screenshot({ path: testInfo.outputPath(`run-filters-${width}.png`) });
+  }
+  await expectNoSeriousAxeViolations(page); expectCleanAudit(audit); await page.close();
+});
 
 test("covers the four backtest routes with keyboard flows and serious axe checks", async ({
   browser,

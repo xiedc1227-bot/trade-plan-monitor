@@ -13,6 +13,8 @@ Current status — 2026-10-18, Asia/Shanghai: **functional acceptance complete w
 | Per-plan diagnostics and full rule comparisons | Complete | BA-S05, CR-V05; old fourth-plan cancellation is historical |
 | Holding-scoped risk exits | Complete | [CR-04](cohort-risk-execution.md#cr-04--completion-record); replaces RW-03's earlier unsupported-execution limit |
 | Top-of-page profit summary | Complete | [PS-02](result-profit-summary.md#ps-02--verification) |
+| Compact service management | Complete within SC-01–SC-02; broader browser failures retained | [SC-03](compact-backtest-service.md#sc-03--verification-and-status) |
+| Simplified run-record filters and consistent cutoff dates | Complete within RF-01–RF-02; actual service verified | [RF-03](run-record-filters.md#rf-03--verification-and-status) |
 | Bilingual acceptance record and task closure | Complete | BA-01–BA-06; documentation parity, links and diff checked for this update |
 
 No open implementation task remains within BA-02. Unquantified source conditions, the zero-fill actual sample and the absence of a new full integration/capacity certification remain explicit limits in BA-05. They are not marked as passing guarantees. No runtime behavior or acceptance threshold changes in this documentation closure.

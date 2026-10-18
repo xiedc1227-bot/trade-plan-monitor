@@ -52,18 +52,78 @@ describe("backtest service transport and scoped UI", () => {
     wrapper.unmount(); await vi.advanceTimersByTimeAsync(60000);
     expect(client.getStatus).toHaveBeenCalledTimes(2);
   });
-  it("loads pending history only on request and requires explicit one-job confirmation", async () => {
+  it("keeps healthy status compact and reveals controls only through service management", async () => {
+    const client = api(ready()); const listJobs = vi.fn().mockResolvedValue({ items: [] });
+    const wrapper = mount(BacktestServiceState, { props: { api: client, jobApi: { listJobs } } }); await flushPromises();
+    const management = wrapper.get('[data-testid="backtest-service-management-toggle"]');
+    expect(management.text()).toBe("服务管理"); expect(management.attributes("aria-expanded")).toBe("false");
+    expect(wrapper.find('[data-testid="backtest-service-management"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("新的有效操作会准备执行能力");
+    expect(listJobs).toHaveBeenCalledTimes(1);
+    await management.trigger("click");
+    expect(management.attributes("aria-expanded")).toBe("true");
+    const panel = wrapper.get('[data-testid="backtest-service-management"]');
+    for (const label of ["刷新服务状态", "查看待恢复任务", "停止回测服务"]) expect(panel.text()).toContain(label);
+    expect(client.recover).not.toHaveBeenCalled(); expect(client.stop).not.toHaveBeenCalled();
+    await management.trigger("click"); expect(management.attributes("aria-expanded")).toBe("false"); wrapper.unmount();
+  });
+  it("automatically reveals a pending history task but requires explicit one-job confirmation", async () => {
     const client = api(ready());
     const listJobs = vi.fn().mockResolvedValue({ items: [{ jobId: "selected", status: "QUEUED" } satisfies Pick<BacktestJobView, "jobId" | "status">] });
     const wrapper = mount(BacktestServiceState, { props: { api: client, jobApi: { listJobs } } }); await flushPromises();
-    expect(listJobs).not.toHaveBeenCalled();
-    await wrapper.findAll("button").find(button => button.text() === "查看待恢复任务")!.trigger("click"); await flushPromises();
+    expect(listJobs).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="backtest-service-management-toggle"]').attributes("aria-expanded")).toBe("true");
     expect(listJobs.mock.calls[0]?.[0]).toEqual({ status: ["QUEUED", "RUNNING", "CANCEL_REQUESTED"], limit: 1 });
     const button = wrapper.findAll("button").find(button => button.text() === "恢复已选任务")!;
     expect(button.attributes("disabled")).toBeDefined(); await button.trigger("click"); expect(client.recover).not.toHaveBeenCalled();
     await wrapper.get('input[type="checkbox"]').setValue(true); await button.trigger("click"); await flushPromises();
     expect(client.recover).toHaveBeenCalledTimes(1);
     expect(vi.mocked(client.recover).mock.calls[0]?.[0]).toEqual({ epoch, expectedRevision: 0, action: "RESUME_JOBS", resumeJobIds: ["selected"] }); wrapper.unmount();
+  });
+  it("does not call an authorized running task interrupted or load its recovery history", async () => {
+    const client = api(status({ state: "READY", canRead: true, canSubmit: true, canCancel: true, canExport: true, authorizedJobIds: ["running"], physicallyDrained: false }));
+    const listJobs = vi.fn();
+    const wrapper = mount(BacktestServiceState, { props: { api: client, jobApi: { listJobs } } }); await flushPromises();
+    expect(listJobs).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="backtest-service-management-toggle"]').attributes("aria-expanded")).toBe("false");
+    expect(wrapper.text()).not.toContain("正在等待已有工作实际结束"); wrapper.unmount();
+  });
+  it("checks pending history once per service identity instead of competing with every progress poll", async () => {
+    vi.useFakeTimers(); const client = api(ready()); const listJobs = vi.fn().mockResolvedValue({ items: [] });
+    const value = host({ api: client, jobApi: { listJobs } }); await flushPromises();
+    await vi.advanceTimersByTimeAsync(20000); await flushPromises();
+    expect(client.getStatus).toHaveBeenCalledTimes(3); expect(listJobs).toHaveBeenCalledTimes(1);
+    vi.mocked(client.getStatus).mockResolvedValue(status({ ...ready(), epoch: "b".repeat(32) }));
+    await value.service.refresh(); await flushPromises(); expect(listJobs).toHaveBeenCalledTimes(2); value.wrapper.unmount();
+  });
+  it.each([failed(), status({ state: "STOPPED" }), status({ state: "DISABLED", epoch: null })])("reveals management when service intervention is needed", async value => {
+    const wrapper = mount(BacktestServiceState, { props: { api: api(value) } }); await flushPromises();
+    expect(wrapper.get('[data-testid="backtest-service-management-toggle"]').attributes("aria-expanded")).toBe("true");
+    expect(wrapper.find('[data-testid="backtest-service-management"]').exists()).toBe(true); wrapper.unmount();
+  });
+  it("reveals read failures without submitting a repair", async () => {
+    const client = api(); vi.mocked(client.getStatus).mockRejectedValueOnce(error("NETWORK_ERROR", 0));
+    const wrapper = mount(BacktestServiceState, { props: { api: client } }); await flushPromises();
+    expect(wrapper.get('[data-testid="backtest-service-management-toggle"]').attributes("aria-expanded")).toBe("true");
+    expect(wrapper.text()).toContain("回测服务状态暂不可用"); expect(client.recover).not.toHaveBeenCalled(); wrapper.unmount();
+  });
+  it("keeps a background busy response quiet but reports an explicitly requested failed check", async () => {
+    const client = api(ready()); const listJobs = vi.fn().mockRejectedValue(error("SERVICE_UNAVAILABLE", 503));
+    const wrapper = mount(BacktestServiceState, { props: { api: client, jobApi: { listJobs } } }); await flushPromises();
+    const toggle = wrapper.get('[data-testid="backtest-service-management-toggle"]');
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    await toggle.trigger("click");
+    await wrapper.findAll("button").find(button => button.text() === "查看待恢复任务")!.trigger("click"); await flushPromises();
+    expect(wrapper.text()).toContain("待恢复任务暂不可读取"); expect(client.recover).not.toHaveBeenCalled(); wrapper.unmount();
+  });
+  it("ignores a pending-history read after service identity or authorization changes", async () => {
+    let resolve!: (value: { items: BacktestJobView[] }) => void;
+    const listJobs = vi.fn().mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const client = api(ready()); const value = host({ api: client, jobApi: { listJobs } }); await flushPromises();
+    vi.mocked(client.getStatus).mockResolvedValue(status({ ...ready(), revision: 1, authorizedJobIds: ["selected"] }));
+    await value.service.refresh();
+    resolve({ items: [{ jobId: "selected", status: "RUNNING" } as BacktestJobView] }); await flushPromises();
+    expect(value.service.pendingJob.value).toBeNull(); expect(client.recover).not.toHaveBeenCalled(); value.wrapper.unmount();
   });
   it("replays the same frozen control/key after an unknown result despite new status", async () => {
     const client = api(failed()); vi.mocked(client.recover).mockRejectedValueOnce(error("NETWORK_ERROR", 0));

@@ -746,6 +746,8 @@ export type BacktestRunFiltersView = {
   completedFrom: (string) | (null);
   completedTo: (string) | (null);
   datasetHash: (string) | (null);
+  eventEndFrom?: (string) | (null);
+  eventEndTo?: (string) | (null);
   pinned: (boolean) | (null);
   planVersionId: (string) | (null);
   symbol: (string) | (null);
@@ -6451,6 +6453,8 @@ export interface paths {
           completedTo?: (string) | (null);
           cursor?: (string) | (null);
           datasetHash?: (string) | (null);
+          eventEndFrom?: (string) | (null);
+          eventEndTo?: (string) | (null);
           limit?: number;
           pinned?: ("true" | "false") | (null);
           planVersionId?: (string) | (null);

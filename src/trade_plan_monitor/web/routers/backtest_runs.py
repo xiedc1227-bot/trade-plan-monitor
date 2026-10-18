@@ -48,6 +48,8 @@ _RUN_COLLECTION_QUERY_FIELDS = frozenset(
         "datasetHash",
         "completedFrom",
         "completedTo",
+        "eventEndFrom",
+        "eventEndTo",
         "pinned",
         "limit",
         "cursor",
@@ -77,6 +79,14 @@ CompletedFromQuery = Annotated[
 CompletedToQuery = Annotated[
     str | None,
     Query(alias="completedTo", min_length=25, max_length=40),
+]
+EventEndFromQuery = Annotated[
+    str | None, Query(alias="eventEndFrom", min_length=10, max_length=10,
+                      pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"),
+]
+EventEndToQuery = Annotated[
+    str | None, Query(alias="eventEndTo", min_length=10, max_length=10,
+                      pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"),
 ]
 PinnedQuery = Annotated[
     Literal["true", "false"] | None,
@@ -197,6 +207,8 @@ async def list_backtest_runs(
     dataset_hash: DatasetHashQuery = None,
     completed_from: CompletedFromQuery = None,
     completed_to: CompletedToQuery = None,
+    event_end_from: EventEndFromQuery = None,
+    event_end_to: EventEndToQuery = None,
     pinned: PinnedQuery = None,
     limit: LimitQuery = _DEFAULT_LIMIT,
     cursor: CursorQuery = None,
@@ -207,6 +219,8 @@ async def list_backtest_runs(
         dataset_hash=dataset_hash,
         completed_from=completed_from,
         completed_to=completed_to,
+        event_end_from=event_end_from,
+        event_end_to=event_end_to,
         pinned=None if pinned is None else pinned == "true",
     )
     page = validate_api_response(
@@ -321,6 +335,8 @@ def _run_filters(
     completed_from: str | None,
     completed_to: str | None,
     pinned: bool | None,
+    event_end_from: str | None = None,
+    event_end_to: str | None = None,
 ) -> BacktestRunFiltersView:
     try:
         return BacktestRunFiltersView.model_validate(
@@ -331,6 +347,8 @@ def _run_filters(
                 "completedFrom": completed_from,
                 "completedTo": completed_to,
                 "pinned": pinned,
+                "eventEndFrom": event_end_from,
+                "eventEndTo": event_end_to,
             }
         )
     except ValidationError:

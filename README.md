@@ -271,6 +271,10 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 ## Historical Backtesting
 
+Run-record filters contain stock, inclusive backtest cutoff dates and pin status. Dataset hash and plan version ID are absent from the filter UI; old page links drop these conditions and their cursor before reading records. Their internal API and stored identifiers remain available for diagnosis. Dates compare coverage end, while the fixed result-time order is explained in text; replay cutoff is not actual program completion. See [filter operations](docs/operations/monitor-loop-backtest.md#ml-o21-run-record-filters-and-time-meaning) and [verification](docs/verification/2026-10-18-run-record-filters.md).
+
+Normal backtest pages show one compact status and `服务管理`; refresh, pending-task lookup and service stop are inside that panel. Interrupted jobs and service faults expand it, while task progress, cancellation and retries remain in their original pages. Discovery does not resume a task. See [service controls and verification](docs/verification/2026-10-18-compact-backtest-service.md).
+
 Functional acceptance within the agreed scope is complete on baseline `7046d2e` in `main`. The [current acceptance record](docs/verification/2026-10-18-backtest-functional-acceptance.md) consolidates completed capabilities, the corrected four-source continuous run and test evidence. Unquantified source conditions remain unknown; the actual sample has zero fills; no new full integration/capacity certification is claimed. Historical verification records retain their original dates and limits.
 
 The approved backtest design uses a hybrid workflow: an explicitly authorized `DATA_SYNC` incrementally downloads `stk_mins`, `trade_cal`, `stk_limit`, and unadjusted `daily` facts into `backtest-market.sqlite3`; local verification freezes an exact `dataset_hash`; every formal run then reads that frozen dataset fully offline and writes only result artifacts to `backtest-results.sqlite3`.

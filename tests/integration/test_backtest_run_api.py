@@ -737,3 +737,21 @@ def test_backtest_run_router_imports_no_plan_provider_replay_or_persistence() ->
             "coordinator",
         )
     )
+
+
+def test_run_end_date_query_is_inclusive_and_rejects_invalid_calendar_dates() -> None:
+    service = _FakeRunReadService()
+    client = _client(read_service=service)
+    response = client.get("/api/v1/backtest-runs", params={
+        "eventEndFrom": "2024-01-05", "eventEndTo": "2024-01-05",
+    })
+    assert response.status_code == 200
+    assert response.json()["filters"]["eventEndFrom"] == "2024-01-05"
+    assert response.json()["items"][0]["eventEnd"] == "2024-01-05"
+    for params in (
+        {"eventEndFrom": "2026-02-30"},
+        {"eventEndFrom": "2026-08-29", "eventEndTo": "2026-08-28"},
+        {"eventEndTo": "2026-08-28T00:00:00+08:00"},
+    ):
+        assert client.get("/api/v1/backtest-runs", params=params).status_code == 422
+    assert len(service.list_calls) == 1
