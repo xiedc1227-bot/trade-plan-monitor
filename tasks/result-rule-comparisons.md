@@ -1,5 +1,7 @@
 # Frozen result rule comparisons
 
+> Current status — 2026-10-18: comparison display is complete. RC-03's fourth-source cancelled-exit example records the old frozen policy; it is not the accepted source meaning. The current fourth plan modifies the old-holding scope and preserves its exit, verified in [CR-V01–CR-V05](../docs/verification/2026-10-18-cohort-risk-execution.md). See [BA-01–BA-06](../docs/verification/2026-10-18-backtest-functional-acceptance.md) for current acceptance and limits. The earlier display evidence below is preserved.
+
 ## RC-01 — Contract
 
 Continuous result pages list every scheduled source and its immediate predecessor. Expand a source to load `GET /api/v1/backtest-runs/{run_id}/rule-changes/{source_id}`. Each response contains one complete comparison, bound to the run, manifest, source and version. It compares final frozen snapshots by stable rule ID (risk branch kind), not mutable preparation records or a new AI interpretation. Initial rules are ADD; equal values RETAIN; changed values MODIFY; absent rules REVOKE. Independent legacy versions are explicitly labelled, while still comparing adjacent snapshots. Account descriptions never reset the account.

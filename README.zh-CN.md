@@ -225,6 +225,8 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 ## 历史回测
 
+`main` 中基线 `7046d2e` 已完成约定范围内功能验收。[当前验收记录](docs/verification/2026-10-18-backtest-functional-acceptance.zh-CN.md)汇总已完成能力、纠正后的四份原文连续回测及测试依据。原文未量化条件保持未知，实际样本为零成交，不宣称新一轮全量集成／容量认证。历史验证记录保留当时日期和限制。
+
 已批准的回测设计采用混合流程：经明确授权的 `DATA_SYNC` 把 `stk_mins`、`trade_cal`、`stk_limit` 和不复权 `daily` 事实增量下载到 `backtest-market.sqlite3`；本地校验冻结精确 `dataset_hash`；每次正式运行随后完全离线读取该冻结数据集，并且只把结果资产写入 `backtest-results.sqlite3`。
 
 `/backtests/new` 页面会列出后端当前标记为 `canActivate=true` 的真实不可变计划版本，包括合格但未启用的草稿。用户选择一个准确版本；提交时后端会重新校验，并在返回已接受回执前持久化其规范计划快照。之后保存更新版本不能改变已排队任务、旧结果或其既有哈希。

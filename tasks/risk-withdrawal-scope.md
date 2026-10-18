@@ -1,6 +1,6 @@
 # Risk withdrawal scope correction
 
-Historical task: the execution limitation below was completed by [CR-01–CR-03](cohort-risk-execution.md) on 2026-10-18, with a separately reviewed four-original continuous replay. Earlier findings remain audit history.
+> Current status — 2026-10-18: the validation correction below is complete. RW-03's remaining execution limitation was subsequently resolved by [CR-01–CR-04](cohort-risk-execution.md), including the corrected actual four-source run. Earlier unresolved candidates and frozen reports remain historical, not current approval authority. See [BA-01–BA-06](../docs/verification/2026-10-18-backtest-functional-acceptance.md) for the current completed scope and retained limits.
 
 ## RW-01 — Meaning
 

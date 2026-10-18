@@ -1,5 +1,7 @@
 # 冻结结果规则对照
 
+> 当前状态 — 2026-10-18：规则对照展示已完成。RC-03 中第四份取消退出的例子记录旧冻结政策，不是已验收的原文含义。当前第四份修改旧仓适用范围并保留退出，依据见 [CR-V01–CR-V05](../docs/verification/2026-10-18-cohort-risk-execution.zh-CN.md)。当前验收及限制见 [BA-01–BA-06](../docs/verification/2026-10-18-backtest-functional-acceptance.zh-CN.md)。保留下文当时的展示证据。
+
 ## RC-01 — 契约
 
 连续回测结果页列出全部计划原文及紧邻前序。展开某份时加载 `GET /api/v1/backtest-runs/{run_id}/rule-changes/{source_id}`。每次返回一份完整对照，绑定运行、清单、原文及版本。按稳定规则 ID（风险分支使用 kind）比较最终冻结快照，不读取可变准备记录或重新调用 AI 解读。首份规则为 ADD；相同值为 RETAIN；变化值为 MODIFY；消失的规则为 REVOKE。旧独立版本明确标注，同时仍比较相邻快照。持仓陈述不会重置账户。

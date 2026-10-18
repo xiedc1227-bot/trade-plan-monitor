@@ -1,6 +1,21 @@
 # Repair Tasks: Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). **20 of 20 repair tasks complete.** RP IDs are separate from historical ML completion/cancellation records. Concrete API review passes RP-T14/U11.
+Current status — 2026-10-18, Asia/Shanghai: **functional acceptance complete within the agreed scope**, baseline `7046d2e` merged into `main`. [Repair plan](plan.md); [Chinese copy](todo.zh-CN.md). Scope and retained limits: [BA-01–BA-06](../docs/verification/2026-10-18-backtest-functional-acceptance.md). RP IDs remain separate from historical ML completion/cancellation records; concrete API review remains RP-T14/U11. Dated progress below is preserved as history.
+
+## BA-T01 — Acceptance closure
+
+| Work | Status | Current evidence |
+| --- | --- | --- |
+| RP-T01–RP-T20 continuity repair | Complete, 20/20 | RP-V01–RP-V20 in [verification history](../docs/verification/monitor-loop-backtest.md) |
+| Single-source preparation, date confirmation and reviewed library | Complete | BA-S01–BA-S02 |
+| Generic inheritance and bounded extraction repair | Complete with explicit semantic review | [GI-03](generic-plan-inheritance.md#gi-03--current-status), CR-V01–CR-V02; BA-05 retains reviewer-assistance limits |
+| Daily price basis and continuous account | Complete | BA-S03, CR-V04 |
+| Per-plan diagnostics and full rule comparisons | Complete | BA-S05, CR-V05; old fourth-plan cancellation is historical |
+| Holding-scoped risk exits | Complete | [CR-04](cohort-risk-execution.md#cr-04--completion-record); replaces RW-03's earlier unsupported-execution limit |
+| Top-of-page profit summary | Complete | [PS-02](result-profit-summary.md#ps-02--verification) |
+| Bilingual acceptance record and task closure | Complete | BA-01–BA-06; documentation parity, links and diff checked for this update |
+
+No open implementation task remains within BA-02. Unquantified source conditions, the zero-fill actual sample and the absence of a new full integration/capacity certification remain explicit limits in BA-05. They are not marked as passing guarantees. No runtime behavior or acceptance threshold changes in this documentation closure.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.

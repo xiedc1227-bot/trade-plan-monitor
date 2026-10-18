@@ -1,6 +1,6 @@
 # Repair Plan: Restore Daily Plan Continuity
 
-Status: bounded implementation authorized, 2026-10-10, Asia/Shanghai. **20 of 20 repair tasks complete.** Concrete API review passes RP-T14/U11. Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Repair tasks: [todo.md](todo.md), `RP-T01`–`RP-T20`.
+Current status — 2026-10-18, Asia/Shanghai: **functional acceptance complete within the agreed scope**, implementation baseline `7046d2e` merged into `main`. The 20 original repair tasks and delivered follow-up increments are complete. See [BA-01–BA-06](../docs/verification/2026-10-18-backtest-functional-acceptance.md) for scope, evidence and retained limits, and [current task status](todo.md). Chinese review copy: [plan.zh-CN.md](plan.zh-CN.md). Concrete API review remains recorded in RP-T14/U11. Dated progress below is historical; batch preparation and earlier scoped-execution limits are superseded by the linked acceptance record.
 
 
 Implementation update, 2026-10-10: the user authorized this bounded repair in the current session. RP-T01 is complete: restored original ML01–ML13, concrete codec/order-edit matrix, 11 fixture checks and 14 fixture/legacy compatibility checks pass; deliberate 899500→899501 oracle mutation fails, exact bytes restored. Ruff, bilingual section/link checks and diff review pass. This validates the baseline only, not runtime continuity. **1 of 20 repair tasks complete.** Next: RP-T02. Historical planning-only authorization wording below is superseded by this instruction; concrete API review is still pending.

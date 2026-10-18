@@ -1,6 +1,6 @@
 # 风险撤销适用范围纠正
 
-历史任务：下文执行限制已于 2026-10-18 由 [CR-01–CR-03](cohort-risk-execution.zh-CN.md) 补齐，并完成独立审核的四份实际原文连续回测。此前发现保留为审计历史。
+> 当前状态 — 2026-10-18：下文校验纠正已完成。RW-03 当时保留的执行限制随后由 [CR-01–CR-04](cohort-risk-execution.zh-CN.md)补齐，包括纠正后的四份实际原文连续运行。旧未解决候选和冻结报告仍属历史，不作为当前审核权限。当前完成范围及保留限制见 [BA-01–BA-06](../docs/verification/2026-10-18-backtest-functional-acceptance.zh-CN.md)。
 
 ## RW-01 — 含义
 

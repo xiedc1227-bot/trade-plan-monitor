@@ -271,6 +271,8 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 ## Historical Backtesting
 
+Functional acceptance within the agreed scope is complete on baseline `7046d2e` in `main`. The [current acceptance record](docs/verification/2026-10-18-backtest-functional-acceptance.md) consolidates completed capabilities, the corrected four-source continuous run and test evidence. Unquantified source conditions remain unknown; the actual sample has zero fills; no new full integration/capacity certification is claimed. Historical verification records retain their original dates and limits.
+
 The approved backtest design uses a hybrid workflow: an explicitly authorized `DATA_SYNC` incrementally downloads `stk_mins`, `trade_cal`, `stk_limit`, and unadjusted `daily` facts into `backtest-market.sqlite3`; local verification freezes an exact `dataset_hash`; every formal run then reads that frozen dataset fully offline and writes only result artifacts to `backtest-results.sqlite3`.
 
 The `/backtests/new` page lists real immutable plan versions that the backend currently marks `canActivate=true`, including eligible inactive drafts. The user selects one exact version; submission revalidates it and persists its canonical plan snapshot before the accepted receipt is returned. Saving a newer version later cannot change the queued job, an older result, or its established hashes.
