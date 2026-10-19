@@ -30,9 +30,7 @@ from trade_plan_monitor.web.routers.daily_plans import DailySupplementCommand
 from trade_plan_monitor.web.routers.plans import (
     PlanActivationCommand,
     PlanDeactivationCommand,
-    PlanDocumentFormat,
     PlanDraftCommand,
-    PlanImportCommand,
     PlanReviewConfirmationCommand,
 )
 from trade_plan_monitor.web.schemas import ApiErrorCode, MutationContext
@@ -178,6 +176,10 @@ def test_production_app_lazily_injects_the_persistent_plan_service(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from functools import partial
+
+    monkeypatch.setattr(plan_service_module, "PersistentPlanWebLifecycle",
+                        partial(PersistentPlanWebLifecycle, clock=lambda: _FIXED_NOW))
     database_path = tmp_path / "state" / "monitor.sqlite3"
     distribution = tmp_path / "dist"
     _write_distribution(distribution)
@@ -202,18 +204,14 @@ def test_production_app_lazily_injects_the_persistent_plan_service(
             assert response.json() == {"items": [], "limit": 20, "offset": 0, "total": 0}
             assert database_path.is_file()
             assert hasattr(app.state, "plan_operation_service")
-            imported = client.post(
-                "/api/v1/plan-imports",
-                headers={"Idempotency-Key": "production-import-v1"},
-                json={
-                    "document": _source(),
-                    "expectedRevision": 0,
-                    "format": "YAML",
-                    "symbol": "003043.SZ",
-                },
+            from tests.integration.test_current_plan_api import reviewed_save
+
+            saved = reviewed_save(
+                client,
+                UnifiedPlanDraft.from_executable(load_plan_yaml(_source())),
+                source=_source(),
             )
-            assert imported.status_code == 200
-            imported_id = imported.json()["id"]
+            imported_id = saved["id"]
         assert not hasattr(app.state, "plan_operation_service")
 
     with create_production_app(
@@ -232,7 +230,7 @@ def test_production_app_lazily_injects_the_persistent_plan_service(
     assert detail.json()["id"] == imported_id
 
 
-def test_plan_lifespan_starts_in_dependency_order_and_stops_in_reverse_order() -> None:
+def test_plan_lifespan_starts_lazily_in_order_and_stops_in_reverse_order() -> None:
     events: list[str] = []
     plan_lifecycle = _OrderedPlanLifecycle(events)
     app = create_app(
@@ -242,8 +240,12 @@ def test_plan_lifespan_starts_in_dependency_order_and_stops_in_reverse_order() -
         backtest_lifecycle_factory=lambda: _OrderedBacktestLifecycle(events),
     )
 
-    with TestClient(app):
+    with TestClient(app) as client:
         assert app.state.plan_operation_service is plan_lifecycle.operation_service
+        assert events == ["runtime.start", "ai.start", "plan.start"]
+        from functools import partial
+
+        client.portal.call(partial(app.state.backtest_lifecycle.ensure, execution=True))
         assert events == [
             "runtime.start",
             "ai.start",
@@ -266,6 +268,10 @@ def test_plan_lifespan_starts_in_dependency_order_and_stops_in_reverse_order() -
 
 
 def test_plan_lifespan_is_cleaned_up_when_backtest_start_fails() -> None:
+    from functools import partial
+
+    from trade_plan_monitor.backtest.service_lifecycle import BacktestServiceUnavailable
+
     events: list[str] = []
     app = create_app(
         runtime_factory=lambda: _OrderedRuntimeLifecycle(events),
@@ -277,8 +283,9 @@ def test_plan_lifespan_is_cleaned_up_when_backtest_start_fails() -> None:
         ),
     )
 
-    with pytest.raises(RuntimeError, match="backtest start failed"), TestClient(app):
-        pass
+    with pytest.raises(BacktestServiceUnavailable), TestClient(app) as client:
+        assert events == ["runtime.start", "ai.start", "plan.start"]
+        client.portal.call(partial(app.state.backtest_lifecycle.ensure, execution=True))
 
     assert events == [
         "runtime.start",
@@ -372,14 +379,14 @@ def test_plan_operations_and_idempotency_survive_independent_lifecycles(
         await third.start()
         restored_active = await third.get_plan_activation_state(symbol="003043.SZ")
         assert restored_active == activated_v1
-        imported_v2 = await third.import_plan(
-            command=PlanImportCommand(
-                format=PlanDocumentFormat.YAML,
-                document=source_v2,
-                symbol="003043.SZ",
+        imported_v2 = await _save(
+            third,
+            command=_draft(
+                plan_json=dump_plan_json(load_plan_yaml(source_v2)),
+                source_text=source_v2,
                 expected_revision=restored_active.revision,
             ),
-            context=_context("import-v2"),
+            context=_context("save-v2"),
         )
         assert imported_v2.version == 2
         assert imported_v2.source_text == source_v2
@@ -675,38 +682,6 @@ def test_concurrent_base_plan_drafts_allocate_distinct_versions_and_replay(
     asyncio.run(scenario())
 
 
-def test_plan_import_service_rejects_a_cross_symbol_command(tmp_path: Path) -> None:
-    database_path = tmp_path / "monitor.sqlite3"
-    document = _source()
-
-    async def scenario() -> None:
-        service = PersistentPlanWebLifecycle(database_path=database_path, clock=lambda: _FIXED_NOW)
-        await service.start()
-        unsafe_command = PlanImportCommand.model_construct(
-            format=PlanDocumentFormat.YAML,
-            document=document,
-            symbol="600000.SH",
-            expected_revision=0,
-        )
-
-        with pytest.raises(ApiError) as rejected:
-            await service.import_plan(
-                command=unsafe_command,
-                context=_context("cross-symbol-import"),
-            )
-        assert rejected.value.code is ApiErrorCode.VALIDATION_ERROR
-
-        page = await service.list_plan_versions(
-            offset=0,
-            limit=20,
-            symbol=None,
-            status=None,
-            can_activate=None,
-        )
-        assert page.total == 0
-        await service.stop()
-
-    asyncio.run(scenario())
 
 
 def test_plan_service_rejects_javascript_unsafe_documents_without_persisting(
@@ -726,27 +701,13 @@ def test_plan_service_rejects_javascript_unsafe_documents_without_persisting(
             review_issues=(),
             expected_revision=0,
         )
-        imported = PlanImportCommand.model_construct(
-            document=plan_json,
-            expected_revision=0,
-            format=PlanDocumentFormat.JSON,
-            symbol=plan.symbol,
-        )
-
         with pytest.raises(ApiError) as rejected_draft:
             await _save(
                 service,
                 command=draft,
                 context=_context("unsafe-service-draft"),
             )
-        with pytest.raises(ApiError) as rejected_import:
-            await service.import_plan(
-                command=imported,
-                context=_context("unsafe-service-import"),
-            )
-
         assert rejected_draft.value.code is ApiErrorCode.VALIDATION_ERROR
-        assert rejected_import.value.code is ApiErrorCode.VALIDATION_ERROR
 
         page = await service.list_plan_versions(
             offset=0,

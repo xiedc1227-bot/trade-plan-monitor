@@ -7,8 +7,7 @@ import type { BacktestApi } from "../api/backtests";
 import type { PlanApi } from "../api/plans";
 import BacktestRunForm from "../components/backtests/BacktestRunForm.vue";
 import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
-import BacktestReferenceMarketCoveragePanel from "../components/backtests/BacktestReferenceMarketCoveragePanel.vue";
-import { useBacktestPlanVersions } from "../composables/useBacktestPlanVersions";
+import WorkbenchPlanReplay from "../components/backtests/WorkbenchPlanReplay.vue";
 import { useBacktestRunForm } from "../composables/useBacktestRunForm";
 import type { PreparationApi } from "../api/preparations";
 import type { ReviewChoice } from "../api/preparationReview";
@@ -19,7 +18,10 @@ import ReviewedPlanLibrary from "../components/backtests/ReviewedPlanLibrary.vue
 import { usePlanLibrary } from "../composables/usePlanLibrary";
 import PlanPreparationReview from "../components/backtests/PlanPreparationReview.vue";
 
+import type { PlanSelectionApi } from "../api/planSelections";
+
 interface Props {
+  selectionApi?: PlanSelectionApi;
   api?: BacktestApi;
   createIdempotencyKey?: () => string;
   planApi?: PlanApi;
@@ -82,11 +84,9 @@ const dataPhaseText = computed(() => ({
   FAILED: "数据准备未完成", CANCELLED: "回测已取消",
 })[form.automaticData.phase.value]);
 const preparingData = computed(() => ["CHECKING", "SYNCING", "VERIFYING"].includes(form.automaticData.phase.value));
-const plans = useBacktestPlanVersions({
-  ...(props.planApi === undefined ? {} : { api: props.planApi }),
-});
+const workbenchLocked = ref(false);
 const runLocked = computed(() => ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(form.submissionState.value));
-const modeLocked = computed(() => preparation.isBusy.value || library.locked.value || runLocked.value);
+const modeLocked = computed(() => preparation.isBusy.value || library.locked.value || runLocked.value || workbenchLocked.value);
 watch(() => preparation.canUsePrepared.value, (ready) => { if (ready) void library.refresh(); });
 async function prepareNext(): Promise<void> {
   if (library.loading.value || modeLocked.value || preparation.sourceDirty.value) return;
@@ -95,16 +95,18 @@ async function prepareNext(): Promise<void> {
   preparation.newSource();
 }
 function chooseMode(value: "LEGACY" | "PREPARED"): void {
-  if (!modeLocked.value) mode.value = value;
+  if (modeLocked.value || mode.value === value) return;
+  mode.value = value;
+  const { selectionId: _previousSelection, preparationId: _previousPreparation, ...query } = route.query;
+  void router.replace({ path: route.path, query: {
+    ...query, ...(value === "PREPARED" && preparation.preparationId.value
+      ? { preparationId: preparation.preparationId.value } : {}),
+  } });
 }
 function reviewPrepared(value: { evidence: string; choices: ReviewChoice[]; unknownConfirmed: boolean }): void {
   if (!runLocked.value) void preparation.review(value.evidence, value.choices, value.unknownConfirmed);
 }
 
-function selectPlanVersion(versionId: string): void {
-  const selected = plans.selectVersion(versionId);
-  form.updateField("planVersionId", selected?.id ?? "");
-}
 
 onMounted(() => {
   document.title = "创建回测 · Trade Plan Monitor";
@@ -130,9 +132,9 @@ onBeforeUnmount(() => {
       仅供研究与回放，不连接券商、不自动下单。浏览器不推断计划资格、交易日历、T+1、成交或指标。
     </aside>
 
-    <section class="backtest-new-view__mode" aria-label="选择准备方式">
-      <button type="button" data-testid="choose-legacy-plan" :aria-pressed="mode === 'LEGACY'" :disabled="modeLocked" @click="chooseMode('LEGACY')">使用已有计划版本</button>
-      <button type="button" data-testid="choose-prepared-plan" :aria-pressed="mode === 'PREPARED'" :disabled="modeLocked" @click="chooseMode('PREPARED')">从原文准备新计划</button>
+    <section class="backtest-new-view__mode" aria-label="选择已审核计划来源">
+      <button type="button" data-testid="choose-legacy-plan" :aria-pressed="mode === 'LEGACY'" :disabled="modeLocked" @click="chooseMode('LEGACY')">工作台已审核计划</button>
+      <button type="button" data-testid="choose-prepared-plan" :aria-pressed="mode === 'PREPARED'" :disabled="modeLocked" @click="chooseMode('PREPARED')">回测已审核计划与原文准备</button>
       <p v-if="modeLocked" role="status">当前任务或操作未结束，完成前不能切换准备方式或开启其他任务。</p>
     </section>
 
@@ -161,34 +163,24 @@ onBeforeUnmount(() => {
         @correct-item="!runLocked && preparation.correctItem($event.sourceId, $event.evidence, $event.changes)" />
     </section>
 
+    <WorkbenchPlanReplay v-if="mode === 'LEGACY'" :api="api" :plan-api="planApi" :selection-api="selectionApi" :create-idempotency-key="createIdempotencyKey" :on-accepted="navigateToAcceptedRun" @locked="workbenchLocked = $event" />
     <BacktestRunForm
-      v-if="mode === 'LEGACY' || reviewedPrepared !== null"
+      v-if="mode === 'PREPARED' && reviewedPrepared !== null"
       :prepared-mode="mode === 'PREPARED'"
       :prepared="reviewedPrepared"
       :draft="form.draft.value"
       :error-revision="form.errorRevision.value"
       :errors="form.errors.value"
-      :plan-version-error="plans.errorMessage.value"
-      :plan-version-page="plans.page.value"
-      :plan-version-state="plans.state.value"
-      :selected-plan-version="plans.selectedVersion.value"
+      :plan-version-error="null"
+      :plan-version-page="null"
+      plan-version-state="IDLE"
+      :selected-plan-version="null"
       :submission-state="form.submissionState.value"
       @add-lot="form.addLot"
-      @next-plan-version-page="plans.nextPage"
-      @previous-plan-version-page="plans.previousPage"
       @remove-lot="form.removeLot"
-      @retry-plan-versions="plans.retry"
-      @select-plan-version="selectPlanVersion"
       @submit="form.submit"
       @update-field="form.updateField"
       @update-lot="form.updateLot"
-    />
-
-    <BacktestReferenceMarketCoveragePanel
-      v-if="mode === 'LEGACY'"
-      :coverage="form.referenceMarketCoverage.value"
-      :error="form.referenceMarketCoverageError.value"
-      :state="form.referenceMarketCoverageState.value"
     />
 
     <section

@@ -1,11 +1,11 @@
 import { onBeforeUnmount, readonly, shallowRef, watch, type DeepReadonly } from "vue";
 import type { BacktestApi } from "../api/backtests";
 import type { BacktestDataSyncCommand, BacktestJobView, PreparedBacktestRunCommand,
-  ScheduledPreparedBacktestRunCommand } from "../api/generated";
+  ScheduledPreparedBacktestRunCommand, WorkbenchBacktestRunCommand } from "../api/generated";
 import { ApiClientError } from "../api/transport";
 import { useBacktestJob } from "./useBacktestJob";
 
-type PreparedCommand = PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand;
+type PreparedCommand = PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand;
 type Phase = "IDLE" | "CHECKING" | "SYNCING" | "VERIFYING" | "READY" | "FAILED" | "CANCELLED";
 
 /** One explicit start owns this sequence; reads and remounts never start downloads. */

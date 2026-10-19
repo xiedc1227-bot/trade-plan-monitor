@@ -39,7 +39,7 @@ function accepted() {
 function api() {
   return { ...createBacktestApi(vi.fn<typeof fetch>()),
     checkPreparedData: vi.fn<BacktestApi["checkPreparedData"]>().mockImplementation(async value => ({
-      preparationId: value.preparationId, manifestHash: value.manifestHash,
+      ...("preparationId" in value ? { preparationId: value.preparationId, manifestHash: value.manifestHash } : { selectionId: value.selectionId, selectionHash: value.selectionHash }),
       endDate: value.endDate ?? "2026-08-24", ready: true, syncScope: null, blockers: [],
     })), submitRun: vi.fn<BacktestApi["submitRun"]>().mockResolvedValue(accepted()) };
 }

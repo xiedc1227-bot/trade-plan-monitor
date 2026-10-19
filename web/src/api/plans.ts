@@ -4,7 +4,6 @@ import type {
   PlanActivationCommand,
   PlanDeactivationCommand,
   PlanDraftCommand,
-  PlanImportCommand,
   PlanReviewConfirmationCommand,
   PlanReviewConfirmationView,
   PlanVersionPage,
@@ -48,11 +47,6 @@ export interface PlanApi {
   ): Promise<ActivePlanView>;
   getPlanVersion(
     versionId: string,
-    options?: PlanRequestOptions,
-  ): Promise<PlanVersionView>;
-  importPlan(
-    command: PlanImportCommand,
-    idempotencyKey: string,
     options?: PlanRequestOptions,
   ): Promise<PlanVersionView>;
   listPlanVersions(
@@ -155,27 +149,6 @@ export function createPlanApi(
       return body;
     },
 
-    async importPlan(
-      command: PlanImportCommand,
-      idempotencyKey: string,
-      options?: PlanRequestOptions,
-    ) {
-      const { body, status } = await requestJson(
-        fetchImplementation,
-        "/api/v1/plan-imports",
-        mutationRequest(command, idempotencyKey, options),
-      );
-      if (
-        !isPlanVersion(body) ||
-        body.status !== "DRAFT" ||
-        body.symbol !== command.symbol ||
-        body.sourceText !== command.document ||
-        (body.reviewIssues?.length ?? 0) !== 0
-      ) {
-        throw invalidResponse(status);
-      }
-      return body;
-    },
 
     async activatePlan(
       command: PlanActivationCommand,

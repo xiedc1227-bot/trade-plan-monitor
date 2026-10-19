@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import type {
   ActivePlanView,
   PlanDraftCommand,
-  PlanImportCommand,
   PlanVersionSummary,
   PlanVersionView,
 } from "../../src/api/generated";
@@ -254,15 +253,7 @@ describe("plan API", () => {
       reviewIssues: [],
       sourceText: version.sourceText,
     };
-    const imported: PlanImportCommand = {
-      document: version.planJson,
-      expectedRevision: 0,
-      format: "JSON",
-      symbol: version.symbol,
-    };
-
     await api.savePlanDraft(draft, "plan-save-1");
-    await api.importPlan(imported, "plan-import-1");
     await api.activatePlan(
       { expectedRevision: 0, planVersionId: VERSION_ID },
       "plan-activate-1",
@@ -274,7 +265,6 @@ describe("plan API", () => {
 
     expect(requests.map(({ url }) => url)).toEqual([
       "/api/v1/plan-drafts",
-      "/api/v1/plan-imports",
       "/api/v1/plan-activations",
       "/api/v1/plan-deactivations",
     ]);
@@ -282,13 +272,11 @@ describe("plan API", () => {
       requests.map(({ init }) => (init?.headers as Record<string, string>)["Idempotency-Key"]),
     ).toEqual([
       "plan-save-1",
-      "plan-import-1",
       "plan-activate-1",
       "plan-deactivate-1",
     ]);
     expect(requests.map(({ init }) => JSON.parse(String(init?.body)))).toEqual([
       draft,
-      imported,
       { expectedRevision: 0, planVersionId: VERSION_ID },
       { expectedRevision: 1, symbol: version.symbol },
     ]);

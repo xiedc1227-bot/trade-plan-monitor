@@ -1,3 +1,5 @@
+import reviewedWorkbench from "../fixtures/workbench-reviewed-version.json" with { type: "json" };
+import workbenchSelection from "../fixtures/workbench-selection.json" with { type: "json" };
 import { createRequire } from "node:module";
 import researchDecision from "../fixtures/unified-replay-decision.json" with { type: "json" };
 
@@ -28,7 +30,7 @@ const axePath = require.resolve("axe-core/axe.min.js");
 const RUN_ID = "a".repeat(64);
 const DATASET_HASH = "d".repeat(64);
 const JOB_ID = "e2e-run-job-001";
-const PLAN_VERSION_ID = "123e4567-e89b-42d3-a456-426614174000";
+const PLAN_VERSION_ID = reviewedWorkbench.id;
 const TIME = "2026-08-30T10:00:00.000000+08:00";
 const INDEX_TIME = "2026-08-28T15:00:00.000000+08:00";
 const serviceStatus: BacktestServiceView = {
@@ -38,7 +40,7 @@ const serviceStatus: BacktestServiceView = {
 };
 const ROUTES = [
   { heading: "回测运行记录", path: "/backtests", readyTestId: "run-detail-link", viewSelector: ".backtest-runs-view" },
-  { heading: "创建回测", path: "/backtests/new", readyTestId: "submit-backtest-run", viewSelector: ".backtest-new-view" },
+  { heading: "创建回测", path: "/backtests/new", readyTestId: "plan-version-status", viewSelector: ".backtest-new-view" },
   {
     heading: "历史数据管理",
     path: "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28&warmupStart=2026-07-01",
@@ -71,22 +73,10 @@ const dashboard: DashboardResponse = {
 };
 
 const planVersionPage: PlanVersionPage = {
-  items: [
-    {
-      canActivate: true,
-      createdAt: TIME,
-      id: PLAN_VERSION_ID,
-      planHash: "e".repeat(64),
-      planId: "e2e-backtest-plan",
-      revision: 0,
-      status: "DRAFT",
-      symbol: "000001.SZ",
-      version: 1,
-    },
-  ],
-  limit: 20,
-  offset: 0,
-  total: 1,
+  items: [{ id: reviewedWorkbench.id, planId: reviewedWorkbench.planId, version: reviewedWorkbench.version,
+    symbol: reviewedWorkbench.symbol, planHash: reviewedWorkbench.planHash, status: "DRAFT", canActivate: true,
+    createdAt: reviewedWorkbench.createdAt, revision: reviewedWorkbench.revision }],
+  offset: 0, limit: 20, total: 1,
 };
 
 interface BrowserAudit {
@@ -562,7 +552,7 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
     }
   });
   page.on("requestfailed", (request) => {
-    audit.requestFailures.push(`${request.method()} ${request.url()}`);
+    audit.requestFailures.push(`${request.method()} ${request.url()} (${request.failure()?.errorText ?? "unknown"})`);
   });
   page.on("response", (response) => {
     if (response.url().includes("/api/v1/") && response.status() >= 400) {
@@ -570,6 +560,7 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
     }
   });
 
+  let savedSelection = structuredClone(workbenchSelection);
   await page.route(`${baseUrl}/api/v1/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -594,6 +585,23 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
       } else if (key === "GET /api/v1/plan-versions") {
         expect(url.searchParams.get("canActivate")).toBe("true");
         await fulfillJson(route, planVersionPage);
+      } else if (key === `GET /api/v1/plan-versions/${PLAN_VERSION_ID}`) {
+        await fulfillJson(route, reviewedWorkbench);
+      } else if (key === "POST /api/v1/backtest-plan-selections") {
+        const body = request.postDataJSON();
+        expect(body.plan.planVersionId).toBe(PLAN_VERSION_ID);
+        expect(body.plan.reviewId).toBe(reviewedWorkbench.reviewId);
+        savedSelection = structuredClone(workbenchSelection);
+        savedSelection.frozen.context = body.context;
+        savedSelection.frozen.version.information_cutoff = body.context.informationCutoff;
+        savedSelection.frozen.version.available_at = body.context.availableAt ?? `${body.context.effectiveTradeDate}T09:30:00+08:00`;
+        await route.fulfill({ status: 201, contentType: "application/json", headers: { "Cache-Control": "no-store" }, body: JSON.stringify(savedSelection) });
+      } else if (key === `GET /api/v1/backtest-plan-selections/${workbenchSelection.selectionId}`) {
+        await fulfillJson(route, savedSelection);
+      } else if (key === "GET /api/v1/backtest-run-data") {
+        expect(url.searchParams.get("selectionId")).toBe(workbenchSelection.selectionId);
+        await fulfillJson(route, { selectionId: workbenchSelection.selectionId, selectionHash: workbenchSelection.selectionHash,
+          endDate: "2026-08-30", ready: true, blockers: [], syncScope: null });
       } else if (key === "POST /api/v1/backtest-runs") {
         audit.runSubmissions.push({
           body: request.postDataJSON(),
@@ -659,18 +667,28 @@ async function openRoute(page: Page, route: (typeof ROUTES)[number]): Promise<vo
   await page.goto(`${baseUrl}${route.path}`);
   await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible();
   await expect(page.getByTestId(route.readyTestId)).toBeVisible();
+  await page.waitForLoadState("networkidle");
 }
 
-async function fillValidRunCommand(page: Page): Promise<void> {
+async function confirmWorkbenchContext(page: Page): Promise<void> {
   await page.locator("#plan-version-id").selectOption(PLAN_VERSION_ID);
-  await page.locator("#dataset-hash").fill(DATASET_HASH);
-  await page.locator("#initial-cash-fen").fill("10000000");
+  await page.locator("#research-effective-date").fill("2026-08-20");
+  await page.locator("#research-cutoff").fill("2026-08-20T09:00");
+  await page.locator("#research-snapshot").fill("2026-08-20T09:00");
+  await page.locator("#research-inventory").selectOption("EMPTY");
+  await page.locator("#research-evidence").fill("已核对历史研究起点与空仓假设，直接复用工作台原审核。");
+  await page.locator("#research-confirmed").check();
+  await page.getByRole("button", { name: "确认研究起点，继续设置回测" }).click();
+  await expect(page.getByTestId("submit-backtest-run")).toBeVisible();
+}
+async function fillValidRunCommand(page: Page): Promise<void> {
+  await confirmWorkbenchContext(page);
   await page.locator("#commission-rate").fill("0.0003");
   await page.locator("#minimum-commission-fen").fill("500");
   await page.locator("#stamp-duty-rate").fill("0.001");
   await page.locator("#transfer-fee-rate").fill("0.00001");
-  await page.locator("#buy-slippage-bps").fill("2.5");
-  await page.locator("#sell-slippage-bps").fill("3.75");
+  await page.locator("#buy-slippage-fen").fill("1");
+  await page.locator("#sell-slippage-fen").fill("2");
 }
 
 async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
@@ -738,7 +756,7 @@ test("service management stays compact and supports keyboard disclosure at deskt
   }
   expect(audit.requestTotals.get("POST /api/v1/backtest-service/recovery-requests")).toBeUndefined();
   expect(audit.requestTotals.get("POST /api/v1/backtest-service/stop-requests")).toBeUndefined();
-  expectCleanAudit(audit); await page.close();
+  await page.waitForLoadState("networkidle"); expectCleanAudit(audit); await page.close();
 });
 
 test("interrupted jobs and service faults expand management without automatically resuming work", async ({ browser }) => {
@@ -797,7 +815,7 @@ test("compact service controls preserve job progress, refresh, cancellation and 
   expect(intents).toHaveLength(2); expect(intents[0]?.key).toBeTruthy(); expect(intents[1]).toEqual(intents[0]);
   expect(intents[0]?.body).toEqual({ jobId: JOB_ID });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  expectCleanAudit(audit); await page.close();
+  await page.waitForLoadState("networkidle"); expectCleanAudit(audit); await page.close();
 });
 
 test("run filters use inclusive coverage dates without technical lookup conditions", async ({ browser }, testInfo) => {
@@ -838,12 +856,10 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   await expectNoSeriousAxeViolations(page);
 
   await openRoute(page, ROUTES[1]);
-  await page.locator("#plan-version-id").selectOption(PLAN_VERSION_ID);
-  await page.locator("#dataset-hash").fill(DATASET_HASH);
-  await expect(page.getByTestId("reference-market-coverage")).toContainText("深证成指");
-  await expect(page.getByTestId("reference-market-coverage")).toContainText(
-    "entry.conditions.all[0]",
-  );
+  await confirmWorkbenchContext(page);
+  await expect(page.locator("#research-input-json")).toHaveCount(0);
+  await expect(page.locator("#dataset-hash")).toHaveCount(0);
+  await page.locator(".workbench-replay").screenshot({ path: testInfo.outputPath("workbench-selection.png") });
   await page.getByTestId("submit-backtest-run").focus();
   const reducedMotionSeconds = await page.getByTestId("submit-backtest-run").evaluate((element) =>
     Math.max(
@@ -887,32 +903,55 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   );
   await expectNoSeriousAxeViolations(page);
 
+  await page.waitForLoadState("networkidle");
   expectChromeProject(testInfo);
+  await page.waitForLoadState("networkidle");
   expectCleanAudit(audit);
   await page.close();
 });
 
-test("current research input and actual typed decision bytes work in the existing pages", async ({ browser }, testInfo) => {
+test("historical typed research decision bytes remain readable", async ({ browser }, testInfo) => {
   const { audit, page } = await openPage(browser);
-  await openRoute(page, ROUTES[1]);
-  await fillValidRunCommand(page);
-  const researchInput = { schema_version: "unified-research-input-v1", started_at: "2026-08-24T09:00:00+08:00",
-    inventory_known: true, operations: [], review: {content_hash: "a".repeat(64), confirmed: true,
-      reviewed_at: "2026-10-03T12:00:00+08:00", evidence: "Synthetic reviewed research fixture"} };
-  await page.getByLabel("统一计划研究输入 JSON").fill(JSON.stringify(researchInput));
-  await page.getByTestId("submit-backtest-run").click();
-  await expect(page).toHaveURL(`${baseUrl}/backtests/${RUN_ID}?tab=summary`, {timeout: 7000});
-  expect(audit.runSubmissions[0]?.body).toMatchObject({researchInput});
   await page.route(`${baseUrl}/api/v1/backtest-runs/${RUN_ID}/details?**`, async (route) => {
-    await fulfillJson(route, { ...decisionDetails, items: [{...researchDecision, runId: RUN_ID}] });
+    await fulfillJson(route, { ...decisionDetails, items: [{ ...researchDecision, runId: RUN_ID }] });
   });
   await page.goto(`${baseUrl}/backtests/${RUN_ID}?tab=details&kind=DECISION`);
   await expect(page.getByTestId("backtest-detail-row")).toContainText("计划 100 股 / 可执行 100 股");
   await expect(page.getByTestId("backtest-detail-row")).toContainText("数据阻断");
   await expectNoSeriousAxeViolations(page);
+  await page.waitForLoadState("networkidle");
   expectChromeProject(testInfo);
+  await page.waitForLoadState("networkidle");
   expectCleanAudit(audit);
   await page.close();
+});
+
+test("workbench structured context stays usable at narrow width and 200 percent text", async ({ browser }, testInfo) => {
+  const { audit, page } = await openPage(browser, 320);
+  await openRoute(page, ROUTES[1]);
+  await page.locator("#plan-version-id").selectOption(PLAN_VERSION_ID);
+  await expect(page.locator(".research-context")).toBeVisible();
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    await expect(page.locator("html")).toHaveCSS("font-size", "32px");
+    await page.screenshot({ path: testInfo.outputPath(`workbench-page-${width}.png`), fullPage: true });
+    const overflow = await page.evaluate(() => Array.from(document.querySelectorAll("body *"))
+      .map(element => ({ name: `${element.tagName}.${element.className}`, right: element.getBoundingClientRect().right }))
+      .filter(element => element.right > innerWidth + 1).slice(0, 12));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), JSON.stringify(overflow)).toBe(true);
+    for (const field of await page.locator(".research-context input, .research-context select, .research-context textarea").all()) {
+      const bounds = await field.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    }
+    await expectNoSeriousAxeViolations(page);
+    await page.locator(".research-context").screenshot({ path: testInfo.outputPath(`workbench-context-${width}.png`) });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "100%"; });
+  }
+  expect(audit.runSubmissions).toEqual([]);
+  await page.waitForLoadState("networkidle"); expectCleanAudit(audit); await page.close();
 });
 
 test("submits a complete new run and follows the authoritative job to its result", async ({
@@ -922,7 +961,6 @@ test("submits a complete new run and follows the authoritative job to its result
 
   await openRoute(page, ROUTES[1]);
   await fillValidRunCommand(page);
-  await expect(page.getByTestId("reference-market-coverage")).toContainText("深证成指");
   const submissionResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -950,23 +988,17 @@ test("submits a complete new run and follows the authoritative job to its result
   expect(audit.requestTotals.get("POST /api/v1/backtest-runs")).toBe(1);
   expect(audit.runSubmissions).toHaveLength(1);
   expect(audit.runSubmissions[0]?.body).toEqual({
-    datasetHash: DATASET_HASH,
-    eventRiskAssumption: "NO_EVENT_RISK",
-    executionConfig: {
-      buySlippageBps: "2.5",
-      commissionRate: "0.0003",
-      minimumCommissionFen: 500,
-      sellSlippageBps: "3.75",
-      stampDutyRate: "0.001",
-      transferFeeRate: "0.00001",
-    },
-    initialCashFen: 10_000_000,
-    initialLots: [],
-    planVersionId: PLAN_VERSION_ID,
+    schemaVersion: "workbench-loop-selection-v1", selectionId: workbenchSelection.selectionId,
+    selectionHash: workbenchSelection.selectionHash,
+    response: { mode: "FOLLOW_REMINDERS", responseDelaySeconds: 0 },
+    costs: { commissionRate: "0.0003", minimumCommissionFen: 500, stampDutyRate: "0.001",
+      transferFeeRate: "0.00001", buySlippageFen: 1, sellSlippageFen: 2 },
   });
   expect(audit.runSubmissions[0]?.idempotencyKey).toMatch(/^[A-Za-z0-9._:-]{1,128}$/);
   expect(audit.jobRequestTimes).toHaveLength(2);
+  await page.waitForLoadState("networkidle");
   expectChromeProject(testInfo);
+  await page.waitForLoadState("networkidle");
   expectCleanAudit(audit);
   await page.close();
 });
@@ -1015,7 +1047,9 @@ test("keeps 320/768/1024/1440 layouts and 200 percent text inside route boundari
     }
   }
 
+  await page.waitForLoadState("networkidle");
   expectChromeProject(testInfo);
+  await page.waitForLoadState("networkidle");
   expectCleanAudit(audit);
   await page.close();
 });
@@ -1062,6 +1096,7 @@ test("R13 records immediate and settled narrow backtest layout without changing 
     await page.screenshot({path: testInfo.outputPath(`layout-${index}.png`), fullPage: true});
   }
   await testInfo.attach('layout-measurements', {body: JSON.stringify(measurements, null, 2), contentType: 'application/json'});
+  await page.waitForLoadState("networkidle");
   expectCleanAudit(audit);
   await page.close();
 });
@@ -1110,7 +1145,9 @@ test("enforces request, DOM, polling, and pre-equity ECharts bounds", async ({ b
   await page.waitForTimeout(2_200);
   expect(audit.jobRequestTimes).toHaveLength(1);
 
+  await page.waitForLoadState("networkidle");
   expectChromeProject(testInfo);
+  await page.waitForLoadState("networkidle");
   expectCleanAudit(audit);
   await page.close();
 });

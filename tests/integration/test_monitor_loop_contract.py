@@ -46,6 +46,7 @@ def test_public_run_commands_and_results_preserve_explicit_legacy_variants(contr
         "BacktestRunCommand",
         "PreparedBacktestRunCommand",
         "ScheduledPreparedBacktestRunCommand",
+        "WorkbenchBacktestRunCommand",
     }
     for method in ("get", "patch"):
         result = document["paths"][RUN + "/{run_id}"][method]["responses"]["200"]
@@ -53,6 +54,7 @@ def test_public_run_commands_and_results_preserve_explicit_legacy_variants(contr
             "BacktestRunView",
             "BacktestLoopRunView",
             "BacktestScheduledRunView",
+            "WorkbenchBacktestRunView",
         }
     schemas = document["components"]["schemas"]
     items = schemas["BacktestRunPage"]["properties"]["items"]["items"]
@@ -204,12 +206,17 @@ def test_generated_types_narrow_native_events_and_old_new_results(contract, tmp_
 type ReadOperation = paths["/api/v1/backtest-runs/{run_id}"]["get"];
 type Read = ReadOperation["responses"][200]["content"]["application/json"];
 export function metric(value: Read): number | string | null {
-  if ("schemaVersion" in value) {
-    if (value.schemaVersion === "monitor-loop-result-v2") {
-      const reportVersion: "backtest-report-v5" = value.report.report_schema_version;
-      return value.versions.length + value.provenance.sources.length;
+  if ("versions" in value) {
+    const reportVersion: "backtest-report-v5" = value.report.report_schema_version;
+    return value.versions.length + value.provenance.sources.length;
+  }
+  if ("frozenPlan" in value) {
+    if (value.schemaVersion === "monitor-loop-result-workbench-v1") {
+      const reviewId: string = value.provenance.reviewId;
+      const selectionHash: string = value.provenance.selectionHash;
+      return value.metrics.final_equity_fen;
     }
-    const version: "monitor-loop-result-v1" = value.schemaVersion;
+    const version: "monitor-loop-result-v1" = value.schemaVersion ?? "monitor-loop-result-v1";
     const reportVersion: "backtest-report-v4" = value.report.schema_version ?? "backtest-report-v4";
     return value.metrics.final_equity_fen;
   }

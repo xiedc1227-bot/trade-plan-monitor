@@ -32,7 +32,7 @@ from trade_plan_monitor.domain.daily_plan_validation import (
     daily_draft_sha256,
     load_daily_draft_json,
 )
-from trade_plan_monitor.domain.plan_codec import load_plan_json, load_plan_yaml
+from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.domain.plan_validation import (
@@ -67,11 +67,9 @@ from trade_plan_monitor.web.routers.plans import (
     ActivePlanView,
     PlanActivationCommand,
     PlanDeactivationCommand,
-    PlanDocumentFormat,
     PlanDraftCommand,
     PlanExtractionCommand,
     PlanExtractionView,
-    PlanImportCommand,
     PlanMappingView,
     PlanReviewConfirmationCommand,
     PlanReviewConfirmationView,
@@ -194,6 +192,58 @@ class PersistentPlanWebLifecycle:
     async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None:
         return await self._run(self._get_plan_version_sync, version_id=version_id)
 
+    async def get_reviewed_backtest_plan(self, *, version_id: str):
+        """Read approval, source and executable content in one read-only unit of work."""
+        return await self._run(self._get_reviewed_backtest_plan_sync, version_id=version_id)
+
+    def _get_reviewed_backtest_plan_sync(self, *, version_id):
+        from trade_plan_monitor.backtest.plan_schedule import LoopPlanReview, LoopPlanVersion
+        from trade_plan_monitor.backtest.workbench_selection import (
+            WorkbenchPlanReference,
+            WorkbenchReviewedPlan,
+        )
+        from trade_plan_monitor.domain.plan_hash import plan_sha256
+
+        with self._unit_of_work() as work:
+            details = work.plans.get_version_details(version_id)
+            if details is None:
+                return None
+            draft, _validation, eligible = _validated_plan_state(details)
+            if not eligible or details.review_confirmed_at is None:
+                raise PlanSaveBlockedError("Reviewed current workbench plan required")
+            snapshot = draft.to_executable()
+            confirmed_at = details.review_confirmed_at.astimezone(_SHANGHAI)
+            reference = WorkbenchPlanReference(
+                origin="WORKBENCH", plan_version_id=UUID(details.id),
+                plan_hash=details.plan_hash, content_hash=details.content_hash,
+                source_hash=details.source_hash, review_evidence_hash=details.review_evidence_hash,
+                review_id=UUID(details.review_id), review_revision=details.review_revision,
+            )
+            version = LoopPlanVersion(
+                version_id=details.id,
+                snapshot=snapshot,
+                plan_hash=plan_sha256(snapshot),
+                source_hashes=(details.source_hash,),
+                evidence_hash=details.review_evidence_hash,
+                available_at=confirmed_at,
+                information_cutoff=confirmed_at,
+                review=LoopPlanReview(
+                    content_hash=details.content_hash,
+                    reviewed_at=confirmed_at,
+                    confirmed=True,
+                    source_hashes=(details.source_hash,),
+                    evidence_hash=details.review_evidence_hash,
+                    evidence="Original workbench review " + details.review_id,
+                ),
+            )
+            return WorkbenchReviewedPlan(
+                reference=reference,
+                version=version,
+                draft_json=details.payload_json,
+                source_text=details.source_text,
+                mapping_json=details.daily_mapping.model_dump_json(),
+            )
+
     async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None:
         return await self._run(self._get_plan_activation_state_sync, symbol=symbol)
 
@@ -264,48 +314,6 @@ class PersistentPlanWebLifecycle:
             return
         raise PlanSaveBlockedError("Only current extraction results can be recorded")
 
-    async def import_plan(
-        self,
-        *,
-        command: PlanImportCommand,
-        context: MutationContext,
-    ) -> PlanVersionView:
-        plan = (
-            load_plan_json(command.document)
-            if command.format is PlanDocumentFormat.JSON
-            else load_plan_yaml(command.document)
-        )
-        if plan.schema_version != 5:
-            raise PlanSaveBlockedError(
-                "Historical imports require re-extraction into a current draft"
-            )
-        _require_web_safe_plan(plan)
-        if plan.symbol != command.symbol:
-            raise ApiError(ApiErrorCode.VALIDATION_ERROR)
-        from trade_plan_monitor.ai.daily_review import DailyMapping, daily_source_clauses
-        from trade_plan_monitor.domain.daily_plan_validation import (
-            daily_draft_content_sha256,
-            daily_draft_json,
-        )
-        from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
-
-        draft = UnifiedPlanDraft.from_executable(plan)
-        mapping = DailyMapping(
-            mapping_version="daily-mapping-v1",
-            candidate_content_hash=daily_draft_content_sha256(draft),
-            clauses=daily_source_clauses(command.document),
-            bindings=(),
-            supplements=(),
-        )
-        return await self.save_plan_draft(
-            command=PlanDraftCommand(
-                plan_json=daily_draft_json(draft),
-                source_text=command.document,
-                daily_mapping=mapping,
-                expected_revision=command.expected_revision,
-            ),
-            context=context,
-        )
 
     async def activate_plan(
         self,
@@ -483,7 +491,7 @@ class PersistentPlanWebLifecycle:
         *,
         request_hash: str,
         context: MutationContext,
-        command: PlanDraftCommand | PlanImportCommand,
+        command: PlanDraftCommand,
         plan: TradePlan | ExplicitPlanDraft,
         source_text: str,
         review_issues: tuple[DraftReviewIssue, ...],

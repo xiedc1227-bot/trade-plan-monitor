@@ -163,9 +163,9 @@ describe("preparation creation page composition", () => {
       global: { plugins: [router], stubs: { BacktestRunForm: true, BacktestReferenceMarketCoveragePanel: true } } });
     wrappers.push(wrapper); await flushPromises(); return { wrapper, api };
   }
-  it("keeps default legacy creation and preparation acquisition inert until an explicit choice", async () => {
+  it("keeps default workbench reuse and preparation acquisition inert until an explicit choice", async () => {
     const { wrapper, api } = await page();
-    expect(wrapper.findComponent({ name: "BacktestRunForm" }).exists()).toBe(true);
+    expect(wrapper.findComponent({ name: "WorkbenchPlanReplay" }).exists()).toBe(true);
     expect(api.get).not.toHaveBeenCalled();
     await wrapper.get('[data-testid="choose-prepared-plan"]').trigger("click");
     expect(wrapper.findComponent({ name: "PlanPreparationSourceForm" }).exists()).toBe(true);

@@ -18873,14 +18873,6 @@
         "title": "PlanDeactivationCommand",
         "type": "object"
       },
-      "PlanDocumentFormat": {
-        "enum": [
-          "JSON",
-          "YAML"
-        ],
-        "title": "PlanDocumentFormat",
-        "type": "string"
-      },
       "PlanDraftCommand": {
         "additionalProperties": false,
         "properties": {
@@ -19203,39 +19195,6 @@
           "submittedAt"
         ],
         "title": "PlanExtractionView",
-        "type": "object"
-      },
-      "PlanImportCommand": {
-        "additionalProperties": false,
-        "properties": {
-          "document": {
-            "maxLength": 262144,
-            "minLength": 2,
-            "title": "Document",
-            "type": "string"
-          },
-          "expectedRevision": {
-            "maximum": 9007199254740991.0,
-            "minimum": 0.0,
-            "title": "Expectedrevision",
-            "type": "integer"
-          },
-          "format": {
-            "$ref": "#/components/schemas/PlanDocumentFormat"
-          },
-          "symbol": {
-            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "symbol",
-          "format",
-          "document",
-          "expectedRevision"
-        ],
-        "title": "PlanImportCommand",
         "type": "object"
       },
       "PlanMappingView": {
@@ -28836,6 +28795,546 @@
         "title": "ValidationSeverity",
         "type": "string"
       },
+      "WorkbenchBacktestDataView": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "endDate": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Enddate",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "selectionHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Selectionhash",
+            "type": "string"
+          },
+          "selectionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Selectionid",
+            "type": "string"
+          },
+          "syncScope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestDatasetScopeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "selectionId",
+          "selectionHash",
+          "endDate",
+          "ready",
+          "syncScope",
+          "blockers"
+        ],
+        "title": "WorkbenchBacktestDataView",
+        "type": "object"
+      },
+      "WorkbenchBacktestRunCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "costs": {
+            "$ref": "#/components/schemas/BacktestLoopCostsInput"
+          },
+          "endDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enddate"
+          },
+          "response": {
+            "$ref": "#/components/schemas/BacktestLoopResponseInput"
+          },
+          "schemaVersion": {
+            "const": "workbench-loop-selection-v1",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "selectionHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Selectionhash",
+            "type": "string"
+          },
+          "selectionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Selectionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "selectionId",
+          "selectionHash",
+          "response",
+          "costs"
+        ],
+        "title": "WorkbenchBacktestRunCommand",
+        "type": "object"
+      },
+      "WorkbenchBacktestRunView": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/BacktestResultAvailabilityView"
+          },
+          "completedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Completedat",
+            "type": "string"
+          },
+          "costs": {
+            "$ref": "#/components/schemas/LoopCosts"
+          },
+          "datasetHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Datasethash",
+            "type": "string"
+          },
+          "eventEnd": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventend",
+            "type": "string"
+          },
+          "eventStart": {
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "title": "Eventstart",
+            "type": "string"
+          },
+          "fillCount": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Fillcount",
+            "type": "integer"
+          },
+          "frozenPlan": {
+            "$ref": "#/components/schemas/LoopPlanVersion"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/LoopMetrics"
+          },
+          "openingAccount": {
+            "$ref": "#/components/schemas/LoopAccountInput"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "planDiagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "null"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/WorkbenchLoopProvenanceView"
+          },
+          "report": {
+            "$ref": "#/components/schemas/MonitorLoopReport"
+          },
+          "reportHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reporthash",
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/LoopResponsePolicy"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "monitor-loop-result-workbench-v1",
+            "default": "monitor-loop-result-workbench-v1",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "status": {
+            "const": "COMPLETED",
+            "title": "Status",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "reportHash",
+          "planVersionId",
+          "planHash",
+          "datasetHash",
+          "symbol",
+          "status",
+          "eventStart",
+          "eventEnd",
+          "completedAt",
+          "pinned",
+          "revision",
+          "fillCount",
+          "metrics",
+          "availability",
+          "provenance",
+          "frozenPlan",
+          "openingAccount",
+          "response",
+          "costs",
+          "report"
+        ],
+        "title": "WorkbenchBacktestRunView",
+        "type": "object"
+      },
+      "WorkbenchLoopProvenanceView": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmedAt": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "Confirmedat",
+            "type": "string"
+          },
+          "inputHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Inputhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "reviewId": {
+            "format": "uuid",
+            "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+            "title": "Reviewid",
+            "type": "string"
+          },
+          "reviewRevision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Reviewrevision",
+            "type": "integer"
+          },
+          "selectionHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Selectionhash",
+            "type": "string"
+          },
+          "selectionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Selectionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "selectionId",
+          "selectionHash",
+          "planVersionId",
+          "reviewId",
+          "reviewRevision",
+          "confirmedAt",
+          "inputHash"
+        ],
+        "title": "WorkbenchLoopProvenanceView",
+        "type": "object"
+      },
+      "WorkbenchPlanReference": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "origin": {
+            "const": "WORKBENCH",
+            "title": "Origin",
+            "type": "string"
+          },
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "reviewEvidenceHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reviewevidencehash",
+            "type": "string"
+          },
+          "reviewId": {
+            "format": "uuid",
+            "title": "Reviewid",
+            "type": "string"
+          },
+          "reviewRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Reviewrevision",
+            "type": "integer"
+          },
+          "sourceHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "origin",
+          "planVersionId",
+          "planHash",
+          "contentHash",
+          "sourceHash",
+          "reviewEvidenceHash",
+          "reviewId",
+          "reviewRevision"
+        ],
+        "title": "WorkbenchPlanReference",
+        "type": "object"
+      },
+      "WorkbenchPlanSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed_at": {
+            "format": "date-time",
+            "title": "Confirmed At",
+            "type": "string"
+          },
+          "context": {
+            "$ref": "#/components/schemas/WorkbenchReplayContext"
+          },
+          "reviewed": {
+            "$ref": "#/components/schemas/WorkbenchReviewedPlan"
+          },
+          "schema_version": {
+            "const": "workbench-loop-selection-v1",
+            "default": "workbench-loop-selection-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "selection_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Selection Id",
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/LoopPlanVersion"
+          }
+        },
+        "required": [
+          "selection_id",
+          "reviewed",
+          "context",
+          "confirmed_at",
+          "version"
+        ],
+        "title": "WorkbenchPlanSelection",
+        "type": "object"
+      },
+      "WorkbenchReplayContext": {
+        "additionalProperties": false,
+        "properties": {
+          "availableAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availableat"
+          },
+          "confirmed": {
+            "const": true,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "effectiveTradeDate": {
+            "format": "date",
+            "title": "Effectivetradedate",
+            "type": "string"
+          },
+          "evidence": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Evidence",
+            "type": "string"
+          },
+          "informationCutoff": {
+            "format": "date-time",
+            "title": "Informationcutoff",
+            "type": "string"
+          },
+          "initialAccount": {
+            "$ref": "#/components/schemas/LoopAccountInput"
+          }
+        },
+        "required": [
+          "effectiveTradeDate",
+          "informationCutoff",
+          "initialAccount",
+          "confirmed",
+          "evidence"
+        ],
+        "title": "WorkbenchReplayContext",
+        "type": "object"
+      },
+      "WorkbenchReviewedPlan": {
+        "additionalProperties": false,
+        "properties": {
+          "draft_json": {
+            "maxLength": 1048576,
+            "title": "Draft Json",
+            "type": "string"
+          },
+          "mapping_json": {
+            "maxLength": 1048576,
+            "title": "Mapping Json",
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/WorkbenchPlanReference"
+          },
+          "source_text": {
+            "maxLength": 1048576,
+            "title": "Source Text",
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/LoopPlanVersion"
+          }
+        },
+        "required": [
+          "reference",
+          "version",
+          "draft_json",
+          "source_text",
+          "mapping_json"
+        ],
+        "title": "WorkbenchReviewedPlan",
+        "type": "object"
+      },
+      "WorkbenchSelectionCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/WorkbenchReplayContext"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/WorkbenchPlanReference"
+          },
+          "schemaVersion": {
+            "const": "workbench-loop-selection-v1",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "plan",
+          "context"
+        ],
+        "title": "WorkbenchSelectionCommand",
+        "type": "object"
+      },
+      "WorkbenchSelectionView": {
+        "additionalProperties": false,
+        "properties": {
+          "frozen": {
+            "$ref": "#/components/schemas/WorkbenchPlanSelection"
+          },
+          "schemaVersion": {
+            "const": "workbench-loop-selection-v1",
+            "default": "workbench-loop-selection-v1",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "selectionHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Selectionhash",
+            "type": "string"
+          },
+          "selectionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Selectionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "selectionId",
+          "selectionHash",
+          "frozen"
+        ],
+        "title": "WorkbenchSelectionView",
+        "type": "object"
+      },
       "trade_plan_monitor__web__routers__positions__PositionLotView": {
         "additionalProperties": false,
         "description": "One manually confirmed lot with an explicit T+1 sellable projection.",
@@ -31635,6 +32134,306 @@
         ]
       }
     },
+    "/api/v1/backtest-plan-selections": {
+      "post": {
+        "operationId": "create_plan_selection_api_v1_backtest_plan_selections_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkbenchSelectionCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbenchSelectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Plan Selection",
+        "tags": [
+          "backtest-runs"
+        ]
+      }
+    },
+    "/api/v1/backtest-plan-selections/{selection_id}": {
+      "get": {
+        "operationId": "get_plan_selection_api_v1_backtest_plan_selections__selection_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "selection_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Selection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbenchSelectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Plan Selection",
+        "tags": [
+          "backtest-runs"
+        ]
+      }
+    },
     "/api/v1/backtest-preparations": {
       "post": {
         "operationId": "create_preparation_api_v1_backtest_preparations_post",
@@ -33318,25 +34117,75 @@
           {
             "in": "query",
             "name": "preparationId",
-            "required": true,
+            "required": false,
             "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Preparationid",
-              "type": "string"
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preparationid"
             }
           },
           {
             "in": "query",
             "name": "manifestHash",
-            "required": true,
+            "required": false,
             "schema": {
-              "maxLength": 64,
-              "minLength": 64,
-              "pattern": "^[0-9a-f]{64}$",
-              "title": "Manifesthash",
-              "type": "string"
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Manifesthash"
+            }
+          },
+          {
+            "in": "query",
+            "name": "selectionId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Selectionid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "selectionHash",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Selectionhash"
             }
           },
           {
@@ -33362,7 +34211,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreparedBacktestDataView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PreparedBacktestDataView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WorkbenchBacktestDataView"
+                    }
+                  ],
+                  "title": "Response Check Prepared Backtest Data Api V1 Backtest Run Data Get"
                 }
               }
             },
@@ -33827,6 +34684,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ScheduledPreparedBacktestRunCommand"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WorkbenchBacktestRunCommand"
                   }
                 ],
                 "title": "Command"
@@ -33994,6 +34854,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/BacktestScheduledRunView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WorkbenchBacktestRunView"
                     }
                   ],
                   "title": "Response Get Backtest Run Api V1 Backtest Runs  Run Id  Get"
@@ -34170,6 +35033,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/BacktestScheduledRunView"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WorkbenchBacktestRunView"
                     }
                   ],
                   "title": "Response Pin Backtest Run Api V1 Backtest Runs  Run Id  Patch"
@@ -38167,161 +39033,6 @@
           }
         },
         "summary": "Facts",
-        "tags": [
-          "plans"
-        ]
-      }
-    },
-    "/api/v1/plan-imports": {
-      "post": {
-        "operationId": "import_plan_api_v1_plan_imports_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 128,
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlanImportCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlanVersionView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "405": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Method Not Allowed"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Import Plan",
         "tags": [
           "plans"
         ]

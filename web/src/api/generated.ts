@@ -2862,8 +2862,6 @@ export type PlanDeactivationCommand = {
   symbol: string;
 };
 
-export type PlanDocumentFormat = "JSON" | "YAML";
-
 export type PlanDraftCommand = {
   basePlanVersionId?: (string) | (null);
   dailyMapping?: (components["schemas"]["DailyMapping"]) | (null);
@@ -2903,13 +2901,6 @@ export type PlanExtractionView = {
   usage?: (components["schemas"]["AIUsageView"]) | (null);
   validationIssues?: Array<components["schemas"]["ValidationIssue"]>;
   warnings?: Array<components["schemas"]["ExtractionIssue"]>;
-};
-
-export type PlanImportCommand = {
-  document: string;
-  expectedRevision: number;
-  format: components["schemas"]["PlanDocumentFormat"];
-  symbol: string;
 };
 
 export type PlanMappingView = {
@@ -4150,6 +4141,110 @@ export type ValidationIssue = {
 
 export type ValidationSeverity = "ERROR" | "WARNING";
 
+export type WorkbenchBacktestDataView = {
+  blockers: Array<string>;
+  endDate: string;
+  ready: boolean;
+  selectionHash: string;
+  selectionId: string;
+  syncScope: (components["schemas"]["BacktestDatasetScopeInput"]) | (null);
+};
+
+export type WorkbenchBacktestRunCommand = {
+  costs: components["schemas"]["BacktestLoopCostsInput"];
+  endDate?: (string) | (null);
+  response: components["schemas"]["BacktestLoopResponseInput"];
+  schemaVersion: "workbench-loop-selection-v1";
+  selectionHash: string;
+  selectionId: string;
+};
+
+export type WorkbenchBacktestRunView = {
+  availability: components["schemas"]["BacktestResultAvailabilityView"];
+  completedAt: string;
+  costs: components["schemas"]["LoopCosts"];
+  datasetHash: string;
+  eventEnd: string;
+  eventStart: string;
+  fillCount: number;
+  frozenPlan: components["schemas"]["LoopPlanVersion"];
+  metrics: components["schemas"]["LoopMetrics"];
+  openingAccount: components["schemas"]["LoopAccountInput"];
+  pinned: boolean;
+  planDiagnostics?: (components["schemas"]["LoopDiagnostics"]) | (null);
+  planHash: string;
+  planVersionId: null;
+  provenance: components["schemas"]["WorkbenchLoopProvenanceView"];
+  report: components["schemas"]["MonitorLoopReport"];
+  reportHash: string;
+  response: components["schemas"]["LoopResponsePolicy"];
+  revision: number;
+  runId: string;
+  schemaVersion?: "monitor-loop-result-workbench-v1";
+  status: "COMPLETED";
+  symbol: string;
+};
+
+export type WorkbenchLoopProvenanceView = {
+  confirmedAt: string;
+  inputHash: string;
+  planVersionId: string;
+  reviewId: string;
+  reviewRevision: number;
+  selectionHash: string;
+  selectionId: string;
+};
+
+export type WorkbenchPlanReference = {
+  contentHash: string;
+  origin: "WORKBENCH";
+  planHash: string;
+  planVersionId: string;
+  reviewEvidenceHash: string;
+  reviewId: string;
+  reviewRevision: number;
+  sourceHash: string;
+};
+
+export type WorkbenchPlanSelection = {
+  confirmed_at: string;
+  context: components["schemas"]["WorkbenchReplayContext"];
+  reviewed: components["schemas"]["WorkbenchReviewedPlan"];
+  schema_version?: "workbench-loop-selection-v1";
+  selection_id: string;
+  version: components["schemas"]["LoopPlanVersion"];
+};
+
+export type WorkbenchReplayContext = {
+  availableAt?: (string) | (null);
+  confirmed: true;
+  effectiveTradeDate: string;
+  evidence: string;
+  informationCutoff: string;
+  initialAccount: components["schemas"]["LoopAccountInput"];
+};
+
+export type WorkbenchReviewedPlan = {
+  draft_json: string;
+  mapping_json: string;
+  reference: components["schemas"]["WorkbenchPlanReference"];
+  source_text: string;
+  version: components["schemas"]["LoopPlanVersion"];
+};
+
+export type WorkbenchSelectionCommand = {
+  context: components["schemas"]["WorkbenchReplayContext"];
+  plan: components["schemas"]["WorkbenchPlanReference"];
+  schemaVersion: "workbench-loop-selection-v1";
+};
+
+export type WorkbenchSelectionView = {
+  frozen: components["schemas"]["WorkbenchPlanSelection"];
+  schemaVersion?: "workbench-loop-selection-v1";
+  selectionHash: string;
+  selectionId: string;
+};
+
 export type trade_plan_monitor__web__routers__positions__PositionLotView = {
   acquiredTradeDate: string;
   bucket: "CORE" | "TACTICAL";
@@ -4485,12 +4580,10 @@ export interface components {
     PlanCandidateReview: PlanCandidateReview;
     PlanChange: PlanChange;
     PlanDeactivationCommand: PlanDeactivationCommand;
-    PlanDocumentFormat: PlanDocumentFormat;
     PlanDraftCommand: PlanDraftCommand;
     PlanExtractionCommand: PlanExtractionCommand;
     PlanExtractionOperationStatus: PlanExtractionOperationStatus;
     PlanExtractionView: PlanExtractionView;
-    PlanImportCommand: PlanImportCommand;
     PlanMappingView: PlanMappingView;
     PlanReviewConfirmationCommand: PlanReviewConfirmationCommand;
     PlanReviewConfirmationView: PlanReviewConfirmationView;
@@ -4631,6 +4724,16 @@ export interface components {
     UserSupplementView: UserSupplementView;
     ValidationIssue: ValidationIssue;
     ValidationSeverity: ValidationSeverity;
+    WorkbenchBacktestDataView: WorkbenchBacktestDataView;
+    WorkbenchBacktestRunCommand: WorkbenchBacktestRunCommand;
+    WorkbenchBacktestRunView: WorkbenchBacktestRunView;
+    WorkbenchLoopProvenanceView: WorkbenchLoopProvenanceView;
+    WorkbenchPlanReference: WorkbenchPlanReference;
+    WorkbenchPlanSelection: WorkbenchPlanSelection;
+    WorkbenchReplayContext: WorkbenchReplayContext;
+    WorkbenchReviewedPlan: WorkbenchReviewedPlan;
+    WorkbenchSelectionCommand: WorkbenchSelectionCommand;
+    WorkbenchSelectionView: WorkbenchSelectionView;
     trade_plan_monitor__web__routers__positions__PositionLotView: trade_plan_monitor__web__routers__positions__PositionLotView;
     trade_plan_monitor__web__routers__symbols__PositionLotView: trade_plan_monitor__web__routers__symbols__PositionLotView;
   };
@@ -5812,6 +5915,160 @@ export interface paths {
       };
     };
   };
+  "/api/v1/backtest-plan-selections": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["WorkbenchSelectionCommand"];
+        };
+      };
+      responses: {
+        "201": {
+          content: {
+            "application/json": components["schemas"]["WorkbenchSelectionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-plan-selections/{selection_id}": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          selection_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["WorkbenchSelectionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
   "/api/v1/backtest-preparations": {
     post: {
       parameters: {
@@ -6458,10 +6715,12 @@ export interface paths {
   "/api/v1/backtest-run-data": {
     get: {
       parameters: {
-        query: {
+        query?: {
           endDate?: (string) | (null);
-          manifestHash: string;
-          preparationId: string;
+          manifestHash?: (string) | (null);
+          preparationId?: (string) | (null);
+          selectionHash?: (string) | (null);
+          selectionId?: (string) | (null);
         };
         header?: never;
         path?: never;
@@ -6471,7 +6730,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": components["schemas"]["PreparedBacktestDataView"];
+            "application/json": (components["schemas"]["PreparedBacktestDataView"]) | (components["schemas"]["WorkbenchBacktestDataView"]);
           };
         };
         "400": {
@@ -6626,7 +6885,7 @@ export interface paths {
       };
       requestBody: {
         content: {
-          "application/json": (components["schemas"]["BacktestRunCommand"]) | (components["schemas"]["PreparedBacktestRunCommand"]) | (components["schemas"]["ScheduledPreparedBacktestRunCommand"]);
+          "application/json": (components["schemas"]["BacktestRunCommand"]) | (components["schemas"]["PreparedBacktestRunCommand"]) | (components["schemas"]["ScheduledPreparedBacktestRunCommand"]) | (components["schemas"]["WorkbenchBacktestRunCommand"]);
         };
       };
       responses: {
@@ -6707,7 +6966,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]) | (components["schemas"]["BacktestScheduledRunView"]);
+            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]) | (components["schemas"]["BacktestScheduledRunView"]) | (components["schemas"]["WorkbenchBacktestRunView"]);
           };
         };
         "400": {
@@ -6786,7 +7045,7 @@ export interface paths {
       responses: {
         "200": {
           content: {
-            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]) | (components["schemas"]["BacktestScheduledRunView"]);
+            "application/json": (components["schemas"]["BacktestRunView"]) | (components["schemas"]["BacktestLoopRunView"]) | (components["schemas"]["BacktestScheduledRunView"]) | (components["schemas"]["WorkbenchBacktestRunView"]);
           };
         };
         "400": {
@@ -8702,85 +8961,6 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["DailyMutationReceipt"];
-          };
-        };
-        "400": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "401": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "403": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "404": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "405": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "409": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "413": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "422": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "429": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "500": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-        "503": {
-          content: {
-            "application/json": components["schemas"]["ErrorResponse"];
-          };
-        };
-      };
-    };
-  };
-  "/api/v1/plan-imports": {
-    post: {
-      parameters: {
-        query?: never;
-        header: {
-          "Idempotency-Key": string;
-        };
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["PlanImportCommand"];
-        };
-      };
-      responses: {
-        "200": {
-          content: {
-            "application/json": components["schemas"]["PlanVersionView"];
           };
         };
         "400": {

@@ -280,10 +280,26 @@ class ScheduledLoopInput(ResearchValue):
         return sha256((self.run_formula_version + "\0" + canonical_json(self)).encode()).hexdigest()
 
 
+class WorkbenchLoopInput(MonitorLoopInput):
+    """Same executor/formula, with every independently confirmed research fact bound."""
+
+    schema_version: Literal["workbench-loop-input-v1"] = "workbench-loop-input-v1"
+    selection_hash: Sha256Hex
+
+    @property
+    def input_hash(self) -> str:
+        return sha256((self.schema_version + "\0" + canonical_json(self)).encode()).hexdigest()
+
+
 _LOOP_INPUT_CODEC = TypeAdapter(
-    Annotated[MonitorLoopInput | ScheduledLoopInput, Field(discriminator="schema_version")]
+    Annotated[
+        MonitorLoopInput | ScheduledLoopInput | WorkbenchLoopInput,
+        Field(discriminator="schema_version"),
+    ]
 )
 
 
-def decode_monitor_loop_input_json(value: str | bytes) -> MonitorLoopInput | ScheduledLoopInput:
+def decode_monitor_loop_input_json(
+    value: str | bytes,
+) -> MonitorLoopInput | ScheduledLoopInput | WorkbenchLoopInput:
     return _LOOP_INPUT_CODEC.validate_json(value)

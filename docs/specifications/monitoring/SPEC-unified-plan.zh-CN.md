@@ -30,7 +30,7 @@
 
 `/plans` 是唯一当前工作台，展示原文、结构化候选、遗漏、绑定、审核、已保存版本、激活和模拟状态。保存只创建未激活草稿。审核绑定原文/内容/证据/修订。激活使用独立命令。改变原文或内容会使先前审核失效。提取、提醒、已读、审核和刷新均不能改变持仓。
 
-当前正式 API 操作使用 `/api/v1/plan-extractions`、`/api/v1/plan-drafts`、`/api/v1/plan-imports`、`/api/v1/plan-review-previews`、`/api/v1/plan-review-supplements`、`/api/v1/plan-review-confirmations`、`/api/v1/plan-activations`、`/api/v1/plan-deactivations`、`/api/v1/plan-facts`、`/api/v1/simulation-position-confirmations`、`/api/v1/simulation-position-inventory`、`/api/v1/plan-risk-reassessments`、`/api/v1/simulated-trades` 和 `/api/v1/plan-runtime/{symbol}`。当前路由没有独立 `/daily-*` 操作族。AI 供应商配置在 API 中只读，并从项目文件一次加载。旧 `dailyMapping` 传输字段和内部 `Daily*` 名称作为共用审核/记账兼容细节保留，不能构成第二套当前流程。
+当前正式 API 操作使用 `/api/v1/plan-extractions`、`/api/v1/plan-drafts`、`/api/v1/plan-review-previews`、`/api/v1/plan-review-supplements`、`/api/v1/plan-review-confirmations`、`/api/v1/plan-activations`、`/api/v1/plan-deactivations`、`/api/v1/plan-facts`、`/api/v1/simulation-position-confirmations`、`/api/v1/simulation-position-inventory`、`/api/v1/plan-risk-reassessments`、`/api/v1/simulated-trades` 和 `/api/v1/plan-runtime/{symbol}`。当前路由没有独立 `/daily-*` 操作族。AI 供应商配置在 API 中只读，并从项目文件一次加载。旧 `dailyMapping` 传输字段和内部 `Daily*` 名称作为共用审核/记账兼容细节保留，不能构成第二套当前流程。
 
 历史审阅 OpenAPI 快照 SHA-256：`8da41a7d8d06f6a4e114570b52e88c894d0f817de365dc062bee08b28989e833`。于 2026-10-07（Asia/Shanghai）依据 [SPEC-unified-replay](../backtesting/SPEC-unified-replay.zh-CN.md) UR01/UR03/UR04/UR05/UR06/UR08 审阅，覆盖已在 `7a92f75` 提交的既有统一研究扩展：增量 `researchInput`、强类型研究决策/操作详情、指标/权益投影及其有界支持结构。路由、操作参数/响应和其他全部既有监测/错误/任务结构不变，生成物与实际路由一致。[MV12](../../verification/monitor-loop-backtest.zh-CN.md#mv12-隔离收尾与契约审阅) 记录全部 37 处 schema 差异及实际检查。原批准 `4d1ff1d58e37b764aa057415cee1418298bc05bedbd360fbec60202f1f7cd255` 保留为 `a0915f7` 的历史身份，不再视为当前批准。此次纠正仅批准当时既有统一研究契约，保留其历史范围；现有监控闭环准备/服务 API 的最终审阅和批准见 U09。
 
@@ -279,3 +279,11 @@ OpenAPI 快照 SHA-256：`6de1b8500f2b6bb217e419c191861579bb27cdaa8ee40078c1b6e5
 区别于 U24 的短元数据重叠修复，本次跟进增加一个惰性有所有者的结果读取线程，不增加重执行工作线程。汇总、规则对照和权益投影使用该通道，最多一个物理调用、8 个观察者及 8 个不同进行中键，不同排队工作准入等待 60 秒。元数据保留 8 个等待读取及 5 秒；写操作准入与重任务槽位不变。相同并发结果读取按操作、运行、来源键共享活动工作，汇总键还包含固定状态。完成后移除共享工作，后续请求重新校验当前存储证据，不得用持久响应缓存隐藏保留或损坏变化。
 
 取消观察者绝不取消其他观察者或释放物理工作。停服、排空统计纳入新所有者，保留脱敏 SQL BUSY/LOCKED、停止及过载 503/Retry-After 行为。公开路由和 schema、OpenAPI、依赖、数据库 schema 及 AI/联网权限不变。实际验证对比新旧报告完整响应及保存哈希的全部 50 份自有文件；[RR-01–RR-03](../../../tasks/result-read-isolation.zh-CN.md) 及[验证记录](../../verification/2026-10-18-result-read-isolation.zh-CN.md) 记录本次范围内结果，不保证永无 503，也不代表负载认证。
+
+## U27. 已审核计划统一复用，2026-10-19
+
+OpenAPI 快照 SHA-256：`2b5963fcb0b5445fac66a4e701b608b22f0a441949da81956345a2c33a1c3985`。Canonical monitor v2 snapshot SHA-256: `ed664052450bd40c9978571c855ee4ed704d369d4853a667877277bbc8ed262f`。用户批准 PRU01–PRU11 的有界实施，并明确授权删除 JSON/YAML 导入接口。参见[规格](../backtesting/SPEC-plan-reuse-unification.zh-CN.md)及[验证记录](../../verification/2026-10-19-plan-reuse-unification.zh-CN.md)。
+
+新增 `POST /api/v1/backtest-plan-selections` 和 `GET /api/v1/backtest-plan-selections/{selection_id}`，在现有数据检查／运行命令及结果联合类型增加绑定选择的工作台分支。冻结原审核计划身份与单独确认的历史研究上下文，无需重新提取或实时启用。新增复制输入使用 `monitor-loop-stored-input-v3` 和 `workbench-loop-input-v1`；旧编解码、哈希、结果字节及准备多计划执行保持权威。仅带标记准备存储增加一张不可变选择表（schema 1 → 2），旧程序会拒绝升级后的存储。
+
+删除 `POST /api/v1/plan-imports`、`PlanImportCommand`、`PlanDocumentFormat` 及直接前端客户端／表单。已删除端点返回现有 404 信封。内部 JSON/YAML 编解码、原文准备、已有计划和结果继续可用。其他全部 API 路径、监控／供应商／错误／安全语义保持不变。生成产物与两套挂载契约一致；审批仅覆盖本次增加／删除，不代表真实供应商或部署认证。

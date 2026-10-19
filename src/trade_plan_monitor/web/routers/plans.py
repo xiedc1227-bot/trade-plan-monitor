@@ -44,7 +44,6 @@ from trade_plan_monitor.domain.plan_codec import (
     MAX_PLAN_DOCUMENT_BYTES,
     dump_plan_json,
     load_plan_json,
-    load_plan_yaml,
 )
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.domain.plan_models import (
@@ -125,9 +124,6 @@ Sha256Hex = Annotated[
 ]
 
 
-class PlanDocumentFormat(StrEnum):
-    JSON = "JSON"
-    YAML = "YAML"
 
 
 class ExplicitPlanCapabilityView(ApiValue):
@@ -406,23 +402,6 @@ class PlanDraftCommand(ApiValue):
         return _valid_utf8_text(value, max_bytes=MAX_PLAN_DOCUMENT_BYTES)
 
 
-class PlanImportCommand(ApiValue):
-    symbol: AShareSymbol
-    format: PlanDocumentFormat = Field(strict=False)
-    document: PlanDocument
-    expected_revision: NonNegativeSafeInteger
-
-    @model_validator(mode="after")
-    def validate_document(self) -> Self:
-        plan = (
-            load_plan_json(self.document)
-            if self.format is PlanDocumentFormat.JSON
-            else load_plan_yaml(self.document)
-        )
-        _validate_web_plan(plan)
-        if plan.symbol != self.symbol:
-            raise ValueError("symbol must match the imported plan document")
-        return self
 
 
 class PlanExtractionCommand(ApiValue):
@@ -797,12 +776,6 @@ class PlanOperationService(PlanExtractionService, Protocol):
         context: MutationContext,
     ) -> PlanVersionView: ...
 
-    async def import_plan(
-        self,
-        *,
-        command: PlanImportCommand,
-        context: MutationContext,
-    ) -> PlanVersionView: ...
 
     async def confirm_plan_review(
         self,
@@ -969,39 +942,6 @@ async def save_plan_draft(
     return result
 
 
-@router.post("/plan-imports", response_model=PlanVersionView)
-async def import_plan(
-    command: PlanImportCommand,
-    context: MutationContextDependency,
-    service: PlanServiceDependency,
-) -> PlanVersionView:
-    imported = (
-        load_plan_json(command.document)
-        if command.format is PlanDocumentFormat.JSON
-        else load_plan_yaml(command.document)
-    )
-    if imported.schema_version != 5:
-        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
-    result = validate_api_response(
-        await service.import_plan(command=command, context=context),
-        PlanVersionView,
-    )
-    plan = (
-        load_plan_json(command.document)
-        if command.format is PlanDocumentFormat.JSON
-        else load_plan_yaml(command.document)
-    )
-    if not _matches_plan(result, plan):
-        raise RuntimeError("plan service returned a mismatched import")
-    if result.symbol != command.symbol:
-        raise RuntimeError("plan service returned an import for another symbol")
-    if result.status is not PlanVersionStatus.DRAFT:
-        raise RuntimeError("plan service returned a non-draft import")
-    if result.review_issues:
-        raise RuntimeError("manual import cannot acquire AI review state")
-    if result.source_text != command.document:
-        raise RuntimeError("plan service returned mismatched import provenance")
-    return result
 
 
 @router.get("/plan-capabilities", response_model=ExplicitPlanCapabilityView)
@@ -1157,7 +1097,6 @@ __all__ = [
     "PlanExtractionCommand",
     "PlanExtractionService",
     "PlanExtractionView",
-    "PlanImportCommand",
     "PlanOperationService",
     "PlanReviewConfirmationCommand",
     "PlanReviewConfirmationView",

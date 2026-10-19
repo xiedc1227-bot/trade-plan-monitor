@@ -37,6 +37,7 @@ backups/
 
 # Frontend dependencies and generated output
 web/node_modules/
+web/.test-browsers/
 web/dist/
 web/dist-runtime-status/
 web/dist-legacy-test/

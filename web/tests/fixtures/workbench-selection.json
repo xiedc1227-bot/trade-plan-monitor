@@ -1,0 +1,229 @@
+{
+  "schemaVersion": "workbench-loop-selection-v1",
+  "selectionId": "99999999-9999-4999-8999-999999999999",
+  "selectionHash": "5c5ff8ed866a324bf97abe3aebeb725203cf959818196e3b26f697edf367b612",
+  "frozen": {
+    "schema_version": "workbench-loop-selection-v1",
+    "selection_id": "99999999-9999-4999-8999-999999999999",
+    "reviewed": {
+      "reference": {
+        "origin": "WORKBENCH",
+        "planVersionId": "77777777-7777-4777-8777-777777777777",
+        "planHash": "57f2c23c96a0cbff4e3a0041d69fa9c696a181651c4e6029821773cdf9ca3e80",
+        "contentHash": "6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a",
+        "sourceHash": "5ebe3212d9cfcafce2a9b5da7e293d3678bbf92145703fce6e840b95ee86ccff",
+        "reviewEvidenceHash": "3fc1ca43e94303572f949283e16291d6b3bf3e2da70c8e52d9624ff60f0e4991",
+        "reviewId": "88888888-8888-4888-8888-888888888888",
+        "reviewRevision": 1
+      },
+      "version": {
+        "version_id": "77777777-7777-4777-8777-777777777777",
+        "plan_hash": "57f2c23c96a0cbff4e3a0041d69fa9c696a181651c4e6029821773cdf9ca3e80",
+        "snapshot": {
+          "schema_version": 5,
+          "execution_mode": "CONDITION_PLAN",
+          "execution_version": "condition-plan-v1",
+          "plan_id": "synthetic-daily",
+          "version": 1,
+          "symbol": "601021.SH",
+          "name": "Synthetic reviewed plan",
+          "market": "SSE",
+          "metadata": {
+            "report_at": null,
+            "reference_price_fen": null
+          },
+          "activation": {
+            "mode": "MANUAL"
+          },
+          "levels": null,
+          "position": {
+            "max_qty": 1000,
+            "core_target_qty": null,
+            "tactical_target_qty": null,
+            "allocation_provenance": null,
+            "allocation_evidence": null
+          },
+          "trading_rules": {
+            "settlement": "NEXT_EXCHANGE_SESSION",
+            "tick_size_fen": 1,
+            "special_state_restrictions": "BLOCK_UNVERIFIED"
+          },
+          "monitoring": null,
+          "ordinary_rules": [
+            {
+              "status": "ENABLED",
+              "side": "BUY",
+              "rule_id": "low-buy",
+              "quantity": 100,
+              "bucket": "TACTICAL",
+              "condition": {
+                "type": "MINUTE_CLOSE_BELOW",
+                "timeframe_minutes": 5,
+                "price_fen": 4000
+              },
+              "confirmation": {
+                "kind": "COMPLETED_BAR_CLOSE",
+                "timeframe_minutes": 5
+              },
+              "execution_window": "CURRENT_SESSION",
+              "zone": null,
+              "validity": {
+                "mode": "PLAN_ACTIVE"
+              },
+              "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+              "independent_signal": {
+                "mode": "REVIEWED_INDEPENDENT_EVENT",
+                "evidence_requirement": "New structure linked to prior signal"
+              }
+            }
+          ],
+          "risk_branches": [],
+          "execution_policy": {
+            "same_signal": "ONE_PLANNED_QUANTITY",
+            "risk_priority": "SEVERE_THEN_ORDINARY",
+            "ordinary_conflict": "BLOCK_BOTH"
+          },
+          "alert_rules": []
+        },
+        "source_hashes": [
+          "5ebe3212d9cfcafce2a9b5da7e293d3678bbf92145703fce6e840b95ee86ccff"
+        ],
+        "evidence_hash": "3fc1ca43e94303572f949283e16291d6b3bf3e2da70c8e52d9624ff60f0e4991",
+        "authored_at": "2026-08-19T18:00:00+08:00",
+        "authored_date": null,
+        "available_at": "2026-08-20T08:00:00+08:00",
+        "information_cutoff": "2026-08-19T15:00:00+08:00",
+        "review": {
+          "content_hash": "6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a",
+          "reviewed_at": "2026-08-26T18:00:00+08:00",
+          "confirmed": true,
+          "evidence": "Offline reviewed fixture; retrospective provenance stays explicit.",
+          "source_hashes": [
+            "5ebe3212d9cfcafce2a9b5da7e293d3678bbf92145703fce6e840b95ee86ccff"
+          ],
+          "evidence_hash": "3fc1ca43e94303572f949283e16291d6b3bf3e2da70c8e52d9624ff60f0e4991"
+        }
+      },
+      "draft_json": "{\"activation\":{\"mode\":\"MANUAL\"},\"alert_rules\":[],\"execution_mode\":\"CONDITION_PLAN\",\"execution_policy\":{\"ordinary_conflict\":\"BLOCK_BOTH\",\"risk_priority\":\"SEVERE_THEN_ORDINARY\",\"same_signal\":\"ONE_PLANNED_QUANTITY\"},\"execution_version\":\"condition-plan-v1\",\"levels\":null,\"market\":\"SSE\",\"metadata\":{\"reference_price_fen\":null,\"report_at\":null},\"monitoring\":null,\"name\":\"Synthetic reviewed plan\",\"ordinary_rules\":[{\"bucket\":\"TACTICAL\",\"condition\":{\"price_fen\":4000,\"timeframe_minutes\":5,\"type\":\"MINUTE_CLOSE_BELOW\"},\"confirmation\":{\"kind\":\"COMPLETED_BAR_CLOSE\",\"timeframe_minutes\":5},\"execution_window\":\"CURRENT_SESSION\",\"independent_signal\":{\"evidence_requirement\":\"New structure linked to prior signal\",\"mode\":\"REVIEWED_INDEPENDENT_EVENT\"},\"invalidation\":\"RISK_OR_REVIEWED_INVALIDATION\",\"quantity\":100,\"rule_id\":\"low-buy\",\"side\":\"BUY\",\"status\":\"ENABLED\",\"validity\":{\"mode\":\"PLAN_ACTIVE\"},\"zone\":null}],\"plan_id\":\"synthetic-daily\",\"position\":{\"allocation_evidence\":null,\"allocation_provenance\":null,\"core_target_qty\":null,\"max_qty\":1000,\"tactical_target_qty\":null},\"risk_branches\":[],\"schema_version\":5,\"symbol\":\"601021.SH\",\"trading_rules\":{\"settlement\":\"NEXT_EXCHANGE_SESSION\",\"special_state_restrictions\":\"BLOCK_UNVERIFIED\",\"tick_size_fen\":1},\"version\":1}",
+      "source_text": "Synthetic human-reviewed supplements for this fixture.",
+      "mapping_json": "{\"mapping_version\":\"daily-mapping-v1\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"clauses\":[{\"clause_id\":\"clause-d74c4424e30c889b\",\"start\":0,\"end\":54,\"excerpt\":\"Synthetic human-reviewed supplements for this fixture.\",\"disposition\":\"POLICY\",\"paths\":[\"schema_version\",\"execution_mode\",\"execution_version\",\"symbol\",\"market\",\"activation.mode\",\"position.max_qty\",\"trading_rules.settlement\",\"trading_rules.tick_size_fen\",\"trading_rules.special_state_restrictions\",\"ordinary_rules[0].status\",\"ordinary_rules[0].side\",\"ordinary_rules[0].rule_id\",\"ordinary_rules[0].quantity\",\"ordinary_rules[0].bucket\",\"ordinary_rules[0].condition.type\",\"ordinary_rules[0].condition.timeframe_minutes\",\"ordinary_rules[0].condition.price_fen\",\"ordinary_rules[0].confirmation.kind\",\"ordinary_rules[0].confirmation.timeframe_minutes\",\"ordinary_rules[0].execution_window\",\"ordinary_rules[0].validity.mode\",\"ordinary_rules[0].invalidation\",\"ordinary_rules[0].independent_signal.mode\",\"ordinary_rules[0].independent_signal.evidence_requirement\",\"risk_branches\",\"execution_policy.same_signal\",\"execution_policy.risk_priority\",\"execution_policy.ordinary_conflict\",\"alert_rules\"],\"reason\":\"Synthetic human-reviewed policy supplements, independently reviewed.\",\"exclusions\":[],\"remainders\":[]}],\"bindings\":[{\"path\":\"schema_version\",\"value\":5,\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-0\"},{\"path\":\"execution_mode\",\"value\":\"CONDITION_PLAN\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-1\"},{\"path\":\"execution_version\",\"value\":\"condition-plan-v1\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-2\"},{\"path\":\"symbol\",\"value\":\"601021.SH\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-3\"},{\"path\":\"market\",\"value\":\"SSE\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-4\"},{\"path\":\"activation.mode\",\"value\":\"MANUAL\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-5\"},{\"path\":\"position.max_qty\",\"value\":1000,\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-6\"},{\"path\":\"trading_rules.settlement\",\"value\":\"NEXT_EXCHANGE_SESSION\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-7\"},{\"path\":\"trading_rules.tick_size_fen\",\"value\":1,\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-8\"},{\"path\":\"trading_rules.special_state_restrictions\",\"value\":\"BLOCK_UNVERIFIED\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-9\"},{\"path\":\"ordinary_rules[0].status\",\"value\":\"ENABLED\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-10\"},{\"path\":\"ordinary_rules[0].side\",\"value\":\"BUY\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-11\"},{\"path\":\"ordinary_rules[0].rule_id\",\"value\":\"low-buy\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-12\"},{\"path\":\"ordinary_rules[0].quantity\",\"value\":100,\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-13\"},{\"path\":\"ordinary_rules[0].bucket\",\"value\":\"TACTICAL\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-14\"},{\"path\":\"ordinary_rules[0].condition.type\",\"value\":\"MINUTE_CLOSE_BELOW\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-15\"},{\"path\":\"ordinary_rules[0].condition.timeframe_minutes\",\"value\":5,\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-16\"},{\"path\":\"ordinary_rules[0].condition.price_fen\",\"value\":4000,\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-17\"},{\"path\":\"ordinary_rules[0].confirmation.kind\",\"value\":\"COMPLETED_BAR_CLOSE\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-18\"},{\"path\":\"ordinary_rules[0].confirmation.timeframe_minutes\",\"value\":5,\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-19\"},{\"path\":\"ordinary_rules[0].execution_window\",\"value\":\"CURRENT_SESSION\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-20\"},{\"path\":\"ordinary_rules[0].validity.mode\",\"value\":\"PLAN_ACTIVE\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-21\"},{\"path\":\"ordinary_rules[0].invalidation\",\"value\":\"RISK_OR_REVIEWED_INVALIDATION\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-22\"},{\"path\":\"ordinary_rules[0].independent_signal.mode\",\"value\":\"REVIEWED_INDEPENDENT_EVENT\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-23\"},{\"path\":\"ordinary_rules[0].independent_signal.evidence_requirement\",\"value\":\"New structure linked to prior signal\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-24\"},{\"path\":\"risk_branches\",\"value\":[],\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-25\"},{\"path\":\"execution_policy.same_signal\",\"value\":\"ONE_PLANNED_QUANTITY\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-26\"},{\"path\":\"execution_policy.risk_priority\",\"value\":\"SEVERE_THEN_ORDINARY\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-27\"},{\"path\":\"execution_policy.ordinary_conflict\",\"value\":\"BLOCK_BOTH\",\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-28\"},{\"path\":\"alert_rules\",\"value\":[],\"origin\":\"HUMAN_SUPPLEMENT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":\"supplement-29\"}],\"supplements\":[{\"supplement_id\":\"supplement-0\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"schema_version\",\"value\":5,\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-1\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"execution_mode\",\"value\":\"CONDITION_PLAN\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-2\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"execution_version\",\"value\":\"condition-plan-v1\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-3\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"symbol\",\"value\":\"601021.SH\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-4\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"market\",\"value\":\"SSE\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-5\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"activation.mode\",\"value\":\"MANUAL\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-6\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"position.max_qty\",\"value\":1000,\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-7\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"trading_rules.settlement\",\"value\":\"NEXT_EXCHANGE_SESSION\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-8\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"trading_rules.tick_size_fen\",\"value\":1,\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-9\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"trading_rules.special_state_restrictions\",\"value\":\"BLOCK_UNVERIFIED\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-10\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].status\",\"value\":\"ENABLED\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-11\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].side\",\"value\":\"BUY\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-12\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].rule_id\",\"value\":\"low-buy\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-13\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].quantity\",\"value\":100,\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-14\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].bucket\",\"value\":\"TACTICAL\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-15\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].condition.type\",\"value\":\"MINUTE_CLOSE_BELOW\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-16\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].condition.timeframe_minutes\",\"value\":5,\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-17\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].condition.price_fen\",\"value\":4000,\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-18\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].confirmation.kind\",\"value\":\"COMPLETED_BAR_CLOSE\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-19\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].confirmation.timeframe_minutes\",\"value\":5,\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-20\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].execution_window\",\"value\":\"CURRENT_SESSION\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-21\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].validity.mode\",\"value\":\"PLAN_ACTIVE\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-22\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].invalidation\",\"value\":\"RISK_OR_REVIEWED_INVALIDATION\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-23\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].independent_signal.mode\",\"value\":\"REVIEWED_INDEPENDENT_EVENT\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-24\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"ordinary_rules[0].independent_signal.evidence_requirement\",\"value\":\"New structure linked to prior signal\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-25\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"risk_branches\",\"value\":[],\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-26\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"execution_policy.same_signal\",\"value\":\"ONE_PLANNED_QUANTITY\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-27\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"execution_policy.risk_priority\",\"value\":\"SEVERE_THEN_ORDINARY\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-28\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"execution_policy.ordinary_conflict\",\"value\":\"BLOCK_BOTH\",\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"},{\"supplement_id\":\"supplement-29\",\"candidate_content_hash\":\"6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a\",\"path\":\"alert_rules\",\"value\":[],\"reason\":\"Synthetic human-reviewed supplements; proposed policy, not registered inventory.\"}]}"
+    },
+    "context": {
+      "effectiveTradeDate": "2026-08-20",
+      "availableAt": null,
+      "informationCutoff": "2026-08-20T09:00:00+08:00",
+      "initialAccount": {
+        "snapshot_at": "2026-08-20T09:00:00+08:00",
+        "inventory_known": true,
+        "cash": {
+          "kind": "KNOWN",
+          "balance_fen": 0
+        },
+        "lots": [
+          {
+            "lot_key": "opening-core",
+            "bucket": "CORE",
+            "quantity": 100,
+            "cost_basis_fen": 401050,
+            "acquired_trade_date": null,
+            "sellable_quantity": null,
+            "evidence": "Source explicitly states 100 CORE at 40.105/share."
+          }
+        ],
+        "opening_mark": null,
+        "evidence": "Explicit reviewed opening account; no acquisition-date inference."
+      },
+      "confirmed": true,
+      "evidence": "Confirmed historical opening facts for offline research."
+    },
+    "confirmed_at": "2026-08-28T10:00:00+08:00",
+    "version": {
+      "version_id": "77777777-7777-4777-8777-777777777777",
+      "plan_hash": "57f2c23c96a0cbff4e3a0041d69fa9c696a181651c4e6029821773cdf9ca3e80",
+      "snapshot": {
+        "schema_version": 5,
+        "execution_mode": "CONDITION_PLAN",
+        "execution_version": "condition-plan-v1",
+        "plan_id": "synthetic-daily",
+        "version": 1,
+        "symbol": "601021.SH",
+        "name": "Synthetic reviewed plan",
+        "market": "SSE",
+        "metadata": {
+          "report_at": null,
+          "reference_price_fen": null
+        },
+        "activation": {
+          "mode": "MANUAL"
+        },
+        "levels": null,
+        "position": {
+          "max_qty": 1000,
+          "core_target_qty": null,
+          "tactical_target_qty": null,
+          "allocation_provenance": null,
+          "allocation_evidence": null
+        },
+        "trading_rules": {
+          "settlement": "NEXT_EXCHANGE_SESSION",
+          "tick_size_fen": 1,
+          "special_state_restrictions": "BLOCK_UNVERIFIED"
+        },
+        "monitoring": null,
+        "ordinary_rules": [
+          {
+            "status": "ENABLED",
+            "side": "BUY",
+            "rule_id": "low-buy",
+            "quantity": 100,
+            "bucket": "TACTICAL",
+            "condition": {
+              "type": "MINUTE_CLOSE_BELOW",
+              "timeframe_minutes": 5,
+              "price_fen": 4000
+            },
+            "confirmation": {
+              "kind": "COMPLETED_BAR_CLOSE",
+              "timeframe_minutes": 5
+            },
+            "execution_window": "CURRENT_SESSION",
+            "zone": null,
+            "validity": {
+              "mode": "PLAN_ACTIVE"
+            },
+            "invalidation": "RISK_OR_REVIEWED_INVALIDATION",
+            "independent_signal": {
+              "mode": "REVIEWED_INDEPENDENT_EVENT",
+              "evidence_requirement": "New structure linked to prior signal"
+            }
+          }
+        ],
+        "risk_branches": [],
+        "execution_policy": {
+          "same_signal": "ONE_PLANNED_QUANTITY",
+          "risk_priority": "SEVERE_THEN_ORDINARY",
+          "ordinary_conflict": "BLOCK_BOTH"
+        },
+        "alert_rules": []
+      },
+      "source_hashes": [
+        "5ebe3212d9cfcafce2a9b5da7e293d3678bbf92145703fce6e840b95ee86ccff"
+      ],
+      "evidence_hash": "3fc1ca43e94303572f949283e16291d6b3bf3e2da70c8e52d9624ff60f0e4991",
+      "authored_at": "2026-08-19T18:00:00+08:00",
+      "authored_date": null,
+      "available_at": "2026-08-20T09:30:00+08:00",
+      "information_cutoff": "2026-08-20T09:00:00+08:00",
+      "review": {
+        "content_hash": "6e265b777b0b11caddadc9827f2b9f31c719fe740ecb4a866aeac695c92de92a",
+        "reviewed_at": "2026-08-26T18:00:00+08:00",
+        "confirmed": true,
+        "evidence": "Offline reviewed fixture; retrospective provenance stays explicit.",
+        "source_hashes": [
+          "5ebe3212d9cfcafce2a9b5da7e293d3678bbf92145703fce6e840b95ee86ccff"
+        ],
+        "evidence_hash": "3fc1ca43e94303572f949283e16291d6b3bf3e2da70c8e52d9624ff60f0e4991"
+      }
+    }
+  }
+}

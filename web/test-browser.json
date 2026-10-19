@@ -1,0 +1,12 @@
+{
+  "version": "157.0.8103.6",
+  "chromiumRevision": 1717349,
+  "requiredFixRevision": 1712735,
+  "fix": "https://chromium-review.googlesource.com/c/chromium/src/+/8508456",
+  "platforms": {
+    "win32-x64": { "archive": "win64", "executable": "chrome-win64/chrome.exe" },
+    "linux-x64": { "archive": "linux64", "executable": "chrome-linux64/chrome" },
+    "darwin-x64": { "archive": "mac-x64", "executable": "chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" },
+    "darwin-arm64": { "archive": "mac-arm64", "executable": "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" }
+  }
+}

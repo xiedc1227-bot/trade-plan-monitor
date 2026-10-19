@@ -40,6 +40,8 @@ APPROVED_PATHS = {
     "/api/v1/backtest-plan-library",
     "/api/v1/backtest-plan-library/preparations",
     "/api/v1/backtest-plan-library/compositions",
+    "/api/v1/backtest-plan-selections",
+    "/api/v1/backtest-plan-selections/{selection_id}",
     "/api/v1/backtest-preparations",
     "/api/v1/backtest-preparations/{preparation_id}",
     "/api/v1/backtest-preparations/{preparation_id}/cancellations",
@@ -83,7 +85,6 @@ APPROVED_PATHS = {
     "/api/v1/plan-drafts",
     "/api/v1/plan-extractions",
     "/api/v1/plan-extractions/{operation_id}",
-    "/api/v1/plan-imports",
     "/api/v1/plan-review-confirmations",
     "/api/v1/plan-versions",
     "/api/v1/plan-versions/{version_id}",
@@ -192,8 +193,8 @@ def test_plan_contract_exposes_server_versioning_and_lightweight_summaries() -> 
     assert "basePlanVersionId" in draft["properties"]
     assert "basePlanVersionId" not in draft["required"]
 
-    imported = schemas["PlanImportCommand"]
-    assert "symbol" in imported["required"]
+    assert "PlanImportCommand" not in schemas
+    assert "/api/v1/plan-imports" not in document["paths"]
 
     page = schemas["PlanVersionPage"]
     assert page["properties"]["items"]["items"] == {
@@ -223,7 +224,6 @@ def test_plan_contract_exposes_server_versioning_and_lightweight_summaries() -> 
     assert schemas["PlanVersionSummary"]["properties"]["version"]["maximum"] == (MAX_SAFE_INTEGER)
     assert schemas["PlanVersionSummary"]["properties"]["revision"]["maximum"] == (MAX_SAFE_INTEGER)
     assert draft["properties"]["expectedRevision"]["maximum"] == MAX_SAFE_INTEGER
-    assert imported["properties"]["expectedRevision"]["maximum"] == MAX_SAFE_INTEGER
     assert schemas["PlanActivationCommand"]["properties"]["expectedRevision"]["maximum"] == (
         MAX_SAFE_INTEGER - 2
     )

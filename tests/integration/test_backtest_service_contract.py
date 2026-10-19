@@ -72,14 +72,49 @@ def test_lifecycle_values_and_explicit_resume_bounds_are_closed(contract):
 def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
     version, document = contract
     snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
-    before = json.loads(subprocess.check_output(["git", "show", f"d14d638:{snapshot}"], cwd=ROOT))
+    # The last pre-reuse contract already contains preparation/data and lifecycle APIs.
+    before = json.loads(subprocess.check_output(["git", "show", f"81aae039:{snapshot}"], cwd=ROOT))
     assert set(document["paths"]) - set(before["paths"]) == {
-        BASE,
-        BASE + "/recovery-requests",
-        BASE + "/stop-requests",
-        "/api/v1/market-indexes/overview",
+        "/api/v1/backtest-plan-selections",
+        "/api/v1/backtest-plan-selections/{selection_id}",
     }
+    assert set(before["paths"]) - set(document["paths"]) == {"/api/v1/plan-imports"}
+
+    def without_workbench(schema):
+        if isinstance(schema, list):
+            return [without_workbench(item) for item in schema]
+        if not isinstance(schema, dict):
+            return schema
+        result = {key: without_workbench(value) for key, value in schema.items()}
+        alternatives = schema.get("anyOf", [])
+        prior = [item for item in alternatives
+                 if not item.get("$ref", "").startswith("#/components/schemas/Workbench")]
+        if len(prior) != len(alternatives):
+            if len(prior) == 1:
+                return prior[0]
+            result["anyOf"] = prior
+        return result
+
     for path, operation in before["paths"].items():
-        assert document["paths"][path] == operation, path
+        if path == "/api/v1/plan-imports":
+            continue
+        current = without_workbench(document["paths"][path])
+        if path == "/api/v1/backtest-run-data":
+            parameters = current["get"]["parameters"]
+            current["get"]["parameters"] = [
+                parameter for parameter in parameters
+                if parameter["name"] not in {"selectionId", "selectionHash"}
+            ]
+            for parameter in current["get"]["parameters"]:
+                if parameter["name"] in {"preparationId", "manifestHash"}:
+                    schema = parameter["schema"]
+                    parameter["required"] = True
+                    parameter["schema"] = schema["anyOf"][0] | {"title": schema["title"]}
+        assert current == operation, path
+    assert set(before["components"]["schemas"]) - set(document["components"]["schemas"]) == {
+        "PlanDocumentFormat", "PlanImportCommand",
+    }
     for name, schema in before["components"]["schemas"].items():
+        if name in {"PlanDocumentFormat", "PlanImportCommand"}:
+            continue
         assert document["components"]["schemas"][name] == schema, name

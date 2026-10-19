@@ -48,5 +48,6 @@ function applyFilters() {
 .dataset-filters__fields { display: flex; align-items: end; flex-wrap: wrap; gap: var(--space-3); }
 .dataset-filters__fields label { display: grid; gap: var(--space-2); min-width: 0; flex: 1 1 12rem; }
 .dataset-filters__fields input, .dataset-filters__fields button { min-height: 2.75rem; box-sizing: border-box; max-width: 100%; padding: var(--space-2) var(--space-3); border: var(--border-technical); background: var(--color-surface-raised); color: var(--color-text-mineral); }
+.dataset-filters__fields input { min-width: 0; width: 100%; }
 .dataset-filters :focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
 </style>

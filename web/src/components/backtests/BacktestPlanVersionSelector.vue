@@ -57,7 +57,7 @@ function selectedValue(event: Event): string {
 }
 
 function optionLabel(version: PlanVersionSummary): string {
-  return `${version.symbol} · ${version.planId} · v${version.version} · ${version.status} · ${version.planHash.slice(0, 12)}`;
+  return `${version.symbol} · ${version.planId} · v${version.version} · ${version.canActivate ? "已审核" : version.status} · ${version.planHash.slice(0, 12)}`;
 }
 </script>
 
@@ -72,7 +72,7 @@ function optionLabel(version: PlanVersionSummary): string {
       :value="selectedId"
       @change="emit('select', selectedValue($event))"
     >
-      <option value="">请选择后端允许用于回测的计划版本</option>
+      <option value="">请选择已审核计划版本</option>
       <option
         v-if="selectedOutsidePage && selectedVersion !== null"
         :value="selectedVersion.id"
@@ -84,7 +84,7 @@ function optionLabel(version: PlanVersionSummary): string {
       </option>
     </select>
     <p id="plan-version-id-help" class="plan-version-selector__help">
-      仅列出后端判定可用于回测（canActivate=true）的真实不可变版本；计划无需已经启用。
+      仅列出已完成审核的计划版本；计划无需已经启用。
       提交时冻结所选版本，之后保存新版本不会改变旧回测。
     </p>
     <p
@@ -96,7 +96,7 @@ function optionLabel(version: PlanVersionSummary): string {
     >
       <template v-if="state === 'LOADING'">正在加载计划版本</template>
       <template v-else-if="state === 'FAILED'">{{ error }}</template>
-      <template v-else-if="state === 'EMPTY'">暂无后端允许用于回测的计划版本，请先保存并完成审核。</template>
+      <template v-else-if="state === 'EMPTY'">暂无已审核计划版本，请先到计划工作台保存并完成审核。</template>
       <template v-else-if="page !== null">共 {{ page.total }} 个可用版本</template>
       <template v-else>等待加载计划版本</template>
     </p>

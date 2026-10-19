@@ -112,6 +112,14 @@ class PreparationService:
     async def get(self, preparation_id: str) -> PreparationRecord | None:
         return await self._metadata.read(self._store.get, preparation_id)
 
+    async def selection(self, operation, *args):
+        from trade_plan_monitor.backtest.workbench_selection import WorkbenchSelectionStore
+
+        selections = WorkbenchSelectionStore(self._store)
+        method = getattr(selections, operation)
+        runner = self._metadata.run if operation == "save" else self._metadata.read
+        return await runner(method, *args)
+
     async def list_reviewed(self, *, offset=0, limit=20):
         from trade_plan_monitor.backtest.plan_library import list_reviewed_plans
         return await self._metadata.read(

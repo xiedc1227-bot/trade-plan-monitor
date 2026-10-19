@@ -446,6 +446,24 @@ class ScheduledPreparedBacktestRunCommand(PreparedBacktestRunCommand):
     schema_version: Literal["prepared-loop-plan-v2"]
 
 
+class WorkbenchBacktestRunCommand(_BacktestApiInput):
+    schema_version: Literal["workbench-loop-selection-v1"]
+    selection_id: PreparedIdentifier
+    selection_hash: Sha256Hex
+    response: BacktestLoopResponseInput
+    costs: BacktestLoopCostsInput
+    end_date: ApiDate | None = None
+
+
+class WorkbenchBacktestDataView(_BacktestApiInput):
+    selection_id: PreparedIdentifier
+    selection_hash: Sha256Hex
+    end_date: ApiDate
+    ready: bool
+    sync_scope: BacktestDatasetScopeInput | None
+    blockers: Annotated[tuple[str, ...], Field(max_length=100)]
+
+
 class BacktestRunCommand(_BacktestApiInput):
     """Canonical public request for one deterministic offline replay."""
 
@@ -2571,3 +2589,18 @@ __all__ = [
     "Sha256Hex",
     "ShanghaiDatetime",
 ]
+
+
+class WorkbenchLoopProvenanceView(_BacktestApiInput):
+    selection_id: PreparedIdentifier
+    selection_hash: Sha256Hex
+    plan_version_id: Rfc4122Uuid
+    review_id: Rfc4122Uuid
+    review_revision: PositiveJavaScriptSafeInteger
+    confirmed_at: ShanghaiDatetime
+    input_hash: Sha256Hex
+
+
+class WorkbenchBacktestRunView(BacktestLoopRunView):
+    schema_version: Literal["monitor-loop-result-workbench-v1"] = "monitor-loop-result-workbench-v1"
+    provenance: WorkbenchLoopProvenanceView

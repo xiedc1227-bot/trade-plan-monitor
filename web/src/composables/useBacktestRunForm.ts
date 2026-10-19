@@ -1,3 +1,4 @@
+import type { WorkbenchSelectionView, WorkbenchBacktestRunCommand } from "../api/generated";
 import { onBeforeUnmount, onMounted, readonly, shallowRef, watch, type DeepReadonly } from "vue";
 
 import type {
@@ -88,7 +89,7 @@ export interface BacktestRunDraft {
 }
 
 export type BacktestRunFormErrors = Readonly<Record<string, string>>;
-export type PreparedRunSnapshot = PreparationFrozenView | DeepReadonly<PreparationFrozenView> | CollectionPreparationFrozenView | DeepReadonly<CollectionPreparationFrozenView>;
+export type PreparedRunSnapshot = WorkbenchSelectionView | DeepReadonly<WorkbenchSelectionView> | PreparationFrozenView | DeepReadonly<PreparationFrozenView> | CollectionPreparationFrozenView | DeepReadonly<CollectionPreparationFrozenView>;
 
 export interface UseBacktestRunFormOptions {
   readonly prepared?: () => PreparedRunSnapshot | null;
@@ -99,7 +100,7 @@ export interface UseBacktestRunFormOptions {
 }
 
 interface SubmissionIntent {
-  readonly command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand;
+  readonly command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand;
   readonly key: string;
 }
 
@@ -457,7 +458,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     });
   }
 
-  function validatePreparedDraft(): PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | null {
+  function validatePreparedDraft(): PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand | null {
     const prepared = options.prepared?.() ?? null;
     const current = draft.value;
     const nextErrors: Record<string, string> = {};
@@ -484,7 +485,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     }
     return deepFreeze({
       ...("schemaVersion" in prepared && prepared.schemaVersion === "prepared-loop-plan-v2" ? { schemaVersion: "prepared-loop-plan-v2" as const } : {}),
-      preparationId: prepared.preparationId, manifestHash: prepared.manifestHash,
+      ...("selectionId" in prepared ? { schemaVersion: "workbench-loop-selection-v1" as const, selectionId: prepared.selectionId, selectionHash: prepared.selectionHash } : { preparationId: prepared.preparationId, manifestHash: prepared.manifestHash }),
       response: { mode: current.responseMode, responseDelaySeconds },
       costs: { commissionRate: current.commissionRate, minimumCommissionFen,
         stampDutyRate: current.stampDutyRate, transferFeeRate: current.transferFeeRate,
@@ -501,7 +502,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     submissionErrorMessage.value = null;
     let receipt: BacktestJobReceipt;
     try {
-      if ("preparationId" in intent.command && dataReadyIntent !== intent) {
+      if (("preparationId" in intent.command || "selectionId" in intent.command) && dataReadyIntent !== intent) {
         await automaticData.prepare(intent.command);
         if (!mounted || controller.signal.aborted || submissionIntent !== intent) return;
         dataReadyIntent = intent;
@@ -526,7 +527,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
       } else {
         submissionIntent = null;
         submissionState.value = "FAILED";
-        submissionErrorMessage.value = "preparationId" in intent.command && error instanceof Error && !(error instanceof ApiClientError)
+        submissionErrorMessage.value = ("preparationId" in intent.command || "selectionId" in intent.command) && error instanceof Error && !(error instanceof ApiClientError)
           ? error.message : "回测提交未被服务端接受，请检查输入后重试";
       }
       return;

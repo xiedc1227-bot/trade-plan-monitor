@@ -1,3 +1,4 @@
+import type { WorkbenchBacktestRunView } from "./generated";
 import type { BacktestLoopRunView, BacktestLoopRunSummaryView, BacktestLoopEventView, BacktestLoopFillView, BacktestScheduledRunView, BacktestScheduledRunSummaryView, BacktestScheduledEventView } from "./generated";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
 import { validPlanDiagnostics } from "./planDiagnostics";
@@ -104,7 +105,7 @@ function receipt(v: unknown): boolean {
 const summaryKeys = ["availability", "completedAt", "datasetHash", "eventEnd", "eventStart", "fillCount", "metrics", "pinned", "planHash",
   "planVersionId", "reportHash", "revision", "runId", "schemaVersion", "status", "symbol"];
 function summary(v: Record<string, unknown>): boolean {
-  return ["monitor-loop-result-v1", "monitor-loop-result-v2"].includes(String(v.schemaVersion)) && [v.runId, v.reportHash, v.datasetHash, v.planHash].every(hash) &&
+  return ["monitor-loop-result-v1", "monitor-loop-result-v2", "monitor-loop-result-workbench-v1"].includes(String(v.schemaVersion)) && [v.runId, v.reportHash, v.datasetHash, v.planHash].every(hash) &&
     v.planVersionId === null && v.status === "COMPLETED" && symbol(v.symbol) &&
     isCalendarDate(v.eventStart) && isCalendarDate(v.eventEnd) && v.eventStart <= v.eventEnd && isShanghaiDateTime(v.completedAt) &&
     integer(v.fillCount) && integer(v.revision) && typeof v.pinned === "boolean" && metrics(v.metrics) && record(v.availability) &&
@@ -114,15 +115,20 @@ function summary(v: Record<string, unknown>): boolean {
 export function validLoopRunSummary(v: unknown): v is BacktestLoopRunSummaryView | BacktestScheduledRunSummaryView {
   return record(v) && keys(v, summaryKeys) && bounded(v) && summary(v) && bytes(v, 32 * 1024);
 }
-export function validLoopRun(v: unknown): v is BacktestLoopRunView {
-  if (!record(v) || v.schemaVersion !== "monitor-loop-result-v1" || !keys(v, [...summaryKeys, "costs", "frozenPlan", "openingAccount", "provenance", "report", "response"], ["planDiagnostics"]) ||
+export function validLoopRun(v: unknown): v is BacktestLoopRunView | WorkbenchBacktestRunView {
+  if (!record(v) || !["monitor-loop-result-v1", "monitor-loop-result-workbench-v1"].includes(String(v.schemaVersion)) || !keys(v, [...summaryKeys, "costs", "frozenPlan", "openingAccount", "provenance", "report", "response"], ["planDiagnostics"]) ||
       !bounded(v) || !bytes(v, 4 * 1024 * 1024) || !summary(v) || !opening(v.openingAccount) || !costs(v.costs) ||
       !record(v.provenance) || !record(v.report) || !record(v.frozenPlan) || !record(v.response)) return false;
   const provenance = v.provenance, report = v.report, plan = v.frozenPlan, response = v.response;
   if (!validPlanDiagnostics(v.planDiagnostics, [String(plan.version_id)], Number(v.fillCount))) return false;
-  if (!keys(provenance, ["candidateHash", "candidateRevision", "inputHash", "manifestHash", "preparationId", "sourceRevision"]) ||
-      ![provenance.candidateHash, provenance.inputHash, provenance.manifestHash].every(hash) || !identifier(provenance.preparationId) ||
-      !integer(provenance.candidateRevision, 1) || !integer(provenance.sourceRevision, 1) ||
+  const validProvenance = v.schemaVersion === "monitor-loop-result-workbench-v1"
+    ? keys(provenance, ["selectionId", "selectionHash", "planVersionId", "reviewId", "reviewRevision", "confirmedAt", "inputHash"]) &&
+      identifier(provenance.selectionId) && identifier(provenance.reviewId) && provenance.planVersionId === plan.version_id &&
+      hash(provenance.selectionHash) && hash(provenance.inputHash) && integer(provenance.reviewRevision, 1) && isShanghaiDateTime(provenance.confirmedAt)
+    : keys(provenance, ["candidateHash", "candidateRevision", "inputHash", "manifestHash", "preparationId", "sourceRevision"]) &&
+      [provenance.candidateHash, provenance.inputHash, provenance.manifestHash].every(hash) && identifier(provenance.preparationId) &&
+      integer(provenance.candidateRevision, 1) && integer(provenance.sourceRevision, 1);
+  if (!validProvenance ||
       !keys(plan, ["available_at", "evidence_hash", "information_cutoff", "plan_hash", "review", "snapshot", "source_hashes", "version_id"], ["authored_at", "authored_date"]) ||
       plan.plan_hash !== v.planHash || !hash(plan.evidence_hash) || !identifier(plan.version_id) ||
       !isShanghaiDateTime(plan.available_at) || !isShanghaiDateTime(plan.information_cutoff) || !Array.isArray(plan.source_hashes) || !plan.source_hashes.every(hash) ||

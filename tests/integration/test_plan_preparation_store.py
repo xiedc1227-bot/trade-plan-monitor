@@ -49,7 +49,7 @@ def test_source_and_creation_receipt_survive_restart(tmp_path):
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute(
             "SELECT domain, schema_version FROM backtest_preparation_metadata"
-        ).fetchone() == ("backtest-preparation-v1", 1)
+        ).fetchone() == ("backtest-preparation-v1", 2)
 
 
 @pytest.mark.parametrize("count", [0, 2])
@@ -411,7 +411,7 @@ def test_unsupported_or_mixed_preparation_tag_is_not_adopted(tmp_path, mutation)
     with closing(sqlite3.connect(path)) as connection:
         statements = {
             "domain": "UPDATE backtest_preparation_metadata SET domain = 'different-domain'",
-            "version": "UPDATE backtest_preparation_metadata SET schema_version = 2",
+            "version": "UPDATE backtest_preparation_metadata SET schema_version = 999",
             "missing-tag": "DROP TABLE backtest_preparation_metadata",
             "mixed-domain": "CREATE TABLE active_plan (id TEXT)",
         }

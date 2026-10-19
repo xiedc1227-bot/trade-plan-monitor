@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, type DeepReadonly } from "vue";
-import type { BacktestLoopRunView, BacktestScheduledRunView } from "../../api/generated";
+import type { BacktestLoopRunView, BacktestScheduledRunView, WorkbenchBacktestRunView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 import { choiceLabels, fieldLabels } from "../plans/planSchema";
 import PlanExecutionDiagnostics from "./PlanExecutionDiagnostics.vue";
 import ResultRuleChanges from "./ResultRuleChanges.vue";
 
-const props = defineProps<{ run: DeepReadonly<BacktestLoopRunView | BacktestScheduledRunView> }>();
+const props = defineProps<{ run: DeepReadonly<BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView> }>();
 const money = (value: number | null) => value === null ? "不可用 / 未知" : `${formatFenAsYuan(String(value))} 元`;
 const ratio = (value: string | null) => value === null ? "不可用" : value;
 function rows(value: unknown, path = ""): { path: string; value: string }[] {
@@ -19,8 +19,10 @@ function label(path: string): string {
   return path.split(".").map(part => { const key = part.replace(/\[\d+\]/g, ""); return (fieldLabels[key] ?? key) + part.slice(key.length); }).join(" / ");
 }
 const legacy = computed(() => props.run.schemaVersion === "monitor-loop-result-v1" ? props.run : null);
+const workbench = computed(() => props.run.schemaVersion === "monitor-loop-result-workbench-v1" ? props.run : null);
+const single = computed(() => legacy.value ?? workbench.value);
 const scheduled = computed(() => props.run.schemaVersion === "monitor-loop-result-v2" ? props.run : null);
-const planRows = computed(() => legacy.value ? rows(legacy.value.frozenPlan.snapshot) : []);
+const planRows = computed(() => single.value ? rows(single.value.frozenPlan.snapshot) : []);
 const financialMetrics = computed(() => [
   ["期初权益", money(props.run.metrics.initial_equity_fen)], ["期末权益", money(props.run.metrics.final_equity_fen)],
   ["权益变化", money(props.run.metrics.equity_change_fen)], ["成本口径损益", money(props.run.metrics.cost_pnl_fen)],
@@ -37,7 +39,7 @@ const financialMetrics = computed(() => [
     <p>预置计划未声明历史可用时间时，按生效交易日开盘起执行；该执行假设不代表计划在历史上已发布。</p>
     <p v-if="run.openingAccount.cash.kind === 'POSITION_LIMIT_ONLY'">本次回测不限制现金，买入仍受规则授权及最大持仓限制。记录成交盈亏和费用，不计算本金收益率或净值回撤。</p>
     <dl>
-      <dt>计划准备记录</dt><dd>{{ run.provenance.preparationId }}</dd>
+      <template v-if="workbench"><dt>工作台计划版本</dt><dd>{{ workbench.provenance.planVersionId }}</dd><dt>研究信息确认时间</dt><dd>{{ formatDisplayDateTime(workbench.provenance.confirmedAt) }}</dd></template><template v-else><dt>计划准备记录</dt><dd>{{ "preparationId" in run.provenance ? run.provenance.preparationId : "" }}</dd></template>
       <template v-if="legacy"><dt>原文 / 提取修订</dt><dd>{{ legacy.provenance.sourceRevision }} / {{ legacy.provenance.candidateRevision }}</dd>
       <dt>计划可执行起点</dt><dd>{{ formatDisplayDateTime(legacy.frozenPlan.available_at) }}</dd></template>
       <dt>期初账户快照</dt><dd>{{ formatDisplayDateTime(run.openingAccount.snapshot_at) }}</dd>
@@ -68,12 +70,12 @@ const financialMetrics = computed(() => [
         <p v-if="version.accountContext">持仓陈述：核心 {{ version.accountContext.core_qty ?? '未知' }} 股 / 机动 {{ version.accountContext.tactical_qty ?? '未知' }} 股 · {{ version.accountContext.evidence }}</p>
       </li></ol>
     </section>
-    <details v-if="legacy"><summary>已审核的完整计划</summary>
-      <p>审核时间 {{ formatDisplayDateTime(legacy.frozenPlan.review.reviewed_at) }} · {{ legacy.frozenPlan.review.evidence }}</p>
+    <details v-if="single"><summary>已审核的完整计划</summary>
+      <p>审核时间 {{ formatDisplayDateTime(single.frozenPlan.review.reviewed_at) }} · {{ single.frozenPlan.review.evidence }}</p>
       <dl><template v-for="row in planRows" :key="row.path"><dt>{{ label(row.path) }}</dt><dd>{{ row.value }}</dd></template></dl>
     </details>
     <details><summary>冻结来源与核对标识</summary>
-      <dl><dt>计划</dt><dd>{{ run.planHash }}</dd><dt>准备清单</dt><dd>{{ run.provenance.manifestHash }}</dd>
+      <dl><dt>计划</dt><dd>{{ run.planHash }}</dd><dt>准备清单</dt><dd>{{ "selectionHash" in run.provenance ? run.provenance.selectionHash : run.provenance.manifestHash }}</dd>
         <dt>输入</dt><dd>{{ run.provenance.inputHash }}</dd><dt>数据集</dt><dd>{{ run.datasetHash }}</dd>
         <dt>报告</dt><dd>{{ run.reportHash }}</dd><template v-if="legacy"><dt>原文证据</dt><dd v-for="source in legacy.frozenPlan.source_hashes" :key="source">{{ source }}</dd></template>
         <template v-if="scheduled"><template v-for="source in scheduled.provenance.sources" :key="source.sourceId"><dt>{{ source.sourceId }} 原文 / 提取 / 证据</dt><dd>{{ source.sourceHash }}<br>{{ source.candidateHash }}<br>{{ source.evidenceHash }}</dd></template></template></dl>

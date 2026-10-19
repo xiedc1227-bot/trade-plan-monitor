@@ -217,6 +217,17 @@ test("start automatically fills missing history with the real worker and then re
 
 test("four complete plans produce one continuous account and one run in real Chrome", async ({ page }, testInfo) => {
   test.setTimeout(600000); await start("continuity-retry");
+  // This regression deliberately retains the historical KNOWN funding contract.
+  // New ordinary preparations default to POSITION_LIMIT_ONLY; no production default changes here.
+  await page.route(`${url}/api/v1/backtest-preparations/*/reviews`, async route => {
+    const body = route.request().postDataJSON();
+    if (body.kind === "CHAIN_REVIEW" && body.review.items.length === 1) {
+      body.review.account = { snapshot_at: "2026-08-20T09:00:00+08:00", inventory_known: true,
+        cash: { kind: "KNOWN", balance_fen: 1000000 }, lots: [], opening_mark: null,
+        evidence: "Historical funded fixture: original explicitly states 10000 yuan and zero holdings." };
+      await route.continue({ postData: JSON.stringify(body) });
+    } else await route.continue();
+  });
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   const consoleErrors: { text: string; url: string }[] = [];
   const revisionConflicts = new Set<string>();

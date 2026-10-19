@@ -1,3 +1,4 @@
+import type { WorkbenchBacktestRunCommand, WorkbenchBacktestDataView, WorkbenchBacktestRunView } from "./generated";
 import { isResearchDetail, isResearchInput } from "./researchValues";
 import { validLoopRun, validLoopRunSummary, validLoopEvent, validLoopFill, validScheduledRun, validScheduledEvent } from "./monitorLoopValues";
 import type { ResearchMetricsView, ResearchEquityView } from "./generated";
@@ -95,7 +96,7 @@ export type BacktestMarketIndexSeriesQuery = NonNullable<
 export interface BacktestRequestOptions {
   readonly signal?: AbortSignal;
 }
-export type BacktestRunResult = BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView;
+export type BacktestRunResult = BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView;
 
 export interface BacktestMutationResponse<T> {
   readonly body: T;
@@ -106,9 +107,9 @@ export interface BacktestMutationResponse<T> {
 
 export interface BacktestApi {
   checkPreparedData(
-    command: PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
+    command: PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand,
     options?: BacktestRequestOptions,
-  ): Promise<import("./generated").PreparedBacktestDataView>;
+  ): Promise<import("./generated").PreparedBacktestDataView | WorkbenchBacktestDataView>;
   cancelJob(
     command: BacktestJobCancellationCommand,
     idempotencyKey: string,
@@ -163,7 +164,7 @@ export interface BacktestApi {
     options?: BacktestRequestOptions,
   ): Promise<BacktestMutationResponse<BacktestRunResult>>;
   submitRun(
-    command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
+    command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand,
     idempotencyKey: string,
     options?: BacktestRequestOptions,
   ): Promise<BacktestMutationResponse<BacktestJobReceipt>>;
@@ -958,25 +959,27 @@ export function createBacktestApi(
       });
     },
 
-    async checkPreparedData(command: PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
+    async checkPreparedData(command: PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand,
       options?: BacktestRequestOptions) {
       const normalized = normalizeRunCommand(command);
-      if (!("preparationId" in normalized)) throw invalidRequest();
-      const search = new URLSearchParams({ preparationId: normalized.preparationId,
-        manifestHash: normalized.manifestHash });
+      if (!("preparationId" in normalized) && !("selectionId" in normalized)) throw invalidRequest();
+      const identity = "selectionId" in normalized
+        ? { selectionId: normalized.selectionId, selectionHash: normalized.selectionHash }
+        : { preparationId: normalized.preparationId, manifestHash: normalized.manifestHash };
+      const search = new URLSearchParams(identity);
       if (normalized.endDate) search.set("endDate", normalized.endDate);
       const { body, status } = await requestJson(fetchImplementation,
         withQuery("/api/v1/backtest-run-data", search), requestInit("GET", options));
       if (status !== 200 || !isRecord(body) ||
-          !hasExactKeys(body, ["preparationId", "manifestHash", "endDate", "ready", "syncScope", "blockers"]) ||
-          body.preparationId !== normalized.preparationId || body.manifestHash !== normalized.manifestHash ||
+          !hasExactKeys(body, [...Object.keys(identity), "endDate", "ready", "syncScope", "blockers"]) ||
+          !Object.entries(identity).every(([key, value]) => body[key] === value) ||
           !isCalendarDate(body.endDate) || normalized.endDate !== undefined && body.endDate !== normalized.endDate ||
           typeof body.ready !== "boolean" || !Array.isArray(body.blockers) || body.blockers.length > 100 ||
           !body.blockers.every(value => typeof value === "string") || body.ready !== (body.blockers.length === 0) ||
           body.ready && body.syncScope !== null || body.syncScope !== null && !isDatasetScope(body.syncScope)) {
         throw invalidResponse(status);
       }
-      return body as import("./generated").PreparedBacktestDataView;
+      return body as import("./generated").PreparedBacktestDataView | WorkbenchBacktestDataView;
     },
 
     async listDatasets(
@@ -1171,7 +1174,7 @@ export function createBacktestApi(
     },
 
     async submitRun(
-      command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
+      command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand,
       idempotencyKey: string,
       options?: BacktestRequestOptions,
     ) {
@@ -2083,7 +2086,7 @@ function datasetMatchesFilters(
 
 function isRun(value: unknown): value is BacktestRunResult {
   if (isRecord(value) && value.schemaVersion === "monitor-loop-result-v2") return validScheduledRun(value);
-  if (isRecord(value) && value.schemaVersion === "monitor-loop-result-v1") return validLoopRun(value);
+  if (isRecord(value) && ["monitor-loop-result-v1", "monitor-loop-result-workbench-v1"].includes(String(value.schemaVersion))) return validLoopRun(value);
   if (!isRecord(value) || !hasExactKeys(value, runViewKeys)) return false;
   if (
     !isPositiveFenText(value.initialCashFen) ||
@@ -3004,8 +3007,8 @@ function marketIndexSeriesSearch(query: BacktestMarketIndexSeriesQuery): URLSear
   return search;
 }
 
-function normalizeRunCommand(value: unknown): BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand {
-  if (isRecord(value) && "preparationId" in value) return normalizePreparedRunCommand(value);
+function normalizeRunCommand(value: unknown): BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand {
+  if (isRecord(value) && ("preparationId" in value || "selectionId" in value)) return normalizePreparedRunCommand(value);
   if (
     !isRecord(value) ||
     !hasExactKeys(value, value.researchInput === undefined ? runCommandKeys.filter((key) => key !== "researchInput") : runCommandKeys) ||
@@ -3046,14 +3049,15 @@ function normalizeRunCommand(value: unknown): BacktestRunCommand | PreparedBackt
   };
 }
 
-function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand {
-  const keys = ["preparationId", "manifestHash", "response", "costs"];
+function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand {
+  const workbench = value.schemaVersion === "workbench-loop-selection-v1";
+  const keys = workbench ? ["schemaVersion", "selectionId", "selectionHash", "response", "costs"] : ["preparationId", "manifestHash", "response", "costs"];
   if (value.schemaVersion === "prepared-loop-plan-v2") keys.push("schemaVersion");
   if (value.endDate !== undefined) keys.push("endDate");
   const response = value.response;
   const costs = value.costs;
   const responseDelaySeconds = isRecord(response) ? response.responseDelaySeconds ?? 0 : null;
-  if (!hasExactKeys(value, keys) || !isJobId(value.preparationId) || !isSha256(value.manifestHash) ||
+  if (!hasExactKeys(value, keys) || !(workbench ? isJobId(value.selectionId) && isSha256(value.selectionHash) : isJobId(value.preparationId) && isSha256(value.manifestHash)) ||
       value.endDate !== undefined && !isCalendarDate(value.endDate) ||
       !isRecord(response) || !hasExactKeys(response, response.responseDelaySeconds === undefined
         ? ["mode"] : ["mode", "responseDelaySeconds"]) ||
@@ -3070,8 +3074,9 @@ function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBa
   }
   return {
     ...(value.schemaVersion === "prepared-loop-plan-v2" ? { schemaVersion: "prepared-loop-plan-v2" as const } : {}),
-    preparationId: value.preparationId,
-    manifestHash: value.manifestHash,
+    ...(workbench ? { schemaVersion: "workbench-loop-selection-v1" as const,
+      selectionId: value.selectionId as string, selectionHash: value.selectionHash as string }
+      : { preparationId: value.preparationId as string, manifestHash: value.manifestHash as string }),
     response: { mode: response.mode, responseDelaySeconds },
     costs: { commissionRate: costs.commissionRate, minimumCommissionFen: costs.minimumCommissionFen,
       stampDutyRate: costs.stampDutyRate, transferFeeRate: costs.transferFeeRate,

@@ -17,6 +17,7 @@ from uuid import UUID
 
 from anyio import sleep
 from pydantic import BaseModel, ValidationError
+from sqlalchemy.exc import OperationalError as SQLAlchemyOperationalError
 
 from trade_plan_monitor.backtest.application import (
     create_backtest_job_operations,
@@ -67,6 +68,7 @@ from trade_plan_monitor.backtest.loop_input import (
     LoopResponsePolicy,
     MonitorLoopInput,
     ScheduledLoopInput,
+    WorkbenchLoopInput,
 )
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
@@ -113,6 +115,10 @@ from trade_plan_monitor.backtest.time import (
     SHANGHAI,
     format_shanghai_datetime,
     parse_shanghai_datetime,
+)
+from trade_plan_monitor.backtest.workbench_selection import (
+    WorkbenchPlanSelection,
+    WorkbenchSelectionView,
 )
 from trade_plan_monitor.decision.models import (
     ConditionEvidence,
@@ -176,6 +182,9 @@ from trade_plan_monitor.web.backtest_schemas import (
     PreparedBacktestDataView,
     PreparedBacktestRunCommand,
     ScheduledPreparedBacktestRunCommand,
+    WorkbenchBacktestDataView,
+    WorkbenchBacktestRunCommand,
+    WorkbenchBacktestRunView,
 )
 from trade_plan_monitor.web.cursor_keys import load_or_create_cursor_key
 from trade_plan_monitor.web.errors import ApiError
@@ -476,6 +485,7 @@ def create_backtest_composition(
         result_cursor_signer=domain_signer,
         job_cursor_signer=BacktestApiCursorSigner(key),
         prepared_plan_reader=read_prepared,
+        preparation_service_reader=lambda: composition.ensure_preparations(),
     )
     composition = BacktestComposition(
         read_service=service,
@@ -502,6 +512,7 @@ class _ProductionBacktestService:
         result_cursor_signer: HmacCursorSigner,
         job_cursor_signer: BacktestApiCursorSigner,
         prepared_plan_reader: Callable[[str], Awaitable[FrozenPreparedPlan]] | None = None,
+        preparation_service_reader=None,
     ) -> None:
         self._plan_snapshot_reader = plan_snapshot_reader
         self._market_store = market_store
@@ -513,6 +524,7 @@ class _ProductionBacktestService:
         self._result_cursor_signer = result_cursor_signer
         self._job_cursor_signer = job_cursor_signer
         self._prepared_plan_reader = prepared_plan_reader
+        self._preparation_service_reader = preparation_service_reader
         self._metadata_thread = BacktestMetadataThread()
         self._reservation_thread = BacktestMetadataThread()
         self._result_thread = BacktestResultReadThread()
@@ -561,6 +573,68 @@ class _ProductionBacktestService:
         return await self._call_sync(
             partial(self._result_thread.read_shared, key), function, *args, **kwargs,
         )
+
+    async def _selection_operation(self, operation, *args):
+        if self._preparation_service_reader is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        try:
+            service = await self._preparation_service_reader()
+            return await service.selection(operation, *args)
+        except PreparationConflictError:
+            raise ApiError(ApiErrorCode.CONFLICT) from None
+        except BacktestServiceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+        except sqlite3.OperationalError as error:
+            if getattr(error, "sqlite_errorcode", None) not in {
+                sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED,
+            }:
+                raise
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+        except ValueError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+
+    async def create_plan_selection(self, *, command, context):
+        previous = await self._selection_operation("replay", command, context.idempotency_key)
+        if previous is not None:
+            return WorkbenchSelectionView.project(previous)
+        reader = getattr(self._plan_snapshot_reader, "get_reviewed_backtest_plan", None)
+        if reader is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        from trade_plan_monitor.web.plan_service import PlanSaveBlockedError
+
+        try:
+            reviewed = await reader(version_id=str(command.plan.plan_version_id))
+        except PlanSaveBlockedError:
+            raise ApiError(ApiErrorCode.CONFLICT) from None
+        except (sqlite3.OperationalError, SQLAlchemyOperationalError) as error:
+            original = error.orig if isinstance(error, SQLAlchemyOperationalError) else error
+            if getattr(original, "sqlite_errorcode", None) not in {
+                sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED,
+            }:
+                raise
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+        if reviewed is None:
+            raise ApiError(ApiErrorCode.NOT_FOUND)
+        selected = await self._selection_operation(
+            "save", command, reviewed, context.idempotency_key
+        )
+        return WorkbenchSelectionView.project(selected)
+
+    async def get_plan_selection(self, *, selection_id):
+        value = await self._selection_operation("get", selection_id)
+        if value is None:
+            raise ApiError(ApiErrorCode.NOT_FOUND)
+        return WorkbenchSelectionView.project(value)
+
+    async def _read_selection(self, selection_id, selection_hash):
+        value = (await self.get_plan_selection(selection_id=selection_id)).frozen
+        if value.manifest_hash != selection_hash:
+            raise ApiError(ApiErrorCode.CONFLICT)
+        return value
+
+    async def check_selection_data(self, *, selection_id, selection_hash, end_date=None):
+        selected = await self._read_selection(selection_id, selection_hash)
+        return await self._read_sync(self._check_prepared_data, selected, end_date)
 
     async def submit_data_sync(
         self,
@@ -623,7 +697,9 @@ class _ProductionBacktestService:
                     context.idempotency_key,
                 )
                 if isinstance(claim, BacktestJobSubmissionBinding):
-                    if isinstance(command, PreparedBacktestRunCommand):
+                    if isinstance(
+                        command, (PreparedBacktestRunCommand, WorkbenchBacktestRunCommand)
+                    ):
                         _verify_prepared_submission_binding(claim)
                         return _run_submission_outcome(claim.receipt)
                     if (
@@ -645,7 +721,7 @@ class _ProductionBacktestService:
                 await sleep(_RUN_CLAIM_POLL_SECONDS)
             else:
                 raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
-            if isinstance(command, PreparedBacktestRunCommand):
+            if isinstance(command, (PreparedBacktestRunCommand, WorkbenchBacktestRunCommand)):
                 receipt = await self._submit_prepared_run(command, reservation, reservation_lost)
                 reservation = None
                 return _run_submission_outcome(receipt)
@@ -796,8 +872,18 @@ class _ProductionBacktestService:
                     "historicalProfile": scope.historical_profile.value,
                     "adjustmentPolicy": scope.adjustment_policy,
                 })
-        return PreparedBacktestDataView(
-            preparationId=prepared.preparation_id, manifestHash=prepared.manifest_hash,
+        view = (
+            WorkbenchBacktestDataView
+            if isinstance(prepared, WorkbenchPlanSelection)
+            else PreparedBacktestDataView
+        )
+        identity = (
+            {"selectionId": prepared.selection_id, "selectionHash": prepared.manifest_hash}
+            if isinstance(prepared, WorkbenchPlanSelection)
+            else {"preparationId": prepared.preparation_id, "manifestHash": prepared.manifest_hash}
+        )
+        return view(
+            **identity,
             endDate=str(request.scope.end), ready=result.ready or cached is not None,
             syncScope=sync_scope, blockers=() if cached is not None else result.blockers,
         )
@@ -808,6 +894,26 @@ class _ProductionBacktestService:
         reservation: BacktestRunSubmissionReservation,
         lost: asyncio.Event,
     ) -> DomainBacktestJobReceipt:
+        if isinstance(command, WorkbenchBacktestRunCommand):
+            prepared = await self._read_selection(command.selection_id, command.selection_hash)
+        else:
+            prepared = await self._load_command_preparation(command)
+        try:
+            reference = await self._run_sync(
+                self._freeze_prepared_input, prepared, command, reservation
+            )
+        except ValueError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        if lost.is_set():
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        return await self._run_sync(
+            self._repository.finalize_run_submission,
+            MonitorLoopJobRequest(input_reference=reference),
+            reservation,
+            on_admitted=self._coordinator.authorize_new_job,
+        )
+
+    async def _load_command_preparation(self, command):
         if self._prepared_plan_reader is None:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
         try:
@@ -827,20 +933,7 @@ class _ProductionBacktestService:
             or prepared.manifest_hash != command.manifest_hash
         ):
             raise ApiError(ApiErrorCode.CONFLICT)
-        try:
-            reference = await self._run_sync(
-                self._freeze_prepared_input, prepared, command, reservation
-            )
-        except ValueError:
-            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
-        if lost.is_set():
-            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
-        return await self._run_sync(
-            self._repository.finalize_run_submission,
-            MonitorLoopJobRequest(input_reference=reference),
-            reservation,
-            on_admitted=self._coordinator.authorize_new_job,
-        )
+        return prepared
 
     def _freeze_prepared_input(
         self,
@@ -880,8 +973,11 @@ class _ProductionBacktestService:
                 **{name: getattr(cached.dataset, name) for name in cached.dataset.model_dump()
                    if name not in {"schema_version", "dataset_hash", "boundary"}},
             )
-        input_type = ScheduledLoopInput if scheduled else MonitorLoopInput
+        workbench = isinstance(prepared, WorkbenchPlanSelection)
+        input_type = (WorkbenchLoopInput if workbench else
+                      ScheduledLoopInput if scheduled else MonitorLoopInput)
         run_input = input_type(
+            **({"selection_hash": prepared.manifest_hash} if workbench else {}),
             schedule=prepared.schedule,
             initial_account=prepared.account,
             boundary=boundary,
@@ -1583,6 +1679,29 @@ class _ProductionBacktestService:
                             mode="json", exclude={"schedule", "schema_version"},
                         )
                         | {"report_schema_version": report.schema_version},
+                    }
+                )
+            if isinstance(prepared, WorkbenchPlanSelection):
+                ref = prepared.reviewed.reference
+                return WorkbenchBacktestRunView.model_validate(
+                    _run_summary_view(record).canonical_payload()
+                    | {
+                        "schemaVersion": "monitor-loop-result-workbench-v1",
+                        "provenance": {
+                            "selectionId": prepared.selection_id,
+                            "selectionHash": prepared.manifest_hash,
+                            "planVersionId": str(ref.plan_version_id),
+                            "reviewId": str(ref.review_id),
+                            "reviewRevision": ref.review_revision,
+                            "confirmedAt": format_shanghai_datetime(prepared.confirmed_at),
+                            "inputHash": run_input.input_hash,
+                        },
+                        "frozenPlan": prepared.version,
+                        "planDiagnostics": diagnostics,
+                        "openingAccount": stored.run_input.initial_account,
+                        "response": stored.run_input.response,
+                        "costs": stored.run_input.costs,
+                        "report": report,
                     }
                 )
             return BacktestLoopRunView.model_validate(

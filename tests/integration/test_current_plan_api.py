@@ -251,37 +251,15 @@ def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
 
 
 @pytest.mark.parametrize("format", ["JSON", "YAML"])
-def test_current_import_is_an_unresolved_review_candidate_and_cannot_bypass_review(
-    tmp_path, format
-):
+def test_plan_import_endpoint_is_removed_without_changing_saved_plans(tmp_path, format):
     plan = simple_plan()
     document = dump_plan_json(plan) if format == "JSON" else dump_plan_yaml(plan)
     with TestClient(make_app(tmp_path), base_url="http://127.0.0.1:8765") as client:
-        saved = post(
-            client,
-            "plan-imports",
-            {
-                "symbol": plan.symbol,
-                "format": format,
-                "document": document,
-                "expectedRevision": 0,
-            },
-        )
-        assert saved["sourceText"] == document
-        assert saved["status"] == "DRAFT" and not saved["canActivate"]
-        assert saved["dailyIssues"]
-        assert saved["reviewId"] is None
-        post(client, "plan-review-confirmations", review_payload(saved), expected=422)
-        post(
-            client,
-            "plan-activations",
-            {
-                "planVersionId": saved["id"],
-                "expectedRevision": 0,
-            },
-            expected=409,
-        )
-        assert not client.get("/api/v1/plan-activation-states/" + plan.symbol).json()["active"]
+        response = client.post("/api/v1/plan-imports", json={
+            "symbol": plan.symbol, "format": format, "document": document, "expectedRevision": 0,
+        }, headers={"Idempotency-Key": "removed-import"})
+        assert response.status_code == 404, response.text
+        assert client.get("/api/v1/plan-versions").json()["total"] == 0
 
 
 @pytest.mark.parametrize("schema", [1, 2, 3, 4])

@@ -46,7 +46,7 @@ const props = withDefaults(defineProps<Props>(), { preparedMode: false, prepared
 const emit = defineEmits<Emits>();
 const errorSummary = useTemplateRef<HTMLDivElement>("errorSummary");
 
-const preparedAccount = computed(() => props.prepared ? "account" in props.prepared ? props.prepared.account : props.prepared.frozen.account : null);
+const preparedAccount = computed(() => props.prepared ? "selectionId" in props.prepared ? props.prepared.frozen.context.initialAccount : "account" in props.prepared ? props.prepared.account : props.prepared.frozen.account : null);
 const preparedVersions = computed(() => props.prepared && "versions" in props.prepared ? props.prepared.versions : null);
 const preparedSymbol = computed(() => props.prepared && "frozen" in props.prepared ? props.prepared.frozen.version.snapshot.symbol : null);
 const fieldDefinitions = [
@@ -183,7 +183,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
             {{ lot.bucket }} · {{ lot.quantity }} 股；总成本 {{ lot.cost_basis_fen === null ? '未知' : `${formatFenAsYuan(String(lot.cost_basis_fen))} 元` }}；可卖 {{ lot.sellable_quantity ?? '未知' }} 股
           </li>
         </ul>
-        <p>计划和唯一期初账户由已审核原文冻结；提交一次，逐日沿用同一个账户。此处只设置回放响应、结束日期及费用。</p>
+        <p>计划规则与已确认期初账户已冻结；提交一次，逐日沿用同一个账户。此处设置回放响应、结束日期及费用。</p>
       </div>
       <p v-else role="status">请先完成当前计划的审核，之后才能提交回测。</p>
 

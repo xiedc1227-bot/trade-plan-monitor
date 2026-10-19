@@ -10,6 +10,10 @@ from typing import Annotated, Literal, Protocol, cast
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from pydantic import Field, ValidationError
 
+from trade_plan_monitor.backtest.workbench_selection import (
+    WorkbenchSelectionCommand,
+    WorkbenchSelectionView,
+)
 from trade_plan_monitor.web.backtest_schemas import (
     BacktestJobReceipt,
     BacktestLoopRunView,
@@ -21,6 +25,9 @@ from trade_plan_monitor.web.backtest_schemas import (
     PreparedBacktestDataView,
     PreparedBacktestRunCommand,
     ScheduledPreparedBacktestRunCommand,
+    WorkbenchBacktestDataView,
+    WorkbenchBacktestRunCommand,
+    WorkbenchBacktestRunView,
 )
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.result_rule_changes import BacktestRuleChangesView
@@ -127,6 +134,11 @@ class BacktestRunReadService(Protocol):
     async def check_prepared_data(self, *, preparation_id: str, manifest_hash: str,
                                   end_date: date | None) -> PreparedBacktestDataView: ...
 
+    async def get_plan_selection(self, *, selection_id: str) -> WorkbenchSelectionView: ...
+
+    async def check_selection_data(self, *, selection_id: str, selection_hash: str,
+                                   end_date: date | None) -> WorkbenchBacktestDataView: ...
+
     async def list_runs(
         self,
         *,
@@ -135,8 +147,14 @@ class BacktestRunReadService(Protocol):
         cursor: str | None,
     ) -> BacktestRunPage: ...
 
-    async def get_run(self, *, run_id: str) -> (
-        BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | None
+    async def get_run(
+        self, *, run_id: str
+    ) -> (
+        BacktestRunView
+        | BacktestLoopRunView
+        | BacktestScheduledRunView
+        | WorkbenchBacktestRunView
+        | None
     ): ...
 
     async def get_rule_changes(self, *, run_id: str, source_id: str) -> (
@@ -147,11 +165,15 @@ class BacktestRunReadService(Protocol):
 class BacktestRunOperationService(Protocol):
     """Atomic submission, idempotency, and pin boundary owned by the application."""
 
+    async def create_plan_selection(
+        self, *, command: WorkbenchSelectionCommand, context: MutationContext,
+    ) -> WorkbenchSelectionView: ...
+
     async def submit_run(
         self,
         *,
         command: (BacktestRunCommand | PreparedBacktestRunCommand
-                  | ScheduledPreparedBacktestRunCommand),
+                  | ScheduledPreparedBacktestRunCommand | WorkbenchBacktestRunCommand),
         context: MutationContext,
     ) -> BacktestRunSubmissionOutcome: ...
 
@@ -161,7 +183,9 @@ class BacktestRunOperationService(Protocol):
         run_id: str,
         command: BacktestRunPinCommand,
         context: MutationContext,
-    ) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView: ...
+    ) -> (
+        BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView
+    ): ...
 
 
 def get_backtest_run_read_service(request: Request) -> BacktestRunReadService:
@@ -203,21 +227,85 @@ RunCollectionQueryDependency = Annotated[
 ]
 
 
-@router.get("/backtest-run-data", response_model=PreparedBacktestDataView)
+@router.post("/backtest-plan-selections", response_model=WorkbenchSelectionView, status_code=201)
+async def create_plan_selection(
+    command: WorkbenchSelectionCommand, context: MutationContextDependency,
+    service: BacktestRunOperationServiceDependency, response: Response,
+):
+    response.headers["Cache-Control"] = "no-store"
+    return await service.create_plan_selection(command=command, context=context)
+
+
+@router.get("/backtest-plan-selections/{selection_id}", response_model=WorkbenchSelectionView)
+async def get_plan_selection(
+    selection_id: Annotated[str, Path(min_length=1, max_length=128,
+                                     pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")],
+    service: BacktestRunReadServiceDependency, response: Response,
+):
+    response.headers["Cache-Control"] = "no-store"
+    return await service.get_plan_selection(selection_id=selection_id)
+
+
+@router.get(
+    "/backtest-run-data", response_model=PreparedBacktestDataView | WorkbenchBacktestDataView
+)
 async def check_prepared_backtest_data(
     request: Request,
     response: Response,
     service: BacktestRunReadServiceDependency,
-    preparation_id: Annotated[str, Query(alias="preparationId", min_length=1, max_length=128,
-                                        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")],
-    manifest_hash: Annotated[str, Query(alias="manifestHash", min_length=64, max_length=64,
-                                       pattern=_SHA256_PATTERN)],
+    preparation_id: Annotated[
+        str | None,
+        Query(
+            alias="preparationId",
+            min_length=1,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ] = None,
+    manifest_hash: Annotated[
+        str | None,
+        Query(alias="manifestHash", min_length=64, max_length=64, pattern=_SHA256_PATTERN),
+    ] = None,
+    selection_id: Annotated[
+        str | None,
+        Query(
+            alias="selectionId",
+            min_length=1,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ] = None,
+    selection_hash: Annotated[
+        str | None, Query(alias="selectionHash", pattern=_SHA256_PATTERN)
+    ] = None,
     end_date: Annotated[date | None, Query(alias="endDate")] = None,
 ):
     names = [name for name, _ in request.query_params.multi_items()]
-    if set(names) - {"preparationId", "manifestHash", "endDate"} or len(names) != len(set(names)):
+    if set(names) - {
+        "preparationId",
+        "manifestHash",
+        "selectionId",
+        "selectionHash",
+        "endDate",
+    } or len(names) != len(set(names)):
         raise ApiError(ApiErrorCode.VALIDATION_ERROR)
     response.headers["Cache-Control"] = "no-store"
+    if (
+        selection_id is not None
+        and selection_hash is not None
+        and preparation_id is None
+        and manifest_hash is None
+    ):
+        return await service.check_selection_data(
+            selection_id=selection_id, selection_hash=selection_hash, end_date=end_date
+        )
+    if (
+        preparation_id is None
+        or manifest_hash is None
+        or selection_id is not None
+        or selection_hash is not None
+    ):
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
     return await service.check_prepared_data(
         preparation_id=preparation_id, manifest_hash=manifest_hash, end_date=end_date,
     )
@@ -257,12 +345,17 @@ async def list_backtest_runs(
     return page
 
 
-@router.get("/backtest-runs/{run_id}",
-            response_model=BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView)
+@router.get(
+    "/backtest-runs/{run_id}",
+    response_model=BacktestRunView
+    | BacktestLoopRunView
+    | BacktestScheduledRunView
+    | WorkbenchBacktestRunView,
+)
 async def get_backtest_run(
     run_id: RunIdPath,
     service: BacktestRunReadServiceDependency,
-) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView:
+) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView:
     value = await service.get_run(run_id=run_id)
     if value is None:
         raise ApiError(ApiErrorCode.NOT_FOUND)
@@ -295,7 +388,10 @@ async def get_backtest_rule_changes(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def submit_backtest_run(
-    command: BacktestRunCommand | PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
+    command: BacktestRunCommand
+    | PreparedBacktestRunCommand
+    | ScheduledPreparedBacktestRunCommand
+    | WorkbenchBacktestRunCommand,
     context: MutationContextDependency,
     service: BacktestRunOperationServiceDependency,
     response: Response,
@@ -322,14 +418,19 @@ async def submit_backtest_run(
     return receipt
 
 
-@router.patch("/backtest-runs/{run_id}",
-              response_model=BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView)
+@router.patch(
+    "/backtest-runs/{run_id}",
+    response_model=BacktestRunView
+    | BacktestLoopRunView
+    | BacktestScheduledRunView
+    | WorkbenchBacktestRunView,
+)
 async def pin_backtest_run(
     run_id: RunIdPath,
     command: BacktestRunPinCommand,
     context: MutationContextDependency,
     service: BacktestRunOperationServiceDependency,
-) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView:
+) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView:
     run = _validated_run(
         await service.pin_run(run_id=run_id, command=command, context=context),
     )
@@ -339,8 +440,12 @@ async def pin_backtest_run(
 
 
 def _validated_run(value: object) -> (
-    BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView
+    BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView
 ):
+    if isinstance(value, WorkbenchBacktestRunView) or (
+        isinstance(value, dict) and value.get("schemaVersion") == "monitor-loop-result-workbench-v1"
+    ):
+        return validate_api_response(value, WorkbenchBacktestRunView)
     if isinstance(value, BacktestScheduledRunView) or (
         isinstance(value, dict) and value.get("schemaVersion") == "monitor-loop-result-v2"
     ):

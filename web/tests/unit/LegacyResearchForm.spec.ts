@@ -12,7 +12,7 @@ import type {
 import type { BacktestApi, BacktestMutationResponse } from "../../src/api/backtests";
 import type { PlanApi } from "../../src/api/plans";
 import { ApiClientError } from "../../src/api/transport";
-import BacktestNewView from "../../src/views/BacktestNewView.vue";
+import BacktestNewView from "./fixtures/LegacyResearchHarness";
 
 const PLAN_VERSION_ID = "123e4567-e89b-42d3-a456-426614174000";
 const DATASET_HASH = "a".repeat(64);
@@ -105,7 +105,6 @@ function planApiWith(overrides: Partial<PlanApi> = {}): PlanApi {
     deactivatePlan: unused,
     getPlanActivationState: unused,
     getPlanVersion: unused,
-    importPlan: unused,
     listPlanVersions: vi.fn().mockResolvedValue(planPage()),
     savePlanDraft: unused,
     ...overrides,
@@ -202,7 +201,7 @@ async function submit(wrapper: VueWrapper): Promise<void> {
   await flushPromises();
 }
 
-describe("BacktestNewView", () => {
+describe("retained scripted research form", () => {
   it("loads backend-approved immutable plan versions and selects one exact identity", async () => {
     const listPlanVersions = vi.fn<PlanApi["listPlanVersions"]>().mockResolvedValue(
       planPage(),
@@ -219,8 +218,8 @@ describe("BacktestNewView", () => {
     expect(selector.element.tagName).toBe("SELECT");
     expect(selector.text()).toContain("003043.SZ");
     expect(selector.text()).toContain("v1");
-    expect(selector.text()).toContain("DRAFT");
-    expect(wrapper.text()).toContain("后端判定可用于回测");
+    expect(selector.text()).toContain("已审核");
+    expect(wrapper.text()).toContain("已完成审核的计划版本");
     expect(wrapper.text()).toContain("提交时冻结");
 
     await selector.setValue(PLAN_VERSION_ID);

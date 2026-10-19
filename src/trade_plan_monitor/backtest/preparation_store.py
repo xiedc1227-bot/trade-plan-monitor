@@ -50,7 +50,12 @@ _TABLES = {
     "backtest_preparation_metadata",
     "backtest_preparation",
     "backtest_preparation_idempotency",
+    "backtest_plan_selection",
 }
+_SELECTION_SCHEMA = (
+    "CREATE TABLE backtest_plan_selection "
+    "(selection_id TEXT PRIMARY KEY, document_json TEXT NOT NULL)"
+)
 _SCHEMA = (
     "CREATE TABLE backtest_preparation_metadata "
     "(singleton INTEGER PRIMARY KEY CHECK (singleton = 1), domain TEXT NOT NULL, "
@@ -107,15 +112,20 @@ class PreparationStore:
                 "SELECT name FROM sqlite_schema WHERE type = 'table'"
             )}
             if not tables:
-                for statement in _SCHEMA:
+                for statement in (*_SCHEMA, _SELECTION_SCHEMA):
                     connection.execute(statement)
                 connection.execute(
                     "INSERT INTO backtest_preparation_metadata VALUES (1, ?, ?)",
-                    (PREPARATION_DOMAIN, PREPARATION_SCHEMA_VERSION),
+                    (PREPARATION_DOMAIN, 2),
                 )
+            elif (tables == _TABLES - {"backtest_plan_selection"} and connection.execute(
+                "SELECT singleton, domain, schema_version FROM backtest_preparation_metadata"
+            ).fetchall() == [(1, PREPARATION_DOMAIN, PREPARATION_SCHEMA_VERSION)]):
+                connection.execute(_SELECTION_SCHEMA)
+                connection.execute("UPDATE backtest_preparation_metadata SET schema_version = 2")
             elif tables != _TABLES or connection.execute(
                 "SELECT singleton, domain, schema_version FROM backtest_preparation_metadata"
-            ).fetchall() != [(1, PREPARATION_DOMAIN, PREPARATION_SCHEMA_VERSION)]:
+            ).fetchall() != [(1, PREPARATION_DOMAIN, 2)]:
                 raise ValueError("database_path is not a supported tagged preparation store")
             connection.commit()
 

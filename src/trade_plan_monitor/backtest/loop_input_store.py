@@ -30,6 +30,7 @@ from trade_plan_monitor.backtest.loop_input import (
     MAX_SOURCE_BYTES,
     MonitorLoopInput,
     ScheduledLoopInput,
+    WorkbenchLoopInput,
 )
 from trade_plan_monitor.backtest.models import Sha256Hex
 from trade_plan_monitor.backtest.preparation_review import (
@@ -37,6 +38,9 @@ from trade_plan_monitor.backtest.preparation_review import (
     FrozenPreparedPlan,
 )
 from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.backtest.workbench_selection import (
+    WorkbenchPlanSelection,
+)
 
 if TYPE_CHECKING:
     from trade_plan_monitor.backtest.market_store import BacktestMarketStore
@@ -118,9 +122,24 @@ class ScheduledStoredLoopInput(ResearchValue):
         return StoredLoopInput.reference.fget(self)
 
 
-_STORED_LOOP_CODEC = TypeAdapter(Annotated[
-    StoredLoopInput | ScheduledStoredLoopInput, Field(discriminator="schema_version"),
-])
+class WorkbenchStoredLoopInput(StoredLoopInput):
+    schema_version: Literal["monitor-loop-stored-input-v3"] = "monitor-loop-stored-input-v3"
+    prepared: WorkbenchPlanSelection
+    run_input: WorkbenchLoopInput
+
+    @model_validator(mode="after")
+    def selection_bound(self):
+        if self.run_input.selection_hash != self.prepared.manifest_hash:
+            raise ValueError("workbench input differs from its complete research declaration")
+        return self
+
+
+_STORED_LOOP_CODEC = TypeAdapter(
+    Annotated[
+        StoredLoopInput | ScheduledStoredLoopInput | WorkbenchStoredLoopInput,
+        Field(discriminator="schema_version"),
+    ]
+)
 
 
 def _verify_day(dataset: LoopDatasetManifest, index: int, day: LoopFrozenSymbolDay) -> None:
@@ -306,7 +325,8 @@ class LoopInputStore:
         if (market_source is None) == (frozen_source is None):
             raise ValueError("choose one verified market source")
         scheduled = isinstance(prepared, FrozenPreparedCollection)
-        stored_type = ScheduledStoredLoopInput if scheduled else StoredLoopInput
+        stored_type = (WorkbenchStoredLoopInput if isinstance(prepared, WorkbenchPlanSelection)
+                       else ScheduledStoredLoopInput if scheduled else StoredLoopInput)
         candidate = stored_type(
             prepared=prepared,
             run_input=run_input,
@@ -339,7 +359,8 @@ class LoopInputStore:
         reference = LoopInputReference.model_validate(reference.model_dump(mode="python"))
         self._owned_root(create=False)
         payload = self._read(
-            self.bundle_path(reference), (_BUNDLE_DOMAIN, "monitor-loop-stored-input-v2"),
+            self.bundle_path(reference),
+            (_BUNDLE_DOMAIN, "monitor-loop-stored-input-v2", "monitor-loop-stored-input-v3"),
             reference.bundle_hash,
         )
         stored = _STORED_LOOP_CODEC.validate_json(payload)
