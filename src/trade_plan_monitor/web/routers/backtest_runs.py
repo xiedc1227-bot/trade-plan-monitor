@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date
 from typing import Annotated, Literal, Protocol, cast
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
@@ -17,6 +18,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestRunPage,
     BacktestRunView,
     BacktestScheduledRunView,
+    PreparedBacktestDataView,
     PreparedBacktestRunCommand,
     ScheduledPreparedBacktestRunCommand,
 )
@@ -122,6 +124,9 @@ class BacktestRunSubmissionOutcome:
 class BacktestRunReadService(Protocol):
     """Read-only run query boundary implemented outside the HTTP adapter."""
 
+    async def check_prepared_data(self, *, preparation_id: str, manifest_hash: str,
+                                  end_date: date | None) -> PreparedBacktestDataView: ...
+
     async def list_runs(
         self,
         *,
@@ -196,6 +201,26 @@ RunCollectionQueryDependency = Annotated[
     None,
     Depends(require_run_collection_query),
 ]
+
+
+@router.get("/backtest-run-data", response_model=PreparedBacktestDataView)
+async def check_prepared_backtest_data(
+    request: Request,
+    response: Response,
+    service: BacktestRunReadServiceDependency,
+    preparation_id: Annotated[str, Query(alias="preparationId", min_length=1, max_length=128,
+                                        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")],
+    manifest_hash: Annotated[str, Query(alias="manifestHash", min_length=64, max_length=64,
+                                       pattern=_SHA256_PATTERN)],
+    end_date: Annotated[date | None, Query(alias="endDate")] = None,
+):
+    names = [name for name, _ in request.query_params.multi_items()]
+    if set(names) - {"preparationId", "manifestHash", "endDate"} or len(names) != len(set(names)):
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+    response.headers["Cache-Control"] = "no-store"
+    return await service.check_prepared_data(
+        preparation_id=preparation_id, manifest_hash=manifest_hash, end_date=end_date,
+    )
 
 
 @router.get("/backtest-runs", response_model=BacktestRunPage)

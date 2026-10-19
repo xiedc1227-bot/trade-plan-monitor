@@ -254,7 +254,7 @@ class BrowserAI(FakeAI):
                         model=request.config.model, content=json.dumps(content, ensure_ascii=False),
                         finish_reason="stop", attempts=1, usage=None,
                     )
-                if len(outer.calls) == 1:
+                if len(outer.calls) == 1 and outer.mode != "auto-data":
                     raise AIProviderError(
                         AIProviderErrorCode.RATE_LIMITED,
                         AIProviderOperation.EXTRACT_PLAN,
@@ -309,7 +309,8 @@ def environment(root, monkeypatch, *, mode="retry", fail_first=False, port=8765)
     """Seed market observations only; no reviewed preparation or expected trades."""
     assert set(FIXTURE) == {"fixture_version", "source", "ai_output", "cutoff", "expected"}
     real_prune = BacktestJobMaintenance.prune
-    now = at(25, 9, 38, 12) if mode.startswith("continuity") else NOW
+    now = (at(25, 9, 38, 12) if mode.startswith("continuity") else
+           at(21, 16) if mode == "auto-data" else NOW)
 
     def prune_at_fixture_time(self, *, as_of, batch_size=1000):
         # All fake time domains agree: real maintenance must not expire this fixture.
@@ -333,6 +334,10 @@ def environment(root, monkeypatch, *, mode="retry", fail_first=False, port=8765)
             ),
         )
     )
+    data_calls = []
+    if mode == "auto-data":
+        from tests.integration.automatic_data_provider import bind_provider
+        data_calls = bind_provider(monkeypatch, market)
     if mode.startswith("continuity"):
         from datetime import datetime
 
@@ -374,6 +379,7 @@ def environment(root, monkeypatch, *, mode="retry", fail_first=False, port=8765)
     monkeypatch.setattr(
         composition_module, "PreparationStore", partial(PreparationStore, clock=lambda: now)
     )
+    monkeypatch.setattr("trade_plan_monitor.backtest.automatic_data.now", lambda: now)
     factory = create_backtest_composition_factory(
         config_path=root / "absent.yaml",
         plan_snapshot_reader=None,
@@ -408,6 +414,7 @@ def environment(root, monkeypatch, *, mode="retry", fail_first=False, port=8765)
             "monitorStopped": runtime.stopped,
             "sourceCalls": ai.source_calls,
             "retryEntered": ai.retry_entered.is_set(),
+            "dataCalls": list(data_calls),
         }
 
     @app.get("/fixture/continuity-sources")
@@ -617,8 +624,9 @@ if __name__ == "__main__":
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--web-port", type=int, required=True)
-    parser.add_argument("--mode", choices=("retry", "unknown", "continuity", "continuity-retry"),
-                        default="retry")
+    parser.add_argument("--mode", choices=(
+        "retry", "unknown", "continuity", "continuity-retry", "auto-data",
+    ), default="retry")
     parser.add_argument("--fail-first", action="store_true")
     args = parser.parse_args()
     assert args.root.resolve().is_relative_to(Path(__import__("tempfile").gettempdir()).resolve())

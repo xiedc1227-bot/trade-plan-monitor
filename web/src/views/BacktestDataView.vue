@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
 import { useRoute, useRouter, type LocationQueryRaw } from "vue-router";
 
 import type {
-  BacktestDatasetScopeInput,
   BacktestDatasetVerificationJobResultView,
   BacktestJobView,
 } from "../api/generated";
@@ -95,35 +94,6 @@ watch(jobState.job, (job) => {
   void replaceQuery(query);
 });
 
-function sameScope(
-  left: BacktestDatasetScopeInput | null,
-  right: BacktestDatasetScopeInput,
-): boolean {
-  return (
-    left !== null &&
-    left.adjustmentPolicy === right.adjustmentPolicy &&
-    left.historicalProfile === right.historicalProfile &&
-    left.warmupStart === right.warmupStart &&
-    left.start === right.start &&
-    left.end === right.end &&
-    left.symbols.join(",") === right.symbols.join(",")
-  );
-}
-
-async function ensureScope(scope: BacktestDatasetScopeInput): Promise<void> {
-  if (!sameScope(data.scope.value, scope)) await data.applyScope(scope);
-}
-
-async function requestSync(scope: BacktestDatasetScopeInput, refresh: boolean): Promise<void> {
-  await ensureScope(scope);
-  await data.sync(scope, refresh);
-}
-
-async function requestVerification(scope: BacktestDatasetScopeInput): Promise<void> {
-  await ensureScope(scope);
-  await data.verify(scope);
-}
-
 onMounted(() => {
   document.title = "历史数据管理 · Trade Plan Monitor";
 });
@@ -138,45 +108,19 @@ onBeforeUnmount(() => {
     <header class="backtest-data-view__hero">
       <div>
         <h1>历史数据管理</h1>
-        <p>管理回测数据范围、查看服务端覆盖事实，并以显式授权启动联网同步。</p>
+        <p>查看历史数据覆盖与任务状态。数据由程序在开始回测后自动准备。</p>
       </div>
       <a href="/backtests">返回回测研究台</a>
     </header>
 
     <aside class="backtest-data-view__boundary" aria-label="研究边界">
-      仅供研究与回放，不连接券商、不自动下单。除经确认的同步外，数据验证保持离线。
+      仅供研究与回放，不连接券商、不自动下单。查看此页不会下载或改写历史数据。
     </aside>
 
     <DatasetScopeForm
       :filters="data.filters.value"
-      :scope="data.scope.value"
-      :submission-state="data.submissionState.value"
       @apply-filters="data.applyFilters"
-      @apply-scope="data.applyScope"
-      @request-sync="requestSync"
-      @request-verify="requestVerification"
     />
-
-    <section
-      v-if="data.submissionState.value !== 'IDLE'"
-      class="backtest-data-view__submission"
-      :role="data.submissionErrorMessage.value === null ? 'status' : 'alert'"
-      aria-live="polite"
-    >
-      <p v-if="data.submissionState.value === 'SUBMITTING'">正在提交数据任务</p>
-      <p v-else-if="data.submissionState.value === 'ACCEPTED'">数据任务已由服务端接受</p>
-      <p v-if="data.submissionErrorMessage.value !== null">
-        {{ data.submissionErrorMessage.value }}
-      </p>
-      <button
-        v-if="data.submissionState.value === 'UNCERTAIN'"
-        data-testid="retry-dataset-submission"
-        type="button"
-        @click="data.retrySubmission"
-      >
-        使用同一请求安全重试
-      </button>
-    </section>
 
     <p
       v-if="identityError !== null"

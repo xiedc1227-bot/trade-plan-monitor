@@ -105,6 +105,10 @@ export interface BacktestMutationResponse<T> {
 }
 
 export interface BacktestApi {
+  checkPreparedData(
+    command: PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
+    options?: BacktestRequestOptions,
+  ): Promise<import("./generated").PreparedBacktestDataView>;
   cancelJob(
     command: BacktestJobCancellationCommand,
     idempotencyKey: string,
@@ -952,6 +956,27 @@ export function createBacktestApi(
         }
         return body;
       });
+    },
+
+    async checkPreparedData(command: PreparedBacktestRunCommand | ScheduledPreparedBacktestRunCommand,
+      options?: BacktestRequestOptions) {
+      const normalized = normalizeRunCommand(command);
+      if (!("preparationId" in normalized)) throw invalidRequest();
+      const search = new URLSearchParams({ preparationId: normalized.preparationId,
+        manifestHash: normalized.manifestHash });
+      if (normalized.endDate) search.set("endDate", normalized.endDate);
+      const { body, status } = await requestJson(fetchImplementation,
+        withQuery("/api/v1/backtest-run-data", search), requestInit("GET", options));
+      if (status !== 200 || !isRecord(body) ||
+          !hasExactKeys(body, ["preparationId", "manifestHash", "endDate", "ready", "syncScope", "blockers"]) ||
+          body.preparationId !== normalized.preparationId || body.manifestHash !== normalized.manifestHash ||
+          !isCalendarDate(body.endDate) || normalized.endDate !== undefined && body.endDate !== normalized.endDate ||
+          typeof body.ready !== "boolean" || !Array.isArray(body.blockers) || body.blockers.length > 100 ||
+          !body.blockers.every(value => typeof value === "string") || body.ready !== (body.blockers.length === 0) ||
+          body.ready && body.syncScope !== null || body.syncScope !== null && !isDatasetScope(body.syncScope)) {
+        throw invalidResponse(status);
+      }
+      return body as import("./generated").PreparedBacktestDataView;
     },
 
     async listDatasets(

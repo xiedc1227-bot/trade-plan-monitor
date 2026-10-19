@@ -3241,6 +3241,15 @@ export type PreparationView = {
   workPhase: ("READY" | "CALLING" | "UNKNOWN" | "ENDED") | (null);
 };
 
+export type PreparedBacktestDataView = {
+  blockers: Array<string>;
+  endDate: string;
+  manifestHash: string;
+  preparationId: string;
+  ready: boolean;
+  syncScope: (components["schemas"]["BacktestDatasetScopeInput"]) | (null);
+};
+
 export type PreparedBacktestRunCommand = {
   costs: components["schemas"]["BacktestLoopCostsInput"];
   endDate?: (string) | (null);
@@ -4516,6 +4525,7 @@ export interface components {
     PreparationSourceCommand: PreparationSourceCommand;
     PreparationUnavailableCandidate: PreparationUnavailableCandidate;
     PreparationView: PreparationView;
+    PreparedBacktestDataView: PreparedBacktestDataView;
     PreparedBacktestRunCommand: PreparedBacktestRunCommand;
     PreparedPlanCompositionInput: PreparedPlanCompositionInput;
     ProductSourceTreatmentView: ProductSourceTreatmentView;
@@ -6385,6 +6395,83 @@ export interface paths {
         "200": {
           content: {
             "application/json": (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]) | (components["schemas"]["PreparationView"]) | (components["schemas"]["CollectionPreparationView"]);
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-run-data": {
+    get: {
+      parameters: {
+        query: {
+          endDate?: (string) | (null);
+          manifestHash: string;
+          preparationId: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["PreparedBacktestDataView"];
           };
         };
         "400": {

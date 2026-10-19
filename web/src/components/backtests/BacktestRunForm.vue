@@ -259,7 +259,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
           :disabled="submissionDisabled()"
           @click="emit('submit')"
         >
-          {{ submissionState === "SUBMITTING" ? "正在提交…" : "提交回测运行" }}
+          {{ submissionState === "SUBMITTING" ? "正在准备与提交…" : submissionState === "FAILED" ? "重试回测" : "开始回测" }}
         </button>
         <p>前端只做形状防护；计划资格、上限、日历、T+1、成交与指标均由后端权威执行。</p>
       </div>

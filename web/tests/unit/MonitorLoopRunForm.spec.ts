@@ -37,7 +37,11 @@ function accepted() {
     retryAfterSeconds: 2, status: 202 as const };
 }
 function api() {
-  return { ...createBacktestApi(vi.fn<typeof fetch>()), submitRun: vi.fn<BacktestApi["submitRun"]>().mockResolvedValue(accepted()) };
+  return { ...createBacktestApi(vi.fn<typeof fetch>()),
+    checkPreparedData: vi.fn<BacktestApi["checkPreparedData"]>().mockImplementation(async value => ({
+      preparationId: value.preparationId, manifestHash: value.manifestHash,
+      endDate: value.endDate ?? "2026-08-24", ready: true, syncScope: null, blockers: [],
+    })), submitRun: vi.fn<BacktestApi["submitRun"]>().mockResolvedValue(accepted()) };
 }
 function controller(backtest = api(), prepared: () => PreparationFrozenView | CollectionPreparationFrozenView | null = frozen) {
   let form!: ReturnType<typeof useBacktestRunForm>;

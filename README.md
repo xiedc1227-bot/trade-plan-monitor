@@ -179,10 +179,7 @@ The entry/shared bundle excluding ECharts must be ≤ 150 KiB gzip, every non-ch
 measurement output outside Git; an unavailable or flaky measurement environment blocks the gate
 instead of weakening a threshold.
 
-The production backtest workflow remains `DATA_SYNC` → `DATASET_VERIFY` → offline
-`BACKTEST_RUN`. Only data synchronization may access the network, with explicit human
-authorization and the API request field `allowNetwork: true`. Passing the fake browser gate never authorizes live synchronization
-and never proves Tushare availability or semantics.
+Reviewed-source backtests automatically check data, run `DATA_SYNC` only when needed, verify, then execute offline `BACKTEST_RUN`. Clicking start authorizes that data preparation; read-only page visits do not. Sync retains `allowNetwork: true`, bounded jobs and cancellation. Passing a synthetic provider/browser test does not certify live Tushare availability or semantics.
 
 ## Commands
 
@@ -297,7 +294,7 @@ Each evaluation uses at most 512 complete five-minute bars, 499 official daily b
 
 Reports also disclose that zero-volume minutes are treated as a non-tradable proxy (`ZERO_VOLUME_MINUTE_USED_AS_NON_TRADABLE_PROXY`), fill quantity is not capped by minute volume (`FILL_QUANTITY_NOT_CAPPED_BY_MINUTE_VOLUME`), limit locks conservatively use the open or slipped price (`CONSERVATIVE_LIMIT_LOCK_FROM_OPEN_OR_SLIPPAGE`), drawdown samples daily equity (`DAILY_EQUITY_DRAWDOWN_SAMPLING`), win rate is per sell fill rather than round trip (`WIN_RATE_PER_SELL_FILL_NOT_ROUND_TRIP`), and metric division is fixed to Decimal precision 28 with `ROUND_HALF_EVEN` (`METRIC_DECIMAL_PRECISION_28_HALF_EVEN`).
 
-Use the backtest data page to submit historical synchronization and local verification, then select the reviewed plan, frozen dataset, initial account, and execution assumptions on `/backtests/new`. Background jobs execute asynchronously with progress and cancellation; the result page provides inspection and report downloads. Only explicitly authorized data synchronization may access the network. Backtest CLI commands and compatibility adapters have been removed; application launch commands still start the Web service.
+On `/backtests/new`, select reviewed plans, the replay end and execution assumptions, then click start. The program checks local evidence, reuses an exact verified frozen copy when available, fills missing closed historical data, verifies again and starts replay. No manual URL, sync, validation or cache-refresh controls are needed. Historical data management only lists datasets and task records. Progress, cancellation, safe request retry and explicit failure retry remain available; existing reports and frozen inputs are not overwritten. Legacy version/dataset replay still accepts its existing frozen dataset. See [automatic preparation](docs/operations/monitor-loop-backtest.md#ml-o23-automatic-data-preparation). Backtest CLI commands and compatibility adapters remain removed; application launch commands still start the Web service.
 
 “从原文准备新计划” prepares one original at a time. Successors link an exact reviewed predecessor; explicitly review and save each entry, then select 1–256 reviewed plans for a single continuous backtest. Composition makes no AI call. Saving extracts unambiguous effective trading dates from their text; only missing/ambiguous dates need confirmation. Authoring and historical-availability timestamps are optional. Preloaded plans without declared availability execute from the effective day's 09:30 Shanghai opening, with the existing plan/account review and market-data checks. See [source preparation](docs/operations/monitor-loop-backtest.md#ml-o02-prepare-and-review-ordered-sources).
 

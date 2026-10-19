@@ -7,11 +7,9 @@ import type {
   BacktestDatasetPage,
   BacktestDatasetScopeInput,
   BacktestDatasetView,
-  BacktestJobReceipt,
   BacktestJobView,
 } from "../../src/api/generated";
-import type { BacktestApi, BacktestMutationResponse } from "../../src/api/backtests";
-import { ApiClientError } from "../../src/api/transport";
+import type { BacktestApi } from "../../src/api/backtests";
 import BacktestDataView from "../../src/views/BacktestDataView.vue";
 
 const DATASET_HASH_A = "a".repeat(64);
@@ -130,32 +128,6 @@ function job(
   };
 }
 
-function receipt(kind: "DATA_SYNC" | "DATASET_VERIFY"): BacktestJobReceipt {
-  return {
-    attempt: 0,
-    datasetHash: null,
-    jobId: JOB_ID,
-    kind,
-    reused: false,
-    revision: 0,
-    runId: null,
-    status: "QUEUED",
-    submittedAt: "2026-08-29T10:00:00.000000+08:00",
-  };
-}
-
-function mutation(
-  body: BacktestJobReceipt,
-  retryAfterSeconds = 2,
-): BacktestMutationResponse<BacktestJobReceipt> {
-  return {
-    body,
-    location: `/api/v1/backtest-jobs/${body.jobId}`,
-    retryAfterSeconds,
-    status: 202,
-  };
-}
-
 function apiWith(overrides: Partial<BacktestApi> = {}): BacktestApi {
   const unused = vi.fn(() => Promise.reject(new Error("unexpected API call")));
   return {
@@ -257,18 +229,17 @@ describe("BacktestDataView", () => {
   it("reconstructs the form from URL back navigation without a hidden authority", async () => {
     const { router, wrapper } = await mountDataView({
       url:
-        "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28" +
-        "&warmupStart=2026-07-01",
+        "/backtests/data?symbol=000001.SZ",
     });
 
-    await wrapper.get<HTMLInputElement>("#dataset-symbols").setValue("600000.sh");
-    await wrapper.get('[data-testid="apply-dataset-scope"]').trigger("click");
+    await wrapper.get<HTMLInputElement>('input[placeholder="000001.SZ"]').setValue("600000.sh");
+    await wrapper.get("form").trigger("submit");
     await flushPromises();
-    expect(router.currentRoute.value.query.symbols).toBe("600000.SH");
+    expect(router.currentRoute.value.query.symbol).toBe("600000.SH");
 
     router.back();
     await flushPromises();
-    expect(wrapper.get<HTMLInputElement>("#dataset-symbols").element.value).toBe("000001.SZ");
+    expect(wrapper.get<HTMLInputElement>('input[placeholder="000001.SZ"]').element.value).toBe("000001.SZ");
     wrapper.unmount();
   });
 
@@ -299,154 +270,16 @@ describe("BacktestDataView", () => {
     wrapper.unmount();
   });
 
-  it("requires explicit confirmation before the only network-capable sync action", async () => {
-    const syncData = vi.fn().mockResolvedValue(mutation(receipt("DATA_SYNC"), 3));
-    const getJob = vi.fn().mockResolvedValue(job("DATA_SYNC"));
-    const { router, wrapper } = await mountDataView({
-      api: apiWith({ getJob, syncData }),
-      createIdempotencyKey: () => "sync-intent-001",
-      url:
-        "/backtests/data?symbols=600000.SH,000001.SZ&start=2026-08-01" +
-        "&end=2026-08-28&warmupStart=2026-07-01",
-    });
-
-    await wrapper.get('[data-testid="request-dataset-sync"]').trigger("click");
-    expect(syncData).not.toHaveBeenCalled();
-    expect(wrapper.get('[role="dialog"]').text()).toContain("联网");
-
-    await wrapper.get('[data-testid="confirm-dataset-sync"]').trigger("click");
-    await flushPromises();
-    expect(syncData).toHaveBeenCalledWith(
-      {
-        allowNetwork: true,
-        refresh: false,
-        scope: { ...defaultScope, symbols: ["000001.SZ", "600000.SH"] },
-      },
-      "sync-intent-001",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-    expect(router.currentRoute.value.query.jobId).toBe(JOB_ID);
-    expect(getJob).toHaveBeenCalledWith(JOB_ID, expect.anything());
-    router.back();
-    await flushPromises();
-    expect(router.currentRoute.value.query.jobId).toBeUndefined();
-    wrapper.unmount();
-  });
-
-  it("submits verification locally without a network confirmation or allowNetwork field", async () => {
-    const verifyDataset = vi.fn().mockResolvedValue(mutation(receipt("DATASET_VERIFY")));
-    const { wrapper } = await mountDataView({
-      api: apiWith({ getJob: vi.fn().mockResolvedValue(job("DATASET_VERIFY")), verifyDataset }),
-      createIdempotencyKey: () => "verify-intent-001",
-      url:
-        "/backtests/data?symbols=000001.SZ,600000.SH&start=2026-08-01" +
-        "&end=2026-08-28&warmupStart=2026-07-01",
-    });
-
-    await wrapper.get('[data-testid="request-dataset-verification"]').trigger("click");
-    await flushPromises();
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
-    expect(verifyDataset).toHaveBeenCalledWith(
-      { scope: defaultScope },
-      "verify-intent-001",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-    expect(Object.keys(verifyDataset.mock.calls[0]?.[0] ?? {})).toEqual(["scope"]);
-    wrapper.unmount();
-  });
-
-  it.each(["NETWORK_ERROR", "INVALID_RESPONSE"] as const)(
-    "retries an uncertain %s submission with the same semantic key",
-    async (code) => {
-      const syncData = vi
-        .fn<BacktestApi["syncData"]>()
-        .mockRejectedValueOnce(new ApiClientError({ code, message: "private", status: 0 }))
-        .mockResolvedValueOnce(mutation(receipt("DATA_SYNC")));
-      const createIdempotencyKey = vi.fn(() => "sync-intent-stable");
-      const { wrapper } = await mountDataView({
-        api: apiWith({ syncData }),
-        createIdempotencyKey,
-        url:
-          "/backtests/data?symbols=000001.SZ,600000.SH&start=2026-08-01" +
-          "&end=2026-08-28&warmupStart=2026-07-01",
-      });
-
-      await wrapper.get('[data-testid="request-dataset-sync"]').trigger("click");
-      await wrapper.get('[data-testid="confirm-dataset-sync"]').trigger("click");
-      await flushPromises();
-      expect(wrapper.get('[role="alert"]').text()).toContain("结果尚未确认");
-      expect(wrapper.text()).not.toContain("private");
-
-      await wrapper.get('[data-testid="request-dataset-sync"]').trigger("click");
-      await flushPromises();
-      expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
-      expect(syncData).toHaveBeenCalledTimes(1);
-      expect(createIdempotencyKey).toHaveBeenCalledTimes(1);
-
-      await wrapper.get('[data-testid="retry-dataset-submission"]').trigger("click");
-      await flushPromises();
-      expect(syncData.mock.calls[0]?.[1]).toBe("sync-intent-stable");
-      expect(syncData.mock.calls[1]?.[1]).toBe("sync-intent-stable");
-      expect(createIdempotencyKey).toHaveBeenCalledTimes(1);
-      wrapper.unmount();
-    },
-  );
-
-  it("creates a new submission key after the URL-owned scope changes", async () => {
-    const keys = ["sync-intent-old", "sync-intent-new"];
-    const createIdempotencyKey = vi.fn(() => keys.shift() ?? "unexpected-key");
-    const syncData = vi
-      .fn<BacktestApi["syncData"]>()
-      .mockRejectedValueOnce(
-        new ApiClientError({ code: "NETWORK_ERROR", message: "private", status: 0 }),
-      )
-      .mockResolvedValueOnce(mutation(receipt("DATA_SYNC")));
-    const { wrapper } = await mountDataView({
-      api: apiWith({ syncData }),
-      createIdempotencyKey,
-      url:
-        "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28" +
-        "&warmupStart=2026-07-01",
-    });
-
-    await wrapper.get('[data-testid="request-dataset-sync"]').trigger("click");
-    await wrapper.get('[data-testid="confirm-dataset-sync"]').trigger("click");
-    await flushPromises();
-    await wrapper.get<HTMLInputElement>("#dataset-symbols").setValue("600000.SH");
-    await wrapper.get('[data-testid="apply-dataset-scope"]').trigger("click");
-    await flushPromises();
-    await wrapper.get('[data-testid="request-dataset-sync"]').trigger("click");
-    await wrapper.get('[data-testid="confirm-dataset-sync"]').trigger("click");
-    await flushPromises();
-
-    expect(syncData.mock.calls[0]?.[1]).toBe("sync-intent-old");
-    expect(syncData.mock.calls[1]?.[1]).toBe("sync-intent-new");
-    expect(createIdempotencyKey).toHaveBeenCalledTimes(2);
-    wrapper.unmount();
-  });
-
-  it("clears accepted submission state when its URL-owned scope identity changes", async () => {
-    const syncData = vi.fn().mockResolvedValue(mutation(receipt("DATA_SYNC"), 9));
-    const { router, wrapper } = await mountDataView({
-      api: apiWith({ syncData }),
-      createIdempotencyKey: () => "accepted-scope-key",
-      url:
-        "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28" +
-        "&warmupStart=2026-07-01",
-    });
-
-    await wrapper.get('[data-testid="request-dataset-sync"]').trigger("click");
-    await wrapper.get('[data-testid="confirm-dataset-sync"]').trigger("click");
-    await flushPromises();
-    expect(wrapper.text()).toContain("数据任务已由服务端接受");
-
-    await wrapper.get<HTMLInputElement>("#dataset-symbols").setValue("600000.SH");
-    await wrapper.get('[data-testid="apply-dataset-scope"]').trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.jobId).toBeUndefined();
-    expect(wrapper.text()).not.toContain("数据任务已由服务端接受");
-    wrapper.unmount();
+  it("has no manual data preparation entry and never downloads on visits or filter changes", async () => {
+    const syncData = vi.fn(), verifyDataset = vi.fn();
+    const { wrapper } = await mountDataView({ api: apiWith({ syncData, verifyDataset }) });
+    for (const text of ["应用到当前 URL", "同步历史数据", "本地验证数据集", "刷新已缓存表面"]) {
+      expect(wrapper.findAll("button, label").some(item => item.text() === text)).toBe(false);
+    }
+    await wrapper.get('input[placeholder="000001.SZ"]').setValue("600000.SH");
+    await wrapper.get("form").trigger("submit"); await flushPromises();
+    expect(syncData).not.toHaveBeenCalled(); expect(verifyDataset).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("程序会自动检查"); wrapper.unmount();
   });
 
   it.each(["DATA_SYNC", "DATASET_VERIFY"] as const)(
@@ -532,21 +365,13 @@ describe("BacktestDataView", () => {
     runJob.wrapper.unmount();
   });
 
-  it("clears stale cursor and data-job identity when the URL-owned scope changes", async () => {
-    const { router, wrapper } = await mountDataView({
-      url:
-        "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28" +
-        `&warmupStart=2026-07-01&cursor=cursor.payload&jobId=${JOB_ID}`,
-    });
-
-    await wrapper.get<HTMLInputElement>("#dataset-symbols").setValue("600000.SH");
-    await wrapper.get('[data-testid="apply-dataset-scope"]').trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.symbols).toBe("600000.SH");
+  it("changing filters resets paging and preserves the inspected data job", async () => {
+    const { router, wrapper } = await mountDataView({ url: `/backtests/data?cursor=cursor.payload&jobId=${JOB_ID}` });
+    await wrapper.get('input[placeholder="000001.SZ"]').setValue("600000.SH");
+    await wrapper.get("form").trigger("submit"); await flushPromises();
+    expect(router.currentRoute.value.query.symbol).toBe("600000.SH");
     expect(router.currentRoute.value.query.cursor).toBeUndefined();
-    expect(router.currentRoute.value.query.jobId).toBeUndefined();
-    wrapper.unmount();
+    expect(router.currentRoute.value.query.jobId).toBe(JOB_ID); wrapper.unmount();
   });
 
   it("removes ambiguous scalar query values and invalid calendar dates without a loop", async () => {
@@ -557,7 +382,7 @@ describe("BacktestDataView", () => {
     });
 
     expect(router.currentRoute.value.query).toEqual({});
-    expect(wrapper.get<HTMLInputElement>("#dataset-symbols").element.value).toBe("");
+    expect(wrapper.get<HTMLInputElement>('input[placeholder="000001.SZ"]').element.value).toBe("");
     wrapper.unmount();
   });
 

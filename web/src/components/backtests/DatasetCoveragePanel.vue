@@ -96,7 +96,7 @@ const countLabels: ReadonlyArray<{
       class="dataset-coverage__state"
       data-testid="dataset-empty"
     >
-      尚无已验证数据集。可以先执行本地验证；只有同步操作会申请联网。
+      尚无已验证数据集。开始回测时，程序会自动检查、补齐并验证所需数据。
     </p>
 
     <div v-else-if="datasets.length > 0" class="dataset-coverage__list">

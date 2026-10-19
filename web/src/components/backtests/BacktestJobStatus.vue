@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue";
+import { computed, nextTick, shallowRef, useTemplateRef, watch, type DeepReadonly } from "vue";
 
 import type { BacktestJobView } from "../../api/generated";
 import type {
@@ -11,7 +11,7 @@ import { formatDisplayDateTime } from "../../formatters/dateTime";
 interface Props {
   cancellationState: BacktestCancellationState;
   errorMessage?: string | null;
-  job: BacktestJobView | null;
+  job: DeepReadonly<BacktestJobView> | null;
   requestState: BacktestJobRequestState;
 }
 

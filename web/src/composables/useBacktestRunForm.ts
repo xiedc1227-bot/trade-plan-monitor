@@ -21,6 +21,7 @@ import {
 } from "../api/backtestValues";
 import { isCalendarDate } from "../api/shanghaiTime";
 import { ApiClientError } from "../api/transport";
+import { useAutomaticBacktestData } from "./useAutomaticBacktestData";
 
 export type BacktestRunSubmissionState =
   | "IDLE"
@@ -165,6 +166,8 @@ function sortedLots(lots: BacktestInitialLotInput[]): BacktestInitialLotInput[] 
 export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   const api = options.api ?? createBacktestApi();
   const createIdempotencyKey = options.createIdempotencyKey ?? defaultIdempotencyKey;
+  const automaticData = useAutomaticBacktestData({ api, createIdempotencyKey });
+  let dataReadyIntent: SubmissionIntent | null = null;
   const draft = shallowRef<BacktestRunDraft>(emptyDraft());
   const errors = shallowRef<BacktestRunFormErrors>(Object.freeze({}));
   const errorRevision = shallowRef(0);
@@ -498,6 +501,11 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     submissionErrorMessage.value = null;
     let receipt: BacktestJobReceipt;
     try {
+      if ("preparationId" in intent.command && dataReadyIntent !== intent) {
+        await automaticData.prepare(intent.command);
+        if (!mounted || controller.signal.aborted || submissionIntent !== intent) return;
+        dataReadyIntent = intent;
+      }
       const response = await api.submitRun(intent.command, intent.key, {
         signal: controller.signal,
       });
@@ -518,7 +526,8 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
       } else {
         submissionIntent = null;
         submissionState.value = "FAILED";
-        submissionErrorMessage.value = "回测提交未被服务端接受，请检查输入后重试";
+        submissionErrorMessage.value = "preparationId" in intent.command && error instanceof Error && !(error instanceof ApiClientError)
+          ? error.message : "回测提交未被服务端接受，请检查输入后重试";
       }
       return;
     } finally {
@@ -580,6 +589,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   });
 
   return {
+    automaticData,
     acceptedReceipt: readonly(acceptedReceipt),
     addLot,
     draft: readonly(draft),

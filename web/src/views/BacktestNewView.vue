@@ -6,6 +6,7 @@ import type { BacktestJobReceipt, PreparationFrozenView, CollectionPreparationFr
 import type { BacktestApi } from "../api/backtests";
 import type { PlanApi } from "../api/plans";
 import BacktestRunForm from "../components/backtests/BacktestRunForm.vue";
+import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
 import BacktestReferenceMarketCoveragePanel from "../components/backtests/BacktestReferenceMarketCoveragePanel.vue";
 import { useBacktestPlanVersions } from "../composables/useBacktestPlanVersions";
 import { useBacktestRunForm } from "../composables/useBacktestRunForm";
@@ -75,6 +76,12 @@ const form = useBacktestRunForm({
   prepared: () => reviewedPrepared.value,
   preparedMode: () => mode.value === "PREPARED",
 });
+const dataPhaseText = computed(() => ({
+  IDLE: "", CHECKING: "正在检查本地历史数据", SYNCING: "正在自动补齐历史数据",
+  VERIFYING: "正在验证回测数据", READY: "数据已就绪，正在提交回测",
+  FAILED: "数据准备未完成", CANCELLED: "回测已取消",
+})[form.automaticData.phase.value]);
+const preparingData = computed(() => ["CHECKING", "SYNCING", "VERIFYING"].includes(form.automaticData.phase.value));
 const plans = useBacktestPlanVersions({
   ...(props.planApi === undefined ? {} : { api: props.planApi }),
 });
@@ -114,7 +121,7 @@ onBeforeUnmount(() => {
     <header class="backtest-new-view__hero">
       <div>
         <h1 ref="pageTitle" tabindex="-1">创建回测</h1>
-        <p>选择不可变计划版本与已验证数据集，提交可复现的回测运行。</p>
+        <p>选择已审核计划并开始回测；程序自动检查、补齐和验证历史数据。</p>
       </div>
       <a href="/backtests">返回回测研究台</a>
     </header>
@@ -190,7 +197,7 @@ onBeforeUnmount(() => {
       :role="form.submissionErrorMessage.value === null ? 'status' : 'alert'"
       aria-live="polite"
     >
-      <p v-if="form.submissionState.value === 'SUBMITTING'">正在提交回测运行</p>
+      <p v-if="form.submissionState.value === 'SUBMITTING'">{{ preparingData ? dataPhaseText : '正在提交回测运行' }}</p>
       <p v-else-if="form.submissionState.value === 'ACCEPTED'">回测运行已由服务端接受</p>
       <p v-if="form.submissionErrorMessage.value !== null">
         {{ form.submissionErrorMessage.value }}
@@ -203,7 +210,20 @@ onBeforeUnmount(() => {
       >
         使用同一请求安全重试
       </button>
+      <button v-if="preparingData" type="button" data-testid="cancel-automatic-data"
+        :disabled="form.automaticData.cancellationRequested.value" @click="form.automaticData.cancel">
+        {{ form.automaticData.cancellationRequested.value ? '正在取消，等待任务确认' : '取消回测' }}
+      </button>
     </section>
+    <BacktestJobStatus v-if="form.automaticData.jobState.job.value"
+      :job="form.automaticData.jobState.job.value"
+      :request-state="form.automaticData.jobState.requestState.value"
+      :cancellation-state="form.automaticData.jobState.cancellationState.value"
+      :error-message="form.automaticData.jobState.errorMessage.value"
+      @cancel="form.automaticData.cancel"
+      @refresh="form.automaticData.jobState.refresh"
+      @retry-cancellation="form.automaticData.jobState.retryCancellation" />
+    <a v-if="form.automaticData.jobId.value" :href="`/backtests/data?jobId=${form.automaticData.jobId.value}`">查看数据任务记录</a>
   </div>
 </template>
 

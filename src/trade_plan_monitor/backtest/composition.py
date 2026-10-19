@@ -6,7 +6,7 @@ import asyncio
 import json
 import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import date, datetime, time
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
@@ -25,7 +25,7 @@ from trade_plan_monitor.backtest.cursor_key_security import (
     create_cursor_key_file,
     read_cursor_key_file,
 )
-from trade_plan_monitor.backtest.dataset import DatasetScope, FrozenMarketIndexDatasetReader
+from trade_plan_monitor.backtest.dataset import FrozenMarketIndexDatasetReader
 from trade_plan_monitor.backtest.dataset_service import (
     BacktestDatasetFilters,
     BacktestDatasetService,
@@ -59,11 +59,7 @@ from trade_plan_monitor.backtest.jobs.repository import (
     JobAdmissionError,
 )
 from trade_plan_monitor.backtest.loop_dataset import (
-    LoopDatasetRequest,
-    ScheduledLoopDatasetRequest,
     freeze_scheduled_loop_dataset,
-    loop_dataset_requirements,
-    scheduled_dataset_requirements,
 )
 from trade_plan_monitor.backtest.loop_input import (
     LoopCosts,
@@ -74,7 +70,6 @@ from trade_plan_monitor.backtest.loop_input import (
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.models import ExecutionConfig
 from trade_plan_monitor.backtest.pagination import HmacCursorSigner, InvalidCursorError
-from trade_plan_monitor.backtest.plan_schedule import LoopEndBoundary
 from trade_plan_monitor.backtest.preparation_review import (
     FrozenPreparedCollection,
     FrozenPreparedPlan,
@@ -174,6 +169,7 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestScheduledRunSummaryView,
     BacktestScheduledRunView,
     BacktestSignalView,
+    PreparedBacktestDataView,
     PreparedBacktestRunCommand,
     ScheduledPreparedBacktestRunCommand,
 )
@@ -734,6 +730,57 @@ class _ProductionBacktestService:
                     reservation,
                 )
 
+    async def check_prepared_data(self, *, preparation_id, manifest_hash, end_date=None):
+        """Check local evidence only; a read never starts a provider or worker."""
+        if self._prepared_plan_reader is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        try:
+            prepared = await self._prepared_plan_reader(preparation_id)
+        except PreparationConflictError as error:
+            raise ApiError(ApiErrorCode.NOT_FOUND if error.code == "PREPARATION_NOT_FOUND"
+                           else ApiErrorCode.CONFLICT) from None
+        except BacktestServiceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+        if prepared.preparation_id != preparation_id or prepared.manifest_hash != manifest_hash:
+            raise ApiError(ApiErrorCode.CONFLICT)
+        return await self._read_sync(self._check_prepared_data, prepared, end_date)
+
+    def _check_prepared_data(self, prepared, end_date):
+        from trade_plan_monitor.backtest.automatic_data import now, prepared_dataset_request
+
+        submitted = now()
+        try:
+            request = prepared_dataset_request(
+                self._market_store, prepared, submitted_at=submitted, end_date=end_date,
+            )
+        except ValueError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        result = (freeze_scheduled_loop_dataset(self._market_store, request)
+                  if isinstance(prepared, FrozenPreparedCollection)
+                  else self._market_store.freeze_loop_dataset(request))
+        cached = (self._result_store.reusable_loop_market(prepared, request)
+                  if not result.ready else None)
+        sync_scope = None
+        if not result.ready and cached is None:
+            expanded = prepared_dataset_request(
+                self._market_store, prepared, submitted_at=submitted, end_date=end_date,
+                expand_missing=True,
+            )
+            scope = expanded.scope
+            closed_end = min(scope.end, submitted.date() - timedelta(days=1))
+            if scope.warmup_start <= closed_end:
+                sync_scope = BacktestDatasetScopeInput.model_validate({
+                    "symbols": list(scope.symbols), "start": str(scope.warmup_start),
+                    "warmupStart": str(scope.warmup_start), "end": str(closed_end),
+                    "historicalProfile": scope.historical_profile.value,
+                    "adjustmentPolicy": scope.adjustment_policy,
+                })
+        return PreparedBacktestDataView(
+            preparationId=prepared.preparation_id, manifestHash=prepared.manifest_hash,
+            endDate=str(request.scope.end), ready=result.ready or cached is not None,
+            syncScope=sync_scope, blockers=() if cached is not None else result.blockers,
+        )
+
     async def _submit_prepared_run(
         self,
         command: PreparedBacktestRunCommand,
@@ -780,58 +827,19 @@ class _ProductionBacktestService:
         command: PreparedBacktestRunCommand,
         reservation: BacktestRunSubmissionReservation,
     ) -> LoopInputReference:
+        from trade_plan_monitor.backtest.automatic_data import prepared_dataset_request
+
         scheduled = isinstance(prepared, FrozenPreparedCollection)
-        source = prepared.items[0].source if scheduled else prepared.source
-        version = prepared.schedule.entries[0].version
-        start = max(
-            source.execution_available_at,
-            datetime.combine(source.effective_trade_date, time.min, SHANGHAI),
-        )
-        if scheduled:
-            start = max(start, prepared.account.snapshot_at)
-        boundary = LoopEndBoundary.resolve(
-            started_at=start,
-            submitted_at=reservation.claimed_at,
+        request = prepared_dataset_request(
+            self._market_store, prepared, submitted_at=reservation.claimed_at,
             end_date=command.end_date,
         )
-        requirements = (scheduled_dataset_requirements(prepared.schedule, boundary) if scheduled
-                        else loop_dataset_requirements(version.snapshot))
-        warmup_start = min(start.date(), source.effective_trade_date)
-        needed = max(
-            requirements.daily_observations,
-            (max(requirements.minute_observations - 1, 0) + 47) // 48,
-        )
-        calendar = self._market_store.current_trading_day(
-            version.snapshot.market, start.date()
-        )
-        for _ in range(needed):
-            if calendar is None:
-                break
-            previous = self._market_store.current_trading_day(
-                version.snapshot.market,
-                calendar.previous_trade_date,
-            )
-            if previous is None:
-                break
-            if not previous.is_open:
-                raise RuntimeError("loop warmup calendar chain is inconsistent")
-            warmup_start = min(warmup_start, previous.cal_date)
-            calendar = previous
-        request_type = ScheduledLoopDatasetRequest if scheduled else LoopDatasetRequest
-        request = request_type(
-            scope=DatasetScope(
-                symbols=(version.snapshot.symbol,),
-                start=start.date(),
-                end=boundary.resolved_end_date,
-                warmup_start=warmup_start,
-                historical_profile=HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1,
-            ),
-            schedule=prepared.schedule,
-            boundary=boundary,
-        )
+        boundary = request.boundary
         result = (freeze_scheduled_loop_dataset(self._market_store, request) if scheduled
                   else self._market_store.freeze_loop_dataset(request))
-        if not result.ready:
+        cached = (self._result_store.reusable_loop_market(prepared, request)
+                  if not result.ready else None)
+        if not result.ready and cached is None:
             raise ApiError(
                 ApiErrorCode.CONFLICT,
                 details=tuple(
@@ -843,12 +851,20 @@ class _ProductionBacktestService:
                     for blocker in result.blockers
                 ),
             )
+        dataset = result.manifest
+        if cached is not None:
+            # Rebind the new submission boundary; retain every immutable fact/hash.
+            dataset = type(cached.dataset).build(
+                boundary=boundary,
+                **{name: getattr(cached.dataset, name) for name in cached.dataset.model_dump()
+                   if name not in {"schema_version", "dataset_hash", "boundary"}},
+            )
         input_type = ScheduledLoopInput if scheduled else MonitorLoopInput
         run_input = input_type(
             schedule=prepared.schedule,
             initial_account=prepared.account,
             boundary=boundary,
-            dataset_hash=result.manifest.dataset_hash,
+            dataset_hash=dataset.dataset_hash,
             response=LoopResponsePolicy(
                 mode=command.response.mode,
                 response_delay_seconds=command.response.response_delay_seconds,
@@ -858,8 +874,9 @@ class _ProductionBacktestService:
         return self._result_store.record_loop_input(
             prepared=prepared,
             run_input=run_input,
-            dataset=result.manifest,
-            market_source=self._market_store,
+            dataset=dataset,
+            market_source=None if cached is not None else self._market_store,
+            frozen_source=None if cached is None else cached.reference,
         )
 
     async def _keep_run_reservation_alive(

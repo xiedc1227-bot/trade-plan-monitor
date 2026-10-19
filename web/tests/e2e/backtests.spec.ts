@@ -42,7 +42,7 @@ const ROUTES = [
   {
     heading: "历史数据管理",
     path: "/backtests/data?symbols=000001.SZ&start=2026-08-01&end=2026-08-28&warmupStart=2026-07-01",
-    readyTestId: "request-dataset-sync",
+    readyTestId: "apply-dataset-filters",
     viewSelector: ".backtest-data-view",
   },
   {
@@ -861,12 +861,10 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   await expectNoSeriousAxeViolations(page);
 
   await openRoute(page, ROUTES[2]);
-  await page.getByTestId("request-dataset-sync").focus();
+  await page.getByTestId("apply-dataset-filters").focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "确认联网同步历史数据" })).toBeVisible();
-  await expect(page.getByTestId("confirm-dataset-sync")).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "确认联网同步历史数据" })).toBeHidden();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByTestId("apply-dataset-filters")).toBeFocused();
   await expectNoSeriousAxeViolations(page);
 
   await openRoute(page, ROUTES[3]);

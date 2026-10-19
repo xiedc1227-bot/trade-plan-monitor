@@ -299,9 +299,12 @@ class LoopInputStore:
         prepared: FrozenPreparedPlan | FrozenPreparedCollection,
         run_input: MonitorLoopInput | ScheduledLoopInput,
         dataset: LoopDatasetManifest | ScheduledLoopDatasetManifest,
-        market_source: BacktestMarketStore,
+        market_source: BacktestMarketStore | None = None,
+        frozen_source: LoopInputReference | None = None,
     ) -> StoredLoopInput | ScheduledStoredLoopInput:
         # Validate all authority bindings before creating the directory or copying evidence.
+        if (market_source is None) == (frozen_source is None):
+            raise ValueError("choose one verified market source")
         scheduled = isinstance(prepared, FrozenPreparedCollection)
         stored_type = ScheduledStoredLoopInput if scheduled else StoredLoopInput
         candidate = stored_type(
@@ -312,8 +315,11 @@ class LoopInputStore:
         )
         self._owned_root(create=True)
         hashes = []
-        stream = (open_frozen_scheduled_loop_dataset(market_source, dataset) if scheduled
-                  else market_source.open_frozen_loop_dataset(dataset))
+        if frozen_source is not None:
+            stream = self.open_dataset(frozen_source)
+        else:
+            stream = (open_frozen_scheduled_loop_dataset(market_source, dataset) if scheduled
+                      else market_source.open_frozen_loop_dataset(dataset))
         with stream as reader:
             for index, day in enumerate(reader):
                 if index >= len(dataset.days):

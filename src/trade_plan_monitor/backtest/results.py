@@ -659,7 +659,8 @@ class BacktestResultStore:
         prepared: FrozenPreparedPlan,
         run_input: MonitorLoopInput,
         dataset: LoopDatasetManifest,
-        market_source: BacktestMarketStore,
+        market_source: BacktestMarketStore | None = None,
+        frozen_source=None,
     ) -> LoopInputReference:
         """Copy verified dependencies before atomically binding this canonical input."""
         existing = self.get_loop_input_reference(run_input.run_id)
@@ -677,6 +678,7 @@ class BacktestResultStore:
             run_input=run_input,
             dataset=dataset,
             market_source=market_source,
+            frozen_source=frozen_source,
         )
         reference = stored.reference
         snapshot = stored.run_input.schedule.entries[0].version.snapshot
@@ -716,6 +718,44 @@ class BacktestResultStore:
             self._get_loop_input_participant(connection, reference)
             connection.commit()
         return reference
+
+    def reusable_loop_market(self, prepared, request):
+        """Reuse only verified copies with identical authority and evidence cutoff.
+
+        A bounded lookup avoids downloading facts already retained with a report.
+        It never widens a cutoff or borrows another plan/account's evidence.
+        """
+        from trade_plan_monitor.backtest.jobs.models import LoopInputReference
+        from trade_plan_monitor.backtest.loop_dataset import (
+            loop_dataset_requirements,
+            scheduled_dataset_requirements,
+        )
+        from trade_plan_monitor.backtest.preparation_review import FrozenPreparedCollection
+
+        snapshot = prepared.schedule.entries[0].version.snapshot
+        needed = (scheduled_dataset_requirements(prepared.schedule, request.boundary)
+                  if isinstance(prepared, FrozenPreparedCollection)
+                  else loop_dataset_requirements(snapshot))
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT input_json FROM backtest_run_input WHERE plan_sha256 = ? "
+                "AND json_extract(input_json, '$.schema_version') = ? "
+                "ORDER BY created_at DESC, run_id LIMIT 20",
+                (plan_sha256(snapshot), "monitor-loop-input-reference-v1"),
+            ).fetchall()
+            for row in rows:
+                reference = LoopInputReference.model_validate_json(str(row[0]))
+                stored = self._get_loop_input_participant(connection, reference)
+                old, scope = stored.dataset, request.scope
+                if (stored.prepared.schedule == prepared.schedule
+                    and stored.prepared.account == prepared.account
+                    and old.boundary.started_at == request.boundary.started_at
+                    and old.boundary.evidence_cutoff == request.boundary.evidence_cutoff
+                    and old.requirements == needed
+                    and old.scope.model_copy(update={"warmup_start": scope.warmup_start}) == scope
+                    and old.scope.warmup_start <= scope.warmup_start):
+                    return stored
+        return None
 
     def get_loop_input_reference(self, run_id: str) -> LoopInputReference | None:
         """Read an existing verified reference; never reconstruct input from mutable heads."""

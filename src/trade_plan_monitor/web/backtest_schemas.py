@@ -361,6 +361,17 @@ class BacktestDatasetVerificationCommand(_BacktestApiInput):
     scope: BacktestDatasetScopeInput
 
 
+class PreparedBacktestDataView(_BacktestApiInput):
+    """Read-only check; sync scope never refers to a frozen historical dataset."""
+
+    preparation_id: PreparedIdentifier
+    manifest_hash: Sha256Hex
+    end_date: ApiDate
+    ready: bool
+    sync_scope: BacktestDatasetScopeInput | None
+    blockers: Annotated[tuple[str, ...], Field(max_length=100)]
+
+
 class BacktestExecutionConfigInput(_BacktestApiInput):
     """Version-independent exact simulated execution assumptions."""
 

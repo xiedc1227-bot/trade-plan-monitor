@@ -49,6 +49,7 @@ APPROVED_PATHS = {
     "/api/v1/backtest-preparations/{preparation_id}/reviews",
     "/api/v1/backtest-preparations/{preparation_id}/source",
     "/api/v1/backtest-runs",
+    "/api/v1/backtest-run-data",
     "/api/v1/backtest-runs/{run_id}",
     "/api/v1/backtest-runs/{run_id}/details",
     "/api/v1/backtest-runs/{run_id}/equity-series",

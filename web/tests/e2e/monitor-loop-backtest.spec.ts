@@ -173,6 +173,48 @@ test("unknown extraction cancellation survives navigation and requires explicit 
   expect((await (await page.request.get(url + "/fixture/counters")).json()).extractions).toBe(1);
 });
 
+test("start automatically fills missing history with the real worker and then replays", async ({ page }, testInfo) => {
+  test.setTimeout(180000); await start("auto-data");
+  const errors: string[] = [], commands: string[] = [], checks: boolean[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("request", request => { if (request.method() === "POST") commands.push(new URL(request.url()).pathname); });
+  page.on("response", response => {
+    if (new URL(response.url()).pathname === "/api/v1/backtest-run-data" && response.status() === 200) {
+      response.json().then(body => checks.push(body.ready));
+    }
+  });
+  const created = await page.request.post(url + "/api/v1/backtest-preparations", {
+    headers: { Origin: url, "Idempotency-Key": "auto-data-source" },
+    data: { input: { preparation_id: "auto-one", sources: [fixture.source] } },
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  await page.goto(url + "/backtests/new?preparationId=auto-one");
+  await candidate(page);
+  const supplements = page.locator('[data-testid^="review-supplement-"]');
+  for (let index = 0; index < await supplements.count(); index++) await supplements.nth(index).fill("核对合成原文的参数与来源绑定。");
+  const unknown = page.getByTestId("review-unknown-confirmation"); if (await unknown.count()) await unknown.check();
+  await page.getByTestId("review-evidence").fill("核对原文计划、期初持仓和规则，接受明确的研究限制。");
+  await page.getByTestId("review-confirmation").check(); await page.getByTestId("review-submit").click();
+  await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
+  expect((await (await page.request.get(url + "/fixture/counters")).json()).dataCalls).toEqual([]);
+  for (const [id, value] of Object.entries({ "commission-rate": "0", "minimum-commission-fen": "0", "stamp-duty-rate": "0", "transfer-fee-rate": "0", "buy-slippage-fen": "0", "sell-slippage-fen": "0", "end-date": "2026-08-20" })) await page.locator("#" + id).fill(value);
+  const sync = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/backtest-data-syncs");
+  const accepted = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/backtest-runs");
+  await page.getByTestId("submit-backtest-run").click();
+  expect((await sync).status()).toBe(202);
+  await expect(page.getByText("正在自动补齐历史数据", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("cancel-automatic-data")).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath("automatic-preparation.png"), fullPage: true });
+  const response = await accepted; expect(response.status(), await response.text()).toBe(202);
+  await expect(page.getByTestId("monitor-loop-summary")).toBeVisible({ timeout: 120000 });
+  expect(checks).toEqual([false, true]);
+  expect(commands.filter(path => path === "/api/v1/backtest-data-syncs")).toHaveLength(1);
+  expect(commands.filter(path => path === "/api/v1/backtest-runs")).toHaveLength(1);
+  expect(commands).not.toContain("/api/v1/backtest-dataset-verifications");
+  expect((await (await page.request.get(url + "/fixture/counters")).json()).dataCalls).toContain("minutes");
+  expect(errors).toEqual([]);
+});
+
 test("four complete plans produce one continuous account and one run in real Chrome", async ({ page }, testInfo) => {
   test.setTimeout(600000); await start("continuity-retry");
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
@@ -218,7 +260,6 @@ test("four complete plans produce one continuous account and one run in real Chr
   for (const [index, source] of inputs.sources.entries()) {
     if (index) {
       await page.getByTestId("prepare-next-source").click();
-      await page.getByRole("radio", { name: "修改型计划", exact: true }).check();
       await page.getByLabel("关联上一份已审核计划", { exact: true }).selectOption(previousId);
     }
     await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({ name: `day-${index+1}.txt`, mimeType: "text/plain", buffer: Buffer.from(source.text) });

@@ -149,9 +149,7 @@ p95 ≤ 200 毫秒。排除 ECharts 的入口/共享包必须 ≤ 150 KiB gzip�
 ≤ 100 KiB gzip，异步 ECharts 分块必须 ≤ 450 KiB gzip。性能 profile 与测量输出必须存放
 在 Git 外；测量环境不可用或不稳定时应阻断闸门，不能降低阈值。
 
-生产回测流程仍为 `DATA_SYNC` → `DATASET_VERIFY` → 离线 `BACKTEST_RUN`。只有数据同步
-可以联网，并且需要明确人工授权及 API 请求字段 `allowNetwork: true`。假浏览器闸门通过绝不授权真实同步，也不
-证明 Tushare 的可用性或语义。
+已审核原文回测自动检查数据，仅在需要时执行 `DATA_SYNC`，验证后离线执行 `BACKTEST_RUN`。点击开始授权本次数据准备；只读访问页面不授权。同步仍使用 `allowNetwork: true`、有界任务和取消机制。合成供应商与浏览器测试通过，不证明真实 Tushare 可用性或语义。
 
 ## 命令
 
@@ -251,7 +249,7 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 报告还会公开以下限制：零成交量分钟作为不可交易代理（`ZERO_VOLUME_MINUTE_USED_AS_NON_TRADABLE_PROXY`）、成交数量不受分钟成交量上限约束（`FILL_QUANTITY_NOT_CAPPED_BY_MINUTE_VOLUME`）、涨跌停锁定保守使用开盘价或滑点后价格（`CONSERVATIVE_LIMIT_LOCK_FROM_OPEN_OR_SLIPPAGE`）、回撤按每日权益采样（`DAILY_EQUITY_DRAWDOWN_SAMPLING`）、胜率按卖出成交而非往返交易统计（`WIN_RATE_PER_SELL_FILL_NOT_ROUND_TRIP`），以及指标除法固定使用 Decimal precision 28 和 `ROUND_HALF_EVEN`（`METRIC_DECIMAL_PRECISION_28_HALF_EVEN`）。
 
-通过回测数据页面提交历史数据同步和本地校验，冻结所需数据集，再在 `/backtests/new` 选择已审核计划、数据集、初始账户及成交假设并提交。后台任务异步执行，可查看进度、取消任务，并在结果页面查询或下载报告。只有经明确授权的数据同步可以联网。回测 CLI 命令及兼容适配器已移除；应用启动命令继续用于启动网页服务。
+在 `/backtests/new` 选择已审核计划、回放结束日期和成交假设后点击开始。程序检查本地证据，存在准确匹配的已验证冻结副本时自动复用，再补齐缺失的已结束日期历史数据、重新验证并启动回放。无需手动应用 URL、同步、验证或刷新缓存。历史数据管理仅查看数据集和任务记录。保留进度、取消、同一请求安全重试及失败后明确重试；不覆盖已有报告和冻结输入。旧版本与数据集回放继续使用既有冻结数据集。见[自动准备](docs/operations/monitor-loop-backtest.zh-CN.md#ml-o23-自动准备数据)。回测 CLI 命令及兼容适配器继续保持移除；应用启动命令仍启动网页服务。
 
 “从原文准备新计划”每次准备一份原文。后续计划关联准确的已审核前序；逐份明确审核保存后，勾选 1–256 份已审核计划组合为一次连续回测。组合不调用 AI。保存时从正文提取明确的生效交易日，仅在日期缺失或有歧义时要求确认。成文时间和历史可用时间为可选信息。未声明可用时间的预置计划从生效日上海时间 09:30 开盘起执行，保留既有计划/账户审核及行情检查。详见[原文准备](docs/operations/monitor-loop-backtest.zh-CN.md#ml-o02-准备并审核有序原文)。
 
