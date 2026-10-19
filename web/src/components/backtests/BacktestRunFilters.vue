@@ -217,7 +217,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
       </details>
       <div class="run-filters__footer">
         <p>按结果时间倒序显示。连续回测的结果时间为证据截止时间，不代表程序实际完成时间。</p>
-        <button data-testid="apply-run-filters" type="submit">应用筛选</button>
+        <button data-testid="apply-run-filters" type="submit">查询</button>
       </div>
     </form>
   </section>

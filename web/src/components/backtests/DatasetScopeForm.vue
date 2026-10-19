@@ -36,7 +36,7 @@ function applyFilters() {
         <label>股票代码<input v-model="symbol" autocomplete="off" placeholder="000001.SZ" /></label>
         <label>开始不早于<input v-model="start" inputmode="numeric" placeholder="YYYY-MM-DD" /></label>
         <label>结束不晚于<input v-model="end" inputmode="numeric" placeholder="YYYY-MM-DD" /></label>
-        <button type="submit" data-testid="apply-dataset-filters">应用筛选</button>
+        <button type="submit" data-testid="apply-dataset-filters">查询</button>
       </div>
       <p v-if="error" role="alert">{{ error }}</p>
     </form>

@@ -123,7 +123,7 @@ test("one production workspace extracts, edits mixed periods, reviews, explicitl
   await expect(page.locator("[data-risk-reminder]")).toBeVisible();
   await page.getByLabel("信号类型").selectOption("RISK_ALERT");
   const filteredResponse = page.waitForResponse(r => r.url().includes("/api/v1/alerts?") && r.url().includes("signalType=RISK_ALERT"));
-  await page.getByRole("button", { name: "应用筛选" }).click();
+  await page.getByRole("button", { name: "查询" }).click();
   const filtered = await filteredResponse;
   expect(filtered.status(), await filtered.text()).toBe(200);
   const filteredPage = await filtered.json();

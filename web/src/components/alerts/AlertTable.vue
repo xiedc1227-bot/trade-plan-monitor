@@ -222,7 +222,7 @@ function toLocalInput(value: string | null): string {
         结束时间
         <input v-model="endAt" name="alert-end-at" type="datetime-local" step="1" />
       </label>
-      <button type="submit" :disabled="busy">应用筛选</button>
+      <button type="submit" :disabled="busy">查询</button>
     </form>
     <p v-if="filterError !== null" class="alert-history__filter-error" role="alert">
       {{ filterError }}

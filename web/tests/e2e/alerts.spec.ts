@@ -174,7 +174,7 @@ test("queries, filters, expands evidence, and acknowledges without a position re
     ["确认状态", page.getByLabel("确认状态")],
     ["开始时间", page.getByLabel("开始时间")],
     ["结束时间", page.getByLabel("结束时间")],
-    ["应用筛选", page.getByRole("button", { name: "应用筛选" })],
+    ["查询", page.getByRole("button", { name: "查询" })],
   ];
   for (const width of [320, 768, 1_024, 1_440]) {
     await page.setViewportSize({ height: 900, width });
@@ -197,7 +197,7 @@ test("queries, filters, expands evidence, and acknowledges without a position re
   await page.getByLabel("确认状态").selectOption("false");
   await page.getByLabel("开始时间").fill("2026-08-24T09:30");
   await page.getByLabel("结束时间").fill("2026-08-24T15:00");
-  await page.getByRole("button", { name: "应用筛选" }).click();
+  await page.getByRole("button", { name: "查询" }).click();
   await expect.poll(() => alertQueries.length).toBe(2);
   expect(alertQueries[1]).toEqual({
     acknowledged: "false",
