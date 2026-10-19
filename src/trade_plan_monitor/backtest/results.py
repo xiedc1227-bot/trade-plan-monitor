@@ -928,15 +928,12 @@ class BacktestResultStore:
 
     def get_loop_diagnostics(self, run_id: str):
         """Project retained evidence in one snapshot; never mutate frozen result bytes."""
-        from trade_plan_monitor.backtest.loop_diagnostics import PlanDiagnosticCollector
-        from trade_plan_monitor.backtest.loop_publication import (
-            audit_record,
-            verify_loop_publication,
-        )
-        from trade_plan_monitor.backtest.loop_report import (
-            decode_loop_event,
-            verify_published_loop_event_set,
-        )
+        result = self.get_loop_result(run_id)
+        return None if result is None else result[2]
+
+    def get_loop_result(self, run_id: str):
+        """Verify input, report and diagnostics once in one retention-consistent snapshot."""
+        from trade_plan_monitor.backtest.loop_publication import read_loop_publication
 
         run_id = _validate_hash(run_id, "run_id")
         with self._connect() as connection:
@@ -950,44 +947,52 @@ class BacktestResultStore:
                 return None
             summary = _load_summary_row(row, expected_run_id=run_id)
             reference, _ = _publication_run_input(connection, run_id)
-            report = verify_loop_publication(
-                self, connection, summary, reference, materialized=True,
-            )
-            stored = self._get_loop_input_participant(connection, reference)
-            prepared = stored.prepared
-            if hasattr(prepared, "items"):
-                versions = [(i.source.source_id, i.source.effective_trade_date, i.version)
-                            for i in prepared.items]
-            else:
-                versions = [(prepared.source.source_id,
-                             prepared.schedule.entries[0].effective_trade_date,
-                             prepared.version)]
-            collector = PlanDiagnosticCollector(
-                versions, response_mode=stored.run_input.response.mode,
-            )
-            state = _artifact_state(connection, run_id, BacktestDetailKind.DECISION)
-            if state is None or state.availability is not BacktestArtifactAvailability.AVAILABLE:
-                return collector.finish(availability=(
-                    "EXPIRED" if state and state.availability.value == "EXPIRED" else "UNAVAILABLE"
-                ))
+            stored, report = read_loop_publication(self, connection, summary, reference)
+            return stored, report, self._loop_diagnostics(connection, stored, report)
 
-            def events():
-                cursor = connection.execute(
-                    "SELECT detail_id, run_id, kind, event_at, content_domain, content_hash, "
-                    "payload_json FROM backtest_detail WHERE run_id = ? AND kind = 'DECISION' "
-                    "ORDER BY detail_id", (run_id,),
-                )
-                while rows := cursor.fetchmany(100):
-                    for value in rows:
-                        detail = _load_detail_row(tuple(value), expected_run_id=run_id)
-                        event = decode_loop_event(canonical_json(detail.payload))
-                        if detail != audit_record(event):
-                            raise ValueError("loop diagnostic evidence identity mismatch")
-                        collector.observe(event)
-                        yield event
+    def _loop_diagnostics(self, connection, stored, report):
+        from trade_plan_monitor.backtest.loop_diagnostics import PlanDiagnosticCollector
+        from trade_plan_monitor.backtest.loop_publication import audit_record
+        from trade_plan_monitor.backtest.loop_report import (
+            decode_loop_event,
+            verify_published_loop_event_set,
+        )
 
-            verify_published_loop_event_set(report, events())
-            return collector.finish()
+        run_id = report.run_id
+        prepared = stored.prepared
+        if hasattr(prepared, "items"):
+            versions = [(i.source.source_id, i.source.effective_trade_date, i.version)
+                        for i in prepared.items]
+        else:
+            versions = [(prepared.source.source_id,
+                         prepared.schedule.entries[0].effective_trade_date,
+                         prepared.version)]
+        collector = PlanDiagnosticCollector(
+            versions, response_mode=stored.run_input.response.mode,
+        )
+        state = _artifact_state(connection, run_id, BacktestDetailKind.DECISION)
+        if state is None or state.availability is not BacktestArtifactAvailability.AVAILABLE:
+            return collector.finish(availability=(
+                "EXPIRED" if state and state.availability.value == "EXPIRED" else "UNAVAILABLE"
+            ))
+
+        def events():
+            cursor = connection.execute(
+                "SELECT detail_id, run_id, kind, event_at, content_domain, content_hash, "
+                "payload_json FROM backtest_detail WHERE run_id = ? AND kind = 'DECISION' "
+                "ORDER BY detail_id", (run_id,),
+            )
+            while rows := cursor.fetchmany(100):
+                for value in rows:
+                    detail = _load_detail_row(tuple(value), expected_run_id=run_id)
+                    event = decode_loop_event(canonical_json(detail.payload))
+                    if detail != audit_record(event):
+                        raise ValueError("loop diagnostic evidence identity mismatch")
+                    collector.observe(event)
+                    yield event
+
+        verify_published_loop_event_set(report, events())
+        return collector.finish()
 
     def get_loop_equity_series(self, run_id: str):
         """Verify and project a complete v5 curve in one retention-consistent snapshot."""

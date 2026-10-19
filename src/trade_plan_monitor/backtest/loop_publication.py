@@ -236,13 +236,19 @@ def stage_loop_report(
     return summary
 
 
-def verify_loop_publication(store, connection, summary, reference, *, materialized):
-    """Bind report, copied facts and every typed row in the caller's read snapshot."""
+def read_loop_publication(store, connection, summary, reference):
+    """Verify copied input and report together in the caller's read snapshot."""
     stored = store._get_loop_input_participant(connection, reference)
     report = store.loop_input_store.load_report(summary.assumptions["reportHash"])
     validate_report_input(stored, report)
     if summary.model_copy(update={"pinned": False}) != report_summary(stored, report):
         raise ValueError("stored loop summary does not match immutable report")
+    return stored, report
+
+
+def verify_loop_publication(store, connection, summary, reference, *, materialized):
+    """Bind report, copied facts and every typed row in the caller's read snapshot."""
+    stored, report = read_loop_publication(store, connection, summary, reference)
     if materialized:
         # Existing verified publication metadata survives optional-detail expiry.
         return report

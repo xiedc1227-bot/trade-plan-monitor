@@ -17,6 +17,7 @@ Current status — 2026-10-18, Asia/Shanghai: **functional acceptance complete w
 | Simplified run-record filters and consistent cutoff dates | Complete within RF-01–RF-02; actual service verified | [RF-03](run-record-filters.md#rf-03--verification-and-status) |
 | Temporary read failures and preparation progress | Complete within BR-01–BR-02; actual concurrent reads and full preparation journey verified | [BR-03](backtest-read-reliability.md#br-03--verification-and-status) |
 | Automatic market preparation and read-only data management | Completed; four actual plans and missing-data browser flow verified; retained report and 47 files unchanged | [AD-01–AD-03](automatic-backtest-data.md) |
+| Completed-result read contention | Complete; 180 backend checks passed; identical and mixed actual concurrent reads all 200; two reports and 50 files unchanged | [RR-01–RR-03](result-read-isolation.md) |
 | Bilingual acceptance record and task closure | Complete | BA-01–BA-06; documentation parity, links and diff checked for this update |
 
 No open implementation task remains within BA-02. Unquantified source conditions, the zero-fill actual sample and the absence of a new full integration/capacity certification remain explicit limits in BA-05. They are not marked as passing guarantees. No runtime behavior or acceptance threshold changes in this documentation closure.

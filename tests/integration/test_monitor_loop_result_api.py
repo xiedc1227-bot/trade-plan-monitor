@@ -147,6 +147,71 @@ def test_scheduled_result_has_exact_bounded_provenance_and_native_report_header(
     assert "report" not in summary and "versions" not in summary
 
 
+def test_one_result_read_verifies_the_frozen_input_once(scheduled_published, monkeypatch):
+    from trade_plan_monitor.backtest.loop_input_store import LoopInputStore
+
+    client, _, store, reference, _ = scheduled_published
+    original = LoopInputStore.load
+    loads = []
+
+    def checked(owner, selected, **kwargs):
+        loads.append(selected)
+        return original(owner, selected, **kwargs)
+
+    monkeypatch.setattr(LoopInputStore, "load", checked)
+    response = client.get(f"/api/v1/backtest-runs/{reference.run_id}")
+    assert response.status_code == 200
+    assert response.json()["planDiagnostics"]["availability"] == "AVAILABLE"
+    assert loads == [reference]
+
+
+def test_slow_result_read_does_not_block_jobs_or_duplicate_work(scheduled_published, monkeypatch):
+    from trade_plan_monitor.web.backtest_schemas import BacktestJobFiltersView
+
+    _, service, _, reference, _ = scheduled_published
+    entered, release = Event(), Event()
+    calls = []
+    original = service._project_run
+
+    def held(record):
+        calls.append(record.summary.run_id)
+        entered.set()
+        assert release.wait(5)
+        return original(record)
+
+    monkeypatch.setattr(service, "_project_run", held)
+    monkeypatch.setattr(service._metadata_thread, "_read_wait_seconds", 0.03)
+
+    async def scenario():
+        first = asyncio.create_task(service.get_run(run_id=reference.run_id))
+        second = None
+        try:
+            assert await asyncio.to_thread(entered.wait, 3)
+            second = asyncio.create_task(service.get_run(run_id=reference.run_id))
+            await asyncio.sleep(0)
+            page = await service.list_jobs(
+                filters=BacktestJobFiltersView.model_validate({
+                    name: None for name in (
+                        "kind", "status", "runId", "datasetHash", "createdFrom", "createdTo",
+                    )
+                }), limit=1, cursor=None,
+            )
+            assert len(page.items) == 1
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            assert service.outstanding_work == 1
+            release.set()
+            result = await second
+            assert result.run_id == reference.run_id
+            assert calls == [reference.run_id]
+        finally:
+            release.set()
+            await asyncio.gather(first, *([second] if second else []), return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
 def test_rule_comparison_reads_frozen_sources_without_preparation_or_replay(scheduled_published):
     client, service, store, reference, _ = scheduled_published
     prepared = store.get_loop_input(reference).prepared
@@ -610,6 +675,7 @@ def test_projection_backpressure_keeps_event_loop_responsive(published, monkeypa
         return original(value)
 
     monkeypatch.setattr(composition, "_detail_view", held)
+    monkeypatch.setattr(service._metadata_thread, "_read_wait_seconds", 0.03)
 
     async def query():
         task = asyncio.create_task(

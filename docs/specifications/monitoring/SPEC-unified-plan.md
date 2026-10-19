@@ -271,3 +271,11 @@ Historical data management becomes read-only: remove `应用到当前 URL`, `同
 OpenAPI snapshot SHA-256: `6de1b8500f2b6bb217e419c191861579bb27cdaa8ee40078c1b6e566ddee2228`
 
 Canonical monitor v2 OpenAPI snapshot SHA-256: `6a49893bef934394a1034eed225711cc152fb47684322878b2c84b6e08f9ad95`
+
+## U26. Isolated verified result reads (2026-10-18)
+
+The remaining completed-result 503 is a measured metadata head-of-line timeout. Summary projection must read and verify copied input, native report and diagnostics once in one retention-consistent snapshot. Preserve copied-day canonical/hash checks, report/input/summary binding, typed retained events and their complete published digest, diagnostic budgets and expiry states. No evidence, rule, historical input, report or SQL projection is rewritten.
+
+Unlike U24's short metadata-overlap repair, this follow-up adds one lazy owned result-reading thread, not a heavy execution worker. Summary, rule-comparison and equity projections use it. It permits one physical call, at most 8 observers and 8 distinct in-flight keys, with a 60-second admission wait for different queued work. Metadata retains 8 waiting reads and 5 seconds; mutation admission and the heavy-job slot remain unchanged. Concurrent identical result reads share active work keyed by operation/run/source; summary keys also include pin state. Remove shared work on completion; a later request verifies current stored evidence again. No persistent response cache may hide retention or corruption changes.
+
+Observer cancellation never cancels another observer or releases physical work. Include the new owner in stop/drain accounting and preserve sanitized SQL BUSY/LOCKED, stopping and overload 503/Retry-After behavior. Public routes/schemas, OpenAPI, dependencies, database schema and AI/network authority are unchanged. Actual verification compares both complete old/new report responses and all 50 snapshotted owned files; [RR-01–RR-03](../../../tasks/result-read-isolation.md) and [verification](../../verification/2026-10-18-result-read-isolation.md) record the scoped result, not a never-503/load guarantee.

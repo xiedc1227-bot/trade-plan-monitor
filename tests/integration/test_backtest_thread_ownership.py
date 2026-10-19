@@ -11,7 +11,10 @@ from trade_plan_monitor.backtest.service_lifecycle import (
     BacktestServiceUnavailable,
     LazyBacktestLifecycle,
 )
-from trade_plan_monitor.backtest.thread_lifecycle import BacktestMetadataThread
+from trade_plan_monitor.backtest.thread_lifecycle import (
+    BacktestMetadataThread,
+    BacktestResultReadThread,
+)
 
 
 class Lifecycle:
@@ -262,4 +265,78 @@ def test_metadata_read_wait_is_bounded_and_cancelled_read_never_executes() -> No
         finally:
             release.set()
             await thread.stop()
+    asyncio.run(scenario())
+
+
+def test_shared_result_read_keeps_cancelled_observers_owned_and_does_not_cache():
+    entered, release = Event(), Event()
+    calls = []
+
+    def read():
+        calls.append("read")
+        entered.set()
+        assert release.wait(2)
+        return len(calls)
+
+    async def scenario():
+        thread = BacktestResultReadThread(max_readers=2)
+        first = asyncio.create_task(thread.read_shared(("run", "a"), read))
+        try:
+            while not entered.is_set():
+                await asyncio.sleep(0)
+            second = asyncio.create_task(thread.read_shared(("run", "a"), read))
+            await asyncio.sleep(0)
+            with pytest.raises(BacktestServiceUnavailable):
+                await thread.read_shared(("run", "a"), read)
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            assert thread.outstanding_work == 1
+            release.set()
+            assert await second == 1
+            assert await thread.read_shared(("run", "a"), read) == 2
+            assert calls == ["read", "read"]
+        finally:
+            release.set()
+            await thread.stop()
+        assert thread.outstanding_work == 0
+        with pytest.raises(BacktestServiceUnavailable):
+            await thread.read_shared(("run", "a"), read)
+
+    asyncio.run(scenario())
+
+
+def test_shared_result_queue_timeout_and_shutdown_never_execute_waiting_reads():
+    entered, release = Event(), Event()
+    calls = []
+
+    def held():
+        entered.set()
+        assert release.wait(2)
+
+    async def scenario():
+        thread = BacktestResultReadThread(read_wait_seconds=0.03)
+        first = asyncio.create_task(thread.read_shared(("run", "a"), held))
+        try:
+            while not entered.is_set():
+                await asyncio.sleep(0)
+            with pytest.raises(BacktestServiceUnavailable):
+                await thread.read_shared(("run", "b"), lambda: calls.append("expired"))
+            waiting = asyncio.create_task(thread.read_shared(
+                ("run", "c"), lambda: calls.append("stopped"),
+            ))
+            await asyncio.sleep(0)
+            stopping = asyncio.create_task(thread.stop())
+            await asyncio.sleep(0)
+            assert not stopping.done() and thread.outstanding_work == 1
+            release.set()
+            await first
+            await stopping
+            with pytest.raises(BacktestServiceUnavailable):
+                await waiting
+            assert calls == []
+        finally:
+            release.set()
+            await thread.stop()
+
     asyncio.run(scenario())

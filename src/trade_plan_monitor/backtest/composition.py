@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from threading import Lock
 from typing import Protocol
@@ -104,7 +105,10 @@ from trade_plan_monitor.backtest.service_lifecycle import (
     BacktestServiceUnavailable,
     LazyBacktestLifecycle,
 )
-from trade_plan_monitor.backtest.thread_lifecycle import BacktestMetadataThread
+from trade_plan_monitor.backtest.thread_lifecycle import (
+    BacktestMetadataThread,
+    BacktestResultReadThread,
+)
 from trade_plan_monitor.backtest.time import (
     SHANGHAI,
     format_shanghai_datetime,
@@ -511,21 +515,30 @@ class _ProductionBacktestService:
         self._prepared_plan_reader = prepared_plan_reader
         self._metadata_thread = BacktestMetadataThread()
         self._reservation_thread = BacktestMetadataThread()
+        self._result_thread = BacktestResultReadThread()
 
     @property
     def outstanding_work(self) -> int:
-        return self._metadata_thread.outstanding_work + self._reservation_thread.outstanding_work
+        return (self._metadata_thread.outstanding_work
+                + self._reservation_thread.outstanding_work
+                + self._result_thread.outstanding_work)
 
     async def stop_metadata(self) -> None:
         await self._metadata_thread.stop()
         await self._reservation_thread.stop()
+        await self._result_thread.stop()
 
     async def _run_sync[ResultT](
         self, function: Callable[..., ResultT], /, *args: object,
         _read_only: bool = False, **kwargs: object,
     ) -> ResultT:
+        runner = self._metadata_thread.read if _read_only else self._metadata_thread.run
+        return await self._call_sync(runner, function, *args, **kwargs)
+
+    async def _call_sync[ResultT](
+        self, runner, function: Callable[..., ResultT], /, *args: object, **kwargs: object,
+    ) -> ResultT:
         try:
-            runner = self._metadata_thread.read if _read_only else self._metadata_thread.run
             return await runner(function, *args, **kwargs)
         except BacktestServiceUnavailable:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
@@ -540,6 +553,14 @@ class _ProductionBacktestService:
         self, function: Callable[..., ResultT], /, *args: object, **kwargs: object,
     ) -> ResultT:
         return await self._run_sync(function, *args, _read_only=True, **kwargs)
+
+    async def _read_result[ResultT](
+        self, key: tuple[str, ...], function: Callable[..., ResultT], /,
+        *args: object, **kwargs: object,
+    ) -> ResultT:
+        return await self._call_sync(
+            partial(self._result_thread.read_shared, key), function, *args, **kwargs,
+        )
 
     async def submit_data_sync(
         self,
@@ -1266,7 +1287,9 @@ class _ProductionBacktestService:
         return await self._run_view(record)
 
     async def get_rule_changes(self, *, run_id: str, source_id: str):
-        return await self._read_sync(self._project_rule_changes, run_id, source_id)
+        return await self._read_result(
+            ("rule-changes", run_id, source_id), self._project_rule_changes, run_id, source_id,
+        )
 
     def _project_rule_changes(self, run_id: str, source_id: str):
         from trade_plan_monitor.web.result_rule_changes import project_rule_changes
@@ -1368,7 +1391,7 @@ class _ProductionBacktestService:
         )
 
     async def get_equity_series(self, *, run_id: str) -> BacktestEquitySeries:
-        return await self._read_sync(self._equity_series_view, run_id)
+        return await self._read_result(("equity", run_id), self._equity_series_view, run_id)
 
     def _equity_series_view(self, run_id: str) -> BacktestEquitySeries:
         try:
@@ -1516,19 +1539,20 @@ class _ProductionBacktestService:
         return _run_summary_view(record)
 
     async def _run_view(self, record: BacktestRunRecord) -> BacktestRunView | BacktestLoopRunView:
-        return await self._read_sync(self._project_run, record)
+        return await self._read_result(
+            ("run", record.summary.run_id, str(record.summary.pinned)), self._project_run, record,
+        )
 
     def _project_run(self, record: BacktestRunRecord) -> BacktestRunView | BacktestLoopRunView:
         run_input = self._result_store.get_run_input(record.summary.run_id)
         if run_input is None:
             raise RuntimeError("verified result is missing its immutable run input")
         if isinstance(run_input, LoopInputReference):
-            stored = self._result_store.get_loop_input(run_input)
-            report = self._result_store.get_loop_report(record.summary.run_id)
-            if report is None:
+            result = self._result_store.get_loop_result(record.summary.run_id)
+            if result is None:
                 raise RuntimeError("verified loop result is missing its immutable report")
+            stored, report, diagnostics = result
             prepared = stored.prepared
-            diagnostics = self._result_store.get_loop_diagnostics(record.summary.run_id)
             if isinstance(prepared, FrozenPreparedCollection):
                 from trade_plan_monitor.web.preparation_schemas import project_collection_frozen
 
