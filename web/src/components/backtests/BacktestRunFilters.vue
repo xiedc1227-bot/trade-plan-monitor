@@ -159,7 +159,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
         </p>
       </div>
       <div class="run-filters__field">
-        <label for="run-filter-pinned">固定状态 <span>可选，仅看已固定或未固定记录</span></label>
+        <label for="run-filter-pinned">保留状态 <span>可选，已保留记录的明细不会被常规过期清理。</span></label>
         <select
           id="run-filter-pinned"
           v-model="pinned"
@@ -167,8 +167,8 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
           :aria-describedby="fieldError('pinned') === undefined ? undefined : 'run-filter-pinned-error'"
         >
           <option value="">全部</option>
-          <option value="true">仅已固定</option>
-          <option value="false">仅未固定</option>
+          <option value="true">仅已保留</option>
+          <option value="false">仅未保留</option>
         </select>
         <p v-if="fieldError('pinned')" id="run-filter-pinned-error" class="run-filters__field-error">
           {{ fieldError("pinned") }}

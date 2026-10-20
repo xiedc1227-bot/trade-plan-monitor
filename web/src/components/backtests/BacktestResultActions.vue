@@ -40,7 +40,7 @@ const summaryExportHref = computed(() =>
 const fillsExportHref = computed(() =>
   buildBacktestExportHref(props.run.runId, "FILLS_CSV"),
 );
-const pinActionLabel = computed(() => (props.run.pinned ? "取消固定" : "固定本结果"));
+const pinActionLabel = computed(() => (props.run.pinned ? "取消保留" : "保留"));
 
 function defaultIdempotencyKey(): string {
   return globalThis.crypto.randomUUID();
@@ -103,25 +103,25 @@ async function performPin(retryUncertain: boolean): Promise<void> {
     if (requestGeneration !== generation || controller.signal.aborted) return;
     pendingIntent = null;
     pinState.value = "REFRESHING";
-    pinMessage.value = "固定状态已提交，正在刷新服务端权威状态";
+    pinMessage.value = "保留状态已提交，正在刷新服务端权威状态";
     emit("refresh");
   } catch (error) {
     if (requestGeneration !== generation || controller.signal.aborted) return;
     if (error instanceof ApiClientError && error.code === "CONFLICT") {
       pendingIntent = null;
       pinState.value = "REFRESHING";
-      pinMessage.value = "固定状态已发生修订冲突，正在刷新服务端权威状态";
+      pinMessage.value = "保留状态已发生修订冲突，正在刷新服务端权威状态";
       emit("refresh");
     } else if (
       error instanceof ApiClientError &&
       (error.code === "NETWORK_ERROR" || error.code === "INVALID_RESPONSE")
     ) {
       pinState.value = "UNCERTAIN";
-      pinMessage.value = "固定结果尚未确认；不要创建新意图，可安全重试同一请求";
+      pinMessage.value = "保留操作结果尚未确认；不要创建新意图，可安全重试同一请求";
     } else {
       pendingIntent = null;
       pinState.value = "FAILED";
-      pinMessage.value = "固定请求未被服务端接受，请稍后重试";
+      pinMessage.value = "保留请求未被服务端接受，请稍后重试";
     }
   } finally {
     if (activeController === controller) activeController = null;
@@ -139,8 +139,7 @@ onBeforeUnmount(() => {
   <section class="result-actions" aria-labelledby="result-actions-title">
     <div>
       <h3 id="result-actions-title">结果操作</h3>
-      <p v-if="'report' in run">固定仅更新结果标记，已完成的报告保持冻结。</p>
-      <p v-else>固定操作只改变保留元数据；导出由浏览器直接接收服务端流式文件。</p>
+      <p>已保留记录的明细不会被常规过期清理。取消保留后恢复默认保留规则，不改变回测报告或盈亏。</p>
     </div>
 
     <div class="result-actions__controls">
@@ -184,7 +183,7 @@ onBeforeUnmount(() => {
       aria-live="polite"
       aria-busy="true"
     >
-      正在提交固定状态…
+      正在提交保留状态…
     </p>
 
     <p v-if="!('report' in run)" class="result-actions__boundary">

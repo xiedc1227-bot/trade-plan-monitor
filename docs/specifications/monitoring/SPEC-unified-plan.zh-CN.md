@@ -240,7 +240,7 @@ OpenAPI 快照 SHA-256：`5d6dff24961ae06dafe422211775851ff1fc55cbb91267e9d5b79f
 
 既有筛选响应增加可选可空日期字段，未使用时省略，因此旧无日期筛选响应和游标上下文不变。前端核对回显日期条件及每项返回结果的覆盖日期。旧 API 客户端／链接的 `completedFrom` / `completedTo` 保持原结果时间语义，不重新定义为实际任务完成时间。历史连续回测的 `completedAt` 是证据截止时间。冻结报告、哈希、存储时间戳、保留规则和固定 `completedAt:desc,runId:desc` 顺序不变。表格将该值标为结果时间，静态文字说明排序；实际任务完成仍是独立任务事实。
 
-界面包含股票、覆盖截止日期及固定状态。根据用户进一步简化要求，数据集哈希和单版本 ID 不再提供筛选控件或折叠入口。页面 URL 在首次列表读取前清除 `datasetHash` / `planVersionId` 及其游标，保留其他条件并返回第 1 页；内部 API 筛选和存储标识不变。旧时间链接条件仅在已有条件时明确标为“旧链接时间条件”，不静默转换为覆盖日期。参见 [RF-01–RF-03](../../../tasks/run-record-filters.zh-CN.md)及[验证记录](../../verification/2026-10-18-run-record-filters.zh-CN.md)。
+界面包含股票、覆盖截止日期及保留状态。结果操作使用“保留”／“取消保留”，已保留明细免于常规过期清理。本次只调整界面文案，`pinned` 及存储语义保持不变。根据用户进一步简化要求，数据集哈希和单版本 ID 不再提供筛选控件或折叠入口。页面 URL 在首次列表读取前清除 `datasetHash` / `planVersionId` 及其游标，保留其他条件并返回第 1 页；内部 API 筛选和存储标识不变。旧时间链接条件仅在已有条件时明确标为“旧链接时间条件”，不静默转换为覆盖日期。参见 [RF-01–RF-03](../../../tasks/run-record-filters.zh-CN.md)及[验证记录](../../verification/2026-10-18-run-record-filters.zh-CN.md)。
 
 OpenAPI 快照 SHA-256：`a94974a7d4b7ec26239b72574d87b4a97fd3dbda353833b5a7eb7056e398d67b`
 

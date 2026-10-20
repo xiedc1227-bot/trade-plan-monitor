@@ -119,7 +119,7 @@ export function validateRunFilterDraft(draft: RunFilterDraft): RunFilterValidati
   const pinned =
     draft.pinned === "true" ? true : draft.pinned === "false" ? false : null;
   if (!(draft.pinned === "" || draft.pinned === "true" || draft.pinned === "false")) {
-    errors.pinned = "固定状态筛选无效";
+    errors.pinned = "保留状态筛选无效";
   }
   return Object.freeze({
     errors: Object.freeze(errors),

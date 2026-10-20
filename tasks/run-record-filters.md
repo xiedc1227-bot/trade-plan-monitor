@@ -2,7 +2,7 @@
 
 ## RF-01 — Interface
 
-- [x] Keep stock, inclusive backtest cutoff dates and pin status. Remove dataset hash and plan version ID, including their advanced/legacy lookup entrances. Old page links drop both conditions and their cursor before querying; internal APIs and stored identifiers remain. Replace the disabled sort selector with an explanation. Preserve visible old-link time conditions, keyboard use, URL restoration and narrow layouts.
+- [x] Keep stock, inclusive backtest cutoff dates and retention status. Remove dataset hash and plan version ID, including their advanced/legacy lookup entrances. Old page links drop both conditions and their cursor before querying; internal APIs and stored identifiers remain. Replace the disabled sort selector with an explanation. Preserve visible old-link time conditions, keyboard use, URL restoration and narrow layouts.
 
 ## RF-02 — Date contract and compatibility
 

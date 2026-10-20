@@ -326,7 +326,7 @@ describe("BacktestRunDetailView pin reconciliation", () => {
     await flushPromises();
 
     expect(getRun).toHaveBeenCalledTimes(2);
-    expect(wrapper.get("[data-testid='toggle-run-pin']").text()).toContain("取消固定");
+    expect(wrapper.get("[data-testid='toggle-run-pin']").text()).toContain("取消保留");
     expect(wrapper.text()).not.toContain("private conflict");
     wrapper.unmount();
   });

@@ -90,7 +90,7 @@ function intervalReturn(run: BacktestRunPage["items"][number]): string {
             <th scope="col">最终权益（元）</th>
             <th scope="col">总收益率</th>
             <th scope="col">成交数</th>
-            <th scope="col">固定</th>
+            <th scope="col">保留状态</th>
           </tr>
         </thead>
         <tbody>
@@ -112,7 +112,7 @@ function intervalReturn(run: BacktestRunPage["items"][number]): string {
             <td class="run-table__number">{{ finalEquity(run) }}</td>
             <td class="run-table__number">{{ intervalReturn(run) }}</td>
             <td class="run-table__number">{{ run.fillCount }}</td>
-            <td>{{ run.pinned ? "已固定" : "未固定" }}</td>
+            <td>{{ run.pinned ? "已保留" : "未保留" }}</td>
           </tr>
         </tbody>
       </table>

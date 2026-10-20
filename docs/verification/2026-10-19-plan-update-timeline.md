@@ -63,7 +63,7 @@ No arbitrary start-date clipping, intraday update scheduling, same-day replaceme
 
 ## PUT-V07. Final staged verification, 2026-10-20
 
-The user authorized a final review and focused commit. The 37-file candidate includes the earlier optional library identity projection required by the timeline display. Nine unrelated whole-file edits and the unrelated U22 changes in the two mixed specification files were excluded. Independent staged review found no blockers. Candidate tree `edf54f1c411d8df4830c4a09dad3fd1b525f081f` was exported into an isolated directory and checked without those unrelated edits; only this bilingual verification section was added afterward.
+The user authorized a final review and focused commit. The 37-file candidate includes the earlier optional library identity projection required by the timeline display. Nine unrelated whole-file edits and the unrelated U23 changes in the two mixed specification files were excluded. Independent staged review found no blockers. Candidate tree `edf54f1c411d8df4830c4a09dad3fd1b525f081f` was exported into an isolated directory and checked without those unrelated edits; only this bilingual verification section was added afterward.
 
 The exact candidate passed all 1147 frontend tests in 76 files, all 145 required backend tests, all 20 real Chrome tests in 7.0 minutes with zero retries, both generated-contract checks, Ruff, type checking and production build. The existing Starlette/httpx deprecation warning remains. The editable Shanghai current-day default, historical-detail isolation, original four-plan account/fill/fee/equity oracle, historical readers, cancellation audit and layout gates passed. Real preparation/result database SHA-256 values still match PUT-V03.
 
