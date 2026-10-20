@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, shallowRef, watch } from "vue";
 import type { DeepReadonly } from "vue";
 import type { ReviewedPlanLibraryItem } from "../../api/generated-runtime-status";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
@@ -14,6 +14,15 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ open: [id: string]; update: [id: string]; refresh: []; new: [] }>();
 const groups = computed(() => planTimelineGroups(props.items));
+const pageSize = 10;
+const page = shallowRef(1);
+const pageCount = computed(() => Math.max(1, Math.ceil(groups.value.length / pageSize)));
+const pageOffset = computed(() => (page.value - 1) * pageSize);
+const visibleGroups = computed(() => groups.value.slice(pageOffset.value, pageOffset.value + pageSize));
+const selected = computed(() => props.items.find(item => item.preparationId === props.endpointId));
+const selectedPage = computed(() => 1 + Math.floor(Math.max(0, groups.value.findIndex(group =>
+  group.entries.some(row => row.item.preparationId === props.endpointId))) / pageSize));
+watch(pageCount, count => { page.value = Math.min(page.value, count); });
 </script>
 <template>
   <section class="plan-library" aria-label="已审核计划库">
@@ -28,8 +37,12 @@ const groups = computed(() => planTimelineGroups(props.items));
     <fieldset v-else :disabled="disabled || pending || loading">
       <legend>选择计划更新时间线</legend>
       <p>打开一条时间线查看或更新计划；开始回测时自动使用该路径的全部已审核更新，无需逐份勾选。</p>
-      <section v-for="(group, groupIndex) in groups" :key="group.id" class="plan-library__chain" data-testid="plan-library-chain" :data-chain-id="group.id" :aria-label="`时间线 ${groupIndex + 1} · ${group.label}`">
-        <h3>时间线 {{ groupIndex + 1 }} · {{ group.label }}</h3>
+      <div v-if="selected" class="actions plan-library__selection">
+        <p role="status">当前已选：{{ selected.name }}（{{ selected.symbol }}）· 截至 {{ selected.effectiveTradeDate }}</p>
+        <button v-if="page !== selectedPage" type="button" @click="page = selectedPage">定位已选时间线</button>
+      </div>
+      <section v-for="(group, groupIndex) in visibleGroups" :key="group.id" class="plan-library__chain" data-testid="plan-library-chain" :data-chain-id="group.id" :aria-label="`时间线 ${pageOffset + groupIndex + 1} · ${group.label}`">
+        <h3>时间线 {{ pageOffset + groupIndex + 1 }} · {{ group.label }}</h3>
         <p v-if="group.paths.length > 1">存在不同更新路径，请明确选择一个末端版本；各路径不会合并。</p>
         <p v-if="!group.paths.length" role="status">前序关系无法核对，暂不能作为完整时间线使用。</p>
         <div v-for="(path, pathIndex) in group.paths" :key="path.endpoint.preparationId" class="plan-library__path">
@@ -40,7 +53,9 @@ const groups = computed(() => planTimelineGroups(props.items));
             <button v-if="endpointId === path.endpoint.preparationId" type="button" data-testid="prepare-next-source" :disabled="disabled || pending || loading || !!path.error || !canStart" @click="emit('update', path.endpoint.preparationId)">更新交易计划</button>
           </div>
         </div>
-        <ol class="plan-library__nodes">
+        <details class="plan-library__updates" data-testid="timeline-updates">
+          <summary>查看更新记录（{{ group.entries.length }}）</summary>
+          <ol class="plan-library__nodes">
           <li v-for="row in group.entries" :key="row.item.preparationId" class="plan-library__record">
             <div class="entry">
               <span>{{ row.item.effectiveTradeDate }} · {{ row.item.name }}（{{ row.item.symbol }}）
@@ -52,8 +67,14 @@ const groups = computed(() => planTimelineGroups(props.items));
             </div>
           <ReviewedPlanDetails :item="row.item" :predecessor="row.predecessor" v-bind="detailsApi ? { api: detailsApi } : {}" />
           </li>
-        </ol>
+          </ol>
+        </details>
       </section>
+      <nav v-if="pageCount > 1" class="actions" aria-label="计划时间线分页">
+        <button type="button" :disabled="page <= 1" @click="page--">上一页</button>
+        <p role="status">共 {{ groups.length }} 条时间线 · 第 {{ page }} / {{ pageCount }} 页 · 每页 {{ pageSize }} 条</p>
+        <button type="button" :disabled="page >= pageCount" @click="page++">下一页</button>
+      </nav>
     </fieldset>
     <p v-if="uncertain" role="status">回测准备结果尚未确认，请使用下方同一请求安全重试；当前路径和设置保持锁定。</p>
     <p v-if="error" role="alert">{{ error }}</p>
@@ -65,6 +86,8 @@ const groups = computed(() => planTimelineGroups(props.items));
 .plan-library fieldset { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); min-width: 0; margin-top: var(--space-4); border: var(--border-technical); }
 .plan-library select { width: 100%; min-width: 0; box-sizing: border-box; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.plan-library__selection { min-width: 0; overflow-wrap: anywhere; }
+.plan-library__updates > summary { cursor: pointer; padding-block: var(--space-2); overflow-wrap: anywhere; }
 .plan-library__nodes { min-width: 0; padding-inline-start: 1.5rem; }
 .plan-library__path { margin-block-end: var(--space-3); overflow-wrap: anywhere; }
 .entry { display: flex; align-items: start; gap: var(--space-3); overflow-wrap: anywhere; }

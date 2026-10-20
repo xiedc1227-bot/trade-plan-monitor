@@ -52,3 +52,9 @@ A new approved update never rewrites an accepted/running replay or historical re
 Use **查看计划及本次调整** to inspect the plan date, stock, preceding plan and approved retain/modify/add/revoke changes. Prices are displayed in yuan. Independent timelines and alternative paths remain separately selectable by their dates, review times and display order. Internal preparation/version IDs and hashes are no longer displayed as text; exact references still drive linking, selection and replay admission internally.
 
 Expanding an entry reads its existing reviewed preparation and that source's details only. The displayed changes must match the selected manifest, source, effective date, revision and corresponding approved evidence; a mismatch or failed read shows an explicit retry message. Older records without itemized change evidence keep a link to their reviewed original text and conditions. Opening details performs no extraction, review, composition or replay submission and cannot alter the selected endpoint or form. The independent read-only source page remains available.
+
+## PR-O07. Browse a compact timeline library
+
+The library displays ten complete timelines per page. Each timeline initially shows its stock, date range, review time and update count; **查看更新记录** expands its reviewed updates, and **查看计划及本次调整** opens the existing condition details. Alternative endpoints stay together within their owning timeline. Display numbering continues across pages.
+
+Changing pages or expanding records does not select a different replay endpoint or submit any operation. The current selection remains visible above the list; **定位已选时间线** returns to its page when needed. The existing **打开时间线** and **更新交易计划** actions keep their exact endpoint references and behavior. Pagination only limits presentation of already loaded complete groups; it does not truncate the plan chain or change continuous replay or historical results.

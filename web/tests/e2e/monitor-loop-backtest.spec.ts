@@ -312,6 +312,7 @@ test("four complete plans produce one continuous account and one run in real Chr
   await expect(page.getByTestId("prepared-run-account")).toContainText("10000.00");
   await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
   for (const [id, value] of Object.entries({ "commission-rate": "0", "minimum-commission-fen": "500", "stamp-duty-rate": "0", "transfer-fee-rate": "0", "buy-slippage-fen": "0", "sell-slippage-fen": "0", "end-date": "2026-08-25" })) await page.locator("#" + id).fill(value);
+  await page.getByTestId("timeline-updates").first().getByText("查看更新记录（4）", { exact: true }).click();
   await page.getByText("查看计划及本次调整", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "本次建立的交易条件", exact: true })).toBeVisible();
   const inspectionOpened = page.waitForEvent("popup");
