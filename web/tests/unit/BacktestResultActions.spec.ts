@@ -279,9 +279,9 @@ describe("BacktestMetricsSummary", () => {
     expect(text).toContain("NO_EVENT_RISK");
     expect(text).toContain("TUSHARE_STK_MINS_241_END_V1");
     expect(text).toContain("NONE（未复权）");
-    expect(text).toContain("佣金率0.0003");
-    expect(text).toContain("最低佣金（元）5.00");
-    expect(text).toContain("买入滑点（bps）1.25");
+    expect(text).toContain("佣金率0.03%");
+    expect(text).toContain("最低佣金5.00 元/笔");
+    expect(text).toContain("买入滑点0.0125%（价格比例）");
     expect(text).toContain("backtest-execution-v1");
     expect(text).toContain("backtest-metrics-v1");
     expect(text).toContain("backtest-report-summary-v2");

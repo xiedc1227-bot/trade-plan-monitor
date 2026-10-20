@@ -37,7 +37,7 @@ test.afterAll(async () => { await vite?.close(); });
 test("actual four-source result shows automatic diagnosis at desktop and mobile widths", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
-  await page.goto(`${url}/backtests/${run.runId}?tab=summary`);
+  await page.goto(`${url}/backtests/${run.runId}?tab=reasons`);
   const panel = page.getByTestId("plan-execution-diagnostics");
   await expect(panel).toBeVisible();
   await expect(panel.locator('[data-testid^="plan-diagnostic-"]')).toHaveCount(4);

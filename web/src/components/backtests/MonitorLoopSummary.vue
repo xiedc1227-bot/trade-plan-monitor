@@ -6,8 +6,10 @@ import { formatDisplayDateTime } from "../../formatters/dateTime";
 import { choiceLabels, fieldLabels } from "../plans/planSchema";
 import PlanExecutionDiagnostics from "./PlanExecutionDiagnostics.vue";
 import ResultRuleChanges from "./ResultRuleChanges.vue";
+import BacktestCostSummary from "./BacktestCostSummary.vue";
 
-const props = defineProps<{ run: DeepReadonly<BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView> }>();
+const props = withDefaults(defineProps<{ run: DeepReadonly<BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView>; showDiagnostics?: boolean }>(), { showDiagnostics: true });
+const emit = defineEmits<{ select: [sequence: number] }>();
 const money = (value: number | null) => value === null ? "不可用 / 未知" : `${formatFenAsYuan(String(value))} 元`;
 const ratio = (value: string | null) => value === null ? "不可用" : value;
 function rows(value: unknown, path = ""): { path: string; value: string }[] {
@@ -30,7 +32,8 @@ const financialMetrics = computed(() => [
   ["累计费用", money(props.run.metrics.paid_fees_fen)], ["累计滑点", money(props.run.metrics.slippage_fen)],
   ["区间收益率（比例）", ratio(props.run.metrics.interval_return)], ["最大回撤（比例）", ratio(props.run.metrics.maximum_drawdown)],
   ["换手率（比例）", ratio(props.run.metrics.turnover)],
-]);
+].filter(([title]) => props.run.openingAccount.cash.kind !== "POSITION_LIMIT_ONLY" ||
+  !["期初权益", "期末权益", "权益变化", "区间收益率（比例）", "最大回撤（比例）", "换手率（比例）"].includes(title!)));
 </script>
 
 <template>
@@ -54,7 +57,8 @@ const financialMetrics = computed(() => [
       <dt>期末持仓</dt><dd>{{ run.report.final_inventory.total_qty ?? '未知' }} 股；可卖核心 {{ run.report.final_inventory.sellable_core ?? '未知' }} 股 / 机动 {{ run.report.final_inventory.sellable_tactical ?? '未知' }} 股</dd>
       <dt>闭环记录</dt><dd>{{ run.report.cycle.evaluations }} 次评估 · {{ run.report.cycle.intents }} 个响应意图 · {{ run.report.cycle.fills }} 次成交 · {{ run.report.cycle.unfilled_intents }} 个未成交意图</dd>
     </dl>
-    <PlanExecutionDiagnostics :diagnostics="run.planDiagnostics ?? null" :response-mode="run.response.mode" />
+    <BacktestCostSummary :costs="run.costs" />
+    <PlanExecutionDiagnostics v-if="showDiagnostics" :diagnostics="run.planDiagnostics ?? null" :response-mode="run.response.mode" @select="emit('select', $event)" />
     <ResultRuleChanges v-if="scheduled" :run="scheduled" />
     <h4>服务端已验证指标</h4>
     <p>{{ run.metrics.valuation_valid ? '估值有效' : '估值受限，缺失项保持不可用' }}。比例按服务端原始精度展示。</p>

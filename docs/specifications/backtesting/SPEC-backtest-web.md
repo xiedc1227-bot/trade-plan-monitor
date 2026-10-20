@@ -172,3 +172,7 @@ Browser tests cover the complete fake-provider data-sync → verify → submit �
 ## Open Questions
 
 No blocking question remains for the first workbench proposal. Runtime internationalization, multi-run comparison, portfolio/shared-cash backtests, parameter optimization, WebSocket progress, browser/OS notifications, a cross-route Pinia store, and empirical performance budgets remain separate future capabilities or implementation-plan decisions as applicable.
+
+## BR-WEB01. Result review workspace
+
+[BR01–BR06](SPEC-backtest-review.md) govern the P0 + minimal P1 slice. Existing `summary`, `fills`, `details`, `equity`, `market-index` URL meanings remain readable; add `reasons` and `provenance` for monitoring-loop runs. The compact overview and fill list lead to recorded evidence through URL `fillId|eventId|sequence`, `relation`, `reviewCursor`. Keep the resource cursor when opening/closing evidence; abort and ignore stale reads. Back/Forward restores selection. Visited signed cursors support Previous; direct links retain First page fallback. Preserve exact amounts, funding-mode applicability, representative diagnostic sampling, engine root outcomes and legacy readers. Evidence moves below records below 1024px; controls have 44px targets and visible keyboard focus. No whole-run client filtering or single-fill accounting reconstruction.

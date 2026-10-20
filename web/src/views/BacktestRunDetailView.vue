@@ -17,6 +17,11 @@ import {
 
 import type { BacktestJobView } from "../api/generated";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
+import type { BacktestReviewApi } from "../api/backtestReview";
+import { useBacktestReview } from "../composables/useBacktestReview";
+import BacktestEvidencePanel from "../components/backtests/BacktestEvidencePanel.vue";
+import BacktestOverview from "../components/backtests/BacktestOverview.vue";
+import PlanExecutionDiagnostics from "../components/backtests/PlanExecutionDiagnostics.vue";
 import BacktestDetailTable from "../components/backtests/BacktestDetailTable.vue";
 import BacktestEquityTable from "../components/backtests/BacktestEquityTable.vue";
 import BacktestFillTable from "../components/backtests/BacktestFillTable.vue";
@@ -38,6 +43,7 @@ import {
 
 interface Props {
   api?: BacktestApi;
+  reviewApi?: BacktestReviewApi;
   createIdempotencyKey?: () => string;
 }
 
@@ -68,6 +74,8 @@ const RESULT_TABS = new Set<BacktestResultTab>([
   "details",
   "equity",
   "market-index",
+  "reasons",
+  "provenance",
 ]);
 const DETAIL_KIND_OPTIONS: readonly BacktestDetailKind[] = [
   "DECISION",
@@ -207,6 +215,22 @@ const results = useBacktestResults({
   selectedTab,
 });
 const loopRun = computed(() => results.summary.value !== null && "report" in results.summary.value ? results.summary.value : null);
+const review = useBacktestReview({
+  runId, enabled: () => resultsEnabled.value && loopRun.value !== null,
+  ...(props.reviewApi ? { api: props.reviewApi } : {}),
+});
+const previousCursors = shallowRef<Record<string, string | null>>({});
+const pageKey = (cursor: string | null) => `${runId.value}:${selectedTab.value}:${selectedDetailKind.value}:${cursor ?? ''}`;
+const previousCursorKnown = computed(() => Object.hasOwn(previousCursors.value, pageKey(selectedCursor.value)));
+const previousCursor = computed(() => previousCursors.value[pageKey(selectedCursor.value)] ?? null);
+function rememberNextPage() {
+  if (activePage.value?.nextCursor) previousCursors.value = {
+    ...previousCursors.value, [pageKey(activePage.value.nextCursor)]: selectedCursor.value,
+  };
+}
+async function navigateReviewTab(tab: "fills" | "reasons" | "provenance") {
+  await router.push({ path: route.path, query: resultQuery(tab) });
+}
 const legacyRun = computed(() => results.summary.value !== null && !("report" in results.summary.value) ? results.summary.value : null);
 const loopDetails = computed(() => results.detailPage.value?.items.filter(item => "event" in item) ?? []);
 const marketIndexRequest = computed(() =>
@@ -498,15 +522,8 @@ onBeforeUnmount(() => {
         <div>
           <h2 id="result-review-title">结果审阅</h2>
         </div>
-        <p>每次仅读取 URL 当前选择的一页结果，不执行历史重放或明细重建。</p>
+        <p>选择一笔成交或一条诊断，核对当时的计划要求、实际依据和执行结果。</p>
       </div>
-
-      <BacktestResultActions
-        :api="api"
-        :create-idempotency-key="props.createIdempotencyKey"
-        :run="results.summary.value"
-        @refresh="results.refreshSummary"
-      />
 
       <nav class="run-detail-view__tabs" aria-label="回测结果资源">
         <RouterLink
@@ -514,22 +531,26 @@ onBeforeUnmount(() => {
           :to="{ path: route.path, query: resultQuery('summary') }"
           :aria-current="selectedTab === 'summary' ? 'page' : undefined"
         >
-          汇总
+          结果概览
         </RouterLink>
         <RouterLink
           data-testid="result-tab-fills"
           :to="{ path: route.path, query: resultQuery('fills') }"
           :aria-current="selectedTab === 'fills' ? 'page' : undefined"
         >
-          模拟成交
+          成交与原因
         </RouterLink>
         <RouterLink
           data-testid="result-tab-details"
           :to="{ path: route.path, query: resultQuery('details') }"
           :aria-current="selectedTab === 'details' ? 'page' : undefined"
         >
-          结果明细
+          审计事件
         </RouterLink>
+        <RouterLink v-if="loopRun" data-testid="result-tab-reasons"
+          :to="{ path: route.path, query: resultQuery('reasons') }" :aria-current="selectedTab === 'reasons' ? 'page' : undefined">未成交原因</RouterLink>
+        <RouterLink v-if="loopRun" data-testid="result-tab-provenance"
+          :to="{ path: route.path, query: resultQuery('provenance') }" :aria-current="selectedTab === 'provenance' ? 'page' : undefined">计划与来源</RouterLink>
         <RouterLink
           data-testid="result-tab-equity"
           :to="{ path: route.path, query: resultQuery('equity') }"
@@ -547,7 +568,14 @@ onBeforeUnmount(() => {
         </RouterLink>
       </nav>
 
-      <MonitorLoopSummary v-if="selectedTab === 'summary' && loopRun !== null" :run="loopRun" />
+      <div class="run-detail-view__workspace" :class="{ 'run-detail-view__workspace--selected': review.selected.value }">
+      <div class="run-detail-view__workspace-content">
+      <BacktestOverview v-if="selectedTab === 'summary' && loopRun !== null" :run="loopRun" @navigate="navigateReviewTab" />
+      <MonitorLoopSummary v-else-if="selectedTab === 'provenance' && loopRun !== null" :run="loopRun" :show-diagnostics="false" />
+      <section v-else-if="selectedTab === 'reasons' && loopRun !== null" class="run-detail-view__resource" aria-label="未成交原因">
+        <h3>未成交原因</h3>
+        <PlanExecutionDiagnostics :diagnostics="loopRun.planDiagnostics ?? null" :response-mode="loopRun.response.mode" @select="review.open({ sequence: $event })" />
+      </section>
       <BacktestMetricsSummary
         v-else-if="selectedTab === 'summary' && legacyRun !== null"
         :run="legacyRun"
@@ -594,6 +622,7 @@ onBeforeUnmount(() => {
         <BacktestFillTable
           v-else-if="results.fillsState.value === 'READY' && results.fillsPage.value !== null"
           :items="results.fillsPage.value.items"
+          @select="review.open({ fillId: $event })"
         />
       </section>
 
@@ -666,6 +695,7 @@ onBeforeUnmount(() => {
         <MonitorLoopTimeline
           v-else-if="results.detailState.value === 'READY' && loopRun !== null"
           :items="loopDetails"
+          @select="review.open({ eventId: $event })"
         />
         <BacktestDetailTable
           v-else-if="results.detailState.value === 'READY' && results.detailPage.value !== null"
@@ -777,11 +807,23 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
+      </div>
+      <BacktestEvidencePanel v-if="review.selected.value && loopRun" :context="review.context.value"
+        :loading="review.loading.value" :error="review.error.value" :diagnostics="loopRun.planDiagnostics ?? null"
+        @close="review.close" @retry="review.refresh" @next="review.nextPage" @relation="review.changeRelation"
+        @select="review.open({ eventId: $event })" />
+      </div>
+
       <nav
         v-if="selectedTab !== 'summary' && activePage !== null"
         class="run-detail-view__pagination"
         aria-label="当前结果资源分页"
       >
+        <RouterLink
+          v-if="previousCursorKnown"
+          data-testid="previous-result-page"
+          :to="{ path: route.path, query: resultQuery(selectedTab, selectedDetailKind, previousCursor) }"
+        >上一页</RouterLink>
         <RouterLink
           v-if="selectedCursor !== null"
           data-testid="first-result-page"
@@ -795,6 +837,7 @@ onBeforeUnmount(() => {
         <RouterLink
           v-if="activePage.hasMore && activePage.nextCursor !== null"
           data-testid="next-result-page"
+          @click="rememberNextPage"
           :to="{
             path: route.path,
             query: resultQuery(selectedTab, selectedDetailKind, activePage.nextCursor),
@@ -804,11 +847,22 @@ onBeforeUnmount(() => {
         </RouterLink>
         <span v-if="!activePage.hasMore">已到当前资源末页</span>
       </nav>
+      <BacktestResultActions
+        :api="api"
+        :create-idempotency-key="props.createIdempotencyKey"
+        :run="results.summary.value"
+        @refresh="results.refreshSummary"
+      />
     </section>
   </div>
 </template>
 
 <style scoped>
+.run-detail-view__workspace { display: grid; gap: var(--space-4); min-width: 0; align-items: start; }
+.run-detail-view__workspace-content { min-width: 0; }
+@media (min-width: 64rem) {
+  .run-detail-view__workspace--selected { grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr); }
+}
 .run-detail-view {
   display: grid;
   box-sizing: border-box;

@@ -4,6 +4,7 @@ import type { LoopDiagnostics, LoopPlanDiagnostic, LoopDiagnosticExample } from 
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 const props = defineProps<{ diagnostics?: DeepReadonly<LoopDiagnostics> | null; responseMode: string }>();
+const emit = defineEmits<{ select: [sequence: number] }>();
 const labels: Record<LoopDiagnosticExample["category"], string> = {
   MARKET_UNMET: "行情条件未满足", QUALITATIVE_UNRESOLVED: "定性条件未量化／未核验",
   PROCESSING_ERROR: "提取／校验问题", DATA_UNAVAILABLE: "行情依据不足",
@@ -47,7 +48,7 @@ function outcome(value: LoopDiagnosticExample["root_outcome"]): string {
               <thead><tr><th scope="col">分类／时间</th><th scope="col">计划要求</th><th scope="col">实际依据</th></tr></thead>
               <tbody><tr v-for="(example, row) in plan.examples" :key="`${example.sequence}-${row}`">
                 <td data-label="分类／时间"><strong>{{ labels[example.category] }}</strong><br><time :datetime="example.at">{{ formatDisplayDateTime(example.at) }}</time><br><small>{{ outcome(example.root_outcome) }}</small></td>
-                <td data-label="计划要求">{{ example.requirement || '执行本次已审核计划' }}</td><td data-label="实际依据">{{ example.actual }}</td>
+                <td data-label="计划要求">{{ example.requirement || '执行本次已审核计划' }}</td><td data-label="实际依据">{{ example.actual }}<br><button type="button" data-testid="review-diagnostic" @click="emit('select', example.sequence)">查看此条记录与原因</button></td>
               </tr></tbody>
             </table>
           </div>
@@ -76,6 +77,8 @@ table { border-collapse: collapse; width: 100%; font-size: .875rem; }
 .caption { text-align: left; font-weight: 600; padding-block: var(--space-2); }
 th, td { text-align: left; vertical-align: top; padding: var(--space-3); border-bottom: var(--border-technical); overflow-wrap: anywhere; min-width: 9rem; line-height: 1.6; }
 summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; }
+button { cursor: pointer; min-height: 2.75rem; margin-block-start: var(--space-2); padding: var(--space-2) var(--space-3); color: inherit; background: var(--color-surface-raised); border: var(--border-technical); border-radius: var(--radius-control); }
+button:focus-visible { outline: .1875rem solid var(--color-focus-ring); outline-offset: .1875rem; }
 details li { overflow-wrap: anywhere; }
 @media (max-width: 36rem) {
   .plan { padding: var(--space-3); }

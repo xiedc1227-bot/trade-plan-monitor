@@ -4,6 +4,7 @@ import type { DeepReadonly } from "vue";
 import type { BacktestRunView } from "../../api/generated";
 import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
+import BacktestCostSummary from "./BacktestCostSummary.vue";
 
 interface Props {
   run: DeepReadonly<BacktestRunView>;
@@ -143,13 +144,8 @@ function limitationDescription(token: string): string {
         <div><dt>历史数据标签契约</dt><dd>{{ run.assumptions.historicalProfile }}</dd></div>
         <div><dt>价格调整策略</dt><dd>{{ run.assumptions.priceAdjustmentPolicy }}（未复权）</dd></div>
         <div><dt>执行配置哈希</dt><dd>{{ run.assumptions.executionConfigHash }}</dd></div>
-        <div><dt>佣金率</dt><dd>{{ run.assumptions.executionConfig.commissionRate }}</dd></div>
-        <div><dt>最低佣金（元）</dt><dd>{{ formatFenAsYuan(run.assumptions.executionConfig.minimumCommissionFen) }}</dd></div>
-        <div><dt>印花税率</dt><dd>{{ run.assumptions.executionConfig.stampDutyRate }}</dd></div>
-        <div><dt>过户费率</dt><dd>{{ run.assumptions.executionConfig.transferFeeRate }}</dd></div>
-        <div><dt>买入滑点（bps）</dt><dd>{{ run.assumptions.executionConfig.buySlippageBps }}</dd></div>
-        <div><dt>卖出滑点（bps）</dt><dd>{{ run.assumptions.executionConfig.sellSlippageBps }}</dd></div>
       </dl>
+      <BacktestCostSummary :costs="run.assumptions.executionConfig" />
     </section>
 
     <section class="metrics-summary__section" aria-labelledby="formula-versions-title">

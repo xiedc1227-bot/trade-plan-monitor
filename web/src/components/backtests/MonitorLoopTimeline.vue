@@ -5,17 +5,19 @@ import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 defineProps<{ items: readonly (BacktestLoopEventView | BacktestScheduledEventView | DeepReadonly<BacktestLoopEventView | BacktestScheduledEventView>)[] }>();
+const emit = defineEmits<{ select: [eventId: string] }>();
 const money = (v: number | null) => v === null ? "未知 / 不可用" : `${formatFenAsYuan(String(v))} 元`;
 const labels = { REPLACED: "计划替换", CONTINUED: "计划延续", NO_AUTHORITY: "无有效计划权限", EVALUATED: "监控评估", REMINDED: "提醒", REQUESTED: "响应意图", EXECUTED: "执行尝试", STATE: "账户状态", VALUATION: "估值" };
 </script>
 
 <template>
   <section class="loop-timeline" data-testid="monitor-loop-timeline" aria-label="当前页因果事件">
-    <p>按服务端事件顺序展示当前页。原因事件可能位于前一页；分页不会补造或重算事件。</p>
+    <p>按记录顺序展示当前页。点击“追溯原因”可定位其他页的关联记录。</p>
     <ol>
       <li v-for="item in items" :key="item.event.event_id" :data-event-id="item.event.event_id">
         <h4>第 {{ item.event.sequence }} 条 · {{ labels[item.event.payload.kind] }}</h4>
         <time :datetime="item.eventAt">{{ formatDisplayDateTime(item.eventAt) }}</time>
+        <div class="loop-timeline__actions"><button type="button" @click="emit('select', item.event.event_id)">查看这条记录</button><button v-if="item.event.cause_event_id" type="button" @click="emit('select', item.event.cause_event_id)">追溯原因</button></div>
         <p class="identity">事件 {{ item.event.event_id }}<span v-if="item.event.cause_event_id"><br>原因事件 {{ item.event.cause_event_id }}</span></p>
         <p v-if="item.schemaVersion === 'monitor-loop-event-v2'" class="identity">版本 {{ item.event.version_id ?? '无有效版本' }} · 权限 {{ item.event.authority_id ?? '无有效权限' }}</p>
         <template v-if="item.event.payload.kind === 'REPLACED' || item.event.payload.kind === 'CONTINUED' || item.event.payload.kind === 'NO_AUTHORITY'">
@@ -65,6 +67,9 @@ const labels = { REPLACED: "计划替换", CONTINUED: "计划延续", NO_AUTHORI
 
 <style scoped>
 .loop-timeline { min-width: 0; }
+.loop-timeline__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+button { min-height: 2.75rem; cursor: pointer; padding: var(--space-2) var(--space-3); border: var(--border-technical); border-radius: var(--radius-control); background: var(--color-surface-raised); color: inherit; }
+button:focus-visible { outline: .1875rem solid var(--color-focus-ring); outline-offset: .1875rem; }
 ol { display: grid; gap: var(--space-4); padding: 0; list-style: none; }
 li { min-width: 0; border: var(--border-technical); border-inline-start: 0.25rem solid var(--color-signal-watch-amber); padding: var(--space-4); background: var(--color-surface-raised); border-radius: var(--radius-control); }
 h4, p { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }

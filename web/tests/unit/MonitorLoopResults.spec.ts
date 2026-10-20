@@ -146,12 +146,17 @@ describe("owned native loop results", () => {
       .listFills(fixture.run.runId, { limit: 100 })).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
   it("shows frozen provenance, exact cutoff and valid metrics without unsupported export links", async () => {
-    const { wrapper, fetcher } = await page();
+    const { wrapper, fetcher } = await page("provenance");
     const summary = wrapper.get('[data-testid="monitor-loop-summary"]');
     expect(summary.text()).toContain(fixture.run.provenance.preparationId);
     expect(summary.text()).toContain("2026-08-24 09:43:12");
     expect(summary.text()).toContain("服务端默认");
     expect(summary.text()).toContain("已审核的完整计划");
+    const costs = summary.get('[aria-label="本次回测费用参数"]');
+    expect(costs.text()).toContain("佣金率0.03%");
+    expect(costs.text()).toContain("最低佣金5.00 元/笔");
+    expect(costs.text()).toContain("买入滑点0.01 元/股");
+    expect(costs.findAll("input, select, button")).toHaveLength(0);
     expect(wrapper.find('[data-testid="export-summary-json"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="toggle-run-pin"]').exists()).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -247,6 +252,9 @@ describe("owned scheduled loop results", () => {
     const tabs = wrapper.get('[aria-label="回测结果资源"]');
     expect(summary.element.compareDocumentPosition(tabs.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(summary.get('[data-testid="profit-cutoff"]').text()).toBe(run.eventEnd);
+    const costs = wrapper.get('[aria-label="本次回测费用参数"]');
+    expect(costs.text()).toContain("佣金率0.03%");
+    expect(costs.text()).toContain("最低佣金5.00 元/笔");
     expect(fetcher).toHaveBeenCalledTimes(1);
     await router.push({ path: router.currentRoute.value.path, query: { tab: "fills" } });
     await flushPromises();
@@ -298,7 +306,7 @@ describe("owned scheduled loop results", () => {
       .listDetails(event.run_id, { kind: "DECISION", limit: 100 })).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
   it("renders one run-wide account summary and the ordered immutable version calendar", async () => {
-    const { wrapper, fetcher, run } = await scheduledPage();
+    const { wrapper, fetcher, run } = await scheduledPage("provenance");
     expect(wrapper.findAll('[data-testid="monitor-loop-summary"]')).toHaveLength(1);
     const summary = wrapper.get('[data-testid="monitor-loop-summary"]');
     expect(summary.text()).toContain(run.provenance.preparationId); expect(summary.text()).toContain("连续");

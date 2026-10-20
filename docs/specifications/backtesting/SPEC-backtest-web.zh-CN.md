@@ -172,3 +172,7 @@ Router 测试固定精确 10 条路径，并证明四个回测路径都渲染真
 ## 开放问题
 
 首个工作台提案没有阻断问题。运行时国际化、多运行比较、组合/共享资金回测、参数寻优、WebSocket 进度、浏览器/OS 通知、跨路由 Pinia Store 和经验性能预算继续作为独立未来能力或相应实现计划决策。
+
+## BR-WEB01. 结果审阅工作区
+
+[BR01–BR06](SPEC-backtest-review.zh-CN.md) 约束 P0 + 最小 P1 阶段。已有 `summary`、`fills`、`details`、`equity`、`market-index` URL 含义保持可读；监控闭环运行新增 `reasons` 和 `provenance`。紧凑概览和成交列表通过 URL `fillId|eventId|sequence`、`relation`、`reviewCursor` 打开记录证据。打开／关闭保留资源游标，取消并忽略过期读取。前进／后退恢复选择。已访问签名游标支持上一页，直达链接保留返回第一页。保留精确金额、资金模式适用性、代表性诊断抽样、引擎根结论及历史读取器。1024px 以下证据置于记录下方；控件操作目标 44px 并具有可见键盘焦点。不做全运行前端筛选或单笔会计重建。
