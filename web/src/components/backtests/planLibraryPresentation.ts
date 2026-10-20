@@ -93,3 +93,5 @@ export function planTimelineGroups(items: readonly Entry[]) {
       .map(({ item: endpoint }) => ({ endpoint, ...planTimelinePath(items, endpoint.preparationId) })),
   }));
 }
+
+export type PlanTimelineGroup = ReturnType<typeof planTimelineGroups>[number];

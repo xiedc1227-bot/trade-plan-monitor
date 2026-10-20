@@ -37,6 +37,11 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 
 ## Backtesting specifications
 
+- [Backtest result interaction proposal (proposed)](specifications/backtesting/PROPOSAL-backtest-result-ux.md) ([中文](specifications/backtesting/PROPOSAL-backtest-result-ux.zh-CN.md))
+- [Backtest result review — P0 + minimal P1](specifications/backtesting/SPEC-backtest-review.md) · [BT-R01–BT-R03](../tasks/backtest-review.md)
+  - [Review operations and old-run indexing](operations/backtest-review.md) · [Verification](verification/2026-10-20-backtest-review.md)
+- [Backtest creation interaction](specifications/backtesting/SPEC-backtest-creation-ux.md) · [Implementation tasks](../tasks/backtest-creation-ux.md)
+  - [Creation interaction verification](verification/2026-10-20-backtest-creation-ux.md)
 - [Monitoring-loop backtest design (implemented)](specifications/backtesting/PROPOSAL-monitor-loop-backtest.md) ([中文](specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md))
 - Active monitoring-loop implementation: [plan](../tasks/plan.md) ([中文](../tasks/plan.zh-CN.md)) and [tasks](../tasks/todo.md) ([中文](../tasks/todo.zh-CN.md)); implementation and acceptance are complete, with results in MV18–MV46.
 - [Unified Plan Historical Replay](specifications/backtesting/SPEC-unified-replay.md) ([中文](specifications/backtesting/SPEC-unified-replay.zh-CN.md))

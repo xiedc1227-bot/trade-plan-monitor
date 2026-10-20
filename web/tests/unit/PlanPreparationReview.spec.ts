@@ -12,6 +12,7 @@ import PlanPreparationProgress from "../../src/components/backtests/PlanPreparat
 import BacktestNewView from "../../src/views/BacktestNewView.vue";
 import { createRouter, createMemoryHistory } from "vue-router";
 import { createPlanApi } from "../../src/api/plans";
+import { createPlanLibraryApi } from "../../src/api/planLibrary";
 
 const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.json", "utf8")) as {
   candidate: PreparationView; reviewed: PreparationView; choices: { path: string; reason: string }[];
@@ -158,7 +159,9 @@ describe("preparation creation page composition", () => {
     };
     const planApi = { ...createPlanApi(vi.fn<typeof fetch>()),
       listPlanVersions: vi.fn().mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 }) };
-    const wrapper = mount(BacktestNewView, { props: { preparationApi: api, planApi,
+    const libraryApi = { ...createPlanLibraryApi(vi.fn<typeof fetch>()),
+      list: vi.fn().mockResolvedValue({ items: [], offset: 0, limit: 100, total: 0 }) };
+    const wrapper = mount(BacktestNewView, { props: { preparationApi: api, planApi, libraryApi,
       ...(initialPreparationId === undefined ? {} : { initialPreparationId }) },
       global: { plugins: [router], stubs: { BacktestRunForm: true, BacktestReferenceMarketCoveragePanel: true } } });
     wrappers.push(wrapper); await flushPromises(); return { wrapper, api };
@@ -168,9 +171,22 @@ describe("preparation creation page composition", () => {
     expect(wrapper.findComponent({ name: "WorkbenchPlanReplay" }).exists()).toBe(true);
     expect(api.get).not.toHaveBeenCalled();
     await wrapper.get('[data-testid="choose-prepared-plan"]').trigger("click");
-    expect(wrapper.findComponent({ name: "PlanPreparationSourceForm" }).exists()).toBe(true);
+    expect(wrapper.findComponent(PlanPreparationSourceForm).exists()).toBe(false);
+    expect(wrapper.findComponent(PlanPreparationProgress).exists()).toBe(false);
     expect(api.get).not.toHaveBeenCalled();
     expect(wrapper.findComponent({ name: "BacktestRunForm" }).exists()).toBe(false);
+    await wrapper.get('[data-testid="new-plan-timeline"]').trigger("click");
+    expect(wrapper.findComponent(PlanPreparationSourceForm).exists()).toBe(true);
+    await wrapper.get('[data-testid="close-preparation-workspace"]').trigger("click");
+    expect(wrapper.findComponent(PlanPreparationSourceForm).exists()).toBe(false);
+    await wrapper.get('[data-testid="new-plan-timeline"]').trigger("click");
+    wrapper.findComponent(PlanPreparationSourceForm).vm.$emit("update:source", { source_id: "draft", text: "保留未保存的原文" });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="close-preparation-workspace"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[data-testid="new-plan-timeline"]').attributes("disabled")).toBeDefined();
+    await wrapper.get('[data-testid="close-preparation-workspace"]').trigger("click");
+    expect(wrapper.findComponent(PlanPreparationSourceForm).props("source").text).toBe("保留未保存的原文");
+    expect(api.get).not.toHaveBeenCalled();
   });
   it("composes explicit resumed review and blocks mutually exclusive mode switching while the task is unfinished", async () => {
     const { wrapper, api } = await page(fixture.candidate.preparationId);

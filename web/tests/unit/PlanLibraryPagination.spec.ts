@@ -68,3 +68,28 @@ it("keeps forked endpoints together on the same page", () => {
     expect(first.findAll(".plan-library__record")).toHaveLength(5);
   });
 });
+
+it("searches loaded stock metadata without losing selection or merging complete timelines", async () => {
+  const { wrapper, items } = setup();
+  const original = JSON.stringify(items);
+  await button(wrapper, "下一页").trigger("click");
+  await wrapper.get('input[type="search"]').setValue("测试时间线26");
+  expect(wrapper.findAll('[data-testid="plan-library-chain"]')).toHaveLength(1);
+  expect(wrapper.get('[data-testid="plan-library-chain"]').attributes("data-chain-id")).toBe("page-25-0");
+  expect(wrapper.get('[data-testid="plan-library-chain"]').text()).toContain("时间线 26");
+  expect(wrapper.findAll(".plan-library__record")).toHaveLength(4);
+  await wrapper.get('input[type="search"]').setValue("没有这只股票");
+  expect(wrapper.findAll('[data-testid="plan-library-chain"]')).toHaveLength(0);
+  expect(wrapper.text()).toContain("已加载的历史记录仍然保留");
+  expect(wrapper.props("endpointId")).toBe("page-25-3");
+  await button(wrapper, "定位已选时间线").trigger("click");
+  expect(wrapper.get('input[type="search"]').element).toHaveProperty("value", "");
+  expect(wrapper.text()).toContain("第 3 / 3 页");
+  expect(wrapper.get('[data-endpoint-id="page-25-3"]').attributes("aria-pressed")).toBe("true");
+  await wrapper.get('input[type="search"]').setValue("002240.sz");
+  expect(wrapper.text()).toContain("第 1 / 3 页");
+  expect(wrapper.get('[data-testid="plan-library-count"]').text()).toContain("30 条时间线 · 120 份已审核计划");
+  expect(wrapper.emitted("open")).toBeUndefined();
+  expect(wrapper.emitted("refresh")).toBeUndefined();
+  expect(JSON.stringify(items)).toBe(original);
+});

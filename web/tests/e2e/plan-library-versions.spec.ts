@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createServer, type ViteDevServer } from "vite";
 import vue from "@vitejs/plugin-vue";
+import axe from "axe-core";
 
 let server: ViteDevServer;
 let url: string;
@@ -25,8 +26,20 @@ const manyItems = Array.from({ length: 30 }, (_, chain) => items.slice(0, 4).map
 test.beforeAll(async () => {
   const cache = join(process.cwd(), ".pytest_cache");
   await mkdir(cache, { recursive: true });
+  await writeFile(join(cache, "library-read-states.html"), `<!doctype html><html lang="zh-CN"><head>
+  <meta charset="utf-8"><title>计划库读取状态</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"></head>
+  <body><main style="padding:1rem"><h1>计划库读取状态</h1><div id="app"></div></main><script type="module">
+  import {createApp,h} from 'vue';
+  import Library from '/src/components/backtests/ReviewedPlanLibrary.vue';
+  import {usePlanLibrary} from '/src/composables/usePlanLibrary';
+  import '/src/assets/tokens.css';
+  createApp({setup(){const library=usePlanLibrary();return()=>h(Library,{
+    items:library.items.value,endpointId:library.endpointId.value,disabled:false,
+    loading:library.loading.value,pending:false,uncertain:false,error:library.error.value,canStart:true,
+    onRefresh:()=>library.refresh(),onOpen:id=>library.chooseEndpoint(id)});}}).mount('#app');
+  </script></body></html>`);
   await writeFile(join(cache, "library-display.html"), `<!doctype html><html lang="zh-CN"><head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"></head>
+  <meta charset="utf-8"><title>已审核计划库核对</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"></head>
   <body><main style="padding:1rem"><h1>已审核计划库核对</h1><div id="app"></div></main><script type="module">
   import {createApp,h,reactive} from 'vue';
   import Library from '/src/components/backtests/ReviewedPlanLibrary.vue';
@@ -62,6 +75,75 @@ test.beforeAll(async () => {
   url = `http://127.0.0.1:${address.port}/.pytest_cache/library-display.html`;
 });
 test.afterAll(async () => { await server.close(); });
+
+test("search and selection navigation work by keyboard without writes or overflow", async ({ page }) => {
+  const writes: string[] = [], errors: string[] = [];
+  page.on("request", request => { if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url()); });
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto(url + "?many=1");
+  const search = page.getByRole("searchbox", { name: "搜索股票" });
+  await search.fill("测试时间线26");
+  await expect(page.getByTestId("plan-library-chain")).toHaveCount(1);
+  await expect(page.locator('[data-endpoint-id="page-25-3"]')).toHaveAttribute("aria-pressed", "true");
+  await search.fill("无匹配股票");
+  await expect(page.getByTestId("plan-library-chain")).toHaveCount(0);
+  await expect(page.getByText("已加载的历史记录仍然保留", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "定位已选时间线" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(search).toHaveValue("");
+  await expect(page.getByRole("navigation", { name: "计划时间线分页" })).toContainText("第 3 / 3 页");
+  await expect(page.locator('[data-endpoint-id="page-25-3"]')).toBeFocused();
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  await page.addScriptTag({ content: axe.source });
+  const violations = await page.evaluate(async () => (await (window as unknown as { axe: typeof axe }).axe.run(document,
+    { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations.map(item => item.id));
+  expect(violations).toEqual([]);
+  expect(writes).toEqual([]); expect(errors).toEqual([]);
+});
+
+test("failed reads never claim empty history and explicit retry recovers the preserved list", async ({ page }) => {
+  let mode: "failed" | "loaded" | "empty" = "failed";
+  const writes: string[] = [], errors: string[] = [];
+  page.on("request", request => { if (!["GET", "HEAD"].includes(request.method())) writes.push(request.url()); });
+  page.on("pageerror", error => errors.push(error.message));
+  await page.route("**/api/v1/backtest-plan-library?**", async route => {
+    await route.fulfill({ status: mode === "failed" ? 503 : 200,
+      contentType: "application/json", headers: { "Cache-Control": "no-store" },
+      body: JSON.stringify(mode === "failed"
+        ? { error: { code: "SERVICE_UNAVAILABLE", message: "Service unavailable", details: [], requestId: "a".repeat(32) } }
+        : { items: mode === "empty" ? [] : items, offset: 0, limit: 100, total: mode === "empty" ? 0 : items.length }) });
+  });
+  await page.goto(url.replace("library-display.html", "library-read-states.html"));
+  await expect(page.getByRole("alert")).toContainText("服务管理");
+  await expect(page.getByText("还没有计划时间线", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("暂时无法确认");
+  await expect(page.getByTestId("new-plan-timeline")).toBeDisabled();
+  mode = "loaded";
+  await page.getByRole("button", { name: "刷新计划时间线", exact: true }).click();
+  await expect(page.getByTestId("plan-library-chain")).toHaveCount(2);
+  await expect(page.locator(".plan-library__record")).toHaveCount(8);
+  await page.getByTestId("open-plan-timeline").first().click();
+  const selected = page.locator('[data-testid="open-plan-timeline"][aria-pressed="true"]');
+  const selectedId = await selected.getAttribute("data-endpoint-id");
+  mode = "failed";
+  await page.getByRole("button", { name: "刷新计划时间线", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("服务管理");
+  await expect(page.getByText("以下为上次成功读取", { exact: false })).toBeVisible();
+  await expect(page.locator(".plan-library__record")).toHaveCount(8);
+  await expect(selected).toHaveAttribute("data-endpoint-id", selectedId!);
+  mode = "loaded";
+  await page.getByRole("button", { name: "刷新计划时间线", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(selected).toHaveAttribute("data-endpoint-id", selectedId!);
+  mode = "empty";
+  await page.getByRole("button", { name: "刷新计划时间线", exact: true }).click();
+  await expect(page.getByText("还没有计划时间线", { exact: false })).toBeVisible();
+  expect(writes).toEqual([]); expect(errors).toEqual([]);
+});
 
 test("eight records form two timelines with exact endpoint updates at 200 percent text", async ({ page }, testInfo) => {
   const failures: string[] = [], errors: string[] = [], writes: string[] = [];

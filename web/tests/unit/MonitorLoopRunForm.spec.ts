@@ -158,7 +158,8 @@ it("opens historical plan inspection read-only without selecting a replay endpoi
   expect(wrapper.find('[data-testid="submit-backtest-run"]').exists()).toBe(false);
   expect(wrapper.find('[data-testid="new-plan-timeline"]').exists()).toBe(false);
   expect(backtest.submitRun).not.toHaveBeenCalled();
-  expect(wrapper.get('[data-testid="choose-prepared-plan"]').element.matches(":disabled")).toBe(true);
+  expect(wrapper.find('[data-testid="choose-prepared-plan"]').exists()).toBe(false);
+  expect(wrapper.get(".source-form fieldset").element.matches(":disabled")).toBe(true);
 });
 
 describe("one run from an ordered reviewed collection", () => {
@@ -343,7 +344,8 @@ describe("one prepared monitoring-loop run", () => {
     await flushPromises();
     expect(wrapper.get("#end-date").attributes("disabled")).toBeDefined();
     expect(wrapper.get('[data-testid="choose-legacy-plan"]').attributes("disabled")).toBeDefined();
-    expect(wrapper.get(".backtest-new-view__preparation fieldset").attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".source-form").exists()).toBe(false);
+    expect(wrapper.get('[data-testid="new-plan-timeline"]').attributes("disabled")).toBeDefined();
     await wrapper.get('[data-testid="retry-run-submission"]').trigger("click");
     await flushPromises();
     expect(backtest.submitRun.mock.calls[1]?.slice(0, 2)).toEqual(backtest.submitRun.mock.calls[0]?.slice(0, 2));

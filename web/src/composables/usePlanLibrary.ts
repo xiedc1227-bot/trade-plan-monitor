@@ -53,7 +53,11 @@ export function usePlanLibrary(api: PlanLibraryApi = createPlanLibraryApi()) {
       }
       if (new Set(loaded.map(item => item.preparationId)).size !== loaded.length) throw new Error("Duplicate library entries");
       items.value = loaded; libraryReady.value = true; error.value = null;
-    } catch { if (!disposed) error.value = "无法读取已审核计划，请刷新重试。"; }
+    } catch (failure) {
+      if (!disposed) error.value = failure instanceof ApiClientError && failure.status === 503
+        ? "回测服务暂不可用，无法读取已审核计划。请展开上方“服务管理”检查状态，恢复后刷新计划时间线。"
+        : "无法读取已审核计划，暂时无法确认历史记录。请刷新重试。";
+    }
     finally { loading.value = false; }
   }
   async function compose(): Promise<CollectionPreparationFrozenView | null> {

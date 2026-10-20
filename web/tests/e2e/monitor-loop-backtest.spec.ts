@@ -7,6 +7,7 @@ import { createServer, type ViteDevServer } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { expect, test, type Page } from "@playwright/test";
 import fixture from "../fixtures/monitor-loop.json" with { type: "json" };
+import axe from "axe-core";
 
 const root = resolve(import.meta.dirname, "../../..");
 let backend: ChildProcess;
@@ -73,8 +74,16 @@ test.afterEach(async ({ page }, testInfo) => {
 async function source(page: Page) {
   await page.goto(url + "/backtests/new");
   await page.getByTestId("choose-prepared-plan").click();
+  await expect(page.getByLabel("完整原文", { exact: true })).toHaveCount(0);
+  await page.getByTestId("new-plan-timeline").click();
+  await expect(page.getByRole("heading", { name: "准备计划原文", exact: true })).toBeFocused();
+  await page.getByTestId("close-preparation-workspace").click();
+  await expect(page.getByTestId("new-plan-timeline")).toBeFocused();
+  await expect(page.getByLabel("完整原文", { exact: true })).toHaveCount(0);
+  await page.getByTestId("new-plan-timeline").click();
   await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({ name: "one.txt", mimeType: "text/plain", buffer: Buffer.from(fixture.source.text) });
   await expect(page.getByLabel("完整原文", { exact: true })).toHaveValue(fixture.source.text);
+  await expect(page.getByTestId("close-preparation-workspace")).toBeDisabled();
   await expect(page.locator('input[type="datetime-local"]')).toHaveCount(0);
   await page.getByLabel("生效交易日（留空自动识别，必要时确认）", { exact: true }).fill("2026-08-20");
 }
@@ -85,8 +94,8 @@ async function candidate(page: Page) {
   await expect(page.getByLabel("完整原文", { exact: true })).toBeEnabled();
 }
 
-test("real upload/retry/edit/review/run journey retains original 503 intent and causal results", async ({ page }) => {
-  test.setTimeout(60000); await start("retry", true);
+test("real upload/retry/edit/review/run journey retains original 503 intent and causal results", async ({ page }, testInfo) => {
+  test.setTimeout(120000); await start("retry", true);
   page.on("response", async response => {
     if (response.request().method() === "GET" && new URL(response.url()).pathname.startsWith("/api/v1/backtest-preparations/")) {
       preparationReads.push({ url: response.url(), status: response.status(), headers: response.headers(), body: await response.text().catch(() => "aborted") });
@@ -115,7 +124,8 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   const unknown = page.getByTestId("review-unknown-confirmation"); if (await unknown.count()) await unknown.check();
   await page.getByTestId("review-evidence").fill("已核对原文、现金、核心持仓、成本、取得日期及完整条件规则；接受明确列出的限制。");
   await page.getByTestId("review-confirmation").check(); await page.getByTestId("review-submit").click();
-  await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "回测设置", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "回测设置", exact: true })).toBeFocused();
   await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
   for (const [id, value] of Object.entries({ "commission-rate": "0.0001", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "0", "sell-slippage-fen": "0" }))
     await expect(page.locator("#" + id)).toHaveValue(value);
@@ -126,7 +136,7 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   const receipt = JSON.parse(await accepted.text());
   let job: Record<string, unknown> = {};
   await expect.poll(async () => { const response = await page.request.get(url + "/api/v1/backtest-jobs/" + receipt.jobId); job = await response.json(); expect(response.status(), JSON.stringify(job) + output).toBe(200); return job.status; }, { timeout: 10000 }).toBe("COMPLETED");
-  await expect(page.getByTestId("monitor-loop-summary"), JSON.stringify(job) + output).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId("backtest-overview"), JSON.stringify(job) + output).toBeVisible({ timeout: 15000 });
   const runId = new URL(page.url()).pathname.split("/").at(-1)!;
   const run = await (await page.request.get(url + "/api/v1/backtest-runs/" + runId)).json();
   expect(run.report.cycle.fills).toBe(fixture.expected.fills);
@@ -140,12 +150,61 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   expect(run.report.final_inventory.total_qty).toBe(fixture.expected.inventory_qty);
   expect(run.report.boundary.evidence_cutoff).toBe(fixture.cutoff);
   expect(run.provenance.sourceRevision).toBe(2);
-  await expect(page.getByTestId("monitor-loop-summary")).toContainText("不限制现金");
+  await expect(page.getByTestId("backtest-overview")).toContainText("不限制现金");
+  await page.getByText("查看模拟费用设置", { exact: true }).click();
+  const savedCosts = page.getByRole("region", { name: "本次回测费用参数", exact: true });
+  await expect(savedCosts).toContainText("0.03%");
+  await expect(savedCosts).toContainText("5.00 元/笔");
+  await expect(savedCosts).toContainText("0.05%");
+  await expect(savedCosts).toContainText("0.001%");
+  await expect(savedCosts).toContainText("0.01 元/股");
+  await expect(savedCosts.locator("input,select,button")).toHaveCount(0);
   await expect(page.getByTestId("backtest-profit-summary")).toContainText("+53.46 元");
   await page.getByTestId("result-tab-details").click(); await expect(page.getByTestId("monitor-loop-timeline")).toBeVisible();
   expect(await page.locator("li[data-event-id]").count()).toBe(run.report.event_count);
   await page.getByTestId("result-tab-fills").click(); await expect(page.getByRole("table")).toContainText("39.71");
-  for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 900 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); }
+  const contextReads: string[] = [];
+  page.on("request", request => { if (request.url().includes("/review-context?")) contextReads.push(request.url()); });
+  await page.getByTestId("review-fill").first().click();
+  const evidence = page.getByTestId("backtest-evidence-panel");
+  await expect(evidence.getByTestId("review-outcome")).toContainText("已模拟成交");
+  await expect(page).toHaveURL(/fillId=/);
+  await expect(page.locator("#review-evidence-title")).toBeFocused();
+  await expect(evidence).toContainText("计划要求与实际依据");
+  await expect(evidence).toContainText("结果持仓");
+  expect(contextReads).toHaveLength(1);
+  await evidence.getByRole("button", { name: "后续直接事件", exact: true }).click();
+  await expect(evidence.getByRole("button", { name: "后续直接事件", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.goBack();
+  await expect(evidence.getByRole("button", { name: "追溯原因", exact: true })).toHaveAttribute("aria-pressed", "true");
+  for (const width of [1440, 1024, 768, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(evidence.getByRole("button", { name: "关闭原因", exact: true })).toBeVisible();
+    if (width === 1440 || width === 320) {
+      const path = testInfo.outputPath(`review-${width}.png`);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path, fullPage: true });
+      await testInfo.attach(`review-${width}`, { path, contentType: "image/png" });
+    }
+  }
+  await page.addScriptTag({ content: axe.source });
+  const violations = await page.evaluate(async () => {
+    const result = await (window as unknown as { axe: typeof axe }).axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
+    return result.violations.filter(item => item.impact === "serious" || item.impact === "critical");
+  });
+  expect(violations).toEqual([]);
+  await evidence.getByRole("button", { name: "关闭原因", exact: true }).click();
+  await expect(evidence).toHaveCount(0);
+  await page.getByTestId("result-tab-reasons").click();
+  await expect(page.getByTestId("plan-execution-diagnostics")).toBeVisible();
+  const diagnostic = page.getByTestId("review-diagnostic").first();
+  await diagnostic.focus(); await page.keyboard.press("Enter");
+  await expect(evidence).toBeVisible();
+  await expect(page).toHaveURL(/sequence=/);
+  await expect(page.locator("#review-evidence-title")).toBeFocused();
+  await evidence.getByRole("button", { name: "关闭原因", exact: true }).click();
+  await expect(diagnostic).toBeFocused();
   expect((await (await page.request.get(url + "/fixture/counters")).json()).extractions).toBe(3);
   const serviceManagement = page.getByTestId("backtest-service-management-toggle");
   if (await serviceManagement.getAttribute("aria-expanded") === "false") await serviceManagement.click();
@@ -164,7 +223,7 @@ test("unknown extraction cancellation survives navigation and requires explicit 
   await expect(page).toHaveURL(/preparationId=/); const preparedUrl = page.url();
   await page.getByTestId("extract-preparation").click(); await expect(page.getByTestId("recover-preparation")).toBeVisible({ timeout: 10000 });
   await page.getByTestId("cancel-preparation").click(); await expect(page.getByText("等待提取结束", { exact: true }).first()).toBeVisible();
-  expect(await page.getByLabel("完整原文", { exact: true }).isDisabled()).toBe(true);
+  await expect(page.getByLabel("完整原文", { exact: true })).toBeDisabled();
   const create = await page.request.post(url + "/api/v1/backtest-preparations", { headers: { Origin: url, "Idempotency-Key": "other" }, data: { input: { preparation_id: "other", sources: [fixture.source] } } });
   expect(create.status()).toBe(409);
   await page.getByRole("link", { name: "监控总览", exact: true }).click(); await expect(page.getByRole("heading", { name: "监控测试页面" })).toBeVisible();
@@ -198,7 +257,8 @@ test("start automatically fills missing history with the real worker and then re
   const unknown = page.getByTestId("review-unknown-confirmation"); if (await unknown.count()) await unknown.check();
   await page.getByTestId("review-evidence").fill("核对原文计划、期初持仓和规则，接受明确的研究限制。");
   await page.getByTestId("review-confirmation").check(); await page.getByTestId("review-submit").click();
-  await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "回测设置", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "回测设置", exact: true })).toBeFocused();
   expect((await (await page.request.get(url + "/fixture/counters")).json()).dataCalls).toEqual([]);
   for (const [id, value] of Object.entries({ "commission-rate": "0", "minimum-commission-fen": "0", "stamp-duty-rate": "0", "transfer-fee-rate": "0", "buy-slippage-fen": "0", "sell-slippage-fen": "0", "end-date": "2026-08-20" })) await page.locator("#" + id).fill(value);
   const sync = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/backtest-data-syncs");
@@ -209,7 +269,7 @@ test("start automatically fills missing history with the real worker and then re
   await expect(page.getByTestId("cancel-automatic-data")).toBeEnabled();
   await page.screenshot({ path: testInfo.outputPath("automatic-preparation.png"), fullPage: true });
   const response = await accepted; expect(response.status(), await response.text()).toBe(202);
-  await expect(page.getByTestId("monitor-loop-summary")).toBeVisible({ timeout: 120000 });
+  await expect(page.getByTestId("backtest-overview")).toBeVisible({ timeout: 120000 });
   expect(checks).toEqual([false, true]);
   expect(commands.filter(path => path === "/api/v1/backtest-data-syncs")).toHaveLength(1);
   expect(commands.filter(path => path === "/api/v1/backtest-runs")).toHaveLength(1);
@@ -270,6 +330,8 @@ test("four complete plans produce one continuous account and one run in real Chr
   };
   inputs.sources.forEach(source => { source.text += `\n生效交易日：${source.effective_trade_date}`; });
   await page.goto(url + "/backtests/new"); await page.getByTestId("choose-prepared-plan").click();
+  await expect(page.getByLabel("完整原文", { exact: true })).toHaveCount(0);
+  await page.getByTestId("new-plan-timeline").click();
   let previousId = "";
   for (const [index, source] of inputs.sources.entries()) {
     if (index) {
@@ -294,10 +356,11 @@ test("four complete plans produce one continuous account and one run in real Chr
     await page.getByLabel("本份核对说明", { exact: true }).fill("核对本份完整规则、生效日期和已审核前序；保留连续账户与真实模拟成交。");
     await page.getByTestId("review-confirmation").check();
     await page.getByRole("button", { name: "审核并保存这一份计划", exact: true }).click();
-    await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "回测设置", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "回测设置", exact: true })).toBeFocused();
     await expect(page.getByRole("region", { name: "已审核计划库" }).locator(".plan-library__record")).toHaveCount(index+1);
     await expect(page.getByTestId("prepare-next-source")).toBeVisible();
-    expect(await page.getByLabel("完整原文", { exact: true }).isDisabled()).toBe(true);
+    await expect(page.getByLabel("完整原文", { exact: true })).toHaveCount(0);
   }
   expect((await (await page.request.get(url + "/fixture/counters")).json()).sourceCalls).toEqual([0,1,1,2,3]);
   await page.reload();
@@ -344,7 +407,8 @@ test("four complete plans produce one continuous account and one run in real Chr
   expect(submissions).toHaveLength(1); expect(submissions[0]).toMatchObject({ schemaVersion: "prepared-loop-plan-v2", preparationId });
   await expect.poll(async () => (await (await page.request.get(url + "/api/v1/backtest-jobs/" + receipt.jobId)).json()).status,
     { timeout: 540000, intervals: [500, 1000, 2000] }).toBe("COMPLETED");
-  await expect(page.getByTestId("monitor-loop-summary")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId("backtest-overview")).toBeVisible({ timeout: 15000 });
+  await page.getByTestId("result-tab-provenance").click();
   const run = await (await page.request.get(url + "/api/v1/backtest-runs/" + receipt.runId)).json();
   expect(run.schemaVersion).toBe("monitor-loop-result-v2"); expect(run.versions).toHaveLength(4);
   expect(run.report.cycle.fills).toBe(2); expect(run.report.final_account.cash.balance_fen).toBe(1019000);
@@ -353,6 +417,18 @@ test("four complete plans produce one continuous account and one run in real Chr
   await expect(page.getByRole("region", { name: "冻结版本日历", exact: true }).locator("li")).toHaveCount(4);
   await expect(page.getByRole("region", { name: "冻结版本日历", exact: true })).toContainText("机动 200 股");
   await expect(page.getByTestId("monitor-loop-summary")).toContainText("10190.00 元");
+  const savedCosts = page.getByRole("region", { name: "本次回测费用参数", exact: true });
+  await expect(savedCosts.locator("dd")).toHaveText(["0%", "5.00 元/笔", "0%", "0%", "0.00 元/股", "0.00 元/股"]);
+  const historyWrites: string[] = [];
+  const auditHistory = (request: import("@playwright/test").Request) => {
+    if (!["GET", "HEAD"].includes(request.method())) historyWrites.push(request.url());
+  };
+  page.on("request", auditHistory);
+  await page.reload();
+  await expect(savedCosts.locator("dd")).toHaveText(["0%", "5.00 元/笔", "0%", "0%", "0.00 元/股", "0.00 元/股"]);
+  expect(await (await page.request.get(url + "/api/v1/backtest-runs/" + receipt.runId)).json()).toEqual(run);
+  expect(historyWrites).toEqual([]);
+  page.off("request", auditHistory);
   const equity = await (await page.request.get(url + "/api/v1/backtest-runs/" + receipt.runId + "/equity-series")).json();
   expect(equity.availability).toBe("AVAILABLE"); expect(equity.items).toHaveLength(7);
   expect(equity.items.map((point: { cashFen: string }) => point.cashFen)).toEqual(["1000000", "899500", "899500", "899500", "899500", "1019000", "1019000"]);
@@ -389,6 +465,8 @@ test("actual originals are prepared individually and require date confirmation b
   const filenames = ["01-20260924-104506.txt", "02-20260928-092555.txt", "03-20260930-095728.txt", "04-20261009-091956.txt"];
   const dates = ["2026-09-24","2026-09-28","2026-09-30","2026-10-09"];
   await page.goto(url + "/backtests/new"); await page.getByTestId("choose-prepared-plan").click();
+  await expect(page.getByLabel("完整原文", { exact: true })).toHaveCount(0);
+  await page.getByTestId("new-plan-timeline").click();
   for (const [index,name] of filenames.entries()) {
     if (index) await page.getByTestId("new-plan-timeline").click();
     await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({name,mimeType:"text/plain",buffer:await readFile(join(root,"tests/fixtures/shengxin_sources",name))});

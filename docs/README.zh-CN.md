@@ -37,6 +37,11 @@
 
 ## 回测规格
 
+- [回测结果交互优化方案（提案）](specifications/backtesting/PROPOSAL-backtest-result-ux.zh-CN.md) ([English](specifications/backtesting/PROPOSAL-backtest-result-ux.md))
+- [回测结果审阅 — P0 + 最小 P1](specifications/backtesting/SPEC-backtest-review.zh-CN.md) · [BT-R01–BT-R03](../tasks/backtest-review.zh-CN.md)
+  - [审阅操作与旧运行索引](operations/backtest-review.zh-CN.md) · [验证记录](verification/2026-10-20-backtest-review.zh-CN.md)
+- [回测创建交互](specifications/backtesting/SPEC-backtest-creation-ux.zh-CN.md) · [实施任务](../tasks/backtest-creation-ux.zh-CN.md)
+  - [创建交互验证](verification/2026-10-20-backtest-creation-ux.zh-CN.md)
 - [监控闭环回测设计（已实施）](specifications/backtesting/PROPOSAL-monitor-loop-backtest.zh-CN.md) ([English](specifications/backtesting/PROPOSAL-monitor-loop-backtest.md))
 - 当前监控闭环实施：[方案](../tasks/plan.zh-CN.md)（[English](../tasks/plan.md)）与[任务](../tasks/todo.zh-CN.md)（[English](../tasks/todo.md)）；实施及验收完成，结果见 MV18–MV46。
 - [统一计划历史回放](specifications/backtesting/SPEC-unified-replay.zh-CN.md) ([English](specifications/backtesting/SPEC-unified-replay.md))

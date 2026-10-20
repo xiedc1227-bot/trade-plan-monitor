@@ -20,6 +20,49 @@ function setup() {
   return { api, state };
 }
 
+it("does not report an empty history when the library read failed", () => {
+  const wrapper = mount(ReviewedPlanLibrary, { props: { items: [], endpointId: "",
+    disabled: false, loading: false, pending: false, uncertain: false,
+    error: "无法读取已审核计划", canStart: true } });
+  wrappers.push(wrapper);
+  expect(wrapper.text()).not.toContain("还没有计划时间线");
+  expect(wrapper.get('[role="status"]').text()).toContain("暂时无法确认");
+  expect(wrapper.get('[role="alert"]').text()).toContain("无法读取");
+  expect(wrapper.get('[data-testid="new-plan-timeline"]').attributes("disabled")).toBeDefined();
+});
+
+it("shows a genuine empty library only after a successful read and hides old errors during retry", async () => {
+  const wrapper = mount(ReviewedPlanLibrary, { props: { items: [], endpointId: "",
+    disabled: false, loading: true, pending: false, uncertain: false,
+    error: "无法读取已审核计划", canStart: true } });
+  wrappers.push(wrapper);
+  expect(wrapper.get('[role="status"]').text()).toContain("正在读取");
+  expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+  expect(wrapper.text()).not.toContain("还没有计划时间线");
+  await wrapper.setProps({ loading: false, error: null });
+  expect(wrapper.text()).toContain("还没有计划时间线");
+  expect(wrapper.get('[data-testid="new-plan-timeline"]').attributes("disabled")).toBeUndefined();
+});
+
+it("explains unavailable reads, preserves loaded history, and clears the error after retry", async () => {
+  const { api, state } = setup(); await flushPromises(); state.chooseEndpoint("first");
+  vi.mocked(api.list).mockRejectedValueOnce(new ApiClientError({ code: "SERVICE_UNAVAILABLE",
+    status: 503, message: "Service unavailable" }));
+  await state.refresh();
+  expect(state.error.value).toContain("服务管理");
+  expect(state.items.value).toEqual([entry]);
+  expect(state.endpointId.value).toBe("first");
+  const wrapper = mount(ReviewedPlanLibrary, { props: { items: state.items.value, endpointId: "first",
+    disabled: false, loading: false, pending: false, uncertain: false,
+    error: state.error.value, canStart: true } });
+  wrappers.push(wrapper);
+  expect(wrapper.text()).toContain("上次成功读取");
+  expect(wrapper.findAll('[data-testid="plan-library-chain"]')).toHaveLength(1);
+  await state.refresh();
+  expect(state.error.value).toBeNull();
+  expect(state.endpointId.value).toBe("first");
+});
+
 it("explains a rejected old risk scope without requesting manual source facts", async () => {
   const { api, state } = setup(); await flushPromises(); state.chooseEndpoint("first");
   vi.mocked(api.compose).mockRejectedValue(new ApiClientError({ code: "CONFLICT", status: 409,

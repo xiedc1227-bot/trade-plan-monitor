@@ -74,3 +74,17 @@ A new **创建回测运行** form prefills the following cost assumptions. Commi
 The retained scripted research form also starts both BPS slippage fields at `0`. All values remain editable, including explicit zero-cost assumptions. Clearing a required fee still fails the original validation; there is no hidden fallback on submission. Switching plans does not refill costs. These are frontend defaults for new forms only: the API still requires explicit costs, existing fee calculation/rounding is unchanged, and saved historical costs/results are not rewritten.
 
 Stamp-duty and transfer-fee rates reference the [SSE stock investment service](https://one.sse.com.cn/onething/gptz/), checked on 2026-10-20. The preset does not automatically adjust historical tax regimes or broker-specific rates.
+
+## PR-O09. Read-only historical cost parameters
+
+The result summary shows **本次回测费用参数** for single-plan, workbench and continuous runs. It reads that run's saved `costs`; older result formats use the saved `assumptions.executionConfig`. It does not read new-form defaults or substitute them for saved zero values.
+
+Commission, stamp duty and transfer fees are displayed as exact percentages: for example, `0.0003` becomes `0.03%`. Minimum commission is shown in yuan per trade (`500` fen becomes `5.00 元/笔`), and continuous replay slippage in yuan per share (`1` fen becomes `0.01 元/股`). Older proportional slippage retains its meaning: `1.25` BPS becomes `0.0125%（价格比例）`, not a fixed per-share amount. Decimal rates and fen amounts are formatted without binary floating-point rounding.
+
+This section has no editing or submission controls. Reading it neither recomputes results nor writes historical data. Existing run/report identities, fee calculation, plan-chain execution and history APIs are unchanged. **累计费用** remains the resulting total, distinct from these input parameters.
+
+## PR-O10. Distinguish unavailable history from an empty library
+
+An unsuccessful library read must not display **还没有计划时间线**. Until a successful response confirms an empty library, explain that history could not be loaded and its presence is unknown; disable new-timeline creation in that failure state. Hide the previous error while retrying. If a refresh fails after a successful read, retain the loaded records and selected endpoint and label the list as the last successfully loaded data. A successful retry clears the error.
+
+For HTTP `503`, direct the user to **服务管理** above the page. Check `/api/v1/backtest-service`; `DEGRADED` with `canRead: false` means a read capability failure, not evidence that plans were deleted. When `physicallyDrained: true`, use the existing `RETRY_PREPARATION` recovery action with `resumeJobIds: []`, then refresh the library. Do not substitute `RESUME_JOBS` or recreate plans to recover a failed list read. Recovery is explicit; the list does not automatically issue recovery commands.

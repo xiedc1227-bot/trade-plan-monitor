@@ -132,7 +132,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
   <section class="run-form" aria-labelledby="run-form-title">
     <header class="run-form__header">
       <div>
-        <h2 id="run-form-title">创建回测运行</h2>
+        <h2 id="run-form-title">回测参数</h2>
       </div>
       <p>已预填低费用回测参数，均可修改；佣金请按券商实际约定调整。</p>
     </header>
@@ -171,18 +171,24 @@ function focusErrorField(field: string, event: MouseEvent): void {
         @select="emit('selectPlanVersion', $event)"
       />
 
-      <div v-else-if="prepared && preparedAccount" class="run-form__field" data-testid="prepared-run-account">
+      <div v-else-if="prepared && preparedAccount" class="run-form__field run-form__account" data-testid="prepared-run-account">
         <h3>{{ preparedVersions ? `${preparedVersions.length} 份已复核计划 · 一次连续回测` : `一份已审核计划 · ${preparedSymbol}` }}</h3>
-        <ol v-if="preparedVersions" data-testid="prepared-run-versions"><li v-for="version in preparedVersions" :key="version.sourceId">{{ version.effectiveTradeDate }} · 来源 {{ version.sourceId }} · 执行起点 {{ formatDisplayDateTime(version.availableAt) }}</li></ol>
-        <p>预置计划未声明历史可用时间时，从生效交易日开盘起执行。</p>
+        <div class="run-form__account-facts">
         <p>初始账户快照：{{ formatDisplayDateTime(preparedAccount.snapshot_at) }}</p>
         <p>资金模式：{{ preparedAccount.cash.kind === 'POSITION_LIMIT_ONLY' ? '按计划最大持仓执行，无现金限制' : preparedAccount.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(preparedAccount.cash.balance_fen))} 元（历史资金模式）` : '未知（历史资金模式）' }}</p>
         <p>库存：{{ preparedAccount.inventory_known ? '已知' : '未知；不会推断为空仓' }}</p>
-        <ul>
+        </div>
+        <ul v-if="preparedAccount.lots.length">
           <li v-for="lot in preparedAccount.lots" :key="lot.lot_key">
             {{ lot.bucket }} · {{ lot.quantity }} 股；总成本 {{ lot.cost_basis_fen === null ? '未知' : `${formatFenAsYuan(String(lot.cost_basis_fen))} 元` }}；可卖 {{ lot.sellable_quantity ?? '未知' }} 股
           </li>
         </ul>
+        <details v-if="preparedVersions">
+          <summary>查看计划生效日期（{{ preparedVersions.length }}）</summary>
+          <ol data-testid="prepared-run-versions"><li v-for="version in preparedVersions" :key="version.sourceId">{{ version.effectiveTradeDate }} · 来源 {{ version.sourceId }} · 执行起点 {{ formatDisplayDateTime(version.availableAt) }}</li></ol>
+          <p>预置计划未声明历史可用时间时，从生效交易日开盘起执行。</p>
+        </details>
+        <p v-else>预置计划未声明历史可用时间时，从生效交易日开盘起执行。</p>
         <p>计划规则与已确认期初账户已冻结；提交一次，逐日沿用同一个账户。此处设置回放响应、结束日期及费用。</p>
       </div>
       <p v-else role="status">请先完成当前计划的审核，之后才能提交回测。</p>
@@ -306,6 +312,12 @@ function focusErrorField(field: string, event: MouseEvent): void {
   min-width: 0;
   gap: var(--space-2);
 }
+
+.run-form__account { grid-column: 1 / -1; padding-block-end: var(--space-4); border-block-end: var(--border-technical); overflow-wrap: anywhere; }
+.run-form__account h3, .run-form__account ul { margin: 0; }
+.run-form__account-facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); }
+.run-form__account > p, .run-form__account summary { color: var(--color-text-muted); font-size: .875rem; }
+.run-form__account summary { display: list-item; min-height: 2.75rem; padding-block: var(--space-2); cursor: pointer; }
 
 .run-form__field label {
   display: grid;
