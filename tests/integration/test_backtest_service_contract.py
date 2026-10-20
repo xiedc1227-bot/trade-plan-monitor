@@ -117,4 +117,16 @@ def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
     for name, schema in before["components"]["schemas"].items():
         if name in {"PlanDocumentFormat", "PlanImportCommand"}:
             continue
-        assert document["components"]["schemas"][name] == schema, name
+        current = document["components"]["schemas"][name]
+        if name == "ReviewedPlanLibraryItem":
+            assert "identity" not in current["required"]
+            assert current["properties"]["identity"] == {
+                "anyOf": [
+                    {"$ref": "#/components/schemas/ReviewedPlanLibraryIdentity"},
+                    {"type": "null"},
+                ],
+            }
+            current = current | {"properties": {
+                key: value for key, value in current["properties"].items() if key != "identity"
+            }}
+        assert current == schema, name

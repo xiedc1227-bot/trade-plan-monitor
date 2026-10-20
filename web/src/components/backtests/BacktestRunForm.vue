@@ -71,7 +71,7 @@ const preparedFieldDefinitions = [
   { id: "buy-slippage-fen", field: "buySlippageFen", label: "买入滑点（每股分）", help: "非负整数分", inputmode: "numeric" },
   { id: "sell-slippage-fen", field: "sellSlippageFen", label: "卖出滑点（每股分）", help: "非负整数分", inputmode: "numeric" },
   { id: "response-delay-seconds", field: "responseDelaySeconds", label: "响应延迟（秒）", help: "提醒之后的最短等待时间，0 表示不额外等待", inputmode: "numeric" },
-  { id: "end-date", field: "endDate", label: "结束日期（可选）", help: "留空由服务端按提交时的上海日期确定，并冻结当时可用证据；精确截止时间在完成后的结果中展示", inputmode: "text" },
+  { id: "end-date", field: "endDate", label: "结束日期（可选）", help: "默认当前上海日期，可以修改；留空按提交时的上海日期确定。精确截止时间在结果中展示", inputmode: "text" },
 ] as const;
 const visibleFieldDefinitions = computed(() => props.preparedMode ? preparedFieldDefinitions : fieldDefinitions);
 const editingDisabled = () =>

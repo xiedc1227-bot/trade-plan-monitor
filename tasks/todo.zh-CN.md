@@ -885,3 +885,13 @@ RP-T01 恢复被取消的 ML 要求，同时保留历史完成证据。新增 v2
   - 验收：配对规格把曾经的占位路由 `/`、`/stocks/:symbol`、`/plans/:id`、`/alerts` 和 `/system` 标记为真实惰性 SFC；精确的 10 路由地图和 `submit → run+job URL → poll → remove jobId → materialized result` 链路具备单元、浏览器与后端 fake 证据；OpenAPI 继续精确为 42 条路径（27 条实时加 15 条回测）；配对报告状态为 `PASS`。
   - 验证：聚焦后端 pytest 与 production-fake 旅程；Ruff；OpenAPI 快照与生成 TypeScript 一致性；完整 Vitest、`vue-tsc`、构建与 Chromium 套件；`git diff --check`。
   - 文件：`README*`、`docs/README*`、配对 local-Web/backtest/API/ADR 规格、`tasks/plan*`、`tasks/todo*`、`docs/verification/webf13-acceptance*`、`web/tests/unit/BacktestRouter.spec.ts`、`web/tests/e2e/backtests.spec.ts` 和 `web/tests/e2e/accessibility.spec.ts`。
+
+
+## PUT 任务 — 已确认时间线首期
+
+- [x] PUT-T01 — 聚焦测试证明准确路径／分支／非法关联行为，只读推导时间线路径。文件：展示模型及聚焦测试。
+- [x] PUT-T02 — 将手动成员选择改为时间线打开／新增／更新，保留版本／来源详情及安全加载。验证组件及准备竞争／恢复测试。
+- [x] PUT-T03 — 回测前自动冻结准确展示路径，不确定重试保留原表单／键／请求体。验证状态控制及运行表单测试。
+- [x] PUT-T04 — 结束日期默认 Asia/Shanghai 当前日期且可修改，验证跨日及用户输入保留。
+- [x] PUT-T05 — 真实浏览器测试仅调整被替代界面操作；保留原连续性／历史／取消／布局／阈值断言并增加时间线覆盖。
+- [x] PUT-T06 — 执行 PUT08 门槛，复核范围，比对原数据库哈希，补齐双语操作／验证证据。

@@ -3507,8 +3507,16 @@ export type ReviewedDailyFact = {
   validity_scope: "TRADE_DATE" | "SIGNAL";
 };
 
+export type ReviewedPlanLibraryIdentity = {
+  planHash: string;
+  planVersionId: string;
+  reviewedVersionHash: string;
+  sourceHash: string;
+};
+
 export type ReviewedPlanLibraryItem = {
   effectiveTradeDate: string;
+  identity?: (components["schemas"]["ReviewedPlanLibraryIdentity"]) | (null);
   manifestHash: string;
   name: string;
   preparationId: string;
@@ -4649,6 +4657,7 @@ export interface components {
     ReviewIssueKind: ReviewIssueKind;
     ReviewResolutionKind: ReviewResolutionKind;
     ReviewedDailyFact: ReviewedDailyFact;
+    ReviewedPlanLibraryIdentity: ReviewedPlanLibraryIdentity;
     ReviewedPlanLibraryItem: ReviewedPlanLibraryItem;
     ReviewedPlanLibraryPage: ReviewedPlanLibraryPage;
     ReviewedPlanReference: ReviewedPlanReference;

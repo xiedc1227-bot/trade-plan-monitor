@@ -8,7 +8,7 @@ import { createBacktestApi, type BacktestApi } from "../../src/api/backtests";
 import { createPreparationApi } from "../../src/api/preparations";
 import { createPlanApi } from "../../src/api/plans";
 import { ApiClientError } from "../../src/api/transport";
-import { useBacktestRunForm } from "../../src/composables/useBacktestRunForm";
+import { useBacktestRunForm, type UseBacktestRunFormOptions } from "../../src/composables/useBacktestRunForm";
 import BacktestNewView from "../../src/views/BacktestNewView.vue";
 import BacktestRunForm from "../../src/components/backtests/BacktestRunForm.vue";
 
@@ -17,6 +17,7 @@ const fixture = JSON.parse(readFileSync("tests/fixtures/plan-preparation-review.
 };
 const wrappers: VueWrapper[] = [];
 afterEach(() => wrappers.splice(0).forEach(value => value.unmount()));
+afterEach(() => { vi.useRealTimers(); });
 function frozen(): PreparationFrozenView {
   const candidate = fixture.reviewed.candidate;
   if (candidate?.kind !== "FROZEN") throw new Error("frozen fixture required");
@@ -24,6 +25,7 @@ function frozen(): PreparationFrozenView {
 }
 function command(): PreparedBacktestRunCommand {
   return {
+    endDate: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10),
     preparationId: frozen().preparationId, manifestHash: frozen().manifestHash,
     response: { mode: "FOLLOW_REMINDERS", responseDelaySeconds: 0 },
     costs: { commissionRate: "0.0003", minimumCommissionFen: 500, stampDutyRate: "0.0005",
@@ -43,11 +45,12 @@ function api() {
       endDate: value.endDate ?? "2026-08-24", ready: true, syncScope: null, blockers: [],
     })), submitRun: vi.fn<BacktestApi["submitRun"]>().mockResolvedValue(accepted()) };
 }
-function controller(backtest = api(), prepared: () => PreparationFrozenView | CollectionPreparationFrozenView | null = frozen) {
+function controller(backtest = api(), prepared: () => PreparationFrozenView | CollectionPreparationFrozenView | null = frozen,
+  prepareScheduled?: UseBacktestRunFormOptions["prepareScheduled"]) {
   let form!: ReturnType<typeof useBacktestRunForm>;
   const wrapper = mount(defineComponent({ setup() {
     form = useBacktestRunForm({ api: backtest, prepared, preparedMode: () => true,
-      createIdempotencyKey: () => "loop-run-key", onAccepted: vi.fn() });
+      createIdempotencyKey: () => "loop-run-key", onAccepted: vi.fn(), ...(prepareScheduled ? { prepareScheduled } : {}) });
     return () => h("div");
   } }));
   wrappers.push(wrapper);
@@ -57,6 +60,51 @@ function controller(backtest = api(), prepared: () => PreparationFrozenView | Co
   }
   return { form, backtest };
 }
+
+it("defaults the editable end date to today's Shanghai day across UTC midnight and preserves edits", () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-19T16:05:00Z"));
+  const { form } = controller();
+  expect(form.draft.value.endDate).toBe("2026-10-20");
+  form.updateField("endDate", "2026-10-09");
+  vi.setSystemTime(new Date("2026-10-20T16:05:00Z"));
+  expect(form.draft.value.endDate).toBe("2026-10-09");
+});
+
+it("freezes a timeline before data preparation and retains the captured run on a lost receipt", async () => {
+  let finish!: (value: ScheduledPreparedBacktestRunCommand) => void;
+  const prepare = vi.fn<NonNullable<UseBacktestRunFormOptions["prepareScheduled"]>>()
+    .mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const backtest = api();
+  backtest.submitRun.mockRejectedValueOnce(new ApiClientError({ code: "NETWORK_ERROR", status: 0, message: "lost" }));
+  const { form } = controller(backtest, collectionFrozen, prepare);
+  form.updateField("endDate", "2026-08-28");
+  const pending = form.submit();
+  expect(form.submissionState.value).toBe("SUBMITTING");
+  expect(backtest.checkPreparedData).not.toHaveBeenCalled();
+  form.updateField("endDate", "2026-09-30");
+  const captured = prepare.mock.calls[0]![0];
+  finish({ ...captured, preparationId: "timeline-snapshot", manifestHash: "f".repeat(64) });
+  await pending;
+  expect(backtest.checkPreparedData.mock.calls[0]![0]).toMatchObject({ preparationId: "timeline-snapshot", endDate: "2026-08-28" });
+  expect(form.submissionState.value).toBe("UNCERTAIN");
+  const original = backtest.submitRun.mock.calls[0]!.slice(0, 2);
+  await form.retrySubmission();
+  expect(prepare).toHaveBeenCalledTimes(1);
+  expect(backtest.submitRun.mock.calls[1]!.slice(0, 2)).toEqual(original);
+  expect(form.submissionState.value).toBe("ACCEPTED");
+});
+
+it("keeps the original settings when retrying an uncertain timeline freeze", async () => {
+  const prepare = vi.fn<NonNullable<UseBacktestRunFormOptions["prepareScheduled"]>>()
+    .mockRejectedValueOnce(new ApiClientError({ code: "NETWORK_ERROR", status: 0, message: "freeze unknown" }))
+    .mockImplementation(async command => ({ ...command, preparationId: "timeline-snapshot" }));
+  const { form, backtest } = controller(api(), collectionFrozen, prepare);
+  form.updateField("endDate", "2026-08-28"); await form.submit();
+  expect(form.submissionState.value).toBe("UNCERTAIN"); expect(backtest.submitRun).not.toHaveBeenCalled();
+  form.updateField("endDate", "2026-09-30"); await form.retrySubmission();
+  expect(prepare.mock.calls[1]![0]).toEqual(prepare.mock.calls[0]![0]);
+  expect(backtest.submitRun.mock.calls[0]![0]).toMatchObject({ endDate: "2026-08-28", preparationId: "timeline-snapshot" });
+});
 
 function collectionFrozen(): CollectionPreparationFrozenView {
   const base = frozen();
@@ -72,6 +120,21 @@ function collectionCommand(): ScheduledPreparedBacktestRunCommand {
   return { ...command(), schemaVersion: "prepared-loop-plan-v2", preparationId: collectionFrozen().preparationId,
     manifestHash: collectionFrozen().manifestHash };
 }
+
+it("opens historical plan inspection read-only without selecting a replay endpoint or allowing a run", async () => {
+  const backtest = api();
+  const preparationApi = { ...createPreparationApi(vi.fn<typeof fetch>()),
+    get: vi.fn().mockResolvedValue({ body: fixture.reviewed, status: 200, retryAfterSeconds: null }) };
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/backtests/new", component: { template: "<div />" } }] });
+  await router.push(`/backtests/new?preparationId=${frozen().preparationId}&inspect=1`); await router.isReady();
+  const wrapper = mount(BacktestNewView, { props: { api: backtest, preparationApi, initialPreparationId: frozen().preparationId }, global: { plugins: [router] } });
+  wrappers.push(wrapper); await flushPromises();
+  expect(wrapper.text()).toContain("只读查看历史计划");
+  expect(wrapper.find('[data-testid="submit-backtest-run"]').exists()).toBe(false);
+  expect(wrapper.find('[data-testid="new-plan-timeline"]').exists()).toBe(false);
+  expect(backtest.submitRun).not.toHaveBeenCalled();
+  expect(wrapper.get('[data-testid="choose-prepared-plan"]').element.matches(":disabled")).toBe(true);
+});
 
 describe("one run from an ordered reviewed collection", () => {
   it("posts exactly one versioned chain manifest to the existing run route", async () => {

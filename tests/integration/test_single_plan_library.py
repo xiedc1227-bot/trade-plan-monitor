@@ -40,6 +40,39 @@ def approved_single(tmp_path):
     return store, approved, ref
 
 
+def test_library_identity_projects_frozen_versions_without_rewriting_records(tmp_path):
+    import sqlite3
+    from hashlib import sha256
+
+    from trade_plan_monitor.backtest.canonical import canonical_json
+    from trade_plan_monitor.backtest.plan_library import list_reviewed_plans
+    from trade_plan_monitor.web.routers.plan_library import ReviewedPlanLibraryPage
+
+    store, approved, _ref = approved_single(tmp_path)
+    frozen = frozen_preparation(approved)
+    with sqlite3.connect(store.database_path) as connection:
+        before = connection.execute("SELECT * FROM backtest_preparation").fetchall()
+        receipts = connection.execute("SELECT * FROM backtest_preparation_idempotency").fetchall()
+    page = list_reviewed_plans(store, offset=0, limit=20)
+    assert page["items"][0]["identity"] == {
+        "source_hash": frozen.items[-1].source.source_hash,
+        "plan_hash": frozen.items[-1].version.plan_hash,
+        "plan_version_id": frozen.items[-1].version.version_id,
+        "reviewed_version_hash": sha256(
+            (
+                "plan-library-reviewed-version-v1\0" + canonical_json(frozen.items[-1].version)
+            ).encode()
+        ).hexdigest(),
+    }
+    projected = ReviewedPlanLibraryPage(**page).model_dump(mode="json", by_alias=True)
+    assert projected["items"][0]["identity"]["planVersionId"] == frozen.items[-1].version.version_id
+    with sqlite3.connect(store.database_path) as connection:
+        assert connection.execute("SELECT * FROM backtest_preparation").fetchall() == before
+        assert connection.execute(
+            "SELECT * FROM backtest_preparation_idempotency"
+        ).fetchall() == receipts
+
+
 def test_single_create_and_approved_prefix_are_immutable(tmp_path):
     from trade_plan_monitor.backtest.plan_library import (
         create_single_preparation,
@@ -377,6 +410,14 @@ def test_four_single_preparations_link_exact_reviewed_versions_and_compose(tmp_p
         assert ai.source_calls == [0, 1, 2, 3]
         page = client.get(library + "?limit=100").json()
         assert page["total"] == 4 and len(page["items"]) == 4
+        by_id = {item["preparationId"]: item for item in page["items"]}
+        for index, frozen in enumerate(frozen_entries):
+            item = by_id[f"single-{index}"]
+            assert item["identity"]["planVersionId"] == frozen.items[-1].version.version_id
+            assert len(item["identity"]["reviewedVersionHash"]) == 64
+            assert item["reviewedBase"] == (references[index - 1] if index else None)
+        paged = client.get(library + "?offset=1&limit=1").json()
+        assert paged["items"][0]["identity"] == page["items"][1]["identity"]
         denied = post(
             client,
             library + "/compositions",

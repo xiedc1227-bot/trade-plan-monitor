@@ -683,6 +683,8 @@ async function confirmWorkbenchContext(page: Page): Promise<void> {
 }
 async function fillValidRunCommand(page: Page): Promise<void> {
   await confirmWorkbenchContext(page);
+  await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  await page.locator("#end-date").fill("2026-08-30");
   await page.locator("#commission-rate").fill("0.0003");
   await page.locator("#minimum-commission-fen").fill("500");
   await page.locator("#stamp-duty-rate").fill("0.001");
@@ -990,6 +992,7 @@ test("submits a complete new run and follows the authoritative job to its result
   expect(audit.runSubmissions[0]?.body).toEqual({
     schemaVersion: "workbench-loop-selection-v1", selectionId: workbenchSelection.selectionId,
     selectionHash: workbenchSelection.selectionHash,
+    endDate: "2026-08-30",
     response: { mode: "FOLLOW_REMINDERS", responseDelaySeconds: 0 },
     costs: { commissionRate: "0.0003", minimumCommissionFen: 500, stampDutyRate: "0.001",
       transferFeeRate: "0.00001", buySlippageFen: 1, sellSlippageFen: 2 },

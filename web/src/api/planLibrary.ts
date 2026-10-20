@@ -12,6 +12,10 @@ const digest = (v: unknown) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v)
 function reference(v: unknown): v is ReviewedPlanReference {
   return object(v) && identifier(v.preparation_id) && digest(v.manifest_hash);
 }
+function identity(v: unknown): boolean {
+  return v == null || object(v) && Object.keys(v).length === 4 && digest(v.sourceHash) && digest(v.planHash) &&
+    identifier(v.planVersionId) && digest(v.reviewedVersionHash);
+}
 export function createPlanLibraryApi(fetcher: typeof fetch = resolveApiFetch()) {
   return {
     async list(offset = 0, signal?: AbortSignal): Promise<ReviewedPlanLibraryPage> {
@@ -24,7 +28,7 @@ export function createPlanLibraryApi(fetcher: typeof fetch = resolveApiFetch()) 
           !Array.isArray(v.items) || v.items.length > 100 || offset + v.items.length > Number(v.total) ||
           v.items.some(item => !object(item) || !identifier(item.preparationId) || !digest(item.manifestHash) ||
             !isCalendarDate(item.effectiveTradeDate) || typeof item.name !== "string" || typeof item.symbol !== "string" ||
-            item.reviewedBase != null && !reference(item.reviewedBase))) throw invalidResponse(result.status);
+            !identity(item.identity) || item.reviewedBase != null && !reference(item.reviewedBase))) throw invalidResponse(result.status);
       return v as unknown as ReviewedPlanLibraryPage;
     },
     async compose(command: PreparedPlanCompositionInput, key: string, signal?: AbortSignal): Promise<CollectionPreparationFrozenView> {

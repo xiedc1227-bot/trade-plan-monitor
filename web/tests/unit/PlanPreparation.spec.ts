@@ -19,6 +19,23 @@ const COLLECTION_SOURCES = ["初始计划", "次日跟踪", "第三日跟踪", "
 const wrappers: VueWrapper[] = [];
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); vi.useRealTimers(); vi.restoreAllMocks(); });
 
+it("opens an exact existing preparation without creating or extracting another source", async () => {
+  const api = mockApi(); const { state } = controller(api, null); await flushPromises();
+  vi.mocked(api.get).mockResolvedValue(result(preparation({ preparationId: "timeline-head" })));
+  await state.open("timeline-head");
+  expect(state.preparationId.value).toBe("timeline-head");
+  expect(state.preparation.value?.preparationId).toBe("timeline-head");
+  expect(api.get).toHaveBeenCalledWith("timeline-head", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  expect(api.create).not.toHaveBeenCalled(); expect(api.extract).not.toHaveBeenCalled();
+});
+
+it("does not replace an unsaved source or a pending mutation when opening another timeline", async () => {
+  const api = mockApi(); const { state } = controller(api); await flushPromises();
+  state.updateSource({ ...SOURCE, text: "未保存的更新" }); await state.open("other-head");
+  expect(state.preparationId.value).toBe("prep-1"); expect(state.draft.value.text).toBe("未保存的更新");
+  expect(api.get).toHaveBeenCalledTimes(1);
+});
+
 it("recovers an initial unavailable progress read without repeating extraction", async () => {
   vi.useFakeTimers(); const api = mockApi();
   vi.mocked(api.get).mockRejectedValueOnce(new ApiClientError({ code: "SERVICE_UNAVAILABLE", status: 503, message: "Starting" }));

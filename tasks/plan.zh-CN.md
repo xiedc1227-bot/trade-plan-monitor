@@ -458,3 +458,11 @@ ML-T33 并发纠正，2026-10-07：用户最新要求覆盖 MV12 中此前的过
 
 
 当前增量: ML-T29 / MV46 — 最终审阅保留全部 52 条原路径，仅批准 10 条新增路径及已记录原生增量分支，并保留历史身份。两份已审阅快照/类型与已提交源码一致。精确白名单、双语批准、公共错误及生成 TypeScript 门禁通过：51 项集成与 18 项服务值检查。删除一条批准路径会失败，精确恢复字节后通过。C10 完成，全部 37 个活动任务及用户要求本轮 20 项完成。
+
+
+## PUT-P01. 已确认计划更新时间线，2026-10-19
+
+用户已确认 [PUT01–PUT09](../docs/specifications/backtesting/SPEC-plan-update-timeline.zh-CN.md)，包括结束日期默认 Asia/Shanghai 当前日期且可修改。限于原准备计划页面，依次实施：纯准确路径推导 → 时间线打开／更新及原准备加载 → 回测前自动复用原组合冻结 → 可修改的日期默认值 → 原连续性／历史／审计／布局回归。工作台单版本入口、公开契约和存储不变。组件职责：`ReviewedPlanLibrary.vue` 展示时间线／路径选择并发出 open/new/update/refresh；`planLibraryPresentation.ts` 只读推导准确路径；`usePlanLibrary.ts` 管理明确选择／冻结／重试；`usePlanPreparation.ts` 安全加载准确准备记录；`BacktestNewView.vue` 衔接以上能力与原文／审核／运行组件。`useBacktestRunForm.ts` 保留已捕获提交值，并调用一处窄提交前冻结钩子。不纳入无关修改。
+
+
+PUT 完成：PUT-T01–PUT-T06 已全部完成。完整前端1147项通过，后端连续性／输入／结果／契约145项通过，最终完整 Chrome 20项通过、耗时6.0分钟。类型／构建／生成配置通过。独立复核关闭历史查看 P2；原来源／风险／执行门槛及真实准备／结果库哈希均保持不变。见[验证记录](../docs/verification/2026-10-19-plan-update-timeline.zh-CN.md)。

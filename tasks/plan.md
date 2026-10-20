@@ -458,3 +458,11 @@ Current increment: ML-T38 / MV45 — Paired guidance records dormant startup, ex
 
 
 Current increment: ML-T29 / MV46 — Final review retains all 52 original paths, approves exactly 10 additions and the documented additive native branches, preserving historical identities. Both reviewed snapshots/types match committed source. The exact allowlist, bilingual approval, public-error and generated TypeScript gates pass: 51 integration plus 18 service-value checks. Removing one approved path fails; exact bytes restored and the gate passes. C10 completes; all 37 active tasks and the user-requested 20-task sequence are complete.
+
+
+## PUT-P01. Approved plan update timeline, 2026-10-19
+
+The user approved [PUT01–PUT09](../docs/specifications/backtesting/SPEC-plan-update-timeline.md), including the editable end date defaulting to the current Asia/Shanghai date. Implement within the existing prepared-plan page: pure exact-path projection → timeline open/update and existing preparation loading → automatic existing composition freeze before run → editable date default → original continuity/history/audit/layout regressions. Keep the workbench single-version entry, public contracts and stores unchanged. Component map: `ReviewedPlanLibrary.vue` renders timeline/path selection and emits open/new/update/refresh; `planLibraryPresentation.ts` derives exact paths without writes; `usePlanLibrary.ts` owns explicit selection/freeze/retry; `usePlanPreparation.ts` safely loads one exact preparation; `BacktestNewView.vue` wires these to the existing source/review/run components. `useBacktestRunForm.ts` retains captured submission values and invokes one narrow pre-submission freeze hook. No unrelated changes are included.
+
+
+PUT completion: PUT-T01–PUT-T06 complete. Full frontend 1147 passed; backend continuity/input/results/contracts 145 passed; final complete Chrome 20 passed in 6.0 minutes. Types/build/generated profiles pass. Independent review closed the historical-inspection P2; source/risk/execution gates and real preparation/result database hashes remain unchanged. See [verification](../docs/verification/2026-10-19-plan-update-timeline.md).

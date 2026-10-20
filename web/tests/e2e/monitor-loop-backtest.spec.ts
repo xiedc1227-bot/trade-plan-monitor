@@ -116,7 +116,8 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   await page.getByTestId("review-evidence").fill("已核对原文、现金、核心持仓、成本、取得日期及完整条件规则；接受明确列出的限制。");
   await page.getByTestId("review-confirmation").check(); await page.getByTestId("review-submit").click();
   await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
-  for (const [id, value] of Object.entries({ "commission-rate": "0.0003", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "1", "sell-slippage-fen": "1" })) await page.locator("#" + id).fill(value);
+  await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  for (const [id, value] of Object.entries({ "commission-rate": "0.0003", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "1", "sell-slippage-fen": "1", "end-date": fixture.cutoff.slice(0, 10) })) await page.locator("#" + id).fill(value);
   const acceptedPromise = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/backtest-runs");
   await page.getByTestId("submit-backtest-run").click();
   const accepted = await acceptedPromise; expect(accepted.status(), await accepted.text()).toBe(202);
@@ -271,7 +272,7 @@ test("four complete plans produce one continuous account and one run in real Chr
   for (const [index, source] of inputs.sources.entries()) {
     if (index) {
       await page.getByTestId("prepare-next-source").click();
-      await page.getByLabel("关联上一份已审核计划", { exact: true }).selectOption(previousId);
+      await expect(page.getByRole("status").filter({ hasText: "正在更新" })).toContainText("前序生效日");
     }
     await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({ name: `day-${index+1}.txt`, mimeType: "text/plain", buffer: Buffer.from(source.text) });
     const saved = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/backtest-plan-library/preparations");
@@ -292,19 +293,16 @@ test("four complete plans produce one continuous account and one run in real Chr
     await page.getByTestId("review-confirmation").check();
     await page.getByRole("button", { name: "审核并保存这一份计划", exact: true }).click();
     await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
-    await expect(page.getByRole("region", { name: "已审核计划库" }).getByRole("checkbox")).toHaveCount(index+1);
+    await expect(page.getByRole("region", { name: "已审核计划库" }).locator(".plan-library__record")).toHaveCount(index+1);
+    await expect(page.getByTestId("prepare-next-source")).toBeVisible();
     expect(await page.getByLabel("完整原文", { exact: true }).isDisabled()).toBe(true);
   }
   expect((await (await page.request.get(url + "/fixture/counters")).json()).sourceCalls).toEqual([0,1,1,2,3]);
   await page.reload();
-  const choices = page.getByRole("region", { name: "已审核计划库" }).getByRole("checkbox");
-  await expect(choices).toHaveCount(4);
-  await expect(choices.first()).toBeEnabled({timeout:15000});
-  for (let i=0;i<4;i++) await choices.nth(i).check();
-  const composed = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/backtest-plan-library/compositions");
-  await page.getByTestId("compose-reviewed-plans").click();
-  const composition = await composed; expect(composition.status(), await composition.text()).toBe(201);
-  const preparationId = (await composition.json()).preparationId;
+  await expect(page.getByRole("region", { name: "已审核计划库" }).locator(".plan-library__record")).toHaveCount(4);
+  await expect(page.getByTestId("open-plan-timeline")).toHaveCount(1);
+  await expect(page.locator('[data-endpoint-id="' + previousId + '"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("region", { name: "已审核计划库" }).getByRole("checkbox")).toHaveCount(0);
   for (const width of [320,768,1024,1440]) {
     await page.setViewportSize({width,height:900});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -312,9 +310,29 @@ test("four complete plans produce one continuous account and one run in real Chr
   }
   await expect(page.getByTestId("prepared-run-versions").locator("li")).toHaveCount(4);
   await expect(page.getByTestId("prepared-run-account")).toContainText("10000.00");
+  await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
   for (const [id, value] of Object.entries({ "commission-rate": "0", "minimum-commission-fen": "500", "stamp-duty-rate": "0", "transfer-fee-rate": "0", "buy-slippage-fen": "0", "sell-slippage-fen": "0", "end-date": "2026-08-25" })) await page.locator("#" + id).fill(value);
+  await page.getByText("查看版本与来源", { exact: true }).first().click();
+  const inspectionOpened = page.waitForEvent("popup");
+  await page.getByRole("link", { name: "查看已审核原文与规则（只读，新页面）", exact: true }).first().click();
+  const inspection = await inspectionOpened;
+  const inspectionWrites: string[] = [], inspectionFailures: string[] = [];
+  inspection.on("request", request => { if (!["GET", "HEAD"].includes(request.method())) inspectionWrites.push(request.url()); });
+  inspection.on("requestfailed", request => inspectionFailures.push(request.url()));
+  await expect(inspection.getByRole("heading", { name: "只读查看历史计划", exact: true })).toBeVisible();
+  await expect(inspection.getByTestId("submit-backtest-run")).toHaveCount(0);
+  await expect(inspection.getByTestId("new-plan-timeline")).toHaveCount(0);
+  await inspection.waitForLoadState("networkidle");
+  expect(inspectionWrites).toEqual([]); expect(inspectionFailures).toEqual([]);
+  await inspection.close();
+  await expect(page.locator('[data-endpoint-id="' + previousId + '"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#end-date")).toHaveValue("2026-08-25");
+  const composed = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/backtest-plan-library/compositions");
   const acceptedPromise = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/backtest-runs");
-  await page.getByTestId("submit-backtest-run").click(); const accepted = await acceptedPromise;
+  await page.getByTestId("submit-backtest-run").click();
+  const composition = await composed; expect(composition.status(), await composition.text()).toBe(201);
+  const preparationId = (await composition.json()).preparationId;
+  const accepted = await acceptedPromise;
   expect(accepted.status(), await accepted.text()).toBe(202);
   const receipt = await accepted.json();
   expect(submissions).toHaveLength(1); expect(submissions[0]).toMatchObject({ schemaVersion: "prepared-loop-plan-v2", preparationId });
@@ -366,7 +384,7 @@ test("actual originals are prepared individually and require date confirmation b
   const dates = ["2026-09-24","2026-09-28","2026-09-30","2026-10-09"];
   await page.goto(url + "/backtests/new"); await page.getByTestId("choose-prepared-plan").click();
   for (const [index,name] of filenames.entries()) {
-    if (index) await page.getByTestId("prepare-next-source").click();
+    if (index) await page.getByTestId("new-plan-timeline").click();
     await page.getByLabel("从文件读取（UTF-8 的 .txt 或 .md）").setInputFiles({name,mimeType:"text/plain",buffer:await readFile(join(root,"tests/fixtures/shengxin_sources",name))});
     const created = page.waitForResponse(r => r.request().method()==="POST" && new URL(r.url()).pathname==="/api/v1/backtest-plan-library/preparations");
     await page.getByRole("button",{name:"保存原文",exact:true}).click();

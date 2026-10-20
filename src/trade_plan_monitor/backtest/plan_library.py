@@ -1,5 +1,7 @@
 """Single-source preparation and composition of immutable reviewed entries."""
 
+from hashlib import sha256
+
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.loop_input import LoopSourceCollection
 from trade_plan_monitor.backtest.plan_schedule import ScheduledLoopSchedule, ScheduledScheduleEntry
@@ -122,6 +124,16 @@ def list_reviewed_plans(store, *, offset: int, limit: int):
                 name=last.version.snapshot.name,
                 reviewed_base=record.reviewed_base,
                 reviewed_at=last.version.review.reviewed_at,
+                identity=dict(
+                    source_hash=last.source.source_hash,
+                    plan_hash=last.version.plan_hash,
+                    plan_version_id=last.version.version_id,
+                    reviewed_version_hash=sha256(
+                        (
+                            "plan-library-reviewed-version-v1\0" + canonical_json(last.version)
+                        ).encode()
+                    ).hexdigest(),
+                ),
             )
         )
     return dict(items=tuple(items), offset=offset, limit=limit, total=total)

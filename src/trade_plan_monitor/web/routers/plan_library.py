@@ -26,6 +26,13 @@ from trade_plan_monitor.web.schemas import ApiValue, MutationContextDependency
 router = APIRouter(prefix="/api/v1/backtest-plan-library", tags=["backtest-plan-library"])
 
 
+class ReviewedPlanLibraryIdentity(ApiValue):
+    source_hash: Sha256Hex
+    plan_hash: Sha256Hex
+    plan_version_id: StableIdentifier
+    reviewed_version_hash: Sha256Hex
+
+
 class ReviewedPlanLibraryItem(ApiValue):
     preparation_id: StableIdentifier
     manifest_hash: Sha256Hex
@@ -35,6 +42,9 @@ class ReviewedPlanLibraryItem(ApiValue):
     name: str = Field(max_length=256)
     reviewed_base: ReviewedPlanReference | None
     reviewed_at: LoopTimestamp
+    identity: ReviewedPlanLibraryIdentity | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
 
 class ReviewedPlanLibraryPage(ApiValue):

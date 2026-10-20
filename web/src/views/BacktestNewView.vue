@@ -19,6 +19,7 @@ import { usePlanLibrary } from "../composables/usePlanLibrary";
 import PlanPreparationReview from "../components/backtests/PlanPreparationReview.vue";
 
 import type { PlanSelectionApi } from "../api/planSelections";
+import { ApiClientError } from "../api/transport";
 
 interface Props {
   selectionApi?: PlanSelectionApi;
@@ -32,6 +33,7 @@ interface Props {
 const props = defineProps<Props>();
 const router = useRouter();
 const route = useRoute();
+const inspecting = computed(() => route.query.inspect === "1");
 const pageTitle = useTemplateRef<HTMLHeadingElement>("pageTitle");
 const previousTitle = document.title;
 
@@ -60,10 +62,10 @@ watch(() => preparation.preparationId.value, (identity) => {
   }
 });
 const reviewedPrepared = computed<DeepReadonly<PreparationFrozenView | CollectionPreparationFrozenView> | null>(() => {
-  if (preparation.isBusy.value || preparation.sourceDirty.value) return null;
-  if (library.composition.value) return library.composition.value;
+  if (inspecting.value || !preparation.canUsePrepared.value || preparation.sourceDirty.value) return null;
   const chain = preparation.collection.value;
-  if (chain && chain.workflow !== "SINGLE" && preparation.canUsePrepared.value) return chain.frozen;
+  if (chain) return chain.workflow !== "SINGLE" ||
+    library.endpointId.value === chain.preparationId && !library.path.value.error ? chain.frozen : null;
   const value = preparation.preparation.value;
   if (!preparation.canUsePrepared.value || value?.candidate?.kind !== "FROZEN") return null;
   return { preparationId: value.preparationId, manifestHash: value.candidate.candidateHash,
@@ -77,6 +79,16 @@ const form = useBacktestRunForm({
   onAccepted: navigateToAcceptedRun,
   prepared: () => reviewedPrepared.value,
   preparedMode: () => mode.value === "PREPARED",
+  async prepareScheduled(command) {
+    if (preparation.collection.value?.workflow !== "SINGLE") return command;
+    if (command.preparationId !== library.endpoint.value?.preparationId || command.manifestHash !== library.endpoint.value.manifestHash) {
+      throw new ApiClientError({ code: "CONFLICT", status: 409, message: "时间线版本已变化，请核对后重新开始。" });
+    }
+    const frozen = await library.compose();
+    if (!frozen) throw new ApiClientError({ code: library.uncertain.value ? "NETWORK_ERROR" : "CONFLICT",
+      status: library.uncertain.value ? 0 : 409, message: library.error.value ?? "无法准备计划时间线。" });
+    return frozen;
+  },
 });
 const dataPhaseText = computed(() => ({
   IDLE: "", CHECKING: "正在检查本地历史数据", SYNCING: "正在自动补齐历史数据",
@@ -85,15 +97,30 @@ const dataPhaseText = computed(() => ({
 })[form.automaticData.phase.value]);
 const preparingData = computed(() => ["CHECKING", "SYNCING", "VERIFYING"].includes(form.automaticData.phase.value));
 const workbenchLocked = ref(false);
-const runLocked = computed(() => ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(form.submissionState.value));
+const runLocked = computed(() => inspecting.value || ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(form.submissionState.value));
 const modeLocked = computed(() => preparation.isBusy.value || library.locked.value || runLocked.value || workbenchLocked.value);
 watch(() => preparation.canUsePrepared.value, (ready) => { if (ready) void library.refresh(); });
-async function prepareNext(): Promise<void> {
+watch([() => preparation.canUsePrepared.value, () => preparation.preparationId.value, library.items], ([ready, id]) => {
+  if (!inspecting.value && ready && id && preparation.collection.value?.workflow === "SINGLE" && library.items.value.some(item => item.preparationId === id)) {
+    library.chooseEndpoint(id);
+  }
+});
+async function openTimeline(id: string): Promise<void> {
   if (library.loading.value || modeLocked.value || preparation.sourceDirty.value) return;
-  const previousId = preparation.canUsePrepared.value ? preparation.preparationId.value ?? undefined : undefined;
-  await library.prepareNext(previousId);
+  if (library.chooseEndpoint(id)) await preparation.open(id);
+}
+function prepareNext(id: string): void {
+  if (library.loading.value || modeLocked.value || preparation.sourceDirty.value) return;
+  if (!library.chooseEndpoint(id)) return;
   preparation.newSource();
 }
+function newTimeline(): void {
+  if (library.loading.value || modeLocked.value || preparation.sourceDirty.value || !library.chooseEndpoint("")) return;
+  preparation.newSource();
+}
+watch(() => props.initialPreparationId, (id) => {
+  if (id && id !== preparation.preparationId.value) void openTimeline(id);
+});
 function chooseMode(value: "LEGACY" | "PREPARED"): void {
   if (modeLocked.value || mode.value === value) return;
   mode.value = value;
@@ -109,7 +136,7 @@ function reviewPrepared(value: { evidence: string; choices: ReviewChoice[]; unkn
 
 
 onMounted(() => {
-  document.title = "创建回测 · Trade Plan Monitor";
+  document.title = `${inspecting.value ? "查看历史计划" : "创建回测"} · Trade Plan Monitor`;
   pageTitle.value?.focus();
 });
 
@@ -122,7 +149,7 @@ onBeforeUnmount(() => {
   <div class="backtest-new-view">
     <header class="backtest-new-view__hero">
       <div>
-        <h1 ref="pageTitle" tabindex="-1">创建回测</h1>
+        <h1 ref="pageTitle" tabindex="-1">{{ inspecting ? '只读查看历史计划' : '创建回测' }}</h1>
         <p>选择已审核计划并开始回测；程序自动检查、补齐和验证历史数据。</p>
       </div>
       <a href="/backtests">返回回测研究台</a>
@@ -134,15 +161,17 @@ onBeforeUnmount(() => {
 
     <section class="backtest-new-view__mode" aria-label="选择已审核计划来源">
       <button type="button" data-testid="choose-legacy-plan" :aria-pressed="mode === 'LEGACY'" :disabled="modeLocked" @click="chooseMode('LEGACY')">工作台已审核计划</button>
-      <button type="button" data-testid="choose-prepared-plan" :aria-pressed="mode === 'PREPARED'" :disabled="modeLocked" @click="chooseMode('PREPARED')">回测已审核计划与原文准备</button>
-      <p v-if="modeLocked" role="status">当前任务或操作未结束，完成前不能切换准备方式或开启其他任务。</p>
+      <button type="button" data-testid="choose-prepared-plan" :aria-pressed="mode === 'PREPARED'" :disabled="modeLocked" @click="chooseMode('PREPARED')">计划更新时间线与原文准备</button>
+      <p v-if="modeLocked && !inspecting" role="status">当前任务或操作未结束，完成前不能切换准备方式或开启其他任务。</p>
     </section>
 
     <section v-if="mode === 'PREPARED'" class="backtest-new-view__preparation" aria-label="计划原文准备">
-      <ReviewedPlanLibrary :items="library.items.value" :selected="library.selected.value" :base-id="library.baseId.value" :needs-base="library.needsBase.value"
-        :creating="preparation.preparationId.value === null" :disabled="preparation.isBusy.value || runLocked" :loading="library.loading.value"
+      <p v-if="inspecting" role="status">此页面只读展示历史原文与审核规则，不改变原页面的时间线选择和回测设置。</p>
+      <ReviewedPlanLibrary v-if="!inspecting" :items="library.items.value" :endpoint-id="library.endpointId.value"
+        :disabled="modeLocked" :loading="library.loading.value"
         :pending="library.locked.value" :uncertain="library.uncertain.value" :error="library.error.value" :can-start="!preparation.sourceDirty.value"
-        @base="library.chooseBase" @toggle="library.toggle" @compose="library.compose" @refresh="library.refresh" @new="prepareNext" />
+        @open="openTimeline" @update="prepareNext" @refresh="library.refresh" @new="newTimeline" />
+      <p v-if="!preparation.preparationId.value && library.endpoint.value" role="status">正在更新 {{ library.endpoint.value.name }}（{{ library.endpoint.value.symbol }}）的计划时间线，前序生效日为 {{ library.endpoint.value.effectiveTradeDate }}。新计划审核通过后才会追加。</p>
       <p v-if="preparation.collection.value?.workflow === 'SINGLE' && preparation.collection.value.itemCount > 1">前序版本已审核并锁定，只能编辑和提取当前这一份原文。</p>
       <PlanPreparationSourceForm :source="preparation.draft.value" :disabled="runLocked || library.locked.value || !preparation.canSubmitSource.value || (!preparation.preparationId.value && (library.loading.value || library.needsBase.value))"
         @update:source="preparation.updateSource" @submit="!library.needsBase.value && preparation.submitSource()" />

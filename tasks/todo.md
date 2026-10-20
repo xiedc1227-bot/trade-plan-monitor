@@ -885,3 +885,13 @@ The following original completed historical record is preserved; it does not imp
   - Acceptance: paired specifications identify the former placeholder routes `/`, `/stocks/:symbol`, `/plans/:id`, `/alerts`, and `/system` as real lazy SFCs; the exact 10-route map and `submit → run+job URL → poll → remove jobId → materialized result` chain have unit, browser, and backend-fake evidence; OpenAPI remains exactly 42 paths (27 live plus 15 backtest); the paired report is `PASS`.
   - Verify: focused backend pytest plus the production-fake journey; Ruff; OpenAPI snapshot and generated-TypeScript consistency; full Vitest, `vue-tsc`, build, and Chromium suites; `git diff --check`.
   - Files: `README*`, `docs/README*`, paired local-Web/backtest/API/ADR specifications, `tasks/plan*`, `tasks/todo*`, `docs/verification/webf13-acceptance*`, `web/tests/unit/BacktestRouter.spec.ts`, `web/tests/e2e/backtests.spec.ts`, and `web/tests/e2e/accessibility.spec.ts`.
+
+
+## PUT tasks — approved timeline increment
+
+- [x] PUT-T01 — Prove exact path/branch/invalid-lineage behavior with focused tests; derive timeline paths without writes. Files: presentation model and focused test.
+- [x] PUT-T02 — Replace manual member selection with timeline open/new/update; retain version/source details and safe loading. Verify component and preparation race/recovery tests.
+- [x] PUT-T03 — Automatically freeze the exact displayed path before run; retain original form/key/body through uncertain retries. Verify controller and run-form tests.
+- [x] PUT-T04 — Default editable end date to the current Asia/Shanghai day; prove midnight rollover and edit preservation.
+- [x] PUT-T05 — Adapt only superseded UI actions in real browser tests; retain original continuity/history/cancellation/layout/threshold assertions and add timeline coverage.
+- [x] PUT-T06 — Run PUT08 gates, review scope, compare original database hashes, and finish bilingual operations/verification evidence.

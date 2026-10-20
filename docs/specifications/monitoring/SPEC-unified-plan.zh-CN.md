@@ -287,3 +287,8 @@ OpenAPI 快照 SHA-256：`2b5963fcb0b5445fac66a4e701b608b22f0a441949da81956345a2
 新增 `POST /api/v1/backtest-plan-selections` 和 `GET /api/v1/backtest-plan-selections/{selection_id}`，在现有数据检查／运行命令及结果联合类型增加绑定选择的工作台分支。冻结原审核计划身份与单独确认的历史研究上下文，无需重新提取或实时启用。新增复制输入使用 `monitor-loop-stored-input-v3` 和 `workbench-loop-input-v1`；旧编解码、哈希、结果字节及准备多计划执行保持权威。仅带标记准备存储增加一张不可变选择表（schema 1 → 2），旧程序会拒绝升级后的存储。
 
 删除 `POST /api/v1/plan-imports`、`PlanImportCommand`、`PlanDocumentFormat` 及直接前端客户端／表单。已删除端点返回现有 404 信封。内部 JSON/YAML 编解码、原文准备、已有计划和结果继续可用。其他全部 API 路径、监控／供应商／错误／安全语义保持不变。生成产物与两套挂载契约一致；审批仅覆盖本次增加／删除，不代表真实供应商或部署认证。
+
+
+## U28. 已审核计划库身份展示，2026-10-19
+
+OpenAPI 快照 SHA-256：`282b181606f85de400008eaf1ca44d396567f6348572d27f7f5807109be8260f`。当前监控 v2 快照 SHA-256：`8d1bdf473c23f89d6c15635d1e60cd3cf713a92e62c2bef50c4054c0cf684591`。用户授权清楚展示八条既有记录的计划链／前序／版本。仅新增可选可空 `ReviewedPlanLibraryItem.identity`，包含 `sourceHash`、`planHash`、`planVersionId` 和 `reviewedVersionHash`，从既有不可变已审核输入投影。不修改路由、写入、存储格式／哈希、组合规则或历史结果。见[验证与只读核查](../../verification/2026-10-19-plan-library-versions.zh-CN.md)。

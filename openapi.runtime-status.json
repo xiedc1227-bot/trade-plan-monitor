@@ -24212,6 +24212,41 @@
         "title": "ReviewedDailyFact",
         "type": "object"
       },
+      "ReviewedPlanLibraryIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "planHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Planhash",
+            "type": "string"
+          },
+          "planVersionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "reviewedVersionHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Reviewedversionhash",
+            "type": "string"
+          },
+          "sourceHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceHash",
+          "planHash",
+          "planVersionId",
+          "reviewedVersionHash"
+        ],
+        "title": "ReviewedPlanLibraryIdentity",
+        "type": "object"
+      },
       "ReviewedPlanLibraryItem": {
         "additionalProperties": false,
         "properties": {
@@ -24219,6 +24254,16 @@
             "format": "date",
             "title": "Effectivetradedate",
             "type": "string"
+          },
+          "identity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewedPlanLibraryIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "manifestHash": {
             "pattern": "^[0-9a-f]{64}$",

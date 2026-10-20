@@ -10,7 +10,7 @@ Confirm research context once, then set response, costs and optional end date an
 
 ## PR-O02. Existing prepared plans and results
 
-The secondary **Prepared backtest plans and source preparation** entry retains the existing library, original-text preparation, extraction/review, unfinished preparation recovery and continuous multi-plan replay. The current maximum is 256 chain entries. This increment supports one workbench version per run; mixed-source or multiple-workbench schedules are unavailable. The two plan stores retain their current authoring/review responsibilities.
+The secondary **Plan update timeline and source preparation** entry retains the existing library, original-text preparation, extraction/review, unfinished preparation recovery and continuous multi-plan replay. The current maximum is 256 chain entries. This increment supports one workbench version per run; mixed-source or multiple-workbench schedules are unavailable. The two plan stores retain their current authoring/review responsibilities.
 
 Existing `preparationId` links and historical result links, details and exports remain usable. New workbench results identify the actual plan version/review and frozen research selection. Accepted runs own copied inputs; execution and result reads no longer require either source plan store. Current JSON/YAML plan import is removed: `POST /api/v1/plan-imports` returns 404, and its direct client/form is removed. Internal codecs and original-text preparation remain supported.
 
@@ -35,3 +35,14 @@ npm --prefix web run test:e2e -- tests/e2e/backtests.spec.ts tests/e2e/monitor-l
 With Python on PATH, `npm --prefix web run setup:test-browser` is equivalent. The installer downloads the exact official artifact into the ignored `web/.test-browsers/157.0.8103.6/` cache and reuses a completed installation. It does not install/update system Chrome or download anything during ordinary test runs. A missing browser fails with the setup command; tests do not silently fall back to an affected browser. Chrome for Testing is a development verification prerequisite, not a product runtime dependency.
 
 The existing Chrome project, viewports, assertions, 5-second expectation timeout and zero retries remain unchanged. A new regression requires 1000 complete stream reads with zero failed requests, checks a separately delivered end-of-body, and verifies that a real caller cancellation still emits a failed request. See PR-V05 in the verification report for cancellation results and PR-V06 for the subsequent narrow-layout repair.
+
+
+## PR-O05. Maintain a plan update timeline
+
+Create a timeline from the first source; stock code/name are extracted and confirmed during review. Open an existing timeline and use **Update trading plan** to append a later effective-date source to its exact reviewed endpoint. Review the existing add/modify/retain/revoke differences before saving. Only the newest source is editable; a draft does not change the reviewed timeline. Independent approvals for the same stock remain separate. If a timeline has alternative endpoints, select one path explicitly.
+
+The timeline page replaces manual per-plan checkboxes and the composition button. **Start replay** automatically freezes the complete selected path through the existing server composition checks, then reuses automatic data preparation and continuous replay. Opening a timeline is read-only. The end-date field defaults to the current Asia/Shanghai calendar date when the form is created and may be edited; clearing it keeps the existing server fallback. The first-plan/account start and all cost, risk, funding and T+1 rules remain unchanged.
+
+Historical source/rule links open an independent read-only page. It cannot edit, review or start a run, and leaves the original selected endpoint and form unchanged. Uncertain freeze/run receipts must use the displayed same-request retry; keep the path, settings and key/body locked until resolved. A confirmed freeze receipt is reused on later submission retries.
+
+A new approved update never rewrites an accepted/running replay or historical result. Run the updated timeline again to create a new result. Existing preparation/result links and exports remain supported. This increment adds no database migration, public API or live-plan activation. The workbench single-version replay entry remains available; cross-store timeline assembly, same-day replacement, backdated insertion, merge/delete/reorder and arbitrary start-date clipping are outside this increment. See [approved scope](../specifications/backtesting/SPEC-plan-update-timeline.md) and [verification](../verification/2026-10-19-plan-update-timeline.md).

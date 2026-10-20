@@ -97,6 +97,9 @@ export interface UseBacktestRunFormOptions {
   readonly api?: BacktestApi;
   readonly createIdempotencyKey?: () => string;
   readonly onAccepted: (receipt: BacktestJobReceipt) => Promise<unknown> | unknown;
+  readonly prepareScheduled?: (command: ScheduledPreparedBacktestRunCommand) => Promise<
+    Pick<ScheduledPreparedBacktestRunCommand, "preparationId" | "manifestHash">
+  >;
 }
 
 interface SubmissionIntent {
@@ -116,7 +119,8 @@ function defaultIdempotencyKey(): string {
 
 function emptyDraft(): BacktestRunDraft {
   return Object.freeze({
-    endDate: "",
+    endDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai",
+      year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
     responseMode: "FOLLOW_REMINDERS",
     responseDelaySeconds: "0",
     buySlippageFen: "0",
@@ -169,6 +173,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   const createIdempotencyKey = options.createIdempotencyKey ?? defaultIdempotencyKey;
   const automaticData = useAutomaticBacktestData({ api, createIdempotencyKey });
   let dataReadyIntent: SubmissionIntent | null = null;
+  let resolvedScheduled: { intent: SubmissionIntent; command: ScheduledPreparedBacktestRunCommand } | null = null;
   const draft = shallowRef<BacktestRunDraft>(emptyDraft());
   const errors = shallowRef<BacktestRunFormErrors>(Object.freeze({}));
   const errorRevision = shallowRef(0);
@@ -502,12 +507,22 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     submissionErrorMessage.value = null;
     let receipt: BacktestJobReceipt;
     try {
-      if (("preparationId" in intent.command || "selectionId" in intent.command) && dataReadyIntent !== intent) {
-        await automaticData.prepare(intent.command);
+      let command = intent.command;
+      if (options.prepareScheduled && "schemaVersion" in command && command.schemaVersion === "prepared-loop-plan-v2") {
+        if (resolvedScheduled?.intent !== intent) {
+          const frozen = await options.prepareScheduled(command);
+          if (!mounted || controller.signal.aborted || submissionIntent !== intent) return;
+          resolvedScheduled = { intent, command: Object.freeze({ ...command,
+            preparationId: frozen.preparationId, manifestHash: frozen.manifestHash }) };
+        }
+        command = resolvedScheduled.command;
+      }
+      if (("preparationId" in command || "selectionId" in command) && dataReadyIntent !== intent) {
+        await automaticData.prepare(command);
         if (!mounted || controller.signal.aborted || submissionIntent !== intent) return;
         dataReadyIntent = intent;
       }
-      const response = await api.submitRun(intent.command, intent.key, {
+      const response = await api.submitRun(command, intent.key, {
         signal: controller.signal,
       });
       if (!mounted || controller.signal.aborted || submissionIntent !== intent) return;

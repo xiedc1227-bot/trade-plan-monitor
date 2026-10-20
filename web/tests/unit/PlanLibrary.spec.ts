@@ -21,7 +21,7 @@ function setup() {
 }
 
 it("explains a rejected old risk scope without requesting manual source facts", async () => {
-  const { api, state } = setup(); await flushPromises(); state.toggle("first");
+  const { api, state } = setup(); await flushPromises(); state.chooseEndpoint("first");
   vi.mocked(api.compose).mockRejectedValue(new ApiClientError({ code: "CONFLICT", status: 409,
     message: "Conflict", details: [{ code: "REVIEWED_RISK_SCOPE_RECHECK_REQUIRED", location: ["preparation"], message: "Conflict" }] }));
   await state.compose();
@@ -29,24 +29,24 @@ it("explains a rejected old risk scope without requesting manual source facts", 
   expect(state.error.value).toContain("无需补填原文已有的信息");
   expect(state.locked.value).toBe(false);
 });
-it("defaults to the unique latest reviewed entry without a document type", async () => {
+it("starts a first source without auto-selecting a reviewed timeline", async () => {
   const { api, state } = setup(); await flushPromises();
-  expect(state.reviewedBase.value).toEqual({ preparation_id: "first", manifest_hash: entry.manifestHash });
+  expect(state.reviewedBase.value).toBeNull(); expect(state.endpointId.value).toBe("");
   expect(state.needsBase.value).toBe(false); expect(api.compose).not.toHaveBeenCalled();
 });
 it("preserves an explicit new chain on refresh and follows the just-reviewed plan for the next source", async () => {
   const { state } = setup(); await flushPromises();
-  state.chooseBase(""); await state.refresh();
+  state.chooseEndpoint(""); await state.refresh();
   expect(state.reviewedBase.value).toBeNull();
   expect(state.needsBase.value).toBe(false);
-  await state.prepareNext("first");
+  state.chooseEndpoint("first");
   expect(state.reviewedBase.value?.preparation_id).toBe("first");
 });
 it("does not choose across assets or tied dates, or substitute a missing explicit predecessor", async () => {
   const { api, state } = setup(); await flushPromises();
   vi.mocked(api.list).mockResolvedValue({ ...page, items: [entry, { ...entry, preparationId: "other" }], total: 2 });
-  await state.prepareNext(); expect(state.needsBase.value).toBe(true);
-  state.chooseBase("first");
+  state.chooseEndpoint(""); expect(state.endpointId.value).toBe("");
+  state.chooseEndpoint("first");
   vi.mocked(api.list).mockResolvedValue({ ...page, items: [{ ...entry, preparationId: "other", symbol: "600000.SH" }] });
   await state.refresh(); expect(state.needsBase.value).toBe(true);
   expect(state.reviewedBase.value).toBeNull();
@@ -54,20 +54,20 @@ it("does not choose across assets or tied dates, or substitute a missing explici
 it("keeps the exact uncertain composition intent and blocks selection edits", async () => {
   const { api, state } = setup(); await flushPromises();
   vi.mocked(api.compose).mockRejectedValue(new Error("lost reply"));
-  state.toggle("first"); await state.compose();
+  state.chooseEndpoint("first"); await state.compose();
   const first = vi.mocked(api.compose).mock.calls[0]!;
-  expect(state.uncertain.value).toBe(true); state.toggle("first");
-  expect(state.selected.value).toEqual(["first"]);
+  expect(state.uncertain.value).toBe(true); state.chooseEndpoint("first");
+  expect(state.endpointId.value).toBe("first");
   await state.compose();
   expect(vi.mocked(api.compose).mock.calls[1]!.slice(0,2)).toEqual(first.slice(0,2));
   expect(first[0].plans).toEqual([{ preparation_id: "first", manifest_hash: entry.manifestHash }]);
 });
 it("reports missing dependencies without freezing the selection after definite rejection", async () => {
-  const { api, state } = setup(); await flushPromises(); state.toggle("first");
+  const { api, state } = setup(); await flushPromises(); state.chooseEndpoint("first");
   vi.mocked(api.compose).mockRejectedValue(new ApiClientError({ code: "CONFLICT", status: 409,
     message: "Conflict", details: [{ code: "PREDECESSOR_SELECTION_REQUIRED", location: ["preparation"], message: "Conflict" }] }));
   await state.compose(); expect(state.error.value).toContain("上一份已审核版本");
-  expect(state.locked.value).toBe(false); state.toggle("first"); expect(state.selected.value).toEqual([]);
+  expect(state.locked.value).toBe(false); state.chooseEndpoint(""); expect(state.endpointId.value).toBe("");
 });
 it("rejects an incomplete library page", async () => {
   const { api, state } = setup(); await flushPromises();
@@ -82,18 +82,93 @@ it("checks library dates, references and no-store before exposing entries", asyn
   }
 });
 it("disables new preparation while a composition outcome is unknown", () => {
-  const wrapper = mount(ReviewedPlanLibrary,{props:{ items:[entry],selected:["first"],baseId:"",creating:false,
+  const wrapper = mount(ReviewedPlanLibrary,{props:{ items:[entry],endpointId:"first",
     disabled:false,loading:false,pending:true,uncertain:true,error:null,canStart:true }}); wrappers.push(wrapper);
   expect(wrapper.get('[data-testid="prepare-next-source"]').attributes("disabled")).toBeDefined();
   expect(wrapper.get('fieldset').attributes("disabled")).toBeDefined();
-  expect(wrapper.text()).toContain("使用同一请求安全重试组合");
+  expect(wrapper.text()).toContain("回测准备结果尚未确认");
 });
-it("offers preparation and predecessor selection without plan-type radios", () => {
-  const wrapper = mount(ReviewedPlanLibrary,{props:{ items:[entry],selected:[],baseId:"first",creating:true,
+it("offers timeline creation and endpoint updates without stock or predecessor selectors", () => {
+  const wrapper = mount(ReviewedPlanLibrary,{props:{ items:[entry],endpointId:"first",
     disabled:false,loading:false,pending:false,uncertain:false,error:null,canStart:true }}); wrappers.push(wrapper);
   expect(wrapper.findAll('input[type="radio"]')).toHaveLength(0);
   expect(wrapper.text()).not.toContain("修改型计划");
   expect(wrapper.text()).not.toContain("完整计划");
-  expect(wrapper.text()).toContain("准备计划");
-  expect(wrapper.get('select').element.value).toBe("first");
+  expect(wrapper.text()).toContain("计划更新时间线");
+  expect(wrapper.findAll("select")).toHaveLength(0);
+});
+
+function twoChains(): ReviewedPlanLibraryItem[] {
+  return ["a", "b"].flatMap(chain => [0, 1, 2, 3].map(index => ({
+    ...entry, preparationId: `${chain}-${index}`, manifestHash: (chain + index).repeat(32),
+    sourceId: `source-${index}`, effectiveTradeDate: ["2026-09-24", "2026-09-28", "2026-09-30", "2026-10-09"][index]!,
+    reviewedAt: `2026-10-17T${chain === "a" ? "02" : "11"}:48:03+08:00`,
+    reviewedBase: index ? { preparation_id: `${chain}-${index - 1}`, manifest_hash: (chain + (index - 1)).repeat(32) } : null,
+    identity: { sourceHash: String(index + 1).repeat(64), planHash: chain.repeat(64),
+      planVersionId: `prepared-${chain}-${index}`, reviewedVersionHash: (chain + index).repeat(32) },
+  })));
+}
+
+function library(items: ReviewedPlanLibraryItem[]) {
+  const wrapper = mount(ReviewedPlanLibrary, { props: { items, endpointId: "b-3",
+    disabled: false, loading: false, pending: false, uncertain: false, error: null, canStart: true } });
+  wrappers.push(wrapper); return wrapper;
+}
+
+it("distinguishes two four-plan timelines while retaining exact endpoint identities", async () => {
+  const wrapper = library(twoChains());
+  expect(wrapper.findAll('[data-testid="plan-library-chain"]')).toHaveLength(2);
+  expect(wrapper.findAll('[data-testid="open-plan-timeline"]')).toHaveLength(2);
+  expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(0);
+  expect(wrapper.findAll(".plan-library__record")).toHaveLength(8);
+  expect(wrapper.get('[data-endpoint-id="b-3"]').attributes("aria-pressed")).toBe("true");
+  const a = wrapper.get('[data-chain-id="a-0"]');
+  expect(a.text()).toContain("02:48:03");
+  expect(a.text()).toContain("前序：2026-09-30");
+  expect(a.text()).toContain("同原文，计划内容不同");
+  expect(a.text()).not.toContain("prepared-b-2");
+  await wrapper.get('[data-endpoint-id="b-3"]').trigger("click");
+  expect(wrapper.emitted("open")).toEqual([["b-3"]]);
+  expect(wrapper.emitted("compose")).toBeUndefined();
+  expect(wrapper.get('[data-endpoint-id="a-3"]').attributes("aria-pressed")).toBe("false");
+});
+
+it("does not call equal rules a duplicate approval or silently bind a stale predecessor", () => {
+  const items = twoChains();
+  items[4]!.identity!.planHash = items[0]!.identity!.planHash;
+  items[6]!.reviewedBase!.manifest_hash = "f".repeat(64);
+  const wrapper = library(items);
+  expect(wrapper.text()).toContain("同原文，计划内容一致，审核版本不同");
+  expect(wrapper.text()).toContain("前序版本与当前记录不匹配");
+  expect(wrapper.text()).not.toContain("相同审核版本的重复准备");
+});
+
+it("keeps independent preparations separate when their content-based version IDs coincide", () => {
+  const items = twoChains();
+  for (let index = 0; index < 4; index++) {
+    items[index + 4]!.identity!.planVersionId = items[index]!.identity!.planVersionId;
+    items[index + 4]!.identity!.planHash = items[index]!.identity!.planHash;
+  }
+  const wrapper = library(items);
+  expect(wrapper.findAll('[data-testid="plan-library-chain"]')).toHaveLength(2);
+  expect(wrapper.get('[data-chain-id="a-0"]').text()).toContain("02:48:03");
+  expect(wrapper.get('[data-chain-id="b-0"]').text()).toContain("11:48:03");
+  expect(wrapper.text()).toContain("同原文，计划内容一致，审核版本不同");
+  expect(wrapper.text()).not.toContain("相同审核快照的重复准备");
+});
+
+it("keeps truly repeated approvals and old payloads explicit instead of dropping records", () => {
+  const repeated = { ...entry, preparationId: "repeated", identity: twoChains()[0]!.identity! };
+  const wrapper = library([twoChains()[0]!, repeated, { ...entry, preparationId: "legacy" }]);
+  expect(wrapper.findAll(".plan-library__record")).toHaveLength(3);
+  expect(wrapper.text()).toContain("相同审核快照的重复准备");
+  expect(wrapper.text()).toContain("未提供版本标识");
+});
+
+it("rejects malformed optional identity metadata while accepting existing library payloads", async () => {
+  const fetcher = (body: unknown) => vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { headers: { "Cache-Control": "no-store" } }));
+  await expect(createPlanLibraryApi(fetcher(page)).list()).resolves.toEqual(page);
+  for (const identity of [{ sourceHash: "bad" }, { ...twoChains()[0]!.identity, planHash: "bad" }]) {
+    await expect(createPlanLibraryApi(fetcher({ ...page, items: [{ ...entry, identity }] })).list()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  }
 });

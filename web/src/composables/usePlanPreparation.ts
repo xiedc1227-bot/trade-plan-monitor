@@ -374,6 +374,13 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     selectedSourceId.value = null; draft.value = { source_id: createId(), text: "" };
     requestState.value = "IDLE"; commandError.value = null; readError.value = null;
   }
+  async function open(id: string): Promise<void> {
+    if (!mounted || isBusy.value || draftDirty.value) return;
+    if (preparationId.value === id) { await refresh(); return; }
+    newSource();
+    preparationId.value = id;
+    await refresh();
+  }
   onMounted(() => {
     mounted = true;
     document.addEventListener("visibilitychange", visibilityChanged);
@@ -391,6 +398,6 @@ export function usePlanPreparation(options: UsePlanPreparationOptions = {}) {
     canSubmitSource, canExtract, extractionBlockers, canCancel, canRecover, canRetryMutation, canReview, canUsePrepared,
     sourceDirty: readonly(draftDirty),
     updateSources, submitSources, selectSource, reorderSources, reviewCollection, correctItem,
-    updateSource, submitSource, extract, cancel, recover, retryMutation, refresh, review, newSource,
+    updateSource, submitSource, extract, cancel, recover, retryMutation, refresh, review, newSource, open,
   } as const;
 }
