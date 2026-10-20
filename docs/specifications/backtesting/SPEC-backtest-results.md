@@ -123,3 +123,7 @@ Cover staged invisibility, 1,000-row read-snapshot verification and short-writer
 ## Open Questions
 
 Automatic oldest-first deletion beyond 30 historical runs is authorized by the 2026-10-07 policy update and remains pending ML-T21 implementation. A new public manual-deletion API and server-side comparison exports remain deferred. Existing per-run JSON/CSV exports remain compatible for retained runs; add no new export development.
+
+## BR-RESULT01. Disposable causal lookup metadata
+
+[BR03](SPEC-backtest-review.md#br03-derived-index-and-accounting) adds optional `backtest_review_event` metadata to the owned result database. Index `run_id,event_id`, `run_id,sequence`, and `run_id,cause_event_id,sequence`; retain canonical `detail_id` and `content_hash`. Stage metadata in the same transaction as its event. Foreign-key `ON DELETE CASCADE` follows canonical detail retention. Migration inventory recognizes both the previous and extended schemas. Metadata does not participate in canonical report/set hashes. Reads verify canonical hashes and metadata identities, and respect artifact availability. Old missing indexes show `NOT_READY`; an explicit maintenance batch reads at most 100 verified retained rows. See [maintenance instructions](../../operations/backtest-review.md). No per-fill PnL projection ships in this slice.

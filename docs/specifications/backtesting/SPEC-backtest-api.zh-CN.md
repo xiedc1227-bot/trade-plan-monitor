@@ -224,3 +224,7 @@ OpenAPI 测试固定精确 42 条路径，重新生成 TypeScript 并拒绝 Sche
 ## 开放问题
 
 首个契约提案没有阻断问题。WebSocket 任务事件、远程认证、破坏性运行删除、Debug Trace 公开、组合运行、服务端比较和经验性能预算继续延期，并根据适用情况要求单独批准或获批准的实现计划。
+
+## BR-API01. 精确结果原因查询
+
+新增 `GET /api/v1/backtest-runs/{run_id}/review-context` 契约见 [BR02](SPEC-backtest-review.zh-CN.md#br02-读取契约)。`fillId`、`eventId`、`sequence` 三选一，另可传 `relation`、`limit`、`cursor`。整数序号为 1..420001，limit 默认 20、最大 100；已有封闭查询不变。类型化响应包括选中事件、保留成交、有界关联事件及最多 100 项确定性 `evidence`（`sequence`、`ruleId`、`at`、`rootOutcome`、`requirement`、`actual`、`reason`）。验证运行／选择器／关系身份，响应小于 4 MiB。签名游标绑定选择器、关系、条数及选中记录哈希。`COMPLETE` 表示已加载页没有已知缺失关联，`hasMore` 表示仍可继续遍历。GET 不修改状态或构建索引。

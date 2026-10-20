@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date
-from typing import Annotated, Protocol, cast
+from typing import Annotated, Literal, Protocol, cast
 
 from fastapi import APIRouter, Depends, Path, Query, Request
+from pydantic import ValidationError
 
+from trade_plan_monitor.backtest.loop_report import MAX_AUDIT_EVENTS
 from trade_plan_monitor.web.backtest_schemas import (
     BacktestDetailFiltersView,
     BacktestDetailPage,
@@ -17,6 +19,8 @@ from trade_plan_monitor.web.backtest_schemas import (
     BacktestMarketIndexPointView,
     BacktestMarketIndexSeriesView,
     BacktestPublicDetailKind,
+    BacktestReviewContext,
+    BacktestReviewSelector,
 )
 from trade_plan_monitor.web.errors import ApiError
 from trade_plan_monitor.web.schemas import ApiErrorCode, validate_api_response
@@ -42,6 +46,11 @@ CursorQuery = Annotated[
 
 class BacktestResultReadService(Protocol):
     """Completed-result Web projection boundary implemented by the application."""
+
+    async def get_review_context(
+        self, *, run_id: str, selector: BacktestReviewSelector,
+        relation: Literal["CAUSES", "EFFECTS"], limit: int, cursor: str | None,
+    ) -> BacktestReviewContext: ...
 
     async def list_fills(
         self,
@@ -83,6 +92,37 @@ BacktestResultReadServiceDependency = Annotated[
     BacktestResultReadService,
     Depends(get_backtest_result_read_service),
 ]
+
+
+@router.get("/backtest-runs/{run_id}/review-context", response_model=BacktestReviewContext)
+async def get_review_context(
+    run_id: RunIdPath,
+    request: Request,
+    service: BacktestResultReadServiceDependency,
+    fill_id: Annotated[str | None, Query(alias="fillId", min_length=1, max_length=128,
+                                       pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")] = None,
+    event_id: Annotated[str | None, Query(alias="eventId", pattern=_SHA256_PATTERN)] = None,
+    sequence: Annotated[int | None, Query(ge=1, le=MAX_AUDIT_EVENTS)] = None,
+    relation: Literal["CAUSES", "EFFECTS"] = "CAUSES",
+    limit: LimitQuery = _DEFAULT_LIMIT,
+    cursor: CursorQuery = None,
+) -> BacktestReviewContext:
+    _require_closed_query(request, allowed=frozenset({
+        "fillId", "eventId", "sequence", "relation", "limit", "cursor",
+    }))
+    try:
+        selector = BacktestReviewSelector.model_validate({
+            "fillId": fill_id, "eventId": event_id, "sequence": sequence,
+        })
+    except ValidationError:
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+    context = validate_api_response(await service.get_review_context(
+        run_id=run_id, selector=selector, relation=relation, limit=limit, cursor=cursor,
+    ), BacktestReviewContext)
+    if (context.run_id != run_id or context.selector != selector
+            or context.relation != relation or context.limit != limit):
+        raise RuntimeError("review service returned mismatched context")
+    return context
 
 
 def require_fill_query(request: Request) -> None:

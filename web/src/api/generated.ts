@@ -709,6 +709,39 @@ export type BacktestResultAvailabilityView = {
   signalDetails: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
 };
 
+export type BacktestReviewContext = {
+  availability: "AVAILABLE" | "EXPIRED" | "NOT_RECORDED";
+  completeness: "COMPLETE" | "PARTIAL";
+  evidence: Array<components["schemas"]["BacktestReviewEvidence"]>;
+  fill: (components["schemas"]["BacktestLoopFillView"]) | (null);
+  hasMore: boolean;
+  items: Array<(components["schemas"]["BacktestLoopEventView"]) | (components["schemas"]["BacktestScheduledEventView"])>;
+  limit: number;
+  missingEventId: (string) | (null);
+  nextCursor: (string) | (null);
+  projectionStatus: "READY" | "NOT_READY";
+  relation: "CAUSES" | "EFFECTS";
+  runId: string;
+  selected: (components["schemas"]["BacktestLoopEventView"]) | (components["schemas"]["BacktestScheduledEventView"]) | (null);
+  selector: components["schemas"]["BacktestReviewSelector"];
+};
+
+export type BacktestReviewEvidence = {
+  actual: string;
+  at: string;
+  reason: string;
+  requirement: string;
+  rootOutcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  ruleId: string;
+  sequence: number;
+};
+
+export type BacktestReviewSelector = {
+  eventId?: (string) | (null);
+  fillId?: (string) | (null);
+  sequence?: (number) | (null);
+};
+
 export type BacktestRuleChangesView = {
   changes: Array<components["schemas"]["PlanChange"]>;
   manifestHash: string;
@@ -4354,6 +4387,9 @@ export interface components {
     BacktestReferenceMarketCoverageView: BacktestReferenceMarketCoverageView;
     BacktestReferenceMarketView: BacktestReferenceMarketView;
     BacktestResultAvailabilityView: BacktestResultAvailabilityView;
+    BacktestReviewContext: BacktestReviewContext;
+    BacktestReviewEvidence: BacktestReviewEvidence;
+    BacktestReviewSelector: BacktestReviewSelector;
     BacktestRuleChangesView: BacktestRuleChangesView;
     BacktestRunCommand: BacktestRunCommand;
     BacktestRunCoverageView: BacktestRunCoverageView;
@@ -7443,6 +7479,88 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["BacktestMarketIndexSeriesView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/backtest-runs/{run_id}/review-context": {
+    get: {
+      parameters: {
+        query?: {
+          cursor?: (string) | (null);
+          eventId?: (string) | (null);
+          fillId?: (string) | (null);
+          limit?: number;
+          relation?: "CAUSES" | "EFFECTS";
+          sequence?: (number) | (null);
+        };
+        header?: never;
+        path: {
+          run_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["BacktestReviewContext"];
           };
         };
         "400": {

@@ -123,3 +123,7 @@ Web/API 负责结果查询、置顶和导出。`backtest-api` 流式返回已验
 ## 开放问题
 
 超过 30 个历史运行后自动按最旧优先删除，已由 2026-10-07 策略更新授权，仍待 ML-T21 实现。新增公开手动删除 API 和服务端比较导出继续延后。既有逐运行 JSON/CSV 导出对保留运行保持兼容，不新增导出开发。
+
+## BR-RESULT01. 可重建的原因查询元数据
+
+[BR03](SPEC-backtest-review.zh-CN.md#br03-派生索引与会计口径) 在独立结果数据库增加可选 `backtest_review_event` 元数据。建立 `run_id,event_id`、`run_id,sequence`、`run_id,cause_event_id,sequence` 索引，保存规范 `detail_id` 与 `content_hash`。元数据与事件在同一事务暂存。外键 `ON DELETE CASCADE` 跟随规范明细保留策略。迁移清单识别旧结构及扩展结构。元数据不参与规范报告／集合哈希。读取验证规范哈希和元数据身份，遵守明细可用性。旧索引缺失时显示 `NOT_READY`；显式维护每批最多读取 100 条保留中的已验证记录。参见[维护说明](../../operations/backtest-review.zh-CN.md)。本阶段不交付逐笔盈亏投影。

@@ -1402,6 +1402,41 @@ class _ProductionBacktestService:
             return None
         return project_rule_changes(run_id, stored.prepared, source_id)
 
+    async def get_review_context(self, *, run_id, selector, relation, limit, cursor):
+        return await self._read_sync(
+            self._review_context_view, run_id, selector, relation, limit, cursor,
+        )
+
+    def _review_context_view(self, run_id, selector, relation, limit, cursor):
+        from trade_plan_monitor.backtest.review import read_review_context
+        from trade_plan_monitor.web.backtest_schemas import BacktestReviewContext
+
+        try:
+            self._results.get_run(run_id)
+            value = read_review_context(
+                self._result_store, self._result_cursor_signer, run_id=run_id,
+                selector=selector.model_dump(mode="json", by_alias=True, exclude_none=True),
+                relation=relation, limit=limit, cursor=cursor,
+            )
+        except BacktestResultNotFoundError:
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        except InvalidCursorError:
+            raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
+        from trade_plan_monitor.backtest.review import project_review_evidence
+
+        value["evidence"] = tuple(project_review_evidence(
+            ([value["selected"]] if value["selected"] is not None else []) + value["items"],
+        ))
+        for field in ("selected", "fill"):
+            record = value[field]
+            value[field] = None if record is None else (
+                _fill_view(record) if field == "fill" else _detail_view(record)
+            ).canonical_payload()
+        value["items"] = tuple(
+            _detail_view(record).canonical_payload() for record in value["items"]
+        )
+        return BacktestReviewContext.model_validate(value)
+
     async def list_fills(
         self,
         *,

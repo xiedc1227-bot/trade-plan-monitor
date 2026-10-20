@@ -4608,6 +4608,252 @@
         "title": "BacktestResultAvailabilityView",
         "type": "object"
       },
+      "BacktestReviewContext": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "enum": [
+              "AVAILABLE",
+              "EXPIRED",
+              "NOT_RECORDED"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "completeness": {
+            "enum": [
+              "COMPLETE",
+              "PARTIAL"
+            ],
+            "title": "Completeness",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestReviewEvidence"
+            },
+            "maxItems": 100,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "fill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestLoopFillView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BacktestLoopEventView"
+                },
+                {
+                  "$ref": "#/components/schemas/BacktestScheduledEventView"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "missingEventId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missingeventid"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "projectionStatus": {
+            "enum": [
+              "READY",
+              "NOT_READY"
+            ],
+            "title": "Projectionstatus",
+            "type": "string"
+          },
+          "relation": {
+            "enum": [
+              "CAUSES",
+              "EFFECTS"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "runId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Runid",
+            "type": "string"
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestLoopEventView"
+              },
+              {
+                "$ref": "#/components/schemas/BacktestScheduledEventView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/BacktestReviewSelector"
+          }
+        },
+        "required": [
+          "runId",
+          "selector",
+          "relation",
+          "selected",
+          "fill",
+          "items",
+          "evidence",
+          "availability",
+          "projectionStatus",
+          "completeness",
+          "missingEventId",
+          "limit",
+          "hasMore",
+          "nextCursor"
+        ],
+        "title": "BacktestReviewContext",
+        "type": "object"
+      },
+      "BacktestReviewEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "actual": {
+            "maxLength": 400,
+            "title": "Actual",
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?\\+08:00$",
+            "title": "At",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 200,
+            "title": "Reason",
+            "type": "string"
+          },
+          "requirement": {
+            "maxLength": 400,
+            "title": "Requirement",
+            "type": "string"
+          },
+          "rootOutcome": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Rootoutcome",
+            "type": "string"
+          },
+          "ruleId": {
+            "title": "Ruleid",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 420001.0,
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "ruleId",
+          "at",
+          "rootOutcome",
+          "requirement",
+          "actual",
+          "reason"
+        ],
+        "title": "BacktestReviewEvidence",
+        "type": "object"
+      },
+      "BacktestReviewSelector": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventid"
+          },
+          "fillId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fillid"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "maximum": 420001.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence"
+          }
+        },
+        "title": "BacktestReviewSelector",
+        "type": "object"
+      },
       "BacktestRuleChangesView": {
         "additionalProperties": false,
         "properties": {
@@ -37706,6 +37952,250 @@
           }
         },
         "summary": "Get Backtest Market Index Series",
+        "tags": [
+          "backtest-results"
+        ]
+      }
+    },
+    "/api/v1/backtest-runs/{run_id}/review-context": {
+      "get": {
+        "operationId": "get_review_context_api_v1_backtest_runs__run_id__review_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fillId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fillid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "eventId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Eventid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sequence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 420001,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sequence"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relation",
+            "required": false,
+            "schema": {
+              "default": "CAUSES",
+              "enum": [
+                "CAUSES",
+                "EFFECTS"
+              ],
+              "title": "Relation",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestReviewContext"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Review Context",
         "tags": [
           "backtest-results"
         ]

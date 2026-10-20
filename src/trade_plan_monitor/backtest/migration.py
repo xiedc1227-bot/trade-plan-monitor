@@ -1951,13 +1951,35 @@ def _inspect_results(
     run_columns = (
         _table_columns(connection, "backtest_run") if "backtest_run" in table_names else ()
     )
+    from trade_plan_monitor.backtest.review_index import REVIEW_INDEXES, REVIEW_TABLE_SQL
+
+    columns = dict(_RESULT_COLUMN_CONTRACTS)
+    foreign_keys = dict(_RESULT_FOREIGN_KEY_CONTRACTS)
+    tables = dict(_RESULT_TABLE_SQL_CONTRACTS)
+    indexes = dict(_RESULT_INDEX_CONTRACTS)
+    if "backtest_review_event" in table_names:
+        columns["backtest_review_event"] = {
+            "detail_id": ("TEXT", False, None, 1),
+            "run_id": ("TEXT", True, None, 0),
+            "event_id": ("TEXT", True, None, 0),
+            "sequence": ("INTEGER", True, None, 0),
+            "cause_event_id": ("TEXT", False, None, 0),
+            "content_hash": ("TEXT", True, None, 0),
+        }
+        foreign_keys["backtest_review_event"] = frozenset({
+            ("detail_id", "backtest_detail", "detail_id", "NO ACTION", "CASCADE", "NONE"),
+        })
+        tables["backtest_review_event"] = REVIEW_TABLE_SQL
+        indexes.update({name: ("backtest_review_event", tuple(
+            (column, False, "BINARY") for column in names
+        )) for name, names in REVIEW_INDEXES.items()})
     current = _has_required_schema(
         connection,
         table_names,
-        column_contracts=_RESULT_COLUMN_CONTRACTS,
-        foreign_key_contracts=_RESULT_FOREIGN_KEY_CONTRACTS,
-        table_sql_contracts=_RESULT_TABLE_SQL_CONTRACTS,
-        index_contracts=_RESULT_INDEX_CONTRACTS,
+        column_contracts=columns,
+        foreign_key_contracts=foreign_keys,
+        table_sql_contracts=tables,
+        index_contracts=indexes,
         trigger_sql_contracts=_RESULT_TRIGGER_SQL_CONTRACTS,
     )
     bt019_current = _is_supported_bt019_result_schema(connection, table_names)

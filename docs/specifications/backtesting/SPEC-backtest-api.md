@@ -224,3 +224,7 @@ OpenAPI tests fix exactly 42 paths, regenerate TypeScript, and reject schema/sta
 ## Open Questions
 
 No blocking question remains for the first contract proposal. WebSocket job events, remote authentication, destructive run deletion, debug-trace exposure, portfolio runs, server-side comparison, and empirical performance budgets are deferred and require separate approval or an approved implementation plan as applicable.
+
+## BR-API01. Exact result cause lookup
+
+The additive `GET /api/v1/backtest-runs/{run_id}/review-context` contract is defined in [BR02](SPEC-backtest-review.md#br02-read-contract). It accepts exactly one of `fillId`, `eventId`, `sequence`, plus `relation`, `limit`, `cursor`. The integer sequence is 1..420001, limit defaults to 20 and is at most 100. Keep the existing closed queries unchanged. Typed responses include the selected event, retained fill, bounded related events and up to 100 deterministic `evidence` items (`sequence`, `ruleId`, `at`, `rootOutcome`, `requirement`, `actual`, `reason`). Validate run/selector/relation identity and stay below 4 MiB. Cursor signing binds the selector, relation, limit and selected record hash. `COMPLETE` describes absence of known missing links in the loaded page; `hasMore` describes remaining traversal. No mutation or index construction during GET.

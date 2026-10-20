@@ -37,6 +37,7 @@ from trade_plan_monitor.backtest.migration import (
     prepare_store_initialization,
     require_safe_store_initialization,
 )
+from trade_plan_monitor.backtest.review_index import REVIEW_SCHEMA, index_review_event
 from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 from trade_plan_monitor.backtest.time import format_shanghai_datetime
@@ -2331,6 +2332,7 @@ class BacktestResultStore:
                 raise RuntimeError("backtest result database did not enter WAL mode")
             connection.execute("PRAGMA synchronous=NORMAL")
             connection.executescript(_SCHEMA)
+            connection.executescript(REVIEW_SCHEMA)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -2460,6 +2462,7 @@ class BacktestResultStore:
                         raise ResultConflictError(
                             "conflicting detail content under an existing detail_id"
                         )
+                    index_review_event(connection, stored, content_hash)
                     continue
                 if materialized:
                     raise ResultConflictError("cannot append details to a materialized run")
@@ -2481,6 +2484,7 @@ class BacktestResultStore:
                         now,
                     ),
                 )
+                index_review_event(connection, record, content_hash)
                 inserted += 1
             connection.commit()
         return inserted

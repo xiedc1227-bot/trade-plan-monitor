@@ -2194,6 +2194,59 @@ type BacktestDetailView = (
 )
 
 
+class BacktestReviewSelector(_BacktestApiInput):
+    fill_id: StableIdentifier | None = None
+    event_id: Sha256Hex | None = None
+    sequence: Annotated[int, Field(strict=True, ge=1, le=MAX_AUDIT_EVENTS)] | None = None
+
+    @model_validator(mode="after")
+    def single_selector(self) -> Self:
+        if sum(value is not None for value in (self.fill_id, self.event_id, self.sequence)) != 1:
+            raise ValueError("exactly one review selector is required")
+        return self
+
+
+class BacktestReviewEvidence(_BacktestApiInput):
+    sequence: Annotated[int, Field(strict=True, ge=1, le=MAX_AUDIT_EVENTS)]
+    rule_id: str
+    at: ShanghaiDatetime
+    root_outcome: Literal["SATISFIED", "UNSATISFIED", "MISSING_INPUT"]
+    requirement: Annotated[str, Field(max_length=400)]
+    actual: Annotated[str, Field(max_length=400)]
+    reason: Annotated[str, Field(max_length=200)]
+
+
+class BacktestReviewContext(_BacktestApiInput):
+    run_id: Sha256Hex
+    selector: BacktestReviewSelector
+    relation: Literal["CAUSES", "EFFECTS"]
+    selected: BacktestLoopEventView | BacktestScheduledEventView | None
+    fill: BacktestLoopFillView | None
+    items: Annotated[
+        tuple[BacktestLoopEventView | BacktestScheduledEventView, ...], Field(max_length=100)
+    ]
+    evidence: Annotated[tuple[BacktestReviewEvidence, ...], Field(max_length=100)]
+    availability: Literal["AVAILABLE", "EXPIRED", "NOT_RECORDED"]
+    projection_status: Literal["READY", "NOT_READY"]
+    completeness: Literal["COMPLETE", "PARTIAL"]
+    missing_event_id: Sha256Hex | None
+    limit: Annotated[int, Field(strict=True, ge=1, le=100)]
+    has_more: bool
+    next_cursor: str | None
+
+    @model_validator(mode="after")
+    def consistent_review(self) -> Self:
+        if (len(self.items) > self.limit or self.has_more != (self.next_cursor is not None)
+                or any(row.run_id != self.run_id for row in self.items)
+                or (self.selected is not None and self.selected.run_id != self.run_id)
+                or (self.fill is not None and self.fill.run_id != self.run_id)):
+            raise ValueError("review context identity/page mismatch")
+        from trade_plan_monitor.backtest.pagination import require_bounded_page_json
+
+        require_bounded_page_json(self.model_dump_json(by_alias=True))
+        return self
+
+
 class BacktestEquityPointView(_BacktestApiInput):
     snapshot_id: StableIdentifier
     run_id: Sha256Hex
