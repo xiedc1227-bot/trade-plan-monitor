@@ -19,6 +19,36 @@ it("groups all four outcomes and shows only changed values with exact source tex
   expect(wrapper.emitted()).toEqual({});
   wrapper.unmount();
 });
+it("shows business changes with yuan values and no internal rule identifiers or review actions", () => {
+  const wrapper = mount(PlanRuleChanges, { props: { businessMode: true, changes: [
+    { target: "levels", rule_id: "internal-rule", action: "MODIFY", before: { risk_line_fen: 2500 }, after: { risk_line_fen: 2599 }, clause_ids: [] },
+    { target: "ordinary_rules", rule_id: "internal-buy", action: "ADD", before: null,
+      after: { rule_id: "internal-buy", quantity: 200, condition: { reference_price_fen: 2600 } }, clause_ids: [] },
+  ] } });
+  expect(wrapper.text()).toContain("本次交易条件变化");
+  expect(wrapper.text()).toContain("25.00 元 → 25.99 元");
+  expect(wrapper.text()).toContain("26.00 元");
+  expect(wrapper.text()).toContain("200");
+  expect(wrapper.text()).not.toContain("internal-rule");
+  expect(wrapper.text()).not.toContain("internal-buy");
+  expect(wrapper.text()).not.toContain("统一审核本份计划");
+  expect(wrapper.emitted()).toEqual({});
+  wrapper.unmount();
+});
+
+it("explains changed prerequisite rules in business terms without displaying their internal IDs", () => {
+  const wrapper = mount(PlanRuleChanges, { props: { businessMode: true, changes: [
+    { target: "ordinary_rules", rule_id: "first-buy", action: "RETAIN", before: { side: "BUY", quantity: 100 }, after: { side: "BUY", quantity: 100 }, clause_ids: [] },
+    { target: "ordinary_rules", rule_id: "second-buy", action: "RETAIN", before: { side: "BUY", quantity: 200 }, after: { side: "BUY", quantity: 200 }, clause_ids: [] },
+    { target: "ordinary_rules", rule_id: "sell", action: "MODIFY", before: { independent_signal: { prior_rule_id: "first-buy" } },
+      after: { independent_signal: { prior_rule_id: "second-buy" } }, clause_ids: [] },
+  ] } });
+  expect(wrapper.text()).toContain("买入 100 股（第 1 条规则） → 买入 200 股（第 2 条规则）");
+  expect(wrapper.text()).toContain("必须先完成的规则");
+  for (const id of ["first-buy", "second-buy", "prior_rule_id"]) expect(wrapper.text()).not.toContain(id);
+  wrapper.unmount();
+});
+
 it("shows unresolved scope without claiming old rules were cancelled", () => {
   const wrapper = mount(PlanRuleChanges, { props: { changes: [], unresolved: true } });
   expect(wrapper.text()).toContain("部分变更含义或目标尚不明确");

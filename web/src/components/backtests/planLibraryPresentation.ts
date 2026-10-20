@@ -3,10 +3,6 @@ import type { ReviewedPlanLibraryItem } from "../../api/generated-runtime-status
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 type Entry = DeepReadonly<ReviewedPlanLibraryItem>;
-export function versionLabel(item: Entry): string {
-  return item.identity?.reviewedVersionHash.slice(0, 12) ?? "未提供版本标识";
-}
-
 /** Display only: original IDs, selection state and composition admission stay unchanged. */
 export function planLibraryGroups(items: readonly Entry[]) {
   const byId = new Map(items.map(item => [item.preparationId, item]));
@@ -33,10 +29,10 @@ export function planLibraryGroups(items: readonly Entry[]) {
     const previous = byId.get(item.reviewedBase.preparation_id);
     if (!previous) return "前序记录未在当前计划库中，须核对准确版本";
     if (previous.manifestHash !== item.reviewedBase.manifest_hash) return "前序版本与当前记录不匹配";
-    return `前序：${previous.effectiveTradeDate} · ${previous.sourceId} · 版本 ${versionLabel(previous)}`;
+    return `前序：${previous.effectiveTradeDate} · ${previous.name}（${previous.symbol}）`;
   }
   function comparison(item: Entry): string {
-    if (!item.identity) return "未提供版本标识，可查看原准备记录";
+    if (!item.identity) return "历史计划，可查看已审核原文与交易条件";
     const peers = (sources.get(sourceKey(item)) ?? []).filter(other => other.preparationId !== item.preparationId);
     if (!peers.length) return "";
     const repeated = peers.some(other => other.identity!.reviewedVersionHash === item.identity!.reviewedVersionHash);
@@ -51,8 +47,8 @@ export function planLibraryGroups(items: readonly Entry[]) {
     let group = grouped.get(id);
     if (!group) {
       const label = root
-        ? `${root.effectiveTradeDate} 起 · ${root.symbol} · 起点审核 ${formatDisplayDateTime(root.reviewedAt)} · 链 ${root.manifestHash.slice(0, 8)}`
-        : `无法核对准确链起点 · 准备记录 ${item.preparationId}`;
+        ? `${root.name}（${root.symbol}）· ${root.effectiveTradeDate} 起 · 起点审核 ${formatDisplayDateTime(root.reviewedAt)}`
+        : `${item.name}（${item.symbol}）· 无法核对计划链起点`;
       group = { id, label, entries: [] }; grouped.set(id, group);
     }
     group.entries.push({ item, predecessor: predecessor(item), comparison: comparison(item) });

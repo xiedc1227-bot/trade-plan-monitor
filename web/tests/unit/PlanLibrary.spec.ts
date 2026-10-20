@@ -115,6 +115,23 @@ function library(items: ReviewedPlanLibraryItem[]) {
   wrappers.push(wrapper); return wrapper;
 }
 
+it("shows business dates, stocks and predecessors without exposing internal identifiers", () => {
+  const items = twoChains();
+  const wrapper = library(items);
+  expect(wrapper.text()).toContain("2026-09-24");
+  expect(wrapper.text()).toContain("测试（002240.SZ）");
+  expect(wrapper.text()).toContain("前序：2026-09-30");
+  expect(wrapper.findAll("summary").map(item => item.text())).toContain("查看计划及本次调整");
+  for (const item of items) {
+    for (const value of [item.preparationId, item.manifestHash, item.sourceId,
+      item.identity!.planVersionId, item.identity!.reviewedVersionHash,
+      item.identity!.sourceHash, item.identity!.planHash]) expect(wrapper.text()).not.toContain(value);
+  }
+  for (const label of ["审核清单标识", "原冻结版本标识", "完整审核版本标识", "原文核对标识", "计划内容核对标识"])
+    expect(wrapper.text()).not.toContain(label);
+  expect(wrapper.get('[data-endpoint-id="b-3"]').attributes("aria-pressed")).toBe("true");
+});
+
 it("distinguishes two four-plan timelines while retaining exact endpoint identities", async () => {
   const wrapper = library(twoChains());
   expect(wrapper.findAll('[data-testid="plan-library-chain"]')).toHaveLength(2);
@@ -162,7 +179,7 @@ it("keeps truly repeated approvals and old payloads explicit instead of dropping
   const wrapper = library([twoChains()[0]!, repeated, { ...entry, preparationId: "legacy" }]);
   expect(wrapper.findAll(".plan-library__record")).toHaveLength(3);
   expect(wrapper.text()).toContain("相同审核快照的重复准备");
-  expect(wrapper.text()).toContain("未提供版本标识");
+  expect(wrapper.text()).toContain("历史计划，可查看已审核原文与交易条件");
 });
 
 it("rejects malformed optional identity metadata while accepting existing library payloads", async () => {

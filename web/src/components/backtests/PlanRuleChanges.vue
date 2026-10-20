@@ -11,7 +11,9 @@ const props = withDefaults(defineProps<{
   clauses?: readonly { clause_id: string; excerpt: string }[];
   unresolved?: boolean;
   resultMode?: boolean;
-}>(), { changes: () => [], initialDraft: null, clauses: () => [], unresolved: false, resultMode: false });
+  businessMode?: boolean;
+  referenceDraft?: DeepReadonly<UnifiedPlanDraft> | null;
+}>(), { changes: () => [], initialDraft: null, clauses: () => [], unresolved: false, resultMode: false, businessMode: false, referenceDraft: null });
 const titles = { RETAIN: "保留", MODIFY: "修改", ADD: "新增", REVOKE: "取消" } as const;
 const sections = ["position", "levels", "activation", "ordinary_rules", "risk_branches", "alert_rules", "monitoring", "execution_policy", "trading_rules"];
 const changes = computed<readonly ReviewChange[]>(() => {
@@ -24,7 +26,7 @@ const changes = computed<readonly ReviewChange[]>(() => {
   });
 });
 function label(path: string): string {
-  if (props.resultMode) return resultFieldLabel(path);
+  if (props.resultMode || props.businessMode) return resultFieldLabel(path);
   const result = path.split(".").map(key => /^\d+$/.test(key) ? `第 ${Number(key) + 1} 项` : fieldLabels[key] ?? key).join(" / ");
   return result;
 }
@@ -41,12 +43,26 @@ function display(value: unknown): string {
   if (Array.isArray(value) && !value.length) return "无";
   return choiceLabels[String(value)] ?? String(value);
 }
+function businessValue(value: unknown, path: string, flattened: Record<string, unknown>, side: "before" | "after"): string {
+  if (!path.endsWith("prior_rule_id") || typeof value !== "string") return resultValue(value, path, flattened);
+  const rules = (props.referenceDraft ?? props.initialDraft)?.ordinary_rules ?? [];
+  const related = changes.value.find(change => change.rule_id === value);
+  const rule = related?.[side] ?? rules.find(rule => rule.rule_id === value);
+  const identifiers = [...new Set([...rules.map(rule => rule.rule_id), ...changes.value.map(change => change.rule_id)].filter(Boolean))];
+  const order = identifiers.indexOf(value) + 1;
+  if (rule && typeof rule === "object" && "side" in rule && (rule.side === "BUY" || rule.side === "SELL")) {
+    const quantity = "quantity" in rule && typeof rule.quantity === "number" ? ` ${rule.quantity} 股` : "";
+    return `${rule.side === "BUY" ? "买入" : "卖出"}${quantity}${order ? `（第 ${order} 条规则）` : ""}`;
+  }
+  return order ? `第 ${order} 条已审核交易规则（详见完整计划）` : `${side === "before" ? "上一份" : "本份"}计划的先决交易规则（详见已审核原文）`;
+}
 const groups = computed(() => Object.entries(titles).map(([action, title]) => ({
   action, title,
   entries: changes.value.filter(change => change.action === action).map(change => {
     const before = flatten(change.before), after = flatten(change.after);
     const paths = [...new Set([...Object.keys(before), ...Object.keys(after)])];
     const fields = paths.filter(path => path && !["rule_id", "version", "plan_id"].includes(path) &&
+      (!props.businessMode || !path.split(".").some(key => /(?:_id|_hash)$/.test(key) && key !== "prior_rule_id" || key === "version")) &&
       (!props.resultMode || !paths.some(child => child.startsWith(`${path}.`))) &&
       (props.resultMode || action !== "MODIFY" || JSON.stringify(before[path]) !== JSON.stringify(after[path])));
     return {
@@ -56,8 +72,10 @@ const groups = computed(() => Object.entries(titles).map(([action, title]) => ({
         before: action === "ADD" ? '无此规则' : resultValue(before[path], path, before),
         after: action === "REVOKE" ? '已取消' : resultValue(after[path], path, after),
         changed: JSON.stringify(before[path]) !== JSON.stringify(after[path]) })),
-      rows: fields.map(path => ({ label: label(path), value: action === "MODIFY"
-        ? `${display(before[path])} → ${display(after[path])}` : display(action === "REVOKE" ? before[path] : after[path]) })),
+      rows: fields.map(path => ({ label: label(path), value: props.businessMode
+        ? action === "MODIFY" ? `${businessValue(before[path], path, before, "before")} → ${businessValue(after[path], path, after, "after")}`
+          : businessValue(action === "REVOKE" ? before[path] : after[path], path, action === "REVOKE" ? before : after, action === "REVOKE" ? "before" : "after")
+        : action === "MODIFY" ? `${display(before[path])} → ${display(after[path])}` : display(action === "REVOKE" ? before[path] : after[path]) })),
       excerpts: props.clauses.filter(clause => change.clause_ids.includes(clause.clause_id)).map(clause => clause.excerpt),
     };
   }),
@@ -65,9 +83,10 @@ const groups = computed(() => Object.entries(titles).map(([action, title]) => ({
 </script>
 
 <template>
-  <section class="rule-changes" :aria-label="resultMode ? '冻结规则对照' : '规则变更审核'" data-testid="plan-rule-changes">
-    <h4>{{ resultMode ? '保留／修改／新增／取消' : initialDraft ? '本份建立的规则' : '相对上一份已审核计划的规则变更' }}</h4>
-    <p v-if="resultMode">按最终冻结值分类。修改组同时列出未改变的字段；标记“变化”的行为前后不同的内容。保留组可展开查看完整规则。</p>
+  <section class="rule-changes" :class="{ 'rule-changes--business': businessMode }" :aria-label="businessMode ? '交易条件变化' : resultMode ? '冻结规则对照' : '规则变更审核'" data-testid="plan-rule-changes">
+    <h4>{{ businessMode ? initialDraft ? '本次建立的交易条件' : '本次交易条件变化' : resultMode ? '保留／修改／新增／取消' : initialDraft ? '本份建立的规则' : '相对上一份已审核计划的规则变更' }}</h4>
+    <p v-if="businessMode">以下为已审核的交易条件，按保留、修改、新增和取消分类。</p>
+    <p v-else-if="resultMode">按最终冻结值分类。修改组同时列出未改变的字段；标记“变化”的行为前后不同的内容。保留组可展开查看完整规则。</p>
     <p v-else-if="unresolved" role="status">部分变更含义或目标尚不明确，请核对提示；未提及的规则默认保留。</p>
     <p v-else>以上一份已审核规则为基础，未提及的规则默认保留；核对保留、修改、新增和取消后，统一审核本份计划。</p>
     <details v-for="group in groups" :key="group.action" :open="group.action !== 'RETAIN' && group.entries.length > 0">
@@ -99,6 +118,8 @@ const groups = computed(() => Object.entries(titles).map(([action, title]) => ({
 .rule-changes dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-2); }
 .rule-changes dd { margin: 0; }
 .rule-changes blockquote { margin: var(--space-2) 0; padding-left: var(--space-3); border-left: var(--border-technical); }
+.rule-changes--business { padding: 0; border: 0; }
+.rule-changes--business article, .rule-changes--business summary { padding-inline: 0; }
 .comparison-table { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 caption { text-align: left; padding: var(--space-2) 0; color: var(--color-text-silt); }

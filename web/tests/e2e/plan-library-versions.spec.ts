@@ -27,8 +27,18 @@ test.beforeAll(async () => {
   import '/src/assets/tokens.css';
   const response=await fetch('/library-fixture.json'); const items=await response.json();
   const state=reactive({endpointId:'',updates:[],submissions:0});
+  const detailsApi={get:async id=>{const item=items.find(item=>item.preparationId===id);return {body:{preparationId:id,
+    workflow:'SINGLE',status:'REVIEWED',revision:1,items:[{sourceId:item.sourceId,sourceRevision:1,candidateRevision:1,
+    candidateHash:'9'.repeat(64),evidenceHash:item.reviewedBase?'e'.repeat(64):'f'.repeat(64),baseHash:item.reviewedBase?.manifest_hash??null}],frozen:{manifestHash:item.manifestHash,
+    versions:[{sourceId:item.sourceId,effectiveTradeDate:item.effectiveTradeDate,planHash:item.identity.planHash,sourceRevision:1,candidateRevision:1,evidenceHash:'e'.repeat(64)}]}}};},
+    items:async id=>{const item=items.find(item=>item.preparationId===id);return {preparationId:id,revision:1,items:[{sourceId:item.sourceId,
+    effectiveTradeDate:item.effectiveTradeDate,sourceRevision:1,candidateRevision:1,candidateHash:'9'.repeat(64),
+    evidenceHash:item.reviewedBase?'e'.repeat(64):'f'.repeat(64),baseHash:item.reviewedBase?.manifest_hash??null,
+    candidate:{kind:item.reviewedBase?'MATERIALIZED':'INITIAL',candidateHash:'9'.repeat(64),validation:'VALID',
+    evidenceHash:item.reviewedBase?'e'.repeat(64):'f'.repeat(64),draft:{position:{max_qty:1000},levels:{risk_line_fen:2599}},
+    review:{changes:[{target:'levels',rule_id:'private-risk',action:'MODIFY',before:{risk_line_fen:2500},after:{risk_line_fen:2599},clause_ids:[]}]}}}]};}};
   createApp({setup(){return()=>h('div',[h(Library,{items,endpointId:state.endpointId,
-    disabled:false,loading:false,pending:false,uncertain:false,error:null,canStart:true,
+    disabled:false,loading:false,pending:false,uncertain:false,error:null,canStart:true,detailsApi,
     onOpen:value=>state.endpointId=value,onUpdate:value=>state.updates.push(value),onNew:()=>state.endpointId=''}),h('output',{'data-testid':'composition-count'},String(state.submissions)),h('output',{'data-testid':'update-endpoint'},state.updates.join(','))]);}}).mount('#app');
   </script></body></html>`);
   server = await createServer({ configFile: false, logLevel: "silent",
@@ -60,14 +70,22 @@ test("eight records form two timelines with exact endpoint updates at 200 percen
   await expect(page.getByTestId("open-plan-timeline")).toHaveCount(2);
   await expect(page.locator("select")).toHaveCount(0);
   await expect(page.getByText("同原文，计划内容不同", { exact: true })).toHaveCount(8);
+  const library = page.getByRole("region", { name: "已审核计划库", exact: true });
+  for (const item of items) for (const id of [item.preparationId, item.manifestHash, item.sourceId,
+    item.identity.planVersionId, item.identity.reviewedVersionHash, item.identity.sourceHash, item.identity.planHash])
+    await expect(library).not.toContainText(id);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: testInfo.outputPath("timeline-desktop.png"), fullPage: true });
   for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-    await page.getByText("查看版本与来源", { exact: true }).first().click();
+    await page.getByText("查看计划及本次调整", { exact: true }).nth(1).click();
+    const change = page.getByText("25.00 元 → 25.99 元", { exact: true });
+    await expect(change).toHaveCount(1);
+    await expect(change).toBeVisible();
+    await expect(library).not.toContainText("private-risk");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    await page.getByText("查看版本与来源", { exact: true }).first().click();
+    await page.getByText("查看计划及本次调整", { exact: true }).nth(1).click();
   }
   await page.locator('[data-endpoint-id="b-3"]').focus(); await page.keyboard.press("Enter");
   await expect(page.locator('[data-endpoint-id="b-3"]')).toHaveAttribute("aria-pressed", "true");
