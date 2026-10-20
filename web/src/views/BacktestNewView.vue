@@ -99,7 +99,11 @@ const preparingData = computed(() => ["CHECKING", "SYNCING", "VERIFYING"].includ
 const workbenchLocked = ref(false);
 const runLocked = computed(() => inspecting.value || ["SUBMITTING", "UNCERTAIN", "ACCEPTED"].includes(form.submissionState.value));
 const modeLocked = computed(() => preparation.isBusy.value || library.locked.value || runLocked.value || workbenchLocked.value);
-watch(() => preparation.canUsePrepared.value, (ready) => { if (ready) void library.refresh(); });
+watch(() => preparation.canUsePrepared.value, (ready) => {
+  if (!ready) return;
+  const frozen = preparation.collection.value?.frozen;
+  void library.refresh(frozen ? { preparation_id: frozen.preparationId, manifest_hash: frozen.manifestHash } : undefined);
+});
 watch([() => preparation.canUsePrepared.value, () => preparation.preparationId.value, library.items], ([ready, id]) => {
   if (!inspecting.value && ready && id && preparation.collection.value?.workflow === "SINGLE" && library.items.value.some(item => item.preparationId === id)) {
     library.chooseEndpoint(id);

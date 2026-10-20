@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, readonly, shallowRef } from "vue";
 import { createPlanLibraryApi, type PlanLibraryApi } from "../api/planLibrary";
 import { ApiClientError } from "../api/transport";
-import type { CollectionPreparationFrozenView, PreparedPlanCompositionInput, ReviewedPlanLibraryItem } from "../api/generated-runtime-status";
+import type { CollectionPreparationFrozenView, PreparedPlanCompositionInput, ReviewedPlanLibraryItem, ReviewedPlanReference } from "../api/generated-runtime-status";
 import { planTimelinePath } from "../components/backtests/planLibraryPresentation";
 
 /** Explicit timeline endpoint; composition is an internal new-run snapshot only. */
@@ -35,8 +35,10 @@ export function usePlanLibrary(api: PlanLibraryApi = createPlanLibraryApi()) {
     endpointId.value = id; error.value = null;
     return true;
   }
-  async function refresh() {
+  async function refresh(reviewed?: ReviewedPlanReference) {
     if (loading.value || locked.value || disposed) return;
+    if (reviewed && libraryReady.value && !error.value && items.value.some(item =>
+      item.preparationId === reviewed.preparation_id && item.manifestHash === reviewed.manifest_hash)) return;
     loading.value = true;
     const request = new AbortController(); controller = request;
     try {

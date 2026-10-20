@@ -73,6 +73,56 @@ def test_library_identity_projects_frozen_versions_without_rewriting_records(tmp
         ).fetchall() == receipts
 
 
+def test_library_reads_saved_manifest_without_decoding_or_rebuilding_chain(tmp_path, monkeypatch):
+    from trade_plan_monitor.backtest import plan_library
+
+    store, _approved, ref = approved_single(tmp_path)
+    expected = plan_library.list_reviewed_plans(store, offset=0, limit=20)
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("listing must not rebuild or decode the complete reviewed chain")
+
+    monkeypatch.setattr(store, "_read", unexpected)
+    monkeypatch.setattr(plan_library, "frozen_preparation", unexpected)
+    actual = plan_library.list_reviewed_plans(store, offset=0, limit=20)
+    assert actual == expected
+    assert actual["items"][0]["manifest_hash"] == ref.manifest_hash
+    assert plan_library.list_reviewed_plans(store, offset=1, limit=1)["items"] == ()
+
+
+@pytest.mark.parametrize("mismatch", ["identity", "revision", "review_time", "source", "claim"])
+def test_library_rejects_mismatched_saved_manifest_envelope(tmp_path, mismatch):
+    import json
+    import sqlite3
+
+    from trade_plan_monitor.backtest.plan_library import list_reviewed_plans
+
+    store, approved, _ref = approved_single(tmp_path)
+    with sqlite3.connect(store.database_path) as connection:
+        document = json.loads(connection.execute(
+            "SELECT document_json FROM backtest_preparation WHERE preparation_id = ?",
+            (approved.preparation_id,),
+        ).fetchone()[0])
+        manifest = json.loads(document["review"]["manifest_json"])
+        if mismatch == "identity":
+            manifest["preparation_id"] = "another-plan"
+        elif mismatch == "revision":
+            manifest["revision"] += 1
+        elif mismatch == "review_time":
+            manifest["reviewed_at"] = "2026-01-01T00:00:00.000000+08:00"
+        elif mismatch == "source":
+            manifest["items"][-1]["source"]["source_id"] = "another-source"
+        else:
+            document["work_claim"] = {"phase": "CALLING"}
+        document["review"]["manifest_json"] = json.dumps(manifest)
+        connection.execute(
+            "UPDATE backtest_preparation SET document_json = ? WHERE preparation_id = ?",
+            (json.dumps(document), approved.preparation_id),
+        )
+    with pytest.raises(ValueError):
+        list_reviewed_plans(store, offset=0, limit=20)
+
+
 def test_single_create_and_approved_prefix_are_immutable(tmp_path):
     from trade_plan_monitor.backtest.plan_library import (
         create_single_preparation,
@@ -413,6 +463,9 @@ def test_four_single_preparations_link_exact_reviewed_versions_and_compose(tmp_p
         by_id = {item["preparationId"]: item for item in page["items"]}
         for index, frozen in enumerate(frozen_entries):
             item = by_id[f"single-{index}"]
+            assert item["manifestHash"] == frozen.manifest_hash
+            assert item["sourceId"] == frozen.items[-1].source.source_id
+            assert item["effectiveTradeDate"] == str(frozen.items[-1].source.effective_trade_date)
             assert item["identity"]["planVersionId"] == frozen.items[-1].version.version_id
             assert len(item["identity"]["reviewedVersionHash"]) == 64
             assert item["reviewedBase"] == (references[index - 1] if index else None)

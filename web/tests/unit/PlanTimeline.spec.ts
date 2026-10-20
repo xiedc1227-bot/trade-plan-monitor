@@ -99,6 +99,20 @@ it("loads all pages before resolving the exact predecessor path", async () => {
   state.chooseEndpoint("b-3"); expect(state.path.value.items).toHaveLength(4); expect(api.compose).not.toHaveBeenCalled();
 });
 
+it("skips an automatic refresh only for the exact listed reviewed version and keeps manual refresh", async () => {
+  const { api, state, items } = setup(); await flushPromises();
+  const reference = { preparation_id: items[0]!.preparationId, manifest_hash: items[0]!.manifestHash };
+  await state.refresh(reference);
+  expect(api.list).toHaveBeenCalledTimes(1);
+  await state.refresh({ ...reference, manifest_hash: "f".repeat(64) });
+  expect(api.list).toHaveBeenCalledTimes(2);
+  await state.refresh({ ...reference, preparation_id: "newly-reviewed" });
+  expect(api.list).toHaveBeenCalledTimes(3);
+  await state.refresh();
+  expect(api.list).toHaveBeenCalledTimes(4);
+  expect(state.endpointId.value).toBe(""); expect(api.compose).not.toHaveBeenCalled();
+});
+
 it("replaces member selection with opening one complete timeline and updating its endpoint", async () => {
   const wrapper = mount(ReviewedPlanLibrary, { props: { items: timelineEntries(), endpointId: "b-3",
     disabled: false, loading: false, pending: false, uncertain: false, error: null, canStart: true } });

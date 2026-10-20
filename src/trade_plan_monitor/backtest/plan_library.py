@@ -1,5 +1,7 @@
 """Single-source preparation and composition of immutable reviewed entries."""
 
+import json
+from datetime import datetime
 from hashlib import sha256
 
 from trade_plan_monitor.backtest.canonical import canonical_json
@@ -9,11 +11,14 @@ from trade_plan_monitor.backtest.preparation_models import (
     CollectionPreparationRecord,
     CollectionPreparationReview,
     PreparationItem,
+    PreparationSource,
     PreparedPlanCompositionInput,
+    ReviewedPlanReference,
     SingleSourcePreparationInput,
 )
 from trade_plan_monitor.backtest.preparation_review import (
     FrozenPreparedCollection,
+    PreparationSemanticError,
     _collection_review_hash,
     collection_item_binding,
     frozen_preparation,
@@ -104,33 +109,56 @@ def list_reviewed_plans(store, *, offset: int, limit: int):
             f"SELECT count(*) FROM backtest_preparation WHERE {where}"
         ).fetchone()[0]
         rows = connection.execute(
-            f"SELECT preparation_id FROM backtest_preparation WHERE {where} "
+            f"SELECT preparation_id, document_json FROM backtest_preparation WHERE {where} "
             "ORDER BY json_extract(document_json, '$.updated_at') DESC, "
             "preparation_id LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
-        records = [store._read(connection, row[0]) for row in rows]
     items = []
-    for record in records:
-        frozen = frozen_preparation(record)
-        last = frozen.items[-1]
+    for preparation_id, document in rows:
+        # Discovery projects the saved review; reuse still calls reviewed_entry's full checks.
+        record = json.loads(document)
+        frozen = json.loads(record["review"]["manifest_json"])
+        if (
+            record["schema_version"] != "backtest-preparation-v2"
+            or record["preparation_id"] != preparation_id
+            or record.get("work_claim") is not None
+            or frozen["schema_version"] != "prepared-loop-plan-v2"
+            or frozen["preparation_id"] != preparation_id
+            or frozen["revision"] != record["revision"]
+            or datetime.fromisoformat(frozen["reviewed_at"])
+            != datetime.fromisoformat(record["review"]["reviewed_at"])
+            or not frozen["items"]
+            or len(frozen["items"]) != len(record["items"])
+        ):
+            raise PreparationSemanticError("FROZEN_BINDING_CONFLICT")
+        last = frozen["items"][-1]
+        source = PreparationSource.model_validate_json(json.dumps(last["source"]))
+        if source != PreparationSource.model_validate_json(
+            json.dumps(record["items"][-1]["source"])
+        ):
+            raise PreparationSemanticError("FROZEN_BINDING_CONFLICT")
+        version = last["version"]
         items.append(
             dict(
-                preparation_id=record.preparation_id,
-                manifest_hash=frozen.manifest_hash,
-                source_id=last.source.source_id,
-                effective_trade_date=last.source.effective_trade_date,
-                symbol=last.version.snapshot.symbol,
-                name=last.version.snapshot.name,
-                reviewed_base=record.reviewed_base,
-                reviewed_at=last.version.review.reviewed_at,
+                preparation_id=preparation_id,
+                manifest_hash=sha256(
+                    ("prepared-loop-plan-v2\0" + canonical_json(frozen)).encode()
+                ).hexdigest(),
+                source_id=source.source_id,
+                effective_trade_date=source.effective_trade_date,
+                symbol=version["snapshot"]["symbol"],
+                name=version["snapshot"]["name"],
+                reviewed_base=ReviewedPlanReference.model_validate_json(json.dumps(record["reviewed_base"]))
+                if record.get("reviewed_base") is not None else None,
+                reviewed_at=version["review"]["reviewed_at"],
                 identity=dict(
-                    source_hash=last.source.source_hash,
-                    plan_hash=last.version.plan_hash,
-                    plan_version_id=last.version.version_id,
+                    source_hash=source.source_hash,
+                    plan_hash=version["plan_hash"],
+                    plan_version_id=version["version_id"],
                     reviewed_version_hash=sha256(
                         (
-                            "plan-library-reviewed-version-v1\0" + canonical_json(last.version)
+                            "plan-library-reviewed-version-v1\0" + canonical_json(version)
                         ).encode()
                     ).hexdigest(),
                 ),
