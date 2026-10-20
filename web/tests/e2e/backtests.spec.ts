@@ -683,6 +683,8 @@ async function confirmWorkbenchContext(page: Page): Promise<void> {
 }
 async function fillValidRunCommand(page: Page): Promise<void> {
   await confirmWorkbenchContext(page);
+  for (const [id, value] of Object.entries({ "commission-rate": "0.0001", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "0", "sell-slippage-fen": "0" }))
+    await expect(page.locator("#" + id)).toHaveValue(value);
   await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
   await page.locator("#end-date").fill("2026-08-30");
   await page.locator("#commission-rate").fill("0.0003");
@@ -862,6 +864,8 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   await expect(page.locator("#research-input-json")).toHaveCount(0);
   await expect(page.locator("#dataset-hash")).toHaveCount(0);
   await page.locator(".workbench-replay").screenshot({ path: testInfo.outputPath("workbench-selection.png") });
+  await expect(page.locator("#commission-rate")).toHaveValue("0.0001");
+  await page.locator("#commission-rate").fill("");
   await page.getByTestId("submit-backtest-run").focus();
   const reducedMotionSeconds = await page.getByTestId("submit-backtest-run").evaluate((element) =>
     Math.max(
@@ -876,6 +880,8 @@ test("covers the four backtest routes with keyboard flows and serious axe checks
   expect(reducedMotionSeconds).toBeLessThanOrEqual(0.000_01);
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("run-form-error-summary")).toBeFocused();
+  await expect(page.locator("#commission-rate")).toHaveAttribute("aria-invalid", "true");
+  expect(audit.runSubmissions).toEqual([]);
   await expectNoSeriousAxeViolations(page);
 
   await openRoute(page, ROUTES[2]);

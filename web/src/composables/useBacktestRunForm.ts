@@ -126,17 +126,17 @@ function emptyDraft(): BacktestRunDraft {
     buySlippageFen: "0",
     sellSlippageFen: "0",
     researchInputJson: "",
-    buySlippageBps: "",
-    commissionRate: "",
+    buySlippageBps: "0",
+    commissionRate: "0.0001",
     datasetHash: "",
     eventRiskAssumption: "NO_EVENT_RISK",
     initialCashFen: "",
     initialLots: Object.freeze([]),
-    minimumCommissionFen: "",
+    minimumCommissionFen: "500",
     planVersionId: "",
-    sellSlippageBps: "",
-    stampDutyRate: "",
-    transferFeeRate: "",
+    sellSlippageBps: "0",
+    stampDutyRate: "0.0005",
+    transferFeeRate: "0.00001",
   });
 }
 

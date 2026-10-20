@@ -58,3 +58,19 @@ Expanding an entry reads its existing reviewed preparation and that source's det
 The library displays ten complete timelines per page. Each timeline initially shows its stock, date range, review time and update count; **查看更新记录** expands its reviewed updates, and **查看计划及本次调整** opens the existing condition details. Alternative endpoints stay together within their owning timeline. Display numbering continues across pages.
 
 Changing pages or expanding records does not select a different replay endpoint or submit any operation. The current selection remains visible above the list; **定位已选时间线** returns to its page when needed. The existing **打开时间线** and **更新交易计划** actions keep their exact endpoint references and behavior. Pagination only limits presentation of already loaded complete groups; it does not truncate the plan chain or change continuous replay or historical results.
+
+## PR-O08. Editable low-cost replay defaults
+
+A new **创建回测运行** form prefills the following cost assumptions. Commission is a low-cost research preset, not a universal minimum broker quote; adjust it to the actual broker agreement. Rates use fractions of one.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `commissionRate` | `0.0001` | 0.01% commission |
+| `minimumCommissionFen` | `500` | 5 yuan minimum commission |
+| `stampDutyRate` | `0.0005` | 0.05% stamp duty |
+| `transferFeeRate` | `0.00001` | 0.001% transfer fee |
+| `buySlippageFen`, `sellSlippageFen` | `0` | Zero fen per share |
+
+The retained scripted research form also starts both BPS slippage fields at `0`. All values remain editable, including explicit zero-cost assumptions. Clearing a required fee still fails the original validation; there is no hidden fallback on submission. Switching plans does not refill costs. These are frontend defaults for new forms only: the API still requires explicit costs, existing fee calculation/rounding is unchanged, and saved historical costs/results are not rewritten.
+
+Stamp-duty and transfer-fee rates reference the [SSE stock investment service](https://one.sse.com.cn/onething/gptz/), checked on 2026-10-20. The preset does not automatically adjust historical tax regimes or broker-specific rates.

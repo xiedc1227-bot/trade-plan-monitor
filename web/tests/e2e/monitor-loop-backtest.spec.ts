@@ -117,6 +117,8 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   await page.getByTestId("review-confirmation").check(); await page.getByTestId("review-submit").click();
   await expect(page.getByText("已审核冻结", { exact: true })).toBeVisible();
   await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  for (const [id, value] of Object.entries({ "commission-rate": "0.0001", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "0", "sell-slippage-fen": "0" }))
+    await expect(page.locator("#" + id)).toHaveValue(value);
   for (const [id, value] of Object.entries({ "commission-rate": "0.0003", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "1", "sell-slippage-fen": "1", "end-date": fixture.cutoff.slice(0, 10) })) await page.locator("#" + id).fill(value);
   const acceptedPromise = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/backtest-runs");
   await page.getByTestId("submit-backtest-run").click();
@@ -311,6 +313,8 @@ test("four complete plans produce one continuous account and one run in real Chr
   await expect(page.getByTestId("prepared-run-versions").locator("li")).toHaveCount(4);
   await expect(page.getByTestId("prepared-run-account")).toContainText("10000.00");
   await expect(page.locator("#end-date")).toHaveValue(new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  for (const [id, value] of Object.entries({ "commission-rate": "0.0001", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "0", "sell-slippage-fen": "0" }))
+    await expect(page.locator("#" + id)).toHaveValue(value);
   for (const [id, value] of Object.entries({ "commission-rate": "0", "minimum-commission-fen": "500", "stamp-duty-rate": "0", "transfer-fee-rate": "0", "buy-slippage-fen": "0", "sell-slippage-fen": "0", "end-date": "2026-08-25" })) await page.locator("#" + id).fill(value);
   await page.getByTestId("timeline-updates").first().getByText("查看更新记录（4）", { exact: true }).click();
   await page.getByText("查看计划及本次调整", { exact: true }).first().click();

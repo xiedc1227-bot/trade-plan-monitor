@@ -134,7 +134,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
       <div>
         <h2 id="run-form-title">创建回测运行</h2>
       </div>
-      <p>金额、数量、费率与滑点在校验前始终保留为原始字符串。</p>
+      <p>已预填低费用回测参数，均可修改；佣金请按券商实际约定调整。</p>
     </header>
 
     <div

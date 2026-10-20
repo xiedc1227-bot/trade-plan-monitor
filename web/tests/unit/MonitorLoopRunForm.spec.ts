@@ -46,7 +46,7 @@ function api() {
     })), submitRun: vi.fn<BacktestApi["submitRun"]>().mockResolvedValue(accepted()) };
 }
 function controller(backtest = api(), prepared: () => PreparationFrozenView | CollectionPreparationFrozenView | null = frozen,
-  prepareScheduled?: UseBacktestRunFormOptions["prepareScheduled"]) {
+  prepareScheduled?: UseBacktestRunFormOptions["prepareScheduled"], explicitCosts = true) {
   let form!: ReturnType<typeof useBacktestRunForm>;
   const wrapper = mount(defineComponent({ setup() {
     form = useBacktestRunForm({ api: backtest, prepared, preparedMode: () => true,
@@ -54,12 +54,37 @@ function controller(backtest = api(), prepared: () => PreparationFrozenView | Co
     return () => h("div");
   } }));
   wrappers.push(wrapper);
-  for (const [key, value] of Object.entries({ commissionRate: "0.0003", minimumCommissionFen: "500",
-    stampDutyRate: "0.0005", transferFeeRate: "0.00001", buySlippageFen: "1", sellSlippageFen: "1" })) {
+  for (const [key, value] of Object.entries(explicitCosts ? { commissionRate: "0.0003", minimumCommissionFen: "500",
+    stampDutyRate: "0.0005", transferFeeRate: "0.00001", buySlippageFen: "1", sellSlippageFen: "1" } : {})) {
     form.updateField(key as Parameters<typeof form.updateField>[0], value);
   }
   return { form, backtest };
 }
+
+it.each([["single plan", frozen], ["timeline", collectionFrozen]] as const)("prefills editable low costs and submits them for a %s", async (_label, prepared) => {
+  const { form, backtest } = controller(api(), prepared, undefined, false);
+  expect(form.draft.value).toMatchObject({ commissionRate: "0.0001", minimumCommissionFen: "500",
+    stampDutyRate: "0.0005", transferFeeRate: "0.00001", buySlippageFen: "0", sellSlippageFen: "0",
+    buySlippageBps: "0", sellSlippageBps: "0" });
+  expect(backtest.submitRun).not.toHaveBeenCalled();
+  await form.submit();
+  expect(backtest.submitRun).toHaveBeenCalledTimes(1);
+  expect(backtest.submitRun.mock.calls[0]![0]).toMatchObject({ costs: { commissionRate: "0.0001",
+    minimumCommissionFen: 500, stampDutyRate: "0.0005", transferFeeRate: "0.00001", buySlippageFen: 0, sellSlippageFen: 0 } });
+});
+
+it("preserves explicit zero costs across plan changes and still rejects cleared fee fields", async () => {
+  let prepared: PreparationFrozenView | CollectionPreparationFrozenView = frozen();
+  const { form, backtest } = controller(api(), () => prepared, undefined, false);
+  for (const field of ["commissionRate", "minimumCommissionFen", "stampDutyRate", "transferFeeRate", "buySlippageFen", "sellSlippageFen"] as const)
+    form.updateField(field, "0");
+  prepared = collectionFrozen(); await flushPromises();
+  form.updateField("commissionRate", ""); await form.submit();
+  expect(backtest.submitRun).not.toHaveBeenCalled(); expect(form.errors.value.commissionRate).toBeTruthy();
+  form.updateField("commissionRate", "0"); await form.submit();
+  expect(backtest.submitRun.mock.calls[0]![0]).toMatchObject({ costs: { commissionRate: "0",
+    minimumCommissionFen: 0, stampDutyRate: "0", transferFeeRate: "0", buySlippageFen: 0, sellSlippageFen: 0 } });
+});
 
 it("defaults the editable end date to today's Shanghai day across UTC midnight and preserves edits", () => {
   vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-19T16:05:00Z"));
