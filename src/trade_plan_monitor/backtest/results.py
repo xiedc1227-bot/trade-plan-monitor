@@ -953,9 +953,8 @@ class BacktestResultStore:
 
     def _loop_diagnostics(self, connection, stored, report):
         from trade_plan_monitor.backtest.loop_diagnostics import PlanDiagnosticCollector
-        from trade_plan_monitor.backtest.loop_publication import audit_record
+        from trade_plan_monitor.backtest.loop_publication import decode_audit_record
         from trade_plan_monitor.backtest.loop_report import (
-            decode_loop_event,
             verify_published_loop_event_set,
         )
 
@@ -986,9 +985,7 @@ class BacktestResultStore:
             while rows := cursor.fetchmany(100):
                 for value in rows:
                     detail = _load_detail_row(tuple(value), expected_run_id=run_id)
-                    event = decode_loop_event(canonical_json(detail.payload))
-                    if detail != audit_record(event):
-                        raise ValueError("loop diagnostic evidence identity mismatch")
+                    event = decode_audit_record(detail)
                     collector.observe(event)
                     yield event
 

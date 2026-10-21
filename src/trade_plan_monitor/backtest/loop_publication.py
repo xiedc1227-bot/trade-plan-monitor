@@ -171,6 +171,20 @@ def audit_record(event: LoopAuditEvent) -> BacktestDetailRecord:
     )
 
 
+def decode_audit_record(record: BacktestDetailRecord) -> LoopAuditEvent:
+    """Validate a hash-checked stored row without reconstructing its publication model."""
+    event = decode_loop_event(canonical_json(record.payload))
+    if (
+        record.detail_id != f"loop-{event.sequence:06d}-{event.run_id[:16]}"
+        or record.run_id != event.run_id
+        or record.kind is not BacktestDetailKind.DECISION
+        or record.event_at != event.at
+        or json.loads(canonical_json(event)) != record.payload
+    ):
+        raise ValueError("loop diagnostic evidence identity mismatch")
+    return event
+
+
 def fill_record(event: LoopAuditEvent) -> BacktestFillRecord | None:
     if event.payload.kind != "EXECUTED" or event.payload.attempt.receipt is None:
         return None

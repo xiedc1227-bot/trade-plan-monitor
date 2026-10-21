@@ -41,6 +41,10 @@ def canonical_decimal(value: Decimal) -> str:
 def canonical_value(value: object) -> object:
     """Normalize equivalent Python values to one JSON-compatible representation."""
 
+    # Most leaves are exact JSON primitives; avoid the expensive ABC/model checks
+    # for every leaf in an audit trail while keeping subclasses on the typed path.
+    if value is None or type(value) in {bool, int, str}:
+        return value
     if isinstance(value, BaseModel):
         return canonical_value(value.model_dump(mode="python", round_trip=True))
     if isinstance(value, Enum):
@@ -55,8 +59,6 @@ def canonical_value(value: object) -> object:
         return value.isoformat(timespec="microseconds")
     if isinstance(value, date):
         return value.isoformat()
-    if value is None or type(value) in {bool, int, str}:
-        return value
     if isinstance(value, float):
         raise ValueError("canonical values must not use binary floating point")
     if isinstance(value, Mapping):
