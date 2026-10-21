@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime
+from threading import Event
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -69,6 +70,124 @@ def test_v2_composition_retains_generation_and_actual_stop_without_provider_call
         assert stopped.runtime_generation == first.runtime_generation
         assert stopped.runtime_status.lifecycle == "STOPPED"
         assert stopped.stopped_at is not None
+        assert composition.read_service.outstanding_work == 0
+        # Stopped diagnostics use a new short read scope, never reopen the closed live facade.
+        with pytest.raises(ApiError):
+            await composition.read_service.get_dashboard()
+
+    asyncio.run(scenario())
+
+
+def test_held_read_prevents_database_disposal_and_stop_success_until_retry(tmp_path):
+    from sqlalchemy import event
+
+    config = tmp_path / "app.yaml"
+    config.write_text("tushare: {}\n", encoding="utf-8")
+    composition = create_monitor_composition(
+        config_path=config, database_path=tmp_path / "monitor.sqlite3",
+        monitor_contract_version=2,
+    )
+    reader = composition.read_service
+    entered, release = Event(), Event()
+    original_assemble, original_stop = reader._assemble, reader.stop
+    disposed = []
+    engine = reader._sessions.kw["bind"]
+    event.listen(
+        engine, "engine_disposed", lambda _engine: disposed.append(reader.outstanding_work),
+    )
+
+    def assemble(*args):
+        entered.set()
+        assert release.wait(5)
+        return original_assemble(*args)
+
+    async def short_stop():
+        await original_stop(timeout=0.01)
+
+    reader._assemble, reader.stop = assemble, short_stop
+
+    async def scenario():
+        await composition.start()
+        disposed.clear()
+        task = asyncio.create_task(reader.get_dashboard())
+        async with asyncio.timeout(3):
+            while not entered.is_set():
+                await asyncio.sleep(0.001)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        try:
+            with pytest.raises(TimeoutError):
+                await composition.stop()
+            assert not composition._stopped and not reader._stopped_health
+            assert reader.outstanding_work == 1 and not disposed
+            with pytest.raises(ApiError):
+                await reader.get_health()
+        finally:
+            release.set()
+        reader.stop = original_stop
+        await composition.stop()
+        assert composition._stopped and disposed and set(disposed) == {0}
+        assert reader.outstanding_work == 0
+        assert (await reader.get_health()).runtime_status.lifecycle == "STOPPED"
+
+    asyncio.run(scenario())
+
+
+def test_runtime_storage_callbacks_drain_even_without_outer_composition_stop(tmp_path):
+    from sqlalchemy import event
+
+    config = tmp_path / "app.yaml"
+    config.write_text("tushare: {}\n", encoding="utf-8")
+    composition = create_monitor_composition(
+        config_path=config, database_path=tmp_path / "monitor.sqlite3",
+        monitor_contract_version=2,
+    )
+    reader, runtime = composition.read_service, composition._runtime
+    entered, release = Event(), Event()
+    original_assemble, original_suspend = reader._assemble, reader.suspend_for_storage
+    disposed = []
+    event.listen(
+        reader._sessions.kw["bind"], "engine_disposed",
+        lambda _engine: disposed.append(reader.outstanding_work),
+    )
+
+    def held(*args):
+        entered.set()
+        assert release.wait(5)
+        return original_assemble(*args)
+
+    async def short_suspend(owner):
+        await original_suspend(owner, timeout=0.01)
+
+    async def scenario():
+        await composition.start()
+        disposed.clear()
+        reader._assemble, reader.suspend_for_storage = held, short_suspend
+        task = asyncio.create_task(reader.get_dashboard())
+        async with asyncio.timeout(3):
+            while not entered.is_set():
+                await asyncio.sleep(0.001)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        try:
+            with pytest.raises(TimeoutError):
+                await runtime._checkpoint_wal()
+            assert not composition._stopping and not reader._read_owner._closing
+            assert reader.outstanding_work == 1 and not disposed
+            assert runtime.runtime_generation in reader._read_owner._storage_pauses
+            with pytest.raises(ApiError):
+                await reader.get_dashboard()
+        finally:
+            release.set()
+        await reader._read_owner.drain(timeout=1)
+        reader.suspend_for_storage = original_suspend
+        await runtime._checkpoint_wal()
+        await runtime._close_database()
+        assert disposed and set(disposed) == {0}
+        assert not reader._read_owner._storage_pauses
+        await composition.stop()
 
     asyncio.run(scenario())
 

@@ -19,12 +19,17 @@ from trade_plan_monitor.runtime.market_indexes import ALWAYS_ON_INDEX_CODES, DAS
 from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority, capture_input_stamp
 from trade_plan_monitor.state.events import MonitorEventLog
 from trade_plan_monitor.state.explicit_rules import ExplicitDecisionRepository
+from trade_plan_monitor.state.index_evidence_flights import (
+    EvidenceUnavailable,
+    IndexEvidenceFlights,
+)
 from trade_plan_monitor.state.models import ActivePlan, PlanActivationState, PlanVersion
 from trade_plan_monitor.state.projections import ProjectionError, ProjectionRepository
 from trade_plan_monitor.state.recovery_read_session import require_owned_recovery_session
 from trade_plan_monitor.state.repositories import MarketHistoryRepository, PlanRepository
 from trade_plan_monitor.web import runtime_status_models as views
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.monitor_read_ownership import MonitorReadOwner, current_read_lease
 from trade_plan_monitor.web.persistent_monitor_read_service import (
     _active_plan_details,
     _complete_symbol_projection,
@@ -39,11 +44,11 @@ from trade_plan_monitor.web.runtime_status_eligibility import (
 )
 
 
-def _repositories(session, observed):
+def _repositories(session, observed, **index_options):
     events = MonitorEventLog(session, clock=lambda: observed)
     return SimpleNamespace(
         events=events,
-        projections=ProjectionRepository(session),
+        projections=ProjectionRepository(session, **index_options),
         plans=PlanRepository(
             session, clock=lambda: observed, id_factory=lambda: str(uuid4()), events=events
         ),
@@ -120,24 +125,72 @@ class RuntimeStatusReadService:
 
     monitor_contract_version = 2
 
-    def __init__(self, session_factory, authority_provider, *, clock, legacy_read_service=None):
+    def __init__(
+        self, session_factory, authority_provider, *, clock, legacy_read_service=None,
+        stopped_only=False,
+    ):
         self._sessions = session_factory
         self._authority = authority_provider
         self._clock = clock
         self._legacy_read_service = legacy_read_service
+        self._index_verifier = IndexEvidenceFlights()
+        self._read_owner = MonitorReadOwner()
+        self._stopped_only = stopped_only
+        self._stopped_health = False
+
+    def allow_stopped_health(self):
+        """Called only after composition shutdown and physical database cleanup succeed."""
+        self._stopped_health = True
+
+    @property
+    def outstanding_work(self):
+        return self._read_owner.outstanding_work
+
+    def begin_shutdown(self):
+        self._read_owner.begin_shutdown()
+        if self._index_verifier is not None:
+            self._index_verifier.begin_shutdown()
+
+    async def stop(self, *, timeout=15):
+        self.begin_shutdown()
+        await self._read_owner.stop(timeout=timeout)
+        if self._index_verifier is not None:
+            await to_thread.run_sync(lambda: self._index_verifier.drain(timeout=timeout))
+
+    async def suspend_for_storage(self, owner, *, timeout=15):
+        """Fence automatic runtime cleanup too; a timeout keeps this owner's pause."""
+        self._read_owner.pause_storage(owner)
+        await self._read_owner.drain(timeout=timeout)
+        await to_thread.run_sync(lambda: self._index_verifier.drain(timeout=timeout))
+
+    def resume_after_storage(self, owner):
+        self._read_owner.resume_storage(owner)
 
     async def _read(self):
         try:
+            return await self._read_owner.run(self._read_owned)
+        except EvidenceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
+
+    async def _read_owned(self):
+        try:
             for _attempt in range(2):
+                lease = current_read_lease.get()
+                if lease is not None and lease.cancelled.is_set():
+                    raise EvidenceUnavailable("Monitor observer cancelled")
                 authority = self._authority()
                 if type(authority) is not RuntimeReadAuthority:
                     raise ProjectionError("Runtime authority is unavailable")
+                if self._stopped_only and authority.lifecycle != "STOPPED":
+                    raise ProjectionError("Stopped diagnostics cannot certify a running owner")
                 observed = _observed_at(self._clock())
                 result, identity = await to_thread.run_sync(
                     lambda authority=authority, observed=observed: self._assemble(
                         authority, observed
                     ),
                 )
+                if lease is not None and lease.cancelled.is_set():
+                    raise EvidenceUnavailable("Monitor observer cancelled")
                 identity_after = await to_thread.run_sync(self._identities)
                 after = self._authority()
                 if (
@@ -172,7 +225,13 @@ class RuntimeStatusReadService:
         session = self._sessions()
         require_owned_recovery_session(session, (ActivePlan, PlanVersion, PlanActivationState))
         with session, session.begin():
-            work = _repositories(session, observed)
+            lease = current_read_lease.get()
+            work = _repositories(
+                session, observed, index_verifier=self._index_verifier,
+                index_namespace=(authority.generation, authority.configuration_revision),
+                read_cancelled=None if lease is None else lease.cancelled,
+                read_deadline=None if lease is None else lease.deadline,
+            )
             sequence = work.events.current_sequence()
             details = _list_plan_details(work)
             active = _active_plan_details(work, details)
@@ -419,6 +478,14 @@ class RuntimeStatusReadService:
         )
 
     async def get_health(self):
+        if self._stopped_health:
+            diagnostics = RuntimeStatusReadService(
+                self._sessions, self._authority, clock=self._clock, stopped_only=True,
+            )
+            try:
+                return await diagnostics.get_health()
+            finally:
+                await diagnostics.stop()
         dashboard, _, _, authority = await self._read()
         values = authority.health.model_dump(mode="python")
         names = (

@@ -389,6 +389,16 @@ class MonitorWebComposition:
             return
         self._stopping = True
         first_error: BaseException | None = None
+        # Revoke authority before waiting; read sessions must drain before runtime DB disposal.
+        begin_read_shutdown = getattr(self._read_service, "begin_shutdown", None)
+        if callable(begin_read_shutdown):
+            begin_read_shutdown()
+            begin_owner_shutdown = getattr(self._runtime, "begin_shutdown", None)
+            if callable(begin_owner_shutdown):
+                begin_owner_shutdown()
+        stop_reads = getattr(self._read_service, "stop", None)
+        if callable(stop_reads):
+            await stop_reads()
         candidate = self._candidate_runtime
         if candidate is not None:
             begin_shutdown = getattr(candidate, "begin_shutdown", None)
@@ -431,6 +441,9 @@ class MonitorWebComposition:
         self._stopped = first_error is None
         if first_error is not None:
             raise first_error
+        allow_stopped_health = getattr(self._read_service, "allow_stopped_health", None)
+        if callable(allow_stopped_health):
+            allow_stopped_health()
 
     async def _supervise_runtime(self) -> None:
         """Restart only a post-start failed runner after exact cleanup."""
@@ -1383,7 +1396,7 @@ def create_monitor_composition(
             "STOPPED"
             if progress.state == "STOPPED"
             else "STOPPING"
-            if owner._stopping
+            if composition._stopping or owner._stopping
             else "STARTING"
             if health.status is RuntimeServiceStatus.STARTING
             else "RUNNING"
@@ -1533,6 +1546,18 @@ def create_monitor_composition(
 
             return observed
 
+        async def checkpoint_wal():
+            if monitor_contract_version == 2:
+                await read_service.suspend_for_storage(lifecycle.runtime_generation)
+            await state.checkpoint_wal()
+
+        async def close_database():
+            if monitor_contract_version == 2:
+                await read_service.suspend_for_storage(lifecycle.runtime_generation)
+            await state.close_database()
+            if monitor_contract_version == 2:
+                read_service.resume_after_storage(lifecycle.runtime_generation)
+
         lifecycle = RuntimeLifecycleService(
             clock=clock,
             validate_configuration=local_operation(state.validate_configuration),
@@ -1549,8 +1574,8 @@ def create_monitor_composition(
             next_permission_maintenance_at=state.next_index_permission_at,
             dispatcher=dispatcher,
             request_controller=request_controller,
-            checkpoint_wal=state.checkpoint_wal,
-            close_database=state.close_database,
+            checkpoint_wal=checkpoint_wal,
+            close_database=close_database,
             health_details=state.health_details,
             liveness_owner=state,
             progress_monotonic=progress_monotonic if monitor_contract_version == 2 else None,
