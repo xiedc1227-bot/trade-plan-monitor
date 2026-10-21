@@ -171,7 +171,7 @@ export function createRuntimeMonitor({ api, protocol, store, origin, createSocke
     lastResume = current; armExpiry();
   }
 
-  function navigation(): void { protocol.invalidate(); cancelSnapshot(); if (active()) refresh(); }
+  function navigation(): void { protocol.invalidate(); cancelSnapshot(); store.invalidatePresentation(); if (active()) refresh(); }
   return { start, stop, refresh: () => refresh(), recover, reloadRequired, resume, navigation };
 }
 

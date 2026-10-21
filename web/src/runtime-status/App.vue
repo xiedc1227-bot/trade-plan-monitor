@@ -32,7 +32,12 @@ const connectionState = computed<MonitorStreamConnectionState>(() => {
   }
 });
 provide(shellConnectionKey, connectionState);
-watch(() => route.fullPath, () => monitor.navigation());
+watch(
+  () => route.matched.length === 0 ? null : route.meta.section === "backtests" ? "backtests" : route.fullPath,
+  (surface, previous) => {
+    if (surface !== null && previous !== null) monitor.navigation();
+  },
+);
 onMounted(monitor.start);
 onBeforeUnmount(monitor.stop);
 function reload(): void { window.location.reload(); }

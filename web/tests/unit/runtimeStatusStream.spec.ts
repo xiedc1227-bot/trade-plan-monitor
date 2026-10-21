@@ -30,6 +30,16 @@ beforeEach(() => { vi.useFakeTimers(); setActivePinia(createPinia()); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe("v2 transport and authoritative refresh", () => {
+  it("withdraws old actionable presentation immediately on meaningful navigation", async () => {
+    const h = setup(valid(explicitDashboard())); h.monitor.start(); await flushPromises();
+    h.sockets[0]!.open(); h.sockets[0]!.receive(h.heartbeat()); await flushPromises();
+    const row = h.store.snapshot!.symbols[0]!;
+    expect(h.store.isActionable(row, "risk")).toBe(true);
+    h.api.getDashboard.mockImplementation(() => new Promise(() => {}));
+    h.monitor.navigation();
+    expect(h.store.isActionable(row, "risk")).toBe(false);
+    h.monitor.stop();
+  });
   it.each(["STOPPING", "RUNTIME_FAULT", "STORAGE_UNAVAILABLE"] as const)("withdraws all current presentation immediately for %s while a fresh projection is pending", async reason => {
     const h = setup(valid(explicitDashboard())); h.monitor.start(); await flushPromises();
     const socket = h.sockets[0]!; socket.open(); socket.receive(h.heartbeat()); await flushPromises();
