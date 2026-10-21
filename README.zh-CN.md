@@ -227,7 +227,9 @@ python -m pytest tests/integration/test_tushare_contract.py -q -m "not live"
 
 运行记录筛选保留股票代码、包含边界当天的回测截止日期和固定状态。筛选界面已移除数据集哈希和计划版本 ID；旧页面链接先清除这两个条件及其游标，再读取记录。内部 API 和存储标识继续用于排查。日期比较覆盖截止日，固定的结果时间排序以文字说明；回放截止时间不是程序实际完成时间。参见[筛选操作说明](docs/operations/monitor-loop-backtest.zh-CN.md#ml-o21-运行记录筛选与时间含义)和[验证记录](docs/verification/2026-10-18-run-record-filters.zh-CN.md)。
 
-正常回测页面只显示简短状态及 `服务管理`，刷新、待恢复任务查询和停止服务收进面板。中断任务或服务异常时展开，任务进度、取消和重试仍在原页面，发现任务不会自动恢复。参见[服务操作及验证](docs/verification/2026-10-18-compact-backtest-service.zh-CN.md)。
+正常回测页面只显示简短状态及 `服务管理`，刷新和待恢复任务查询收进面板。停止服务位于高级管理中，且需要确认。运行工作区区分结果与已接受任务记录；打开任务不会恢复执行。任务进度、取消及不确定请求重试保留既有语义。参见[服务操作及验证](docs/verification/2026-10-18-compact-backtest-service.zh-CN.md)。
+
+工作区现已提供紧凑结果行、已访问页面导航、返回时定位原行、明确标注的已验证数据目录、生效版本选择和可键盘操作的权益图控制。读取在 10 秒提示等待、30 秒允许重试，刷新失败时标明保留的旧摘要。结果读取去除了重复模型构造，仍保留证据校验。详见[工作区契约](docs/specifications/backtesting/SPEC-backtest-workspace-ux.zh-CN.md)、[实施任务](tasks/backtest-workspace-ux.zh-CN.md)及[验证与性能限制](docs/verification/2026-10-21-backtest-workspace-ux.zh-CN.md)。
 
 `main` 中基线 `7046d2e` 已完成约定范围内功能验收。[当前验收记录](docs/verification/2026-10-18-backtest-functional-acceptance.zh-CN.md)汇总已完成能力、纠正后的四份原文连续回测及测试依据。原文未量化条件保持未知，实际样本为零成交，不宣称新一轮全量集成／容量认证。历史验证记录保留当时日期和限制。
 
