@@ -1,0 +1,800 @@
+{
+  "p0": {
+    "candidateScope": "Only file.read statement substituted in isolated process; all existing checks retained",
+    "maxReadBytes": 295108609,
+    "sampleIO": [
+      {
+        "kind": "original",
+        "bytes": 506,
+        "peakPythonBytes": 295242058,
+        "seconds": 0.062578,
+        "sha256": "249e88331e6113d1fbd06ddd65905c33f7010ff086a7950ed6b95e0d18410bbe"
+      },
+      {
+        "kind": "bounded-chunks",
+        "bytes": 506,
+        "peakPythonBytes": 198540,
+        "seconds": 0.000988,
+        "sha256": "249e88331e6113d1fbd06ddd65905c33f7010ff086a7950ed6b95e0d18410bbe"
+      }
+    ],
+    "fullVerifiedProjection": [
+      {
+        "round": 1,
+        "kind": "original",
+        "wallSeconds": 4.2015,
+        "cpuSeconds": 4.1406
+      },
+      {
+        "round": 1,
+        "kind": "bounded-chunks",
+        "wallSeconds": 2.2295,
+        "cpuSeconds": 2.1719
+      },
+      {
+        "round": 2,
+        "kind": "original",
+        "wallSeconds": 4.2784,
+        "cpuSeconds": 4.25
+      },
+      {
+        "round": 2,
+        "kind": "bounded-chunks",
+        "wallSeconds": 2.1791,
+        "cpuSeconds": 2.1719
+      },
+      {
+        "round": 3,
+        "kind": "original",
+        "wallSeconds": 4.9404,
+        "cpuSeconds": 4.7344
+      },
+      {
+        "round": 3,
+        "kind": "bounded-chunks",
+        "wallSeconds": 2.203,
+        "cpuSeconds": 2.1719
+      }
+    ],
+    "medians": {
+      "original": 4.2784,
+      "bounded-chunks": 2.203
+    },
+    "equalFullResponse": true,
+    "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+  },
+  "p1": {
+    "measurements": [
+      {
+        "round": 1,
+        "kind": "baseline",
+        "wallSeconds": 3.8935,
+        "cpuSeconds": 3.7812,
+        "queries": {
+          "SELECT": 1929
+        }
+      },
+      {
+        "round": 1,
+        "kind": "batch-only",
+        "wallSeconds": 3.5305,
+        "cpuSeconds": 3.4531,
+        "queries": {
+          "SELECT": 1
+        }
+      },
+      {
+        "round": 1,
+        "kind": "batch-and-primitives",
+        "wallSeconds": 3.6771,
+        "cpuSeconds": 3.5781,
+        "queries": {
+          "SELECT": 1
+        }
+      },
+      {
+        "round": 2,
+        "kind": "baseline",
+        "wallSeconds": 4.0062,
+        "cpuSeconds": 4.0,
+        "queries": {
+          "SELECT": 1929
+        }
+      },
+      {
+        "round": 2,
+        "kind": "batch-only",
+        "wallSeconds": 3.4936,
+        "cpuSeconds": 3.4688,
+        "queries": {
+          "SELECT": 1
+        }
+      },
+      {
+        "round": 2,
+        "kind": "batch-and-primitives",
+        "wallSeconds": 3.6571,
+        "cpuSeconds": 3.6094,
+        "queries": {
+          "SELECT": 1
+        }
+      },
+      {
+        "round": 3,
+        "kind": "baseline",
+        "wallSeconds": 3.9677,
+        "cpuSeconds": 3.8438,
+        "queries": {
+          "SELECT": 1929
+        }
+      },
+      {
+        "round": 3,
+        "kind": "batch-only",
+        "wallSeconds": 3.5447,
+        "cpuSeconds": 3.5,
+        "queries": {
+          "SELECT": 1
+        }
+      },
+      {
+        "round": 3,
+        "kind": "batch-and-primitives",
+        "wallSeconds": 3.5788,
+        "cpuSeconds": 3.5156,
+        "queries": {
+          "SELECT": 1
+        }
+      }
+    ],
+    "medians": {
+      "baseline": 3.9677,
+      "batch-only": 3.5305,
+      "batch-and-primitives": 3.6571
+    },
+    "equalFullRecords": true,
+    "snapshotHashes": [
+      "f3c97217dc538e7ffa49f536fd9a4d05f94810315c8d2fbc75300941d84a5ae4",
+      "5f77e03cf5c70ad59fc96e5b67f1fcbabea3ee8c272a662ffd507c0860f037ea",
+      "37d3affcb249d6be7ccd32796accedcec0adcd43657a60ff3ee4ab6dc445a0b0",
+      "3438b2816ae403349ba2ec73400ecbb3c15cd05eee56b36c382157ea0bb9f61e",
+      "905892bcf4c183be1ae7058b8de273eaee993e92f8c720cd99737fb4b7c8ce89"
+    ]
+  },
+  "httpBefore": [
+    {
+      "name": "single-1",
+      "wallMs": 4789,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 47,
+        "totalMs": 68,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 4788,
+          "totalMs": 4789,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "same-run-pair-1",
+      "wallMs": 8445,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 31,
+        "totalMs": 31,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 8445,
+          "totalMs": 8445,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 8444,
+          "totalMs": 8444,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "different-run-pair-1",
+      "wallMs": 9074,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 63,
+        "totalMs": 63,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 9074,
+          "totalMs": 9074,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b8c260af9676353ef049310b4e8fdba9d4119e9423e716d24fd8fe37169e8010",
+          "status": 200,
+          "ttfbMs": 3981,
+          "totalMs": 3981,
+          "bytes": 14259,
+          "reportHash": "381e0a37e7e5df9b38f0db32ca356589ab6658839175a493c1bc478a3ec82922"
+        }
+      ]
+    },
+    {
+      "name": "result-dashboard-1",
+      "wallMs": 18597,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 115,
+        "totalMs": 120,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 9372,
+          "totalMs": 9373,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/dashboard",
+          "status": 200,
+          "ttfbMs": 18595,
+          "totalMs": 18596,
+          "bytes": 6024
+        }
+      ]
+    },
+    {
+      "name": "single-2",
+      "wallMs": 6127,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 42,
+        "totalMs": 58,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 6127,
+          "totalMs": 6127,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "same-run-pair-2",
+      "wallMs": 5202,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 63,
+        "totalMs": 70,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 5201,
+          "totalMs": 5202,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 5201,
+          "totalMs": 5201,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "different-run-pair-2",
+      "wallMs": 8461,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 184,
+        "totalMs": 200,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 8461,
+          "totalMs": 8461,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b8c260af9676353ef049310b4e8fdba9d4119e9423e716d24fd8fe37169e8010",
+          "status": 200,
+          "ttfbMs": 3896,
+          "totalMs": 3896,
+          "bytes": 14259,
+          "reportHash": "381e0a37e7e5df9b38f0db32ca356589ab6658839175a493c1bc478a3ec82922"
+        }
+      ]
+    },
+    {
+      "name": "result-dashboard-2",
+      "wallMs": 11741,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 122,
+        "totalMs": 128,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 11741,
+          "totalMs": 11741,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/dashboard",
+          "status": 200,
+          "ttfbMs": 9306,
+          "totalMs": 9307,
+          "bytes": 6024
+        }
+      ]
+    },
+    {
+      "name": "cancel-read-observer-then-retry",
+      "first": {
+        "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+        "error": "AbortError",
+        "totalMs": 265
+      },
+      "retry": {
+        "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+        "status": 200,
+        "ttfbMs": 3679,
+        "totalMs": 3679,
+        "bytes": 15559,
+        "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+      }
+    }
+  ],
+  "httpAfter": [
+    {
+      "name": "single-1",
+      "wallMs": 2254,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 185,
+        "totalMs": 185,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2253,
+          "totalMs": 2253,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "same-run-pair-1",
+      "wallMs": 2091,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 58,
+        "totalMs": 58,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2091,
+          "totalMs": 2091,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2089,
+          "totalMs": 2090,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "different-run-pair-1",
+      "wallMs": 3819,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 46,
+        "totalMs": 49,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2205,
+          "totalMs": 2205,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b8c260af9676353ef049310b4e8fdba9d4119e9423e716d24fd8fe37169e8010",
+          "status": 200,
+          "ttfbMs": 3818,
+          "totalMs": 3819,
+          "bytes": 14259,
+          "reportHash": "381e0a37e7e5df9b38f0db32ca356589ab6658839175a493c1bc478a3ec82922"
+        }
+      ]
+    },
+    {
+      "name": "result-dashboard-1",
+      "wallMs": 9576,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 39,
+        "totalMs": 46,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 9576,
+          "totalMs": 9576,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/dashboard",
+          "status": 200,
+          "ttfbMs": 7528,
+          "totalMs": 7528,
+          "bytes": 6024
+        }
+      ]
+    },
+    {
+      "name": "single-2",
+      "wallMs": 2210,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 56,
+        "totalMs": 82,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2210,
+          "totalMs": 2210,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "same-run-pair-2",
+      "wallMs": 2070,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 76,
+        "totalMs": 76,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2070,
+          "totalMs": 2070,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2069,
+          "totalMs": 2070,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        }
+      ]
+    },
+    {
+      "name": "different-run-pair-2",
+      "wallMs": 3895,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 186,
+        "totalMs": 186,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 2268,
+          "totalMs": 2268,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/backtest-runs/b8c260af9676353ef049310b4e8fdba9d4119e9423e716d24fd8fe37169e8010",
+          "status": 200,
+          "ttfbMs": 3894,
+          "totalMs": 3894,
+          "bytes": 14259,
+          "reportHash": "381e0a37e7e5df9b38f0db32ca356589ab6658839175a493c1bc478a3ec82922"
+        }
+      ]
+    },
+    {
+      "name": "result-dashboard-2",
+      "wallMs": 9509,
+      "probe": {
+        "path": "/api/v1/backtest-service",
+        "status": 200,
+        "ttfbMs": 100,
+        "totalMs": 109,
+        "bytes": 222,
+        "canRead": true,
+        "physicallyDrained": false
+      },
+      "responses": [
+        {
+          "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "status": 200,
+          "ttfbMs": 7388,
+          "totalMs": 7445,
+          "bytes": 15559,
+          "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+        },
+        {
+          "path": "/api/v1/dashboard",
+          "status": 200,
+          "ttfbMs": 9509,
+          "totalMs": 9509,
+          "bytes": 6024
+        }
+      ]
+    },
+    {
+      "name": "cancel-read-observer-then-retry",
+      "first": {
+        "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+        "error": "AbortError",
+        "totalMs": 261
+      },
+      "retry": {
+        "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+        "status": 200,
+        "ttfbMs": 5369,
+        "totalMs": 5370,
+        "bytes": 15559,
+        "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+      }
+    }
+  ],
+  "browserBefore": {
+    "outcome": "completed",
+    "events": [
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 459,
+        "failedMs": 2024,
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 2023,
+        "failedMs": 2029,
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 2024,
+        "failedMs": 6977,
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/api/v1/backtest-runs",
+        "startMs": 2024,
+        "finishedMs": 6833
+      },
+      {
+        "path": "/api/v1/backtest-service",
+        "startMs": 5331,
+        "finishedMs": 6490
+      },
+      {
+        "path": "/api/v1/backtest-jobs",
+        "startMs": 6490,
+        "finishedMs": 6879
+      },
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 6976,
+        "failedMs": 6977,
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 6976,
+        "failedMs": 26989,
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+        "startMs": 6976,
+        "finishedMs": 36526
+      },
+      {
+        "path": "/api/v1/backtest-service",
+        "startMs": 16502,
+        "finishedMs": 16534
+      },
+      {
+        "path": "/api/v1/backtest-service",
+        "startMs": 26545,
+        "finishedMs": 26605
+      },
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 27960,
+        "failedMs": 36659,
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/api/v1/backtest-service",
+        "startMs": 36617,
+        "finishedMs": 36625
+      },
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 36659,
+        "failedMs": 36679,
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 36679
+      }
+    ],
+    "writes": [],
+    "errors": [],
+    "summaryReads": 1,
+    "dashboardReads": 8
+  },
+  "browserAfter": {
+    "outcome": "completed",
+    "events": [
+      {
+        "path": "/api/v1/dashboard",
+        "startMs": 354,
+        "finishedMs": 13401
+      },
+      {
+        "path": "/api/v1/backtest-runs",
+        "startMs": 415,
+        "finishedMs": 585
+      },
+      {
+        "path": "/api/v1/backtest-service",
+        "startMs": 569,
+        "finishedMs": 582
+      },
+      {
+        "path": "/api/v1/backtest-jobs",
+        "startMs": 582,
+        "finishedMs": 896
+      },
+      {
+        "path": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+        "startMs": 992,
+        "finishedMs": 10147
+      },
+      {
+        "path": "/api/v1/backtest-service",
+        "startMs": 10587,
+        "finishedMs": 10746
+      }
+    ],
+    "writes": [],
+    "errors": [],
+    "summaryReads": 1,
+    "dashboardReads": 1
+  },
+  "environment": {
+    "date": "2026-10-21",
+    "baseline": "cd5113b8bb92dabd2b6b133102e0751198dfd807",
+    "python": "3.14.7",
+    "gilEnabled": true,
+    "browser": "Chrome for Testing 157.0.8103.6",
+    "scope": "Local observations; existing websocket/health traffic remains active. Not p95 or an SLA.",
+    "realRunCount": 5,
+    "sourceRecordCount": 8,
+    "timelineCount": 2
+  }
+}
