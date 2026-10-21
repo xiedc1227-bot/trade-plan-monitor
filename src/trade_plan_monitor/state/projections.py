@@ -24,15 +24,17 @@ from trade_plan_monitor.decision.models import (
     OfficialCloseEvaluationIdentity,
 )
 from trade_plan_monitor.market_index.canonical import (
-    canonical_json as canonical_market_index_json,
+    FORMULA_DEFINITION_HASH,
+    validate_market_index_snapshot_integrity,
 )
 from trade_plan_monitor.market_index.canonical import (
-    validate_market_index_snapshot_integrity,
+    canonical_json as canonical_market_index_json,
 )
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.market_index.selection import retain_effective_snapshot, snapshot_rank
 from trade_plan_monitor.runtime.health import LEGACY_RUNTIME_GENERATION
+from trade_plan_monitor.state.index_evidence import HEAD_FIELDS, PAYLOAD_FIELDS, RawIndexCandidate
 from trade_plan_monitor.state.models import (
     EvaluationLedger,
     PlanActivationState,
@@ -159,8 +161,15 @@ class MarketIndexSnapshotRecord(_ProjectionValue):
 class ProjectionRepository:
     """Read and mutate complete projections inside the active Unit of Work."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self, session: Session, *, index_verifier=None, index_namespace=(),
+        read_cancelled=None, read_deadline=None,
+    ) -> None:
         self._session = session
+        self._index_verifier = index_verifier
+        self._index_namespace = index_namespace
+        self._read_cancelled = read_cancelled
+        self._read_deadline = read_deadline
 
     def add_evaluation_result(
         self,
@@ -907,8 +916,13 @@ class ProjectionRepository:
         )
         if not index_codes:
             return ()
-        candidates = self._session.execute(
-            select(MarketIndexSnapshotHeadRow, MarketIndexSnapshotRow)
+        head_table = MarketIndexSnapshotHeadRow.__table__
+        payload_table = MarketIndexSnapshotRow.__table__
+        query = (
+            select(
+                *(head_table.c[key] for key in HEAD_FIELDS),
+                *(payload_table.c[key] for key in PAYLOAD_FIELDS),
+            ).select_from(head_table)
             .outerjoin(
                 MarketIndexSnapshotRow,
                 MarketIndexSnapshotHeadRow.snapshot_hash == MarketIndexSnapshotRow.snapshot_hash,
@@ -919,39 +933,35 @@ class ProjectionRepository:
                     tuple(index_code.value for index_code in index_codes)
                 ),
             )
+            .order_by(
+                MarketIndexSnapshotHeadRow.mapping_version,
+                MarketIndexSnapshotHeadRow.index_code,
+                MarketIndexSnapshotHeadRow.decision_cutoff,
+                MarketIndexSnapshotHeadRow.request_set_hash,
+            )
             .execution_options(yield_per=128, populate_existing=True)
         )
-        latest_by_index: dict[MarketIndexCode, MarketIndexSnapshotRecord] = {}
-        for head, row in candidates:
-            if row is None:
-                raise ProjectionMissingDependencyError(
-                    "Market-index head names a missing immutable snapshot"
-                )
-            # Every historical candidate is verified, even when it cannot win.
-            snapshot, provider_revision = _market_index_from_row(row)
-            if (
-                snapshot.mapping_version != head.mapping_version
-                or snapshot.index_code.value != head.index_code
-                or snapshot.decision_cutoff.isoformat() != head.decision_cutoff
-                or snapshot.request_set_hash != head.request_set_hash
-                or provider_revision != head.provider_content_revision
-            ):
-                raise ProjectionError("Stored market-index head crosses snapshot identity")
-            record = MarketIndexSnapshotRecord(
-                snapshot=snapshot, provider_content_revision=provider_revision,
-            )
-            index_code = record.snapshot.index_code
-            current = latest_by_index.get(index_code)
-            incoming_rank = _market_index_snapshot_rank(record.snapshot)
-            current_rank = (
-                None if current is None else _market_index_snapshot_rank(current.snapshot)
-            )
-            if current_rank is None or incoming_rank > current_rank:
-                latest_by_index[index_code] = record
-        return tuple(
-            latest_by_index[index_code]
-            for index_code in index_codes
-            if index_code in latest_by_index
+
+        def scan():
+            with self._session.execute(query) as candidates:
+                for values in candidates:
+                    head = tuple(values[:len(HEAD_FIELDS)])
+                    payload = tuple(values[len(HEAD_FIELDS):])
+                    yield RawIndexCandidate.from_values(
+                        head, None if payload[0] is None else payload,
+                    )
+
+        def verify(candidates):
+            return _latest_index_records(candidates, index_codes)
+
+        if self._index_verifier is None:
+            return verify(scan())
+        scope = (
+            id(self._session.get_bind()), normalized_mapping_version, index_codes,
+            FORMULA_DEFINITION_HASH, self._index_namespace,
+        )
+        return self._index_verifier.run(
+            scope, scan, verify, cancelled=self._read_cancelled, deadline=self._read_deadline,
         )
 
     def list_market_index_snapshot_heads(
@@ -1397,6 +1407,39 @@ def _market_index_values(
         "observed_at": snapshot.observed_at.isoformat(),
         "schema_version": 1,
     }
+
+
+def _latest_index_records(candidates, index_codes):
+    """Pure full verification and ranking; never observe an owner or current clock."""
+    latest = {}
+    try:
+        for candidate in candidates:
+            head, row = candidate.decoded()
+            if row is None:
+                raise ProjectionMissingDependencyError(
+                    "Market-index head names a missing immutable snapshot"
+                )
+            snapshot, revision = _market_index_from_row(row)
+            if (
+                snapshot.mapping_version != head.mapping_version
+                or snapshot.index_code.value != head.index_code
+                or snapshot.decision_cutoff.isoformat() != head.decision_cutoff
+                or snapshot.request_set_hash != head.request_set_hash
+                or revision != head.provider_content_revision
+            ):
+                raise ProjectionError("Stored market-index head crosses snapshot identity")
+            current = latest.get(snapshot.index_code)
+            if current is None or _market_index_snapshot_rank(snapshot) > (
+                _market_index_snapshot_rank(current.snapshot)
+            ):
+                latest[snapshot.index_code] = MarketIndexSnapshotRecord(
+                    snapshot=snapshot, provider_content_revision=revision,
+                )
+    finally:
+        close = getattr(candidates, "close", None)
+        if close is not None:
+            close()
+    return tuple(latest[code] for code in index_codes if code in latest)
 
 
 def _market_index_from_row(row: MarketIndexSnapshotRow) -> tuple[MarketIndexSnapshot, int]:
