@@ -5,7 +5,7 @@ import { formatFenAsYuan } from "../../api/backtestValues";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 import { choiceLabels, fieldLabels } from "../plans/planSchema";
 import PlanExecutionDiagnostics from "./PlanExecutionDiagnostics.vue";
-import ResultRuleChanges from "./ResultRuleChanges.vue";
+import BacktestVersionTimeline from "./BacktestVersionTimeline.vue";
 import BacktestCostSummary from "./BacktestCostSummary.vue";
 
 const props = withDefaults(defineProps<{ run: DeepReadonly<BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView>; showDiagnostics?: boolean }>(), { showDiagnostics: true });
@@ -41,6 +41,8 @@ const financialMetrics = computed(() => [
     <h3>{{ run.symbol }} · {{ scheduled ? '多版本连续监控闭环' : '一份冻结计划的监控闭环' }}</h3>
     <p>预置计划未声明历史可用时间时，按生效交易日开盘起执行；该执行假设不代表计划在历史上已发布。</p>
     <p v-if="run.openingAccount.cash.kind === 'POSITION_LIMIT_ONLY'">本次回测不限制现金，买入仍受规则授权及最大持仓限制。记录成交盈亏和费用，不计算本金收益率或净值回撤。</p>
+    <BacktestVersionTimeline v-if="scheduled" :run="scheduled" />
+    <details><summary>账户与运行设置</summary>
     <dl>
       <template v-if="workbench"><dt>工作台计划版本</dt><dd>{{ workbench.provenance.planVersionId }}</dd><dt>研究信息确认时间</dt><dd>{{ formatDisplayDateTime(workbench.provenance.confirmedAt) }}</dd></template><template v-else><dt>计划准备记录</dt><dd>{{ "preparationId" in run.provenance ? run.provenance.preparationId : "" }}</dd></template>
       <template v-if="legacy"><dt>原文 / 提取修订</dt><dd>{{ legacy.provenance.sourceRevision }} / {{ legacy.provenance.candidateRevision }}</dd>
@@ -58,22 +60,14 @@ const financialMetrics = computed(() => [
       <dt>闭环记录</dt><dd>{{ run.report.cycle.evaluations }} 次评估 · {{ run.report.cycle.intents }} 个响应意图 · {{ run.report.cycle.fills }} 次成交 · {{ run.report.cycle.unfilled_intents }} 个未成交意图</dd>
     </dl>
     <BacktestCostSummary :costs="run.costs" />
+    </details>
     <PlanExecutionDiagnostics v-if="showDiagnostics" :diagnostics="run.planDiagnostics ?? null" :response-mode="run.response.mode" @select="emit('select', $event)" />
-    <ResultRuleChanges v-if="scheduled" :run="scheduled" />
+    <details><summary>查看完整指标与可用性</summary>
     <h4>服务端已验证指标</h4>
     <p>{{ run.metrics.valuation_valid ? '估值有效' : '估值受限，缺失项保持不可用' }}。比例按服务端原始精度展示。</p>
     <ul v-if="run.metrics.blockers.length"><li v-for="blocker in run.metrics.blockers" :key="blocker">{{ blocker }}</li></ul>
     <dl><template v-for="[title, value] in financialMetrics" :key="title"><dt>{{ title }}</dt><dd>{{ value }}</dd></template></dl>
-    <section v-if="scheduled" aria-label="冻结版本日历">
-      <h4>冻结版本日历</h4>
-      <p>按生效日期沿用或替换计划，整个运行共用一个账户。后续持仓陈述只用于核对。</p>
-      <ol><li v-for="version in scheduled.versions" :key="version.versionId">
-        <p>{{ version.effectiveTradeDate }} 生效 · 执行起点 {{ formatDisplayDateTime(version.availableAt) }}</p>
-        <dl><dt>原文 / 修订 / 提取修订</dt><dd>{{ version.sourceId }} / {{ version.sourceRevision }} / {{ version.candidateRevision }}</dd>
-          <dt>版本</dt><dd>{{ version.versionId }}</dd><dt>计划</dt><dd>{{ version.planHash }}</dd><dt>审核证据</dt><dd>{{ version.evidenceHash }}</dd></dl>
-        <p v-if="version.accountContext">持仓陈述：核心 {{ version.accountContext.core_qty ?? '未知' }} 股 / 机动 {{ version.accountContext.tactical_qty ?? '未知' }} 股 · {{ version.accountContext.evidence }}</p>
-      </li></ol>
-    </section>
+    </details>
     <details v-if="single"><summary>已审核的完整计划</summary>
       <p>审核时间 {{ formatDisplayDateTime(single.frozenPlan.review.reviewed_at) }} · {{ single.frozenPlan.review.evidence }}</p>
       <dl><template v-for="row in planRows" :key="row.path"><dt>{{ label(row.path) }}</dt><dd>{{ row.value }}</dd></template></dl>

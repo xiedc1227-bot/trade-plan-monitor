@@ -45,7 +45,8 @@ const emit = defineEmits<{
             </li>
           </ul>
         </section>
-        <MarketIndexChart :points="series.items" @select-date="emit('select-date', $event)" />
+        <p>日期入口打开本次决策记录；暂不自动定位当天。</p>
+        <MarketIndexChart date-action-label="查看决策记录" :points="series.items" @select-date="emit('select-date', $event)" />
       </template>
     </section>
 

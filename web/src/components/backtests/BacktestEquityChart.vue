@@ -8,7 +8,7 @@ import {
   type DeepReadonly,
 } from "vue";
 import { LineChart } from "echarts/charts";
-import { GridComponent, TooltipComponent } from "echarts/components";
+import { DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { init, use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 
@@ -25,6 +25,10 @@ interface ChartInstance {
   resize(): void;
   setOption(option: unknown): void;
 }
+
+const showEquity = shallowRef(true), showCash = shallowRef(true), showMarketValue = shallowRef(true);
+const range = shallowRef("100");
+watch([showEquity, showCash, showMarketValue, range], () => renderChart());
 
 const MAX_SAFE_FEN = 9_007_199_254_740_991n;
 const props = defineProps<Props>();
@@ -60,7 +64,7 @@ function loadChart(): void {
   loadState.value = "LOADING";
   try {
     if (!mounted || chartHost.value === null) return;
-    use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
+    use([LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
     chart.value = init(chartHost.value) as ChartInstance;
     loadState.value = "READY";
     renderChart();
@@ -75,7 +79,13 @@ function renderChart(): void {
   const labels = visibleItems.value.map((item) => formatDisplayDateTime(item.markedAt));
   chart.value.setOption({
     animation: false,
-    grid: { containLabel: true, left: 12, right: 16, top: 24, bottom: 12 },
+    grid: { containLabel: true, left: 12, right: 16, top: 42, bottom: 45 },
+    legend: {
+      selectedMode: false,
+      textStyle: { color: "#b8c1b8" },
+      selected: { "权益": showEquity.value, "现金": showCash.value, "市值": showMarketValue.value },
+    },
+    dataZoom: [{ type: "inside", start: 100 - Number(range.value), end: 100 }, { type: "slider", start: 100 - Number(range.value), end: 100, bottom: 0 }],
     series: [
       {
         data: visibleItems.value.map((item) => safeChartYuan(item.equityFen)),
@@ -117,6 +127,7 @@ function safeChartYuan(value: string | null): number | null {
 
 <template>
   <div class="equity-chart">
+    <fieldset class="equity-chart__controls"><legend>趋势图显示</legend><label><input v-model="showEquity" type="checkbox">权益</label><label><input v-model="showCash" type="checkbox">现金</label><label><input v-model="showMarketValue" type="checkbox">市值</label><label>展示范围<select v-model="range"><option value="100">全部记录</option><option value="50">最近一半记录</option><option value="25">最近四分之一记录</option></select></label></fieldset>
     <p v-if="loadState === 'LOADING'" class="equity-chart__state" role="status">
       正在加载趋势图…
     </p>
@@ -134,6 +145,10 @@ function safeChartYuan(value: string | null): number | null {
 </template>
 
 <style scoped>
+.equity-chart__controls { display: flex; flex-wrap: wrap; gap: var(--space-3); border: var(--border-technical); }
+.equity-chart__controls label { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; }
+.equity-chart__controls select { min-height: 44px; color: inherit; background: var(--color-surface-raised); }
+.equity-chart__controls :focus-visible { outline: 3px solid var(--color-focus-ring); }
 .equity-chart {
   display: grid;
   gap: var(--space-2);

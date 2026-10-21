@@ -18,6 +18,7 @@ const labels = { REPLACED: "计划替换", CONTINUED: "计划延续", NO_AUTHORI
         <h4>第 {{ item.event.sequence }} 条 · {{ labels[item.event.payload.kind] }}</h4>
         <time :datetime="item.eventAt">{{ formatDisplayDateTime(item.eventAt) }}</time>
         <div class="loop-timeline__actions"><button type="button" @click="emit('select', item.event.event_id)">查看这条记录</button><button v-if="item.event.cause_event_id" type="button" @click="emit('select', item.event.cause_event_id)">追溯原因</button></div>
+        <details><summary>展开记录明细</summary>
         <p class="identity">事件 {{ item.event.event_id }}<span v-if="item.event.cause_event_id"><br>原因事件 {{ item.event.cause_event_id }}</span></p>
         <p v-if="item.schemaVersion === 'monitor-loop-event-v2'" class="identity">版本 {{ item.event.version_id ?? '无有效版本' }} · 权限 {{ item.event.authority_id ?? '无有效权限' }}</p>
         <template v-if="item.event.payload.kind === 'REPLACED' || item.event.payload.kind === 'CONTINUED' || item.event.payload.kind === 'NO_AUTHORITY'">
@@ -60,12 +61,19 @@ const labels = { REPLACED: "计划替换", CONTINUED: "计划延续", NO_AUTHORI
           <p>权益 {{ money(item.event.payload.valuation.equity_fen) }} · {{ item.event.payload.valuation.valuation_valid ? '估值有效' : '估值受限' }}</p>
           <p v-for="blocker in item.event.payload.valuation.blockers" :key="blocker">{{ blocker }}</p>
         </template>
+        </details>
       </li>
     </ol>
   </section>
 </template>
 
 <style scoped>
+li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+li > time { grid-column: 1; }
+.loop-timeline__actions { grid-column: 2; grid-row: 1 / 3; flex-wrap: wrap; }
+li > details { grid-column: 1 / -1; }
+li > details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: .8125rem; }
+@media (max-width: 48rem) { li { grid-template-columns: minmax(0, 1fr); } .loop-timeline__actions { grid-column: 1; grid-row: auto; } }
 .loop-timeline { min-width: 0; }
 .loop-timeline__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 button { min-height: 2.75rem; cursor: pointer; padding: var(--space-2) var(--space-3); border: var(--border-technical); border-radius: var(--radius-control); background: var(--color-surface-raised); color: inherit; }

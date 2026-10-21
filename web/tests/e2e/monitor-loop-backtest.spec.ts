@@ -416,9 +416,13 @@ test("four complete plans produce one continuous account and one run in real Chr
   expect(run.report.cycle.fills).toBe(2); expect(run.report.final_account.cash.balance_fen).toBe(1019000);
   expect(run.report.final_inventory.total_qty).toBe(0); expect(run.report.metrics.paid_fees_fen).toBe(1000);
   expect(run.report.metrics.realized_pnl_fen).toBe(19000);
-  await expect(page.getByRole("region", { name: "冻结版本日历", exact: true }).locator("li")).toHaveCount(4);
+  await expect(page.getByRole("group", { name: "选择生效版本", exact: true }).getByRole("button")).toHaveCount(4);
+  const contextIndex = run.versions.findIndex((version: { accountContext?: { tactical_qty?: number } | null }) => version.accountContext?.tactical_qty === 200);
+  expect(contextIndex).toBeGreaterThanOrEqual(0);
+  await page.getByRole("group", { name: "选择生效版本", exact: true }).getByRole("button").nth(contextIndex).click();
   await expect(page.getByRole("region", { name: "冻结版本日历", exact: true })).toContainText("机动 200 股");
   await expect(page.getByTestId("monitor-loop-summary")).toContainText("10190.00 元");
+  await page.getByText("账户与运行设置", { exact: true }).click();
   const savedCosts = page.getByRole("region", { name: "本次回测费用参数", exact: true });
   await expect(savedCosts.locator("dd")).toHaveText(["0%", "5.00 元/笔", "0%", "0%", "0.00 元/股", "0.00 元/股"]);
   const historyWrites: string[] = [];
@@ -427,6 +431,7 @@ test("four complete plans produce one continuous account and one run in real Chr
   };
   page.on("request", auditHistory);
   await page.reload();
+  await page.getByText("账户与运行设置", { exact: true }).click();
   await expect(savedCosts.locator("dd")).toHaveText(["0%", "5.00 元/笔", "0%", "0%", "0.00 元/股", "0.00 元/股"]);
   expect(await (await page.request.get(url + "/api/v1/backtest-runs/" + receipt.runId)).json()).toEqual(run);
   expect(historyWrites).toEqual([]);
@@ -445,6 +450,7 @@ test("four complete plans produce one continuous account and one run in real Chr
   }
   await page.getByTestId("result-tab-equity").click();
   await expect(page.getByRole("heading", { name: "完整权益序列", exact: true })).toBeVisible();
+  await page.getByText("查看完整精确数值表", { exact: true }).click();
   await expect(page.getByRole("table").locator("tbody tr")).toHaveCount(7);
   await expect(page.getByRole("table")).toContainText("10190.00");
   await expect(page.getByTestId("backtest-equity-chart").locator("canvas")).toBeVisible();

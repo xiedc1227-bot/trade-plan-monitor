@@ -4,6 +4,7 @@ import { formatDisplayDateTime } from "../../formatters/dateTime";
 
 interface Props {
   bars?: readonly MarketIndexBarView[];
+  dateActionLabel?: string;
   error?: string | null;
   loading?: boolean;
   points?: readonly BacktestMarketIndexPointView[];
@@ -55,7 +56,7 @@ const emit = defineEmits<{
         <tbody>
           <tr v-for="point in points" :key="`${point.tradeDate}:${point.dataAt}`">
             <th scope="row">
-              <button type="button" :data-trade-date="point.tradeDate" @click="emit('select-date', point.tradeDate)">{{ point.tradeDate }}</button>
+              <button type="button" :data-trade-date="point.tradeDate" :aria-label="dateActionLabel ? `${dateActionLabel}（参考日期 ${point.tradeDate}）` : undefined" @click="emit('select-date', point.tradeDate)">{{ point.tradeDate }}</button>
             </th>
             <td><time :datetime="point.dataAt">{{ formatDisplayDateTime(point.dataAt) }}</time></td>
             <td>{{ point.closePoints }}</td>

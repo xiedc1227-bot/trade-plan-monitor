@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BacktestReadFeedback from "../components/backtests/BacktestReadFeedback.vue";
+import { backtestReturnTarget } from "../composables/backtestNavigation";
 import {
   computed,
   defineAsyncComponent,
@@ -58,6 +60,10 @@ const BacktestEquityChart = defineAsyncComponent(
 );
 const route = useRoute();
 const router = useRouter();
+function returnToRuns(event: MouseEvent) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  event.preventDefault(); void router.push(backtestReturnTarget().path);
+}
 const api = props.api ?? createBacktestApi();
 const runtimeIdentityError = shallowRef<string | null>(null);
 const resultUrlError = shallowRef<string | null>(null);
@@ -433,6 +439,7 @@ onBeforeUnmount(() => {
   <div class="run-detail-view">
     <header class="run-detail-view__hero">
       <div>
+        <a :href="backtestReturnTarget().path" data-testid="return-to-run-list" @click="returnToRuns">返回运行记录</a>
         <h1>回测结果</h1>
         <p>仅展示服务端权威任务状态与已物化历史模拟结果。</p>
       </div>
@@ -442,6 +449,8 @@ onBeforeUnmount(() => {
       本页仅供离线研究，不连接券商、不自动下单，也不复用实时监控状态。
     </aside>
 
+    <BacktestReadFeedback :slow="results.feedback.slow.value" :timed-out="results.feedback.timedOut.value" :refreshing="results.refreshing.value" :last-success="results.feedback.lastSuccess.value" @retry="results.refreshSummary" />
+    <BacktestReadFeedback :slow="results.resourceFeedback.slow.value" :timed-out="results.resourceFeedback.timedOut.value" @retry="results.refreshSelected" />
     <p
       class="run-detail-view__visually-hidden"
       data-testid="completed-job-announcement"
@@ -508,14 +517,15 @@ onBeforeUnmount(() => {
     </section>
 
     <section
-      v-else-if="
+      v-if="
         resultsEnabled &&
-        results.summaryState.value === 'READY' &&
+        (results.summaryState.value === 'READY' || results.summaryState.value === 'FAILED') &&
         results.summary.value !== null
       "
       class="run-detail-view__results"
       aria-labelledby="result-review-title"
     >
+      <p v-if="results.summaryState.value === 'FAILED'" role="status">以下为上次读取的结果，刷新尚未成功。</p>
       <BacktestProfitSummary :run="results.summary.value" />
 
       <div class="run-detail-view__results-heading">
@@ -523,6 +533,7 @@ onBeforeUnmount(() => {
           <h2 id="result-review-title">结果审阅</h2>
         </div>
         <p>选择一笔成交或一条诊断，核对当时的计划要求、实际依据和执行结果。</p>
+        <button type="button" data-testid="refresh-completed-result" :disabled="results.refreshing.value" @click="results.refreshSummary">刷新结果</button>
       </div>
 
       <nav class="run-detail-view__tabs" aria-label="回测结果资源">
@@ -803,7 +814,7 @@ onBeforeUnmount(() => {
           class="run-detail-view__equity"
         >
           <BacktestEquityChart :items="results.equitySeries.value.items" />
-          <BacktestEquityTable :items="results.equitySeries.value.items" />
+          <details class="run-detail-view__exact"><summary>查看完整精确数值表</summary><BacktestEquityTable :items="results.equitySeries.value.items" /></details>
         </div>
       </section>
 
@@ -858,6 +869,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.run-detail-view__exact { min-width: 0; }
+.run-detail-view__exact summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .run-detail-view__workspace { display: grid; gap: var(--space-4); min-width: 0; align-items: start; }
 .run-detail-view__workspace-content { min-width: 0; }
 @media (min-width: 64rem) {

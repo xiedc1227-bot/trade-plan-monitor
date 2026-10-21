@@ -310,7 +310,8 @@ describe("owned scheduled loop results", () => {
     expect(wrapper.findAll('[data-testid="monitor-loop-summary"]')).toHaveLength(1);
     const summary = wrapper.get('[data-testid="monitor-loop-summary"]');
     expect(summary.text()).toContain(run.provenance.preparationId); expect(summary.text()).toContain("连续");
-    for (const version of run.versions) {
+    for (const [index, version] of run.versions.entries()) {
+      await summary.get(`[aria-label="选择生效版本"] button:nth-child(${index + 1})`).trigger("click");
       expect(summary.text()).toContain(version.sourceId); expect(summary.text()).toContain(version.versionId);
       expect(summary.text()).toContain(version.effectiveTradeDate); expect(summary.text()).toContain(version.planHash);
     }

@@ -35,6 +35,8 @@ vi.mock("echarts/core", () => ({
 vi.mock("echarts/charts", () => ({ LineChart: {} }));
 vi.mock("echarts/components", () => ({
   GridComponent: {},
+  LegendComponent: {},
+  DataZoomComponent: {},
   TooltipComponent: {},
 }));
 vi.mock("echarts/renderers", () => ({ CanvasRenderer: {} }));
@@ -461,6 +463,13 @@ describe("BT046 equity review", () => {
       "2026-08-02 15:00:00",
     ]);
     expect(option.series[0]?.data).toEqual([1000.01, null]);
+
+    await wrapper.get('input[type="checkbox"]').setValue(false);
+    await wrapper.get("select").setValue("25");
+    expect(chartRuntime.chart.setOption).toHaveBeenLastCalledWith(expect.objectContaining({
+      legend: expect.objectContaining({ selectedMode: false, selected: { 权益: false, 现金: true, 市值: true } }),
+      dataZoom: expect.arrayContaining([expect.objectContaining({ start: 75, end: 100 })]),
+    }));
 
     wrapper.unmount();
     expect(chartRuntime.chart.dispose).toHaveBeenCalledTimes(1);

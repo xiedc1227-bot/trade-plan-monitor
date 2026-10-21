@@ -17,6 +17,8 @@ import type {
 } from "../api/generated";
 import { createBacktestApi, type BacktestApi, type BacktestRunResult } from "../api/backtests";
 
+import { useBacktestReadFeedback } from "./useBacktestReadFeedback";
+
 export type BacktestSummaryRequestState = "IDLE" | "LOADING" | "READY" | "FAILED";
 export type BacktestResultRequestState =
   | "IDLE"
@@ -42,6 +44,9 @@ const EQUITY_POINT_LIMIT = 2_000;
 
 export function useBacktestResults(options: UseBacktestResultsOptions) {
   const api = options.api ?? createBacktestApi();
+  const feedback = useBacktestReadFeedback();
+  const resourceFeedback = useBacktestReadFeedback();
+  const refreshing = shallowRef(false);
   const summary = shallowRef<BacktestRunResult | null>(null);
   const summaryState = shallowRef<BacktestSummaryRequestState>("IDLE");
   const summaryError = shallowRef<string | null>(null);
@@ -111,6 +116,7 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
   }
 
   function clearSelectedResources(): void {
+    resourceFeedback.reset();
     clearFills();
     clearDetails();
     clearEquity();
@@ -120,26 +126,27 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     const runId = toValue(options.runId);
     if (!mounted || !toValue(options.enabled) || runId === null) return;
     abortSummary();
-    clearSelectedResources();
+    if (summary.value?.runId !== runId) clearSelectedResources();
     const activeGeneration = summaryGeneration;
     const controller = new AbortController();
     summaryController = controller;
-    summary.value = null;
-    summaryState.value = "LOADING";
+    refreshing.value = summary.value?.runId === runId;
+    if (!refreshing.value) { summary.value = null; summaryState.value = "LOADING"; }
     summaryError.value = null;
     try {
-      const response = await api.getRun(runId, { signal: controller.signal });
+      const response = await feedback.read(controller.signal, signal => api.getRun(runId, { signal }));
       if (!currentSummaryRequest(controller, activeGeneration)) return;
       if (response.runId !== runId) throw new Error("run identity mismatch");
+      const wasReady = summaryState.value === "READY";
       summary.value = response;
       summaryState.value = "READY";
+      if (refreshing.value && wasReady) reconcileSelectedResource();
     } catch {
       if (!currentSummaryRequest(controller, activeGeneration)) return;
-      summary.value = null;
       summaryState.value = "FAILED";
       summaryError.value = "回测结果暂不可用，请稍后重试";
     } finally {
-      if (summaryController === controller) summaryController = null;
+      if (summaryController === controller) { summaryController = null; refreshing.value = false; }
     }
   }
 
@@ -155,11 +162,11 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     fillsError.value = null;
     const cursor = toValue(options.cursor);
     try {
-      const response = await api.listFills(
+      const response = await resourceFeedback.read(controller.signal, signal => api.listFills(
         runId,
         { ...(cursor === null ? {} : { cursor }), limit: RESULT_PAGE_LIMIT },
-        { signal: controller.signal },
-      );
+        { signal },
+      ));
       if (!currentFillsRequest(controller, activeGeneration)) return;
       if (response.items.some((item) => item.runId !== runId || (summary.value !== null && "report" in summary.value) !== ("receipt" in item))) {
         throw new Error("fill identity mismatch");
@@ -194,15 +201,15 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     detailError.value = null;
     const cursor = toValue(options.cursor);
     try {
-      const response = await api.listDetails(
+      const response = await resourceFeedback.read(controller.signal, signal => api.listDetails(
         runId,
         {
           ...(cursor === null ? {} : { cursor }),
           kind,
           limit: RESULT_PAGE_LIMIT,
         },
-        { signal: controller.signal },
-      );
+        { signal },
+      ));
       if (!currentDetailRequest(controller, activeGeneration)) return;
       if (
         response.kind !== kind ||
@@ -243,7 +250,7 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
     equityState.value = "LOADING";
     equityError.value = null;
     try {
-      const response = await api.getEquitySeries(runId, { signal: controller.signal });
+      const response = await resourceFeedback.read(controller.signal, signal => api.getEquitySeries(runId, { signal }));
       if (!currentEquityRequest(controller, activeGeneration)) return;
       if (
         response.items.length > EQUITY_POINT_LIMIT ||
@@ -373,6 +380,7 @@ export function useBacktestResults(options: UseBacktestResultsOptions) {
   });
 
   return {
+    feedback, resourceFeedback, refreshing: readonly(refreshing),
     detailError: readonly(detailError),
     detailPage: readonly(detailPage),
     detailState: readonly(detailState),

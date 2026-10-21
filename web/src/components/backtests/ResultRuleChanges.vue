@@ -5,7 +5,7 @@ import { createRuleChangesLoader, type RuleChangesLoader } from "../../api/resul
 import PlanRuleChanges from "./PlanRuleChanges.vue";
 import RiskScopeSummary from "./RiskScopeSummary.vue";
 
-const props = defineProps<{ run: DeepReadonly<BacktestScheduledRunView>; load?: RuleChangesLoader }>();
+const props = defineProps<{ run: DeepReadonly<BacktestScheduledRunView>; load?: RuleChangesLoader; selectedSourceId?: string }>();
 const defaultLoad = createRuleChangesLoader();
 const results = shallowRef<Record<string, BacktestRuleChangesView>>({});
 const errors = shallowRef<Record<string, boolean>>({});
@@ -36,7 +36,7 @@ async function read(index: number) {
   <section class="result-rules" aria-label="逐份规则对照" data-testid="result-rule-changes">
     <h4>逐份规则对照</h4>
     <p>比较本次回测冻结的完整规则。首份建立规则，后续与紧邻上一份比较；后续持仓陈述不会重置账户。</p>
-    <article v-for="(version, index) in run.versions" :key="version.sourceId" :data-testid="`result-rule-source-${index + 1}`">
+    <article v-for="(version, index) in run.versions" :key="version.sourceId" v-show="!selectedSourceId || selectedSourceId === version.sourceId" :data-testid="`result-rule-source-${index + 1}`">
       <h5>第 {{ index + 1 }} 份 · {{ version.effectiveTradeDate }} 生效</h5>
       <p>{{ version.sourceId }}<template v-if="index > 0"> · 对照上一份：{{ run.versions[index - 1]?.effectiveTradeDate }} · {{ run.versions[index - 1]?.sourceId }}</template><template v-else> · 首份，无前序计划</template></p>
       <template v-if="results[version.sourceId]">

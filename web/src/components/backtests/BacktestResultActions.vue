@@ -186,8 +186,9 @@ onBeforeUnmount(() => {
       正在提交保留状态…
     </p>
 
+    <p v-if="'report' in run" class="result-actions__boundary">当前闭环结果暂不支持文件导出，可在各结果页核对证据。</p>
     <p v-if="!('report' in run)" class="result-actions__boundary">
-      导出仅接受当前运行 ID 与固定格式；页面不读取完整文件、不创建 Blob，也不接收或显示文件路径。
+      导出包含当前运行的已记录数据。
     </p>
   </section>
 </template>

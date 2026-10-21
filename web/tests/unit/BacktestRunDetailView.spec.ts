@@ -246,6 +246,16 @@ afterEach(() => {
 });
 
 describe("BacktestRunDetailView", () => {
+  it("keeps the previous summary visible when an explicit refresh fails", async () => {
+    const getRun = vi.fn<BacktestApi["getRun"]>().mockResolvedValueOnce(run()).mockRejectedValueOnce(new Error("unavailable"));
+    const { wrapper } = await mountDetail({ api: apiWith({ getRun }) });
+    await wrapper.get('[data-testid="refresh-completed-result"]').trigger("click"); await flushPromises();
+    expect(wrapper.get('[data-testid="backtest-metrics-summary"]').text()).toContain("000001.SZ");
+    expect(wrapper.text()).toContain("上次读取的结果");
+    expect(wrapper.find('[data-testid="refresh-run-summary"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("loads the reference-index resource only for its URL tab and navigates a date to decisions", async () => {
     const getRun = vi.fn<BacktestApi["getRun"]>().mockResolvedValue(run());
     const getMarketIndexSeries = vi
