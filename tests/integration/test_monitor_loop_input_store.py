@@ -214,6 +214,7 @@ def test_scheduled_unbound_collection_rejected_before_publication(tmp_path, mism
 
 def test_scheduled_result_registration_and_restart_use_first_causal_snapshot(tmp_path):
     _, market, prepared, run_input, dataset = scheduled_frozen_case(tmp_path)
+    BacktestJobRepository(tmp_path / "results.sqlite3")
     results = BacktestResultStore(tmp_path / "results.sqlite3")
     reference = results.record_loop_input(
         prepared=prepared,
@@ -352,6 +353,7 @@ def frozen_case(tmp_path, *, days=1):
 
 def test_complete_input_and_market_copy_survive_original_record_removal(tmp_path):
     preparation, market, prepared, run_input, dataset = frozen_case(tmp_path)
+    BacktestJobRepository(tmp_path / "results.sqlite3")
     results = BacktestResultStore(tmp_path / "results.sqlite3")
     reference = results.record_loop_input(
         prepared=prepared,

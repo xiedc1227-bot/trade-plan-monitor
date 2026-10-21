@@ -302,7 +302,15 @@ class LoopInputStore:
             if path.stat().st_size > _MAX_OBJECT_BYTES:
                 raise RuntimeError("loop input object exceeds existing evidence bounds")
             with path.open("rb") as file:
-                payload = file.read(_MAX_OBJECT_BYTES + 1)
+                blocks = []
+                remaining = _MAX_OBJECT_BYTES + 1
+                while remaining:
+                    block = file.read(min(65_536, remaining))
+                    if not block:
+                        break
+                    blocks.append(block)
+                    remaining -= len(block)
+                payload = b"".join(blocks)
         except FileNotFoundError:
             raise RuntimeError("immutable loop input object is missing") from None
         domains = (domain,) if isinstance(domain, str) else domain
