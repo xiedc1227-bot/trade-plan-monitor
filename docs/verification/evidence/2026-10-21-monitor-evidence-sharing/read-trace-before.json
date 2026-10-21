@@ -1,0 +1,682 @@
+[
+  {
+    "kind": "read-start",
+    "wall": 1792564994.9221025,
+    "monotonic": 1748962.1435432,
+    "processCpu": 17.1875,
+    "thread": 81684,
+    "id": 3,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792564994.952439,
+    "monotonic": 1748962.1738796,
+    "processCpu": 17.21875,
+    "thread": 87496,
+    "id": 3,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565000.2479663,
+    "monotonic": 1748967.4694068,
+    "processCpu": 22.53125,
+    "thread": 87496,
+    "id": 3,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.25
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565000.4493103,
+    "monotonic": 1748967.6707511,
+    "processCpu": 22.71875,
+    "thread": 81684,
+    "id": 3,
+    "source": "get_dashboard",
+    "candidates": 2028
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565002.6206052,
+    "monotonic": 1748969.8420462,
+    "processCpu": 24.125,
+    "thread": 81684,
+    "id": 5,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565002.648357,
+    "monotonic": 1748969.8697971,
+    "processCpu": 24.15625,
+    "thread": 87496,
+    "id": 5,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565007.005124,
+    "monotonic": 1748974.2265647,
+    "processCpu": 28.484375,
+    "thread": 87496,
+    "id": 5,
+    "source": "heartbeat",
+    "candidates": 2028,
+    "threadCpu": 4.328125
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565007.0418108,
+    "monotonic": 1748974.2632516,
+    "processCpu": 28.515625,
+    "thread": 81684,
+    "id": 5,
+    "source": "heartbeat",
+    "candidates": 2028
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565020.4803345,
+    "monotonic": 1748987.7017753,
+    "processCpu": 28.578125,
+    "thread": 81684,
+    "id": 6,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565020.5135775,
+    "monotonic": 1748987.735018,
+    "processCpu": 28.625,
+    "thread": 87496,
+    "id": 6,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565024.2019434,
+    "monotonic": 1748991.4233839,
+    "processCpu": 32.21875,
+    "thread": 87496,
+    "id": 6,
+    "source": "heartbeat",
+    "candidates": 2028,
+    "threadCpu": 3.578125
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565024.2712512,
+    "monotonic": 1748991.4926918,
+    "processCpu": 32.28125,
+    "thread": 87496,
+    "id": 6,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565037.5008972,
+    "monotonic": 1749004.7223381,
+    "processCpu": 45.953125,
+    "thread": 87496,
+    "id": 6,
+    "source": "heartbeat",
+    "candidates": 4056,
+    "threadCpu": 4.828125
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565038.5807016,
+    "monotonic": 1749005.8021428,
+    "processCpu": 47.15625,
+    "thread": 81684,
+    "id": 6,
+    "source": "heartbeat",
+    "candidates": 4056
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565024.847359,
+    "monotonic": 1748992.0687998,
+    "processCpu": 32.859375,
+    "thread": 81684,
+    "id": 7,
+    "source": "get_health",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565025.6782057,
+    "monotonic": 1748992.8996461,
+    "processCpu": 33.71875,
+    "thread": 83568,
+    "id": 7,
+    "source": "get_health"
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565026.3906806,
+    "monotonic": 1748993.6121209,
+    "processCpu": 34.4375,
+    "thread": 81684,
+    "id": 8,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565027.84309,
+    "monotonic": 1748995.0645313,
+    "processCpu": 35.9375,
+    "thread": 81684,
+    "id": 9,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565028.9817061,
+    "monotonic": 1748996.2031469,
+    "processCpu": 37.078125,
+    "thread": 81684,
+    "id": 10,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565028.9818118,
+    "monotonic": 1748996.2032523,
+    "processCpu": 37.078125,
+    "thread": 12292,
+    "id": 8,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565028.9819374,
+    "monotonic": 1748996.203378,
+    "processCpu": 37.09375,
+    "thread": 19596,
+    "id": 9,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565030.2164295,
+    "monotonic": 1748997.43787,
+    "processCpu": 38.296875,
+    "thread": 95088,
+    "id": 10,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565042.633646,
+    "monotonic": 1749009.8550868,
+    "processCpu": 51.125,
+    "thread": 83568,
+    "id": 7,
+    "source": "get_health",
+    "candidates": 2028,
+    "threadCpu": 4.5
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565043.592596,
+    "monotonic": 1749010.8140371,
+    "processCpu": 52.109375,
+    "thread": 81684,
+    "id": 7,
+    "source": "get_health",
+    "candidates": 2028
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565047.2768445,
+    "monotonic": 1749014.4982854,
+    "processCpu": 55.8125,
+    "thread": 81684,
+    "id": 12,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565047.9417274,
+    "monotonic": 1749015.163168,
+    "processCpu": 56.46875,
+    "thread": 12292,
+    "id": 8,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.5
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565048.7147112,
+    "monotonic": 1749015.9361522,
+    "processCpu": 57.265625,
+    "thread": 19596,
+    "id": 9,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.59375
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565049.1671133,
+    "monotonic": 1749016.3885541,
+    "processCpu": 57.734375,
+    "thread": 81684,
+    "id": 13,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565049.7885847,
+    "monotonic": 1749017.0100255,
+    "processCpu": 58.390625,
+    "thread": 95088,
+    "id": 10,
+    "source": "heartbeat",
+    "candidates": 2028,
+    "threadCpu": 4.59375
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565049.9657261,
+    "monotonic": 1749017.1871668,
+    "processCpu": 58.59375,
+    "thread": 19596,
+    "id": 13,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565049.9657717,
+    "monotonic": 1749017.1872123,
+    "processCpu": 58.59375,
+    "thread": 95088,
+    "id": 12,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565050.5308008,
+    "monotonic": 1749017.7522419,
+    "processCpu": 59.25,
+    "thread": 81684,
+    "id": 9,
+    "source": "get_dashboard",
+    "candidates": 2028
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565052.0975034,
+    "monotonic": 1749019.3189444,
+    "processCpu": 60.796875,
+    "thread": 81684,
+    "id": 10,
+    "source": "heartbeat",
+    "candidates": 2028
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565054.8385046,
+    "monotonic": 1749022.0599452,
+    "processCpu": 63.640625,
+    "thread": 81684,
+    "id": 14,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565055.8633463,
+    "monotonic": 1749023.084787,
+    "processCpu": 64.65625,
+    "thread": 12292,
+    "id": 8,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565056.9059312,
+    "monotonic": 1749024.1273718,
+    "processCpu": 65.734375,
+    "thread": 83568,
+    "id": 14,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565061.6358852,
+    "monotonic": 1749028.8573261,
+    "processCpu": 70.421875,
+    "thread": 95088,
+    "id": 12,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.328125
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565062.5212183,
+    "monotonic": 1749029.7426588,
+    "processCpu": 71.3125,
+    "thread": 19596,
+    "id": 13,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.375
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565064.1615515,
+    "monotonic": 1749031.3829919,
+    "processCpu": 72.953125,
+    "thread": 19596,
+    "id": 12,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565066.9589071,
+    "monotonic": 1749034.1803477,
+    "processCpu": 75.828125,
+    "thread": 95088,
+    "id": 13,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565068.6545486,
+    "monotonic": 1749035.8759896,
+    "processCpu": 77.59375,
+    "thread": 81684,
+    "id": 15,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565070.1895158,
+    "monotonic": 1749037.4109564,
+    "processCpu": 79.140625,
+    "thread": 12292,
+    "id": 8,
+    "source": "get_dashboard",
+    "candidates": 4056,
+    "threadCpu": 4.59375
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565070.4094574,
+    "monotonic": 1749037.630898,
+    "processCpu": 79.375,
+    "thread": 12292,
+    "id": 15,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565070.4867651,
+    "monotonic": 1749037.7082057,
+    "processCpu": 79.46875,
+    "thread": 81684,
+    "id": 16,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565072.175463,
+    "monotonic": 1749039.3969036,
+    "processCpu": 81.21875,
+    "thread": 83568,
+    "id": 14,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.515625
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565073.7623537,
+    "monotonic": 1749040.9837947,
+    "processCpu": 82.796875,
+    "thread": 81684,
+    "id": 8,
+    "source": "get_dashboard",
+    "candidates": 4056
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565073.7631788,
+    "monotonic": 1749040.9846193,
+    "processCpu": 82.8125,
+    "thread": 83568,
+    "id": 16,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792565073.765866,
+    "monotonic": 1749040.9873066,
+    "processCpu": 82.8125,
+    "thread": 81684,
+    "id": 17,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565078.118697,
+    "monotonic": 1749045.3401375,
+    "processCpu": 87.203125,
+    "thread": 97732,
+    "id": 17,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565078.118929,
+    "monotonic": 1749045.3403696,
+    "processCpu": 87.203125,
+    "thread": 72904,
+    "id": 14,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565081.2417743,
+    "monotonic": 1749048.463215,
+    "processCpu": 90.5,
+    "thread": 19596,
+    "id": 12,
+    "source": "get_dashboard",
+    "candidates": 4056,
+    "threadCpu": 4.703125
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565082.409989,
+    "monotonic": 1749049.6314302,
+    "processCpu": 91.71875,
+    "thread": 81684,
+    "id": 12,
+    "source": "get_dashboard",
+    "candidates": 4056
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565086.844334,
+    "monotonic": 1749054.0657745,
+    "processCpu": 96.390625,
+    "thread": 95088,
+    "id": 13,
+    "source": "get_dashboard",
+    "candidates": 4056,
+    "threadCpu": 4.59375
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565088.6068907,
+    "monotonic": 1749055.8283316,
+    "processCpu": 98.15625,
+    "thread": 81684,
+    "id": 13,
+    "source": "get_dashboard",
+    "candidates": 4056
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565090.9182858,
+    "monotonic": 1749058.1397263,
+    "processCpu": 100.546875,
+    "thread": 12292,
+    "id": 15,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.75
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565093.457698,
+    "monotonic": 1749060.6791386,
+    "processCpu": 103.171875,
+    "thread": 83568,
+    "id": 16,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.53125
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565093.7847793,
+    "monotonic": 1749061.0062197,
+    "processCpu": 103.53125,
+    "thread": 83568,
+    "id": 15,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565096.374313,
+    "monotonic": 1749063.5957538,
+    "processCpu": 106.296875,
+    "thread": 97732,
+    "id": 17,
+    "source": "get_dashboard",
+    "candidates": 2028,
+    "threadCpu": 4.609375
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565097.402197,
+    "monotonic": 1749064.6236377,
+    "processCpu": 107.296875,
+    "thread": 72904,
+    "id": 14,
+    "source": "get_dashboard",
+    "candidates": 4056,
+    "threadCpu": 4.5
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565097.4113312,
+    "monotonic": 1749064.6327718,
+    "processCpu": 107.3125,
+    "thread": 72904,
+    "id": 16,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565098.8303685,
+    "monotonic": 1749066.0518097,
+    "processCpu": 108.78125,
+    "thread": 81684,
+    "id": 14,
+    "source": "get_dashboard",
+    "candidates": 4056
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792565101.2710092,
+    "monotonic": 1749068.4924497,
+    "processCpu": 111.3125,
+    "thread": 98136,
+    "id": 17,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565105.048659,
+    "monotonic": 1749072.2700997,
+    "processCpu": 115.140625,
+    "thread": 83568,
+    "id": 15,
+    "source": "get_dashboard",
+    "candidates": 4056,
+    "threadCpu": 4.578125
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565106.548558,
+    "monotonic": 1749073.769999,
+    "processCpu": 116.671875,
+    "thread": 81684,
+    "id": 15,
+    "source": "get_dashboard",
+    "candidates": 4056
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565109.120532,
+    "monotonic": 1749076.3419724,
+    "processCpu": 119.328125,
+    "thread": 72904,
+    "id": 16,
+    "source": "get_dashboard",
+    "candidates": 4056,
+    "threadCpu": 4.390625
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565110.197063,
+    "monotonic": 1749077.4185043,
+    "processCpu": 120.4375,
+    "thread": 81684,
+    "id": 16,
+    "source": "get_dashboard",
+    "candidates": 4056
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792565113.3639643,
+    "monotonic": 1749080.5854049,
+    "processCpu": 123.703125,
+    "thread": 98136,
+    "id": 17,
+    "source": "get_dashboard",
+    "candidates": 4056,
+    "threadCpu": 4.390625
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792565113.8649025,
+    "monotonic": 1749081.0863432,
+    "processCpu": 124.25,
+    "thread": 81684,
+    "id": 17,
+    "source": "get_dashboard",
+    "candidates": 4056
+  }
+]

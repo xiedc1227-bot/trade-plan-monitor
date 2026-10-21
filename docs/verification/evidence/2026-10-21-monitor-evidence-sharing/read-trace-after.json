@@ -1,0 +1,702 @@
+[
+  {
+    "kind": "read-start",
+    "wall": 1792568146.0955684,
+    "monotonic": 1752113.3170091,
+    "processCpu": 19.796875,
+    "thread": 7944,
+    "id": 3,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568146.1326835,
+    "monotonic": 1752113.3541239,
+    "processCpu": 19.828125,
+    "thread": 96412,
+    "id": 3,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "index-start",
+    "wall": 1792568146.258401,
+    "monotonic": 1752113.4798416,
+    "processCpu": 19.953125,
+    "thread": 96412,
+    "id": 3,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "index-end",
+    "wall": 1792568150.355492,
+    "monotonic": 1752117.5769328,
+    "processCpu": 23.984375,
+    "thread": 96412,
+    "id": 3,
+    "source": "get_dashboard",
+    "threadCpu": 3.78125
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568150.3594947,
+    "monotonic": 1752117.580935,
+    "processCpu": 24.0,
+    "thread": 96412,
+    "id": 3,
+    "source": "get_dashboard",
+    "candidates": 2048,
+    "threadCpu": 3.890625,
+    "sharing": {
+      "physical_validations": 4,
+      "joins": 0,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 1
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568150.5125775,
+    "monotonic": 1752117.7340182,
+    "processCpu": 24.140625,
+    "thread": 7944,
+    "id": 3,
+    "source": "get_dashboard",
+    "candidates": 2048
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568162.6063497,
+    "monotonic": 1752129.8277903,
+    "processCpu": 25.96875,
+    "thread": 7944,
+    "id": 5,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568162.6384013,
+    "monotonic": 1752129.8598419,
+    "processCpu": 26.015625,
+    "thread": 96412,
+    "id": 5,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-start",
+    "wall": 1792568162.721532,
+    "monotonic": 1752129.9429729,
+    "processCpu": 26.078125,
+    "thread": 96412,
+    "id": 5,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-end",
+    "wall": 1792568166.667838,
+    "monotonic": 1752133.8892789,
+    "processCpu": 29.96875,
+    "thread": 96412,
+    "id": 5,
+    "source": "heartbeat",
+    "threadCpu": 3.875
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568166.6721568,
+    "monotonic": 1752133.8935975,
+    "processCpu": 29.984375,
+    "thread": 96412,
+    "id": 5,
+    "source": "heartbeat",
+    "candidates": 2048,
+    "threadCpu": 3.953125,
+    "sharing": {
+      "physical_validations": 5,
+      "joins": 0,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 1
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568166.7023225,
+    "monotonic": 1752133.923763,
+    "processCpu": 30.015625,
+    "thread": 7944,
+    "id": 5,
+    "source": "heartbeat",
+    "candidates": 2048
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568170.54455,
+    "monotonic": 1752137.7659905,
+    "processCpu": 30.0625,
+    "thread": 7944,
+    "id": 6,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568170.5737522,
+    "monotonic": 1752137.7951928,
+    "processCpu": 30.078125,
+    "thread": 96412,
+    "id": 6,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-start",
+    "wall": 1792568170.6474721,
+    "monotonic": 1752137.8689125,
+    "processCpu": 30.15625,
+    "thread": 96412,
+    "id": 6,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-end",
+    "wall": 1792568174.2734342,
+    "monotonic": 1752141.4948745,
+    "processCpu": 33.75,
+    "thread": 96412,
+    "id": 6,
+    "source": "heartbeat",
+    "threadCpu": 3.59375
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568174.2807784,
+    "monotonic": 1752141.5022192,
+    "processCpu": 33.765625,
+    "thread": 96412,
+    "id": 6,
+    "source": "heartbeat",
+    "candidates": 2048,
+    "threadCpu": 3.6875,
+    "sharing": {
+      "physical_validations": 6,
+      "joins": 0,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 1
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568174.312708,
+    "monotonic": 1752141.5341483,
+    "processCpu": 33.796875,
+    "thread": 7944,
+    "id": 6,
+    "source": "heartbeat",
+    "candidates": 2048
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568174.6288736,
+    "monotonic": 1752141.8503139,
+    "processCpu": 33.796875,
+    "thread": 7944,
+    "id": 7,
+    "source": "get_health",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568174.6606882,
+    "monotonic": 1752141.8821287,
+    "processCpu": 33.828125,
+    "thread": 96412,
+    "id": 7,
+    "source": "get_health"
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568174.7127156,
+    "monotonic": 1752141.9341559,
+    "processCpu": 33.890625,
+    "thread": 7944,
+    "id": 8,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568174.7540674,
+    "monotonic": 1752141.9755079,
+    "processCpu": 33.953125,
+    "thread": 94128,
+    "id": 8,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568174.763993,
+    "monotonic": 1752141.9854338,
+    "processCpu": 34.0,
+    "thread": 7944,
+    "id": 9,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568174.8098662,
+    "monotonic": 1752142.0313068,
+    "processCpu": 34.078125,
+    "thread": 28524,
+    "id": 9,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "compare-start",
+    "wall": 1792568174.8640416,
+    "monotonic": 1752142.0854818,
+    "processCpu": 34.171875,
+    "thread": 28524,
+    "id": 9,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "compare-start",
+    "wall": 1792568174.8640842,
+    "monotonic": 1752142.0855248,
+    "processCpu": 34.171875,
+    "thread": 94128,
+    "id": 8,
+    "source": "get_dashboard"
+  },
+  {
+    "kind": "compare-end",
+    "wall": 1792568176.072414,
+    "monotonic": 1752143.2938544,
+    "processCpu": 35.53125,
+    "thread": 94128,
+    "id": 8,
+    "source": "get_dashboard",
+    "threadCpu": 0.15625
+  },
+  {
+    "kind": "compare-end",
+    "wall": 1792568176.1456735,
+    "monotonic": 1752143.3671139,
+    "processCpu": 35.609375,
+    "thread": 28524,
+    "id": 9,
+    "source": "get_dashboard",
+    "threadCpu": 0.125
+  },
+  {
+    "kind": "index-start",
+    "wall": 1792568176.1482468,
+    "monotonic": 1752143.3696873,
+    "processCpu": 35.609375,
+    "thread": 96412,
+    "id": 7,
+    "source": "get_health"
+  },
+  {
+    "kind": "index-end",
+    "wall": 1792568179.9129589,
+    "monotonic": 1752147.1343995,
+    "processCpu": 39.359375,
+    "thread": 96412,
+    "id": 7,
+    "source": "get_health",
+    "threadCpu": 3.625
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568179.921795,
+    "monotonic": 1752147.1432354,
+    "processCpu": 39.375,
+    "thread": 96412,
+    "id": 7,
+    "source": "get_health",
+    "candidates": 2048,
+    "threadCpu": 3.765625,
+    "sharing": {
+      "physical_validations": 7,
+      "joins": 2,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 2,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 3
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568179.9231744,
+    "monotonic": 1752147.1446149,
+    "processCpu": 39.375,
+    "thread": 94128,
+    "id": 8,
+    "source": "get_dashboard",
+    "candidates": 0,
+    "threadCpu": 0.171875,
+    "sharing": {
+      "physical_validations": 7,
+      "joins": 2,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 3
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568179.9247997,
+    "monotonic": 1752147.1462402,
+    "processCpu": 39.375,
+    "thread": 28524,
+    "id": 9,
+    "source": "get_dashboard",
+    "candidates": 0,
+    "threadCpu": 0.125,
+    "sharing": {
+      "physical_validations": 7,
+      "joins": 2,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 3
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568180.1635652,
+    "monotonic": 1752147.3850056,
+    "processCpu": 39.625,
+    "thread": 7944,
+    "id": 7,
+    "source": "get_health",
+    "candidates": 2048
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568180.692662,
+    "monotonic": 1752147.9141027,
+    "processCpu": 40.25,
+    "thread": 7944,
+    "id": 8,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568180.698717,
+    "monotonic": 1752147.9201576,
+    "processCpu": 40.25,
+    "thread": 7944,
+    "id": 9,
+    "source": "get_dashboard",
+    "candidates": 0
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568186.7120824,
+    "monotonic": 1752153.9335231,
+    "processCpu": 40.6875,
+    "thread": 7944,
+    "id": 11,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568186.7392907,
+    "monotonic": 1752153.9607309,
+    "processCpu": 40.71875,
+    "thread": 96412,
+    "id": 11,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-start",
+    "wall": 1792568186.8119478,
+    "monotonic": 1752154.0333884,
+    "processCpu": 40.796875,
+    "thread": 96412,
+    "id": 11,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-end",
+    "wall": 1792568190.329463,
+    "monotonic": 1752157.5509036,
+    "processCpu": 44.265625,
+    "thread": 96412,
+    "id": 11,
+    "source": "heartbeat",
+    "threadCpu": 3.453125
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568190.3353865,
+    "monotonic": 1752157.5568272,
+    "processCpu": 44.265625,
+    "thread": 96412,
+    "id": 11,
+    "source": "heartbeat",
+    "candidates": 2048,
+    "threadCpu": 3.53125,
+    "sharing": {
+      "physical_validations": 8,
+      "joins": 2,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 1
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568190.3676534,
+    "monotonic": 1752157.5890942,
+    "processCpu": 44.296875,
+    "thread": 7944,
+    "id": 11,
+    "source": "heartbeat",
+    "candidates": 2048
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568194.326895,
+    "monotonic": 1752161.5483357,
+    "processCpu": 44.359375,
+    "thread": 7944,
+    "id": 12,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568194.3534958,
+    "monotonic": 1752161.5749364,
+    "processCpu": 44.375,
+    "thread": 96412,
+    "id": 12,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-start",
+    "wall": 1792568194.422167,
+    "monotonic": 1752161.6436074,
+    "processCpu": 44.453125,
+    "thread": 96412,
+    "id": 12,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-end",
+    "wall": 1792568197.9275303,
+    "monotonic": 1752165.1489709,
+    "processCpu": 47.953125,
+    "thread": 96412,
+    "id": 12,
+    "source": "heartbeat",
+    "threadCpu": 3.484375
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568197.9331696,
+    "monotonic": 1752165.1546104,
+    "processCpu": 47.953125,
+    "thread": 96412,
+    "id": 12,
+    "source": "heartbeat",
+    "candidates": 2048,
+    "threadCpu": 3.5625,
+    "sharing": {
+      "physical_validations": 9,
+      "joins": 2,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 1
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568197.9596648,
+    "monotonic": 1752165.1811052,
+    "processCpu": 47.984375,
+    "thread": 7944,
+    "id": 12,
+    "source": "heartbeat",
+    "candidates": 2048
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568200.7327657,
+    "monotonic": 1752167.9542062,
+    "processCpu": 48.0,
+    "thread": 7944,
+    "id": 13,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "read-start",
+    "wall": 1792568200.7601888,
+    "monotonic": 1752167.9816294,
+    "processCpu": 48.015625,
+    "thread": 7944,
+    "id": 14,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568200.760225,
+    "monotonic": 1752167.9816655,
+    "processCpu": 48.015625,
+    "thread": 96412,
+    "id": 13,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "assembly-start",
+    "wall": 1792568200.7977316,
+    "monotonic": 1752168.019172,
+    "processCpu": 48.078125,
+    "thread": 36740,
+    "id": 14,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "compare-start",
+    "wall": 1792568200.855753,
+    "monotonic": 1752168.0771934,
+    "processCpu": 48.125,
+    "thread": 36740,
+    "id": 14,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "compare-end",
+    "wall": 1792568200.9191382,
+    "monotonic": 1752168.1405787,
+    "processCpu": 48.1875,
+    "thread": 36740,
+    "id": 14,
+    "source": "heartbeat",
+    "threadCpu": 0.0625
+  },
+  {
+    "kind": "index-start",
+    "wall": 1792568200.9195766,
+    "monotonic": 1752168.1410172,
+    "processCpu": 48.203125,
+    "thread": 96412,
+    "id": 13,
+    "source": "heartbeat"
+  },
+  {
+    "kind": "index-end",
+    "wall": 1792568204.4828317,
+    "monotonic": 1752171.704272,
+    "processCpu": 51.71875,
+    "thread": 96412,
+    "id": 13,
+    "source": "heartbeat",
+    "threadCpu": 3.5
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568204.4883814,
+    "monotonic": 1752171.709822,
+    "processCpu": 51.71875,
+    "thread": 36740,
+    "id": 14,
+    "source": "heartbeat",
+    "candidates": 0,
+    "threadCpu": 0.078125,
+    "sharing": {
+      "physical_validations": 10,
+      "joins": 3,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 2
+  },
+  {
+    "kind": "assembly-end",
+    "wall": 1792568204.4886248,
+    "monotonic": 1752171.7100653,
+    "processCpu": 51.71875,
+    "thread": 96412,
+    "id": 13,
+    "source": "heartbeat",
+    "candidates": 2048,
+    "threadCpu": 3.59375,
+    "sharing": {
+      "physical_validations": 10,
+      "joins": 3,
+      "mismatches": 0,
+      "budget_fallbacks": 0,
+      "active_calls": 0,
+      "queued_owners": 0,
+      "retained_bytes": 0,
+      "peak_retained_bytes": 31855603
+    },
+    "owned": 2
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568204.5147412,
+    "monotonic": 1752171.7361818,
+    "processCpu": 51.75,
+    "thread": 7944,
+    "id": 14,
+    "source": "heartbeat",
+    "candidates": 0
+  },
+  {
+    "kind": "read-end",
+    "wall": 1792568204.5419,
+    "monotonic": 1752171.7633405,
+    "processCpu": 51.765625,
+    "thread": 7944,
+    "id": 13,
+    "source": "heartbeat",
+    "candidates": 2048
+  }
+]

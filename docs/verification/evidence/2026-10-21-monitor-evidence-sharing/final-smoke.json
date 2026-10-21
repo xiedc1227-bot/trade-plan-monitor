@@ -1,0 +1,147 @@
+{
+  "scope": "Frozen read-only monitor copy (2008 historical heads, no active plans); stable synthetic absent-owner authority and fixed clock; existing immutable result read only. Baseline original methods from 4c71bcc. No production authority acceptance implied.",
+  "reference": "monitor-reference-3b1c00bbefd3487d822fb406ede6996c.sqlite3",
+  "rows": [
+    {
+      "mode": "before",
+      "monitors": 1,
+      "result": false,
+      "round": 1,
+      "wallSeconds": 4.115770199801773,
+      "processCpuSeconds": 3.953125,
+      "authorityCalls": 2,
+      "decodedCandidates": 2008,
+      "sharing": {
+        "physical_validations": 0,
+        "joins": 0,
+        "mismatches": 0,
+        "budget_fallbacks": 0,
+        "active_calls": 0,
+        "queued_owners": 0,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 0
+      },
+      "maxLoopDelaySeconds": 0.04990219990722835,
+      "workingSetBytes": 255737856,
+      "errors": []
+    },
+    {
+      "mode": "after",
+      "monitors": 1,
+      "result": false,
+      "round": 1,
+      "wallSeconds": 3.869998199865222,
+      "processCpuSeconds": 3.796875,
+      "authorityCalls": 2,
+      "decodedCandidates": 2008,
+      "sharing": {
+        "physical_validations": 1,
+        "joins": 0,
+        "mismatches": 0,
+        "budget_fallbacks": 0,
+        "active_calls": 0,
+        "queued_owners": 0,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 30826621
+      },
+      "maxLoopDelaySeconds": 0.08043879983015359,
+      "workingSetBytes": 278929408,
+      "errors": []
+    },
+    {
+      "mode": "before",
+      "monitors": 2,
+      "result": true,
+      "round": 1,
+      "wallSeconds": 9.349399500060827,
+      "processCpuSeconds": 9.453125,
+      "authorityCalls": 4,
+      "decodedCandidates": 4016,
+      "sharing": {
+        "physical_validations": 0,
+        "joins": 0,
+        "mismatches": 0,
+        "budget_fallbacks": 0,
+        "active_calls": 0,
+        "queued_owners": 0,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 0
+      },
+      "maxLoopDelaySeconds": 0.16591479992493988,
+      "workingSetBytes": 295972864,
+      "errors": []
+    },
+    {
+      "mode": "after",
+      "monitors": 2,
+      "result": true,
+      "round": 1,
+      "wallSeconds": 5.800238299882039,
+      "processCpuSeconds": 5.921875,
+      "authorityCalls": 4,
+      "decodedCandidates": 2008,
+      "sharing": {
+        "physical_validations": 1,
+        "joins": 1,
+        "mismatches": 0,
+        "budget_fallbacks": 0,
+        "active_calls": 0,
+        "queued_owners": 0,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 30826621
+      },
+      "maxLoopDelaySeconds": 0.10939050014130772,
+      "workingSetBytes": 302501888,
+      "errors": []
+    },
+    {
+      "mode": "before",
+      "monitors": 8,
+      "result": true,
+      "round": 1,
+      "wallSeconds": 35.739128600107506,
+      "processCpuSeconds": 38.21875,
+      "authorityCalls": 16,
+      "decodedCandidates": 16064,
+      "sharing": {
+        "physical_validations": 0,
+        "joins": 0,
+        "mismatches": 0,
+        "budget_fallbacks": 0,
+        "active_calls": 0,
+        "queued_owners": 0,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 0
+      },
+      "maxLoopDelaySeconds": 0.16103149987757207,
+      "workingSetBytes": 386777088,
+      "errors": []
+    },
+    {
+      "mode": "after",
+      "monitors": 8,
+      "result": true,
+      "round": 1,
+      "wallSeconds": 6.760597600135952,
+      "processCpuSeconds": 8.9375,
+      "authorityCalls": 16,
+      "decodedCandidates": 2008,
+      "sharing": {
+        "physical_validations": 1,
+        "joins": 7,
+        "mismatches": 0,
+        "budget_fallbacks": 0,
+        "active_calls": 0,
+        "queued_owners": 0,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 30826621
+      },
+      "maxLoopDelaySeconds": 0.103368099918589,
+      "workingSetBytes": 347611136,
+      "errors": []
+    }
+  ],
+  "equalCompleteDashboards": true,
+  "equalCompleteResults": true,
+  "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+}
