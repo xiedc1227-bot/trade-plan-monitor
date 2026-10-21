@@ -907,21 +907,39 @@ class ProjectionRepository:
         )
         if not index_codes:
             return ()
-        heads = self._session.scalars(
-            select(MarketIndexSnapshotHeadRow).where(
+        candidates = self._session.execute(
+            select(MarketIndexSnapshotHeadRow, MarketIndexSnapshotRow)
+            .outerjoin(
+                MarketIndexSnapshotRow,
+                MarketIndexSnapshotHeadRow.snapshot_hash == MarketIndexSnapshotRow.snapshot_hash,
+            )
+            .where(
                 MarketIndexSnapshotHeadRow.mapping_version == normalized_mapping_version,
                 MarketIndexSnapshotHeadRow.index_code.in_(
                     tuple(index_code.value for index_code in index_codes)
                 ),
             )
-        ).all()
+            .execution_options(yield_per=128, populate_existing=True)
+        )
         latest_by_index: dict[MarketIndexCode, MarketIndexSnapshotRecord] = {}
-        for head in heads:
-            record = self.get_market_index_snapshot(head.snapshot_hash)
-            if record is None:  # pragma: no cover - foreign key protects this
+        for head, row in candidates:
+            if row is None:
                 raise ProjectionMissingDependencyError(
                     "Market-index head names a missing immutable snapshot"
                 )
+            # Every historical candidate is verified, even when it cannot win.
+            snapshot, provider_revision = _market_index_from_row(row)
+            if (
+                snapshot.mapping_version != head.mapping_version
+                or snapshot.index_code.value != head.index_code
+                or snapshot.decision_cutoff.isoformat() != head.decision_cutoff
+                or snapshot.request_set_hash != head.request_set_hash
+                or provider_revision != head.provider_content_revision
+            ):
+                raise ProjectionError("Stored market-index head crosses snapshot identity")
+            record = MarketIndexSnapshotRecord(
+                snapshot=snapshot, provider_content_revision=provider_revision,
+            )
             index_code = record.snapshot.index_code
             current = latest_by_index.get(index_code)
             incoming_rank = _market_index_snapshot_rank(record.snapshot)

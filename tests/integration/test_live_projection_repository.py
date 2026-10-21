@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from trade_plan_monitor.decision.models import (
     DataHealthSnapshot,
@@ -44,6 +44,7 @@ from trade_plan_monitor.state.events import (
 from trade_plan_monitor.state.models import PositionBucket
 from trade_plan_monitor.state.projections import (
     ProjectionError,
+    ProjectionMissingDependencyError,
     ProjectionRevisionConflictError,
 )
 from trade_plan_monitor.state.repositories import EvaluationKind, PositionLotRecord
@@ -590,5 +591,98 @@ def test_latest_dashboard_index_snapshots_are_loaded_in_display_order(tmp_path: 
         assert tuple(record.snapshot.snapshot_hash for record in restored) == tuple(
             snapshot.snapshot_hash for snapshot in snapshots
         )
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("damage", [None, "canonical", "missing", "identity"])
+def test_latest_indexes_batch_all_history_and_reject_unselected_damage(
+    tmp_path, monkeypatch, damage,
+):
+    """The newest head cannot hide corrupt older evidence or cause N+1 reads."""
+    import sqlite3
+
+    from trade_plan_monitor.state import projections
+
+    engine, factory = _unit_of_work(tmp_path / "monitor.db")
+    snapshots = tuple(
+        build_market_index_snapshot(
+            index_code=DASHBOARD_INDEX_CODES[0],
+            decision_cutoff=_BUCKET_END + timedelta(minutes=5 * index),
+            requests=(), five_minute_bars=(), official_daily_bars=(),
+            content_revision=130 - index,
+            observed_at=_EVALUATED_AT + timedelta(minutes=5 * index),
+            observed_no_later_than=_EVALUATED_AT + timedelta(minutes=5 * index),
+        )
+        for index in range(130)
+    )
+    queries = []
+    verified = []
+    decode = projections._market_index_from_row
+
+    def observed_decode(row):
+        verified.append(row.snapshot_hash)
+        return decode(row)
+
+    monkeypatch.setattr(projections, "_market_index_from_row", observed_decode)
+
+    def count(_conn, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            queries.append(statement)
+
+    try:
+        with factory() as work:
+            for snapshot in snapshots:
+                revision = snapshot.cache_key.provider_content_revision
+                work.projections.put_market_index_snapshot(
+                    snapshot, provider_content_revision=revision,
+                )
+                work.projections.advance_market_index_head(
+                    snapshot, provider_content_revision=revision,
+                )
+            work.commit()
+        # Deliberately bypass foreign keys only in isolated corrupt-storage fixtures.
+        # A 130-head history crosses the 128-row fetch boundary; damage an older head.
+        damaged_hash = snapshots[-2].snapshot_hash
+        if damage:
+            with sqlite3.connect(tmp_path / "monitor.db") as connection:
+                if damage == "canonical":
+                    connection.execute(
+                        "UPDATE market_index_snapshot SET snapshot_json=snapshot_json || ' ' "
+                        "WHERE snapshot_hash=?",
+                        (damaged_hash,),
+                    )
+                elif damage == "missing":
+                    connection.execute(
+                        "DELETE FROM market_index_snapshot WHERE snapshot_hash=?",
+                        (damaged_hash,),
+                    )
+                else:
+                    connection.execute(
+                        "UPDATE market_index_snapshot_head SET provider_content_revision=999 "
+                        "WHERE snapshot_hash=?",
+                        (damaged_hash,),
+                    )
+        verified.clear()
+        event.listen(engine, "before_cursor_execute", count)
+        with factory() as work:
+            if damage:
+                expected = (
+                    ProjectionMissingDependencyError if damage == "missing" else ProjectionError
+                )
+                with pytest.raises(expected):
+                    work.projections.list_latest_market_index_snapshots(
+                        mapping_version=snapshots[0].mapping_version,
+                        index_codes=DASHBOARD_INDEX_CODES,
+                    )
+            else:
+                restored = work.projections.list_latest_market_index_snapshots(
+                    mapping_version=snapshots[0].mapping_version, index_codes=DASHBOARD_INDEX_CODES,
+                )
+                assert tuple(item.snapshot for item in restored) == (snapshots[-1],)
+                assert restored[0].provider_content_revision == 1
+                assert len(queries) == 1
+                assert set(verified) == {item.snapshot_hash for item in snapshots}
+                assert len(verified) == len(snapshots)
     finally:
         engine.dispose()

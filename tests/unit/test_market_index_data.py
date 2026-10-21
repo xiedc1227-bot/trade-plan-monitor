@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from enum import IntEnum, StrEnum
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from trade_plan_monitor.market_index.canonical import (
     FORMULA_DEFINITION_HASH,
     canonical_decimal,
+    canonical_json,
     market_index_bar_set_hash,
     market_index_request_set_hash,
 )
@@ -29,6 +31,34 @@ from trade_plan_monitor.market_index.models import (
 )
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+
+def test_canonical_index_primitives_keep_exact_bytes_and_typed_boundaries():
+    class Label(StrEnum):
+        LIVE = "LIVE"
+
+    class Count(IntEnum):
+        ONE = 1
+
+    class Text(str):
+        pass
+
+    assert canonical_json({
+        "z": [None, True, 1, "中文", Label.LIVE, Count.ONE],
+        "d": Decimal("12.3400"), "day": date(2026, 9, 5),
+        "time": datetime(2026, 9, 5, 10, 0, tzinfo=SHANGHAI),
+    }) == (
+        '{"d":"12.34","day":"2026-09-05","time":"2026-09-05T10:00:00.000000+08:00",'
+        '"z":[null,true,1,"中文","LIVE",1]}'
+    )
+    with pytest.raises(TypeError, match="unsupported canonical"):
+        canonical_json(Text("text"))
+    with pytest.raises(ValueError, match="floating point"):
+        canonical_json(1.0)
+    with pytest.raises(ValueError, match="timezone-aware"):
+        canonical_json(datetime(2026, 9, 5))
+    with pytest.raises(ValueError, match="finite"):
+        canonical_json(Decimal("NaN"))
 
 
 def _bar(
