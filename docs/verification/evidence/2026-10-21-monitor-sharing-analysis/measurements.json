@@ -1,0 +1,160 @@
+{
+  "cpuUpperBound": {
+    "scope": "Read-only frozen monitor database copy and real immutable backtest database, no active plans, fixed clock and synthetic absent-owner authority. Isolated CPU/duplication experiment, not live authority or production sharing acceptance. Cohort upper bound does not implement admission, lifecycle or data fences.",
+    "rows": [
+      {
+        "kind": "two-monitor-reads",
+        "wallSeconds": 7.8355,
+        "processCpuSeconds": 7.8125,
+        "physicalAssemblies": 2,
+        "assemblySpans": [
+          {
+            "wallSeconds": 7.5053,
+            "threadCpuSeconds": 3.8438
+          },
+          {
+            "wallSeconds": 7.8297,
+            "threadCpuSeconds": 3.9688
+          }
+        ],
+        "authorityCallsOnLoop": 4,
+        "queries": {
+          "BEGIN": 4,
+          "SELECT": 14
+        }
+      },
+      {
+        "kind": "unshared-mixed-1",
+        "wallSeconds": 10.393,
+        "processCpuSeconds": 10.625,
+        "physicalAssemblies": 2,
+        "assemblySpans": [
+          {
+            "wallSeconds": 9.1797,
+            "threadCpuSeconds": 4.0156
+          },
+          {
+            "wallSeconds": 9.5338,
+            "threadCpuSeconds": 4.125
+          }
+        ],
+        "authorityCallsOnLoop": 4,
+        "queries": {
+          "BEGIN": 4,
+          "SELECT": 14
+        }
+      },
+      {
+        "kind": "prestarted-cohort-upper-bound-1",
+        "wallSeconds": 6.0348,
+        "processCpuSeconds": 6.0781,
+        "physicalAssemblies": 1,
+        "assemblySpans": [
+          {
+            "wallSeconds": 5.0751,
+            "threadCpuSeconds": 3.7969
+          }
+        ],
+        "authorityCallsOnLoop": 4,
+        "queries": {
+          "BEGIN": 4,
+          "SELECT": 9
+        }
+      },
+      {
+        "kind": "unshared-mixed-2",
+        "wallSeconds": 10.1057,
+        "processCpuSeconds": 10.3438,
+        "physicalAssemblies": 2,
+        "assemblySpans": [
+          {
+            "wallSeconds": 8.618,
+            "threadCpuSeconds": 4.0469
+          },
+          {
+            "wallSeconds": 8.9842,
+            "threadCpuSeconds": 4.0
+          }
+        ],
+        "authorityCallsOnLoop": 4,
+        "queries": {
+          "BEGIN": 4,
+          "SELECT": 14
+        }
+      },
+      {
+        "kind": "prestarted-cohort-upper-bound-2",
+        "wallSeconds": 6.4013,
+        "processCpuSeconds": 6.4375,
+        "physicalAssemblies": 1,
+        "assemblySpans": [
+          {
+            "wallSeconds": 5.2411,
+            "threadCpuSeconds": 4.0312
+          }
+        ],
+        "authorityCallsOnLoop": 4,
+        "queries": {
+          "BEGIN": 4,
+          "SELECT": 9
+        }
+      }
+    ],
+    "equalCompleteDashboards": true,
+    "equalCompleteResults": true,
+    "reportHash": "8a7ea022c843627419f6d02052b085fb3008e94df7059c5dcab0f421bb98871b"
+  },
+  "fenceBoundaries": {
+    "scope": "Isolated synthetic SQLite WAL fixture, no real-store writes",
+    "dataVersionSameObserverBefore": 2,
+    "dataVersionSameObserverAfterExternalCommit": 3,
+    "freshObserverDataVersion": 2,
+    "ownConnectionVersionUnchanged": true,
+    "unchangedEventSequence": 7,
+    "heldSnapshotSeesOldBytes": true,
+    "newTransactionSeesChangedBytes": true,
+    "progressTokenUnchangedAcrossDeadline": true,
+    "progressStates": [
+      "WORKING",
+      "STALLED"
+    ]
+  },
+  "rawBinding": {
+    "scope": "Feasibility only: same frozen monitor copy; deterministic raw head/payload byte binding, not an integrity validator or sharing implementation",
+    "measurements": [
+      {
+        "round": 1,
+        "wallSeconds": 0.1555,
+        "processCpuSeconds": 0.1406,
+        "candidateCount": 2008,
+        "encodedRawBytes": 32402117,
+        "digest": "fea3d68a02fe7777cba823c8e6d8bbe00d3ac4d93b68528f5bd9d14ac93f0b1b"
+      },
+      {
+        "round": 2,
+        "wallSeconds": 0.1298,
+        "processCpuSeconds": 0.125,
+        "candidateCount": 2008,
+        "encodedRawBytes": 32402117,
+        "digest": "fea3d68a02fe7777cba823c8e6d8bbe00d3ac4d93b68528f5bd9d14ac93f0b1b"
+      },
+      {
+        "round": 3,
+        "wallSeconds": 0.1305,
+        "processCpuSeconds": 0.1406,
+        "candidateCount": 2008,
+        "encodedRawBytes": 32402117,
+        "digest": "fea3d68a02fe7777cba823c8e6d8bbe00d3ac4d93b68528f5bd9d14ac93f0b1b"
+      }
+    ],
+    "medianWallSeconds": 0.1305
+  },
+  "baseline": "4c71bccfdeb5525e166d98b14dc9bc0c777d609d",
+  "limitations": [
+    "Read-only analysis and isolated fixtures only; no production sharing implementation.",
+    "CPU experiment uses a frozen monitor copy, fixed clock and synthetic absent-owner authority with no active plans.",
+    "Raw binding measures deterministic content framing/hash feasibility, not the proposed exact comparison, registry or memory accounting.",
+    "An initial live-database equality run was discarded because background index publication changed the reference data.",
+    "A restricted helper run did not reach measurement and was stopped; accepted CPU runs used the same permitted local execution environment."
+  ]
+}
