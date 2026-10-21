@@ -55,7 +55,7 @@ const preparation = usePlanPreparation({
   ...(props.preparationApi === undefined ? {} : { api: props.preparationApi }),
   ...(props.initialPreparationId === undefined ? {} : { initialPreparationId: props.initialPreparationId }),
 });
-const mode = ref<"LEGACY" | "PREPARED">(props.initialPreparationId ? "PREPARED" : "LEGACY");
+const mode = ref<"LEGACY" | "PREPARED">(props.initialPreparationId || route.query.source === "timeline" ? "PREPARED" : "LEGACY");
 watch(() => preparation.preparationId.value, (identity) => {
   if (identity && route.path === "/backtests/new" && route.query.preparationId !== identity) {
     void router.replace({ path: route.path, query: { ...route.query, preparationId: identity } });

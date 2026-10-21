@@ -19,6 +19,9 @@ import {
 import { isCalendarDate, normalizeShanghaiDateTime } from "../api/shanghaiTime";
 import { ApiClientError } from "../api/transport";
 
+import { useBacktestReadFeedback } from "./useBacktestReadFeedback";
+import { rememberBacktestPage, previousBacktestPage } from "./backtestNavigation";
+
 export type BacktestRunsQueryState = "IDLE" | "LOADING" | "READY" | "EMPTY" | "FAILED";
 export type BacktestRunSort = "completedAt_desc";
 
@@ -49,6 +52,7 @@ export interface RunFilterValidation {
 
 export interface UseBacktestRunsOptions {
   readonly api?: BacktestApi;
+  readonly enabled?: MaybeRefOrGetter<boolean>;
   readonly pushQuery: (query: LocationQueryRaw) => Promise<unknown> | unknown;
   readonly query: MaybeRefOrGetter<LocationQuery>;
   readonly replaceQuery: (query: LocationQueryRaw) => Promise<unknown> | unknown;
@@ -226,6 +230,8 @@ function responseFilters(filters: BacktestRunFiltersView): RunUrlFilters {
 
 export function useBacktestRuns(options: UseBacktestRunsOptions) {
   const api = options.api ?? createBacktestApi();
+  const feedback = useBacktestReadFeedback();
+  const refreshing = shallowRef(false);
   const parsed = shallowRef<ParsedRunUrlState>(parseUrlState(toValue(options.query)));
   const resultPage = shallowRef<BacktestRunPage | null>(null);
   const queryState = shallowRef<BacktestRunsQueryState>("IDLE");
@@ -244,21 +250,23 @@ export function useBacktestRuns(options: UseBacktestRunsOptions) {
   const nextCursor = computed(() => resultPage.value?.nextCursor ?? null);
 
   async function loadRuns(force = false): Promise<void> {
+    if (options.enabled !== undefined && !toValue(options.enabled)) return;
     const state = parsed.value;
     const query = apiQuery(state);
     const key = JSON.stringify(query);
     if (!force && key === lastQueryKey && queryState.value !== "FAILED") return;
+    const sameQuery = key === lastQueryKey;
     lastQueryKey = key;
     generation += 1;
     const activeGeneration = generation;
     controller?.abort();
     const activeController = new AbortController();
     controller = activeController;
-    resultPage.value = null;
-    queryState.value = "LOADING";
+    refreshing.value = sameQuery && resultPage.value !== null;
+    if (!refreshing.value) { resultPage.value = null; queryState.value = "LOADING"; }
     errorMessage.value = null;
     try {
-      const response = await api.listRuns(query, { signal: activeController.signal });
+      const response = await feedback.read(activeController.signal, signal => api.listRuns(query, { signal }));
       if (
         !mounted ||
         activeController.signal.aborted ||
@@ -305,20 +313,22 @@ export function useBacktestRuns(options: UseBacktestRunsOptions) {
         }
         return;
       }
-      resultPage.value = null;
+      if (!sameQuery) resultPage.value = null;
       queryState.value = "FAILED";
-      errorMessage.value = "运行记录暂不可用，请稍后重试";
+      errorMessage.value = feedback.timedOut.value ? "读取超时，请重新读取运行记录" : "运行记录暂不可用，请稍后重试";
     } finally {
-      if (controller === activeController) controller = null;
+      if (controller === activeController) { controller = null; refreshing.value = false; }
     }
   }
 
   async function reconcileQuery(): Promise<void> {
+    if (options.enabled !== undefined && !toValue(options.enabled)) { generation += 1; controller?.abort(); refreshing.value = false; lastQueryKey = null; return; }
     const activeNavigationGeneration = ++navigationGeneration;
-    const invalidatedPendingRequest = queryState.value === "LOADING";
+    const invalidatedPendingRequest = queryState.value === "LOADING" || refreshing.value;
     generation += 1;
     controller?.abort();
     controller = null;
+    refreshing.value = false;
     if (invalidatedPendingRequest) lastQueryKey = null;
     if (preserveAnnouncement) preserveAnnouncement = false;
     else announcement.value = null;
@@ -345,9 +355,17 @@ export function useBacktestRuns(options: UseBacktestRunsOptions) {
     return pushCanonicalQuery(urlQuery(filters, null, 1));
   }
 
+  const pageScope = () => `runs:${JSON.stringify(parsed.value.filters)}`;
+  const previousCursor = computed(() => previousBacktestPage(pageScope(), parsed.value.cursor));
+  function previousPage() {
+    if (previousCursor.value === undefined) return;
+    return pushCanonicalQuery(urlQuery(parsed.value.filters, previousCursor.value, Math.max(1, parsed.value.pageNumber - 1)));
+  }
+
   function nextPage(): Promise<unknown> | unknown {
     if (nextCursor.value === null) return undefined;
     announcement.value = null;
+    rememberBacktestPage(pageScope(), parsed.value.cursor, nextCursor.value);
     return pushCanonicalQuery(
       urlQuery(parsed.value.filters, nextCursor.value, parsed.value.pageNumber + 1),
     );
@@ -396,6 +414,8 @@ export function useBacktestRuns(options: UseBacktestRunsOptions) {
   });
 
   return {
+    feedback, refreshing: readonly(refreshing), previousPage, hasPrevious: computed(() => previousCursor.value !== undefined),
+    hasFilters: computed(() => Object.values(parsed.value.filters).some(v => v !== null && v !== undefined)),
     announcement: readonly(announcement),
     applyFilters,
     errorMessage: readonly(errorMessage),

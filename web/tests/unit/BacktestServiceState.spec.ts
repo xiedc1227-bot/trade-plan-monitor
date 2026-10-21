@@ -52,6 +52,21 @@ describe("backtest service transport and scoped UI", () => {
     wrapper.unmount(); await vi.advanceTimersByTimeAsync(60000);
     expect(client.getStatus).toHaveBeenCalledTimes(2);
   });
+  it("requires explicit stop confirmation and allows keeping the service running", async () => {
+    const client = api(ready());
+    const wrapper = mount(BacktestServiceState, { props: { api: client, jobApi: { listJobs: vi.fn().mockResolvedValue({ items: [] }) } } });
+    await flushPromises();
+    await wrapper.get('[data-testid="backtest-service-management-toggle"]').trigger("click");
+    const button = (label: string) => wrapper.findAll("button").find(item => item.text() === label)!;
+    await button("停止回测服务").trigger("click");
+    expect(client.stop).not.toHaveBeenCalled();
+    await button("保持服务运行").trigger("click");
+    expect(client.stop).not.toHaveBeenCalled();
+    await button("停止回测服务").trigger("click");
+    await button("确认停止服务").trigger("click"); await flushPromises();
+    expect(client.stop).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
   it("keeps healthy status compact and reveals controls only through service management", async () => {
     const client = api(ready()); const listJobs = vi.fn().mockResolvedValue({ items: [] });
     const wrapper = mount(BacktestServiceState, { props: { api: client, jobApi: { listJobs } } }); await flushPromises();

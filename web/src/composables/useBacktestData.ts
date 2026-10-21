@@ -21,6 +21,8 @@ import {
   type BacktestDatasetListQuery,
 } from "../api/backtests";
 import { isCalendarDate } from "../api/shanghaiTime";
+import { useBacktestReadFeedback } from "./useBacktestReadFeedback";
+import { rememberBacktestPage, previousBacktestPage } from "./backtestNavigation";
 import { ApiClientError } from "../api/transport";
 
 export type BacktestDataQueryState = "IDLE" | "LOADING" | "READY" | "EMPTY" | "FAILED";
@@ -230,6 +232,8 @@ function normalizeScope(scope: BacktestDatasetScopeInput): BacktestDatasetScopeI
 
 export function useBacktestData(options: UseBacktestDataOptions) {
   const api = options.api ?? createBacktestApi();
+  const feedback = useBacktestReadFeedback();
+  const refreshing = shallowRef(false);
   const createIdempotencyKey = options.createIdempotencyKey ?? defaultIdempotencyKey;
   const parsed = shallowRef<ParsedUrlState>(parseUrlState(toValue(options.query)));
   const page = shallowRef<BacktestDatasetPage | null>(null);
@@ -256,26 +260,28 @@ export function useBacktestData(options: UseBacktestDataOptions) {
     const query = datasetQuery(parsed.value);
     const key = datasetQueryKey(query);
     if (!force && key === lastDatasetQueryKey && queryState.value !== "FAILED") return;
+    const sameQuery = key === lastDatasetQueryKey;
     lastDatasetQueryKey = key;
     listGeneration += 1;
     const generation = listGeneration;
     listController?.abort();
     const controller = new AbortController();
     listController = controller;
-    queryState.value = "LOADING";
+    refreshing.value = sameQuery && page.value !== null;
+    if (!refreshing.value) { page.value = null; queryState.value = "LOADING"; }
     queryErrorMessage.value = null;
     try {
-      const response = await api.listDatasets(query, { signal: controller.signal });
+      const response = await feedback.read(controller.signal, signal => api.listDatasets(query, { signal }));
       if (!mounted || generation !== listGeneration || controller.signal.aborted) return;
       page.value = response;
       queryState.value = response.items.length === 0 ? "EMPTY" : "READY";
     } catch {
       if (!mounted || generation !== listGeneration || controller.signal.aborted) return;
-      page.value = null;
+      if (!sameQuery) page.value = null;
       queryState.value = "FAILED";
       queryErrorMessage.value = "数据集列表暂不可用，请稍后重试";
     } finally {
-      if (listController === controller) listController = null;
+      if (listController === controller) { listController = null; refreshing.value = false; }
     }
   }
 
@@ -434,10 +440,20 @@ export function useBacktestData(options: UseBacktestDataOptions) {
     return options.pushQuery(next);
   }
 
-  function nextPage(): Promise<unknown> | unknown {
-    return nextCursor.value === null
-      ? undefined
-      : options.pushQuery({ ...parsed.value.canonicalQuery, cursor: nextCursor.value });
+  const pageScope = () => `datasets:${JSON.stringify(parsed.value.filters)}`;
+  const previousCursor = computed(() => previousBacktestPage(pageScope(), parsed.value.cursor));
+  function previousPage() {
+    if (previousCursor.value === undefined) return;
+    const next = { ...parsed.value.canonicalQuery };
+    delete next.cursor;
+    if (previousCursor.value !== null) next.cursor = previousCursor.value;
+    return options.pushQuery(next);
+  }
+  function firstPage() { const next = { ...parsed.value.canonicalQuery }; delete next.cursor; return options.pushQuery(next); }
+  function nextPage() {
+    if (nextCursor.value === null) return;
+    rememberBacktestPage(pageScope(), parsed.value.cursor, nextCursor.value);
+    return options.pushQuery({ ...parsed.value.canonicalQuery, cursor: nextCursor.value });
   }
 
   watch(
@@ -463,6 +479,10 @@ export function useBacktestData(options: UseBacktestDataOptions) {
   });
 
   return {
+    feedback, refreshing: readonly(refreshing), previousPage, firstPage,
+    hasPrevious: computed(() => previousCursor.value !== undefined),
+    hasCursor: computed(() => parsed.value.cursor !== null),
+    hasFilters: computed(() => Object.values(parsed.value.filters).some(v => v !== null)),
     acceptedReceipt: readonly(acceptedReceipt),
     applyFilters,
     applyScope,

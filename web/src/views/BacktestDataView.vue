@@ -7,6 +7,7 @@ import type {
   BacktestJobView,
 } from "../api/generated";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
+import BacktestReadFeedback from "../components/backtests/BacktestReadFeedback.vue";
 import BacktestJobStatus from "../components/backtests/BacktestJobStatus.vue";
 import DatasetCoveragePanel from "../components/backtests/DatasetCoveragePanel.vue";
 import DatasetScopeForm from "../components/backtests/DatasetScopeForm.vue";
@@ -108,7 +109,7 @@ onBeforeUnmount(() => {
     <header class="backtest-data-view__hero">
       <div>
         <h1>历史数据管理</h1>
-        <p>查看历史数据覆盖与任务状态。数据由程序在开始回测后自动准备。</p>
+        <p>浏览已验证数据集；运行结果和计划历史请到对应记录中查看。</p>
       </div>
       <a href="/backtests">返回回测研究台</a>
     </header>
@@ -142,8 +143,11 @@ onBeforeUnmount(() => {
       @retry-cancellation="jobState.retryCancellation"
     />
 
+    <BacktestReadFeedback :slow="data.feedback.slow.value" :timed-out="data.feedback.timedOut.value" :refreshing="data.refreshing.value" :last-success="data.feedback.lastSuccess.value" @retry="data.refreshDatasets" />
     <DatasetCoveragePanel
       :datasets="data.datasets.value"
+      :has-previous="data.hasPrevious.value" :has-cursor="data.hasCursor.value" :has-filters="data.hasFilters.value"
+      @previous-page="data.previousPage" @first-page="data.firstPage"
       :error-message="data.queryErrorMessage.value"
       :has-more="data.hasMore.value"
       :query-state="data.queryState.value"

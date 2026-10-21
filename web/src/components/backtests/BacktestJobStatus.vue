@@ -7,6 +7,7 @@ import type {
   BacktestJobRequestState,
 } from "../../composables/useBacktestJob";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
+import { backtestIssueMessage } from "./backtestIssuePresentation";
 
 interface Props {
   cancellationState: BacktestCancellationState;
@@ -216,10 +217,6 @@ function handleDialogKeydown(event: KeyboardEvent): void {
     <div v-if="props.job !== null" class="backtest-job-status__body">
       <dl class="backtest-job-status__facts">
         <div>
-          <dt>任务</dt>
-          <dd>{{ props.job.jobId }}</dd>
-        </div>
-        <div>
           <dt>类型</dt>
           <dd>{{ kindLabels[props.job.kind] }}</dd>
         </div>
@@ -233,6 +230,7 @@ function handleDialogKeydown(event: KeyboardEvent): void {
         </div>
       </dl>
 
+      <details><summary>任务标识</summary><p>{{ props.job.jobId }}</p></details>
       <div class="backtest-job-status__progress">
         <progress
           v-if="hasKnownProgress"
@@ -259,8 +257,7 @@ function handleDialogKeydown(event: KeyboardEvent): void {
         data-testid="job-diagnostic"
       >
         <h3>服务端任务诊断</h3>
-        <p>{{ props.job.errorCode }}</p>
-        <p>{{ props.job.errorMessage }}</p>
+        <p>{{ props.job.status === 'CANCELLED' ? '本任务已取消，未生成完成结果。' : backtestIssueMessage(props.job.errorCode) }}</p><details><summary>查看诊断代码</summary><p>{{ props.job.errorCode }}</p><p>{{ props.job.errorMessage }}</p></details>
       </div>
     </div>
 
@@ -341,6 +338,7 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
+.backtest-job-status summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .backtest-job-status {
   display: grid;
   gap: var(--space-4);

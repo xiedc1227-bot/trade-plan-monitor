@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, shallowRef, useId, watch } from "vue";
+import { computed, nextTick, shallowRef, useId, useTemplateRef, watch } from "vue";
 import type { BacktestServiceApi } from "../../api/backtestService";
 import type { BacktestApi } from "../../api/backtests";
 import { useBacktestService } from "../../composables/useBacktestService";
 const props = defineProps<{ api?: BacktestServiceApi; jobApi?: Pick<BacktestApi, "listJobs"> }>();
 const service = useBacktestService({ ...(props.api ? { api: props.api } : {}), ...(props.jobApi ? { jobApi: props.jobApi } : {}) });
 const selected = shallowRef(false);
+const stopConfirmation = shallowRef(false);
+const stopTrigger = useTemplateRef<HTMLButtonElement>("stopTrigger");
+async function finishStop(confirm: boolean) { stopConfirmation.value = false; await nextTick(); stopTrigger.value?.focus(); if (confirm) void service.stop(); }
+watch(() => [service.view.value?.epoch, service.view.value?.revision], () => { stopConfirmation.value = false; });
 const managementOpen = shallowRef(false);
 const managementId = useId();
 const labels = { DISABLED: "回测服务未启用", NOT_INITIALIZED: "回测服务尚未使用", STARTING: "回测服务正在准备", READ_READY: "回测历史可读取", READY: "回测服务可执行", RECOVERING: "回测服务正在恢复", DEGRADED: "回测服务需要修复", STOPPING: "回测服务正在停止", STOPPED: "回测服务已停止" };
@@ -38,9 +42,13 @@ function resume() { if (selected.value && service.pendingJob.value) { selected.v
         <button v-if="service.canRepair.value" type="button" @click="service.retryPreparation">重新准备回测服务</button>
         <button v-if="service.uncertain.value" type="button" :disabled="service.busy.value" @click="service.retryControl">使用同一请求重试服务控制</button>
         <button v-if="service.view.value?.canRead" type="button" :disabled="service.busy.value || service.uncertain.value" @click="load">查看待恢复任务</button>
-        <button v-if="service.view.value?.epoch && !['STOPPED', 'DISABLED'].includes(service.view.value.state)" type="button" :disabled="service.busy.value || service.uncertain.value" @click="service.stop">停止回测服务</button>
+
         <a href="/">返回监控总览</a>
       </div>
+      <details class="backtest-service__advanced"><summary>高级服务管理</summary><p>停止服务会暂停新的回测操作；已有工作以服务确认状态为准。</p>
+        <button v-if="service.view.value?.epoch && !['STOPPED', 'DISABLED'].includes(service.view.value.state)" type="button" :disabled="service.busy.value || service.uncertain.value" ref="stopTrigger" @click="stopConfirmation = true">停止回测服务</button>
+        <div v-if="stopConfirmation" role="group" aria-label="确认停止回测服务"><p>确认停止回测服务？恢复后仍需明确选择历史任务。</p><button type="button" @click="finishStop(true)">确认停止服务</button><button type="button" @click="finishStop(false)">保持服务运行</button></div>
+      </details>
       <div v-if="service.pendingJob.value" class="backtest-service__pending">
         <p>待恢复任务：{{ service.pendingJob.value.jobId }}（{{ service.pendingJob.value.status }}）。恢复会允许该任务继续；不会新建任务。</p>
         <label><input v-model="selected" type="checkbox" :disabled="service.busy.value || service.uncertain.value">确认只恢复此任务</label>
@@ -51,6 +59,7 @@ function resume() { if (selected.value && service.pendingJob.value) { selected.v
   </section>
 </template>
 <style scoped>
+.backtest-service__advanced summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .backtest-service { border: 1px solid var(--color-border-quiet, #bcc4ce); border-radius: .5rem; padding: .5rem .75rem; margin-bottom: 1rem; overflow-wrap: anywhere; }
 .backtest-service__summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .backtest-service__status { margin: 0; font-size: .875rem; }
@@ -59,6 +68,6 @@ function resume() { if (selected.value && service.pendingJob.value) { selected.v
 .backtest-service__management p { margin: 0 0 .6rem; }
 .backtest-service__checked { font-size: .875rem; }
 .backtest-service__actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-.backtest-service button, .backtest-service input { min-height: 2.5rem; }
+.backtest-service button, .backtest-service input { min-height: 2.75rem; }
 .backtest-service__pending { margin-top: 1rem; }
 </style>

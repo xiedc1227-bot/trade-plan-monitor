@@ -28,6 +28,8 @@ const completedTo = shallowRef("");
 const eventEndFrom = shallowRef("");
 const eventEndTo = shallowRef("");
 const pinned = shallowRef("");
+const activeConditions = () => [props.filters.symbol, props.filters.pinned === null ? null : props.filters.pinned ? "已保留" : "未保留", props.filters.eventEndFrom ? `截止日从 ${props.filters.eventEndFrom}` : null, props.filters.eventEndTo ? `截止日至 ${props.filters.eventEndTo}` : null, props.filters.completedFrom || props.filters.completedTo ? "旧时间条件" : null].filter(Boolean).join(" · ");
+function clear() { emit("apply", { symbol: null, pinned: null, completedFrom: null, completedTo: null, eventEndFrom: null, eventEndTo: null }); }
 const errors = shallowRef<Partial<RunFilterErrors>>({});
 
 watch(
@@ -107,7 +109,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
       </ul>
     </div>
 
-    <p class="run-filters__hint">日期统一按回测覆盖的截止日筛选，不是程序实际完成运行的日期。</p>
+    <p v-if="activeConditions()" class="run-filters__hint" data-testid="active-run-filters">当前筛选：{{ activeConditions() }}</p>
     <form class="run-filters__grid" @submit.prevent="apply">
       <div class="run-filters__field">
         <label for="run-filter-symbol">股票代码 <span>可选，例如 000001.SZ</span></label>
@@ -123,6 +125,24 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
         </p>
       </div>
       <div class="run-filters__field">
+        <label for="run-filter-pinned">保留状态 <span>可选，已保留记录的明细不会被常规过期清理。</span></label>
+        <select
+          id="run-filter-pinned"
+          v-model="pinned"
+          :aria-invalid="fieldError('pinned') === undefined ? undefined : 'true'"
+          :aria-describedby="fieldError('pinned') === undefined ? undefined : 'run-filter-pinned-error'"
+        >
+          <option value="">全部</option>
+          <option value="true">仅已保留</option>
+          <option value="false">仅未保留</option>
+        </select>
+        <p v-if="fieldError('pinned')" id="run-filter-pinned-error" class="run-filters__field-error">
+          {{ fieldError("pinned") }}
+        </p>
+      </div>
+
+      <details class="run-filters__extra" data-testid="advanced-run-filters" :open="Boolean(props.filters.eventEndFrom || props.filters.eventEndTo)">
+        <summary>更多筛选 · 回测截止日期</summary><p>按回测覆盖的截止日筛选，不是实际完成日期。</p><div class="run-filters__dates">      <div class="run-filters__field">
         <label for="run-filter-end-from">回测截止日期从 <span>可选，包含当天</span></label>
         <input
           type="date"
@@ -158,23 +178,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
           {{ fieldError("eventEndTo") }}
         </p>
       </div>
-      <div class="run-filters__field">
-        <label for="run-filter-pinned">保留状态 <span>可选，已保留记录的明细不会被常规过期清理。</span></label>
-        <select
-          id="run-filter-pinned"
-          v-model="pinned"
-          :aria-invalid="fieldError('pinned') === undefined ? undefined : 'true'"
-          :aria-describedby="fieldError('pinned') === undefined ? undefined : 'run-filter-pinned-error'"
-        >
-          <option value="">全部</option>
-          <option value="true">仅已保留</option>
-          <option value="false">仅未保留</option>
-        </select>
-        <p v-if="fieldError('pinned')" id="run-filter-pinned-error" class="run-filters__field-error">
-          {{ fieldError("pinned") }}
-        </p>
-      </div>
-
+</div></details>
       <details v-if="props.filters.completedFrom || props.filters.completedTo" class="run-filters__extra" data-testid="legacy-run-filters" open>
         <summary>旧链接时间条件</summary>
         <div v-if="props.filters.completedFrom || props.filters.completedTo" class="run-filters__legacy-times">
@@ -216,7 +220,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
         </div>
       </details>
       <div class="run-filters__footer">
-        <p>按结果时间倒序显示。连续回测的结果时间为证据截止时间，不代表程序实际完成时间。</p>
+        <button type="button" data-testid="clear-run-filters" @click="clear">清空筛选</button>
         <button data-testid="apply-run-filters" type="submit">查询</button>
       </div>
     </form>
@@ -226,8 +230,8 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 <style scoped>
 .run-filters {
   display: grid;
-  gap: var(--space-5);
-  padding: var(--space-6);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: var(--border-technical);
   border-radius: var(--radius-panel);
   background: var(--color-surface-graphite);
@@ -249,7 +253,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 
 .run-filters__grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
   gap: var(--space-4);
 }
 
@@ -272,7 +276,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 
 .run-filters__field label span {
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 400;
 }
 
@@ -298,7 +302,10 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 }
 
 .run-filters__hint { margin: 0; color: var(--color-text-muted); font-size: .875rem; }
-.run-filters__extra, .run-filters__footer { grid-column: 1 / -1; }
+.run-filters__extra { grid-column: 1 / -1; }
+.run-filters__footer { grid-column: 3; grid-row: 1; align-self: end; }
+.run-filters__dates { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.run-filters__header h2 { font-size: 1rem; }
 .run-filters__extra { border-top: var(--border-technical); padding-top: var(--space-3); }
 .run-filters__extra summary { cursor: pointer; min-height: 2.75rem; }
 .run-filters__extra p, .run-filters__footer p { color: var(--color-text-muted); font-size: .875rem; }
@@ -333,6 +340,7 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 }
 
 @media (max-width: 70rem) {
+  .run-filters__footer { grid-column: 1 / -1; grid-row: auto; }
   .run-filters__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

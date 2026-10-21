@@ -5,17 +5,23 @@ import type {
 } from "../../api/generated";
 import type { BacktestDataQueryState } from "../../composables/useBacktestData";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
+import { backtestIssueMessage } from "./backtestIssuePresentation";
 
 interface Props {
   datasets: readonly BacktestDatasetView[];
   errorMessage?: string | null;
   hasMore: boolean;
+  hasPrevious?: boolean;
+  hasCursor?: boolean;
+  hasFilters?: boolean;
   queryState: BacktestDataQueryState;
   verification?: BacktestDatasetVerificationJobResultView | null;
 }
 
 interface Emits {
   nextPage: [];
+  previousPage: [];
+  firstPage: [];
   refresh: [];
 }
 
@@ -50,9 +56,9 @@ const countLabels: ReadonlyArray<{
   <section class="dataset-coverage" aria-labelledby="dataset-coverage-title">
     <header class="dataset-coverage__header">
       <div>
-        <h2 id="dataset-coverage-title">数据覆盖与已验证数据集</h2>
+        <h2 id="dataset-coverage-title">已验证数据集目录</h2>
       </div>
-      <p>浏览器只展示服务端计数和 blocker，不推断交易日或数据完整性。</p>
+      <p>目录不包含全部本地行情和冻结运行记录。</p>
     </header>
 
     <section
@@ -88,6 +94,7 @@ const countLabels: ReadonlyArray<{
 
     <div v-else-if="queryState === 'FAILED'" class="dataset-coverage__state" role="alert">
       <p>{{ errorMessage ?? "数据集列表暂不可用，请稍后重试" }}</p>
+      <p v-if="datasets.length">以下为上次读取的数据，尚未刷新成功。</p>
       <button type="button" @click="emit('refresh')">重新读取数据集列表</button>
     </div>
 
@@ -96,10 +103,11 @@ const countLabels: ReadonlyArray<{
       class="dataset-coverage__state"
       data-testid="dataset-empty"
     >
-      尚无已验证数据集。开始回测时，程序会自动检查、补齐并验证所需数据。
+      {{ hasFilters ? "没有符合筛选条件的已验证数据集，可清空筛选重试。" : "此处尚无已验证数据集，不代表之前的回测或计划记录被删除。开始回测时，程序会自动检查、补齐并验证所需数据。" }}
+      <a href="/backtests">查看运行记录</a> · <a href="/backtests/new">新建回测</a> · <a href="/backtests/new?source=timeline">查看计划历史</a>
     </p>
 
-    <div v-else-if="datasets.length > 0" class="dataset-coverage__list">
+    <div v-if="datasets.length > 0" class="dataset-coverage__list">
       <article
         v-for="item in datasets"
         :key="item.datasetHash"
@@ -109,11 +117,13 @@ const countLabels: ReadonlyArray<{
         <header class="dataset-coverage__item-header">
           <div>
             <h3>{{ item.scope.symbols.join("、") }}</h3>
-            <p>{{ item.scope.warmupStart }} → {{ item.scope.start }} → {{ item.scope.end }}</p>
+            <p>回测区间 {{ item.scope.start }} 至 {{ item.scope.end }}</p>
+            <p>{{ item.coverage.blockers.length ? "存在阻断项，暂不可用" : "已验证" }} · 验证于 {{ formatDisplayDateTime(item.verifiedAt) }}</p>
           </div>
-          <p class="dataset-coverage__hash">{{ item.datasetHash }}</p>
+          <span class="dataset-coverage__hash">{{ item.datasetHash.slice(-8) }}</span>
         </header>
 
+        <details class="dataset-coverage__details"><summary>查看覆盖计数与证据详情</summary><p>预热开始 {{ item.scope.warmupStart }}</p><p class="dataset-coverage__hash">{{ item.datasetHash }}</p>
         <dl class="dataset-coverage__counts">
           <div v-for="count in countLabels" :key="count.key">
             <dt>{{ count.label }}</dt>
@@ -131,14 +141,17 @@ const countLabels: ReadonlyArray<{
           <h4>服务端阻断项</h4>
           <p v-if="item.coverage.blockers.length === 0">无</p>
           <ul v-else>
-            <li v-for="blocker in item.coverage.blockers" :key="blocker">{{ blocker }}</li>
+            <li v-for="blocker in item.coverage.blockers" :key="blocker">{{ backtestIssueMessage(blocker) }} <code>{{ blocker }}</code></li>
           </ul>
         </section>
+        </details>
       </article>
     </div>
 
-    <footer v-if="datasets.length > 0" class="dataset-coverage__footer">
-      <p>当前仅保留服务端返回的一页，页面不会累积无界结果。</p>
+    <footer v-if="datasets.length > 0 || hasCursor" class="dataset-coverage__footer">
+      <p>本页 {{ datasets.length }} 个数据集</p>
+      <button type="button" :disabled="!hasCursor || queryState === 'LOADING'" @click="emit('firstPage')">返回第一页</button>
+      <button type="button" :disabled="!hasPrevious || queryState === 'LOADING'" @click="emit('previousPage')">上一页</button>
       <button
         v-if="hasMore"
         data-testid="next-dataset-page"
@@ -153,9 +166,12 @@ const countLabels: ReadonlyArray<{
 </template>
 
 <style scoped>
+.dataset-coverage__details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.dataset-coverage__state a { color: inherit; display: inline-flex; min-height: 44px; align-items: center; }
+.dataset-coverage__footer { flex-wrap: wrap; }
 .dataset-coverage {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-3);
 }
 
 .dataset-coverage__header,

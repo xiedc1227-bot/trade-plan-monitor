@@ -32,7 +32,7 @@ const navigationItems = [
 const backtestNavigationItems = [
   { to: "/backtests", label: "运行记录" },
   { to: "/backtests/new", label: "新建回测" },
-  { to: "/backtests/data", label: "历史数据" },
+  { to: "/backtests/data", label: "历史行情数据" },
 ] as const;
 
 const route = useRoute();

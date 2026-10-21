@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, useTemplateRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue";
 import {
   isNavigationFailure,
   NavigationFailureType,
@@ -8,7 +8,10 @@ import {
   type LocationQueryRaw,
 } from "vue-router";
 
-import type { BacktestApi } from "../api/backtests";
+import { createBacktestApi, type BacktestApi } from "../api/backtests";
+import BacktestReadFeedback from "../components/backtests/BacktestReadFeedback.vue";
+import BacktestTaskWorkspace from "../components/backtests/BacktestTaskWorkspace.vue";
+import { backtestReturnTarget, rememberBacktestReturn } from "../composables/backtestNavigation";
 import BacktestRunFilters from "../components/backtests/BacktestRunFilters.vue";
 import BacktestRunTable from "../components/backtests/BacktestRunTable.vue";
 import { useBacktestRuns } from "../composables/useBacktestRuns";
@@ -18,10 +21,17 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const api = props.api ?? createBacktestApi();
 const route = useRoute();
 const router = useRouter();
 const pageTitle = useTemplateRef<HTMLHeadingElement>("pageTitle");
+function openResult(runId: string, event: MouseEvent) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  event.preventDefault(); rememberBacktestReturn(route.fullPath, runId);
+  void router.push(`/backtests/${runId}`);
+}
 const previousTitle = document.title;
+const tasksView = computed(() => route.query.view === "tasks");
 
 async function replaceQuery(query: LocationQueryRaw): Promise<void> {
   const failure = await router.replace({ path: route.path, query });
@@ -44,17 +54,28 @@ async function pushQuery(query: LocationQueryRaw): Promise<void> {
 }
 
 const runs = useBacktestRuns({
+  enabled: () => !tasksView.value,
   ...(props.api === undefined ? {} : { api: props.api }),
   pushQuery,
   query: () => route.query,
   replaceQuery,
 });
 
-onMounted(() => {
+onMounted(async () => {
   document.title = "回测运行记录 · Trade Plan Monitor";
   pageTitle.value?.focus();
+  await nextTick();
 });
 
+watch(runs.queryState, async state => {
+  if (state !== "READY") return;
+  await nextTick();
+  const target = backtestReturnTarget();
+  if (target.path === route.fullPath && /^[a-f0-9]{64}$/.test(target.runId)) {
+    document.querySelector<HTMLElement>(`[data-run-id="${target.runId}"]`)?.focus();
+    rememberBacktestReturn(target.path, "");
+  }
+});
 onBeforeUnmount(() => {
   document.title = previousTitle;
 });
@@ -65,17 +86,22 @@ onBeforeUnmount(() => {
     <header class="backtest-runs-view__hero">
       <div>
         <h1 ref="pageTitle" tabindex="-1">回测运行记录</h1>
-        <p>用历史检验规则。查看已完成的回测结果，核对每一次研究运行。</p>
+        <p>查找回测结果，查看任务进度与记录。</p>
       </div>
       <nav aria-label="回测研究导航">
         <a href="/backtests/new">新建回测</a>
-        <a href="/backtests/data">历史数据</a>
+
       </nav>
     </header>
 
-    <aside class="backtest-runs-view__boundary" aria-label="研究边界">
-      所有记录均为历史模拟，仅供研究；不连接券商、不自动下单，也不复用实时监控状态。
-    </aside>
+    <p class="backtest-runs-view__research">历史模拟，仅供研究，不连接券商、不自动下单。</p>
+    <nav class="backtest-runs-view__switch" aria-label="回测记录类型">
+      <RouterLink to="/backtests" :aria-current="!tasksView ? 'page' : undefined">结果</RouterLink>
+      <RouterLink data-testid="task-workspace-link" to="/backtests?view=tasks" :aria-current="tasksView ? 'page' : undefined">任务</RouterLink>
+    </nav>
+    <BacktestTaskWorkspace v-if="tasksView" :api="api" />
+    <template v-else>
+    <BacktestReadFeedback :slow="runs.feedback.slow.value" :timed-out="runs.feedback.timedOut.value" :refreshing="runs.refreshing.value" :last-success="runs.feedback.lastSuccess.value" @retry="runs.refresh" />
 
     <p
       v-if="runs.announcement.value !== null"
@@ -95,6 +121,8 @@ onBeforeUnmount(() => {
 
     <BacktestRunTable
       :error-message="runs.errorMessage.value"
+      :has-previous="runs.hasPrevious.value" :has-filters="runs.hasFilters.value" :refreshing="runs.refreshing.value"
+      @previous-page="runs.previousPage" @open="openResult"
       :has-more="runs.hasMore.value"
       :items="runs.items.value"
       :page-number="runs.pageNumber.value"
@@ -103,15 +131,20 @@ onBeforeUnmount(() => {
       @next-page="runs.nextPage"
       @refresh="runs.refresh"
     />
+    </template>
   </div>
 </template>
 
 <style scoped>
+.backtest-runs-view__research { margin: 0; font-size: .8125rem; color: var(--color-text-muted); }
+.backtest-runs-view__switch { display: flex; gap: var(--space-2); }
+.backtest-runs-view__switch a { min-height: 44px; display: inline-flex; align-items: center; padding-inline: var(--space-4); color: inherit; border: var(--border-technical); }
+.backtest-runs-view__switch a[aria-current] { background: var(--color-surface-raised); border-bottom-color: var(--color-signal-watch-amber); }
 .backtest-runs-view {
   display: grid;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-6);
+  gap: var(--space-3);
   width: min(100%, 90rem);
   margin-inline: auto;
   padding: 0;
@@ -123,7 +156,7 @@ onBeforeUnmount(() => {
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
-  padding-block: var(--space-4) var(--space-7);
+  padding-block: 0 var(--space-3);
   border-block-end: var(--border-technical);
 }
 
@@ -134,7 +167,7 @@ onBeforeUnmount(() => {
 }
 
 .backtest-runs-view__hero h1 {
-  font-size: clamp(1.875rem, 3vw, 2.75rem);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
   line-height: 1.3;
 }
 

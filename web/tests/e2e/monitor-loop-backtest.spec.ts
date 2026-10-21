@@ -208,7 +208,9 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   expect((await (await page.request.get(url + "/fixture/counters")).json()).extractions).toBe(3);
   const serviceManagement = page.getByTestId("backtest-service-management-toggle");
   if (await serviceManagement.getAttribute("aria-expanded") === "false") await serviceManagement.click();
+  await page.getByText("高级服务管理", { exact: true }).click();
   await page.getByRole("button", { name: "停止回测服务", exact: true }).click();
+  await page.getByRole("button", { name: "确认停止服务", exact: true }).click();
   await expect(page.getByText("回测服务已停止", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "返回监控总览", exact: true }).click();
   await expect(page.getByRole("heading", { name: "监控测试页面" })).toBeVisible();

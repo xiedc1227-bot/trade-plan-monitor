@@ -152,11 +152,47 @@ async function mountRunsView(options: {
 }
 
 describe("BacktestRunsView", () => {
+  it("retains same-query rows through a failed refresh and restores a visited previous page", async () => {
+    const refreshing = deferred<BacktestRunPage>();
+    const listRuns = vi.fn<BacktestApi["listRuns"]>()
+      .mockResolvedValueOnce(page({ hasMore: true, nextCursor: CURSOR }))
+      .mockReturnValueOnce(refreshing.promise)
+      .mockResolvedValueOnce(page({ items: [summary(2)] }))
+      .mockResolvedValueOnce(page({ hasMore: true, nextCursor: CURSOR }));
+    const { wrapper, router } = await mountRunsView({ api: apiWith({ listRuns }) });
+    await wrapper.get('[data-testid="refresh-run-list"]').trigger("click");
+    expect(wrapper.findAll('[data-testid="backtest-run-row"]')).toHaveLength(1);
+    expect(wrapper.text()).toContain("上次读取");
+    refreshing.reject(new Error("failed")); await flushPromises();
+    expect(wrapper.findAll('[data-testid="backtest-run-row"]')).toHaveLength(1);
+    expect(wrapper.get('[role="alert"]').text()).toContain("上次读取");
+    await wrapper.get('[data-testid="next-run-page"]').trigger("click"); await flushPromises();
+    expect(router.currentRoute.value.query.cursor).toBe(CURSOR);
+    await wrapper.get('[data-testid="previous-run-page"]').trigger("click"); await flushPromises();
+    expect(router.currentRoute.value.query.cursor).toBeUndefined();
+    expect(wrapper.get('[data-testid="run-page-number"]').text()).toContain("1");
+    wrapper.unmount();
+  });
+
+  it("reads accepted tasks and status filters without submitting or treating a job ID as a run", async () => {
+    const listRuns = vi.fn();
+    const listJobs = vi.fn().mockResolvedValue({ items: [{ jobId: "queued-data", status: "QUEUED", kind: "DATA_SYNC", updatedAt: COMPLETED_AT, runId: null }], nextCursor: null, hasMore: false });
+    const client = apiWith({ listJobs, listRuns });
+    const { wrapper, router } = await mountRunsView({ api: client, query: { view: "tasks" } });
+    expect(listRuns).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="task-row"]').text()).toContain("准备历史数据");
+    expect(wrapper.find('[data-testid="run-detail-link"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="task-status-filter"]').setValue("FAILED"); await flushPromises();
+    expect(router.currentRoute.value.query.status).toBe("FAILED");
+    expect(listJobs.mock.calls.some(([query]) => query.status?.includes("FAILED"))).toBe(true);
+    expect(client.submitRun).not.toHaveBeenCalled(); expect(client.syncData).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
   it("shows common filters without dataset or plan-version lookup controls", async () => {
     const { wrapper } = await mountRunsView({ api: apiWith({ listRuns: vi.fn().mockResolvedValue(page()) }) });
     expect(wrapper.get('#run-filter-end-from').attributes('type')).toBe('date');
     expect(wrapper.get('#run-filter-end-to').attributes('type')).toBe('date');
-    expect(wrapper.find('[data-testid="advanced-run-filters"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="advanced-run-filters"]').attributes("open")).toBeUndefined();
     expect(wrapper.find('[data-testid="legacy-run-filters"]').exists()).toBe(false);
     expect(wrapper.find('#run-filter-dataset-hash').exists()).toBe(false);
     expect(wrapper.find('#run-filter-plan-version').exists()).toBe(false);
@@ -587,6 +623,36 @@ describe("BacktestRunsView", () => {
     expect(runs.queryState.value).toBe("READY");
     expect(runs.errorMessage.value).toBeNull();
     expect(runs.items.value[0]?.symbol).toBe("000001.SZ");
+    wrapper.unmount();
+  });
+
+  it("restarts an interrupted refresh when URL normalization keeps the same API filters", async () => {
+    const pending = deferred<BacktestRunPage>();
+    const query = shallowRef<LocationQuery>({ page: "1", sort: "completedAt_desc" });
+    const listRuns = vi.fn<BacktestApi["listRuns"]>()
+      .mockResolvedValueOnce(page())
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue(page());
+    let runs!: ReturnType<typeof useBacktestRuns>;
+    const wrapper = mount(defineComponent({ setup() {
+      runs = useBacktestRuns({ api: apiWith({ listRuns }), query,
+        pushQuery: () => undefined,
+        replaceQuery: next => { query.value = next as LocationQuery; },
+      });
+      return () => null;
+    } }));
+    await flushPromises();
+    void runs.refresh();
+    await nextTick();
+    expect(runs.refreshing.value).toBe(true);
+    query.value = { ...query.value, unused: "remove" };
+    await flushPromises();
+    expect(listRuns).toHaveBeenCalledTimes(3);
+    expect(runs.queryState.value).toBe("READY");
+    expect(runs.refreshing.value).toBe(false);
+    pending.resolve(page({ items: [] }));
+    await flushPromises();
+    expect(runs.queryState.value).toBe("READY");
     wrapper.unmount();
   });
 

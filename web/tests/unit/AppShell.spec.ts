@@ -115,7 +115,7 @@ describe("AppShell", () => {
 
     expect(subNavigation.get('a[href="/backtests"]').text()).toBe("运行记录");
     expect(subNavigation.get('a[href="/backtests/new"]').text()).toBe("新建回测");
-    expect(subNavigation.get('a[href="/backtests/data"]').text()).toBe("历史数据");
+    expect(subNavigation.get('a[href="/backtests/data"]').text()).toBe("历史行情数据");
     expect(document.title).toBe("回测运行记录 · Trade Plan Monitor");
     expect(heading.attributes("tabindex")).toBe("-1");
     expect(document.activeElement).toBe(heading.element);
@@ -150,7 +150,7 @@ describe("AppShell", () => {
   it.each([
     ["/backtests", "运行记录"],
     ["/backtests/new", "新建回测"],
-    ["/backtests/data", "历史数据"],
+    ["/backtests/data", "历史行情数据"],
     [`/backtests/${"a".repeat(64)}`, "运行记录"],
   ])("marks the backtest section and exact sub-navigation target at %s", async (path, label) => {
     const { wrapper } = await mountShell(path, true, true);
