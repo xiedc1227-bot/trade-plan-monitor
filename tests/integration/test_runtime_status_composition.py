@@ -233,6 +233,58 @@ def test_v2_health_retains_stop_timestamp_after_supervised_runner_failure(tmp_pa
     asyncio.run(scenario())
 
 
+def test_stale_heartbeat_and_busy_checkpoint_keep_pause_until_real_cleanup(tmp_path, monkeypatch):
+    """Reproduce the observed 503 chain without releasing a failed storage fence."""
+    import sqlite3
+
+    from tushare.pro.client import DataApi
+
+    from trade_plan_monitor.state.runtime_liveness import RuntimeLivenessError
+
+    monkeypatch.setattr(DataApi, "query", lambda *a, **k: pytest.fail("provider I/O"))
+    config = tmp_path / "app.yaml"
+    config.write_text("tushare: {}\n", encoding="utf-8")
+    database = tmp_path / "monitor.sqlite3"
+    composition = create_monitor_composition(
+        config_path=config, database_path=database, monitor_contract_version=2,
+    )
+    reader, owner = composition.read_service, composition._runtime
+    state = owner._liveness_owner
+    monkeypatch.setattr(composition, "_runtime_factory", None)
+
+    async def scenario():
+        await composition.start()
+        blocker = sqlite3.connect(database, isolation_level=None)
+        blocker.execute("BEGIN")
+        blocker.execute("SELECT revision FROM runtime_liveness").fetchone()
+        # A separate admitted writer advances the durable version: old owner must fail.
+        state._liveness.touch(state._clock.now(), expected_revision=state._liveness_revision)
+        failed = asyncio.create_task(state.heartbeat())
+        with pytest.raises(RuntimeLivenessError, match="runtime liveness changed"):
+            await failed
+        owner._observe_heartbeat_result(failed)
+        try:
+            with pytest.raises(RuntimeError, match="WAL checkpoint did not complete"):
+                await owner.stop()
+            assert owner.cleanup_failed and not owner._cleanup_complete
+            assert owner._liveness_failed and reader.outstanding_work == 0
+            assert owner.runtime_generation in reader._read_owner._storage_pauses
+            with pytest.raises(ApiError):
+                await reader.get_dashboard()
+        finally:
+            blocker.rollback()
+            blocker.close()
+        await owner.stop()
+        assert owner._cleanup_complete and not reader._read_owner._storage_pauses
+        health = await reader.get_health()
+        assert health.runtime_status.lifecycle == "STOPPED"
+        assert health.runtime_status.reason_code == "RUNTIME_STOPPED"
+        assert health.runtime_generation == owner.runtime_generation
+        await composition.stop()
+
+    asyncio.run(scenario())
+
+
 def test_normal_production_entry_defers_v2_owner_and_rejects_old_clients(tmp_path, monkeypatch):
     from importlib import resources
 
