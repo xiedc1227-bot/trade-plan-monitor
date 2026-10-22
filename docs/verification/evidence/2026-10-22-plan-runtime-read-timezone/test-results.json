@@ -1,0 +1,17 @@
+{
+  "new_regression_before": {
+    "failed": 7,
+    "passed": 4
+  },
+  "new_regression_after": {
+    "passed": 11
+  },
+  "related_regression_including_new": {
+    "passed": 117
+  },
+  "ruff": "PASSED",
+  "whole_repository_suite_claimed": false,
+  "external_provider_calls": false,
+  "source_file": "src/trade_plan_monitor/web/daily_service.py",
+  "test_file": "tests/integration/test_plan_read_timezone.py"
+}

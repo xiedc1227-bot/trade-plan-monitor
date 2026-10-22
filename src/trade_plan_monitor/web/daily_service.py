@@ -253,6 +253,8 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
 
 
 def read_daily(lifecycle, *, symbol, trade_date):
+    from trade_plan_monitor.web.plan_service import _shanghai_datetime
+
     with lifecycle._unit_of_work() as work:
         accounting = DailyAccounting(work.daily)
         active = work.plans.get_active(symbol)
@@ -272,7 +274,7 @@ def read_daily(lifecycle, *, symbol, trade_date):
             if trade_date is not None:
                 return DailyInventoryResource(
                     symbol=symbol,
-                    evaluated_at=lifecycle._clock(),
+                    evaluated_at=_shanghai_datetime(lifecycle._clock()),
                     status="UNSUPPORTED",
                     reason=reason,
                     snapshot=None,
@@ -293,7 +295,10 @@ def read_daily(lifecycle, *, symbol, trade_date):
                 json.dumps(DailyAccounting(work.daily).snapshot(symbol, trade_date))
             )
             return DailyInventoryResource(
-                symbol=symbol, evaluated_at=lifecycle._clock(), status="CURRENT", snapshot=view
+                symbol=symbol,
+                evaluated_at=_shanghai_datetime(lifecycle._clock()),
+                status="CURRENT",
+                snapshot=view,
             )
         if active is not None:
             if not isinstance(active_plan, UnifiedTradePlan):
@@ -312,7 +317,9 @@ def read_daily(lifecycle, *, symbol, trade_date):
         )
         return DailyStateView(
             symbol=symbol,
-            evaluated_at=None if head is None else datetime.fromisoformat(head["updated_at"]),
+            evaluated_at=None
+            if head is None
+            else _shanghai_datetime(datetime.fromisoformat(head["updated_at"])),
             status="CURRENT" if current else "AWAITING_EVALUATION" if active else "INACTIVE",
             snapshot=None
             if head is None
