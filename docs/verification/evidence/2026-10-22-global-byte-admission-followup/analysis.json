@@ -1,0 +1,67 @@
+{
+  "scope": "Read-only metadata and query-plan analysis; no validation or performance acceptance",
+  "sqlite": "3.50.4",
+  "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+  "rows": 2008,
+  "groups": 666,
+  "groupRows": {
+    "min": 1,
+    "median": 2.0,
+    "max": 18
+  },
+  "workBounds": {
+    "min": 37620,
+    "median": 242189.0,
+    "max": 663830
+  },
+  "plans": {
+    "metadata": [
+      "SEARCH h USING INDEX sqlite_autoindex_market_index_snapshot_head_1 (mapping_version=? AND index_code=?)",
+      "SEARCH p USING INDEX sqlite_autoindex_market_index_snapshot_1 (snapshot_hash=?) LEFT-JOIN"
+    ],
+    "original": [
+      "SEARCH h USING INDEX sqlite_autoindex_market_index_snapshot_head_1 (mapping_version=? AND index_code=?)",
+      "SEARCH p USING INDEX sqlite_autoindex_market_index_snapshot_1 (snapshot_hash=?) LEFT-JOIN"
+    ],
+    "payload": [
+      "SEARCH h USING INDEX sqlite_autoindex_market_index_snapshot_head_1 (mapping_version=? AND index_code=?)",
+      "SEARCH p USING INDEX sqlite_autoindex_market_index_snapshot_1 (snapshot_hash=?) LEFT-JOIN"
+    ]
+  },
+  "sqlOnlyProbe": {
+    "scope": "One instrumented payload-only pass per variant; excludes metadata/preflight/full validation; not performance acceptance",
+    "progressInterval": 100,
+    "records": [
+      {
+        "variant": "original",
+        "statements": 1,
+        "rows": 2008,
+        "vmApprox100Steps": 64300,
+        "wallSecondsSingleInstrumentedPass": 0.035493200179189444
+      },
+      {
+        "variant": "p0_payload",
+        "statements": 666,
+        "rows": 2008,
+        "vmApprox100Steps": 3253800,
+        "wallSecondsSingleInstrumentedPass": 0.06207340001128614
+      }
+    ]
+  },
+  "baseCommit": "850d9044da163dd7f4306dcf124d9865609cff8a",
+  "sourceHashes": {
+    "scripts/experiments/global_evidence_scan.py": "f3b29fbe5aa43ec77f83386cbd18b0156d5815882bb76c58b4603da3baac2bd1",
+    "scripts/experiments/global_evidence_flights.py": "e4bcf20a974d741ba2eb905aad0c209fd9eabdc9e210436f894bfff8fc3d9081",
+    "src/trade_plan_monitor/state/index_evidence.py": "ddebda6f0401da9dd9e54ca87d796abe62d65e429af37c610fee23bc8544dc07",
+    "src/trade_plan_monitor/state/index_evidence_flights.py": "d390f239edb82c03e4c959abbdb6bac57f222494a72fa1cf5e181ca98551eee5",
+    "src/trade_plan_monitor/state/projections.py": "911dd34dcce43d1d99beeeb33b41f44ef7338d217e3fcef7104eb50b6e81ed71"
+  },
+  "limits": [
+    "Query plans are diagnostic and version-dependent.",
+    "VM count uses callbacks every 100 instructions and is approximate.",
+    "SQL probe is one original-then-P0 pass, with callback overhead and uncontrolled cache order; no end-to-end performance claim.",
+    "Payload locator sequence and row count match; this probe does not execute or certify full evidence validation.",
+    "P0 mismatches conflates unequal input with completion-fence loss; current evidence cannot numerically separate them."
+  ],
+  "inputHashUnchanged": true
+}
