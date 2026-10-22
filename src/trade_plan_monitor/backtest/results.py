@@ -41,6 +41,7 @@ from trade_plan_monitor.backtest.review_index import REVIEW_SCHEMA, index_review
 from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 from trade_plan_monitor.backtest.time import format_shanghai_datetime
+from trade_plan_monitor.diagnostics.read_tracing import read_timed
 from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 
@@ -864,6 +865,7 @@ class BacktestResultStore:
         )
         return True
 
+    @read_timed("result.input")
     def get_run_input(self, run_id: str) -> BacktestRunInput | LoopInputReference | None:
         """Return a hash-verified canonical input, or ``None`` for compatibility rows."""
 
@@ -951,6 +953,7 @@ class BacktestResultStore:
             stored, report = read_loop_publication(self, connection, summary, reference)
             return stored, report, self._loop_diagnostics(connection, stored, report)
 
+    @read_timed("result.audit")
     def _loop_diagnostics(self, connection, stored, report):
         from trade_plan_monitor.backtest.loop_diagnostics import PlanDiagnosticCollector
         from trade_plan_monitor.backtest.loop_publication import decode_audit_record

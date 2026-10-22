@@ -3,6 +3,7 @@
 from pydantic import BaseModel
 from pydantic_core import to_json
 
+from trade_plan_monitor.diagnostics.read_tracing import read_trace
 from trade_plan_monitor.web.runtime_status_models import (
     RuntimeHeartbeatFrame,
     RuntimeSnapshotRequiredFrame,
@@ -26,7 +27,8 @@ class RuntimeStatusEventStream(CommittedMonitorEventStream):
         ).model_dump(mode="json", by_alias=True)
 
     async def _current_heartbeat_frame(self, sequence: int) -> dict[str, object]:
-        health = await self._read_service.get_health()
+        with read_trace("monitor.heartbeat"):
+            health = await self._read_service.get_health()
         if isinstance(health, BaseModel):
             health = health.model_dump(mode="python", by_alias=True)
         envelope = {

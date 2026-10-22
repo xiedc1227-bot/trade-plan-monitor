@@ -618,9 +618,12 @@ async function installFakeContract(page: Page, audit: BrowserAudit): Promise<voi
         });
       } else if (key === "GET /api/v1/backtest-runs") {
         const from = url.searchParams.get("eventEndFrom"), to = url.searchParams.get("eventEndTo");
+        const symbol = url.searchParams.get("symbol");
+        const pinned = url.searchParams.has("pinned") ? url.searchParams.get("pinned") === "true" : null;
         await fulfillJson(route, { ...runPage,
-          filters: { ...runPage.filters, ...(from ? { eventEndFrom: from } : {}), ...(to ? { eventEndTo: to } : {}) },
-          items: runPage.items.filter(item => (!from || item.eventEnd >= from) && (!to || item.eventEnd <= to)),
+          filters: { ...runPage.filters, symbol, pinned, ...(from ? { eventEndFrom: from } : {}), ...(to ? { eventEndTo: to } : {}) },
+          items: runPage.items.filter(item => (!from || item.eventEnd >= from) && (!to || item.eventEnd <= to)
+            && (!symbol || item.symbol === symbol) && (pinned === null || item.pinned === pinned)),
         });
       } else if (key === "GET /api/v1/backtest-datasets") {
         await fulfillJson(route, datasetPage);
@@ -751,7 +754,10 @@ test("service management stays compact and supports keyboard disclosure at deskt
     await page.getByTestId("backtest-service-state").screenshot({ path: testInfo.outputPath(`compact-service-${width}.png`) });
     await toggle.focus(); await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    for (const name of ["刷新服务状态", "查看待恢复任务", "停止回测服务"]) await expect(panel.getByRole("button", { name, exact: true })).toBeVisible();
+    for (const name of ["刷新服务状态", "查看待恢复任务"]) await expect(panel.getByRole("button", { name, exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "停止回测服务", exact: true })).toBeHidden();
+    await panel.getByText("高级服务管理", { exact: true }).focus(); await page.keyboard.press("Enter");
+    await expect(panel.getByRole("button", { name: "停止回测服务", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "返回监控总览", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expectNoSeriousAxeViolations(page);
@@ -822,7 +828,7 @@ test("compact service controls preserve job progress, refresh, cancellation and 
   await page.waitForLoadState("networkidle"); expectCleanAudit(audit); await page.close();
 });
 
-test("run filters use inclusive coverage dates without technical lookup conditions", async ({ browser }, testInfo) => {
+test("run filters keep stock and retention controls and strip retired coverage dates", async ({ browser }, testInfo) => {
   const { audit, page } = await openPage(browser);
   await openRoute(page, ROUTES[0]);
   await expect(page.getByTestId("advanced-run-filters")).toHaveCount(0);
@@ -830,15 +836,26 @@ test("run filters use inclusive coverage dates without technical lookup conditio
   await expect(page.locator("#run-filter-dataset-hash")).toHaveCount(0);
   await expect(page.locator("#run-filter-plan-version")).toHaveCount(0);
   await expect(page.locator("#run-filter-sort")).toHaveCount(0);
-  await page.locator("#run-filter-end-from").fill("2026-08-28"); await page.locator("#run-filter-end-to").fill("2026-08-28");
-  await page.getByTestId("apply-run-filters").click();
+  await expect(page.locator("#run-filter-end-from")).toHaveCount(0);
+  await expect(page.locator("#run-filter-end-to")).toHaveCount(0);
+  const listQueries: URLSearchParams[] = [];
+  page.on("request", request => { const url = new URL(request.url()); if (url.pathname === "/api/v1/backtest-runs") listQueries.push(url.searchParams); });
+  await page.goto(`${baseUrl}/backtests?eventEndFrom=2026-08-28&eventEndTo=2026-08-28&cursor=retired.cursor_001`);
   await expect(page.getByTestId("backtest-run-row")).toHaveCount(1);
-  await expect(page).toHaveURL(url => url.searchParams.get("eventEndFrom") === "2026-08-28" && !url.searchParams.has("completedFrom"));
-  await page.locator("#run-filter-end-from").fill("2026-08-30"); await page.locator("#run-filter-end-to").fill("2026-08-30");
+  await expect(page).toHaveURL(url => !["eventEndFrom", "eventEndTo", "cursor"].some(key => url.searchParams.has(key)));
+  expect(listQueries.length).toBeGreaterThan(0);
+  expect([...listQueries[0]!.keys()]).toEqual(["limit"]);
+  await page.locator("#run-filter-symbol").fill("600000.SH");
   await page.getByTestId("apply-run-filters").click(); await expect(page.getByTestId("backtest-run-row")).toHaveCount(0);
-  await page.locator("#run-filter-end-from").fill("2026-08-28"); await page.locator("#run-filter-end-to").fill("2026-08-28");
+  await page.locator("#run-filter-symbol").fill("000001.SZ");
+  await page.locator("#run-filter-pinned").selectOption("false");
   await page.getByTestId("apply-run-filters").focus(); await page.keyboard.press("Enter");
   await expect(page.getByTestId("backtest-run-row")).toHaveCount(1);
+  await expect(page).toHaveURL(url => url.searchParams.get("symbol") === "000001.SZ" && url.searchParams.get("pinned") === "false");
+  await page.locator("#run-filter-pinned").selectOption("true");
+  await page.getByTestId("apply-run-filters").click(); await expect(page.getByTestId("backtest-run-row")).toHaveCount(0);
+  await page.locator("#run-filter-pinned").selectOption("false");
+  await page.getByTestId("apply-run-filters").click(); await expect(page.getByTestId("backtest-run-row")).toHaveCount(1);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1122,6 +1139,9 @@ test("enforces request, DOM, polling, and pre-equity ECharts bounds", async ({ b
 
   await page.getByTestId("result-tab-equity").click();
   await expect(page.getByTestId("backtest-equity-chart")).toBeVisible();
+  const exactTable = page.locator("details").filter({ has: page.getByText("查看完整精确数值表", { exact: true }) });
+  await expect(exactTable).not.toHaveAttribute("open");
+  await exactTable.locator("summary").focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("region", { name: "完整权益序列表格" })).toBeVisible();
   expect(await page.getByTestId("backtest-equity-row").count()).toBeLessThanOrEqual(2_000);
   expect(audit.chartRequests.length).toBeGreaterThan(0);

@@ -125,6 +125,7 @@ from trade_plan_monitor.decision.models import (
     EvaluationResult,
     RuleEvidence,
 )
+from trade_plan_monitor.diagnostics.read_tracing import read_timed
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
 from trade_plan_monitor.market_index.identity import resolve_board_reference
@@ -561,6 +562,7 @@ class _ProductionBacktestService:
                 raise
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
 
+    @read_timed("metadata.observe")
     async def _read_sync[ResultT](
         self, function: Callable[..., ResultT], /, *args: object, **kwargs: object,
     ) -> ResultT:

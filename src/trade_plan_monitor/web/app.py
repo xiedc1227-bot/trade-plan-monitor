@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
 from trade_plan_monitor.backtest.service_lifecycle import BacktestServiceUnavailable
+from trade_plan_monitor.diagnostics.read_tracing import configured_trace_window
 from trade_plan_monitor.web.blocked_mutations import enforce_blocked_read_only
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode, install_error_boundary
 from trade_plan_monitor.web.lifespan import (
@@ -38,6 +39,7 @@ from trade_plan_monitor.web.origin_guard import (
     LocalWebSecurityMiddleware,
     local_http_origin,
 )
+from trade_plan_monitor.web.read_tracing import ReadTracingMiddleware
 from trade_plan_monitor.web.routers.ai import AIOperationService
 from trade_plan_monitor.web.routers.ai import router as ai_router
 from trade_plan_monitor.web.routers.alerts import AlertOperationService
@@ -423,6 +425,10 @@ def create_app(
         )
     if monitor_contract_version == 2:
         install_monitor_contract_schema(app)
+    window = configured_trace_window()
+    app.state.read_trace_window = window
+    if window is not None:
+        app.add_middleware(ReadTracingMiddleware, window=window)
     return app
 
 

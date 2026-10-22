@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from anyio import to_thread
 from sqlalchemy import select
 
+from trade_plan_monitor.diagnostics.read_tracing import read_span, read_timed, read_trace
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
@@ -168,9 +169,14 @@ class RuntimeStatusReadService:
 
     async def _read(self):
         try:
-            return await self._read_owner.run(self._read_owned)
+            with read_span("monitor.observe"):
+                return await self._read_owner.run(self._read_traced)
         except EvidenceUnavailable:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
+
+    async def _read_traced(self):
+        with read_trace("monitor.read"):
+            return await self._read_owned()
 
     async def _read_owned(self):
         try:
@@ -178,7 +184,8 @@ class RuntimeStatusReadService:
                 lease = current_read_lease.get()
                 if lease is not None and lease.cancelled.is_set():
                     raise EvidenceUnavailable("Monitor observer cancelled")
-                authority = self._authority()
+                with read_span("monitor.authority_before", cpu=True):
+                    authority = self._authority()
                 if type(authority) is not RuntimeReadAuthority:
                     raise ProjectionError("Runtime authority is unavailable")
                 if self._stopped_only and authority.lifecycle != "STOPPED":
@@ -192,7 +199,8 @@ class RuntimeStatusReadService:
                 if lease is not None and lease.cancelled.is_set():
                     raise EvidenceUnavailable("Monitor observer cancelled")
                 identity_after = await to_thread.run_sync(self._identities)
-                after = self._authority()
+                with read_span("monitor.authority_after", cpu=True):
+                    after = self._authority()
                 if (
                     type(after) is RuntimeReadAuthority
                     and after.token == authority.token
@@ -215,12 +223,14 @@ class RuntimeStatusReadService:
         except Exception:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
 
+    @read_timed("monitor.activation_reread")
     def _identities(self):
         session = self._sessions()
         require_owned_recovery_session(session, (ActivePlan, PlanVersion, PlanActivationState))
         with session, session.begin():
             return _identity_rows(session)
 
+    @read_timed("monitor.snapshot")
     def _assemble(self, authority, observed):
         session = self._sessions()
         require_owned_recovery_session(session, (ActivePlan, PlanVersion, PlanActivationState))

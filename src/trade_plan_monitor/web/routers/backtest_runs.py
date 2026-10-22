@@ -14,6 +14,7 @@ from trade_plan_monitor.backtest.workbench_selection import (
     WorkbenchSelectionCommand,
     WorkbenchSelectionView,
 )
+from trade_plan_monitor.diagnostics.read_tracing import read_span, read_timed, trace_point
 from trade_plan_monitor.web.backtest_schemas import (
     BacktestJobReceipt,
     BacktestLoopRunView,
@@ -356,12 +357,14 @@ async def get_backtest_run(
     run_id: RunIdPath,
     service: BacktestRunReadServiceDependency,
 ) -> BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView:
-    value = await service.get_run(run_id=run_id)
+    with read_span("result.service"):
+        value = await service.get_run(run_id=run_id)
     if value is None:
         raise ApiError(ApiErrorCode.NOT_FOUND)
     run = _validated_run(value)
     if run.run_id != run_id:
         raise RuntimeError("backtest run service returned a mismatched run")
+    trace_point("result.endpoint_return")
     return run
 
 
@@ -439,6 +442,7 @@ async def pin_backtest_run(
     return run
 
 
+@read_timed("result.public_validation")
 def _validated_run(value: object) -> (
     BacktestRunView | BacktestLoopRunView | BacktestScheduledRunView | WorkbenchBacktestRunView
 ):

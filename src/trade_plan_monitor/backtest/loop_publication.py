@@ -37,6 +37,7 @@ from trade_plan_monitor.backtest.results import (
     _load_detail_row,
     _load_fill_row,
 )
+from trade_plan_monitor.diagnostics.read_tracing import read_span, read_timed
 from trade_plan_monitor.domain.plan_hash import plan_sha256
 
 
@@ -250,10 +251,13 @@ def stage_loop_report(
     return summary
 
 
+@read_timed("result.publication")
 def read_loop_publication(store, connection, summary, reference):
     """Verify copied input and report together in the caller's read snapshot."""
-    stored = store._get_loop_input_participant(connection, reference)
-    report = store.loop_input_store.load_report(summary.assumptions["reportHash"])
+    with read_span("result.copied_input", cpu=True):
+        stored = store._get_loop_input_participant(connection, reference)
+    with read_span("result.report", cpu=True):
+        report = store.loop_input_store.load_report(summary.assumptions["reportHash"])
     validate_report_input(stored, report)
     if summary.model_copy(update={"pinned": False}) != report_summary(stored, report):
         raise ValueError("stored loop summary does not match immutable report")
