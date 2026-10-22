@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "baselineHead": "b3238407b76a1ad3396838ca18c1a1c4ab840cf8",
+  "scope": "Deterministic in-process probes using real Starlette WebSocket, stream and read-owner classes; synthetic empty replay and health only; no real browser, database, authority or latency acceptance.",
+  "acceleratedHeartbeatSeconds": 0.01,
+  "sourceSha256": {
+    "src/trade_plan_monitor/web/websocket.py": "5c0e693c51375f2ef863c401d5d89994808ed06631cbd556e050f23b38bed939",
+    "src/trade_plan_monitor/web/runtime_status_websocket.py": "9dd337cc3b3dbabb880125c13fa871d0520e068dfac41c84ae49842119d1807e",
+    "src/trade_plan_monitor/web/monitor_read_ownership.py": "d3b59c4891db646348163802c4998c799b49af970e3ae1d0360031c98108cc7c",
+    "src/trade_plan_monitor/web/runtime_status_read_service.py": "2709ec4b1df3fce2aa27e9ee2fe319582a0aa3b08b1414bb028636bc9cf660e5",
+    "src/trade_plan_monitor/state/index_evidence_flights.py": "fac2b79d7046d2be8b7dde9a4c7d479e1e7baa87c1ae67ba21120c2298a17f2b"
+  },
+  "probes": [
+    {
+      "case": "close_before_first_heartbeat",
+      "healthCalls": 1,
+      "receiveTypes": [
+        "websocket.connect"
+      ],
+      "sendTypes": [
+        "websocket.accept",
+        "websocket.send"
+      ],
+      "unreadDisconnectMessages": 1,
+      "pending": null,
+      "finalOwnedReads": 0
+    },
+    {
+      "case": "close_during_admitted_read",
+      "healthCalls": 1,
+      "receiveTypes": [
+        "websocket.connect"
+      ],
+      "sendTypes": [
+        "websocket.accept",
+        "websocket.send"
+      ],
+      "unreadDisconnectMessages": 1,
+      "pending": {
+        "ownedReads": 1,
+        "cancelled": false,
+        "streamDone": false,
+        "disconnectConsumed": false
+      },
+      "finalOwnedReads": 0
+    }
+  ],
+  "baselineTests": {
+    "passed": 35,
+    "warnings": 1,
+    "seconds": 9.22,
+    "warning": "Existing Starlette TestClient deprecation",
+    "command": ".venv/Scripts/python.exe -m pytest tests/unit/test_monitor_read_ownership.py tests/unit/test_index_evidence_flights.py tests/integration/test_runtime_status_websocket.py tests/integration/test_runtime_status_composition.py -q --basetemp=.pytest_cache/disconnect-analysis-baseline"
+  }
+}
