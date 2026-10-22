@@ -19,6 +19,7 @@ from uuid import uuid4
 _ENTRIES = frozenset({
     "http.result", "http.monitor", "http.backtest", "monitor.read",
     "metadata.physical", "result.physical", "monitor.heartbeat", "monitor.socket",
+    "index.physical",
 })
 _STAGES = frozenset({
     "http.headers", "http.body", "metadata.admission", "metadata.observe",
@@ -29,6 +30,10 @@ _STAGES = frozenset({
     "monitor.activation_reread", "monitor.observe",
     "socket.accept", "socket.disconnect", "socket.terminal", "socket.heartbeat_admission",
     "socket.observer_cancelled", "socket.children_drained",
+    "authority.health", "authority.delivery", "authority.configuration",
+    "authority.progress", "authority.dependencies", "authority.plans",
+    "index.scan", "index.collect", "index.compare", "index.wait", "index.validate",
+    "index.input", "index.join", "index.fallback", "monitor.loop_lag",
 })
 _TRACE: ContextVar[ReadTrace | None] = ContextVar("read_trace", default=None)
 trace_window: ContextVar[ReadTraceWindow | None] = ContextVar("read_trace_window", default=None)
@@ -126,7 +131,7 @@ class ReadTrace:
                     safe[key] = value
                 elif key == "joined" and type(value) is bool:
                     safe[key] = value
-                elif key in {"count", "bytes", "statusCode"} and type(value) is int:
+                elif key in {"count", "bytes", "statusCode", "activeNs"} and type(value) is int:
                     safe[key] = max(0, min(value, 2**53 - 1))
             span = {"stage": stage, "startNs": start_ns, "endNs": end_ns,
                     "status": status, **safe}
@@ -246,3 +251,87 @@ def read_timed(stage: str):
                 return function(*args, **kwargs)
         return synchronous
     return decorate
+
+
+def trace_scan(values):
+    """Aggregate iterator advance cost; never count time spent in its consumer as CPU."""
+    trace = current_trace()
+    if trace is None:
+        return values
+
+    def scan():
+        start, active, cpu, count, status = perf_counter_ns(), 0, 0, 0, "ok"
+        iterator = iter(values)
+        try:
+            while True:
+                before, cpu_before = perf_counter_ns(), thread_time_ns()
+                try:
+                    value = next(iterator)
+                except StopIteration:
+                    return
+                finally:
+                    active += perf_counter_ns() - before
+                    cpu += thread_time_ns() - cpu_before
+                count += 1
+                yield value
+        except BaseException as error:
+            status = (
+                "cancelled"
+                if isinstance(error, (GeneratorExit, asyncio.CancelledError)) else "error"
+            )
+            raise
+        finally:
+            try:
+                close = getattr(iterator, "close", None)
+                if close is not None:
+                    close()
+            finally:
+                trace.add("index.scan", start, perf_counter_ns(), cpu_ns=cpu,
+                          status=status, count=count, activeNs=active)
+    return scan()
+
+
+@contextmanager
+def observe_loop_lag():
+    """One aggregate per owned read; a loop timer needs no detached cleanup task."""
+    trace = current_trace()
+    if trace is None:
+        yield
+        return
+    loop = asyncio.get_running_loop()
+    interval = 50_000_000
+    worst_start = worst_end = perf_counter_ns()
+    due = worst_start + interval
+    samples, handle = 0, None
+
+    def sample():
+        nonlocal due, worst_start, worst_end, samples
+        try:
+            now = perf_counter_ns()
+            if now >= due:
+                samples += 1
+                if now - due > worst_end - worst_start:
+                    worst_start, worst_end = due, now
+            due = now + interval
+        except Exception:
+            pass
+
+    try:
+        def tick():
+            nonlocal handle
+            sample()
+            try:
+                handle = loop.call_later(interval / 1e9, tick)
+            except Exception:
+                pass
+
+        handle = loop.call_later(interval / 1e9, tick)
+    except Exception:
+        handle = None
+    try:
+        yield
+    finally:
+        if handle is not None:
+            handle.cancel()
+        sample()
+        trace.add("monitor.loop_lag", worst_start, worst_end, count=samples)

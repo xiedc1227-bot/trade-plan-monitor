@@ -6,6 +6,14 @@ from itertools import zip_longest
 from threading import Condition
 from time import monotonic
 
+from trade_plan_monitor.diagnostics.read_tracing import (
+    current_trace,
+    read_span,
+    read_timed,
+    read_trace,
+    trace_point,
+)
+
 
 class EvidenceUnavailable(RuntimeError):
     """Evidence admission/cancellation cannot certify a result."""
@@ -18,11 +26,13 @@ class _Flight:
     size: int
     future: Future
     users: int = 1
+    trace_id: str | None = None
 
 
 def _outcome(verify, values):
     try:
-        return verify(values), None
+        with read_span("index.validate", cpu=True):
+            return verify(values), None
     except BaseException as error:
         # Futures never retain validator tracebacks (and their complete raw input).
         return None, (type(error), str(error)[:512])
@@ -86,6 +96,7 @@ class IndexEvidenceFlights:
                 self._retained -= flight.size
             self._condition.notify_all()
 
+    @read_timed("index.compare")
     def _compare(self, flight, scan, cancelled, deadline):
         iterator = iter(scan())
         missing = object()
@@ -123,9 +134,10 @@ class IndexEvidenceFlights:
                 self._collect_waiters += 1
                 self._condition.notify_all()
                 try:
-                    while self._busy and self._collecting == scope:
-                        self._check(cancelled, deadline)
-                        self._condition.wait(0.05)
+                    with read_span("index.wait"):
+                        while self._busy and self._collecting == scope:
+                            self._check(cancelled, deadline)
+                            self._condition.wait(0.05)
                 finally:
                     self._collect_waiters -= 1
             flight = self._active
@@ -143,7 +155,9 @@ class IndexEvidenceFlights:
             finally:
                 self._release(flight)
             if join:
-                with self._condition:
+                if flight.trace_id is not None:
+                    trace_point("index.join", physicalId=flight.trace_id, joined=True)
+                with read_span("index.wait"), self._condition:
                     while not flight.future.done():
                         self._check(cancelled, deadline)
                         self._condition.wait(0.05)
@@ -157,9 +171,10 @@ class IndexEvidenceFlights:
                 self._queued += 1
                 self._condition.notify_all()
                 try:
-                    while self._busy:
-                        self._check(cancelled, deadline)
-                        self._condition.wait(0.05)
+                    with read_span("index.wait"):
+                        while self._busy:
+                            self._check(cancelled, deadline)
+                            self._condition.wait(0.05)
                 finally:
                     self._queued -= 1
             self._check(cancelled, deadline)
@@ -167,23 +182,28 @@ class IndexEvidenceFlights:
         return self._lead(scope, scan, verify, cancelled, deadline)
 
     def _lead(self, scope, scan, verify, cancelled, deadline):
+        with read_trace("index.physical"):
+            return self._lead_owned(scope, scan, verify, cancelled, deadline)
+
+    def _lead_owned(self, scope, scan, verify, cancelled, deadline):
         buffer, size, flight = [], 0, None
         iterator = None
         try:
             iterator = iter(scan())
             fallback = False
-            for candidate in iterator:
-                self._check(cancelled, deadline)
-                required = candidate.retained_size()
-                with self._condition:
-                    if self._retained + required > self._max_bytes:
-                        fallback = True
-                        self._counts["budget_fallbacks"] += 1
-                        break
-                    self._retained += required
-                    self._peak_retained = max(self._peak_retained, self._retained)
-                    size += required
-                buffer.append(candidate)
+            with read_span("index.collect", cpu=True):
+                for candidate in iterator:
+                    self._check(cancelled, deadline)
+                    required = candidate.retained_size()
+                    with self._condition:
+                        if self._retained + required > self._max_bytes:
+                            fallback = True
+                            self._counts["budget_fallbacks"] += 1
+                            break
+                        self._retained += required
+                        self._peak_retained = max(self._peak_retained, self._retained)
+                        size += required
+                    buffer.append(candidate)
             close = getattr(iterator, "close", None)
             if close is not None:
                 close()
@@ -195,9 +215,14 @@ class IndexEvidenceFlights:
                     self._collecting = None
                     self._counts["physical_validations"] += 1
                     self._condition.notify_all()
-                return verify(scan())
+                trace_point("index.fallback")
+                with read_span("index.validate", cpu=True):
+                    return verify(scan())
 
             flight = _Flight(scope, tuple(buffer), size, Future())
+            trace = current_trace()
+            flight.trace_id = None if trace is None else trace.trace_id
+            trace_point("index.input", count=len(buffer), bytes=size)
             buffer.clear()
             with self._condition:
                 self._active, self._collecting = flight, None
@@ -205,10 +230,11 @@ class IndexEvidenceFlights:
                 self._condition.notify_all()
                 # Finish comparisons already waiting on input collection before CPU validation.
                 # No completed proof is held open; new arrivals still face the completion fence.
-                while self._collect_waiters or flight.users > 1:
-                    if self._closing or monotonic() >= deadline:
-                        break
-                    self._condition.wait(0.05)
+                with read_span("index.wait"):
+                    while self._collect_waiters or flight.users > 1:
+                        if self._closing or monotonic() >= deadline:
+                            break
+                        self._condition.wait(0.05)
             outcome = _outcome(verify, iter(flight.rows))
             with self._condition:
                 flight.future.set_result(outcome)

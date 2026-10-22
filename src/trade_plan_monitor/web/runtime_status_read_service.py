@@ -6,7 +6,12 @@ from uuid import UUID, uuid4
 from anyio import to_thread
 from sqlalchemy import select
 
-from trade_plan_monitor.diagnostics.read_tracing import read_span, read_timed, read_trace
+from trade_plan_monitor.diagnostics.read_tracing import (
+    observe_loop_lag,
+    read_span,
+    read_timed,
+    read_trace,
+)
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.plan_models import ExplicitTradePlan
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
@@ -175,7 +180,7 @@ class RuntimeStatusReadService:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
 
     async def _read_traced(self):
-        with read_trace("monitor.read"):
+        with read_trace("monitor.read"), observe_loop_lag():
             return await self._read_owned()
 
     async def _read_owned(self):

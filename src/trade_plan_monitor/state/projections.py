@@ -943,7 +943,7 @@ class ProjectionRepository:
             .execution_options(yield_per=128, populate_existing=True)
         )
 
-        def scan():
+        def raw_scan():
             with self._session.execute(query) as candidates:
                 for values in candidates:
                     head = tuple(values[:len(HEAD_FIELDS)])
@@ -951,6 +951,11 @@ class ProjectionRepository:
                     yield RawIndexCandidate.from_values(
                         head, None if payload[0] is None else payload,
                     )
+
+        def scan():
+            from trade_plan_monitor.diagnostics.read_tracing import trace_scan
+
+            return trace_scan(raw_scan())
 
         def verify(candidates):
             return _latest_index_records(candidates, index_codes)

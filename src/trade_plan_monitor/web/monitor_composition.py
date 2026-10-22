@@ -22,6 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from trade_plan_monitor.config import ApplicationConfiguration, load_application_config
+from trade_plan_monitor.diagnostics.read_tracing import read_span, read_timed
 from trade_plan_monitor.live_profiles import load_stock_certification
 from trade_plan_monitor.market_data.models import (
     ProviderCapabilities,
@@ -1135,6 +1136,7 @@ class _ProductionRuntimeState:
         self._database_status = RuntimeResourceStatus.STOPPED
         self._wal_status = RuntimeResourceStatus.STOPPED
 
+    @read_timed("authority.health")
     def health_details(self) -> RuntimeHealthDetails:
         checked_at = self._provider_checked_at or self._clock.now()
         providers = []
@@ -1182,6 +1184,7 @@ class _ProductionRuntimeState:
             cooldown_until=self._request_controller.cooldown_until,
         )
 
+    @read_timed("authority.delivery")
     def _delivery_health(self) -> DeliveryHealthSnapshot:
         if self._pipeline is None or self._database_status is not RuntimeResourceStatus.READY:
             return DeliveryHealthSnapshot(
@@ -1289,6 +1292,7 @@ class _ProductionRuntimeState:
     def _set_semantic_reload_blocked(self) -> None:
         self._semantic_reload_blocked = True
 
+    @read_timed("authority.configuration")
     def configuration_restart_required(self) -> bool:
         """Latch relevant configuration or installed semantic drift until stop."""
 
@@ -1387,7 +1391,8 @@ def create_monitor_composition(
         owner = composition._runtime
         if not isinstance(owner, RuntimeLifecycleService):
             raise RuntimeError("Runtime progress authority is unavailable")
-        progress = owner.progress_snapshot()
+        with read_span("authority.progress", cpu=True):
+            progress = owner.progress_snapshot()
         if progress is None:
             raise RuntimeError("Runtime progress authority is unavailable")
         state = runtime_states[owner.runtime_generation]
@@ -1434,10 +1439,14 @@ def create_monitor_composition(
         else:
             if not pipeline.runtime_status_progress_ready:
                 raise RuntimeError("Runtime progress coverage is unavailable")
-            token, revision, plans = pipeline.runtime_status_snapshot()
+            with read_span("authority.plans", cpu=True):
+                token, revision, plans = pipeline.runtime_status_snapshot()
             from trade_plan_monitor.web.runtime_status_read_service import build_dependency_scopes
 
-            dependencies = build_dependency_scopes(pipeline.runtime_status_dependencies_snapshot())
+            with read_span("authority.dependencies", cpu=True):
+                dependencies = build_dependency_scopes(
+                    pipeline.runtime_status_dependencies_snapshot(),
+                )
         return RuntimeReadAuthority(
             token=(token, owner.progress_authority_token(), block_reason),
             lifecycle=lifecycle,
