@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from re import fullmatch
 from typing import Protocol
 from uuid import uuid4
 
@@ -161,7 +162,29 @@ class LazyBacktestLifecycle:
                 self._metadata_ready = True
                 self._state = BacktestServiceState.READ_READY
         except Exception as error:
-            _LOGGER.warning("Backtest metadata preparation failed: %s", type(error).__name__)
+            # Resolve store errors only on failure; unused startup stays inert.
+            from trade_plan_monitor.backtest.migration import MigrationPreflightError
+
+            code = "UNCLASSIFIED"
+            if (
+                isinstance(error, MigrationPreflightError)
+                and isinstance(error.code, str)
+                and fullmatch(r"[A-Z][A-Z0-9_]{0,95}", error.code)
+            ):
+                code = error.code
+            origin = error.__traceback__
+            while origin is not None and origin.tb_next is not None:
+                origin = origin.tb_next
+            # Exception messages, file paths and source lines may contain secrets.
+            _LOGGER.warning(
+                "Backtest metadata preparation failed: %s code=%s errno=%s "
+                "winerror=%s origin=%s:%s generation=%s",
+                type(error).__name__, code,
+                error.errno if isinstance(error, OSError) else None,
+                getattr(error, "winerror", None) if isinstance(error, OSError) else None,
+                origin.tb_frame.f_code.co_name if origin is not None else "unknown",
+                origin.tb_lineno if origin is not None else 0, generation,
+            )
             self._state = BacktestServiceState.DEGRADED
             raise BacktestServiceUnavailable() from None
 

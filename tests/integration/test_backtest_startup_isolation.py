@@ -98,3 +98,36 @@ def test_pending_initialization_returns_503_retry_after_without_false_empty_resu
         finally:
             release.set()
             client.portal.call(app.state.backtest_lifecycle.stop)
+
+
+def test_initialization_failure_logs_safe_code_and_origin_without_private_content(caplog) -> None:
+    from trade_plan_monitor.backtest.migration import MigrationPreflightError
+
+    def failing_store_preflight():
+        error = MigrationPreflightError("SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT")
+        error.args = ("private database path and credentials",)
+        raise error
+
+    app = create_app(runtime_factory=Runtime, backtest_lifecycle_factory=failing_store_preflight)
+    with TestClient(app) as client:
+        response = client.get("/api/v1/backtest-datasets")
+        assert response.status_code == 503
+        assert "SQLITE_SIDECARS" not in response.text
+    assert "code=SQLITE_SIDECARS_REQUIRE_STOPPED_CHECKPOINT" in caplog.text
+    assert "origin=failing_store_preflight:" in caplog.text
+    assert "generation=0" in caplog.text
+    assert "private database path and credentials" not in caplog.text
+
+
+def test_initialization_failure_does_not_log_untrusted_exception_codes(caplog) -> None:
+    from trade_plan_monitor.backtest.migration import MigrationPreflightError
+
+    def broken_factory():
+        raise MigrationPreflightError("private/path\nsecret-token")
+
+    app = create_app(runtime_factory=Runtime, backtest_lifecycle_factory=broken_factory)
+    with TestClient(app) as client:
+        assert client.get("/api/v1/backtest-datasets").status_code == 503
+    assert "code=UNCLASSIFIED" in caplog.text
+    assert "private/path" not in caplog.text
+    assert "secret-token" not in caplog.text
