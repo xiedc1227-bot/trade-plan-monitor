@@ -1,0 +1,4170 @@
+{
+  "baseline": "ba4156e",
+  "current": "uncommitted P0",
+  "frozenScope": {
+    "candidates": 2008,
+    "bars": 72280,
+    "jsonBytes": 27588993,
+    "activePlans": 0,
+    "factRequests": 0,
+    "facts": 0,
+    "authority": "synthetic absent owner, fixed clock; actual live authority checked separately",
+    "explicitBegin": true,
+    "readOnly": true
+  },
+  "diagnosis": {
+    "admission": [
+      {
+        "closing": false,
+        "storagePauseCount": 1,
+        "outstanding": 0,
+        "sharing": {
+          "physical_validations": 124,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 31855731
+        },
+        "authority": {
+          "lifecycle": "STOPPING",
+          "ownerAbsent": false,
+          "plans": 0,
+          "dependencies": 10,
+          "progressState": "STALLED"
+        }
+      }
+    ],
+    "cleanup": [
+      {
+        "stopping": true,
+        "complete": false,
+        "failed": true,
+        "errorType": "RuntimeError",
+        "frames": [
+          {
+            "file": "monitor_composition.py",
+            "line": 454,
+            "function": "_supervise_runtime"
+          },
+          {
+            "file": "service.py",
+            "line": 3533,
+            "function": "run"
+          },
+          {
+            "file": "service.py",
+            "line": 3798,
+            "function": "stop"
+          },
+          {
+            "file": "service.py",
+            "line": 3925,
+            "function": "_stop_sequence"
+          },
+          {
+            "file": "service.py",
+            "line": 3910,
+            "function": "_stop_sequence"
+          },
+          {
+            "file": "service.py",
+            "line": 4094,
+            "function": "_invoke"
+          },
+          {
+            "file": "monitor_composition.py",
+            "line": 1552,
+            "function": "checkpoint_wal"
+          },
+          {
+            "file": "monitor_composition.py",
+            "line": 1124,
+            "function": "checkpoint_wal"
+          },
+          {
+            "file": "to_thread.py",
+            "line": 65,
+            "function": "run_sync"
+          },
+          {
+            "file": "_asyncio.py",
+            "line": 2641,
+            "function": "run_sync_in_worker_thread"
+          },
+          {
+            "file": "_asyncio.py",
+            "line": 1033,
+            "function": "run"
+          },
+          {
+            "file": "monitor_composition.py",
+            "line": 1130,
+            "function": "_checkpoint_wal_sync"
+          }
+        ],
+        "stopTask": {
+          "done": true,
+          "cancelled": false
+        }
+      }
+    ],
+    "locks": {
+      "owners": [
+        {
+          "chain": [
+            {
+              "type": "RuntimeError",
+              "frames": [
+                {
+                  "file": "monitor_composition.py",
+                  "line": 454,
+                  "function": "_supervise_runtime"
+                },
+                {
+                  "file": "service.py",
+                  "line": 3533,
+                  "function": "run"
+                },
+                {
+                  "file": "service.py",
+                  "line": 3798,
+                  "function": "stop"
+                },
+                {
+                  "file": "service.py",
+                  "line": 3925,
+                  "function": "_stop_sequence"
+                },
+                {
+                  "file": "service.py",
+                  "line": 3910,
+                  "function": "_stop_sequence"
+                },
+                {
+                  "file": "service.py",
+                  "line": 4094,
+                  "function": "_invoke"
+                },
+                {
+                  "file": "monitor_composition.py",
+                  "line": 1552,
+                  "function": "checkpoint_wal"
+                },
+                {
+                  "file": "monitor_composition.py",
+                  "line": 1124,
+                  "function": "checkpoint_wal"
+                },
+                {
+                  "file": "to_thread.py",
+                  "line": 65,
+                  "function": "run_sync"
+                },
+                {
+                  "file": "_asyncio.py",
+                  "line": 2641,
+                  "function": "run_sync_in_worker_thread"
+                },
+                {
+                  "file": "_asyncio.py",
+                  "line": 1033,
+                  "function": "run"
+                },
+                {
+                  "file": "monitor_composition.py",
+                  "line": 1130,
+                  "function": "_checkpoint_wal_sync"
+                }
+              ]
+            }
+          ],
+          "databaseOpened": true,
+          "walCheckpointed": false,
+          "heartbeatFailed": true
+        }
+      ],
+      "engines": [
+        {
+          "pool": "Pool size: 5  Connections in pool: 2 Current Overflow: -3 Current Checked out connections: 0"
+        },
+        {
+          "pool": "Pool size: 5  Connections in pool: 1 Current Overflow: -4 Current Checked out connections: 0"
+        }
+      ],
+      "sessions": [],
+      "connections": [
+        {
+          "inTransaction": false
+        },
+        {
+          "inTransaction": false
+        },
+        {
+          "inTransaction": false
+        }
+      ]
+    },
+    "heartbeat": [
+      [
+        {
+          "type": "RuntimeLivenessError",
+          "sqliteError": null,
+          "frames": [
+            {
+              "file": "service.py",
+              "line": 3867,
+              "function": "_stop_sequence"
+            },
+            {
+              "file": "tasks.py",
+              "line": 488,
+              "function": "wait_for"
+            },
+            {
+              "file": "service.py",
+              "line": 4062,
+              "function": "_heartbeat_loop"
+            },
+            {
+              "file": "service.py",
+              "line": 4094,
+              "function": "_invoke"
+            },
+            {
+              "file": "monitor_composition.py",
+              "line": 786,
+              "function": "heartbeat"
+            },
+            {
+              "file": "to_thread.py",
+              "line": 65,
+              "function": "run_sync"
+            },
+            {
+              "file": "_asyncio.py",
+              "line": 2641,
+              "function": "run_sync_in_worker_thread"
+            },
+            {
+              "file": "_asyncio.py",
+              "line": 1033,
+              "function": "run"
+            },
+            {
+              "file": "monitor_composition.py",
+              "line": 793,
+              "function": "_heartbeat_sync"
+            },
+            {
+              "file": "runtime_liveness.py",
+              "line": 104,
+              "function": "touch"
+            }
+          ]
+        },
+        {
+          "type": "TimeoutError",
+          "sqliteError": null,
+          "frames": [
+            {
+              "file": "service.py",
+              "line": 4056,
+              "function": "_heartbeat_loop"
+            },
+            {
+              "file": "tasks.py",
+              "line": 487,
+              "function": "wait_for"
+            },
+            {
+              "file": "timeouts.py",
+              "line": 115,
+              "function": "__aexit__"
+            }
+          ]
+        },
+        {
+          "type": "CancelledError",
+          "sqliteError": null,
+          "frames": [
+            {
+              "file": "tasks.py",
+              "line": 488,
+              "function": "wait_for"
+            },
+            {
+              "file": "locks.py",
+              "line": 213,
+              "function": "wait"
+            }
+          ]
+        }
+      ]
+    ],
+    "revision": [
+      {
+        "heartbeatCategory": "runtime liveness changed",
+        "expectedRevision": 28033,
+        "observedRevision": 28034,
+        "checkpointResult": [
+          1,
+          -1,
+          -1
+        ]
+      }
+    ],
+    "historicalCompetingWriterIdentified": false,
+    "normalShutdownCompleted": true,
+    "authorityRulesChanged": false
+  },
+  "actualBefore": {
+    "http": [
+      {
+        "status": 200,
+        "wallSeconds": 3.7508677998557687,
+        "lifecycle": "RUNNING",
+        "mode": "STANDBY",
+        "symbols": 0
+      },
+      {
+        "status": 200,
+        "wallSeconds": 3.7064345001708716,
+        "lifecycle": "RUNNING",
+        "mode": "STANDBY",
+        "symbols": 0
+      },
+      {
+        "status": 200,
+        "wallSeconds": 3.7028485001064837,
+        "lifecycle": "RUNNING",
+        "mode": "STANDBY",
+        "symbols": 0
+      }
+    ],
+    "browser": {
+      "phases": [
+        {
+          "name": "single-tab-result-and-heartbeat",
+          "start": 1792574143.641,
+          "end": 1792574172.287
+        },
+        {
+          "name": "two-tabs-result-health-and-heartbeats",
+          "start": 1792574172.287,
+          "end": 1792574201.19,
+          "health": {
+            "status": 200,
+            "finished": 1792574178.462,
+            "bytes": 4691
+          },
+          "serviceProbe": null,
+          "readiness": [
+            "fulfilled",
+            "fulfilled"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792574143.951,
+          "status": 200,
+          "end": 1792574148.26
+        },
+        {
+          "url": "/api/v1/backtest-runs",
+          "start": 1792574144.011,
+          "status": 200,
+          "end": 1792574144.037
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574144.019,
+          "status": 200,
+          "end": 1792574144.054
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792574144.052,
+          "status": 200,
+          "end": 1792574144.063
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792574145.487,
+          "status": 200,
+          "end": 1792574149.892
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574154.067,
+          "status": 200,
+          "end": 1792574154.191
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574164.206,
+          "status": 200,
+          "end": 1792574164.211
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792574172.584,
+          "status": 200,
+          "end": 1792574178.467
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792574172.588,
+          "status": 200,
+          "end": 1792574178.471
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792574172.728,
+          "status": 200,
+          "end": 1792574179.072
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792574172.728,
+          "status": 200,
+          "end": 1792574179.072
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574172.731,
+          "status": 200,
+          "end": 1792574172.745
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574172.731,
+          "status": 200,
+          "end": 1792574172.745
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792574172.745,
+          "status": 200,
+          "end": 1792574172.761
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792574172.745,
+          "status": 200,
+          "end": 1792574172.798
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574182.759,
+          "status": 200,
+          "end": 1792574182.77
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574182.759,
+          "status": 200,
+          "end": 1792574182.77
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574192.78,
+          "status": 200,
+          "end": 1792574192.94
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792574192.78,
+          "status": 200,
+          "end": 1792574192.962
+        }
+      ],
+      "writes": [],
+      "errors": []
+    }
+  },
+  "interleavedMatrix": {
+    "baseline": "ba4156e",
+    "scope": "Same frozen read-only 2008-candidate copy; synthetic absent-owner authority/fixed clock; complete output equality. Actual owner acceptance is separate.",
+    "rows": [
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.062821599887684,
+        "processCpuSeconds": 4.890625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.830688999965787,
+        "processCpuSeconds": 2.796875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 9.226145399967209,
+        "processCpuSeconds": 9.28125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.980704299872741,
+        "processCpuSeconds": 6.21875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 9.201504499884322,
+        "processCpuSeconds": 11.34375,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.964460899820551,
+        "processCpuSeconds": 9.8125,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 1,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 8.435888999840245,
+        "processCpuSeconds": 8.53125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 1,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 6.1729226999450475,
+        "processCpuSeconds": 6.359375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.031209900043905,
+        "processCpuSeconds": 3.0,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.962295699864626,
+        "processCpuSeconds": 4.9375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.897673599887639,
+        "processCpuSeconds": 6.171875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 8.384974800050259,
+        "processCpuSeconds": 8.46875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 7.740035499911755,
+        "processCpuSeconds": 10.53125,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 10.229528399882838,
+        "processCpuSeconds": 13.0625,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 2,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 6.265951199922711,
+        "processCpuSeconds": 6.46875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 2,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 9.520340099930763,
+        "processCpuSeconds": 9.375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.4164171000011265,
+        "processCpuSeconds": 4.375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.335449199890718,
+        "processCpuSeconds": 2.3125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.028541099978611,
+        "processCpuSeconds": 6.125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.683431499870494,
+        "processCpuSeconds": 4.78125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 8.826095999917015,
+        "processCpuSeconds": 11.421875,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 7.112128200009465,
+        "processCpuSeconds": 9.5625,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 3,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 7.733960699988529,
+        "processCpuSeconds": 7.828125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 3,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 5.533323499839753,
+        "processCpuSeconds": 5.78125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.8100117000285536,
+        "processCpuSeconds": 2.734375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.53263989998959,
+        "processCpuSeconds": 4.484375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.072332700015977,
+        "processCpuSeconds": 6.296875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 8.551443999866024,
+        "processCpuSeconds": 8.59375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.596976799890399,
+        "processCpuSeconds": 9.171875,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 8.77020169980824,
+        "processCpuSeconds": 11.9375,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 4,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 5.511437200009823,
+        "processCpuSeconds": 5.65625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 4,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 8.240604599937797,
+        "processCpuSeconds": 8.515625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.861331100109965,
+        "processCpuSeconds": 4.8125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.592428100062534,
+        "processCpuSeconds": 2.546875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 7.892505600117147,
+        "processCpuSeconds": 8.0,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.865654600085691,
+        "processCpuSeconds": 6.015625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 9.029297899920493,
+        "processCpuSeconds": 11.875,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.536564200185239,
+        "processCpuSeconds": 9.71875,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 5,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 7.332820999901742,
+        "processCpuSeconds": 7.40625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 5,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 5.770312400069088,
+        "processCpuSeconds": 5.90625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.6779603001195937,
+        "processCpuSeconds": 2.671875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.862523699877784,
+        "processCpuSeconds": 4.765625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.734606499783695,
+        "processCpuSeconds": 5.859375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 7.45734649989754,
+        "processCpuSeconds": 7.734375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.231447799829766,
+        "processCpuSeconds": 8.09375,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 8.839844799833372,
+        "processCpuSeconds": 11.6875,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 6,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 6.159987200051546,
+        "processCpuSeconds": 6.5,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 6,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 6.460031900089234,
+        "processCpuSeconds": 6.484375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.637483599828556,
+        "processCpuSeconds": 3.59375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.1342798999976367,
+        "processCpuSeconds": 2.078125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.255658100126311,
+        "processCpuSeconds": 6.28125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.844846799969673,
+        "processCpuSeconds": 4.921875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 9.018258800031617,
+        "processCpuSeconds": 11.75,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.558656600071117,
+        "processCpuSeconds": 8.703125,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 7,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 7.653586599975824,
+        "processCpuSeconds": 7.84375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 7,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 5.520405000075698,
+        "processCpuSeconds": 5.5625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.6917560999281704,
+        "processCpuSeconds": 2.6875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.761650900123641,
+        "processCpuSeconds": 4.703125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.450508899986744,
+        "processCpuSeconds": 5.640625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 7.1286232999991626,
+        "processCpuSeconds": 7.296875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.263228399911895,
+        "processCpuSeconds": 8.734375,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 8.201188100036234,
+        "processCpuSeconds": 10.625,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 8,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 5.186061299871653,
+        "processCpuSeconds": 5.234375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 8,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 7.3589862999506295,
+        "processCpuSeconds": 7.46875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.360541500151157,
+        "processCpuSeconds": 4.3125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.5095957000739872,
+        "processCpuSeconds": 2.5,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 7.274096400011331,
+        "processCpuSeconds": 7.28125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.468596699880436,
+        "processCpuSeconds": 5.609375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 8.18948379997164,
+        "processCpuSeconds": 10.71875,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.943046599859372,
+        "processCpuSeconds": 8.34375,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 9,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 7.217777600046247,
+        "processCpuSeconds": 7.203125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 9,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 5.197566899936646,
+        "processCpuSeconds": 5.3125,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.4313804998528212,
+        "processCpuSeconds": 2.390625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.5866072999779135,
+        "processCpuSeconds": 4.515625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.518650500103831,
+        "processCpuSeconds": 5.71875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.5963270999491215,
+        "processCpuSeconds": 6.546875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.359191099880263,
+        "processCpuSeconds": 8.328125,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 8,
+        "result": true,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 6.723039400065318,
+        "processCpuSeconds": 8.8125,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 10,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 4.376042700139806,
+        "processCpuSeconds": 4.5625,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 2,
+        "result": true,
+        "round": 10,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 6.2063525000121444,
+        "processCpuSeconds": 6.1875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      }
+    ],
+    "equalCompleteDashboards": true,
+    "equalCompleteResults": true
+  },
+  "finalDedicatedSingle": {
+    "baseline": "ba4156e",
+    "scope": "Same frozen read-only 2008-candidate copy; synthetic absent-owner authority/fixed clock; complete output equality. Actual owner acceptance is separate.",
+    "rows": [
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.925927500007674,
+        "processCpuSeconds": 3.875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.357235400006175,
+        "processCpuSeconds": 2.3125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.42738620005548,
+        "processCpuSeconds": 2.390625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.705868300050497,
+        "processCpuSeconds": 4.640625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.5915635998826474,
+        "processCpuSeconds": 3.546875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.316282899817452,
+        "processCpuSeconds": 2.296875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.04778810008429,
+        "processCpuSeconds": 2.015625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.4919824001844972,
+        "processCpuSeconds": 3.4375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.655532500008121,
+        "processCpuSeconds": 3.59375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 1.9974106999579817,
+        "processCpuSeconds": 2.0,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.14162759995088,
+        "processCpuSeconds": 2.0625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.505939400056377,
+        "processCpuSeconds": 3.46875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.6246588001959026,
+        "processCpuSeconds": 3.609375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.0099575000349432,
+        "processCpuSeconds": 1.96875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.0072066001594067,
+        "processCpuSeconds": 2.015625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.5383321999106556,
+        "processCpuSeconds": 3.46875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.6956140000838786,
+        "processCpuSeconds": 3.671875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.5363219000864774,
+        "processCpuSeconds": 2.5,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.7726208998356014,
+        "processCpuSeconds": 2.765625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.066385400015861,
+        "processCpuSeconds": 5.0,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 11,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.41803180007264,
+        "processCpuSeconds": 4.421875,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 8,
+        "result": true,
+        "round": 11,
+        "staggerSeconds": 0,
+        "wallSeconds": 5.387182699982077,
+        "processCpuSeconds": 7.375,
+        "authorityCalls": 16,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 7,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 2,
+        "result": true,
+        "round": 11,
+        "staggerSeconds": 0.75,
+        "wallSeconds": 4.297314899973571,
+        "processCpuSeconds": 4.375,
+        "authorityCalls": 4,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 1,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      }
+    ],
+    "equalCompleteDashboards": true,
+    "equalCompleteResults": true
+  },
+  "differentialAndProfile": {
+    "equivalentStoredRows": 2008,
+    "corruptionChecks": [
+      {
+        "candidate": 1,
+        "kind": "canonical",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1,
+        "kind": "blob",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1,
+        "kind": "hash",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1,
+        "kind": "provider",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1,
+        "kind": "formula",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1,
+        "kind": "revision",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1004,
+        "kind": "canonical",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1004,
+        "kind": "blob",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1004,
+        "kind": "hash",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1004,
+        "kind": "provider",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1004,
+        "kind": "formula",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 1004,
+        "kind": "revision",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 2008,
+        "kind": "canonical",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 2008,
+        "kind": "blob",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 2008,
+        "kind": "hash",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 2008,
+        "kind": "provider",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 2008,
+        "kind": "formula",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "candidate": 2008,
+        "kind": "revision",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      }
+    ],
+    "profile": [
+      {
+        "file": "runtime_status_read_service.py",
+        "line": 224,
+        "function": "_assemble",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 0.0001273,
+        "cumulativeSeconds": 5.8106852
+      },
+      {
+        "file": "projections.py",
+        "line": 901,
+        "function": "list_latest_market_index_snapshots",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 3.99e-05,
+        "cumulativeSeconds": 5.7692851
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 103,
+        "function": "run",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 1.73e-05,
+        "cumulativeSeconds": 5.7688721
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 120,
+        "function": "_run",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 2.58e-05,
+        "cumulativeSeconds": 5.7688468
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 169,
+        "function": "_lead",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 0.0029619000000000004,
+        "cumulativeSeconds": 5.7688174000000005
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 23,
+        "function": "_outcome",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 2.5e-06,
+        "cumulativeSeconds": 5.6405683
+      },
+      {
+        "file": "projections.py",
+        "line": 955,
+        "function": "verify",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 5.13e-05,
+        "cumulativeSeconds": 5.6405658
+      },
+      {
+        "file": "projections.py",
+        "line": 1413,
+        "function": "_latest_index_records",
+        "primitiveCalls": 1,
+        "calls": 1,
+        "selfSeconds": 0.061628800000000004,
+        "cumulativeSeconds": 5.6405145
+      },
+      {
+        "file": "projections.py",
+        "line": 1446,
+        "function": "_market_index_from_row",
+        "primitiveCalls": 2008,
+        "calls": 2008,
+        "selfSeconds": 0.0190645,
+        "cumulativeSeconds": 5.503983900000001
+      },
+      {
+        "file": "canonical.py",
+        "line": 128,
+        "function": "verified_market_index_snapshot_json",
+        "primitiveCalls": 2008,
+        "calls": 2008,
+        "selfSeconds": 0.0117313,
+        "cumulativeSeconds": 3.8924770000000004
+      },
+      {
+        "file": "canonical.py",
+        "line": 138,
+        "function": "_verified_market_index_value",
+        "primitiveCalls": 2008,
+        "calls": 2008,
+        "selfSeconds": 0.0324592,
+        "cumulativeSeconds": 3.7268918
+      },
+      {
+        "file": "canonical.py",
+        "line": 50,
+        "function": "canonical_value",
+        "primitiveCalls": 2008,
+        "calls": 1236442,
+        "selfSeconds": 1.0769032,
+        "cumulativeSeconds": 3.1947748000000002
+      },
+      {
+        "file": "main.py",
+        "line": 742,
+        "function": "model_validate_json",
+        "primitiveCalls": 2008,
+        "calls": 2008,
+        "selfSeconds": 0.0014035,
+        "cumulativeSeconds": 1.5366202
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'validate_json' of 'pydantic_core._pydantic_core.SchemaValidator' objects>",
+        "primitiveCalls": 2008,
+        "calls": 2008,
+        "selfSeconds": 0.37719640000000004,
+        "cumulativeSeconds": 1.5352167
+      },
+      {
+        "file": "canonical.py",
+        "line": 30,
+        "function": "canonical_decimal",
+        "primitiveCalls": 447344,
+        "calls": 447344,
+        "selfSeconds": 0.6056210000000001,
+        "cumulativeSeconds": 1.221503
+      },
+      {
+        "file": "models.py",
+        "line": 112,
+        "function": "validate_bar",
+        "primitiveCalls": 74232,
+        "calls": 74232,
+        "selfSeconds": 0.25154770000000004,
+        "cumulativeSeconds": 1.1396895
+      },
+      {
+        "file": "models.py",
+        "line": 80,
+        "function": "_validate_decimal_expansion",
+        "primitiveCalls": 445392,
+        "calls": 445392,
+        "selfSeconds": 0.33292700000000003,
+        "cumulativeSeconds": 0.6980177000000001
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'as_tuple' of 'decimal.Decimal' objects>",
+        "primitiveCalls": 892736,
+        "calls": 892736,
+        "selfSeconds": 0.2897637,
+        "cumulativeSeconds": 0.5566467
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "primitiveCalls": 5531303,
+        "calls": 5531303,
+        "selfSeconds": 0.5117619,
+        "cumulativeSeconds": 0.5456948
+      },
+      {
+        "file": "canonical.py",
+        "line": 83,
+        "function": "_encode_canonical_value",
+        "primitiveCalls": 8032,
+        "calls": 8032,
+        "selfSeconds": 0.005071,
+        "cumulativeSeconds": 0.4999693
+      },
+      {
+        "file": "__init__.py",
+        "line": 185,
+        "function": "dumps",
+        "primitiveCalls": 8032,
+        "calls": 8032,
+        "selfSeconds": 0.0133538,
+        "cumulativeSeconds": 0.4948983
+      },
+      {
+        "file": "encoder.py",
+        "line": 185,
+        "function": "encode",
+        "primitiveCalls": 8032,
+        "calls": 8032,
+        "selfSeconds": 0.010480300000000001,
+        "cumulativeSeconds": 0.47872060000000005
+      },
+      {
+        "file": "encoder.py",
+        "line": 207,
+        "function": "iterencode",
+        "primitiveCalls": 8032,
+        "calls": 8032,
+        "selfSeconds": 0.46460080000000004,
+        "cumulativeSeconds": 0.46460080000000004
+      },
+      {
+        "file": "canonical.py",
+        "line": 148,
+        "function": "digest",
+        "primitiveCalls": 6024,
+        "calls": 6024,
+        "selfSeconds": 0.0145012,
+        "cumulativeSeconds": 0.40559510000000004
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'isoformat' of 'datetime.datetime' objects>",
+        "primitiveCalls": 160456,
+        "calls": 160456,
+        "selfSeconds": 0.1919412,
+        "cumulativeSeconds": 0.1919412
+      },
+      {
+        "file": "models.py",
+        "line": 75,
+        "function": "_validate_shanghai_datetime",
+        "primitiveCalls": 162408,
+        "calls": 162408,
+        "selfSeconds": 0.1398481,
+        "cumulativeSeconds": 0.1851547
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.format>",
+        "primitiveCalls": 447344,
+        "calls": 447344,
+        "selfSeconds": 0.11708840000000001,
+        "cumulativeSeconds": 0.11708840000000001
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method __new__ of type object at 0x00007FFC67C1CD90>",
+        "primitiveCalls": 893391,
+        "calls": 893391,
+        "selfSeconds": 0.11008290000000001,
+        "cumulativeSeconds": 0.11008290000000001
+      },
+      {
+        "file": "projections.py",
+        "line": 946,
+        "function": "scan",
+        "primitiveCalls": 2009,
+        "calls": 2009,
+        "selfSeconds": 0.0027921,
+        "cumulativeSeconds": 0.09968260000000001
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'utcoffset' of 'datetime.datetime' objects>",
+        "primitiveCalls": 316863,
+        "calls": 316863,
+        "selfSeconds": 0.0994067,
+        "cumulativeSeconds": 0.0994067
+      },
+      {
+        "file": "enum.py",
+        "line": 187,
+        "function": "__get__",
+        "primitiveCalls": 305270,
+        "calls": 305270,
+        "selfSeconds": 0.0651647,
+        "cumulativeSeconds": 0.0947678
+      },
+      {
+        "file": "main.py",
+        "line": 427,
+        "function": "model_dump",
+        "primitiveCalls": 2011,
+        "calls": 2011,
+        "selfSeconds": 0.0013867,
+        "cumulativeSeconds": 0.0914127
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'to_python' of 'pydantic_core._pydantic_core.SchemaSerializer' objects>",
+        "primitiveCalls": 2011,
+        "calls": 2011,
+        "selfSeconds": 0.09002600000000001,
+        "cumulativeSeconds": 0.09002600000000001
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.sorted>",
+        "primitiveCalls": 4070,
+        "calls": 4070,
+        "selfSeconds": 0.044289800000000004,
+        "cumulativeSeconds": 0.085427
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.any>",
+        "primitiveCalls": 892736,
+        "calls": 892736,
+        "selfSeconds": 0.0845582,
+        "cumulativeSeconds": 0.0845582
+      },
+      {
+        "file": "result.py",
+        "line": 565,
+        "function": "iterrows",
+        "primitiveCalls": 2009,
+        "calls": 2009,
+        "selfSeconds": 0.0017575000000000002,
+        "cumulativeSeconds": 0.07716110000000001
+      },
+      {
+        "file": "loading.py",
+        "line": 208,
+        "function": "chunks",
+        "primitiveCalls": 27,
+        "calls": 27,
+        "selfSeconds": 0.0046651,
+        "cumulativeSeconds": 0.0754918
+      },
+      {
+        "file": "result.py",
+        "line": 1395,
+        "function": "fetchmany",
+        "primitiveCalls": 17,
+        "calls": 17,
+        "selfSeconds": 4.86e-05,
+        "cumulativeSeconds": 0.07070080000000001
+      },
+      {
+        "file": "result.py",
+        "line": 744,
+        "function": "manyrows",
+        "primitiveCalls": 17,
+        "calls": 17,
+        "selfSeconds": 0.0006618,
+        "cumulativeSeconds": 0.07064000000000001
+      },
+      {
+        "file": "cursor.py",
+        "line": 2263,
+        "function": "_fetchmany_impl",
+        "primitiveCalls": 17,
+        "calls": 17,
+        "selfSeconds": 0.00014920000000000002,
+        "cumulativeSeconds": 0.0699782
+      }
+    ],
+    "scope": "Profile overhead excluded from timing. Every frozen row compared with ba4156e; fact/large/active-plan cases in tests."
+  },
+  "p1Experiment": {
+    "scope": "Process-local exact Decimal tuple memo; max64 entries/128KiB per physical validation; before=P0, after=experiment. Not deployed.",
+    "rows": [
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.3331623999401927,
+        "processCpuSeconds": 2.328125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 1,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.1559153001289815,
+        "processCpuSeconds": 3.125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.347164399921894,
+        "processCpuSeconds": 3.3125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 2,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.9552412999328226,
+        "processCpuSeconds": 2.9375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.882467599818483,
+        "processCpuSeconds": 2.859375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 3,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.838515599956736,
+        "processCpuSeconds": 3.765625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.1491537999827415,
+        "processCpuSeconds": 3.109375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 4,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.2287053000181913,
+        "processCpuSeconds": 2.203125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.224360200110823,
+        "processCpuSeconds": 2.15625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 5,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.10912620020099,
+        "processCpuSeconds": 3.046875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.4620600999332964,
+        "processCpuSeconds": 3.359375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 6,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.398537299828604,
+        "processCpuSeconds": 2.359375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.5400229999795556,
+        "processCpuSeconds": 2.515625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 7,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.9228431000374258,
+        "processCpuSeconds": 3.828125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 4.056903199991211,
+        "processCpuSeconds": 3.984375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 8,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.205395600060001,
+        "processCpuSeconds": 3.125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.993205100065097,
+        "processCpuSeconds": 2.890625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 9,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.1782688999082893,
+        "processCpuSeconds": 3.140625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "after",
+        "monitors": 1,
+        "result": false,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 3.073431799886748,
+        "processCpuSeconds": 3.03125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "mode": "before",
+        "monitors": 1,
+        "result": false,
+        "round": 10,
+        "staggerSeconds": 0,
+        "wallSeconds": 2.3358873000834137,
+        "processCpuSeconds": 2.3125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      }
+    ],
+    "memoStats": [
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      },
+      {
+        "bytes": 38949,
+        "hits": 635,
+        "misses": 446709
+      }
+    ]
+  },
+  "memory": {
+    "freshUntracedProcesses": [
+      {
+        "mode": "before",
+        "traced": false,
+        "initial": {
+          "peakWorkingSetBytes": 237887488,
+          "workingSetBytes": 237887488,
+          "peakPrivateBytes": 989249536
+        },
+        "final": {
+          "peakWorkingSetBytes": 284057600,
+          "workingSetBytes": 58712064,
+          "peakPrivateBytes": 1036177408
+        },
+        "allocations": null,
+        "physicalValidations": 1,
+        "retainedAfter": 0,
+        "symbols": 0
+      },
+      {
+        "mode": "after",
+        "traced": false,
+        "initial": {
+          "peakWorkingSetBytes": 238759936,
+          "workingSetBytes": 238759936,
+          "peakPrivateBytes": 990273536
+        },
+        "final": {
+          "peakWorkingSetBytes": 284090368,
+          "workingSetBytes": 248832000,
+          "peakPrivateBytes": 1035931648
+        },
+        "allocations": null,
+        "physicalValidations": 1,
+        "retainedAfter": 0,
+        "symbols": 0
+      },
+      {
+        "mode": "before",
+        "traced": false,
+        "initial": {
+          "peakWorkingSetBytes": 238231552,
+          "workingSetBytes": 238231552,
+          "peakPrivateBytes": 989720576
+        },
+        "final": {
+          "peakWorkingSetBytes": 282902528,
+          "workingSetBytes": 250601472,
+          "peakPrivateBytes": 1035079680
+        },
+        "allocations": null,
+        "physicalValidations": 1,
+        "retainedAfter": 0,
+        "symbols": 0
+      },
+      {
+        "mode": "after",
+        "traced": false,
+        "initial": {
+          "peakWorkingSetBytes": 237957120,
+          "workingSetBytes": 237957120,
+          "peakPrivateBytes": 989519872
+        },
+        "final": {
+          "peakWorkingSetBytes": 283934720,
+          "workingSetBytes": 248496128,
+          "peakPrivateBytes": 1036079104
+        },
+        "allocations": null,
+        "physicalValidations": 1,
+        "retainedAfter": 0,
+        "symbols": 0
+      },
+      {
+        "mode": "before",
+        "traced": false,
+        "initial": {
+          "peakWorkingSetBytes": 238649344,
+          "workingSetBytes": 238649344,
+          "peakPrivateBytes": 990195712
+        },
+        "final": {
+          "peakWorkingSetBytes": 284139520,
+          "workingSetBytes": 251043840,
+          "peakPrivateBytes": 1036046336
+        },
+        "allocations": null,
+        "physicalValidations": 1,
+        "retainedAfter": 0,
+        "symbols": 0
+      },
+      {
+        "mode": "after",
+        "traced": false,
+        "initial": {
+          "peakWorkingSetBytes": 238526464,
+          "workingSetBytes": 238526464,
+          "peakPrivateBytes": 990076928
+        },
+        "final": {
+          "peakWorkingSetBytes": 283385856,
+          "workingSetBytes": 249167872,
+          "peakPrivateBytes": 1035448320
+        },
+        "allocations": null,
+        "physicalValidations": 1,
+        "retainedAfter": 0,
+        "symbols": 0
+      }
+    ],
+    "untracedMedians": {
+      "before": {
+        "peakWorkingSetBytes": 284057600,
+        "peakPrivateBytes": 1036046336
+      },
+      "after": {
+        "peakWorkingSetBytes": 283934720,
+        "peakPrivateBytes": 1035931648
+      }
+    },
+    "tracedBefore": {
+      "mode": "before",
+      "traced": true,
+      "initial": {
+        "peakWorkingSetBytes": 238227456,
+        "workingSetBytes": 238227456,
+        "peakPrivateBytes": 989949952
+      },
+      "final": {
+        "peakWorkingSetBytes": 290443264,
+        "workingSetBytes": 257028096,
+        "peakPrivateBytes": 1042587648
+      },
+      "allocations": [
+        3085200,
+        42891879
+      ],
+      "physicalValidations": 1,
+      "retainedAfter": 0,
+      "symbols": 0
+    },
+    "tracedAfter": {
+      "mode": "after",
+      "traced": true,
+      "initial": {
+        "peakWorkingSetBytes": 238346240,
+        "workingSetBytes": 238346240,
+        "peakPrivateBytes": 990007296
+      },
+      "final": {
+        "peakWorkingSetBytes": 289660928,
+        "workingSetBytes": 256327680,
+        "peakPrivateBytes": 1041887232
+      },
+      "allocations": [
+        3082629,
+        42890153
+      ],
+      "physicalValidations": 1,
+      "retainedAfter": 0,
+      "symbols": 0
+    }
+  },
+  "testStatus": {
+    "backendPassed": 312,
+    "backendSeconds": 509.61,
+    "modules": [
+      "tests/unit/test_single_canonical_verification.py",
+      "tests/unit/test_market_index_data.py",
+      "tests/unit/test_index_evidence.py",
+      "tests/unit/test_index_evidence_flights.py",
+      "tests/unit/test_monitor_read_ownership.py",
+      "tests/integration/test_live_projection_repository.py",
+      "tests/integration/test_market_index_snapshots.py",
+      "tests/integration/test_market_index_runtime.py",
+      "tests/integration/test_persistent_market_index_history.py",
+      "tests/integration/test_market_index_overview.py",
+      "tests/integration/test_index_close_retention.py",
+      "tests/integration/test_monitor_evidence_sharing.py",
+      "tests/integration/test_runtime_status_projection.py",
+      "tests/integration/test_runtime_status_composition.py",
+      "tests/integration/test_runtime_status_websocket.py",
+      "tests/integration/test_runtime_status_routes.py",
+      "tests/integration/test_runtime_status_official_close.py",
+      "tests/integration/test_monitor_production_composition.py",
+      "tests/integration/test_runtime_liveness.py",
+      "tests/integration/test_monitor_loop_input_store.py",
+      "tests/integration/test_monitor_loop_publication.py",
+      "tests/integration/test_monitor_loop_retention.py",
+      "tests/integration/test_backtest_retention.py",
+      "tests/integration/test_backtest_thread_ownership.py",
+      "tests/integration/test_backtest_workspace_reads.py",
+      "tests/integration/test_monitor_loop_result_api.py",
+      "tests/integration/test_backtest_result_pinning.py"
+    ],
+    "warnings": [
+      "Existing Starlette/httpx deprecation"
+    ],
+    "frontendTypeCheck": "passed",
+    "frontendBuild": "passed",
+    "browserSuitePassed": 8,
+    "browserSuiteSeconds": 28.0,
+    "mutation": "Fact-formula gate removal detected by rehashed fact test: DID NOT RAISE; expected pytest assertion failure. First helper import-path error excluded.",
+    "lint": "passed",
+    "fullRepositoryTestingClaimed": false
+  },
+  "actualAfter": {
+    "http": [
+      {
+        "status": 200,
+        "wallSeconds": 2.34837849996984,
+        "lifecycle": "RUNNING",
+        "mode": "STANDBY",
+        "symbols": 0
+      },
+      {
+        "status": 200,
+        "wallSeconds": 2.285024099983275,
+        "lifecycle": "RUNNING",
+        "mode": "STANDBY",
+        "symbols": 0
+      },
+      {
+        "status": 200,
+        "wallSeconds": 2.285552999936044,
+        "lifecycle": "RUNNING",
+        "mode": "STANDBY",
+        "symbols": 0
+      }
+    ],
+    "browser": {
+      "phases": [
+        {
+          "name": "single-tab-result-and-heartbeat",
+          "start": 1792575967.144,
+          "end": 1792575998.917
+        },
+        {
+          "name": "two-tabs-result-health-and-heartbeats",
+          "start": 1792575998.917,
+          "end": 1792576027.371,
+          "health": {
+            "status": 200,
+            "finished": 1792576004.17,
+            "bytes": 4691
+          },
+          "serviceProbe": {
+            "status": 200,
+            "seconds": 0.045
+          },
+          "readiness": [
+            "fulfilled",
+            "fulfilled"
+          ]
+        },
+        {
+          "name": "monitor-current-owner",
+          "start": 1792576027.371,
+          "end": 1792576030.318,
+          "status": 200,
+          "lifecycle": "RUNNING",
+          "mode": "STANDBY"
+        }
+      ],
+      "requests": [
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792575967.338,
+          "status": 200,
+          "end": 1792575971.539
+        },
+        {
+          "url": "/api/v1/backtest-runs",
+          "start": 1792575967.413,
+          "status": 200,
+          "end": 1792575967.435
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575967.415,
+          "status": 200,
+          "end": 1792575967.431
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792575967.43,
+          "status": 200,
+          "end": 1792575967.442
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792575967.996,
+          "status": 200,
+          "end": 1792575976.687
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575977.434,
+          "status": 200,
+          "end": 1792575977.442
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575987.453,
+          "status": 200,
+          "end": 1792575987.463
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575997.472,
+          "status": 200,
+          "end": 1792575997.561
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792575999.229,
+          "status": 200,
+          "end": 1792576004.17
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792575999.232,
+          "status": 200,
+          "end": 1792576004.17
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792575999.378,
+          "status": 200,
+          "end": 1792576004.311
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792575999.378,
+          "status": 200,
+          "end": 1792576004.311
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575999.379,
+          "status": 200,
+          "end": 1792575999.391
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575999.38,
+          "status": 200,
+          "end": 1792575999.393
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792575999.391,
+          "status": 200,
+          "end": 1792575999.41
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792575999.393,
+          "status": 200,
+          "end": 1792575999.436
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792576009.404,
+          "status": 200,
+          "end": 1792576009.414
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792576009.404,
+          "status": 200,
+          "end": 1792576009.414
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792576019.419,
+          "status": 200,
+          "end": 1792576019.563
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792576019.419,
+          "status": 200,
+          "end": 1792576019.564
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792576027.529,
+          "status": 200,
+          "end": 1792576029.876
+        }
+      ],
+      "writes": [],
+      "errors": []
+    },
+    "heartbeatAndConnectedMonitor": {
+      "status": 200,
+      "headings": [
+        "监控总览",
+        "待机",
+        "主要指数走势 · 当日",
+        "上证指数",
+        "沪深市场成交额",
+        "活动计划 00",
+        "从一份计划开始"
+      ],
+      "lifecycle": "RUNNING",
+      "mode": "STANDBY",
+      "frames": [
+        {
+          "type": "heartbeat",
+          "monitorContractVersion": 2
+        }
+      ],
+      "errors": [],
+      "writes": []
+    },
+    "firstBrowserAttempt": {
+      "phases": [
+        {
+          "name": "single-tab-result-and-heartbeat",
+          "start": 1792575758.65,
+          "end": 1792575785.906
+        },
+        {
+          "name": "two-tabs-result-health-and-heartbeats",
+          "start": 1792575785.906,
+          "end": 1792575814.01,
+          "health": {
+            "status": 200,
+            "finished": 1792575791.465,
+            "bytes": 4691
+          },
+          "serviceProbe": {
+            "status": 200,
+            "seconds": 0.068
+          },
+          "readiness": [
+            "fulfilled",
+            "fulfilled"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792575758.969,
+          "status": 200,
+          "end": 1792575761.94
+        },
+        {
+          "url": "/api/v1/backtest-runs",
+          "start": 1792575759.05,
+          "status": 200,
+          "end": 1792575759.093
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575759.062,
+          "status": 200,
+          "end": 1792575759.087
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792575759.087,
+          "status": 200,
+          "end": 1792575759.11
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792575760.513,
+          "status": 200,
+          "end": 1792575763.718
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575769.09,
+          "status": 200,
+          "end": 1792575769.095
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575779.102,
+          "status": 200,
+          "end": 1792575779.11
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792575786.279,
+          "status": 200,
+          "end": 1792575791.471
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792575786.284,
+          "status": 200,
+          "end": 1792575791.467
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792575786.473,
+          "status": 200,
+          "end": 1792575791.476
+        },
+        {
+          "url": "/api/v1/backtest-runs/b9c937a72b2bf572000c6402321f1e9516e0036ee7f3304f4358466eab888741",
+          "start": 1792575786.475,
+          "status": 200,
+          "end": 1792575791.475
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575786.477,
+          "status": 200,
+          "end": 1792575786.492
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575786.477,
+          "status": 200,
+          "end": 1792575786.492
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792575786.492,
+          "status": 200,
+          "end": 1792575786.74
+        },
+        {
+          "url": "/api/v1/backtest-jobs",
+          "start": 1792575786.492,
+          "status": 200,
+          "end": 1792575786.742
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575796.504,
+          "status": 200,
+          "end": 1792575796.515
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575796.504,
+          "status": 200,
+          "end": 1792575796.516
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575806.52,
+          "status": 200,
+          "end": 1792575806.596
+        },
+        {
+          "url": "/api/v1/backtest-service",
+          "start": 1792575806.52,
+          "status": 200,
+          "end": 1792575806.603
+        },
+        {
+          "url": "/api/v1/dashboard",
+          "start": 1792575814.48,
+          "status": 200,
+          "end": 1792575817.277
+        },
+        {
+          "url": "/api/v1/market-indexes/overview",
+          "start": 1792575839.628,
+          "status": 200,
+          "end": 1792575839.697
+        }
+      ],
+      "writes": [],
+      "errors": []
+    },
+    "firstBrowserAttemptFailure": "Added monitor locator expected fixture heading; actual heading was monitor overview. Result phases passed. Corrected locator and full journey rerun passed.",
+    "inventory": {
+      "results": 5,
+      "backtestService": {
+        "epoch": "d68232d56d0c4a2b89f809950a1018c0",
+        "revision": 0,
+        "generation": 0,
+        "state": "READ_READY",
+        "canRead": true,
+        "canSubmit": false,
+        "canCancel": true,
+        "canExport": true,
+        "physicallyDrained": true,
+        "authorizedJobIds": [],
+        "reason": null
+      },
+      "preparationRecords": 19,
+      "reviewedSources": 8,
+      "timelineRoots": 2,
+      "allRead": true
+    }
+  },
+  "gateAssessment": {
+    "finalDedicatedSingle": {
+      "wallMedianBefore": 3.640095650102012,
+      "wallMedianAfter": 2.228955249884166,
+      "cpuMedianBefore": 3.6015625,
+      "cpuMedianAfter": 2.1796875,
+      "improvementAtLeast30Percent": true,
+      "wallMedianAtMost2Point5Seconds": true
+    },
+    "interleavedSingle": {
+      "wallMedianAfter": 2.635194200091064,
+      "wallMedianAtMost2Point5Seconds": false
+    },
+    "mixedRegressionAtMost10Percent": true,
+    "memoryRegressionAtMost10Percent": true,
+    "p1Decision": "Do not ship tested exact Decimal-tuple memo; slower and low hit rate. No general conclusion about other P1 strategies.",
+    "sustainedLatencyGuarantee": false
+  },
+  "finalSourceSha256": {
+    "src/trade_plan_monitor/market_index/canonical.py": "981b325b015db54c96eaef3cedc1ea3e7b92e715fcfa26f15393d877e4044628",
+    "src/trade_plan_monitor/state/projections.py": "03189f3a11f431bf262fbf9ea3e774f4407bf5602fb34361e620e8914f056376",
+    "tests/unit/test_single_canonical_verification.py": "86ac51f95ee55467a376c94554ff50b15b819966b0098e1fa89f2168274f70ad",
+    "tests/integration/test_runtime_status_composition.py": "36bbf512314db00535a080d40c8a64750cb2dec54d1e0f82180107a988d17474"
+  },
+  "codeReview": "No blocking correctness, integrity, ownership or scope findings; read lifecycle/authority source unchanged; recorded latency limitations retained.",
+  "prePushReview": {
+    "date": "2026-10-22",
+    "backendPassed": 152,
+    "backendSeconds": 101.82,
+    "browserPassed": 8,
+    "browserSeconds": 26.1,
+    "productionSourceChanged": false,
+    "pairedDocuments": "passed",
+    "credentialPatternCheck": "passed",
+    "lint": "passed",
+    "mutation": "fact-formula gate removal caught by rehashed-fact assertion",
+    "findings": "No blocking findings; previously recorded latency limitations remain."
+  }
+}
