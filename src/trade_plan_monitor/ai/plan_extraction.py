@@ -74,6 +74,101 @@ class CurrentPlanExtractionResult(DailyValue):
         return type(self).model_validate({**values, **update})
 
 
+_SOURCE_REVIEW_CONTRACT = {
+    "path_root": "plan",
+    "forbidden_prefixes": ["draft."],
+    "excluded_roots": ["plan_id", "version", "name", "metadata"],
+    "required_scope_paths": ["symbol", "market"],
+    "forbidden_paths": [
+        "plan_id",
+        "version",
+        "name",
+        "metadata",
+        "metadata.report_at",
+        "metadata.reference_price_fen",
+        "levels",
+    ],
+    "registered_null_paths": ["levels.low_buy", "levels.pressure"],
+    "bind_empty_arrays": True,
+    "group_binding_value": "type string",
+    "product_clause_ids": [],
+    "supplement_id": None,
+    "product_binding_example": {
+        "path": "schema_version",
+        "value": 5,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": None,
+    },
+    "path_rules": (
+        "bindings.path and every clauses.paths entry address semantic fields inside the plan, "
+        "not the output envelope. Use symbol, position.max_qty, "
+        "alert_rules[0].condition.reference.value; never draft.symbol or draft.position.max_qty. "
+        "Bind each non-null policy leaf and empty array exactly once. Also bind each ALL/ANY "
+        "group path to its type string. Do not bind other containers. Excluded roots are "
+        "identity/display only: exclude their ENTIRE subtrees from bindings and paths, "
+        "including metadata.reference_price_fen even when non-null. Retain their values in "
+        "draft only. The forbidden_paths list applies to both bindings and clauses.paths. "
+        "symbol and market are REQUIRED runtime asset-scope policies, NOT display-only "
+        "identity. Always bind both to exact source clauses, including mixed clauses that "
+        "also contain excluded plan_id, version or name; never discard the whole mixed clause. "
+        "Omit unregistered null bindings and paths, including levels=null, report_at=null and "
+        "null allocation fields; only the listed registered_null_paths require null bindings "
+        "when those paths exist. Missing trading parameters still stay null and UNRESOLVED, "
+        "and still block review; this never authorizes dropping a source requirement."
+    ),
+    "origin_rules": (
+        "PRODUCT_CONTRACT bindings always have clause_ids=[] and supplement_id=null, even "
+        "when the source repeats the constant. Never attach source references to that origin. "
+        "SOURCE, SOURCE_INTERPRETATION and SOURCE_SEMANTIC require exact canonical source "
+        "clause_ids whose POLICY paths include the binding path. Explicit source constants "
+        "may instead use SOURCE. Never invent HUMAN_SUPPLEMENT or human authority."
+    ),
+    "value_rules": (
+        "A binding value must match the candidate's JSON-serialized semantic value and type "
+        'exactly. Decimal reference.value serializes as a JSON string: use value="1234" '
+        'for a candidate reference.value="1234", not the JSON number 1234. This is only a '
+        "type example, not a strategy price. Use FEN_FROM_YUAN only for integer-fen fields "
+        "converted from an exact source yuan amount; direct fen strings use TEXT or JSON. "
+        "reference.source must quote literal source text, never an invented clause ID."
+    ),
+    "clause_rules": (
+        "Preserve every canonical clause exactly. A heading, identity/display metadata, "
+        "explicit optional null, or non-policy commentary can use CONTEXT with paths=[] and "
+        "semantic_role=COMMENTARY plus a concrete reason. An ACCOUNT or HISTORICAL explanation "
+        "also requires its semantic_role and reason. For a mixed clause bind only its policy "
+        "leaves, explaining the display/account remainder. Do not mark a clear non-policy "
+        "heading UNRESOLVED or BACKGROUND. BACKGROUND is reserved for registered exact scope "
+        "exclusions. Never use CONTEXT to hide a trading directive, deadline, unknown trading "
+        "parameter or technical requirement. POLICY paths must exist among semantic values."
+    ),
+    "metadata_clause_treatment": {
+        "disposition": "CONTEXT",
+        "paths": [],
+        "semantic_role": "COMMENTARY",
+        "reason": "All metadata values remain display-only in draft, never evidence bindings.",
+    },
+    "mixed_identity_clause_treatment": {
+        "disposition": "POLICY",
+        "paths": ["symbol", "market"],
+        "reason": "Bind symbol and market; keep plan_id, version and name in draft only.",
+    },
+    "mixed_clause_example": {
+        "source_shape": "activation.mode=MANUAL levels=null position.max_qty=<source quantity>",
+        "disposition": "POLICY",
+        "paths": ["activation.mode", "position.max_qty"],
+        "reason": "levels=null is retained in draft but omitted from paths and bindings.",
+    },
+    "final_check": (
+        "Before returning, ensure neither bindings nor ANY clause path contains draft., "
+        "an excluded root or its descendants, a forbidden path, an unregistered null or "
+        "a container. Recheck PRODUCT_CONTRACT clause_ids are empty. This check never "
+        "repairs or relaxes the server validator; correct the proposed response itself."
+    ),
+}
+
+
 def build_current_plan_prompt(source):
     if not isinstance(source, str) or not source.strip() or len(source) > 150_000:
         raise ValueError("source must be nonblank bounded text")
@@ -111,8 +206,8 @@ def build_current_plan_prompt(source):
         "Never invent strategy thresholds, quantities, grouping, CORE allocation, zone, risk "
         "branch, "
         "dates, repeat/reset semantics or timing. When source imposes no rule deadline, "
-        "explicitly select validity={\"mode\":\"PLAN_ACTIVE\"}; when source imposes no plan "
-        "activation window, explicitly select activation={\"mode\":\"MANUAL\"}. These exact "
+        'explicitly select validity={"mode":"PLAN_ACTIVE"}; when source imposes no plan '
+        'activation window, explicitly select activation={"mode":"MANUAL"}. These exact '
         "product defaults may use PRODUCT_CONTRACT bindings. They last until manual "
         "deactivation or explicit activation of a reviewed replacement; they do not extend "
         "any single signal execution window or imply a new independent signal. Explicit "
@@ -143,18 +238,22 @@ def build_current_plan_prompt(source):
         "FUNDAMENTALS_REVIEWED_AT_PLAN_GENERATION and keep technical remainders unresolved. "
         "Product constants only may use PRODUCT_CONTRACT: schema_version5, CONDITION_PLAN, "
         "condition-plan-v1, daily-ta-v2/QFQ/ONE_VERIFIED_PROVIDER/CURRENT_QUOTE_BASIS, "
+        "registered monitoring.macd_min_observations=26, "
         "trading_rules settlement NEXT_EXCHANGE_SESSION/tick_size_fen1/special_state_restrictions "
         "BLOCK_UNVERIFIED, execution_policy ONE_PLANNED_QUANTITY/SEVERE_THEN_ORDINARY/BLOCK_BOTH. "
         "All other values require SOURCE bindings; never create HUMAN_SUPPLEMENT or verified "
         "facts. "
         "Simulation quantities are positive multiples of 100 shares; proposed allocation is "
         "not inventory. "
-        "Prices use integer fen and FEN_FROM_YUAN only for exact source amounts. "
+        "Integer-fen price fields use integers and FEN_FROM_YUAN only for exact source amounts; "
+        "Decimal reference.value and its evidence binding retain their JSON string type. "
         "Keep every discriminator, explicit null and source omission visible.\n"
         "Canonical source clauses:\n"
         + clauses
         + "\nJSON schema:\n"
         + schema
+        + "\nSource review contract (trusted):\n"
+        + json.dumps(_SOURCE_REVIEW_CONTRACT, ensure_ascii=False, separators=(",", ":"))
         + "\nUNTRUSTED_PLAN_DATA_START\n"
         + data
         + "\nUNTRUSTED_PLAN_DATA_END"

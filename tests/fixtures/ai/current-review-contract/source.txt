@@ -1,0 +1,15 @@
+计划根字段语义值
+schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1
+plan_id=SNGC-OBS-20261022 version=1 symbol=605296.SH name=神农集团 market=SSE
+metadata.report_at=null metadata.reference_price_fen=3030
+activation.mode=MANUAL levels=null position.max_qty=300
+ordinary_rules=[]
+risk_branches=[]
+alert_rules[0].kind=RISK_ALERT alert_rules[0].rule_id=RISK-ALERT-01
+alert_rules[0].condition.type=DAILY_PRICE_COMPARE alert_rules[0].condition.field=close alert_rules[0].condition.offset=0 alert_rules[0].condition.comparator=LT
+alert_rules[0].condition.reference.mode=FIXED alert_rules[0].condition.reference.value="2659" alert_rules[0].condition.reference.unit=FEN
+alert_rules[0].condition.reference.as_of=2026-10-21 alert_rules[0].condition.reference.source=2026-10-21观察计划
+alert_rules[0].confirmation.kind=OFFICIAL_DAILY_CLOSE
+monitoring.indicator_formula_version=daily-ta-v2 monitoring.price_basis=QFQ monitoring.source_requirement=ONE_VERIFIED_PROVIDER monitoring.comparability_requirement=CURRENT_QUOTE_BASIS monitoring.macd_min_observations=26
+trading_rules.settlement=NEXT_EXCHANGE_SESSION trading_rules.tick_size_fen=1 trading_rules.special_state_restrictions=BLOCK_UNVERIFIED
+execution_policy.same_signal=ONE_PLANNED_QUANTITY execution_policy.risk_priority=SEVERE_THEN_ORDINARY execution_policy.ordinary_conflict=BLOCK_BOTH

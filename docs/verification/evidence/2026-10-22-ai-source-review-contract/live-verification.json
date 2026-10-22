@@ -1,0 +1,72 @@
+{
+  "verification_version": "current-source-review-live-v1",
+  "provider_origin": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "prompt_version": "plan-extract-v9",
+  "started_at_utc": "2026-10-22T03:11:09.062310+00:00",
+  "source_file": "tests/fixtures/ai/current-review-contract/source.txt",
+  "source_sha256": "d672ee69ade8c1cbcee496bf5c88976d305227f9d985be151391c25a16aaab65",
+  "prompt_sha256": "766b30e8f0cbd063b771fd9b08fcf5ac020fe71a6d3fb585aedce0ac352d2c83",
+  "prompt_chars": 48400,
+  "max_input_chars": 50000,
+  "max_output_tokens": 4096,
+  "timeout_seconds": 30,
+  "source_clause_count": 15,
+  "binding_count": 32,
+  "response_file": "tests/fixtures/ai/current-review-contract/deepseek-after.json",
+  "response_sha256": "f75114a2e9f943e4c7a10e887adf0a36a2e67750d1f81d9290434b5b0497d9c4",
+  "result": {
+    "status": "SUCCEEDED",
+    "draft_present": true,
+    "ordinary_rules": 0,
+    "buy_rules": 0,
+    "sell_rules": 0,
+    "liquidation_branches": 0,
+    "technical_alerts": 1,
+    "executable_structure": true,
+    "validation_issues": [],
+    "assumptions": [],
+    "warnings": [],
+    "elapsed_seconds": 9.478
+  },
+  "provider_response": {
+    "model": "deepseek-flash",
+    "finish_reason": "stop",
+    "attempts": 1,
+    "content_chars": 11309,
+    "usage": {
+      "prompt_tokens": 14196,
+      "completion_tokens": 3469,
+      "total_tokens": 17665
+    }
+  },
+  "alert": {
+    "kind": "RISK_ALERT",
+    "rule_id": "RISK-ALERT-01",
+    "condition": {
+      "type": "DAILY_PRICE_COMPARE",
+      "field": "close",
+      "offset": 0,
+      "comparator": "LT",
+      "reference": {
+        "mode": "FIXED",
+        "value": "2659",
+        "unit": "FEN",
+        "as_of": "2026-10-21",
+        "source": "2026-10-21观察计划"
+      }
+    },
+    "confirmation": {
+      "kind": "OFFICIAL_DAILY_CLOSE"
+    }
+  },
+  "side_effects": {
+    "config_file_unchanged": true,
+    "source_unchanged": true,
+    "response_unmodified": true,
+    "validator_unchanged": true,
+    "plan_or_account_database_opened": false,
+    "plan_activated": false,
+    "simulated_inventory_changed": false
+  }
+}
