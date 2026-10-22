@@ -16,7 +16,7 @@ import {
   type BacktestApi,
   type BacktestRunListQuery,
 } from "../api/backtests";
-import { isCalendarDate, normalizeShanghaiDateTime } from "../api/shanghaiTime";
+import { normalizeShanghaiDateTime } from "../api/shanghaiTime";
 import { ApiClientError } from "../api/transport";
 
 import { useBacktestReadFeedback } from "./useBacktestReadFeedback";
@@ -26,8 +26,6 @@ export type BacktestRunsQueryState = "IDLE" | "LOADING" | "READY" | "EMPTY" | "F
 export type BacktestRunSort = "completedAt_desc";
 
 export interface RunUrlFilters {
-  readonly eventEndFrom?: string | null;
-  readonly eventEndTo?: string | null;
   readonly completedFrom: string | null;
   readonly completedTo: string | null;
   readonly pinned: boolean | null;
@@ -35,8 +33,6 @@ export interface RunUrlFilters {
 }
 
 export interface RunFilterDraft {
-  readonly eventEndFrom?: string;
-  readonly eventEndTo?: string;
   readonly completedFrom: string;
   readonly completedTo: string;
   readonly pinned: string;
@@ -100,11 +96,6 @@ function parsePage(value: string | null, hasCursor: boolean): number {
 
 export function validateRunFilterDraft(draft: RunFilterDraft): RunFilterValidation {
   const errors: Partial<Record<keyof RunFilterDraft | "range", string>> = {};
-  const eventEndFrom = draft.eventEndFrom?.trim() || null;
-  const eventEndTo = draft.eventEndTo?.trim() || null;
-  if (eventEndFrom !== null && !isCalendarDate(eventEndFrom)) errors.eventEndFrom = "请输入有效的回测截止开始日期";
-  if (eventEndTo !== null && !isCalendarDate(eventEndTo)) errors.eventEndTo = "请输入有效的回测截止结束日期";
-  if (eventEndFrom !== null && eventEndTo !== null && eventEndFrom > eventEndTo) errors.eventEndFrom = "截止开始日期不得晚于截止结束日期";
   const symbol = draft.symbol.trim().length === 0 ? null : normalizeSymbol(draft.symbol);
   if (draft.symbol.trim().length > 0 && symbol === null) {
     errors.symbol = "股票代码必须是 .SH 或 .SZ A 股代码";
@@ -128,8 +119,6 @@ export function validateRunFilterDraft(draft: RunFilterDraft): RunFilterValidati
   return Object.freeze({
     errors: Object.freeze(errors),
     filters: Object.freeze({
-      ...(eventEndFrom === null || errors.eventEndFrom ? {} : { eventEndFrom }),
-      ...(eventEndTo === null || errors.eventEndTo ? {} : { eventEndTo }),
       completedFrom,
       completedTo,
       pinned,
@@ -150,8 +139,6 @@ function urlQuery(
   if (filters.symbol !== null) query.symbol = filters.symbol;
   if (filters.completedFrom !== null) query.completedFrom = filters.completedFrom;
   if (filters.completedTo !== null) query.completedTo = filters.completedTo;
-  if (filters.eventEndFrom != null) query.eventEndFrom = filters.eventEndFrom;
-  if (filters.eventEndTo != null) query.eventEndTo = filters.eventEndTo;
   if (filters.pinned !== null) query.pinned = filters.pinned ? "true" : "false";
   if (cursor !== null) query.cursor = cursor;
   return Object.freeze(query);
@@ -159,8 +146,6 @@ function urlQuery(
 
 function parseUrlState(query: LocationQuery): ParsedRunUrlState {
   const validation = validateRunFilterDraft({
-    eventEndFrom: scalar(query, "eventEndFrom") ?? "",
-    eventEndTo: scalar(query, "eventEndTo") ?? "",
     completedFrom: scalar(query, "completedFrom") ?? "",
     completedTo: scalar(query, "completedTo") ?? "",
     pinned: scalar(query, "pinned") ?? "",
@@ -171,7 +156,8 @@ function parseUrlState(query: LocationQuery): ParsedRunUrlState {
     filters = Object.freeze({ ...filters, completedFrom: null, completedTo: null });
   }
   const rawCursor = scalar(query, "cursor")?.trim() ?? null;
-  const hasRetiredFilters = Object.hasOwn(query, "datasetHash") || Object.hasOwn(query, "planVersionId");
+  const hasRetiredFilters = ["datasetHash", "planVersionId", "eventEndFrom", "eventEndTo"]
+    .some((key) => Object.hasOwn(query, key));
   const cursor = !hasRetiredFilters && rawCursor !== null && validCursor(rawCursor) ? rawCursor : null;
   const pageNumber = parsePage(scalar(query, "page"), cursor !== null);
   return Object.freeze({
@@ -202,8 +188,6 @@ function queryMatchesCanonical(
 
 function apiQuery(state: ParsedRunUrlState): BacktestRunListQuery {
   return {
-    ...(state.filters.eventEndFrom == null ? {} : { eventEndFrom: state.filters.eventEndFrom }),
-    ...(state.filters.eventEndTo == null ? {} : { eventEndTo: state.filters.eventEndTo }),
     ...(state.filters.completedFrom === null
       ? {}
       : { completedFrom: state.filters.completedFrom }),
@@ -219,8 +203,6 @@ function apiQuery(state: ParsedRunUrlState): BacktestRunListQuery {
 
 function responseFilters(filters: BacktestRunFiltersView): RunUrlFilters {
   return Object.freeze({
-    ...(filters.eventEndFrom == null ? {} : { eventEndFrom: filters.eventEndFrom }),
-    ...(filters.eventEndTo == null ? {} : { eventEndTo: filters.eventEndTo }),
     completedFrom: filters.completedFrom,
     completedTo: filters.completedTo,
     pinned: filters.pinned,

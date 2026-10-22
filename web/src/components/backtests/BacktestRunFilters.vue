@@ -25,11 +25,9 @@ const errorSummary = useTemplateRef<HTMLDivElement>("errorSummary");
 const symbol = shallowRef("");
 const completedFrom = shallowRef("");
 const completedTo = shallowRef("");
-const eventEndFrom = shallowRef("");
-const eventEndTo = shallowRef("");
 const pinned = shallowRef("");
-const activeConditions = () => [props.filters.symbol, props.filters.pinned === null ? null : props.filters.pinned ? "已保留" : "未保留", props.filters.eventEndFrom ? `截止日从 ${props.filters.eventEndFrom}` : null, props.filters.eventEndTo ? `截止日至 ${props.filters.eventEndTo}` : null, props.filters.completedFrom || props.filters.completedTo ? "旧时间条件" : null].filter(Boolean).join(" · ");
-function clear() { emit("apply", { symbol: null, pinned: null, completedFrom: null, completedTo: null, eventEndFrom: null, eventEndTo: null }); }
+const activeConditions = () => [props.filters.symbol, props.filters.pinned === null ? null : props.filters.pinned ? "已保留" : "未保留", props.filters.completedFrom || props.filters.completedTo ? "旧时间条件" : null].filter(Boolean).join(" · ");
+function clear() { emit("apply", { symbol: null, pinned: null, completedFrom: null, completedTo: null }); }
 const errors = shallowRef<Partial<RunFilterErrors>>({});
 
 watch(
@@ -38,8 +36,6 @@ watch(
     symbol.value = filters.symbol ?? "";
     completedFrom.value = filters.completedFrom ?? "";
     completedTo.value = filters.completedTo ?? "";
-    eventEndFrom.value = filters.eventEndFrom ?? "";
-    eventEndTo.value = filters.eventEndTo ?? "";
     pinned.value = filters.pinned === null ? "" : filters.pinned ? "true" : "false";
     errors.value = {};
   },
@@ -48,8 +44,6 @@ watch(
 
 async function apply(): Promise<void> {
   const draft: RunFilterDraft = {
-    eventEndFrom: eventEndFrom.value,
-    eventEndTo: eventEndTo.value,
     completedFrom: completedFrom.value,
     completedTo: completedTo.value,
     pinned: pinned.value,
@@ -67,8 +61,6 @@ async function apply(): Promise<void> {
 
 function errorTarget(field: string): string {
   const targets: Record<string, string> = {
-    eventEndFrom: "run-filter-end-from",
-    eventEndTo: "run-filter-end-to",
     completedFrom: "run-filter-completed-from",
     completedTo: "run-filter-completed-to",
     pinned: "run-filter-pinned",
@@ -141,48 +133,10 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
         </p>
       </div>
 
-      <details class="run-filters__extra" data-testid="advanced-run-filters" :open="Boolean(props.filters.eventEndFrom || props.filters.eventEndTo)">
-        <summary>更多筛选 · 回测截止日期</summary><p>按回测覆盖的截止日筛选，不是实际完成日期。</p><div class="run-filters__dates">      <div class="run-filters__field">
-        <label for="run-filter-end-from">回测截止日期从 <span>可选，包含当天</span></label>
-        <input
-          type="date"
-          id="run-filter-end-from"
-          v-model="eventEndFrom"
-          :aria-invalid="fieldError('eventEndFrom') === undefined ? undefined : 'true'"
-          :aria-describedby="fieldError('eventEndFrom') === undefined ? undefined : 'run-filter-end-from-error'"
-          autocomplete="off"
-        />
-        <p
-          v-if="fieldError('eventEndFrom')"
-          id="run-filter-end-from-error"
-          class="run-filters__field-error"
-        >
-          {{ fieldError("eventEndFrom") }}
-        </p>
-      </div>
-      <div class="run-filters__field">
-        <label for="run-filter-end-to">回测截止日期至 <span>可选，包含当天</span></label>
-        <input
-          type="date"
-          id="run-filter-end-to"
-          v-model="eventEndTo"
-          :aria-invalid="fieldError('eventEndTo') === undefined ? undefined : 'true'"
-          :aria-describedby="fieldError('eventEndTo') === undefined ? undefined : 'run-filter-end-to-error'"
-          autocomplete="off"
-        />
-        <p
-          v-if="fieldError('eventEndTo')"
-          id="run-filter-end-to-error"
-          class="run-filters__field-error"
-        >
-          {{ fieldError("eventEndTo") }}
-        </p>
-      </div>
-</div></details>
       <details v-if="props.filters.completedFrom || props.filters.completedTo" class="run-filters__extra" data-testid="legacy-run-filters" open>
         <summary>旧链接时间条件</summary>
         <div v-if="props.filters.completedFrom || props.filters.completedTo" class="run-filters__legacy-times">
-          <p>当前链接保留旧结果时间条件。连续回测的旧结果时间是证据截止时间，不是实际完成时间；可清空后改用上方日期。</p>
+          <p>当前链接保留旧结果时间条件。连续回测的旧结果时间是证据截止时间，不是实际完成时间；可清空后仅按股票代码和保留状态筛选。</p>
           <div class="run-filters__field">
             <label for="run-filter-completed-from">旧结果时间从 <span>可选，RFC 3339 +08:00</span></label>
             <input
@@ -304,7 +258,6 @@ function fieldError(field: keyof RunFilterDraft): string | undefined {
 .run-filters__hint { margin: 0; color: var(--color-text-muted); font-size: .875rem; }
 .run-filters__extra { grid-column: 1 / -1; }
 .run-filters__footer { grid-column: 3; grid-row: 1; align-self: end; }
-.run-filters__dates { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .run-filters__header h2 { font-size: 1rem; }
 .run-filters__extra { border-top: var(--border-technical); padding-top: var(--space-3); }
 .run-filters__extra summary { cursor: pointer; min-height: 2.75rem; }

@@ -190,25 +190,15 @@ describe("BacktestRunsView", () => {
   });
   it("shows common filters without dataset or plan-version lookup controls", async () => {
     const { wrapper } = await mountRunsView({ api: apiWith({ listRuns: vi.fn().mockResolvedValue(page()) }) });
-    expect(wrapper.get('#run-filter-end-from').attributes('type')).toBe('date');
-    expect(wrapper.get('#run-filter-end-to').attributes('type')).toBe('date');
-    expect(wrapper.get('[data-testid="advanced-run-filters"]').attributes("open")).toBeUndefined();
+    expect(wrapper.find('#run-filter-end-from').exists()).toBe(false);
+    expect(wrapper.find('#run-filter-end-to').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="advanced-run-filters"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="legacy-run-filters"]').exists()).toBe(false);
     expect(wrapper.find('#run-filter-dataset-hash').exists()).toBe(false);
     expect(wrapper.find('#run-filter-plan-version').exists()).toBe(false);
     expect(wrapper.find('#run-filter-sort').exists()).toBe(false);
-    expect(wrapper.text()).toContain('回测截止日期');
+    expect(wrapper.text()).not.toContain('更多筛选 · 回测截止日期');
     expect(wrapper.text()).not.toContain('完成开始时间');
-    wrapper.unmount();
-  });
-  it("restores and submits end-date filters without converting them into completion timestamps", async () => {
-    const listRuns = vi.fn<BacktestApi['listRuns']>().mockImplementation(async query => page({ filters: filters({ eventEndFrom: query?.eventEndFrom ?? null, eventEndTo: query?.eventEndTo ?? null }) }));
-    const { wrapper, router } = await mountRunsView({ api: apiWith({ listRuns }), query: { eventEndFrom: '2026-08-28' } });
-    expect(wrapper.get<HTMLInputElement>('#run-filter-end-from').element.value).toBe('2026-08-28');
-    await wrapper.get('#run-filter-end-to').setValue('2026-08-29');
-    await wrapper.get('[data-testid="apply-run-filters"]').trigger('click'); await flushPromises();
-    expect(listRuns.mock.calls.at(-1)?.[0]).toEqual({ eventEndFrom: '2026-08-28', eventEndTo: '2026-08-29', limit: 20 });
-    expect(router.currentRoute.value.query.completedFrom).toBeUndefined();
     wrapper.unmount();
   });
   it("normalizes all URL filters, fixed sort, and first-page identity before one request", async () => {
@@ -259,22 +249,25 @@ describe("BacktestRunsView", () => {
   });
 
   it.each([
+    { eventEndFrom: "2026-08-28" },
+    { eventEndTo: "2026-08-29" },
+    { eventEndFrom: "2026-08-28", eventEndTo: "2026-08-29" },
     { datasetHash: DATASET_HASH },
     { planVersionId: PLAN_VERSION_ID },
     { datasetHash: "invalid", planVersionId: "invalid" },
   ])("removes retired URL conditions and their cursor before querying: %j", async (retired) => {
     const listRuns = vi.fn<BacktestApi["listRuns"]>().mockResolvedValue(
-      page({ filters: filters({ eventEndFrom: "2026-08-28", pinned: false, symbol: "000001.SZ" }) }),
+      page({ filters: filters({ pinned: false, symbol: "000001.SZ" }) }),
     );
     const { router, wrapper } = await mountRunsView({
       api: apiWith({ listRuns }),
-      query: { ...retired, cursor: CURSOR, page: "2", symbol: "000001.SZ", eventEndFrom: "2026-08-28", pinned: "false" },
+      query: { ...retired, cursor: CURSOR, page: "2", symbol: "000001.SZ", pinned: "false" },
     });
     expect(router.currentRoute.value.query).toEqual({
-      page: "1", sort: "completedAt_desc", symbol: "000001.SZ", eventEndFrom: "2026-08-28", pinned: "false",
+      page: "1", sort: "completedAt_desc", symbol: "000001.SZ", pinned: "false",
     });
     expect(listRuns).toHaveBeenCalledTimes(1);
-    expect(listRuns.mock.calls[0]?.[0]).toEqual({ symbol: "000001.SZ", eventEndFrom: "2026-08-28", pinned: "false", limit: 20 });
+    expect(listRuns.mock.calls[0]?.[0]).toEqual({ symbol: "000001.SZ", pinned: "false", limit: 20 });
     expect(wrapper.find('#run-filter-dataset-hash').exists()).toBe(false);
     expect(wrapper.find('#run-filter-plan-version').exists()).toBe(false);
     wrapper.unmount();
@@ -285,7 +278,6 @@ describe("BacktestRunsView", () => {
       const current = query ?? {};
       return page({
         filters: filters({
-          eventEndTo: current.eventEndTo ?? null,
           pinned: current.pinned == null ? null : current.pinned === "true",
           symbol: current.symbol ?? null,
         }),
@@ -296,22 +288,17 @@ describe("BacktestRunsView", () => {
       query: { cursor: CURSOR, page: "2", sort: "completedAt_desc" },
     });
     await wrapper.get<HTMLInputElement>("#run-filter-symbol").setValue("600000.sh");
-    await wrapper
-      .get<HTMLInputElement>("#run-filter-end-to")
-      .setValue("2026-08-29");
     await wrapper.get<HTMLSelectElement>("#run-filter-pinned").setValue("false");
     await wrapper.get('[data-testid="apply-run-filters"]').trigger("click");
     await flushPromises();
 
     expect(router.currentRoute.value.query).toEqual({
-      eventEndTo: "2026-08-29",
       page: "1",
       pinned: "false",
       sort: "completedAt_desc",
       symbol: "600000.SH",
     });
     expect(listRuns.mock.calls.at(-1)?.[0]).toEqual({
-      eventEndTo: "2026-08-29",
       limit: 20,
       pinned: "false",
       symbol: "600000.SH",
@@ -323,17 +310,12 @@ describe("BacktestRunsView", () => {
     const listRuns = vi.fn<BacktestApi["listRuns"]>().mockResolvedValue(page());
     const { wrapper } = await mountRunsView({ api: apiWith({ listRuns }) });
     await wrapper.get<HTMLInputElement>("#run-filter-symbol").setValue("private<script>");
-    await wrapper
-      .get<HTMLInputElement>("#run-filter-end-from")
-      .setValue("2026-08-29");
-    await wrapper.get('#run-filter-end-to').setValue('2026-08-28');
     await wrapper.get('[data-testid="apply-run-filters"]').trigger("click");
     await flushPromises();
 
     const errors = wrapper.get('[data-testid="run-filter-errors"]');
     expect(document.activeElement).toBe(errors.element);
     expect(errors.text()).toContain("股票代码");
-    expect(errors.text()).toContain("截止开始日期不得晚于截止结束日期");
     expect(wrapper.html()).not.toContain("<script>");
     expect(listRuns).toHaveBeenCalledTimes(1);
     wrapper.unmount();

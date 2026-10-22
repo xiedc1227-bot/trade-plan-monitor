@@ -69,7 +69,22 @@ async function accessible(page: Page) {
 
 test("30 run records paginate, clear filters and return to the selected result with focus", async ({ page }) => {
   const writes = await install(page); await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${base}/backtests`); await expect(page.getByTestId("backtest-run-row")).toHaveCount(20);
+  const runQueries: URL[] = [];
+  page.on("request", request => { const url = new URL(request.url()); if (url.pathname === "/api/v1/backtest-runs") runQueries.push(url); });
+  await page.goto(`${base}/backtests?eventEndFrom=2026-08-28&eventEndTo=2026-08-29&cursor=nextpage.signature&page=2`);
+  await expect(page.getByTestId("backtest-run-row")).toHaveCount(20);
+  await expect(page).toHaveURL(/\/backtests\?page=1&sort=completedAt_desc$/);
+  expect(runQueries).toHaveLength(1);
+  expect([...runQueries[0]!.searchParams.keys()].sort()).toEqual(["limit"]);
+  await expect(page.locator("#run-filter-end-from, #run-filter-end-to")).toHaveCount(0);
+  await expect(page.getByTestId("advanced-run-filters")).toHaveCount(0);
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(page.locator("#run-filter-symbol")).toBeVisible();
+    await expect(page.locator("#run-filter-pinned")).toBeVisible();
+  }
+  await page.screenshot({ path: join(process.cwd(), ".pytest_cache", "backtest-filters.png") });
   const first = page.getByTestId("backtest-run-row").first(); const box = await first.boundingBox(); expect(box!.y).toBeLessThan(900);
   await page.getByTestId("next-run-page").click(); await expect(page.getByTestId("backtest-run-row")).toHaveCount(10);
   await page.getByTestId("previous-run-page").click(); await expect(page.getByTestId("backtest-run-row")).toHaveCount(20);

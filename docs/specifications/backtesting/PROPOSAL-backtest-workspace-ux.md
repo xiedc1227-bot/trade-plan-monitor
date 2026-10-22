@@ -74,7 +74,7 @@ Recommended sequence: shared read feedback → run history + data scope → task
 
 ### BW05.1 Run history
 
-Use a compact header with one primary “New backtest” action. Keep stock code and quick retention choice visible; put date bounds in “More filters”. Show active filter chips and “Clear filters”. Preserve the existing meaning: date filters refer to the backtest end date, not actual execution time.
+Use a compact header with one primary “New backtest” action. Keep stock code and quick retention choice visible. Show active filter chips and “Clear filters”. Per the 2026-10-22 scope update, remove the backtest end-date bounds and “More filters” section. Retired `eventEndFrom`/`eventEndTo` URL conditions are cleared together with their cursor before reading page 1. Existing API date-filter support remains compatible.
 
 Default row layout: **symbol + backtest interval | outcome summary | fill count | retention | View result**. Use a short run-ID suffix as a secondary differentiator; make the full ID available through details/copy. Add a stock name only when returned by an authoritative source. A symbol/date title is presentation-only; editable names and notes are deferred.
 
