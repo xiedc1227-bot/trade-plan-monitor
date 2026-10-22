@@ -1,0 +1,27 @@
+{
+  "focused": 44,
+  "unit": 3445,
+  "integration": 213,
+  "other": 13,
+  "live_deselected": 4,
+  "full_integration_completed": false,
+  "full_integration_reason": "Stopped during unrelated long-running backtest acceptance; not certified",
+  "initial_collection": "Duplicate module names; importlib mode conflicts with existing bare cross-test imports",
+  "lint": true,
+  "format": true,
+  "final_runtime_prompt_matches_live_request": true,
+  "integration_files": [
+    "test_configured_ai_web.py",
+    "test_ai_provider_contract.py",
+    "test_ai_browser_contract.py",
+    "test_plan_extraction_diagnostics.py",
+    "test_plan_preparation_review.py",
+    "test_explicit_plan_review_api.py",
+    "test_source_treatment_review_api.py",
+    "test_source_confirmation_review.py",
+    "test_daily_plan_boundaries.py",
+    "test_daily_plan_chain.py",
+    "test_daily_simulation_review_regressions.py",
+    "test_generic_live_four_plan_chain.py"
+  ]
+}

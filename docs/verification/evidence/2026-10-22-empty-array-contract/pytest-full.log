@@ -1,0 +1,19 @@
+
+=================================== ERRORS ====================================
+________ ERROR collecting tests/unit/test_backtest_service_contract.py ________
+import file mismatch:
+imported module 'test_backtest_service_contract' has this __file__ attribute:
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_backtest_service_contract.py
+which is not the same as the test file we want to collect:
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_backtest_service_contract.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/unit/test_backtest_service_contract.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+4 deselected, 1 warning, 1 error in 5.15s

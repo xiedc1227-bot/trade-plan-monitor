@@ -1,0 +1,82 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [
+        "No extracted draft",
+        "Extraction/review did not fully pass"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6585,
+        "completion_tokens": 1898,
+        "total_tokens": 8483
+      },
+      "source_sha256": "c3bee06455c24ac5bb133ada3842d0b05e6f74989a4e9c8aa4244d851189e672",
+      "source_chars": 822,
+      "extraction_status": "INVALID_OUTPUT",
+      "issues": [
+        {
+          "code": "AI_FIELD_EVIDENCE_INVALID",
+          "path": "mapping",
+          "severity": "ERROR",
+          "message": "Plan source mapping is invalid.",
+          "activationBlocking": true
+        }
+      ],
+      "assumptions": [],
+      "warnings": [],
+      "passed": false
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [
+        "ValidationError: 1 validation error for ValidationIssue\npath\n  String should have at least 1 character [type=string_too_short, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_too_short"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6606,
+        "completion_tokens": 2494,
+        "total_tokens": 9100
+      },
+      "source_sha256": "5abeae5df9898c5094b7aa68d933ca0568a3b942aecda4e0ebe72faf5e44f0ad",
+      "source_chars": 1353,
+      "passed": false
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6507,
+        "completion_tokens": 1834,
+        "total_tokens": 8341
+      },
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6533,
+        "completion_tokens": 2052,
+        "total_tokens": 8585
+      },
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    }
+  ],
+  "all_passed": false,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

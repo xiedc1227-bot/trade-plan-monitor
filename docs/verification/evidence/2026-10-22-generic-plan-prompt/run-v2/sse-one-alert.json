@@ -1,0 +1,140 @@
+{
+  "case": {
+    "id": "sse-one-alert",
+    "symbol": "600010.SH",
+    "market": "SSE",
+    "cap": 500,
+    "alerts": [
+      [
+        "LT",
+        "1207"
+      ]
+    ],
+    "plan_id": "SYNTH-SSE-OBS",
+    "version": 1,
+    "reference": 1234,
+    "importable": true,
+    "input": "当前标的包钢股份600010.SH，沪市主板。实际0股，成本无，上限500股，有效买单0股。仅提醒观察版，明确恰好1条技术提醒：最新正式完整日K收盘严格低于12.07元，正式收盘确认，仅提醒。无买卖、无风险退出。新草稿建议标识SYNTH-SSE-OBS，版本1，尚未保存。合成报告时间时区未知，故report_at=null；2026-10-21合成报告参考价12.34元，完整日K收盘12.34；阈值依据为用户明确的合成结构线12.07元，来源文字“2026-10-21合成观察约定”。没有更多日K、量能、财报和指数资料，这些缺项只列人工附件，不得添加到这条独立价格提醒。原文未设财报前退出或1—3个月期限。"
+  },
+  "summary": {
+    "case": "sse-one-alert",
+    "findings": [
+      "No extracted draft",
+      "Extraction/review did not fully pass"
+    ],
+    "generation_finish_reason": "stop",
+    "generation_usage": {
+      "prompt_tokens": 6592,
+      "completion_tokens": 2029,
+      "total_tokens": 8621
+    },
+    "source_sha256": "e76a5e60415817d7e0727d075f34fb38e7720b332fc61f8435895a5034ec0076",
+    "source_chars": 1351,
+    "extraction_status": "INVALID_OUTPUT",
+    "issues": [
+      {
+        "code": "AI_FIELD_EVIDENCE_INVALID",
+        "path": "mapping",
+        "severity": "ERROR",
+        "message": "Plan source mapping is invalid.",
+        "activationBlocking": true
+      }
+    ],
+    "assumptions": [],
+    "warnings": [],
+    "passed": false
+  },
+  "generation_response": {
+    "request_id": "4954adf4-47b4-472a-af49-3e1803718512",
+    "provider_id": "00000000-0000-4000-8000-0000000000d5",
+    "model": "deepseek-flash",
+    "content": "{\"A\":\"计划根字段语义值\\nschema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\\nplan_id=SYNTH-SSE-OBS version=1 symbol=600010.SH name=包钢股份 market=SH\\nmetadata.report_at=null metadata.reference_price_fen=1234\\nactivation.mode=MANUAL levels=null position.max_qty=500\\nordinary_rules=[]\\nrisk_branches=[]\\nalert_rules[0].kind=RISK_ALERT alert_rules[0].rule_id=OBS-CLOSE-BELOW-1207\\nalert_rules[0].condition.type=DAILY_PRICE_COMPARE alert_rules[0].condition.field=close alert_rules[0].condition.offset=0 alert_rules[0].condition.comparator=LT\\nalert_rules[0].condition.reference.mode=FIXED alert_rules[0].condition.reference.value=\\\"1207\\\" alert_rules[0].condition.reference.unit=FEN alert_rules[0].condition.reference.as_of=2026-10-21 alert_rules[0].condition.reference.source=2026-10-21合成观察约定\\nalert_rules[0].confirmation.kind=OFFICIAL_DAILY_CLOSE\\nmonitoring.indicator_formula_version=daily-ta-v2 monitoring.price_basis=QFQ monitoring.source_requirement=ONE_VERIFIED_PROVIDER monitoring.comparability_requirement=CURRENT_QUOTE_BASIS monitoring.macd_min_observations=26\\ntrading_rules.settlement=NEXT_EXCHANGE_SESSION trading_rules.tick_size_fen=1 trading_rules.special_state_restrictions=BLOCK_UNVERIFIED\\nexecution_policy.same_signal=ONE_PLANNED_QUANTITY execution_policy.risk_priority=SEVERE_THEN_ORDINARY execution_policy.ordinary_conflict=BLOCK_BOTH\",\"B\":\"## 1．当前结论与行情摘要\\n\\n唯一主动作：等待（不动作）。\\n\\n这只股票当前最合理的操作原则是：空仓不建仓，仅以一条独立技术提醒跟踪12.07元结构线是否被正式收盘跌破，跌破后人工复评，不产生任何买卖或清仓义务。\\n\\n- 标的：包钢股份 600010.SH，沪市主板。\\n- 报告：合成报告，报告时间时区未知，report_at=null；合成报告参考价12.34元（2026-10-21），同日完整日K收盘12.34元。\\n- 最新价格与北京时间：本次为离线合成测试，禁止联网取行情，未取得最新真实价格，不声称获得最新数据。\\n- 完整日K截止：2026-10-21（合成）。\\n- 来源：合成输入，非真实行情源；复权口径按QFQ契约，但无更多K线可核验。\\n- 交易规则：沪市主板，T+1，100股整数倍申报，涨跌幅与特殊状态未核验。\\n- 核心风险：数据严重不足（无量能、无财报、无指数、无多日K线），任何趋势与企稳判断均不可成立。\\n- 缺失项：真实行情、成交量、MA/MACD/RSI/ATR/布林、指数状态、公告与财报。\\n- 输出模式：仅提醒观察版，恰好1条技术提醒。\\n\\n## 2．三个核心研究位置\\n\\n| 位置 | 端点 | 依据 | 用途 | 是否启用 |\\n| --- | --- | --- | --- | --- |\\n| 主要压力区 | 未设定 | 无前高/平台等结构数据 | 研究用 | 否 |\\n| 低吸观察区 | 未设定 | 无结构、无量价、无技术辅助 | 研究用 | 否 |\\n| 核心风险位置 | 12.07元（1207分） | 用户明确的合成结构线（2026-10-21合成观察约定） | 独立技术提醒线 | 是（仅提醒） |\\n\\n用途区分：\\n- 已有持仓退出线：无（实际0股，无成本）。\\n- 空仓提醒线：12.07元正式收盘跌破提醒，仅用于触发人工复评，不是买入线，也不是未来新仓止损。\\n- 未来新仓止损：未设定；不得把12.07元默认当作未来建仓止损。\\n\\n## 3．仓位、成本与大盘影响\\n\\n- 实际持仓：0股（已知）。\\n- 持仓成本：无（已知）。\\n- 最大计划持仓：500股（已知，符合100股整数倍）。\\n- 建议底仓/机动仓划分：未确认；当前0股，不划分。\\n- 有效买单：0股（已知）。\\n- 模拟库存：未提供，未知，不推算。\\n- 剩余额度：500股（上限500－持仓0－有效买单0），仅为额度记录，不是买入目标。\\n\\n大盘影响：\\n- 参考指数应为上证指数，但本次无指数日K数据，I、M20、M60、M20_5、L20均无法核验，状态记为“未知”。\\n- 相对强势：近5日、20日个股收益与MA20均无法计算，判定为“未确定”。\\n- S0：未定义（无低吸区、无量价、无技术辅助），不成立。\\n- S1／S2：因S0不完整，不能判为通过。\\n- Q0：未确定（无结构、波动、成本依据）。\\n- 合法数量折减：不适用，本次无买入规则。\\n- 理论数量与当前权限：本次权限仅为1条提醒，无任何买入或卖出权限。\\n\\n## 4．最终人工决策与风险处理\\n\\n- 如果正式完整日K收盘严格低于12.07元，那么触发1条提醒，人工复评结构、量能与基本面，不自动产生卖出或买入动作。\\n- 如果收盘等于或高于12.07元，那么不触发提醒，继续等待。\\n- 普通买卖成立前提：本次未设定，任何买卖均需另行确认低吸区、企稳证据、量能与技术辅助，并单独授权。\\n- 普通技术性破位：无持仓，不适用退出流程。\\n- 严重技术性破位：无持仓，不适用；若未来建仓，须另行设定风险线。\\n- 重大基本面风险：无财报与公告资料，无法核验；出现官方信息推翻逻辑时由人工决定。\\n- 原文期限：未设财报前退出或1—3个月期限，本提醒持续至人工停用或新版替换。\\n- 已确认信号：无。待确认信号：12.07元提醒条件本身已明确，但尚未经真实AI提取与审核启用。\\n\\n## 5．工具可监测与需人工处理\\n\\n| 项目 | 状态 |\\n| --- | --- |\\n| A承载条件 | 仅1条：日线收盘严格低于12.07元，OFFICIAL_DAILY_CLOSE确认，RISK_ALERT |\\n| 未进入A的研究条件 | 压力区、低吸区、量能、技术辅助、S0/S1/S2、Q0、大盘状态——均无可靠数据或本次未授权 |\\n| 依赖不受支持导致整条规则不可导入 | 本次无；未使用指数联动或动态数量 |\\n| 财报与公告 | 人工核验，工具不持续监测 |\\n| 大盘状态 | 人工研究，工具无原生指数联动 |\\n| 真实委托与可卖量 | 券商与人工处理 |\\n| 模拟库存 | 本次不涉及，提取/保存/审核/启用均不改变库存 |\\n| 提取、保存、审核、启用、执行 | 五者相互独立；本次仅生成A，未提取、未保存、未审核、未启用、未执行 |\\n\\n## 6．待确认项及验证状态\\n\\n阻断当前规则或审核的事项：\\n- 无硬性阻断；但plan_id=SYNTH-SSE-OBS为新草稿建议，尚未保存，需人工确认标识与版本。\\n\\n仅影响未来交易安排的事项：\\n- 底仓与机动仓划分未确认。\\n- 未来建仓的低吸区、压力区、风险线、Q0均未设定。\\n- 沪市主板涨跌幅与特殊交易状态未核验。\\n\\n工具暂不支持的事项：\\n- 原生指数联动与动态数量折减。\\n- 财报与公告自动监测。\\n- 真实委托、部分成交与券商可卖量管理。\\n\\n验证状态：静态检查／未执行真实AI验证。本次为离线合成测试，未联网取行情，未调用提取接口，不声称提取通过。\"}",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 6592,
+      "completion_tokens": 2029,
+      "total_tokens": 8621
+    },
+    "attempts": 1
+  },
+  "generation_response_sha256": "61c21c4081fbfa3426cdf38d3621bbee220da806ea31b0b70819c0911cf0015f",
+  "generation_request_suffix": "\n\n本次验证环境与输入：\n这是离线合成测试，不代表真实行情；禁止联网取行情，不得声称获得最新真实数据。仅使用给定事实；真实AI提取由外层程序随后执行，你本轮只生成A/B，不得声称已经提取通过。\n本地代码核验的软件上下文（仅软件契约，不是交易策略）：\nSchema 5；execution_mode=CONDITION_PLAN；execution_version=condition-plan-v1。\nactivation.mode=MANUAL；不使用价格区间时levels=null；position.max_qty为必填的正数100股整数倍。\nmonitoring.indicator_formula_version=daily-ta-v2；price_basis=QFQ；source_requirement=ONE_VERIFIED_PROVIDER；comparability_requirement=CURRENT_QUOTE_BASIS；macd_min_observations=26。\ntrading_rules.settlement=NEXT_EXCHANGE_SESSION；tick_size_fen=1；special_state_restrictions=BLOCK_UNVERIFIED。\nexecution_policy.same_signal=ONE_PLANNED_QUANTITY；risk_priority=SEVERE_THEN_ORDINARY；ordinary_conflict=BLOCK_BOTH。\n独立提醒有kind=RISK_ALERT、rule_id、condition和confirmation；日线确认kind=OFFICIAL_DAILY_CLOSE。\n日线固定价格比较为condition.type=DAILY_PRICE_COMPARE，field=close，offset=0，comparator可用LT或GT；reference.mode=FIXED，value为精确分值字符串，unit=FEN，as_of为来源日期或有依据的null，source为真实来源文字。\n当前没有原生指数联动/动态数量；不允许HUMAN_SUPPLEMENT伪装。\n\n当前标的包钢股份600010.SH，沪市主板。实际0股，成本无，上限500股，有效买单0股。仅提醒观察版，明确恰好1条技术提醒：最新正式完整日K收盘严格低于12.07元，正式收盘确认，仅提醒。无买卖、无风险退出。新草稿建议标识SYNTH-SSE-OBS，版本1，尚未保存。合成报告时间时区未知，故report_at=null；2026-10-21合成报告参考价12.34元，完整日K收盘12.34；阈值依据为用户明确的合成结构线12.07元，来源文字“2026-10-21合成观察约定”。没有更多日K、量能、财报和指数资料，这些缺项只列人工附件，不得添加到这条独立价格提醒。原文未设财报前退出或1—3个月期限。\n\nAPI交付格式：因调用端要求JSON对象，请只返回{\"A\":\"精简正文原文字符串或明确的阻断说明\",\"B\":\"六节人工研究附件字符串\"}，不要返回clauses、bindings或额外键；A中不要加Markdown围栏。此封装只改变交付格式，不改变上述策略或权限。",
+  "generation_request_sha256": "38900c9669e8636f076c981decbe8bd3abb661312d5bffdb5895ba63773b9bbf",
+  "source_a": "计划根字段语义值\nschema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\nplan_id=SYNTH-SSE-OBS version=1 symbol=600010.SH name=包钢股份 market=SH\nmetadata.report_at=null metadata.reference_price_fen=1234\nactivation.mode=MANUAL levels=null position.max_qty=500\nordinary_rules=[]\nrisk_branches=[]\nalert_rules[0].kind=RISK_ALERT alert_rules[0].rule_id=OBS-CLOSE-BELOW-1207\nalert_rules[0].condition.type=DAILY_PRICE_COMPARE alert_rules[0].condition.field=close alert_rules[0].condition.offset=0 alert_rules[0].condition.comparator=LT\nalert_rules[0].condition.reference.mode=FIXED alert_rules[0].condition.reference.value=\"1207\" alert_rules[0].condition.reference.unit=FEN alert_rules[0].condition.reference.as_of=2026-10-21 alert_rules[0].condition.reference.source=2026-10-21合成观察约定\nalert_rules[0].confirmation.kind=OFFICIAL_DAILY_CLOSE\nmonitoring.indicator_formula_version=daily-ta-v2 monitoring.price_basis=QFQ monitoring.source_requirement=ONE_VERIFIED_PROVIDER monitoring.comparability_requirement=CURRENT_QUOTE_BASIS monitoring.macd_min_observations=26\ntrading_rules.settlement=NEXT_EXCHANGE_SESSION trading_rules.tick_size_fen=1 trading_rules.special_state_restrictions=BLOCK_UNVERIFIED\nexecution_policy.same_signal=ONE_PLANNED_QUANTITY execution_policy.risk_priority=SEVERE_THEN_ORDINARY execution_policy.ordinary_conflict=BLOCK_BOTH",
+  "research_b": "## 1．当前结论与行情摘要\n\n唯一主动作：等待（不动作）。\n\n这只股票当前最合理的操作原则是：空仓不建仓，仅以一条独立技术提醒跟踪12.07元结构线是否被正式收盘跌破，跌破后人工复评，不产生任何买卖或清仓义务。\n\n- 标的：包钢股份 600010.SH，沪市主板。\n- 报告：合成报告，报告时间时区未知，report_at=null；合成报告参考价12.34元（2026-10-21），同日完整日K收盘12.34元。\n- 最新价格与北京时间：本次为离线合成测试，禁止联网取行情，未取得最新真实价格，不声称获得最新数据。\n- 完整日K截止：2026-10-21（合成）。\n- 来源：合成输入，非真实行情源；复权口径按QFQ契约，但无更多K线可核验。\n- 交易规则：沪市主板，T+1，100股整数倍申报，涨跌幅与特殊状态未核验。\n- 核心风险：数据严重不足（无量能、无财报、无指数、无多日K线），任何趋势与企稳判断均不可成立。\n- 缺失项：真实行情、成交量、MA/MACD/RSI/ATR/布林、指数状态、公告与财报。\n- 输出模式：仅提醒观察版，恰好1条技术提醒。\n\n## 2．三个核心研究位置\n\n| 位置 | 端点 | 依据 | 用途 | 是否启用 |\n| --- | --- | --- | --- | --- |\n| 主要压力区 | 未设定 | 无前高/平台等结构数据 | 研究用 | 否 |\n| 低吸观察区 | 未设定 | 无结构、无量价、无技术辅助 | 研究用 | 否 |\n| 核心风险位置 | 12.07元（1207分） | 用户明确的合成结构线（2026-10-21合成观察约定） | 独立技术提醒线 | 是（仅提醒） |\n\n用途区分：\n- 已有持仓退出线：无（实际0股，无成本）。\n- 空仓提醒线：12.07元正式收盘跌破提醒，仅用于触发人工复评，不是买入线，也不是未来新仓止损。\n- 未来新仓止损：未设定；不得把12.07元默认当作未来建仓止损。\n\n## 3．仓位、成本与大盘影响\n\n- 实际持仓：0股（已知）。\n- 持仓成本：无（已知）。\n- 最大计划持仓：500股（已知，符合100股整数倍）。\n- 建议底仓/机动仓划分：未确认；当前0股，不划分。\n- 有效买单：0股（已知）。\n- 模拟库存：未提供，未知，不推算。\n- 剩余额度：500股（上限500－持仓0－有效买单0），仅为额度记录，不是买入目标。\n\n大盘影响：\n- 参考指数应为上证指数，但本次无指数日K数据，I、M20、M60、M20_5、L20均无法核验，状态记为“未知”。\n- 相对强势：近5日、20日个股收益与MA20均无法计算，判定为“未确定”。\n- S0：未定义（无低吸区、无量价、无技术辅助），不成立。\n- S1／S2：因S0不完整，不能判为通过。\n- Q0：未确定（无结构、波动、成本依据）。\n- 合法数量折减：不适用，本次无买入规则。\n- 理论数量与当前权限：本次权限仅为1条提醒，无任何买入或卖出权限。\n\n## 4．最终人工决策与风险处理\n\n- 如果正式完整日K收盘严格低于12.07元，那么触发1条提醒，人工复评结构、量能与基本面，不自动产生卖出或买入动作。\n- 如果收盘等于或高于12.07元，那么不触发提醒，继续等待。\n- 普通买卖成立前提：本次未设定，任何买卖均需另行确认低吸区、企稳证据、量能与技术辅助，并单独授权。\n- 普通技术性破位：无持仓，不适用退出流程。\n- 严重技术性破位：无持仓，不适用；若未来建仓，须另行设定风险线。\n- 重大基本面风险：无财报与公告资料，无法核验；出现官方信息推翻逻辑时由人工决定。\n- 原文期限：未设财报前退出或1—3个月期限，本提醒持续至人工停用或新版替换。\n- 已确认信号：无。待确认信号：12.07元提醒条件本身已明确，但尚未经真实AI提取与审核启用。\n\n## 5．工具可监测与需人工处理\n\n| 项目 | 状态 |\n| --- | --- |\n| A承载条件 | 仅1条：日线收盘严格低于12.07元，OFFICIAL_DAILY_CLOSE确认，RISK_ALERT |\n| 未进入A的研究条件 | 压力区、低吸区、量能、技术辅助、S0/S1/S2、Q0、大盘状态——均无可靠数据或本次未授权 |\n| 依赖不受支持导致整条规则不可导入 | 本次无；未使用指数联动或动态数量 |\n| 财报与公告 | 人工核验，工具不持续监测 |\n| 大盘状态 | 人工研究，工具无原生指数联动 |\n| 真实委托与可卖量 | 券商与人工处理 |\n| 模拟库存 | 本次不涉及，提取/保存/审核/启用均不改变库存 |\n| 提取、保存、审核、启用、执行 | 五者相互独立；本次仅生成A，未提取、未保存、未审核、未启用、未执行 |\n\n## 6．待确认项及验证状态\n\n阻断当前规则或审核的事项：\n- 无硬性阻断；但plan_id=SYNTH-SSE-OBS为新草稿建议，尚未保存，需人工确认标识与版本。\n\n仅影响未来交易安排的事项：\n- 底仓与机动仓划分未确认。\n- 未来建仓的低吸区、压力区、风险线、Q0均未设定。\n- 沪市主板涨跌幅与特殊交易状态未核验。\n\n工具暂不支持的事项：\n- 原生指数联动与动态数量折减。\n- 财报与公告自动监测。\n- 真实委托、部分成交与券商可卖量管理。\n\n验证状态：静态检查／未执行真实AI验证。本次为离线合成测试，未联网取行情，未调用提取接口，不声称提取通过。",
+  "extraction_response": {
+    "request_id": "3da77df6-576c-43d8-bad4-b725ff1b0a06",
+    "provider_id": "00000000-0000-4000-8000-0000000000d5",
+    "model": "deepseek-flash",
+    "content": "{\"draft\":{\"schema_version\":5,\"execution_mode\":\"CONDITION_PLAN\",\"execution_version\":\"condition-plan-v1\",\"plan_id\":\"SYNTH-SSE-OBS\",\"version\":1,\"symbol\":\"600010.SH\",\"name\":\"包钢股份\",\"market\":\"SSE\",\"metadata\":{\"report_at\":null,\"reference_price_fen\":1234},\"activation\":{\"mode\":\"MANUAL\"},\"levels\":null,\"position\":{\"max_qty\":500},\"trading_rules\":{\"settlement\":\"NEXT_EXCHANGE_SESSION\",\"tick_size_fen\":1,\"special_state_restrictions\":\"BLOCK_UNVERIFIED\"},\"monitoring\":{\"indicator_formula_version\":\"daily-ta-v2\",\"price_basis\":\"QFQ\",\"source_requirement\":\"ONE_VERIFIED_PROVIDER\",\"comparability_requirement\":\"CURRENT_QUOTE_BASIS\",\"macd_min_observations\":26},\"ordinary_rules\":[],\"risk_branches\":[],\"execution_policy\":{\"same_signal\":\"ONE_PLANNED_QUANTITY\",\"risk_priority\":\"SEVERE_THEN_ORDINARY\",\"ordinary_conflict\":\"BLOCK_BOTH\"},\"alert_rules\":[{\"kind\":\"RISK_ALERT\",\"rule_id\":\"OBS-CLOSE-BELOW-1207\",\"condition\":{\"type\":\"DAILY_PRICE_COMPARE\",\"field\":\"close\",\"offset\":0,\"comparator\":\"LT\",\"reference\":{\"mode\":\"FIXED\",\"value\":\"1207\",\"unit\":\"FEN\",\"as_of\":\"2026-10-21\",\"source\":\"2026-10-21合成观察约定\"}},\"confirmation\":{\"kind\":\"OFFICIAL_DAILY_CLOSE\"}}]},\"clauses\":[{\"clause_id\":\"clause-0a109063554a993f\",\"start\":0,\"end\":8,\"excerpt\":\"计划根字段语义值\",\"disposition\":\"CONTEXT\",\"paths\":[],\"reason\":\"Heading describing root field semantics; no trading directive.\",\"semantic_role\":\"COMMENTARY\"},{\"clause_id\":\"clause-120df09b3d528503\",\"start\":9,\"end\":91,\"excerpt\":\"schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\",\"disposition\":\"POLICY\",\"paths\":[\"schema_version\",\"execution_mode\",\"execution_version\"],\"reason\":\"Product contract constants for plan schema and execution mode.\"},{\"clause_id\":\"clause-56130cd632edc5ff\",\"start\":92,\"end\":160,\"excerpt\":\"plan_id=SYNTH-SSE-OBS version=1 symbol=600010.SH name=包钢股份 market=SH\",\"disposition\":\"POLICY\",\"paths\":[\"symbol\",\"market\"],\"reason\":\"Bind symbol and market; keep plan_id, version and name in draft only.\"},{\"clause_id\":\"clause-b3fd1c3119da58bd\",\"start\":161,\"end\":218,\"excerpt\":\"metadata.report_at=null metadata.reference_price_fen=1234\",\"disposition\":\"CONTEXT\",\"paths\":[],\"reason\":\"All metadata values remain display-only in draft, never evidence bindings.\",\"semantic_role\":\"COMMENTARY\"},{\"clause_id\":\"clause-b1ed7661551d5a71\",\"start\":219,\"end\":274,\"excerpt\":\"activation.mode=MANUAL levels=null position.max_qty=500\",\"disposition\":\"POLICY\",\"paths\":[\"activation.mode\",\"position.max_qty\"],\"reason\":\"levels=null is retained in draft but omitted from paths and bindings.\"},{\"clause_id\":\"clause-1f0253cec4b6d0dd\",\"start\":275,\"end\":292,\"excerpt\":\"ordinary_rules=[]\",\"disposition\":\"POLICY\",\"paths\":[\"ordinary_rules\"],\"reason\":\"Explicit empty ordinary rules array.\"},{\"clause_id\":\"clause-d91a1e829e9323c7\",\"start\":293,\"end\":309,\"excerpt\":\"risk_branches=[]\",\"disposition\":\"POLICY\",\"paths\":[\"risk_branches\"],\"reason\":\"Explicit empty risk branches array.\"},{\"clause_id\":\"clause-2016f07e7f7e134b\",\"start\":310,\"end\":384,\"excerpt\":\"alert_rules[0].kind=RISK_ALERT alert_rules[0].rule_id=OBS-CLOSE-BELOW-1207\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[0].kind\",\"alert_rules[0].rule_id\"],\"reason\":\"Source-defined risk alert identity.\"},{\"clause_id\":\"clause-b006558a2893cccf\",\"start\":385,\"end\":544,\"excerpt\":\"alert_rules[0].condition.type=DAILY_PRICE_COMPARE alert_rules[0].condition.field=close alert_rules[0].condition.offset=0 alert_rules[0].condition.comparator=LT\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[0].condition.type\",\"alert_rules[0].condition.field\",\"alert_rules[0].condition.offset\",\"alert_rules[0].condition.comparator\"],\"reason\":\"Source-defined daily close comparison condition.\"},{\"clause_id\":\"clause-485cda1a1887da92\",\"start\":545,\"end\":793,\"excerpt\":\"alert_rules[0].condition.reference.mode=FIXED alert_rules[0].condition.reference.value=\\\"1207\\\" alert_rules[0].condition.reference.unit=FEN alert_rules[0].condition.reference.as_of=2026-10-21 alert_rules[0].condition.reference.source=2026-10-21合成观察约定\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[0].condition.reference.mode\",\"alert_rules[0].condition.reference.value\",\"alert_rules[0].condition.reference.unit\",\"alert_rules[0].condition.reference.as_of\",\"alert_rules[0].condition.reference.source\"],\"reason\":\"Source-defined fixed reference for the alert condition.\"},{\"clause_id\":\"clause-02ac56100edc4499\",\"start\":794,\"end\":847,\"excerpt\":\"alert_rules[0].confirmation.kind=OFFICIAL_DAILY_CLOSE\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[0].confirmation.kind\"],\"reason\":\"Source-defined official daily close confirmation for the alert.\"},{\"clause_id\":\"clause-4b8042027162d9fd\",\"start\":848,\"end\":1068,\"excerpt\":\"monitoring.indicator_formula_version=daily-ta-v2 monitoring.price_basis=QFQ monitoring.source_requirement=ONE_VERIFIED_PROVIDER monitoring.comparability_requirement=CURRENT_QUOTE_BASIS monitoring.macd_min_observations=26\",\"disposition\":\"POLICY\",\"paths\":[\"monitoring.indicator_formula_version\",\"monitoring.price_basis\",\"monitoring.source_requirement\",\"monitoring.comparability_requirement\",\"monitoring.macd_min_observations\"],\"reason\":\"Source-defined monitoring settings.\"},{\"clause_id\":\"clause-a218c3b76e426e3c\",\"start\":1069,\"end\":1203,\"excerpt\":\"trading_rules.settlement=NEXT_EXCHANGE_SESSION trading_rules.tick_size_fen=1 trading_rules.special_state_restrictions=BLOCK_UNVERIFIED\",\"disposition\":\"POLICY\",\"paths\":[\"trading_rules.settlement\",\"trading_rules.tick_size_fen\",\"trading_rules.special_state_restrictions\"],\"reason\":\"Source-defined trading rules.\"},{\"clause_id\":\"clause-d88e4f2d0e8f8cea\",\"start\":1204,\"end\":1351,\"excerpt\":\"execution_policy.same_signal=ONE_PLANNED_QUANTITY execution_policy.risk_priority=SEVERE_THEN_ORDINARY execution_policy.ordinary_conflict=BLOCK_BOTH\",\"disposition\":\"POLICY\",\"paths\":[\"execution_policy.same_signal\",\"execution_policy.risk_priority\",\"execution_policy.ordinary_conflict\"],\"reason\":\"Source-defined execution policy.\"}],\"bindings\":[{\"path\":\"schema_version\",\"value\":5,\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_mode\",\"value\":\"CONDITION_PLAN\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_version\",\"value\":\"condition-plan-v1\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"symbol\",\"value\":\"600010.SH\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-56130cd632edc5ff\"],\"supplement_id\":null},{\"path\":\"market\",\"value\":\"SSE\",\"origin\":\"SOURCE_SEMANTIC\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-56130cd632edc5ff\"],\"supplement_id\":null},{\"path\":\"activation.mode\",\"value\":\"MANUAL\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-b1ed7661551d5a71\"],\"supplement_id\":null},{\"path\":\"position.max_qty\",\"value\":500,\"origin\":\"SOURCE\",\"unit\":\"SHARES\",\"clause_ids\":[\"clause-b1ed7661551d5a71\"],\"supplement_id\":null},{\"path\":\"ordinary_rules\",\"value\":\"[]\",\"origin\":\"SOURCE\",\"unit\":\"STRUCTURE\",\"clause_ids\":[\"clause-1f0253cec4b6d0dd\"],\"supplement_id\":null},{\"path\":\"risk_branches\",\"value\":\"[]\",\"origin\":\"SOURCE\",\"unit\":\"STRUCTURE\",\"clause_ids\":[\"clause-d91a1e829e9323c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].kind\",\"value\":\"RISK_ALERT\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-2016f07e7f7e134b\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].rule_id\",\"value\":\"OBS-CLOSE-BELOW-1207\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-2016f07e7f7e134b\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.type\",\"value\":\"DAILY_PRICE_COMPARE\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-b006558a2893cccf\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.field\",\"value\":\"close\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-b006558a2893cccf\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.offset\",\"value\":0,\"origin\":\"SOURCE\",\"unit\":\"JSON\",\"clause_ids\":[\"clause-b006558a2893cccf\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.comparator\",\"value\":\"LT\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-b006558a2893cccf\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.mode\",\"value\":\"FIXED\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-485cda1a1887da92\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.value\",\"value\":\"1207\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-485cda1a1887da92\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.unit\",\"value\":\"FEN\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-485cda1a1887da92\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.as_of\",\"value\":\"2026-10-21\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-485cda1a1887da92\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.source\",\"value\":\"2026-10-21合成观察约定\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-485cda1a1887da92\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].confirmation.kind\",\"value\":\"OFFICIAL_DAILY_CLOSE\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-02ac56100edc4499\"],\"supplement_id\":null},{\"path\":\"monitoring.indicator_formula_version\",\"value\":\"daily-ta-v2\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"monitoring.price_basis\",\"value\":\"QFQ\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"monitoring.source_requirement\",\"value\":\"ONE_VERIFIED_PROVIDER\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"monitoring.comparability_requirement\",\"value\":\"CURRENT_QUOTE_BASIS\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"monitoring.macd_min_observations\",\"value\":26,\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"trading_rules.settlement\",\"value\":\"NEXT_EXCHANGE_SESSION\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"trading_rules.tick_size_fen\",\"value\":1,\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"trading_rules.special_state_restrictions\",\"value\":\"BLOCK_UNVERIFIED\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_policy.same_signal\",\"value\":\"ONE_PLANNED_QUANTITY\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_policy.risk_priority\",\"value\":\"SEVERE_THEN_ORDINARY\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_policy.ordinary_conflict\",\"value\":\"BLOCK_BOTH\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null}],\"assumptions\":[],\"warnings\":[]}",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 14154,
+      "completion_tokens": 3275,
+      "total_tokens": 17429
+    },
+    "attempts": 1
+  },
+  "extraction_response_sha256": "9c1fe6a331edf4f1889dd0c8cf1ebadb7f9e229439e4daac636e44faa9cc302f",
+  "extraction_result": {
+    "request_id": "3da77df6-576c-43d8-bad4-b725ff1b0a06",
+    "provider_id": "00000000-0000-4000-8000-0000000000d5",
+    "model": "deepseek-flash",
+    "prompt_version": "plan-extract-v9",
+    "source_text_sha256": "e76a5e60415817d7e0727d075f34fb38e7720b332fc61f8435895a5034ec0076",
+    "draft": null,
+    "mapping": null,
+    "evidence": [],
+    "assumptions": [],
+    "warnings": [],
+    "unmapped_text": [],
+    "validation_issues": [
+      {
+        "code": "AI_FIELD_EVIDENCE_INVALID",
+        "path": "mapping",
+        "severity": "ERROR",
+        "message": "Plan source mapping is invalid.",
+        "activationBlocking": true
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 14154,
+      "completion_tokens": 3275,
+      "total_tokens": 17429
+    },
+    "status": "INVALID_OUTPUT"
+  },
+  "extraction_request_sha256": "56e2d4802c16512c88be1888be7841565efc3b82010e8891e99e3283edf42d14",
+  "unapproved_candidate_observation": {
+    "symbol": "600010.SH",
+    "market": "SSE",
+    "max_qty": 500,
+    "ordinary_rules": 0,
+    "risk_branches": 0,
+    "alerts": [
+      {
+        "comparator": "LT",
+        "value": "1207",
+        "field": "close",
+        "offset": 0,
+        "confirmation": "OFFICIAL_DAILY_CLOSE"
+      }
+    ]
+  },
+  "review_diagnosis": {
+    "error_type": "MappingValidationError",
+    "message": "binding value differs from current candidate"
+  },
+  "empty_array_binding_types": [
+    {
+      "path": "ordinary_rules",
+      "json_type": "str",
+      "value": "[]"
+    },
+    {
+      "path": "risk_branches",
+      "json_type": "str",
+      "value": "[]"
+    }
+  ]
+}

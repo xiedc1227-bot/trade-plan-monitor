@@ -1,0 +1,151 @@
+{
+  "case": {
+    "id": "szse-two-alerts",
+    "symbol": "000858.SZ",
+    "market": "SZSE",
+    "cap": 800,
+    "alerts": [
+      [
+        "LT",
+        "7432"
+      ],
+      [
+        "GT",
+        "8567"
+      ]
+    ],
+    "plan_id": "SYNTH-SZSE-OBS",
+    "version": 1,
+    "reference": 7890,
+    "importable": true,
+    "input": "先前会话另一只股票为神农集团605296.SH，上限300股，提醒价26.59元；这些旧值全部不得继承。当前换成五粮液000858.SZ，深市主板。当前实际200股、成本80.00元、上限800股，有效买单未知，模拟库存未知。仅提醒观察版，明确两条独立技术提醒：最新正式完整日K收盘严格低于74.32元；以及最新正式完整日K收盘严格高于85.67元；两者分别正式收盘确认，仅提醒，无交易与清仓义务。新草稿建议标识SYNTH-SZSE-OBS，版本1，未保存。合成报告时区未知，report_at=null；2026-10-21参考价及正式收盘78.90元。阈值来源文字“2026-10-21合成双向观察约定”。无需实际买卖或模拟；缺少指数、指标、量能和财报明细，只列人工附件。没有财报前退出期限。"
+  },
+  "summary": {
+    "case": "szse-two-alerts",
+    "findings": [
+      "No extracted draft",
+      "Extraction/review did not fully pass"
+    ],
+    "generation_finish_reason": "stop",
+    "generation_usage": {
+      "prompt_tokens": 5785,
+      "completion_tokens": 2102,
+      "total_tokens": 7887
+    },
+    "source_sha256": "19b9fcb40b5532876633ee7a1d4abc7f30d39f9e1c7d9647533829e2d537ad53",
+    "source_chars": 1381,
+    "extraction_status": "INVALID_OUTPUT",
+    "issues": [
+      {
+        "code": "AI_FIELD_EVIDENCE_INVALID",
+        "path": "mapping",
+        "severity": "ERROR",
+        "message": "Plan source mapping is invalid.",
+        "activationBlocking": true
+      }
+    ],
+    "assumptions": [],
+    "warnings": [],
+    "passed": false
+  },
+  "generation_response": {
+    "request_id": "a378fbd3-6d23-48e9-b94a-3fcb0cc17457",
+    "provider_id": "00000000-0000-4000-8000-0000000000d5",
+    "model": "deepseek-flash",
+    "content": "{\"A\":\"计划根字段语义值\\nschema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\\nplan_id=SYNTH-SZSE-OBS version=1 symbol=000858.SZ name=五粮液 market=SZSE\\nmetadata.report_at=null metadata.reference_price_fen=7890\\nactivation.mode=MANUAL\\nposition.max_qty=800\\nordinary_rules=[]\\nrisk_branches=[]\\nalert_rules[0].rule_id=OBS-CLOSE-BELOW-74.32 alert_rules[0].kind=RISK_ALERT alert_rules[0].condition.type=DAILY_PRICE_COMPARE alert_rules[0].condition.field=close alert_rules[0].condition.offset=0 alert_rules[0].condition.comparator=LT alert_rules[0].condition.reference.mode=FIXED alert_rules[0].condition.reference.value=\\\"7432\\\" alert_rules[0].condition.reference.unit=FEN alert_rules[0].condition.reference.as_of=2026-10-21 alert_rules[0].condition.reference.source=2026-10-21合成双向观察约定 alert_rules[0].confirmation.kind=OFFICIAL_DAILY_CLOSE\\nalert_rules[1].rule_id=OBS-CLOSE-ABOVE-85.67 alert_rules[1].kind=RISK_ALERT alert_rules[1].condition.type=DAILY_PRICE_COMPARE alert_rules[1].condition.field=close alert_rules[1].condition.offset=0 alert_rules[1].condition.comparator=GT alert_rules[1].condition.reference.mode=FIXED alert_rules[1].condition.reference.value=\\\"8567\\\" alert_rules[1].condition.reference.unit=FEN alert_rules[1].condition.reference.as_of=2026-10-21 alert_rules[1].condition.reference.source=2026-10-21合成双向观察约定 alert_rules[1].confirmation.kind=OFFICIAL_DAILY_CLOSE\",\"B\":\"## 1．当前结论与行情摘要\\n\\n唯一主动作：等待（仅提醒观察，不产生买卖或清仓义务）。\\n\\n这只股票当前最合理的操作原则是：在缺少指数、指标、量能和财报明细的离线合成环境下，仅以两条正式收盘价提醒跟踪74.32元下方与85.67元上方的结构变化，不据此授权任何交易。\\n\\n- 标的：五粮液 000858.SZ，深市主板。\\n- 报告：合成报告，时区未知，report_at=null；参考价及正式收盘78.90元，日期2026-10-21。\\n- 最新价格与北京时间：离线合成测试，禁止联网取行情，未获得最新真实价格与时间。\\n- 完整日K截止：仅知2026-10-21为参考收盘日，未核验完整日K序列。\\n- 来源：给定合成事实；复权口径未提供；交易规则按深市主板一般规则，未逐项核验。\\n- 核心风险：数据缺失导致趋势、量能、大盘状态均未知；两条提醒仅为观察线，不是退出线或新仓止损。\\n- 缺失项：指数数据、MA/MACD/RSI/ATR/布林、量能、财报与公告明细、有效委托、模拟库存。\\n- 输出模式：仅提醒观察版。\\n\\n## 2．三个核心研究位置\\n\\n| 位置 | 端点 | 依据 | 用途 | 是否启用 |\\n| --- | --- | --- | --- | --- |\\n| 主要压力区 | 85.67元上方（收盘严格高于） | 2026-10-21合成双向观察约定；单一价格结构依据，缺第二维度 | 观察上方结构变化，人工复评 | 仅提醒，不构成卖出或减仓 |\\n| 低吸观察区 | 未设定 | 缺少企稳、量价、技术辅助依据 | 不设低吸 | 未启用 |\\n| 核心风险位置 | 74.32元下方（收盘严格低于） | 2026-10-21合成双向观察约定；单一价格结构依据，缺第二维度 | 观察下方结构变化，人工复评 | 仅提醒，不构成退出义务 |\\n\\n说明：\\n- 已有持仓退出线：未确认，未设定。\\n- 空仓提醒线：本次两条均为观察提醒，不区分空仓/持仓用途。\\n- 未来新仓止损：未设定，不得把74.32元当作未来新仓止损。\\n- 两处价位均只有价格结构一个维度，未满足“至少两个不同维度”的研究位置要求，故仅作提醒，不作交易位置。\\n\\n## 3．仓位、成本与大盘影响\\n\\n- 实际持仓：200股（已知）。\\n- 持仓成本：80.00元（已知）。\\n- 持仓上限：800股（已知）。\\n- 建议底仓与机动仓划分：未确认，不提出划分。\\n- 有效委托：未知，不假定为0。\\n- 模拟库存：未知，不假定为0。\\n- 剩余额度：上限800－实际200－有效买单未知，无法核算确定额度。\\n\\n大盘影响：\\n- 参考指数应为深证成指，但本次无指数数据，状态为“未知”，不假定常态。\\n- 相对强势：缺个股与指数近5日、20日收益及MA20，无法判定。\\n- S0／S1／S2：无完整S0，均不成立。\\n- Q0与合法数量折减：本次为仅提醒模式，不设买入数量；不计算Q0。\\n- 理论数量与当前权限：无买入权限，提醒不带数量。\\n\\n成本：佣金假设买卖分别0.03%、每笔最低5元，仅为假设；本次无交易，不计算保本价差与净收益。\\n\\n## 4．最终人工决策与风险处理\\n\\n- 如果最新正式完整日K收盘严格低于74.32元，那么触发下方观察提醒，人工复评中期结构与持仓风险；不自动卖出，不自动清仓。\\n- 如果最新正式完整日K收盘严格高于85.67元，那么触发上方观察提醒，人工复评压力与减仓条件；不自动卖出，不自动追买。\\n- 如果盘中价格穿越但未获正式收盘确认，那么不视为提醒成立。\\n- 如果出现普通技术性跌破，那么按通用流程首次收盘停止加仓、下一交易日收盘未收回才确认退出——但本次未确认退出线，该流程不自动生效，需人工另行确认。\\n- 如果出现严重技术性破位或重大基本面逻辑失效，那么由人工核实官方信息后优先处理，不等待提醒。\\n- 原文期限：无财报前退出期限；计划持续至人工停用或新版替换。\\n- 已确认信号：无。待确认信号：两条提醒条件本身已明确，但触发后的人工处置未确认。\\n- 数量、范围、时间及可卖约束：本次不产生交易数量；实际可卖量未核验。\\n\\n## 5．工具可监测与需人工处理\\n\\n| 事项 | 处理方 | 说明 |\\n| --- | --- | --- |\\n| 收盘严格低于74.32元 | A承载，工具监测 | 日线正式收盘确认，仅提醒 |\\n| 收盘严格高于85.67元 | A承载，工具监测 | 日线正式收盘确认，仅提醒 |\\n| 低吸区、压力区交易规则 | 未进入A | 无完整S0及第二维度依据，且本次为仅提醒模式 |\\n| 大盘状态与相对强势 | 人工 | 工具无原生指数联动 |\\n| 财报与公告 | 人工 | 工具不持续监测基本面 |\\n| 真实委托、部分成交、可卖量 | 人工/券商 | 工具不代替 |\\n| 模拟库存 | 人工 | 本次不涉及模拟 |\\n\\n提取、保存、审核、启用、执行相互独立：本次仅生成A/B，未提取、未保存、未审核、未启用、未执行。\\n\\n## 6．待确认项及验证状态\\n\\n阻断当前规则或审核的事项：\\n- 无（两条提醒条件参数完整、来源文字已给出）。\\n- 但需注意：两处价位均仅单一价格结构依据，若未来要升级为交易位置，须补齐第二维度依据。\\n\\n仅影响未来交易安排的事项：\\n- 底仓与机动仓划分未确认。\\n- 有效买单与模拟库存未知，剩余额度无法核算。\\n- 退出线、未来新仓止损未设定。\\n- 实际可卖量与T+1约束未核验。\\n\\n工具暂不支持的事项：\\n- 指数联动、动态数量折减、S1/S2自动切换。\\n- 基本面与公告持续监测。\\n- 真实委托与部分成交管理。\\n\\n验证状态：静态检查／未执行真实AI验证。本轮仅生成A/B，未调用提取接口，未声称提取通过。\"}",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 5785,
+      "completion_tokens": 2102,
+      "total_tokens": 7887
+    },
+    "attempts": 1
+  },
+  "generation_response_sha256": "c1481857791a8f581c7faf1507827edfed5e901214d34c5770847ede3f18772c",
+  "generation_request_suffix": "\n\n本次验证环境与输入：\n这是离线合成测试，不代表真实行情；禁止联网取行情，不得声称获得最新真实数据。仅使用给定事实；真实AI提取由外层程序随后执行，你本轮只生成A/B，不得声称已经提取通过。\n本地代码核验的软件上下文（仅软件契约，不是交易策略）：\nSchema 5；execution_mode=CONDITION_PLAN；execution_version=condition-plan-v1。\nactivation.mode=MANUAL；不使用价格区间时levels=null；position.max_qty为必填的正数100股整数倍。\nmonitoring.indicator_formula_version=daily-ta-v2；price_basis=QFQ；source_requirement=ONE_VERIFIED_PROVIDER；comparability_requirement=CURRENT_QUOTE_BASIS；macd_min_observations=26。\ntrading_rules.settlement=NEXT_EXCHANGE_SESSION；tick_size_fen=1；special_state_restrictions=BLOCK_UNVERIFIED。\nexecution_policy.same_signal=ONE_PLANNED_QUANTITY；risk_priority=SEVERE_THEN_ORDINARY；ordinary_conflict=BLOCK_BOTH。\n独立提醒有kind=RISK_ALERT、rule_id、condition和confirmation；日线确认kind=OFFICIAL_DAILY_CLOSE。\n日线固定价格比较为condition.type=DAILY_PRICE_COMPARE，field=close，offset=0，comparator可用LT或GT；reference.mode=FIXED，value为精确分值字符串，unit=FEN，as_of为来源日期或有依据的null，source为真实来源文字。\n当前没有原生指数联动/动态数量；不允许HUMAN_SUPPLEMENT伪装。\n\n先前会话另一只股票为神农集团605296.SH，上限300股，提醒价26.59元；这些旧值全部不得继承。当前换成五粮液000858.SZ，深市主板。当前实际200股、成本80.00元、上限800股，有效买单未知，模拟库存未知。仅提醒观察版，明确两条独立技术提醒：最新正式完整日K收盘严格低于74.32元；以及最新正式完整日K收盘严格高于85.67元；两者分别正式收盘确认，仅提醒，无交易与清仓义务。新草稿建议标识SYNTH-SZSE-OBS，版本1，未保存。合成报告时区未知，report_at=null；2026-10-21参考价及正式收盘78.90元。阈值来源文字“2026-10-21合成双向观察约定”。无需实际买卖或模拟；缺少指数、指标、量能和财报明细，只列人工附件。没有财报前退出期限。\n\nAPI交付格式：因调用端要求JSON对象，请只返回{\"A\":\"精简正文原文字符串或明确的阻断说明\",\"B\":\"六节人工研究附件字符串\"}，不要返回clauses、bindings或额外键；A中不要加Markdown围栏。此封装只改变交付格式，不改变上述策略或权限。",
+  "generation_request_sha256": "8cc49179fbd095c0146f88037490ab6c082a867b7a39627cb88a440cf20dd903",
+  "source_a": "计划根字段语义值\nschema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\nplan_id=SYNTH-SZSE-OBS version=1 symbol=000858.SZ name=五粮液 market=SZSE\nmetadata.report_at=null metadata.reference_price_fen=7890\nactivation.mode=MANUAL\nposition.max_qty=800\nordinary_rules=[]\nrisk_branches=[]\nalert_rules[0].rule_id=OBS-CLOSE-BELOW-74.32 alert_rules[0].kind=RISK_ALERT alert_rules[0].condition.type=DAILY_PRICE_COMPARE alert_rules[0].condition.field=close alert_rules[0].condition.offset=0 alert_rules[0].condition.comparator=LT alert_rules[0].condition.reference.mode=FIXED alert_rules[0].condition.reference.value=\"7432\" alert_rules[0].condition.reference.unit=FEN alert_rules[0].condition.reference.as_of=2026-10-21 alert_rules[0].condition.reference.source=2026-10-21合成双向观察约定 alert_rules[0].confirmation.kind=OFFICIAL_DAILY_CLOSE\nalert_rules[1].rule_id=OBS-CLOSE-ABOVE-85.67 alert_rules[1].kind=RISK_ALERT alert_rules[1].condition.type=DAILY_PRICE_COMPARE alert_rules[1].condition.field=close alert_rules[1].condition.offset=0 alert_rules[1].condition.comparator=GT alert_rules[1].condition.reference.mode=FIXED alert_rules[1].condition.reference.value=\"8567\" alert_rules[1].condition.reference.unit=FEN alert_rules[1].condition.reference.as_of=2026-10-21 alert_rules[1].condition.reference.source=2026-10-21合成双向观察约定 alert_rules[1].confirmation.kind=OFFICIAL_DAILY_CLOSE",
+  "research_b": "## 1．当前结论与行情摘要\n\n唯一主动作：等待（仅提醒观察，不产生买卖或清仓义务）。\n\n这只股票当前最合理的操作原则是：在缺少指数、指标、量能和财报明细的离线合成环境下，仅以两条正式收盘价提醒跟踪74.32元下方与85.67元上方的结构变化，不据此授权任何交易。\n\n- 标的：五粮液 000858.SZ，深市主板。\n- 报告：合成报告，时区未知，report_at=null；参考价及正式收盘78.90元，日期2026-10-21。\n- 最新价格与北京时间：离线合成测试，禁止联网取行情，未获得最新真实价格与时间。\n- 完整日K截止：仅知2026-10-21为参考收盘日，未核验完整日K序列。\n- 来源：给定合成事实；复权口径未提供；交易规则按深市主板一般规则，未逐项核验。\n- 核心风险：数据缺失导致趋势、量能、大盘状态均未知；两条提醒仅为观察线，不是退出线或新仓止损。\n- 缺失项：指数数据、MA/MACD/RSI/ATR/布林、量能、财报与公告明细、有效委托、模拟库存。\n- 输出模式：仅提醒观察版。\n\n## 2．三个核心研究位置\n\n| 位置 | 端点 | 依据 | 用途 | 是否启用 |\n| --- | --- | --- | --- | --- |\n| 主要压力区 | 85.67元上方（收盘严格高于） | 2026-10-21合成双向观察约定；单一价格结构依据，缺第二维度 | 观察上方结构变化，人工复评 | 仅提醒，不构成卖出或减仓 |\n| 低吸观察区 | 未设定 | 缺少企稳、量价、技术辅助依据 | 不设低吸 | 未启用 |\n| 核心风险位置 | 74.32元下方（收盘严格低于） | 2026-10-21合成双向观察约定；单一价格结构依据，缺第二维度 | 观察下方结构变化，人工复评 | 仅提醒，不构成退出义务 |\n\n说明：\n- 已有持仓退出线：未确认，未设定。\n- 空仓提醒线：本次两条均为观察提醒，不区分空仓/持仓用途。\n- 未来新仓止损：未设定，不得把74.32元当作未来新仓止损。\n- 两处价位均只有价格结构一个维度，未满足“至少两个不同维度”的研究位置要求，故仅作提醒，不作交易位置。\n\n## 3．仓位、成本与大盘影响\n\n- 实际持仓：200股（已知）。\n- 持仓成本：80.00元（已知）。\n- 持仓上限：800股（已知）。\n- 建议底仓与机动仓划分：未确认，不提出划分。\n- 有效委托：未知，不假定为0。\n- 模拟库存：未知，不假定为0。\n- 剩余额度：上限800－实际200－有效买单未知，无法核算确定额度。\n\n大盘影响：\n- 参考指数应为深证成指，但本次无指数数据，状态为“未知”，不假定常态。\n- 相对强势：缺个股与指数近5日、20日收益及MA20，无法判定。\n- S0／S1／S2：无完整S0，均不成立。\n- Q0与合法数量折减：本次为仅提醒模式，不设买入数量；不计算Q0。\n- 理论数量与当前权限：无买入权限，提醒不带数量。\n\n成本：佣金假设买卖分别0.03%、每笔最低5元，仅为假设；本次无交易，不计算保本价差与净收益。\n\n## 4．最终人工决策与风险处理\n\n- 如果最新正式完整日K收盘严格低于74.32元，那么触发下方观察提醒，人工复评中期结构与持仓风险；不自动卖出，不自动清仓。\n- 如果最新正式完整日K收盘严格高于85.67元，那么触发上方观察提醒，人工复评压力与减仓条件；不自动卖出，不自动追买。\n- 如果盘中价格穿越但未获正式收盘确认，那么不视为提醒成立。\n- 如果出现普通技术性跌破，那么按通用流程首次收盘停止加仓、下一交易日收盘未收回才确认退出——但本次未确认退出线，该流程不自动生效，需人工另行确认。\n- 如果出现严重技术性破位或重大基本面逻辑失效，那么由人工核实官方信息后优先处理，不等待提醒。\n- 原文期限：无财报前退出期限；计划持续至人工停用或新版替换。\n- 已确认信号：无。待确认信号：两条提醒条件本身已明确，但触发后的人工处置未确认。\n- 数量、范围、时间及可卖约束：本次不产生交易数量；实际可卖量未核验。\n\n## 5．工具可监测与需人工处理\n\n| 事项 | 处理方 | 说明 |\n| --- | --- | --- |\n| 收盘严格低于74.32元 | A承载，工具监测 | 日线正式收盘确认，仅提醒 |\n| 收盘严格高于85.67元 | A承载，工具监测 | 日线正式收盘确认，仅提醒 |\n| 低吸区、压力区交易规则 | 未进入A | 无完整S0及第二维度依据，且本次为仅提醒模式 |\n| 大盘状态与相对强势 | 人工 | 工具无原生指数联动 |\n| 财报与公告 | 人工 | 工具不持续监测基本面 |\n| 真实委托、部分成交、可卖量 | 人工/券商 | 工具不代替 |\n| 模拟库存 | 人工 | 本次不涉及模拟 |\n\n提取、保存、审核、启用、执行相互独立：本次仅生成A/B，未提取、未保存、未审核、未启用、未执行。\n\n## 6．待确认项及验证状态\n\n阻断当前规则或审核的事项：\n- 无（两条提醒条件参数完整、来源文字已给出）。\n- 但需注意：两处价位均仅单一价格结构依据，若未来要升级为交易位置，须补齐第二维度依据。\n\n仅影响未来交易安排的事项：\n- 底仓与机动仓划分未确认。\n- 有效买单与模拟库存未知，剩余额度无法核算。\n- 退出线、未来新仓止损未设定。\n- 实际可卖量与T+1约束未核验。\n\n工具暂不支持的事项：\n- 指数联动、动态数量折减、S1/S2自动切换。\n- 基本面与公告持续监测。\n- 真实委托与部分成交管理。\n\n验证状态：静态检查／未执行真实AI验证。本轮仅生成A/B，未调用提取接口，未声称提取通过。",
+  "extraction_response": {
+    "request_id": "09e1ae45-be4e-43ad-9ecb-7bf6d82b6d49",
+    "provider_id": "00000000-0000-4000-8000-0000000000d5",
+    "model": "deepseek-flash",
+    "content": "{\"draft\":{\"schema_version\":5,\"execution_mode\":\"CONDITION_PLAN\",\"execution_version\":\"condition-plan-v1\",\"plan_id\":\"SYNTH-SZSE-OBS\",\"version\":1,\"symbol\":\"000858.SZ\",\"name\":\"五粮液\",\"market\":\"SZSE\",\"metadata\":{\"report_at\":null,\"reference_price_fen\":7890},\"activation\":{\"mode\":\"MANUAL\"},\"levels\":null,\"position\":{\"max_qty\":800},\"trading_rules\":{\"settlement\":\"NEXT_EXCHANGE_SESSION\",\"tick_size_fen\":1,\"special_state_restrictions\":\"BLOCK_UNVERIFIED\"},\"monitoring\":null,\"ordinary_rules\":[],\"risk_branches\":[],\"execution_policy\":{\"same_signal\":\"ONE_PLANNED_QUANTITY\",\"risk_priority\":\"SEVERE_THEN_ORDINARY\",\"ordinary_conflict\":\"BLOCK_BOTH\"},\"alert_rules\":[{\"kind\":\"RISK_ALERT\",\"rule_id\":\"OBS-CLOSE-BELOW-74.32\",\"condition\":{\"type\":\"DAILY_PRICE_COMPARE\",\"field\":\"close\",\"offset\":0,\"comparator\":\"LT\",\"reference\":{\"mode\":\"FIXED\",\"value\":\"7432\",\"unit\":\"FEN\",\"as_of\":\"2026-10-21\",\"source\":\"2026-10-21合成双向观察约定\"}},\"confirmation\":{\"kind\":\"OFFICIAL_DAILY_CLOSE\"}},{\"kind\":\"RISK_ALERT\",\"rule_id\":\"OBS-CLOSE-ABOVE-85.67\",\"condition\":{\"type\":\"DAILY_PRICE_COMPARE\",\"field\":\"close\",\"offset\":0,\"comparator\":\"GT\",\"reference\":{\"mode\":\"FIXED\",\"value\":\"8567\",\"unit\":\"FEN\",\"as_of\":\"2026-10-21\",\"source\":\"2026-10-21合成双向观察约定\"}},\"confirmation\":{\"kind\":\"OFFICIAL_DAILY_CLOSE\"}}]},\"clauses\":[{\"clause_id\":\"clause-0a109063554a993f\",\"start\":0,\"end\":8,\"excerpt\":\"计划根字段语义值\",\"disposition\":\"CONTEXT\",\"paths\":[],\"reason\":\"Heading describing the root field semantics; no trading directive.\",\"semantic_role\":\"COMMENTARY\"},{\"clause_id\":\"clause-120df09b3d528503\",\"start\":9,\"end\":91,\"excerpt\":\"schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\",\"disposition\":\"POLICY\",\"paths\":[\"schema_version\",\"execution_mode\",\"execution_version\"],\"reason\":\"Product contract constants for schema and execution version.\"},{\"clause_id\":\"clause-e4b2ecd0e456e70e\",\"start\":92,\"end\":162,\"excerpt\":\"plan_id=SYNTH-SZSE-OBS version=1 symbol=000858.SZ name=五粮液 market=SZSE\",\"disposition\":\"POLICY\",\"paths\":[\"symbol\",\"market\"],\"reason\":\"Bind symbol and market; keep plan_id, version and name in draft only.\"},{\"clause_id\":\"clause-847e095bbcccaf33\",\"start\":163,\"end\":220,\"excerpt\":\"metadata.report_at=null metadata.reference_price_fen=7890\",\"disposition\":\"CONTEXT\",\"paths\":[],\"reason\":\"All metadata values remain display-only in draft, never evidence bindings.\",\"semantic_role\":\"COMMENTARY\"},{\"clause_id\":\"clause-375c41bb6e041e50\",\"start\":221,\"end\":243,\"excerpt\":\"activation.mode=MANUAL\",\"disposition\":\"POLICY\",\"paths\":[\"activation.mode\"],\"reason\":\"Explicit manual activation mode.\"},{\"clause_id\":\"clause-1510f21674e9e88b\",\"start\":244,\"end\":264,\"excerpt\":\"position.max_qty=800\",\"disposition\":\"POLICY\",\"paths\":[\"position.max_qty\"],\"reason\":\"Explicit maximum position quantity.\"},{\"clause_id\":\"clause-b653b91e30e56109\",\"start\":265,\"end\":282,\"excerpt\":\"ordinary_rules=[]\",\"disposition\":\"POLICY\",\"paths\":[\"ordinary_rules\"],\"reason\":\"Explicit empty ordinary rules array.\"},{\"clause_id\":\"clause-0ced01e96bf7f6b8\",\"start\":283,\"end\":299,\"excerpt\":\"risk_branches=[]\",\"disposition\":\"POLICY\",\"paths\":[\"risk_branches\"],\"reason\":\"Explicit empty risk branches array.\"},{\"clause_id\":\"clause-adf7079d8f64e127\",\"start\":300,\"end\":812,\"excerpt\":\"alert_rules[0].rule_id=OBS-CLOSE-BELOW-74.32 alert_rules[0].kind=RISK_ALERT alert_rules[0].condition.type=DAILY_PRICE_COMPARE alert_rules[0].condition.field=close alert_rules[0].condition.offset=0 alert_rules[0].condition.comparator=LT alert_rules[0].condition.reference.mode=FIXED alert_rules[0].condition.reference.value=\\\"7432\\\" alert_rules[0].condition.reference.unit=FEN alert_rules[0].condition.reference.as_of=2026-10-21 alert_rules[0].condition.reference.source=2026-10-21合成双向观察约定 alert_rules[0].confirmati\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[0].rule_id\",\"alert_rules[0].kind\",\"alert_rules[0].condition.type\",\"alert_rules[0].condition.field\",\"alert_rules[0].condition.offset\",\"alert_rules[0].condition.comparator\",\"alert_rules[0].condition.reference.mode\",\"alert_rules[0].condition.reference.value\",\"alert_rules[0].condition.reference.unit\",\"alert_rules[0].condition.reference.as_of\",\"alert_rules[0].condition.reference.source\"],\"reason\":\"Source-defined reminder-only risk alert rule 0; confirmation kind continues in next clause.\"},{\"clause_id\":\"clause-8f51e64200f8cf62\",\"start\":812,\"end\":840,\"excerpt\":\"on.kind=OFFICIAL_DAILY_CLOSE\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[0].confirmation.kind\"],\"reason\":\"Official daily close confirmation for alert rule 0.\"},{\"clause_id\":\"clause-0b3136857101d3c7\",\"start\":841,\"end\":1353,\"excerpt\":\"alert_rules[1].rule_id=OBS-CLOSE-ABOVE-85.67 alert_rules[1].kind=RISK_ALERT alert_rules[1].condition.type=DAILY_PRICE_COMPARE alert_rules[1].condition.field=close alert_rules[1].condition.offset=0 alert_rules[1].condition.comparator=GT alert_rules[1].condition.reference.mode=FIXED alert_rules[1].condition.reference.value=\\\"8567\\\" alert_rules[1].condition.reference.unit=FEN alert_rules[1].condition.reference.as_of=2026-10-21 alert_rules[1].condition.reference.source=2026-10-21合成双向观察约定 alert_rules[1].confirmati\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[1].rule_id\",\"alert_rules[1].kind\",\"alert_rules[1].condition.type\",\"alert_rules[1].condition.field\",\"alert_rules[1].condition.offset\",\"alert_rules[1].condition.comparator\",\"alert_rules[1].condition.reference.mode\",\"alert_rules[1].condition.reference.value\",\"alert_rules[1].condition.reference.unit\",\"alert_rules[1].condition.reference.as_of\",\"alert_rules[1].condition.reference.source\"],\"reason\":\"Source-defined reminder-only risk alert rule 1; confirmation kind continues in next clause.\"},{\"clause_id\":\"clause-00bf407a10286bca\",\"start\":1353,\"end\":1381,\"excerpt\":\"on.kind=OFFICIAL_DAILY_CLOSE\",\"disposition\":\"POLICY\",\"paths\":[\"alert_rules[1].confirmation.kind\"],\"reason\":\"Official daily close confirmation for alert rule 1.\"}],\"bindings\":[{\"path\":\"schema_version\",\"value\":5,\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_mode\",\"value\":\"CONDITION_PLAN\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_version\",\"value\":\"condition-plan-v1\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"symbol\",\"value\":\"000858.SZ\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-e4b2ecd0e456e70e\"],\"supplement_id\":null},{\"path\":\"market\",\"value\":\"SZSE\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-e4b2ecd0e456e70e\"],\"supplement_id\":null},{\"path\":\"activation.mode\",\"value\":\"MANUAL\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-375c41bb6e041e50\"],\"supplement_id\":null},{\"path\":\"position.max_qty\",\"value\":800,\"origin\":\"SOURCE\",\"unit\":\"SHARES\",\"clause_ids\":[\"clause-1510f21674e9e88b\"],\"supplement_id\":null},{\"path\":\"trading_rules.settlement\",\"value\":\"NEXT_EXCHANGE_SESSION\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"trading_rules.tick_size_fen\",\"value\":1,\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"JSON\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"trading_rules.special_state_restrictions\",\"value\":\"BLOCK_UNVERIFIED\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"ordinary_rules\",\"value\":\"[]\",\"origin\":\"SOURCE\",\"unit\":\"STRUCTURE\",\"clause_ids\":[\"clause-b653b91e30e56109\"],\"supplement_id\":null},{\"path\":\"risk_branches\",\"value\":\"[]\",\"origin\":\"SOURCE\",\"unit\":\"STRUCTURE\",\"clause_ids\":[\"clause-0ced01e96bf7f6b8\"],\"supplement_id\":null},{\"path\":\"execution_policy.same_signal\",\"value\":\"ONE_PLANNED_QUANTITY\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_policy.risk_priority\",\"value\":\"SEVERE_THEN_ORDINARY\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"execution_policy.ordinary_conflict\",\"value\":\"BLOCK_BOTH\",\"origin\":\"PRODUCT_CONTRACT\",\"unit\":\"TEXT\",\"clause_ids\":[],\"supplement_id\":null},{\"path\":\"alert_rules[0].rule_id\",\"value\":\"OBS-CLOSE-BELOW-74.32\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].kind\",\"value\":\"RISK_ALERT\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.type\",\"value\":\"DAILY_PRICE_COMPARE\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.field\",\"value\":\"close\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.offset\",\"value\":0,\"origin\":\"SOURCE\",\"unit\":\"JSON\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.comparator\",\"value\":\"LT\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.mode\",\"value\":\"FIXED\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.value\",\"value\":\"7432\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.unit\",\"value\":\"FEN\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.as_of\",\"value\":\"2026-10-21\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].condition.reference.source\",\"value\":\"2026-10-21合成双向观察约定\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-adf7079d8f64e127\"],\"supplement_id\":null},{\"path\":\"alert_rules[0].confirmation.kind\",\"value\":\"OFFICIAL_DAILY_CLOSE\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-8f51e64200f8cf62\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].rule_id\",\"value\":\"OBS-CLOSE-ABOVE-85.67\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].kind\",\"value\":\"RISK_ALERT\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.type\",\"value\":\"DAILY_PRICE_COMPARE\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.field\",\"value\":\"close\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.offset\",\"value\":0,\"origin\":\"SOURCE\",\"unit\":\"JSON\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.comparator\",\"value\":\"GT\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.reference.mode\",\"value\":\"FIXED\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.reference.value\",\"value\":\"8567\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.reference.unit\",\"value\":\"FEN\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.reference.as_of\",\"value\":\"2026-10-21\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].condition.reference.source\",\"value\":\"2026-10-21合成双向观察约定\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-0b3136857101d3c7\"],\"supplement_id\":null},{\"path\":\"alert_rules[1].confirmation.kind\",\"value\":\"OFFICIAL_DAILY_CLOSE\",\"origin\":\"SOURCE\",\"unit\":\"TEXT\",\"clause_ids\":[\"clause-00bf407a10286bca\"],\"supplement_id\":null}],\"assumptions\":[],\"warnings\":[]}",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 14121,
+      "completion_tokens": 3777,
+      "total_tokens": 17898
+    },
+    "attempts": 1
+  },
+  "extraction_response_sha256": "d9bdc3c0625ce167d0d9fe5e32841ab590b6e168049d7d26d198047fdb4429b3",
+  "extraction_result": {
+    "request_id": "09e1ae45-be4e-43ad-9ecb-7bf6d82b6d49",
+    "provider_id": "00000000-0000-4000-8000-0000000000d5",
+    "model": "deepseek-flash",
+    "prompt_version": "plan-extract-v9",
+    "source_text_sha256": "19b9fcb40b5532876633ee7a1d4abc7f30d39f9e1c7d9647533829e2d537ad53",
+    "draft": null,
+    "mapping": null,
+    "evidence": [],
+    "assumptions": [],
+    "warnings": [],
+    "unmapped_text": [],
+    "validation_issues": [
+      {
+        "code": "AI_FIELD_EVIDENCE_INVALID",
+        "path": "mapping",
+        "severity": "ERROR",
+        "message": "Plan source mapping is invalid.",
+        "activationBlocking": true
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 14121,
+      "completion_tokens": 3777,
+      "total_tokens": 17898
+    },
+    "status": "INVALID_OUTPUT"
+  },
+  "extraction_request_sha256": "073ed81603e73ff26b847b791640e9642abb0c27fb72115a73736d39e2a9c9aa",
+  "unapproved_candidate_observation": {
+    "symbol": "000858.SZ",
+    "market": "SZSE",
+    "max_qty": 800,
+    "ordinary_rules": 0,
+    "risk_branches": 0,
+    "alerts": [
+      {
+        "comparator": "LT",
+        "value": "7432",
+        "field": "close",
+        "offset": 0,
+        "confirmation": "OFFICIAL_DAILY_CLOSE"
+      },
+      {
+        "comparator": "GT",
+        "value": "8567",
+        "field": "close",
+        "offset": 0,
+        "confirmation": "OFFICIAL_DAILY_CLOSE"
+      }
+    ]
+  },
+  "review_diagnosis": {
+    "error_type": "MappingValidationError",
+    "message": "binding value differs from current candidate"
+  },
+  "empty_array_binding_types": [
+    {
+      "path": "ordinary_rules",
+      "json_type": "str",
+      "value": "[]"
+    },
+    {
+      "path": "risk_branches",
+      "json_type": "str",
+      "value": "[]"
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [
+        "No extracted draft",
+        "Extraction/review did not fully pass"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 5764,
+        "completion_tokens": 2091,
+        "total_tokens": 7855
+      },
+      "source_sha256": "0aeadc3db76c137393265ab4d206d4d416cbd4db28036d84c7bb104017d2858c",
+      "source_chars": 829,
+      "extraction_status": "INVALID_OUTPUT",
+      "issues": [
+        {
+          "code": "AI_FIELD_EVIDENCE_INVALID",
+          "path": "mapping",
+          "severity": "ERROR",
+          "message": "Plan source mapping is invalid.",
+          "activationBlocking": true
+        }
+      ],
+      "assumptions": [],
+      "warnings": [],
+      "passed": false
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [
+        "No extracted draft",
+        "Extraction/review did not fully pass"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 5785,
+        "completion_tokens": 2102,
+        "total_tokens": 7887
+      },
+      "source_sha256": "19b9fcb40b5532876633ee7a1d4abc7f30d39f9e1c7d9647533829e2d537ad53",
+      "source_chars": 1381,
+      "extraction_status": "INVALID_OUTPUT",
+      "issues": [
+        {
+          "code": "AI_FIELD_EVIDENCE_INVALID",
+          "path": "mapping",
+          "severity": "ERROR",
+          "message": "Plan source mapping is invalid.",
+          "activationBlocking": true
+        }
+      ],
+      "assumptions": [],
+      "warnings": [],
+      "passed": false
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [
+        "Produced an importable-looking policy instead of blocking"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 5686,
+        "completion_tokens": 1892,
+        "total_tokens": 7578
+      },
+      "source_sha256": "b1ee5ec6cc7241443395af4de40072aea6d4e0496763e3e5a9ef8c8d24dee709",
+      "source_chars": 394,
+      "correctly_blocked": false,
+      "passed": false
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 5712,
+        "completion_tokens": 1922,
+        "total_tokens": 7634
+      },
+      "source_sha256": "c71ad228cdd28654af1722e0b4d633c0efaf6180e0f238476061453c207d403f",
+      "source_chars": 202,
+      "correctly_blocked": true,
+      "passed": true
+    }
+  ],
+  "all_passed": false,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

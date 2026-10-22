@@ -1,0 +1,90 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6585,
+        "completion_tokens": 1922,
+        "total_tokens": 8507
+      },
+      "source_sha256": "72500f88abd3144a1a802360f8085d87caa2a234154e6e674f02a8e37fb80113",
+      "source_chars": 813,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "passed": true
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [
+        "No extracted draft",
+        "Extraction/review did not fully pass"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6606,
+        "completion_tokens": 2198,
+        "total_tokens": 8804
+      },
+      "source_sha256": "5abeae5df9898c5094b7aa68d933ca0568a3b942aecda4e0ebe72faf5e44f0ad",
+      "source_chars": 1353,
+      "extraction_status": "INVALID_OUTPUT",
+      "issues": [
+        {
+          "code": "AI_INPUT_TOO_LARGE",
+          "path": "source_text",
+          "severity": "ERROR",
+          "message": "The source text and extraction schema exceed the input limit.",
+          "activationBlocking": true
+        }
+      ],
+      "assumptions": [],
+      "warnings": [],
+      "passed": false
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6507,
+        "completion_tokens": 1679,
+        "total_tokens": 8186
+      },
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6533,
+        "completion_tokens": 2144,
+        "total_tokens": 8677
+      },
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    }
+  ],
+  "all_passed": false,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "overall_status": "NOT_FULLY_PASSED",
+  "final_version": "run-v3",
+  "versions": [
+    {
+      "version": "run-v1",
+      "prompt_sha256": "dd4047212f7e47c223b812cae57deafde66da2f82e943a336776476596623eba",
+      "cases": [
+        {
+          "case": "missing-position-limit",
+          "passed": false,
+          "findings": [
+            "Produced an importable-looking policy instead of blocking"
+          ]
+        },
+        {
+          "case": "sse-one-alert",
+          "passed": false,
+          "findings": [
+            "No extracted draft",
+            "Extraction/review did not fully pass"
+          ]
+        },
+        {
+          "case": "szse-two-alerts",
+          "passed": false,
+          "findings": [
+            "No extracted draft",
+            "Extraction/review did not fully pass"
+          ]
+        },
+        {
+          "case": "unsupported-index-buy",
+          "passed": true,
+          "findings": []
+        }
+      ]
+    },
+    {
+      "version": "run-v2",
+      "prompt_sha256": "b36c0eac838522669c03d2f83fefb0f9668005605cc99ad8f537350b83c7148a",
+      "cases": [
+        {
+          "case": "missing-position-limit",
+          "passed": true,
+          "findings": []
+        },
+        {
+          "case": "sse-one-alert",
+          "passed": false,
+          "findings": [
+            "No extracted draft",
+            "Extraction/review did not fully pass"
+          ]
+        },
+        {
+          "case": "szse-two-alerts",
+          "passed": false,
+          "findings": [
+            "No extracted draft",
+            "Extraction/review did not fully pass"
+          ]
+        },
+        {
+          "case": "unsupported-index-buy",
+          "passed": true,
+          "findings": []
+        }
+      ]
+    },
+    {
+      "version": "run-v3",
+      "prompt_sha256": "4a3756d32bd49884e0d4e5f1a0291a75e76cedf5ca83697550219554e382ad6a",
+      "cases": [
+        {
+          "case": "missing-position-limit",
+          "passed": true,
+          "findings": []
+        },
+        {
+          "case": "sse-one-alert",
+          "passed": false,
+          "findings": [
+            "No extracted draft",
+            "Extraction/review did not fully pass"
+          ]
+        },
+        {
+          "case": "szse-two-alerts",
+          "passed": false,
+          "findings": [
+            "No extracted draft",
+            "Extraction/review did not fully pass"
+          ]
+        },
+        {
+          "case": "unsupported-index-buy",
+          "passed": true,
+          "findings": []
+        }
+      ]
+    }
+  ],
+  "offline_contract_security_tests_passed": 30,
+  "generation_calls": 12,
+  "extraction_calls": 6,
+  "model": "deepseek-flash",
+  "unchanged_limits": {
+    "max_input_chars": 50000,
+    "max_output_tokens": 4096,
+    "timeout_seconds": 30,
+    "max_retries": 2
+  },
+  "final_result": {
+    "expected_blocks": 2,
+    "correct_blocks": 2,
+    "normal_sources": 2,
+    "accepted_sources": 0,
+    "last_round_truncated_responses": 0
+  },
+  "raw_text_repaired": false,
+  "validator_changed": false,
+  "review_confirmed": false,
+  "plan_saved": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "notes": [
+    "V1 missing-limit case correctly avoided a fabricated limit; its verbose blocked A failed the strict source-format check.",
+    "Raw candidates are unapproved observations, not accepted drafts. Both final accepted draft fields are null.",
+    "English documentation received parity checks; live generation used the Chinese prompt only."
+  ]
+}

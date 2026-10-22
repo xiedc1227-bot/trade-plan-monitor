@@ -1,0 +1,136 @@
+{
+  "protected_before": {
+    "draft": {
+      "id": "f053d41c-2eca-4c3b-980b-ac6c370c2881",
+      "plan_id": "SNGC-OBS-20261022",
+      "version": 1,
+      "status": "DRAFT",
+      "plan_hash": "18825a7f0dfd462f10b2392d74eaa826b6e6c11e128a54484937252320e2cea5",
+      "confirmed_at": null,
+      "review_id": null,
+      "review_revision": 0,
+      "technical_alerts": 1,
+      "ordinary_rules": 0,
+      "risk_branches": 0
+    },
+    "protected": {
+      "active_plan": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "plan_activation_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_lot": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_opening_balance": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_confirmation": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "risk_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "manual_event_risk": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "daily_records": {
+        "count": 2,
+        "sha256": "85688962b054beda0e35915165c1df7730979440e404b05fee1c98ef21c8644d"
+      },
+      "draft_bytes": {
+        "count": 1,
+        "sha256": "cac3bcb5183abdb830047318926fe32e226023b7359b3f4e2b3d8906ddb6068a"
+      },
+      "review_bytes": {
+        "count": 1,
+        "sha256": "5f5432a2c76c0d4c562e5e1af2e6233bed877cc2b6fa287b4d6407d100720974"
+      },
+      "storage_constraint": {
+        "count": 1,
+        "sha256": "5eb393768b1918e6991d58ac5fa4c3f57c9ca11326e6ef5dda3d354540dcb7fc"
+      }
+    },
+    "config_sha256": "89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428"
+  },
+  "protected_after": {
+    "draft": {
+      "id": "f053d41c-2eca-4c3b-980b-ac6c370c2881",
+      "plan_id": "SNGC-OBS-20261022",
+      "version": 1,
+      "status": "DRAFT",
+      "plan_hash": "18825a7f0dfd462f10b2392d74eaa826b6e6c11e128a54484937252320e2cea5",
+      "confirmed_at": null,
+      "review_id": null,
+      "review_revision": 0,
+      "technical_alerts": 1,
+      "ordinary_rules": 0,
+      "risk_branches": 0
+    },
+    "protected": {
+      "active_plan": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "plan_activation_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_lot": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_opening_balance": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_confirmation": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "risk_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "manual_event_risk": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "daily_records": {
+        "count": 2,
+        "sha256": "85688962b054beda0e35915165c1df7730979440e404b05fee1c98ef21c8644d"
+      },
+      "draft_bytes": {
+        "count": 1,
+        "sha256": "cac3bcb5183abdb830047318926fe32e226023b7359b3f4e2b3d8906ddb6068a"
+      },
+      "review_bytes": {
+        "count": 1,
+        "sha256": "5f5432a2c76c0d4c562e5e1af2e6233bed877cc2b6fa287b4d6407d100720974"
+      },
+      "storage_constraint": {
+        "count": 1,
+        "sha256": "5eb393768b1918e6991d58ac5fa4c3f57c9ca11326e6ef5dda3d354540dcb7fc"
+      }
+    },
+    "config_sha256": "89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428"
+  },
+  "unchanged": true,
+  "access": "Read-only snapshots; generation/extraction runner never opens application storage"
+}

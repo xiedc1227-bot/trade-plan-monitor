@@ -1,0 +1,595 @@
+
+=================================== ERRORS ====================================
+_____ ERROR collecting tests/integration/test_anytime_runtime_recovery.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_anytime_runtime_recovery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_anytime_runtime_recovery.py:18: in <module>
+    import test_explicit_runtime_production as explicit
+E   ModuleNotFoundError: No module named 'test_explicit_runtime_production'
+_____ ERROR collecting tests/integration/test_browser_read_diagnostics.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_browser_read_diagnostics.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_browser_read_diagnostics.py:9: in <module>
+    from test_persistent_monitor_read_service import _NOW, _setup
+E   ModuleNotFoundError: No module named 'test_persistent_monitor_read_service'
+_____ ERROR collecting tests/integration/test_close_recovery_evidence.py ______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_close_recovery_evidence.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_close_recovery_evidence.py:10: in <module>
+    from test_recovery_alert_provenance import NOW, _reactivate
+E   ModuleNotFoundError: No module named 'test_recovery_alert_provenance'
+_ ERROR collecting tests/integration/test_close_recovery_session_ownership.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_close_recovery_session_ownership.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_close_recovery_session_ownership.py:8: in <module>
+    from test_close_recovery_evidence import NOW, discover, mutate
+E   ModuleNotFoundError: No module named 'test_close_recovery_evidence'
+___ ERROR collecting tests/integration/test_daily_bar_permission_demand.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_daily_bar_permission_demand.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_daily_bar_permission_demand.py:8: in <module>
+    from test_close_recovery_evidence import mutate
+E   ModuleNotFoundError: No module named 'test_close_recovery_evidence'
+__ ERROR collecting tests/integration/test_daily_production_reevaluation.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_daily_production_reevaluation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_daily_production_reevaluation.py:8: in <module>
+    from test_daily_plan_chain import FRIDAY, SH, SYMBOL, TUESDAY, WEDNESDAY, Chain, official_proof
+E   ModuleNotFoundError: No module named 'test_daily_plan_chain'
+_ ERROR collecting tests/integration/test_daily_simulation_review_regressions.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_daily_simulation_review_regressions.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_daily_simulation_review_regressions.py:10: in <module>
+    from tests.integration.test_daily_production_reevaluation import (
+E   ImportError: cannot import name 'production_chain' from 'tests.integration.test_daily_production_reevaluation' (D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_daily_production_reevaluation.py)
+_ ERROR collecting tests/integration/test_daily_sparse_calendar_regression.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_daily_sparse_calendar_regression.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_daily_sparse_calendar_regression.py:5: in <module>
+    from test_daily_plan_chain import FRIDAY, SH, SYMBOL
+E   ModuleNotFoundError: No module named 'test_daily_plan_chain'
+_____ ERROR collecting tests/integration/test_daily_supplement_batches.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_daily_supplement_batches.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_daily_supplement_batches.py:4: in <module>
+    from test_daily_plan_chain import Chain
+E   ModuleNotFoundError: No module named 'test_daily_plan_chain'
+________ ERROR collecting tests/integration/test_delivery_admission.py ________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_delivery_admission.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_delivery_admission.py:9: in <module>
+    from test_notification_delivery import NOW, _payload, _unit_of_work
+E   ModuleNotFoundError: No module named 'test_notification_delivery'
+___ ERROR collecting tests/integration/test_delivery_eligibility_storage.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_delivery_eligibility_storage.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_delivery_eligibility_storage.py:15: in <module>
+    from test_explicit_runtime_production import TARGET, _three_rule_plan
+E   ModuleNotFoundError: No module named 'test_explicit_runtime_production'
+____ ERROR collecting tests/integration/test_historical_close_evidence.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_historical_close_evidence.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_historical_close_evidence.py:10: in <module>
+    from test_close_recovery_evidence import mutate
+E   ModuleNotFoundError: No module named 'test_close_recovery_evidence'
+_ ERROR collecting tests/integration/test_index_permission_process_restart.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_index_permission_process_restart.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_index_permission_process_restart.py:12: in <module>
+    from test_index_permission_scope_migration import _migrate
+E   ModuleNotFoundError: No module named 'test_index_permission_scope_migration'
+______ ERROR collecting tests/integration/test_market_index_overview.py _______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_market_index_overview.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_market_index_overview.py:21: in <module>
+    from test_index_close_retention import (
+E   ModuleNotFoundError: No module named 'test_index_close_retention'
+______ ERROR collecting tests/integration/test_missed_close_execution.py ______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_missed_close_execution.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_missed_close_execution.py:15: in <module>
+    from test_ten_symbol_runtime import _daily_bar, _runtime_context, _runtime_plan
+E   ModuleNotFoundError: No module named 'test_ten_symbol_runtime'
+___ ERROR collecting tests/integration/test_monitor_disconnect_ownership.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_monitor_disconnect_ownership.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_monitor_disconnect_ownership.py:8: in <module>
+    from test_monitor_disconnect import Socket, empty_replay
+E   ModuleNotFoundError: No module named 'test_monitor_disconnect'
+_____ ERROR collecting tests/integration/test_monitor_evidence_sharing.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_monitor_evidence_sharing.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_monitor_evidence_sharing.py:11: in <module>
+    from test_persistent_monitor_read_service import _NOW, _setup
+E   ModuleNotFoundError: No module named 'test_persistent_monitor_read_service'
+_______ ERROR collecting tests/integration/test_monitor_read_tracing.py _______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_monitor_read_tracing.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_monitor_read_tracing.py:7: in <module>
+    from test_monitor_evidence_sharing import seed
+E   ModuleNotFoundError: No module named 'test_monitor_evidence_sharing'
+__ ERROR collecting tests/integration/test_permission_candidate_rotation.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_permission_candidate_rotation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_permission_candidate_rotation.py:9: in <module>
+    from current_activation_fixture import current_mixed_plan
+E   ModuleNotFoundError: No module named 'current_activation_fixture'
+__ ERROR collecting tests/integration/test_permission_candidate_selection.py __
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_permission_candidate_selection.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_permission_candidate_selection.py:10: in <module>
+    from current_activation_fixture import current_mixed_plan
+E   ModuleNotFoundError: No module named 'current_activation_fixture'
+_ ERROR collecting tests/integration/test_permission_weekend_candidate_consistency.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_permission_weekend_candidate_consistency.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_permission_weekend_candidate_consistency.py:8: in <module>
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+E   ModuleNotFoundError: No module named 'test_permission_candidate_selection'
+__ ERROR collecting tests/integration/test_production_a04_retry_timeline.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_a04_retry_timeline.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_a04_retry_timeline.py:12: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+______ ERROR collecting tests/integration/test_production_a06_matrix.py _______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_a06_matrix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_a06_matrix.py:10: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_production_a06_process_scheduler.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_a06_process_scheduler.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_a06_process_scheduler.py:11: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+__ ERROR collecting tests/integration/test_production_certification_gate.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_certification_gate.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_certification_gate.py:14: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_production_daily_bar_permission_maintenance.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_daily_bar_permission_maintenance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_daily_bar_permission_maintenance.py:13: in <module>
+    from test_historical_close_evidence import publish
+E   ModuleNotFoundError: No module named 'test_historical_close_evidence'
+_ ERROR collecting tests/integration/test_production_daily_bar_permission_preparation.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_daily_bar_permission_preparation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_daily_bar_permission_preparation.py:13: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_production_daily_limits_permission_maintenance.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_daily_limits_permission_maintenance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_daily_limits_permission_maintenance.py:12: in <module>
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+E   ModuleNotFoundError: No module named 'test_permission_candidate_selection'
+_ ERROR collecting tests/integration/test_production_index_daily_permission_maintenance.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_index_daily_permission_maintenance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_index_daily_permission_maintenance.py:12: in <module>
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+E   ModuleNotFoundError: No module named 'test_permission_candidate_selection'
+_ ERROR collecting tests/integration/test_production_index_historical_permission_probe.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_index_historical_permission_probe.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_index_historical_permission_probe.py:15: in <module>
+    from test_production_certification_gate import _composition
+E   ModuleNotFoundError: No module named 'test_production_certification_gate'
+_ ERROR collecting tests/integration/test_production_index_realtime_permission_probe.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_index_realtime_permission_probe.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_index_realtime_permission_probe.py:12: in <module>
+    from test_index_permission_scope_migration import _migrate
+E   ModuleNotFoundError: No module named 'test_index_permission_scope_migration'
+___ ERROR collecting tests/integration/test_production_sdk_call_boundary.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_sdk_call_boundary.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_sdk_call_boundary.py:12: in <module>
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+E   ModuleNotFoundError: No module named 'test_permission_candidate_selection'
+_____ ERROR collecting tests/integration/test_production_semantic_gate.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_semantic_gate.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_semantic_gate.py:9: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_production_stock_minute_permission_execution.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_stock_minute_permission_execution.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_stock_minute_permission_execution.py:12: in <module>
+    from test_permission_candidate_selection import _block, _seed_open_day
+E   ModuleNotFoundError: No module named 'test_permission_candidate_selection'
+_ ERROR collecting tests/integration/test_production_stock_minute_permission_preparation.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_production_stock_minute_permission_preparation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_production_stock_minute_permission_preparation.py:11: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_provider_cooldown_process_restart.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_provider_cooldown_process_restart.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_provider_cooldown_process_restart.py:9: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+____ ERROR collecting tests/integration/test_recovery_activation_fences.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_recovery_activation_fences.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_recovery_activation_fences.py:9: in <module>
+    from test_live_pipeline_acceptance import NOW
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+____ ERROR collecting tests/integration/test_recovery_alert_eligibility.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_recovery_alert_eligibility.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_recovery_alert_eligibility.py:12: in <module>
+    from test_explicit_runtime_production import (
+E   ModuleNotFoundError: No module named 'test_explicit_runtime_production'
+____ ERROR collecting tests/integration/test_runtime_commit_observation.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_runtime_commit_observation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_runtime_commit_observation.py:6: in <module>
+    from test_ten_symbol_runtime import (
+E   ModuleNotFoundError: No module named 'test_ten_symbol_runtime'
+_ ERROR collecting tests/integration/test_runtime_crossed_market_deadline.py __
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_runtime_crossed_market_deadline.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_runtime_crossed_market_deadline.py:10: in <module>
+    from test_production_certification_gate import _composition
+E   ModuleNotFoundError: No module named 'test_production_certification_gate'
+__ ERROR collecting tests/integration/test_runtime_restart_gap_acceptance.py __
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_runtime_restart_gap_acceptance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_runtime_restart_gap_acceptance.py:12: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+____ ERROR collecting tests/integration/test_runtime_status_projection.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_runtime_status_projection.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_runtime_status_projection.py:8: in <module>
+    from test_explicit_runtime_production import NOW, TARGET, _database
+E   ModuleNotFoundError: No module named 'test_explicit_runtime_production'
+____ ERROR collecting tests/integration/test_s3_frozen_startup_recovery.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_frozen_startup_recovery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_frozen_startup_recovery.py:16: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+______ ERROR collecting tests/integration/test_s3_index_retry_process.py ______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_index_retry_process.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_index_retry_process.py:18: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_s3_installed_runtime_read_liveness.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_installed_runtime_read_liveness.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_installed_runtime_read_liveness.py:9: in <module>
+    from current_activation_fixture import current_sample_plan, seed_current
+E   ModuleNotFoundError: No module named 'current_activation_fixture'
+___ ERROR collecting tests/integration/test_s3_missed_close_kill_restart.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_missed_close_kill_restart.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_missed_close_kill_restart.py:14: in <module>
+    from current_activation_fixture import current_sample_plan, seed_current
+E   ModuleNotFoundError: No module named 'current_activation_fixture'
+___ ERROR collecting tests/integration/test_s3_notification_kill_restart.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_notification_kill_restart.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_notification_kill_restart.py:15: in <module>
+    from test_live_pipeline_acceptance import ControlledClock, VirtualPace
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_s3_permission_reservation_process.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_permission_reservation_process.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_permission_reservation_process.py:12: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_s3_scheduled_permission_shutdown.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_scheduled_permission_shutdown.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_scheduled_permission_shutdown.py:9: in <module>
+    from test_live_pipeline_acceptance import NOW
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_s3_scheduled_stock_recovery_shutdown.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_scheduled_stock_recovery_shutdown.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_scheduled_stock_recovery_shutdown.py:8: in <module>
+    from test_s3_startup_minute_coverage import FIRST_END, NOW, SYMBOL, _running
+E   ModuleNotFoundError: No module named 'test_s3_startup_minute_coverage'
+____ ERROR collecting tests/integration/test_s3_startup_minute_coverage.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_startup_minute_coverage.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_startup_minute_coverage.py:14: in <module>
+    from test_live_pipeline_acceptance import (
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+__ ERROR collecting tests/integration/test_s3_startup_outcome_association.py __
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_startup_outcome_association.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_startup_outcome_association.py:10: in <module>
+    from test_explicit_runtime_production import (
+E   ModuleNotFoundError: No module named 'test_explicit_runtime_production'
+___ ERROR collecting tests/integration/test_s3_stock_recovery_authority.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_stock_recovery_authority.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_stock_recovery_authority.py:9: in <module>
+    from test_s3_startup_minute_coverage import BUSINESS_TABLES, FIRST_END, NOW, SYMBOL, _running
+E   ModuleNotFoundError: No module named 'test_s3_startup_minute_coverage'
+____ ERROR collecting tests/integration/test_s3_stock_recovery_delivery.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_stock_recovery_delivery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_stock_recovery_delivery.py:12: in <module>
+    from test_explicit_runtime_production import TARGET, _ExplicitPipelineSDK
+E   ModuleNotFoundError: No module named 'test_explicit_runtime_production'
+___ ERROR collecting tests/integration/test_s3_stock_recovery_execution.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_stock_recovery_execution.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_stock_recovery_execution.py:11: in <module>
+    from test_live_pipeline_acceptance import NOW
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+____ ERROR collecting tests/integration/test_s3_stock_recovery_identity.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_stock_recovery_identity.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_stock_recovery_identity.py:14: in <module>
+    from test_live_pipeline_acceptance import ControlledClock, OfflineSDK
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_____ ERROR collecting tests/integration/test_s3_stock_recovery_owner.py ______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_stock_recovery_owner.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_stock_recovery_owner.py:8: in <module>
+    from test_live_pipeline_acceptance import NOW
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_____ ERROR collecting tests/integration/test_s3_stock_recovery_wiring.py _____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_s3_stock_recovery_wiring.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_s3_stock_recovery_wiring.py:8: in <module>
+    from test_live_pipeline_acceptance import NOW
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+___ ERROR collecting tests/integration/test_unified_permission_degraded.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_unified_permission_degraded.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_unified_permission_degraded.py:9: in <module>
+    from test_live_pipeline_acceptance import _sample_plan
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+___ ERROR collecting tests/integration/test_unified_permission_dispatch.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_unified_permission_dispatch.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_unified_permission_dispatch.py:12: in <module>
+    from test_live_pipeline_acceptance import ControlledClock, _activate_plans, _sample_plan
+E   ModuleNotFoundError: No module named 'test_live_pipeline_acceptance'
+_ ERROR collecting tests/integration/test_unified_permission_legacy_owners.py _
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_unified_permission_legacy_owners.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_unified_permission_legacy_owners.py:11: in <module>
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+E   ModuleNotFoundError: No module named 'test_permission_candidate_selection'
+____ ERROR collecting tests/integration/test_unified_permission_running.py ____
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_unified_permission_running.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\integration\test_unified_permission_running.py:8: in <module>
+    import test_production_certification_gate as certification_fixture
+E   ModuleNotFoundError: No module named 'test_production_certification_gate'
+__________ ERROR collecting tests/unit/test_cohort_risk_execution.py __________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_cohort_risk_execution.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_cohort_risk_execution.py:7: in <module>
+    from test_daily_plan import synthetic_plan_payload
+E   ModuleNotFoundError: No module named 'test_daily_plan'
+____________ ERROR collecting tests/unit/test_daily_extraction.py _____________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_daily_extraction.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_daily_extraction.py:8: in <module>
+    from test_ai_plan_extraction_v4 import _config
+E   ModuleNotFoundError: No module named 'test_ai_plan_extraction_v4'
+_____________ ERROR collecting tests/unit/test_daily_lifecycle.py _____________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_daily_lifecycle.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_daily_lifecycle.py:6: in <module>
+    from test_daily_plan import synthetic_plan_payload
+E   ModuleNotFoundError: No module named 'test_daily_plan'
+________ ERROR collecting tests/unit/test_daily_plan_review_service.py ________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_daily_plan_review_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_daily_plan_review_service.py:8: in <module>
+    from test_daily_review import reviewed_mapping
+E   ModuleNotFoundError: No module named 'test_daily_review'
+_______________ ERROR collecting tests/unit/test_daily_risk.py ________________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_daily_risk.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_daily_risk.py:6: in <module>
+    from test_daily_plan import synthetic_plan_payload
+E   ModuleNotFoundError: No module named 'test_daily_plan'
+_________ ERROR collecting tests/unit/test_daily_safety_boundaries.py _________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_daily_safety_boundaries.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_daily_safety_boundaries.py:9: in <module>
+    from test_daily_plan import synthetic_plan_payload
+E   ModuleNotFoundError: No module named 'test_daily_plan'
+__ ERROR collecting tests/unit/test_legacy_recovery_delivery_eligibility.py ___
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_legacy_recovery_delivery_eligibility.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_legacy_recovery_delivery_eligibility.py:8: in <module>
+    from test_decision_engine import _context, _official_risk_context, _pressure_lot
+E   ModuleNotFoundError: No module named 'test_decision_engine'
+__________ ERROR collecting tests/unit/test_missed_close_recovery.py __________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_missed_close_recovery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_missed_close_recovery.py:6: in <module>
+    from test_decision_engine import _official_risk_context
+E   ModuleNotFoundError: No module named 'test_decision_engine'
+_______ ERROR collecting tests/unit/test_permission_reservation_ack.py ________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_permission_reservation_ack.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_permission_reservation_ack.py:8: in <module>
+    from test_request_recovery_admission import Clock, controller, fail
+E   ModuleNotFoundError: No module named 'test_request_recovery_admission'
+______ ERROR collecting tests/unit/test_recovery_delivery_eligibility.py ______
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_recovery_delivery_eligibility.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_recovery_delivery_eligibility.py:7: in <module>
+    from test_explicit_rules import _bars, _inventory, _plan_with_rules, _rule
+E   ModuleNotFoundError: No module named 'test_explicit_rules'
+____________ ERROR collecting tests/unit/test_sdk_call_boundary.py ____________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\unit\test_sdk_call_boundary.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+tests\unit\test_sdk_call_boundary.py:11: in <module>
+    from test_minute_permission_transport import _installed
+E   ModuleNotFoundError: No module named 'test_minute_permission_transport'
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/integration/test_anytime_runtime_recovery.py
+ERROR tests/integration/test_browser_read_diagnostics.py
+ERROR tests/integration/test_close_recovery_evidence.py
+ERROR tests/integration/test_close_recovery_session_ownership.py
+ERROR tests/integration/test_daily_bar_permission_demand.py
+ERROR tests/integration/test_daily_production_reevaluation.py
+ERROR tests/integration/test_daily_simulation_review_regressions.py
+ERROR tests/integration/test_daily_sparse_calendar_regression.py
+ERROR tests/integration/test_daily_supplement_batches.py
+ERROR tests/integration/test_delivery_admission.py
+ERROR tests/integration/test_delivery_eligibility_storage.py
+ERROR tests/integration/test_historical_close_evidence.py
+ERROR tests/integration/test_index_permission_process_restart.py
+ERROR tests/integration/test_market_index_overview.py
+ERROR tests/integration/test_missed_close_execution.py
+ERROR tests/integration/test_monitor_disconnect_ownership.py
+ERROR tests/integration/test_monitor_evidence_sharing.py
+ERROR tests/integration/test_monitor_read_tracing.py
+ERROR tests/integration/test_permission_candidate_rotation.py
+ERROR tests/integration/test_permission_candidate_selection.py
+ERROR tests/integration/test_permission_weekend_candidate_consistency.py
+ERROR tests/integration/test_production_a04_retry_timeline.py
+ERROR tests/integration/test_production_a06_matrix.py
+ERROR tests/integration/test_production_a06_process_scheduler.py
+ERROR tests/integration/test_production_certification_gate.py
+ERROR tests/integration/test_production_daily_bar_permission_maintenance.py
+ERROR tests/integration/test_production_daily_bar_permission_preparation.py
+ERROR tests/integration/test_production_daily_limits_permission_maintenance.py
+ERROR tests/integration/test_production_index_daily_permission_maintenance.py
+ERROR tests/integration/test_production_index_historical_permission_probe.py
+ERROR tests/integration/test_production_index_realtime_permission_probe.py
+ERROR tests/integration/test_production_sdk_call_boundary.py
+ERROR tests/integration/test_production_semantic_gate.py
+ERROR tests/integration/test_production_stock_minute_permission_execution.py
+ERROR tests/integration/test_production_stock_minute_permission_preparation.py
+ERROR tests/integration/test_provider_cooldown_process_restart.py
+ERROR tests/integration/test_recovery_activation_fences.py
+ERROR tests/integration/test_recovery_alert_eligibility.py
+ERROR tests/integration/test_runtime_commit_observation.py
+ERROR tests/integration/test_runtime_crossed_market_deadline.py
+ERROR tests/integration/test_runtime_restart_gap_acceptance.py
+ERROR tests/integration/test_runtime_status_projection.py
+ERROR tests/integration/test_s3_frozen_startup_recovery.py
+ERROR tests/integration/test_s3_index_retry_process.py
+ERROR tests/integration/test_s3_installed_runtime_read_liveness.py
+ERROR tests/integration/test_s3_missed_close_kill_restart.py
+ERROR tests/integration/test_s3_notification_kill_restart.py
+ERROR tests/integration/test_s3_permission_reservation_process.py
+ERROR tests/integration/test_s3_scheduled_permission_shutdown.py
+ERROR tests/integration/test_s3_scheduled_stock_recovery_shutdown.py
+ERROR tests/integration/test_s3_startup_minute_coverage.py
+ERROR tests/integration/test_s3_startup_outcome_association.py
+ERROR tests/integration/test_s3_stock_recovery_authority.py
+ERROR tests/integration/test_s3_stock_recovery_delivery.py
+ERROR tests/integration/test_s3_stock_recovery_execution.py
+ERROR tests/integration/test_s3_stock_recovery_identity.py
+ERROR tests/integration/test_s3_stock_recovery_owner.py
+ERROR tests/integration/test_s3_stock_recovery_wiring.py
+ERROR tests/integration/test_unified_permission_degraded.py
+ERROR tests/integration/test_unified_permission_dispatch.py
+ERROR tests/integration/test_unified_permission_legacy_owners.py
+ERROR tests/integration/test_unified_permission_running.py
+ERROR tests/unit/test_cohort_risk_execution.py
+ERROR tests/unit/test_daily_extraction.py
+ERROR tests/unit/test_daily_lifecycle.py
+ERROR tests/unit/test_daily_plan_review_service.py
+ERROR tests/unit/test_daily_risk.py
+ERROR tests/unit/test_daily_safety_boundaries.py
+ERROR tests/unit/test_legacy_recovery_delivery_eligibility.py
+ERROR tests/unit/test_missed_close_recovery.py
+ERROR tests/unit/test_permission_reservation_ack.py
+ERROR tests/unit/test_recovery_delivery_eligibility.py
+ERROR tests/unit/test_sdk_call_boundary.py
+!!!!!!!!!!!!!!!!!! Interrupted: 73 errors during collection !!!!!!!!!!!!!!!!!!!
+4 deselected, 1 warning, 73 errors in 4.94s

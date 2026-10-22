@@ -1,0 +1,302 @@
+{
+  "status": "PASSED",
+  "final_run": "run-v4",
+  "model": "deepseek-flash",
+  "generation_calls": 16,
+  "extraction_calls": 7,
+  "provider_attempts": 23,
+  "calls": [
+    {
+      "run": "run-v1",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6507,
+        "completion_tokens": 1834,
+        "total_tokens": 8341
+      }
+    },
+    {
+      "run": "run-v1",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6585,
+        "completion_tokens": 1898,
+        "total_tokens": 8483
+      }
+    },
+    {
+      "run": "run-v1",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14001,
+        "completion_tokens": 2560,
+        "total_tokens": 16561
+      }
+    },
+    {
+      "run": "run-v1",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6606,
+        "completion_tokens": 2494,
+        "total_tokens": 9100
+      }
+    },
+    {
+      "run": "run-v1",
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14555,
+        "completion_tokens": 3846,
+        "total_tokens": 18401
+      }
+    },
+    {
+      "run": "run-v1",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6533,
+        "completion_tokens": 2052,
+        "total_tokens": 8585
+      }
+    },
+    {
+      "run": "run-v2",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6507,
+        "completion_tokens": 1995,
+        "total_tokens": 8502
+      }
+    },
+    {
+      "run": "run-v2",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6585,
+        "completion_tokens": 2000,
+        "total_tokens": 8585
+      }
+    },
+    {
+      "run": "run-v2",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13963,
+        "completion_tokens": 2941,
+        "total_tokens": 16904
+      }
+    },
+    {
+      "run": "run-v2",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6606,
+        "completion_tokens": 2251,
+        "total_tokens": 8857
+      }
+    },
+    {
+      "run": "run-v2",
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "length",
+      "usage": {
+        "prompt_tokens": 14492,
+        "completion_tokens": 4096,
+        "total_tokens": 18588
+      }
+    },
+    {
+      "run": "run-v2",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6533,
+        "completion_tokens": 1989,
+        "total_tokens": 8522
+      }
+    },
+    {
+      "run": "run-v3",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6507,
+        "completion_tokens": 1679,
+        "total_tokens": 8186
+      }
+    },
+    {
+      "run": "run-v3",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6585,
+        "completion_tokens": 1922,
+        "total_tokens": 8507
+      }
+    },
+    {
+      "run": "run-v3",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14016,
+        "completion_tokens": 2779,
+        "total_tokens": 16795
+      }
+    },
+    {
+      "run": "run-v3",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6606,
+        "completion_tokens": 2198,
+        "total_tokens": 8804
+      }
+    },
+    {
+      "run": "run-v3",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6533,
+        "completion_tokens": 2144,
+        "total_tokens": 8677
+      }
+    },
+    {
+      "run": "run-v4",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6507,
+        "completion_tokens": 1723,
+        "total_tokens": 8230
+      }
+    },
+    {
+      "run": "run-v4",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6585,
+        "completion_tokens": 1959,
+        "total_tokens": 8544
+      }
+    },
+    {
+      "run": "run-v4",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13945,
+        "completion_tokens": 2808,
+        "total_tokens": 16753
+      }
+    },
+    {
+      "run": "run-v4",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6606,
+        "completion_tokens": 2441,
+        "total_tokens": 9047
+      }
+    },
+    {
+      "run": "run-v4",
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 14474,
+        "completion_tokens": 4012,
+        "total_tokens": 18486
+      }
+    },
+    {
+      "run": "run-v4",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6533,
+        "completion_tokens": 2146,
+        "total_tokens": 8679
+      }
+    }
+  ],
+  "prompt_sha256": "4a3756d32bd49884e0d4e5f1a0291a75e76cedf5ca83697550219554e382ad6a",
+  "max_input_chars": 50000,
+  "max_output_tokens": 4096,
+  "timeout_seconds": 30,
+  "max_retries": 2,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "application_database_opened_by_runner": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "code_sha256": {
+    "src/trade_plan_monitor/ai/plan_extraction.py": "66430aa965da303ecda80aa7bade0ed3fc5aeae2729c174eda3af7e4c745cf9a",
+    "src/trade_plan_monitor/domain/unified_plan_validation.py": "5d0c2445c666c4b8b0b1fa3808c1a5f79a60c392b4f3b864c68ed3bc0b22a156"
+  }
+}
