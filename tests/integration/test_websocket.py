@@ -95,6 +95,9 @@ class _CapturingWebSocket:
     async def accept(self) -> None:
         self.accepted = True
 
+    async def receive(self):
+        await asyncio.Future()
+
     async def send_json(self, frame: dict[str, object]) -> None:
         await self.frames.put(frame)
 

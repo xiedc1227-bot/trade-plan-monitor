@@ -27,7 +27,8 @@ _STAGES = frozenset({
     "result.report", "result.audit", "result.public_validation", "result.endpoint_return",
     "monitor.authority_before", "monitor.authority_after", "monitor.snapshot",
     "monitor.activation_reread", "monitor.observe",
-    "socket.accept", "socket.disconnect",
+    "socket.accept", "socket.disconnect", "socket.terminal", "socket.heartbeat_admission",
+    "socket.observer_cancelled", "socket.children_drained",
 })
 _TRACE: ContextVar[ReadTrace | None] = ContextVar("read_trace", default=None)
 trace_window: ContextVar[ReadTraceWindow | None] = ContextVar("read_trace_window", default=None)

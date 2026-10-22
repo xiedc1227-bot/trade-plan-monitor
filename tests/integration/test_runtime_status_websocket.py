@@ -86,6 +86,9 @@ async def _heartbeat_scenario(tmp_path, *, storm):
         async def accept(self):
             pass
 
+        async def receive(self):
+            await asyncio.Future()
+
         async def send_json(self, frame):
             await self.frames.put(frame)
 

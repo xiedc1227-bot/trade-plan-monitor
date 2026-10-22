@@ -11,9 +11,11 @@ from typing import Protocol, cast
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
+from trade_plan_monitor.diagnostics.read_tracing import trace_point
 from trade_plan_monitor.runtime.health import live_runtime_identity
 from trade_plan_monitor.state.events import MonitorEvent, MonitorEventError
 from trade_plan_monitor.state.unit_of_work import UnitOfWork
+from trade_plan_monitor.web.monitor_connection import MonitorConnection
 
 DEFAULT_HEARTBEAT_SECONDS = 20
 _CLOSE_NORMAL = 1000
@@ -98,40 +100,62 @@ class CommittedMonitorEventStream:
         if type(after) is not int or after < 0:
             raise ValueError("after must be a non-negative integer")
         await websocket.accept()
+        connection = MonitorConnection(websocket)
+        await connection.run(lambda connection: self._send_loop(websocket, after, connection))
+
+    async def _send_loop(
+        self, websocket: WebSocket, after: int, connection: MonitorConnection,
+    ) -> None:
         cursor = after
         publication_revision = self._publication_revision
         loop = asyncio.get_running_loop()
         heartbeat_due = loop.time() + self._heartbeat_interval_seconds
-        try:
-            while True:
-                if self._fixed_heartbeat_cadence and loop.time() >= heartbeat_due:
-                    await websocket.send_json(await self._current_heartbeat_frame(cursor))
-                    heartbeat_due = loop.time() + self._heartbeat_interval_seconds
-                page = self._replay_page(cursor)
-                if page.requires_snapshot:
-                    await websocket.send_json(
-                        self._snapshot_required_frame(page.high_water_sequence)
-                    )
-                    await websocket.close(code=_CLOSE_NORMAL)
-                    return
-                if page.events:
-                    for event in page.events:
-                        await websocket.send_json(_event_frame(event))
-                        cursor = event.sequence
-                    continue
+        while True:
+            connection.check_open()
+            if self._fixed_heartbeat_cadence and loop.time() >= heartbeat_due:
+                await self._send_heartbeat(websocket, cursor, connection)
+                heartbeat_due = loop.time() + self._heartbeat_interval_seconds
+            connection.check_open()
+            page = self._replay_page(cursor)
+            if page.requires_snapshot:
+                connection.check_open()
+                await websocket.send_json(
+                    self._snapshot_required_frame(page.high_water_sequence)
+                )
+                await websocket.close(code=_CLOSE_NORMAL)
+                return
+            if page.events:
+                for event in page.events:
+                    connection.check_open()
+                    await websocket.send_json(_event_frame(event))
+                    cursor = event.sequence
+                # An uncongested transport can send a whole page without suspending.
+                await asyncio.sleep(0)
+                continue
 
-                if self._fixed_heartbeat_cadence:
-                    publication_revision, changed = await self._wait_for_publication(
-                        publication_revision, timeout_seconds=max(0, heartbeat_due - loop.time()),
-                    )
-                else:
-                    publication_revision, changed = await self._wait_for_publication(
-                        publication_revision,
-                    )
-                if not changed and not self._fixed_heartbeat_cadence:
-                    await websocket.send_json(await self._current_heartbeat_frame(cursor))
-        except WebSocketDisconnect:
-            return
+            if self._fixed_heartbeat_cadence:
+                publication_revision, changed = await self._wait_for_publication(
+                    publication_revision, timeout_seconds=max(0, heartbeat_due - loop.time()),
+                )
+            else:
+                publication_revision, changed = await self._wait_for_publication(
+                    publication_revision,
+                )
+            if not changed and not self._fixed_heartbeat_cadence:
+                await self._send_heartbeat(websocket, cursor, connection)
+
+    async def _send_heartbeat(
+        self, websocket: WebSocket, cursor: int, connection: MonitorConnection,
+    ) -> None:
+        connection.check_open()
+        trace_point("socket.heartbeat_admission")
+        try:
+            frame = await self._current_heartbeat_frame(cursor)
+        except asyncio.CancelledError:
+            trace_point("socket.observer_cancelled")
+            raise
+        connection.check_open()
+        await websocket.send_json(frame)
 
     def _snapshot_required_frame(self, sequence: int) -> dict[str, object]:
         return {"type": "snapshot.required", "sequence": sequence, "reason": _SNAPSHOT_REASON}
