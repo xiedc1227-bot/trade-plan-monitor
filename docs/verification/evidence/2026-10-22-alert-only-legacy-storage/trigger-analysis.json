@@ -1,0 +1,23 @@
+{
+  "table_sql": "CREATE TABLE daily_plan_record (\n\tid VARCHAR(128) NOT NULL, \n\tkind VARCHAR(20) NOT NULL, \n\tsymbol VARCHAR(9) NOT NULL, \n\tlineage VARCHAR(128) NOT NULL, \n\trevision INTEGER NOT NULL, \n\tpayload_json TEXT NOT NULL, \n\tcreated_at VARCHAR(40) NOT NULL, \n\tupdated_at VARCHAR(40) NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT ck_daily_record_revision CHECK (revision >= 0), \n\tCONSTRAINT ck_daily_record_kind CHECK (kind IN ('SIGNAL','RISK','FACT','REPORT','POSITION','EVALUATION','REVIEW','DRAFT','EXTRACTION','REASSESSMENT'))\n)",
+  "literal_single_quoted_simulation_present": false,
+  "records": [
+    {
+      "id": "extraction-bd275df5-9935-47be-9a16-26bdbd4a876a",
+      "kind": "EXTRACTION",
+      "lineage": "SNGC-OBS-20261022",
+      "revision": 1,
+      "sha256": "a4a1a49f1ef1fa98ef7b5061a78d05e5471d24b04ce53aee5da77b7ff9d03ccb",
+      "legacy_markers": []
+    },
+    {
+      "id": "review-f053d41c-2eca-4c3b-980b-ac6c370c2881",
+      "kind": "REVIEW",
+      "lineage": "SNGC-OBS-20261022",
+      "revision": 1,
+      "sha256": "db0edaa83b3c3450fde97a539b6b69d320c89f978efdb4bdfd488989df6eb0d6",
+      "legacy_markers": []
+    }
+  ],
+  "activation_rows": []
+}

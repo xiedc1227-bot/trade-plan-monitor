@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import type { PlanVersionView } from "../../src/api/generated";
 import DailyOperationsPanel from "../../src/components/plans/PlanSimulationPanel.vue";
+import reviewedVersion from "../fixtures/workbench-reviewed-version.json";
 
 const version = { id: "version-1", symbol: "601021.SH", contentHash: "a".repeat(64) } as PlanVersionView;
 
@@ -138,5 +139,92 @@ describe("daily simulation operations", () => {
     await flushPromises();
     const mutation = request.mock.calls.find(([url]) => url.endsWith("plan-facts"));
     expect(mutation?.[1]).toMatchObject({ tradeDate: "2026-09-23", planVersionId: version.id, expectedRevision: 0 });
+  });
+});
+
+describe("reminder-only drafts with legacy simulation protection", () => {
+  function reminderVersion(reviewed = false): PlanVersionView {
+    const policy = {
+      ...JSON.parse(reviewedVersion.planJson), ordinary_rules: [], risk_branches: [],
+      alert_rules: [{ kind: "RISK_ALERT", rule_id: "price-reminder", condition: {
+        type: "DAILY_PRICE_COMPARE", field: "close", offset: 0, comparator: "LT",
+        reference: { mode: "FIXED", value: "4000", unit: "FEN", as_of: "2026-09-18", source: "Synthetic threshold" },
+      }, confirmation: { kind: "OFFICIAL_DAILY_CLOSE" } }],
+    };
+    return { ...reviewedVersion, status: "DRAFT", reviewId: reviewed ? reviewedVersion.reviewId : null,
+      canActivate: reviewed, reviewRevision: reviewed ? 1 : 0, planJson: JSON.stringify(policy) } as PlanVersionView;
+  }
+
+  function protectedRequest(state: object = { status: "UNSUPPORTED", snapshot: null, risks: [] }) {
+    const request = fixture(state);
+    const respond = request.getMockImplementation()!;
+    request.mockImplementation(async (url: string, body?: object, key?: string): Promise<unknown> => url.includes("position-inventory")
+      ? { status: "UNSUPPORTED", reason: "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED", snapshot: null }
+      : respond(url, body, key));
+    return request;
+  }
+
+  it.each([false, true])("separates pending reminder draft state from simulation restrictions, reviewed=%s", async reviewed => {
+    const selectedVersion = reminderVersion(reviewed);
+    const original = JSON.stringify(selectedVersion);
+    const request = protectedRequest();
+    const wrapper = mount(DailyOperationsPanel, { props: { version: selectedVersion, request: apiRequest(request) } });
+    await flushPromises();
+    expect(wrapper.get("h3").text()).toBe(reviewed ? "仅提醒草稿：已审核，尚未启用" : "仅提醒草稿：待审核，尚未启用");
+    expect(wrapper.text()).toContain("模拟库存受历史记录或存储结构兼容性限制");
+    expect(wrapper.text()).toContain("仅提醒规则不依赖模拟库存");
+    expect(wrapper.text()).toContain("该版本尚未启用，暂不执行技术提醒监测");
+    expect(wrapper.text()).not.toContain("计划当前状态：历史数据不支持模拟");
+    expect(wrapper.findAll("button").filter(b => b.text().startsWith("确认一次模拟"))).toHaveLength(0);
+    expect(wrapper.get("form button[type='submit']").attributes("disabled")).toBeDefined();
+    expect(request.mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(0);
+    expect(JSON.stringify(selectedVersion)).toBe(original);
+  });
+
+  it("shows an active technical reminder alongside the simulation restriction without trade controls", async () => {
+    const selectedVersion = { ...reminderVersion(true), status: "ACTIVE" as const };
+    const request = protectedRequest({ status: "CURRENT", snapshot: { planVersionId: selectedVersion.id,
+      dataBlockers: [], signals: [], risks: [], riskAction: { status: "NONE" }, alerts: [{
+        rule_id: "price-reminder", alert_kind: "RISK_ALERT", outcome: "SATISFIED",
+        confirmation_kind: "OFFICIAL_DAILY_CLOSE", confirmed_trade_date: "2026-09-18", evidence: [],
+      }] } });
+    const wrapper = mount(DailyOperationsPanel, { props: { version: selectedVersion, request: apiRequest(request) } });
+    await flushPromises();
+    expect(wrapper.get("h3").text()).toBe("计划当前状态：当前评估");
+    expect(wrapper.text()).toContain("仅提醒规则不依赖模拟库存");
+    expect(wrapper.findAll(".daily-reminder")).toHaveLength(1);
+    expect(wrapper.get(".daily-reminder").text()).toContain("price-reminder · 已满足");
+    expect(wrapper.findAll("button").filter(b => b.text().startsWith("确认一次模拟"))).toHaveLength(0);
+    expect(request.mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(0);
+  });
+
+  it.each(["ordinary", "risk", "missing", "invalid", "historical"])("does not infer reminder-only authority for %s policy", async kind => {
+    const selectedVersion = reminderVersion();
+    const policy = JSON.parse(selectedVersion.planJson);
+    if (kind === "ordinary") policy.ordinary_rules = [{ side: "BUY" }];
+    if (kind === "risk") policy.risk_branches = [{ kind: "ORDINARY_TECHNICAL" }];
+    if (kind === "missing") delete policy.ordinary_rules;
+    if (kind === "historical") policy.schema_version = 4;
+    selectedVersion.planJson = kind === "invalid" ? "invalid JSON" : JSON.stringify(policy);
+    const request = protectedRequest();
+    const wrapper = mount(DailyOperationsPanel, { props: { version: selectedVersion, request: apiRequest(request) } });
+    await flushPromises();
+    expect(wrapper.get("h3").text()).toBe("计划当前状态：历史数据不支持模拟");
+    expect(wrapper.text()).not.toContain("仅提醒草稿：");
+    expect(request.mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(0);
+  });
+
+  it("keeps a genuine read failure visible instead of presenting it as a reminder-only success", async () => {
+    const request = protectedRequest();
+    const respond = request.getMockImplementation()!;
+    request.mockImplementation(async (url: string, body?: object, key?: string) => {
+      if (url.includes("plan-runtime")) throw new Error("Synthetic storage read failure");
+      return respond(url, body, key);
+    });
+    const wrapper = mount(DailyOperationsPanel, { props: { version: reminderVersion(), request: apiRequest(request) } });
+    await flushPromises();
+    expect(wrapper.get("[role='alert']").text()).toBe("Synthetic storage read failure");
+    expect(wrapper.find(".daily-runtime").exists()).toBe(false);
+    expect(request.mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(0);
   });
 });

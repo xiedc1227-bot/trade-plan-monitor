@@ -1,0 +1,63 @@
+{
+  "checked_at": "2026-10-22T15:06:22.863854+08:00",
+  "draft": {
+    "id": "f053d41c-2eca-4c3b-980b-ac6c370c2881",
+    "plan_id": "SNGC-OBS-20261022",
+    "version": 1,
+    "status": "DRAFT",
+    "plan_hash": "18825a7f0dfd462f10b2392d74eaa826b6e6c11e128a54484937252320e2cea5",
+    "source_hash": "d672ee69ade8c1cbcee496bf5c88976d305227f9d985be151391c25a16aaab65",
+    "confirmed_at": null,
+    "review_id": null,
+    "review_revision": 0
+  },
+  "migration_revision": "0025_index_close_display",
+  "trigger": "PERSISTED_TABLE_CONSTRAINT_HAS_NO_SIMULATION_KIND",
+  "target_legacy_position_or_execution_records": 0,
+  "target_record_kinds": [
+    "EXTRACTION",
+    "REVIEW"
+  ],
+  "all_target_records_unchanged": true,
+  "storage_constraint_unchanged": true,
+  "protected_inventory_and_activation_unchanged": true,
+  "technical_alert_count": 1,
+  "buy_rule_count": 0,
+  "sell_rule_count": 0,
+  "risk_or_liquidation_rule_count": 0,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "simulation_inventory_changed": false,
+  "backend_validation_changed": false,
+  "ui": {
+    "activate_button_disabled": true,
+    "alert_groups": [
+      "alert_rules[0]"
+    ],
+    "comparator": "LT",
+    "confirmation": "OFFICIAL_DAILY_CLOSE",
+    "inactive_notice_visible": true,
+    "internal_error_visible": false,
+    "misleading_plan_status_visible": false,
+    "ordinary_rule_fields": 0,
+    "pending_reminder_draft": true,
+    "plan_id": "SNGC-OBS-20261022",
+    "reference_unit": "FEN",
+    "reference_value": "2659",
+    "reminders_independent_notice": true,
+    "risk_branch_fields": 0,
+    "saved_pending_review": true,
+    "simulation_notice_visible": true,
+    "symbol": "605296.SH",
+    "url": "http://127.0.0.1:8765/plans/f053d41c-2eca-4c3b-980b-ac6c370c2881"
+  },
+  "tests": {
+    "new_frontend_cases": 9,
+    "new_backend_cases": 3,
+    "full_frontend_unit_passed": 1215,
+    "related_backend_passed": 84,
+    "type_check": "PASSED",
+    "build": "PASSED",
+    "ruff": "PASSED"
+  }
+}

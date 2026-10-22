@@ -21,6 +21,19 @@ const actions = [
   { kind: "REASSESSMENT", title: "独立风险重评", path: "/plan-risk-reassessments", description: "保留原风险审计，核验移除风险的官方证据。目标和涉及CORE范围必须与新审核版本一致。一般已阅或提醒确认不能解除风险。" },
 ] as const;
 const current = computed(() => actions.find(a => a.kind === selected.value) ?? actions[0]);
+const reminderOnly = computed(() => {
+  try {
+    const plan: unknown = JSON.parse(props.version.planJson);
+    return plan !== null && typeof plan === "object"
+      && "schema_version" in plan && plan.schema_version === 5
+      && "ordinary_rules" in plan && Array.isArray(plan.ordinary_rules) && plan.ordinary_rules.length === 0
+      && "risk_branches" in plan && Array.isArray(plan.risk_branches) && plan.risk_branches.length === 0
+      && "alert_rules" in plan && Array.isArray(plan.alert_rules) && plan.alert_rules.length > 0;
+  } catch { return false; }
+});
+const reminderDraftState = computed(() => reminderOnly.value && props.version.status === "DRAFT"
+  ? props.version.reviewId ? "仅提醒草稿：已审核，尚未启用" : "仅提醒草稿：待审核，尚未启用"
+  : null);
 const reassessedRisk = computed(() => runtime.value?.snapshot?.risks.find(r => r.kind === riskKind.value));
 const hiddenFields = computed(() => selected.value === "POSITION" ? ["symbol", "expectedRevision"] : selected.value === "REASSESSMENT" ? ["symbol", "riskId", "planVersionId", "contentHash", "expectedRevision"] : ["planVersionId", "contentHash", "expectedRevision", "factId", "signalId"]);
 const stateLabels: Record<string, string> = { CURRENT: "当前评估", AWAITING_EVALUATION: "等待首次评估", INACTIVE: "未启用", UNSUPPORTED: "历史数据不支持模拟", CONFIRMED: "已确认", READY: "可以模拟交易", SIMULATED: "已完成模拟", EXPIRED: "本次权限已过期", INVALIDATED: "信号已失效", CLEAR: "未触发", PENDING: "等待下一收盘确认", OBSERVATION: "继续观察，停止新增", FULFILLED: "风险退出已完成" };
@@ -88,7 +101,8 @@ onMounted(async () => {
     <dl v-if="inventory?.snapshot" class="daily-operations__inventory"><dt>模拟总持仓</dt><dd>{{ inventory.snapshot.totalQty ?? '待初始化' }}股</dd><dt>模拟CORE / TACTICAL</dt>
       <dd>{{ inventory.snapshot.coreQty ?? '待初始化' }} / {{ inventory.snapshot.tacticalQty ?? '待初始化' }}股</dd>
       <dt>可卖CORE / TACTICAL（系统计算T+1）</dt><dd>{{ inventory.snapshot.sellableCore ?? '待初始化' }} / {{ inventory.snapshot.sellableTactical ?? '待初始化' }}股</dd></dl>
-    <div v-if="runtime" class="daily-runtime"><h3>计划当前状态：{{ stateLabels[runtime.status] ?? runtime.status }}</h3>
+    <div v-if="runtime" class="daily-runtime"><h3>{{ reminderDraftState ?? `计划当前状态：${stateLabels[runtime.status] ?? runtime.status}` }}</h3>
+      <p v-if="reminderOnly && inventory?.status === 'UNSUPPORTED'" role="status">模拟库存受历史记录或存储结构兼容性限制。仅提醒规则不依赖模拟库存；是否监测仍取决于本版本的人工审核和启用状态。</p>
       <template v-if="runtime.snapshot">
         <ul v-if="runtime.snapshot.dataBlockers.length"><li v-for="blocker in runtime.snapshot.dataBlockers" :key="blocker">{{ blocker }}</li></ul>
         <article v-for="signal in runtime.snapshot.signals" :key="signal.signalId" class="daily-signal">
@@ -125,7 +139,8 @@ onMounted(async () => {
           <button type="button" :disabled="busy || !currentVersion || !inventory?.snapshot?.known || !riskAction.causeId || riskAction.causeRevision == null || !wholeQuantity(riskQuantity)"
             @click="simulate(riskAction.causeId, riskAction.causeRevision, riskQuantity)">确认一次模拟风险减仓{{ riskQuantity }}股</button>
         </template>
-      </template><p v-else>{{ runtime.status === 'UNSUPPORTED' ? '此历史记录保留用于查看，不能转换为模拟交易。' : '等待首次完整评估' }}</p>
+      </template><p v-else-if="reminderDraftState">该版本尚未启用，暂不执行技术提醒监测。</p>
+      <p v-else>{{ runtime.status === 'UNSUPPORTED' ? '此历史记录保留用于查看，不能转换为模拟交易。' : '等待首次完整评估' }}</p>
       <section v-if="runtime.status === 'UNSUPPORTED' && runtime.risks?.length" aria-label="保留的技术风险历史">
         <article v-for="risk in runtime.risks" :key="String(risk.kind)" class="daily-risk">
           <h4>{{ risk.kind === 'ORDINARY_TECHNICAL' ? '普通技术风险' : '严重技术风险' }} · {{ stateLabels[String(risk.status)] ?? risk.status }}</h4>

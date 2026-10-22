@@ -1,0 +1,25 @@
+{
+  "frontend_red": {
+    "failed": 3,
+    "passed": 17
+  },
+  "frontend_green": {
+    "passed": 20,
+    "new_cases": 9
+  },
+  "full_frontend": {
+    "passed": 1215,
+    "files": 83
+  },
+  "related_backend": {
+    "passed": 84,
+    "new_cases": 3
+  },
+  "type_check": "PASSED",
+  "build": "PASSED",
+  "ruff": "PASSED",
+  "backend_validator_or_schema_changes": false,
+  "real_draft_reviewed_or_activated": false,
+  "real_simulated_inventory_changed": false,
+  "synthetic_tests_only_for_alert_delivery_eligibility": true
+}
