@@ -26,6 +26,7 @@ from trade_plan_monitor.decision.models import (
 from trade_plan_monitor.market_index.canonical import (
     FORMULA_DEFINITION_HASH,
     validate_market_index_snapshot_integrity,
+    verified_market_index_snapshot_json,
 )
 from trade_plan_monitor.market_index.canonical import (
     canonical_json as canonical_market_index_json,
@@ -1445,7 +1446,7 @@ def _latest_index_records(candidates, index_codes):
 def _market_index_from_row(row: MarketIndexSnapshotRow) -> tuple[MarketIndexSnapshot, int]:
     try:
         snapshot = MarketIndexSnapshot.model_validate_json(row.snapshot_json)
-        validate_market_index_snapshot_integrity(snapshot)
+        canonical_json = verified_market_index_snapshot_json(snapshot)
         values = _market_index_values(
             snapshot,
             row.provider_content_revision,
@@ -1453,7 +1454,7 @@ def _market_index_from_row(row: MarketIndexSnapshotRow) -> tuple[MarketIndexSnap
         )
         valid = (
             all(getattr(row, name) == value for name, value in values.items())
-            and canonical_market_index_json(snapshot) == row.snapshot_json
+            and canonical_json == row.snapshot_json
             and snapshot.cache_key.provider_content_revision == row.provider_content_revision
         )
     except TypeError, ValueError:

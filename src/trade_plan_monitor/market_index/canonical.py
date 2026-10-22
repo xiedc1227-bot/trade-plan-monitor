@@ -77,8 +77,13 @@ def canonical_value(value: object) -> object:
 
 
 def canonical_json(value: object) -> str:
+    return _encode_canonical_value(canonical_value(value))
+
+
+def _encode_canonical_value(value: object) -> str:
+    """Encode only a tree already normalized by this module's canonical policy."""
     return json.dumps(
-        canonical_value(value),
+        value,
         ensure_ascii=False,
         allow_nan=False,
         sort_keys=True,
@@ -117,12 +122,44 @@ def market_index_snapshot_hash(payload: object) -> str:
 def validate_market_index_snapshot_integrity(snapshot: MarketIndexSnapshot) -> None:
     """Fail closed if any stored snapshot content hash is inconsistent."""
 
+    _verified_market_index_value(snapshot)
+
+
+def verified_market_index_snapshot_json(snapshot: MarketIndexSnapshot) -> str:
+    """Fully verify one snapshot and return its literal canonical storage representation.
+
+    The normalized tree lives only for this call. Domain hashes and the final
+    byte comparison reuse its values without skipping typed/model validation.
+    """
+
+    return _encode_canonical_value(_verified_market_index_value(snapshot))
+
+
+def _verified_market_index_value(snapshot: MarketIndexSnapshot) -> dict[str, object]:
     if type(snapshot) is not MarketIndexSnapshot:
         raise TypeError("snapshot must be a MarketIndexSnapshot")
     bars = snapshot.five_minute_bars + snapshot.official_daily_bars
-    if snapshot.bar_set_hash != market_index_bar_set_hash(bars):
+    if type(bars) is not tuple or any(type(bar) is not MarketIndexBar for bar in bars):
+        raise TypeError("bars must be an exact tuple of MarketIndexBar values")
+    if type(snapshot.fact_requests) is not tuple:
+        raise TypeError("requests must be a tuple")
+    value = canonical_value(snapshot)
+
+    def digest(domain: bytes, part: object) -> str:
+        return sha256(domain + _encode_canonical_value(part).encode("utf-8")).hexdigest()
+
+    normalized_bars = value["five_minute_bars"] + value["official_daily_bars"]
+    ordered_bars = [
+        normalized
+        for _, normalized in sorted(
+            zip(bars, normalized_bars, strict=True),
+            key=lambda pair: (pair[0].interval.value, pair[0].bar_at),
+        )
+    ]
+    if snapshot.bar_set_hash != digest(b"market-index-bars-v1\0", ordered_bars):
         raise ValueError("market-index snapshot bar_set_hash mismatch")
-    if snapshot.request_set_hash != market_index_request_set_hash(snapshot.fact_requests):
+    requests = sorted(value["fact_requests"], key=_encode_canonical_value)
+    if snapshot.request_set_hash != digest(b"market-index-requests-v1\0", requests):
         raise ValueError("market-index snapshot request_set_hash mismatch")
     if snapshot.formula_definition_hash != FORMULA_DEFINITION_HASH:
         raise ValueError("market-index snapshot formula_definition_hash mismatch")
@@ -131,13 +168,10 @@ def validate_market_index_snapshot_integrity(snapshot: MarketIndexSnapshot) -> N
         for fact in snapshot.indicator_facts
     ):
         raise ValueError("market-index fact formula hash mismatch")
-    payload = snapshot.model_dump(
-        mode="python",
-        round_trip=True,
-        exclude={"snapshot_hash"},
-    )
-    if snapshot.snapshot_hash != market_index_snapshot_hash(payload):
+    payload = {key: part for key, part in value.items() if key != "snapshot_hash"}
+    if snapshot.snapshot_hash != digest(b"market-index-snapshot-v1\0", payload):
         raise ValueError("market-index snapshot_hash mismatch")
+    return value
 
 
 __all__ = [
@@ -149,4 +183,5 @@ __all__ = [
     "market_index_request_set_hash",
     "market_index_snapshot_hash",
     "validate_market_index_snapshot_integrity",
+    "verified_market_index_snapshot_json",
 ]
