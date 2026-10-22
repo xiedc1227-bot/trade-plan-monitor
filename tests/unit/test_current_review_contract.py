@@ -29,7 +29,7 @@ def review_contract():
     return json.JSONDecoder().raw_decode(prompt.split(CONTRACT_MARKER, 1)[1])[0]
 
 
-def extract_response(content):
+def extract_response(content, source=SOURCE):
     class Provider:
         async def extract_plan(self, request):
             return RawAIResponse(
@@ -43,7 +43,7 @@ def extract_response(content):
             )
 
     return asyncio.run(
-        extract_plan(request_id=uuid4(), source_text=SOURCE, config=_config(), provider=Provider())
+        extract_plan(request_id=uuid4(), source_text=source, config=_config(), provider=Provider())
     )
 
 
@@ -89,6 +89,35 @@ def test_prompt_product_example_is_accepted_by_the_existing_product_contract():
     assert contract["supplement_id"] is None
     assert contract["bind_empty_arrays"] is True
     assert contract["group_binding_value"] == "type string"
+
+
+@pytest.mark.parametrize("path", ["ordinary_rules", "risk_branches", "alert_rules"])
+def test_prompt_empty_array_example_preserves_the_candidate_json_type(path):
+    contract = review_contract()
+    example = contract["empty_array_binding_examples"][path]
+    output = json.loads((FIXTURES / "deepseek-after.json").read_text(encoding="utf-8"))
+    output["draft"][path] = []
+    values = semantic_values(UnifiedPlanDraft.model_validate(output["draft"]))
+    assert type(example["value"]) is type(values[path]) is list
+    assert example["path"] == path
+    assert example["value"] == values[path] == []
+    assert example["unit"] == "JSON"
+    assert example["origin"] == "SOURCE"
+    assert example["clause_ids"] == ["<canonical source clause ID>"]
+    assert example["supplement_id"] is None
+
+
+@pytest.mark.parametrize("path", ["ordinary_rules", "risk_branches"])
+@pytest.mark.parametrize("wrong_value", ["[]", None, {}])
+def test_empty_array_binding_never_coerces_string_null_or_object(path, wrong_value):
+    output = json.loads((FIXTURES / "deepseek-after.json").read_text(encoding="utf-8"))
+    binding = next(b for b in output["bindings"] if b["path"] == path)
+    assert binding["value"] == output["draft"][path] == []
+    binding["value"] = wrong_value
+    result = extract_response(json.dumps(output, ensure_ascii=False))
+    assert result.status is PlanExtractionStatus.INVALID_OUTPUT
+    assert result.draft is None
+    assert result.validation_issues[0].code == "AI_FIELD_EVIDENCE_INVALID"
 
 
 def test_original_complete_deepseek_failure_is_still_rejected_without_repair():
@@ -185,3 +214,18 @@ def test_missing_required_quantity_remains_null_and_blocks_review():
     assert result.draft.position.max_qty is None
     assert result.draft.to_executable() is None
     assert any(i.code == "PLAN_PARAMETER_REQUIRED" for i in result.validation_issues)
+
+
+def test_missing_daily_monitoring_returns_blocking_issue_instead_of_crashing():
+    output = json.loads((FIXTURES / "deepseek-after.json").read_text(encoding="utf-8"))
+    output["draft"]["monitoring"] = None
+    output["bindings"] = [b for b in output["bindings"] if not b["path"].startswith("monitoring.")]
+    for clause in output["clauses"]:
+        clause["paths"] = [p for p in clause["paths"] if not p.startswith("monitoring.")]
+        if not clause["paths"] and clause["disposition"] == "POLICY":
+            clause["disposition"] = "UNRESOLVED"
+    result = extract_response(json.dumps(output, ensure_ascii=False))
+    assert result.status is PlanExtractionStatus.SUCCEEDED
+    assert result.draft.monitoring is None
+    assert result.draft.to_executable() is None
+    assert any(i.path == "plan" and i.activation_blocking for i in result.validation_issues)

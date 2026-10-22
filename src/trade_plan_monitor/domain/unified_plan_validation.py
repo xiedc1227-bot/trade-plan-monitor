@@ -126,7 +126,7 @@ def unified_plan_issues(draft):
             errors.append({**item, "loc": location})
         return tuple(
             {
-                "path": ".".join(str(x) for x in e["loc"]),
+                "path": ".".join(str(x) for x in e["loc"]) or "plan",
                 "code": "PLAN_PARAMETER_REQUIRED"
                 if e["input"] is None
                 else "PLAN_PARAMETER_INVALID",

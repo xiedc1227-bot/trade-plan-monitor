@@ -90,6 +90,23 @@ _SOURCE_REVIEW_CONTRACT = {
     ],
     "registered_null_paths": ["levels.low_buy", "levels.pressure"],
     "bind_empty_arrays": True,
+    "empty_array_binding_examples": {
+        path: {
+            "path": path,
+            "value": [],
+            "origin": "SOURCE",
+            "unit": "JSON",
+            "clause_ids": ["<canonical source clause ID>"],
+            "supplement_id": None,
+        }
+        for path in ("ordinary_rules", "risk_branches", "alert_rules")
+    },
+    "empty_array_rules": (
+        'Empty rule binding.value is [], NEVER "[]", null or {}. This also applies to '
+        "无普通规则/无风险分支/无提醒规则. Use JSON, SOURCE and actual canonical POLICY "
+        "clause IDs, not the example placeholder. Never invent empty groups or discard "
+        "source rules; for nonempty arrays bind leaves only."
+    ),
     "group_binding_value": "type string",
     "product_clause_ids": [],
     "supplement_id": None,
@@ -115,7 +132,9 @@ _SOURCE_REVIEW_CONTRACT = {
         "also contain excluded plan_id, version or name; never discard the whole mixed clause. "
         "Omit unregistered null bindings and paths, including levels=null, report_at=null and "
         "null allocation fields; only the listed registered_null_paths require null bindings "
-        "when those paths exist. Missing trading parameters still stay null and UNRESOLVED, "
+        "when those paths exist. levels=null has NO child paths; only an OBJECT levels "
+        "with explicit null children needs their bindings. Missing trading parameters "
+        "still stay null and UNRESOLVED, "
         "and still block review; this never authorizes dropping a source requirement."
     ),
     "origin_rules": (
@@ -163,8 +182,21 @@ _SOURCE_REVIEW_CONTRACT = {
     "final_check": (
         "Before returning, ensure neither bindings nor ANY clause path contains draft., "
         "an excluded root or its descendants, a forbidden path, an unregistered null or "
-        "a container. Recheck PRODUCT_CONTRACT clause_ids are empty. This check never "
+        "a nonempty container. Recheck every empty-array binding.value is [] without "
+        "quotes and uses unit=JSON, and PRODUCT_CONTRACT clause_ids are empty. This check never "
         "repairs or relaxes the server validator; correct the proposed response itself."
+    ),
+    "daily_monitoring_rules": (
+        "ANY DAILY_* condition, even reminder-only DAILY_PRICE_COMPARE, needs non-null "
+        "monitoring with the registered product settings above, unless source conflicts. "
+        "Bind EVERY monitoring, trading_rules and execution_policy leaf, including model "
+        "defaults. Registered constants omitted from compact source use PRODUCT_CONTRACT "
+        "with clause_ids=[]. These settings do not add strategy conditions."
+    ),
+    "output_style": (
+        "Use compact JSON. Keep clause reasons concise (2-6 words when sufficient). "
+        "Omit optional semantic_role on POLICY clauses, but retain required CONTEXT roles. "
+        "Never shorten exact excerpts, omit bindings, or drop rules to save tokens."
     ),
 }
 
@@ -183,7 +215,9 @@ def build_current_plan_prompt(source):
         CurrentPlanExtractionOutput.model_json_schema(), ensure_ascii=False, separators=(",", ":")
     )
     clauses = json.dumps(
-        [c.model_dump(mode="json") for c in server_source_clauses(source)], ensure_ascii=False
+        [c.model_dump(mode="json") for c in server_source_clauses(source)],
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
     data = (
         json.dumps({"source_text": source}, ensure_ascii=False)
