@@ -1,0 +1,31 @@
+{
+  "scope": "Read-only metadata capability probe on previous frozen fixture; no payload fetch, concurrency test or allocation proof.",
+  "baseline": "1748555",
+  "sqliteVersion": "3.50.4",
+  "encoding": "UTF-8",
+  "candidateCount": 2008,
+  "jsonStorageTypes": [
+    "text"
+  ],
+  "maximumJsonBytes": 35587,
+  "totalJsonBytes": 27588993,
+  "queryPlan": [
+    "SCAN h USING INDEX sqlite_autoindex_market_index_snapshot_head_1",
+    "SEARCH p USING INDEX sqlite_autoindex_market_index_snapshot_1 (snapshot_hash=?) LEFT-JOIN"
+  ],
+  "embeddedNulProbe": {
+    "octetLength": 7,
+    "textLength": 1
+  },
+  "frozenInputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+  "proposedEnvelope": {
+    "rawBytesFromPriorMeasurement": 30826621,
+    "transportBytes": 16777216,
+    "readerWorkSlots": 8,
+    "bytesPerWorkSlot": 1048576,
+    "metadataControlBytes": 1048576,
+    "totalBytes": 57041021,
+    "limitBytes": 67108864,
+    "status": "Illustrative partition only; per-slot safety and raw reservation bound are unproven."
+  }
+}
