@@ -1,0 +1,14 @@
+{
+  "scope": "Offline geometry of the previously frozen read-only fixture; pickle sizes are exploratory, not a selected wire format or runtime memory bound. No service/process experiment.",
+  "inputRows": 2008,
+  "rawRetentionBytes": 30826621,
+  "maximumRowRawBytes": 37206,
+  "medianRowRawBytes": 13781.5,
+  "maximumIndividualPickleBytes": 36295,
+  "individualPickleTotalBytes": 29009369,
+  "chunkTargetBytes": 1048576,
+  "sourceSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+  "estimatedChunks": 28,
+  "maximumChunkIndividualPickleSumBytes": 1046886,
+  "maximumChunkRawBytes": 1153404
+}
