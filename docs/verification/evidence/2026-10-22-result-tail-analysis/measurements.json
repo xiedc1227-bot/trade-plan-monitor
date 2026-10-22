@@ -1,0 +1,918 @@
+{
+  "schemaVersion": 1,
+  "observationDate": "2026-10-22",
+  "baselineCommit": "87d85cc6ef799612d5b8c5ef17ec6737dad50d1e",
+  "delivery": "Analysis only; production source, configuration and evidence were not changed; no service restart, commit or push.",
+  "limitations": [
+    "Port 8765 had no listener. New observations are isolated ASGI route/service calls, not live browser or actual-owner acceptance.",
+    "Real result DB is opened mode=ro with query_only=ON; existing copied evidence files are read only.",
+    "Monitor competition uses the frozen 2008-candidate read-only fixture, fixed clock and synthetic absent-owner authority. Independent authority code remains called, but no real owner readiness claim is made.",
+    "Five alternating rounds are exploratory, not percentile or production integrity acceptance. Cache state is uncontrolled.",
+    "Original browser spans lack server ingress/queue/worker/GC/TTFB/response-stage timings, so exact attribution is unavailable.",
+    "Initial interrupted helper run is excluded. No cause of its interruption was captured.",
+    "No production implementation or new tamper/memory acceptance was performed."
+  ],
+  "historicalBrowser": {
+    "source": "Previous verification measurements.json: actualAfter.browser; ignored full record .pytest_cache/single-monitor-implementation/browser-after.json",
+    "clock": "Historical recorded epoch seconds, not current experiment clocks",
+    "single": {
+      "dashboardStart": 1792575967.338,
+      "dashboardEnd": 1792575971.539,
+      "resultStart": 1792575967.996,
+      "resultEnd": 1792575976.687,
+      "httpStatus": 200,
+      "resultWallSeconds": 8.691,
+      "visibleOverlapSeconds": 3.543,
+      "afterDashboardSeconds": 5.148
+    },
+    "pair": {
+      "resultStart": 1792575999.378,
+      "resultEnd": 1792576004.311,
+      "eachResultWallSeconds": 4.933,
+      "logicalRequests": 2,
+      "note": "Matching in-progress keys can share one projection; each caller retains independent mutable metadata lookup."
+    },
+    "ownHeartbeatExcluded": {
+      "cadenceSeconds": 20,
+      "socketOpens": "after initial dashboard snapshot",
+      "otherExistingClients": "possible, not proven"
+    }
+  },
+  "stageObservation": {
+    "fullRequestWallSeconds": 2.2193761,
+    "processCpuSeconds": 2.171875,
+    "metrics": {
+      "metadata-get-run": {
+        "calls": 1,
+        "wallSeconds": 0.0017268999945372343,
+        "threadCpuSeconds": 0.0
+      },
+      "sql-input": {
+        "calls": 1,
+        "wallSeconds": 0.001349500147625804,
+        "threadCpuSeconds": 0.0
+      },
+      "raw-object-read": {
+        "calls": 41,
+        "wallSeconds": 0.011605400359258056,
+        "threadCpuSeconds": 0.015625
+      },
+      "read-and-verify-day": {
+        "calls": 39,
+        "wallSeconds": 0.05289970035664737,
+        "threadCpuSeconds": 0.046875
+      },
+      "load-bundle-and-days": {
+        "calls": 1,
+        "wallSeconds": 0.3583955999929458,
+        "threadCpuSeconds": 0.34375
+      },
+      "owned-copied-input": {
+        "calls": 1,
+        "wallSeconds": 0.35873700003139675,
+        "threadCpuSeconds": 0.34375
+      },
+      "load-and-verify-report": {
+        "calls": 1,
+        "wallSeconds": 0.0027250999119132757,
+        "threadCpuSeconds": 0.0
+      },
+      "all-audit-diagnostics": {
+        "calls": 1,
+        "wallSeconds": 1.7584858001209795,
+        "threadCpuSeconds": 1.734375
+      },
+      "loop-result": {
+        "calls": 1,
+        "wallSeconds": 2.155407899990678,
+        "threadCpuSeconds": 2.109375
+      },
+      "project-run": {
+        "calls": 1,
+        "wallSeconds": 2.21490989997983,
+        "threadCpuSeconds": 2.171875
+      },
+      "public-response-revalidation": {
+        "calls": 1,
+        "wallSeconds": 0.0006587000098079443,
+        "threadCpuSeconds": 0.0
+      }
+    },
+    "note": "Inclusive nested times cannot be summed; thread CPU zeros reflect clock granularity, not proof of no work."
+  },
+  "workerProfile": {
+    "fullRequestWallSeconds": 4.929053,
+    "records": [
+      {
+        "file": "composition.py",
+        "line": 1677,
+        "function": "_project_run",
+        "calls": 1,
+        "selfSeconds": 6.340000000000001e-05,
+        "cumulativeSeconds": 4.9204534
+      },
+      {
+        "file": "results.py",
+        "line": 935,
+        "function": "get_loop_result",
+        "calls": 1,
+        "selfSeconds": 2.97e-05,
+        "cumulativeSeconds": 4.7990033
+      },
+      {
+        "file": "results.py",
+        "line": 954,
+        "function": "_loop_diagnostics",
+        "calls": 1,
+        "selfSeconds": 3.69e-05,
+        "cumulativeSeconds": 4.1383938
+      },
+      {
+        "file": "loop_report.py",
+        "line": 768,
+        "function": "verify_published_loop_event_set",
+        "calls": 1,
+        "selfSeconds": 0.0151365,
+        "cumulativeSeconds": 4.1376968000000005
+      },
+      {
+        "file": "results.py",
+        "line": 979,
+        "function": "events",
+        "calls": 2962,
+        "selfSeconds": 0.018687000000000002,
+        "cumulativeSeconds": 3.4118036000000003
+      },
+      {
+        "file": "canonical.py",
+        "line": 76,
+        "function": "canonical_json",
+        "calls": 15295,
+        "selfSeconds": 0.0332987,
+        "cumulativeSeconds": 3.234656
+      },
+      {
+        "file": "canonical.py",
+        "line": 41,
+        "function": "canonical_value",
+        "calls": 2263592,
+        "selfSeconds": 1.5740656000000002,
+        "cumulativeSeconds": 2.707589
+      },
+      {
+        "file": "loop_publication.py",
+        "line": 174,
+        "function": "decode_audit_record",
+        "calls": 2961,
+        "selfSeconds": 0.038803500000000005,
+        "cumulativeSeconds": 2.5702456000000002
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'validate_json' of 'pydantic_core._pydantic_core.SchemaValidator' objects>",
+        "calls": 5969,
+        "selfSeconds": 0.44521590000000005,
+        "cumulativeSeconds": 2.0540288
+      },
+      {
+        "file": "type_adapter.py",
+        "line": 452,
+        "function": "validate_json",
+        "calls": 2963,
+        "selfSeconds": 0.001293,
+        "cumulativeSeconds": 1.4934386000000002
+      },
+      {
+        "file": "loop_report.py",
+        "line": 482,
+        "function": "decode_loop_event",
+        "calls": 2961,
+        "selfSeconds": 0.0022208,
+        "cumulativeSeconds": 1.2119825000000002
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "calls": 8925307,
+        "selfSeconds": 0.7713506,
+        "cumulativeSeconds": 0.9709161000000001
+      },
+      {
+        "file": "loop_report.py",
+        "line": 288,
+        "function": "integrity",
+        "calls": 2961,
+        "selfSeconds": 0.0033308,
+        "cumulativeSeconds": 0.7628844
+      },
+      {
+        "file": "loop_report.py",
+        "line": 264,
+        "function": "integrity",
+        "calls": 2961,
+        "selfSeconds": 0.011794500000000001,
+        "cumulativeSeconds": 0.7591877
+      },
+      {
+        "file": "results.py",
+        "line": 3501,
+        "function": "_load_detail_row",
+        "calls": 2961,
+        "selfSeconds": 0.012277600000000001,
+        "cumulativeSeconds": 0.7212821
+      },
+      {
+        "file": "loop_report.py",
+        "line": 307,
+        "function": "_digest_event",
+        "calls": 2961,
+        "selfSeconds": 0.004985900000000001,
+        "cumulativeSeconds": 0.7107513000000001
+      },
+      {
+        "file": "results.py",
+        "line": 3483,
+        "function": "_load_detail",
+        "calls": 2961,
+        "selfSeconds": 0.012926900000000002,
+        "cumulativeSeconds": 0.6859315
+      },
+      {
+        "file": "loop_report.py",
+        "line": 298,
+        "function": "_event_hash",
+        "calls": 2961,
+        "selfSeconds": 0.010270900000000001,
+        "cumulativeSeconds": 0.6748717000000001
+      },
+      {
+        "file": "loop_publication.py",
+        "line": 253,
+        "function": "read_loop_publication",
+        "calls": 1,
+        "selfSeconds": 2.65e-05,
+        "cumulativeSeconds": 0.6587875000000001
+      },
+      {
+        "file": "results.py",
+        "line": 784,
+        "function": "_get_loop_input_participant",
+        "calls": 1,
+        "selfSeconds": 0.0001437,
+        "cumulativeSeconds": 0.5799532000000001
+      },
+      {
+        "file": "loop_input_store.py",
+        "line": 364,
+        "function": "load",
+        "calls": 1,
+        "selfSeconds": 0.0010597,
+        "cumulativeSeconds": 0.5795058000000001
+      },
+      {
+        "file": "main.py",
+        "line": 742,
+        "function": "model_validate_json",
+        "calls": 3006,
+        "selfSeconds": 0.0019351000000000001,
+        "cumulativeSeconds": 0.5638183
+      },
+      {
+        "file": "__init__.py",
+        "line": 185,
+        "function": "dumps",
+        "calls": 15379,
+        "selfSeconds": 0.023846700000000002,
+        "cumulativeSeconds": 0.49615400000000004
+      },
+      {
+        "file": "encoder.py",
+        "line": 185,
+        "function": "encode",
+        "calls": 15379,
+        "selfSeconds": 0.018343400000000003,
+        "cumulativeSeconds": 0.4677813
+      },
+      {
+        "file": "results.py",
+        "line": 465,
+        "function": "canonicalize_payload",
+        "calls": 2961,
+        "selfSeconds": 0.0014611000000000001,
+        "cumulativeSeconds": 0.45216290000000003
+      },
+      {
+        "file": "results.py",
+        "line": 4085,
+        "function": "_canonical_mapping",
+        "calls": 2967,
+        "selfSeconds": 0.0023663,
+        "cumulativeSeconds": 0.45077100000000003
+      },
+      {
+        "file": "results.py",
+        "line": 4094,
+        "function": "_canonical_value",
+        "calls": 404034,
+        "selfSeconds": 0.2739435,
+        "cumulativeSeconds": 0.4456852
+      },
+      {
+        "file": "encoder.py",
+        "line": 207,
+        "function": "iterencode",
+        "calls": 15379,
+        "selfSeconds": 0.44332200000000005,
+        "cumulativeSeconds": 0.44332200000000005
+      },
+      {
+        "file": "main.py",
+        "line": 427,
+        "function": "model_dump",
+        "calls": 10915,
+        "selfSeconds": 0.0050067,
+        "cumulativeSeconds": 0.23149150000000002
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'to_python' of 'pydantic_core._pydantic_core.SchemaSerializer' objects>",
+        "calls": 10915,
+        "selfSeconds": 0.2194317,
+        "cumulativeSeconds": 0.22648480000000001
+      },
+      {
+        "file": "<frozen abc>",
+        "line": 117,
+        "function": "__instancecheck__",
+        "calls": 719449,
+        "selfSeconds": 0.1093984,
+        "cumulativeSeconds": 0.1995655
+      },
+      {
+        "file": "preparation_review.py",
+        "line": 542,
+        "function": "bound",
+        "calls": 4,
+        "selfSeconds": 3.8900000000000004e-05,
+        "cumulativeSeconds": 0.1659032
+      },
+      {
+        "file": "preparation_review.py",
+        "line": 558,
+        "function": "_collection_version",
+        "calls": 4,
+        "selfSeconds": 0.00017490000000000002,
+        "cumulativeSeconds": 0.16545020000000002
+      },
+      {
+        "file": "update_review.py",
+        "line": 113,
+        "function": "evidence_hash",
+        "calls": 12,
+        "selfSeconds": 0.0036571000000000004,
+        "cumulativeSeconds": 0.1616793
+      },
+      {
+        "file": "loop_input_store.py",
+        "line": 120,
+        "function": "reference",
+        "calls": 2,
+        "selfSeconds": 9.5e-06,
+        "cumulativeSeconds": 0.1482583
+      },
+      {
+        "file": "loop_input_store.py",
+        "line": 84,
+        "function": "reference",
+        "calls": 2,
+        "selfSeconds": 0.0005296000000000001,
+        "cumulativeSeconds": 0.14824880000000001
+      },
+      {
+        "file": "loop_input_store.py",
+        "line": 382,
+        "function": "_read_day",
+        "calls": 39,
+        "selfSeconds": 0.0002706,
+        "cumulativeSeconds": 0.1296651
+      },
+      {
+        "file": "preparation_review.py",
+        "line": 608,
+        "function": "manifest_hash",
+        "calls": 2,
+        "selfSeconds": 0.0041573,
+        "cumulativeSeconds": 0.1182739
+      },
+      {
+        "file": "loop_diagnostics.py",
+        "line": 244,
+        "function": "observe",
+        "calls": 2961,
+        "selfSeconds": 0.027271700000000003,
+        "cumulativeSeconds": 0.0911416
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method _abc._abc_instancecheck>",
+        "calls": 719449,
+        "selfSeconds": 0.0901671,
+        "cumulativeSeconds": 0.0901671
+      },
+      {
+        "file": "__init__.py",
+        "line": 304,
+        "function": "loads",
+        "calls": 4478,
+        "selfSeconds": 0.004349400000000001,
+        "cumulativeSeconds": 0.08545040000000001
+      },
+      {
+        "file": "decoder.py",
+        "line": 340,
+        "function": "decode",
+        "calls": 4478,
+        "selfSeconds": 0.0066991,
+        "cumulativeSeconds": 0.0798795
+      },
+      {
+        "file": "loop_input_store.py",
+        "line": 145,
+        "function": "_verify_day",
+        "calls": 39,
+        "selfSeconds": 0.0016954000000000001,
+        "cumulativeSeconds": 0.0794697
+      },
+      {
+        "file": "market_store.py",
+        "line": 2311,
+        "function": "_minute_artifact_row",
+        "calls": 1440,
+        "selfSeconds": 0.0033247000000000003,
+        "cumulativeSeconds": 0.0746159
+      },
+      {
+        "file": "loop_publication.py",
+        "line": 86,
+        "function": "report_summary",
+        "calls": 1,
+        "selfSeconds": 2.5300000000000002e-05,
+        "cumulativeSeconds": 0.0714796
+      }
+    ],
+    "note": "Profiling overhead excluded from normal latency summaries; cumulative times are nested."
+  },
+  "completedPreliminaryMatrix": {
+    "scope": "Current real immutable result database and files, opened mode=ro/query_only; same production result route/metadata ownership/result ownership/public serialization. CPU competition uses frozen 2008-candidate RO monitor copy with fixed clock/synthetic absent-owner authority; not actual-owner acceptance. No production behavior/source changes. Three alternating rounds; no p95 claim.",
+    "rows": [
+      {
+        "mode": "single",
+        "round": 1,
+        "wallSeconds": 2.1930484999902546,
+        "processCpuSeconds": 2.171875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "monitor",
+        "round": 1,
+        "wallSeconds": 4.583714099833742,
+        "processCpuSeconds": 4.546875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "overview",
+        "round": 1,
+        "wallSeconds": 2.3013748999219388,
+        "processCpuSeconds": 2.28125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "overview",
+        "round": 2,
+        "wallSeconds": 2.1710066001396626,
+        "processCpuSeconds": 2.078125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "monitor",
+        "round": 2,
+        "wallSeconds": 4.509615800110623,
+        "processCpuSeconds": 4.59375,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "single",
+        "round": 2,
+        "wallSeconds": 2.2514231000095606,
+        "processCpuSeconds": 2.15625,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "single",
+        "round": 3,
+        "wallSeconds": 2.2482714999932796,
+        "processCpuSeconds": 2.21875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "monitor",
+        "round": 3,
+        "wallSeconds": 4.535625499906018,
+        "processCpuSeconds": 4.609375,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "overview",
+        "round": 3,
+        "wallSeconds": 2.1733001000247896,
+        "processCpuSeconds": 2.171875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "single-stages",
+        "round": 6,
+        "wallSeconds": 2.219376099994406,
+        "processCpuSeconds": 2.171875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      },
+      {
+        "mode": "single-profile",
+        "round": 7,
+        "wallSeconds": 4.929052999941632,
+        "processCpuSeconds": 4.859375,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af"
+      }
+    ],
+    "medians": {
+      "single": {
+        "wallSeconds": 2.2482714999932796,
+        "processCpuSeconds": 2.171875
+      },
+      "monitor": {
+        "wallSeconds": 4.535625499906018,
+        "processCpuSeconds": 4.59375
+      },
+      "overview": {
+        "wallSeconds": 2.1733001000247896,
+        "processCpuSeconds": 2.171875
+      }
+    },
+    "completeResponsesEqual": true,
+    "note": "wallSeconds is batch completion, not separate result response completion. Use the corrected final matrix for result comparisons."
+  },
+  "finalMatrix": {
+    "scope": "Five alternating full production-result-route calls on read-only real result data/files. Monitor competition uses frozen RO 2008-candidate input with synthetic absent authority and fixed clock, not live owner acceptance. Experimental canonical reuse is one exact immutable event object, <=256KiB, discarded after its next encoding or physical-read completion; no production implementation or completed cache.",
+    "rows": [
+      {
+        "mode": "single",
+        "round": 1,
+        "resultSeconds": 2.127614,
+        "batchSeconds": 2.1279468999709934,
+        "processCpuSeconds": 2.09375,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 60,
+        "gcWallSeconds": 0.11680779978632927
+      },
+      {
+        "mode": "monitor",
+        "round": 1,
+        "resultSeconds": 4.248006,
+        "batchSeconds": 4.2483946001157165,
+        "processCpuSeconds": 4.234375,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 74,
+        "gcWallSeconds": 0.01250629941932857
+      },
+      {
+        "mode": "monitor",
+        "round": 2,
+        "resultSeconds": 4.64469,
+        "batchSeconds": 4.645144399954006,
+        "processCpuSeconds": 4.75,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 64,
+        "gcWallSeconds": 0.11082209902815521
+      },
+      {
+        "mode": "single",
+        "round": 2,
+        "resultSeconds": 2.318836,
+        "batchSeconds": 2.319203600054607,
+        "processCpuSeconds": 2.265625,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.010852399980649352
+      },
+      {
+        "mode": "single",
+        "round": 3,
+        "resultSeconds": 2.230052,
+        "batchSeconds": 2.230374500155449,
+        "processCpuSeconds": 2.125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.09865900059230626
+      },
+      {
+        "mode": "monitor",
+        "round": 3,
+        "resultSeconds": 4.229498,
+        "batchSeconds": 4.2298179001081735,
+        "processCpuSeconds": 4.265625,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 67,
+        "gcWallSeconds": 0.011789299547672272
+      },
+      {
+        "mode": "monitor",
+        "round": 4,
+        "resultSeconds": 4.602776,
+        "batchSeconds": 4.603209600085393,
+        "processCpuSeconds": 4.578125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 63,
+        "gcWallSeconds": 0.11371500068344176
+      },
+      {
+        "mode": "single",
+        "round": 4,
+        "resultSeconds": 2.244577,
+        "batchSeconds": 2.2452006000094116,
+        "processCpuSeconds": 2.203125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.008331300923600793
+      },
+      {
+        "mode": "single",
+        "round": 5,
+        "resultSeconds": 2.202059,
+        "batchSeconds": 2.202396399807185,
+        "processCpuSeconds": 2.15625,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.009410201571881771
+      },
+      {
+        "mode": "monitor",
+        "round": 5,
+        "resultSeconds": 4.336893,
+        "batchSeconds": 4.337220399873331,
+        "processCpuSeconds": 4.46875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 68,
+        "gcWallSeconds": 0.12004510057158768
+      },
+      {
+        "mode": "baseline",
+        "round": 1,
+        "resultSeconds": 2.074454,
+        "batchSeconds": 2.0747885000891984,
+        "processCpuSeconds": 2.03125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.009900301694869995
+      },
+      {
+        "mode": "event-local-reuse",
+        "round": 1,
+        "resultSeconds": 1.892459,
+        "batchSeconds": 1.8928148001432419,
+        "processCpuSeconds": 1.84375,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.1078741003293544
+      },
+      {
+        "mode": "event-local-reuse",
+        "round": 2,
+        "resultSeconds": 1.915563,
+        "batchSeconds": 1.9159265998750925,
+        "processCpuSeconds": 1.875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.007826199289411306
+      },
+      {
+        "mode": "baseline",
+        "round": 2,
+        "resultSeconds": 2.186065,
+        "batchSeconds": 2.186400800012052,
+        "processCpuSeconds": 2.171875,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.11503499979153275
+      },
+      {
+        "mode": "baseline",
+        "round": 3,
+        "resultSeconds": 1.979412,
+        "batchSeconds": 1.9797251001000404,
+        "processCpuSeconds": 1.953125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.008372400654479861
+      },
+      {
+        "mode": "event-local-reuse",
+        "round": 3,
+        "resultSeconds": 1.811513,
+        "batchSeconds": 1.811835000058636,
+        "processCpuSeconds": 1.78125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.007378098554909229
+      },
+      {
+        "mode": "event-local-reuse",
+        "round": 4,
+        "resultSeconds": 1.901661,
+        "batchSeconds": 1.9019988998770714,
+        "processCpuSeconds": 1.890625,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.11070330091752112
+      },
+      {
+        "mode": "baseline",
+        "round": 4,
+        "resultSeconds": 2.09222,
+        "batchSeconds": 2.092541899997741,
+        "processCpuSeconds": 2.078125,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.009404400130733848
+      },
+      {
+        "mode": "baseline",
+        "round": 5,
+        "resultSeconds": 2.085175,
+        "batchSeconds": 2.085476699983701,
+        "processCpuSeconds": 2.0625,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.10723180091008544
+      },
+      {
+        "mode": "event-local-reuse",
+        "round": 5,
+        "resultSeconds": 1.758452,
+        "batchSeconds": 1.7587637999095023,
+        "processCpuSeconds": 1.734375,
+        "responseBytes": 15559,
+        "responseSha256": "5acadf52d2f4a93ca6f6d4b108c8381bb8aefc801886dcc981aa76107d3fc4af",
+        "gcCount": 57,
+        "gcWallSeconds": 0.007710301550105214
+      }
+    ],
+    "medians": {
+      "single": {
+        "resultSeconds": 2.230052,
+        "batchSeconds": 2.230374500155449,
+        "processCpuSeconds": 2.15625,
+        "gcWallSeconds": 0.010852399980649352
+      },
+      "monitor": {
+        "resultSeconds": 4.336893,
+        "batchSeconds": 4.337220399873331,
+        "processCpuSeconds": 4.46875,
+        "gcWallSeconds": 0.11082209902815521
+      },
+      "baseline": {
+        "resultSeconds": 2.085175,
+        "batchSeconds": 2.085476699983701,
+        "processCpuSeconds": 2.0625,
+        "gcWallSeconds": 0.009900301694869995
+      },
+      "event-local-reuse": {
+        "resultSeconds": 1.892459,
+        "batchSeconds": 1.8928148001432419,
+        "processCpuSeconds": 1.84375,
+        "gcWallSeconds": 0.007826199289411306
+      }
+    },
+    "completeResponsesEqual": true,
+    "gcSummary": [
+      {
+        "generation": 0,
+        "count": 1086,
+        "totalWallSeconds": 0.11722820554859936,
+        "maxWallSeconds": 0.0005550000350922346
+      },
+      {
+        "generation": 1,
+        "count": 99,
+        "totalWallSeconds": 0.07209790032356977,
+        "maxWallSeconds": 0.004155399976298213
+      },
+      {
+        "generation": 2,
+        "count": 9,
+        "totalWallSeconds": 0.915048300055787,
+        "maxWallSeconds": 0.10914960014633834
+      }
+    ],
+    "maxIndividualGcSeconds": 0.10914960014633834
+  },
+  "eventReuseFeasibility": {
+    "savedEncodingsPerTraversal": 2961,
+    "boundEvents": 1,
+    "boundUtf8Bytes": 262144,
+    "memoStats": [
+      {
+        "hits": 2961,
+        "peakBytes": 8419
+      },
+      {
+        "hits": 2961,
+        "peakBytes": 8419
+      },
+      {
+        "hits": 2961,
+        "peakBytes": 8419
+      },
+      {
+        "hits": 2961,
+        "peakBytes": 8419
+      },
+      {
+        "hits": 2961,
+        "peakBytes": 8419
+      }
+    ],
+    "wallImprovementPercent": 9.242197897059,
+    "cpuImprovementPercent": 10.606060606060607,
+    "note": "Ignored process-local experiment, not shipped. Same typed immutable event next encoding only, released on consumption/finally. Current ~9.2% exploratory wall improvement does not meet proposed >=10% production gate. UTF-8 peak is not total process/object memory."
+  },
+  "sqlComponentScan": {
+    "scope": "Raw SQL component scan only; not a valid API read and not a proposal to skip validation; cache state not controlled. All values/parameters omitted.",
+    "queryPlan": [
+      {
+        "id": 4,
+        "parent": 0,
+        "detail": "SEARCH backtest_detail USING INDEX ix_backtest_detail_retention (kind=? AND run_id=?)"
+      }
+    ],
+    "samples": [
+      {
+        "rows": 2961,
+        "payloadBytes": 3199278,
+        "wallSeconds": 0.01834499998949468,
+        "processCpuSeconds": 0.0
+      },
+      {
+        "rows": 2961,
+        "payloadBytes": 3199278,
+        "wallSeconds": 0.006274700164794922,
+        "processCpuSeconds": 0.015625
+      },
+      {
+        "rows": 2961,
+        "payloadBytes": 3199278,
+        "wallSeconds": 0.006316000130027533,
+        "processCpuSeconds": 0.0
+      }
+    ]
+  },
+  "officialSources": [
+    "https://docs.python.org/3.14/library/threading.html",
+    "https://docs.python.org/3.14/library/time.html#time.thread_time",
+    "https://docs.python.org/3.14/library/profile.html"
+  ],
+  "finalInspectionHead": "c3d16dad80fb4644a477ef6d18158807cc294d3b",
+  "existingWorkPreserved": "Final inspection found a run-list filter commit above the measured baseline. Backend source paths are identical across these commits. This analysis performed no Git mutation."
+}

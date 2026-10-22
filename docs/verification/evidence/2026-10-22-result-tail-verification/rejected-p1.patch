@@ -1,0 +1,250 @@
+--- a/src/trade_plan_monitor/backtest/loop_publication.py
++++ b/src/trade_plan_monitor/backtest/loop_publication.py
+@@ -8,0 +9 @@
++from sys import getsizeof
+@@ -174,0 +176,3 @@
++_CANONICAL_AUDIT_BYTES = 256 * 1024
++
++
+@@ -176,0 +181,5 @@
++    return _decode_audit_record_with_canonical(record)[0]
++
++
++def _decode_audit_record_with_canonical(record: BacktestDetailRecord):
++    """One core retains the exact representation used by the existing equality gate."""
+@@ -177,0 +187 @@
++    text = canonical_json(event)
+@@ -183 +193 @@
+-        or json.loads(canonical_json(event)) != record.payload
++        or json.loads(text) != record.payload
+@@ -186 +196,11 @@
+-    return event
++    return event, text
++
++
++def _verified_audit_record(record: BacktestDetailRecord):
++    """Pass owned bytes only to the immediate diagnostic digest, never across rows."""
++    event, text = _decode_audit_record_with_canonical(record)
++    # Bound before encoding too: a non-ASCII character can occupy 4 UTF-8 bytes.
++    maximum = _CANONICAL_AUDIT_BYTES - getsizeof(b"")
++    upper_bound = len(text) if text.isascii() else 4 * len(text)
++    raw = text.encode() if upper_bound <= maximum else None
++    return event, raw
+--- a/src/trade_plan_monitor/backtest/loop_report.py
++++ b/src/trade_plan_monitor/backtest/loop_report.py
+@@ -308 +308,4 @@
+-    raw = canonical_json(event).encode()
++    _digest_event_bytes(digest, canonical_json(event).encode())
++
++
++def _digest_event_bytes(digest, raw):
+@@ -774,0 +778,5 @@
++    _verify_published_loop_event_set(report, ((event, None) for event in events))
++
++
++def _verify_published_loop_event_set(report, verified_rows) -> None:
++    """Common gate; owned canonical bytes come directly from the row decoder only."""
+@@ -777 +785 @@
+-    for event in events:
++    for event, raw in verified_rows:
+@@ -781 +789,6 @@
+-        _digest_event(digest, event)
++        if raw is None:
++            _digest_event(digest, event)
++        else:
++            _digest_event_bytes(digest, raw)
++        # Drop this row's bytes before requesting the next decoded row.
++        del event, raw
+--- a/src/trade_plan_monitor/backtest/results.py
++++ b/src/trade_plan_monitor/backtest/results.py
+@@ -959 +959 @@
+-        from trade_plan_monitor.backtest.loop_publication import decode_audit_record
++        from trade_plan_monitor.backtest.loop_publication import _verified_audit_record
+@@ -961 +961 @@
+-            verify_published_loop_event_set,
++            _verify_published_loop_event_set,
+@@ -991 +991 @@
+-                    event = decode_audit_record(detail)
++                    event, raw = _verified_audit_record(detail)
+@@ -993,3 +993,4 @@
+-                    yield event
+-
+-        verify_published_loop_event_set(report, events())
++                    yield event, raw
++                    del event, raw, detail
++
++        _verify_published_loop_event_set(report, events())
+--- /dev/null
++++ b/tests/unit/test_audit_canonical_reuse.py
+@@ -0,0 +1,171 @@
++"""Row-local bytes must retain identity, typed hash, ordering and complete-set gates."""
++
++from datetime import UTC
++from hashlib import sha256
++from sys import getsizeof
++
++import pytest
++from tests.unit.test_monitor_loop_report import state
++from tests.unit.test_monitor_loop_schedule import at
++
++from trade_plan_monitor.backtest import loop_publication, loop_report
++from trade_plan_monitor.backtest.canonical import canonical_json
++from trade_plan_monitor.backtest.loop_publication import (
++    _decode_audit_record_with_canonical,
++    _verified_audit_record,
++    audit_record,
++    decode_audit_record,
++)
++from trade_plan_monitor.backtest.loop_report import (
++    LoopAuditEvent,
++    LoopValuationEvent,
++    MonitorLoopReport,
++    ScheduledLoopAuditEvent,
++    ScheduledMonitorLoopReport,
++    _verify_published_loop_event_set,
++    project_loop_valuation,
++    verify_published_loop_event_set,
++)
++
++
++def trail(scheduled, count=3):
++    events = []
++    version = 'monitor-loop-event-v2' if scheduled else 'monitor-loop-event-v1'
++    for sequence in range(1, count+1):
++        values = dict(schema_version=version, run_id='a'*64, sequence=sequence, at=at(),
++                      cause_event_id=None, payload=LoopValuationEvent(
++                          valuation=project_loop_valuation(state(), at=at())))
++        if scheduled:
++            values |= dict(version_id=None, authority_id=None)
++        causal = {key: value for key, value in values.items() if key != 'run_id'}
++        event_id = sha256((version+'\0'+canonical_json(causal)).encode()).hexdigest()
++        cls = ScheduledLoopAuditEvent if scheduled else LoopAuditEvent
++        events.append(cls(**values, event_id=event_id))
++    domain = b'monitor-loop-event-set-v2\0' if scheduled else b'monitor-loop-event-set-v1\0'
++    digest = sha256(domain)
++    for event in events:
++        raw = canonical_json(event).encode()
++        digest.update(len(raw).to_bytes(8, 'big'))
++        digest.update(raw)
++    cls = ScheduledMonitorLoopReport if scheduled else MonitorLoopReport
++    report = cls.model_construct(
++        run_id='a'*64, event_count=count, event_set_hash=digest.hexdigest(),
++    )
++    return report, events
++
++
++@pytest.mark.parametrize('scheduled', [False, True])
++@pytest.mark.parametrize('count', [0, 1, 3])
++def test_same_canonical_bytes_and_public_contracts(scheduled, count, monkeypatch):
++    report, events = trail(scheduled, count)
++    assert verify_published_loop_event_set(report, iter(events)) is None
++    original = loop_report.canonical_json
++    encodings = []
++
++    def counted(value):
++        if isinstance(value, (LoopAuditEvent, ScheduledLoopAuditEvent)):
++            encodings.append(1)
++        return original(value)
++
++    monkeypatch.setattr(loop_report, 'canonical_json', counted)
++    pairs = []
++    for event in events:
++        record = audit_record(event)
++        assert decode_audit_record(record) == event
++        decoded, text = _decode_audit_record_with_canonical(record)
++        verified, raw = _verified_audit_record(record)
++        assert decoded == verified == event
++        assert raw == text.encode() == original(event).encode()
++        assert getsizeof(raw) <= 256*1024
++        pairs.append((verified, raw))
++    assert _verify_published_loop_event_set(report, iter(pairs)) is None
++    assert not encodings
++    monkeypatch.setattr(loop_publication, '_CANONICAL_AUDIT_BYTES', 1)
++    fallback = [_verified_audit_record(audit_record(event)) for event in events]
++    assert all(raw is None for _, raw in fallback)
++    _verify_published_loop_event_set(report, iter(fallback))
++    assert len(encodings) == count
++
++
++@pytest.mark.parametrize('damage', ['row', 'run', 'kind', 'time', 'event_hash', 'sequence',
++                                   'missing', 'extra', 'reordered', 'set_hash', 'bytes'])
++@pytest.mark.parametrize('scheduled', [False, True])
++def test_all_existing_gates_reject_damaged_rows_or_trails(scheduled, damage):
++    report, events = trail(scheduled)
++    rows = [audit_record(event) for event in events]
++    if damage in {'row', 'run', 'kind', 'time', 'event_hash'}:
++        from trade_plan_monitor.backtest.results import BacktestDetailKind
++        change = {
++            'row': {'detail_id': 'different'}, 'run': {'run_id': 'b'*64},
++            'kind': {'kind': BacktestDetailKind.DIAGNOSTIC}, 'time': {'event_at': at(20, 11)},
++            'event_hash': {'payload': rows[0].payload | {'event_id': '0'*64}},
++        }[damage]
++        rows[0] = rows[0].model_copy(update=change)
++    if damage == 'sequence':
++        rows = [rows[1], rows[2], rows[0]]
++    elif damage == 'missing':
++        rows.pop()
++    elif damage == 'extra':
++        rows.append(rows[-1])
++    elif damage == 'reordered':
++        rows.reverse()
++    elif damage == 'set_hash':
++        report = type(report).model_construct(
++            run_id=report.run_id, event_count=report.event_count, event_set_hash='0'*64,
++        )
++
++    def verified():
++        for row in rows:
++            event, raw = _verified_audit_record(row)
++            yield event, raw + b' ' if damage == 'bytes' else raw
++
++    with pytest.raises(ValueError):
++        _verify_published_loop_event_set(report, verified())
++
++
++@pytest.mark.parametrize('scheduled', [False, True])
++def test_decoder_hash_and_canonical_equality_are_independent_gates(scheduled):
++    _, events = trail(scheduled, 1)
++    row = audit_record(events[0])
++    for payload in (
++        row.payload | {'event_id': '0'*64},
++        row.payload | {'at': events[0].at.isoformat(timespec='seconds')},
++        row.payload | {'at': events[0].at.astimezone(UTC).isoformat()},
++    ):
++        with pytest.raises(ValueError):
++            _verified_audit_record(row.model_copy(update={'payload': payload}))
++
++
++@pytest.mark.parametrize('damage', ['sequence', 'run', 'count'])
++@pytest.mark.parametrize('scheduled', [False, True])
++def test_membership_and_count_gates_even_when_stream_digest_is_rehashed(scheduled, damage):
++    report, events = trail(scheduled)
++    pairs = [_verified_audit_record(audit_record(e)) for e in events]
++    if damage == 'sequence':
++        pairs.reverse()
++    digest = sha256(b'monitor-loop-event-set-v2\0' if scheduled
++                    else b'monitor-loop-event-set-v1\0')
++    for _, raw in pairs:
++        digest.update(len(raw).to_bytes(8, 'big'))
++        digest.update(raw)
++    altered = type(report).model_construct(
++        run_id='b'*64 if damage == 'run' else report.run_id,
++        event_count=report.event_count+1 if damage == 'count' else report.event_count,
++        event_set_hash=digest.hexdigest(),
++    )
++    with pytest.raises(ValueError):
++        _verify_published_loop_event_set(altered, iter(pairs))
++
++
++@pytest.mark.parametrize('text', ['a' * (256*1024), '😀' * 70_000],
++                         ids=['ascii-byte-budget', 'utf8-byte-budget'])
++def test_byte_budget_is_checked_before_allocating_oversized_utf8(text, monkeypatch):
++    class NoOversizedEncoding(str):
++        def encode(self, *args, **kwargs):
++            raise AssertionError('must fall back without allocating oversized bytes')
++
++    sentinel = object()
++    monkeypatch.setattr(loop_publication, '_decode_audit_record_with_canonical',
++                        lambda _row: (sentinel, NoOversizedEncoding(text)))
++    event, raw = _verified_audit_record(object())
++    assert event is sentinel and raw is None
