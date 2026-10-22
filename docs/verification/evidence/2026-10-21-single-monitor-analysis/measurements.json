@@ -1,0 +1,1148 @@
+{
+  "analysis": {
+    "baseline": "ba4156e",
+    "scope": "Read-only frozen monitor copy, 2008 historical candidates, no active plans, synthetic absent-owner authority and fixed clock. Process-local prototype only; no production source changes or completed proof cache. All independent authority checks remain on the owning loop. Profile and stage timings are separate from uninstrumented benchmarks.",
+    "counts": {
+      "snapshots": 2008,
+      "bars": 72280,
+      "requests": 0,
+      "facts": 0
+    },
+    "rawJsonBytes": 27588993,
+    "measurements": [
+      {
+        "label": "baseline-uninstrumented-1",
+        "wallSeconds": 3.6670190999284387,
+        "processCpuSeconds": 3.46875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-uninstrumented-2",
+        "wallSeconds": 3.497952900128439,
+        "processCpuSeconds": 3.4375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-uninstrumented-3",
+        "wallSeconds": 3.4698177999816835,
+        "processCpuSeconds": 3.4375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "stage-instrumented",
+        "wallSeconds": 3.5357687000650913,
+        "processCpuSeconds": 3.5,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "profiled-not-a-benchmark",
+        "wallSeconds": 10.447106200037524,
+        "processCpuSeconds": 10.171875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-1",
+        "wallSeconds": 3.5353075000457466,
+        "processCpuSeconds": 3.40625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-1",
+        "wallSeconds": 1.964012899901718,
+        "processCpuSeconds": 1.921875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-2",
+        "wallSeconds": 1.9834335998166353,
+        "processCpuSeconds": 1.96875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-2",
+        "wallSeconds": 3.459807600127533,
+        "processCpuSeconds": 3.390625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-3",
+        "wallSeconds": 3.4636824999470264,
+        "processCpuSeconds": 3.4375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-3",
+        "wallSeconds": 1.9895713001023978,
+        "processCpuSeconds": 1.984375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-4",
+        "wallSeconds": 1.9559197002090514,
+        "processCpuSeconds": 1.90625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-4",
+        "wallSeconds": 3.4236945000011474,
+        "processCpuSeconds": 3.40625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-5",
+        "wallSeconds": 3.528724400093779,
+        "processCpuSeconds": 3.4375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-5",
+        "wallSeconds": 2.0391156000550836,
+        "processCpuSeconds": 2.015625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-6",
+        "wallSeconds": 1.968620700063184,
+        "processCpuSeconds": 1.953125,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-6",
+        "wallSeconds": 3.497504699975252,
+        "processCpuSeconds": 3.4375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-7",
+        "wallSeconds": 3.439140500035137,
+        "processCpuSeconds": 3.390625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-7",
+        "wallSeconds": 1.967881000135094,
+        "processCpuSeconds": 1.921875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-8",
+        "wallSeconds": 2.0345600999426097,
+        "processCpuSeconds": 1.984375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-8",
+        "wallSeconds": 3.4476954999845475,
+        "processCpuSeconds": 3.40625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-9",
+        "wallSeconds": 3.516783099854365,
+        "processCpuSeconds": 3.515625,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-9",
+        "wallSeconds": 1.9702629998791963,
+        "processCpuSeconds": 1.96875,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "single-canonical-tree-10",
+        "wallSeconds": 2.024439000058919,
+        "processCpuSeconds": 2.0,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      },
+      {
+        "label": "baseline-10",
+        "wallSeconds": 3.496650400105864,
+        "processCpuSeconds": 3.4375,
+        "authorityCalls": 2,
+        "sharing": {
+          "physical_validations": 1,
+          "joins": 0,
+          "mismatches": 0,
+          "budget_fallbacks": 0,
+          "active_calls": 0,
+          "queued_owners": 0,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 30826621
+        }
+      }
+    ],
+    "stageMetrics": {
+      "retained-size": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.0,
+        "wallSeconds": 0.0048123979941010475
+      },
+      "raw-decode": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.0,
+        "wallSeconds": 0.02090238849632442
+      },
+      "typed-parse": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.546875,
+        "wallSeconds": 0.6346278036944568
+      },
+      "bar-hash": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.984375,
+        "wallSeconds": 0.9343520996626467
+      },
+      "request-hash": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.0,
+        "wallSeconds": 0.011957299895584583
+      },
+      "snapshot-hash": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.8125,
+        "wallSeconds": 0.821256700437516
+      },
+      "integrity-total": {
+        "calls": 2008,
+        "threadCpuSeconds": 1.875,
+        "wallSeconds": 1.8429722976870835
+      },
+      "metadata-values": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.0,
+        "wallSeconds": 0.007883605547249317
+      },
+      "canonical-literal": {
+        "calls": 2008,
+        "threadCpuSeconds": 0.921875,
+        "wallSeconds": 0.8573358082212508
+      },
+      "row-verification": {
+        "calls": 2008,
+        "threadCpuSeconds": 3.375,
+        "wallSeconds": 3.376972510945052
+      },
+      "index-read-total": {
+        "calls": 1,
+        "threadCpuSeconds": 3.5,
+        "wallSeconds": 3.5328800000716
+      }
+    },
+    "profile": [
+      {
+        "file": "runtime_status_read_service.py",
+        "line": 224,
+        "function": "_assemble",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 9.920000000000001e-05,
+        "cumulativeSeconds": 10.438451
+      },
+      {
+        "file": "projections.py",
+        "line": 900,
+        "function": "list_latest_market_index_snapshots",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 2.96e-05,
+        "cumulativeSeconds": 10.4348554
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 103,
+        "function": "run",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 1.23e-05,
+        "cumulativeSeconds": 10.4345747
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 120,
+        "function": "_run",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 2.3e-05,
+        "cumulativeSeconds": 10.4345572
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 169,
+        "function": "_lead",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 0.0022538000000000002,
+        "cumulativeSeconds": 10.4345321
+      },
+      {
+        "file": "index_evidence_flights.py",
+        "line": 23,
+        "function": "_outcome",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 1.7e-06,
+        "cumulativeSeconds": 10.335773900000001
+      },
+      {
+        "file": "projections.py",
+        "line": 954,
+        "function": "verify",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 4.0100000000000006e-05,
+        "cumulativeSeconds": 10.335772200000001
+      },
+      {
+        "file": "projections.py",
+        "line": 1412,
+        "function": "_latest_index_records",
+        "calls": 1,
+        "primitiveCalls": 1,
+        "selfSeconds": 0.0516481,
+        "cumulativeSeconds": 10.335732100000001
+      },
+      {
+        "file": "projections.py",
+        "line": 1445,
+        "function": "_market_index_from_row",
+        "calls": 2008,
+        "primitiveCalls": 2008,
+        "selfSeconds": 0.024719,
+        "cumulativeSeconds": 10.2288367
+      },
+      {
+        "file": "canonical.py",
+        "line": 79,
+        "function": "canonical_json",
+        "calls": 8032,
+        "primitiveCalls": 8032,
+        "selfSeconds": 0.025683,
+        "cumulativeSeconds": 8.6427279
+      },
+      {
+        "file": "canonical.py",
+        "line": 50,
+        "function": "canonical_value",
+        "calls": 3701644,
+        "primitiveCalls": 8032,
+        "selfSeconds": 2.8674942000000003,
+        "cumulativeSeconds": 8.1731016
+      },
+      {
+        "file": "canonical.py",
+        "line": 117,
+        "function": "validate_market_index_snapshot_integrity",
+        "calls": 2008,
+        "primitiveCalls": 2008,
+        "selfSeconds": 0.010483800000000001,
+        "cumulativeSeconds": 5.9799106
+      },
+      {
+        "file": "canonical.py",
+        "line": 89,
+        "function": "_digest",
+        "calls": 6024,
+        "primitiveCalls": 6024,
+        "selfSeconds": 0.012781,
+        "cumulativeSeconds": 5.811326800000001
+      },
+      {
+        "file": "canonical.py",
+        "line": 30,
+        "function": "canonical_decimal",
+        "calls": 1328368,
+        "primitiveCalls": 1328368,
+        "selfSeconds": 1.518906,
+        "cumulativeSeconds": 3.0972118
+      },
+      {
+        "file": "canonical.py",
+        "line": 99,
+        "function": "market_index_bar_set_hash",
+        "calls": 2008,
+        "primitiveCalls": 2008,
+        "selfSeconds": 0.009066000000000001,
+        "cumulativeSeconds": 3.0096655
+      },
+      {
+        "file": "canonical.py",
+        "line": 113,
+        "function": "market_index_snapshot_hash",
+        "calls": 2008,
+        "primitiveCalls": 2008,
+        "selfSeconds": 0.0007908,
+        "cumulativeSeconds": 2.8657097
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "calls": 15388552,
+        "primitiveCalls": 15388552,
+        "selfSeconds": 1.2686819,
+        "cumulativeSeconds": 1.3496448
+      },
+      {
+        "file": "main.py",
+        "line": 742,
+        "function": "model_validate_json",
+        "calls": 2008,
+        "primitiveCalls": 2008,
+        "selfSeconds": 0.0010868,
+        "cumulativeSeconds": 1.2859653
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'validate_json' of 'pydantic_core._pydantic_core.SchemaValidator' objects>",
+        "calls": 2008,
+        "primitiveCalls": 2008,
+        "selfSeconds": 0.30294770000000004,
+        "cumulativeSeconds": 1.2848785
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'as_tuple' of 'decimal.Decimal' objects>",
+        "calls": 1773760,
+        "primitiveCalls": 1773760,
+        "selfSeconds": 0.4984797,
+        "cumulativeSeconds": 0.9855537000000001
+      },
+      {
+        "file": "models.py",
+        "line": 112,
+        "function": "validate_bar",
+        "calls": 74232,
+        "primitiveCalls": 74232,
+        "selfSeconds": 0.20605040000000002,
+        "cumulativeSeconds": 0.9670896000000001
+      },
+      {
+        "file": "models.py",
+        "line": 80,
+        "function": "_validate_decimal_expansion",
+        "calls": 445392,
+        "primitiveCalls": 445392,
+        "selfSeconds": 0.2854224,
+        "cumulativeSeconds": 0.6039567
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'isoformat' of 'datetime.datetime' objects>",
+        "calls": 459448,
+        "primitiveCalls": 459448,
+        "selfSeconds": 0.444701,
+        "cumulativeSeconds": 0.444701
+      },
+      {
+        "file": "__init__.py",
+        "line": 185,
+        "function": "dumps",
+        "calls": 8032,
+        "primitiveCalls": 8032,
+        "selfSeconds": 0.014506100000000001,
+        "cumulativeSeconds": 0.44394330000000004
+      },
+      {
+        "file": "encoder.py",
+        "line": 185,
+        "function": "encode",
+        "calls": 8032,
+        "primitiveCalls": 8032,
+        "selfSeconds": 0.010309800000000001,
+        "cumulativeSeconds": 0.4266819
+      },
+      {
+        "file": "encoder.py",
+        "line": 207,
+        "function": "iterencode",
+        "calls": 8032,
+        "primitiveCalls": 8032,
+        "selfSeconds": 0.4127178,
+        "cumulativeSeconds": 0.4127178
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.format>",
+        "calls": 1328368,
+        "primitiveCalls": 1328368,
+        "selfSeconds": 0.27525700000000003,
+        "cumulativeSeconds": 0.27525700000000003
+      },
+      {
+        "file": "main.py",
+        "line": 427,
+        "function": "model_dump",
+        "calls": 76299,
+        "primitiveCalls": 76299,
+        "selfSeconds": 0.022583000000000002,
+        "cumulativeSeconds": 0.2596001
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'to_python' of 'pydantic_core._pydantic_core.SchemaSerializer' objects>",
+        "calls": 76299,
+        "primitiveCalls": 76299,
+        "selfSeconds": 0.2370171,
+        "cumulativeSeconds": 0.2370171
+      },
+      {
+        "file": "enum.py",
+        "line": 187,
+        "function": "__get__",
+        "calls": 751071,
+        "primitiveCalls": 751071,
+        "selfSeconds": 0.1479927,
+        "cumulativeSeconds": 0.21684810000000002
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method __new__ of type object at 0x00007FFC67C1CD90>",
+        "calls": 1773804,
+        "primitiveCalls": 1773804,
+        "selfSeconds": 0.1989324,
+        "cumulativeSeconds": 0.1989324
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'rstrip' of 'str' objects>",
+        "calls": 2043804,
+        "primitiveCalls": 2043804,
+        "selfSeconds": 0.17120970000000002,
+        "cumulativeSeconds": 0.17120970000000002
+      },
+      {
+        "file": "models.py",
+        "line": 75,
+        "function": "_validate_shanghai_datetime",
+        "calls": 162408,
+        "primitiveCalls": 162408,
+        "selfSeconds": 0.11816070000000001,
+        "cumulativeSeconds": 0.1526724
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'utcoffset' of 'datetime.datetime' objects>",
+        "calls": 615855,
+        "primitiveCalls": 615855,
+        "selfSeconds": 0.1523768,
+        "cumulativeSeconds": 0.1523768
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.any>",
+        "calls": 1773760,
+        "primitiveCalls": 1773760,
+        "selfSeconds": 0.14608870000000002,
+        "cumulativeSeconds": 0.14608870000000002
+      }
+    ],
+    "scale": [
+      {
+        "candidates": 128,
+        "mode": "baseline",
+        "wallSeconds": 0.13254890008829534,
+        "processCpuSeconds": 0.125
+      },
+      {
+        "candidates": 128,
+        "mode": "single-canonical-tree",
+        "wallSeconds": 0.0729044999461621,
+        "processCpuSeconds": 0.078125
+      },
+      {
+        "candidates": 512,
+        "mode": "baseline",
+        "wallSeconds": 1.0773336999118328,
+        "processCpuSeconds": 1.0625
+      },
+      {
+        "candidates": 512,
+        "mode": "single-canonical-tree",
+        "wallSeconds": 0.5912525001913309,
+        "processCpuSeconds": 0.578125
+      },
+      {
+        "candidates": 2008,
+        "mode": "baseline",
+        "wallSeconds": 3.376784299965948,
+        "processCpuSeconds": 3.34375
+      },
+      {
+        "candidates": 2008,
+        "mode": "single-canonical-tree",
+        "wallSeconds": 1.8681030999869108,
+        "processCpuSeconds": 1.859375
+      }
+    ],
+    "equivalentStoredRows": 2008,
+    "corruptionChecks": [
+      {
+        "kind": "canonical",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "blob",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "hash",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "provider",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "formula",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "revision",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "canonical",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "blob",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "hash",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "provider",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "formula",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "revision",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "canonical",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "blob",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "hash",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "provider",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "formula",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "revision",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      }
+    ]
+  },
+  "supplementary": {
+    "scope": "Supplementary pure-row fixture with 8 bars, 4 requests and 4 facts, five alternating 500-validation rounds; not whole-monitor latency. SQL raw scan uses the same frozen read-only database and 128-row fetch size.",
+    "samples": [
+      {
+        "round": 1,
+        "mode": "baseline",
+        "validations": 500,
+        "wallSeconds": 0.2768812000285834,
+        "processCpuSeconds": 0.265625
+      },
+      {
+        "round": 1,
+        "mode": "candidate",
+        "validations": 500,
+        "wallSeconds": 0.1666733999736607,
+        "processCpuSeconds": 0.15625
+      },
+      {
+        "round": 2,
+        "mode": "candidate",
+        "validations": 500,
+        "wallSeconds": 0.1647733999416232,
+        "processCpuSeconds": 0.171875
+      },
+      {
+        "round": 2,
+        "mode": "baseline",
+        "validations": 500,
+        "wallSeconds": 0.2752586000133306,
+        "processCpuSeconds": 0.28125
+      },
+      {
+        "round": 3,
+        "mode": "baseline",
+        "validations": 500,
+        "wallSeconds": 0.27426579990424216,
+        "processCpuSeconds": 0.265625
+      },
+      {
+        "round": 3,
+        "mode": "candidate",
+        "validations": 500,
+        "wallSeconds": 0.169307200005278,
+        "processCpuSeconds": 0.171875
+      },
+      {
+        "round": 4,
+        "mode": "candidate",
+        "validations": 500,
+        "wallSeconds": 0.2121226000599563,
+        "processCpuSeconds": 0.21875
+      },
+      {
+        "round": 4,
+        "mode": "baseline",
+        "validations": 500,
+        "wallSeconds": 0.33086590003222227,
+        "processCpuSeconds": 0.296875
+      },
+      {
+        "round": 5,
+        "mode": "baseline",
+        "validations": 500,
+        "wallSeconds": 0.28399939998053014,
+        "processCpuSeconds": 0.28125
+      },
+      {
+        "round": 5,
+        "mode": "candidate",
+        "validations": 500,
+        "wallSeconds": 0.16282219998538494,
+        "processCpuSeconds": 0.15625
+      }
+    ],
+    "factCount": 4,
+    "requestCount": 4,
+    "barCount": 8,
+    "errors": [
+      {
+        "kind": "fact-formula",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "decimal-spelling",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "json-number",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "timestamp-spelling",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      },
+      {
+        "kind": "request-hash",
+        "outcomes": [
+          "ProjectionError",
+          "ProjectionError"
+        ]
+      }
+    ],
+    "reorderedRequestEquivalence": true,
+    "queryPlan": [
+      {
+        "id": 6,
+        "parent": 0,
+        "detail": "SEARCH market_index_snapshot_head USING INDEX sqlite_autoindex_market_index_snapshot_head_1 (mapping_version=? AND index_code=?)"
+      },
+      {
+        "id": 37,
+        "parent": 0,
+        "detail": "SEARCH market_index_snapshot USING INDEX sqlite_autoindex_market_index_snapshot_1 (snapshot_hash=?) LEFT-JOIN"
+      }
+    ],
+    "rawScans": [
+      {
+        "candidates": 2008,
+        "retainedSizeSum": 30826621,
+        "wallSeconds": 0.2112186998128891,
+        "processCpuSeconds": 0.0625
+      },
+      {
+        "candidates": 2008,
+        "retainedSizeSum": 30826621,
+        "wallSeconds": 0.06818039994686842,
+        "processCpuSeconds": 0.0625
+      },
+      {
+        "candidates": 2008,
+        "retainedSizeSum": 30826621,
+        "wallSeconds": 0.06395350000821054,
+        "processCpuSeconds": 0.046875
+      }
+    ]
+  },
+  "liveObservation": {
+    "scope": "Three sequential GET dashboard observations against unchanged live service. Existing clients/background publications remain; no candidate deployed, no claim these are isolated or percentile measurements.",
+    "samples": [
+      {
+        "round": 1,
+        "error": "HTTPError",
+        "wallSeconds": 0.05201640003360808
+      },
+      {
+        "round": 2,
+        "error": "HTTPError",
+        "wallSeconds": 0.025359899969771504
+      },
+      {
+        "round": 3,
+        "error": "HTTPError",
+        "wallSeconds": 0.015146299963817
+      }
+    ],
+    "followup": [
+      {
+        "status": 503,
+        "code": "SERVICE_UNAVAILABLE"
+      }
+    ],
+    "evidenceDiagnostic": {
+      "mode": "read-only current database, fixed clock, synthetic absent-owner authority; not actual live authority",
+      "result": "PASS",
+      "symbols": 0
+    },
+    "limitation": "Initial version-2 live calls returned HTTPError; follow-up confirms SERVICE_UNAVAILABLE (503). No successful live latency baseline; do not count these as fast successful reads. A separate no-version diagnostic returned expected 409 contract mismatch. No service restart or authority bypass was performed."
+  },
+  "medians": {
+    "baseline": {
+      "wallSeconds": 3.480166450026445,
+      "processCpuSeconds": 3.421875
+    },
+    "single-canonical-tree": {
+      "wallSeconds": 1.9768482998479158,
+      "processCpuSeconds": 1.96875
+    },
+    "wallReductionPercent": 43.1967312990764,
+    "cpuReductionPercent": 42.465753424657535
+  }
+}
