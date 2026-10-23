@@ -1,0 +1,23 @@
+--- a/src/sbom.rs
++++ b/src/sbom.rs
+@@ -63,6 +63,20 @@
+                 sbom.bom
+                     .output_as_json_v1_5(&mut buf)
+                     .map_err(|e| anyhow!("Failed to serialize SBOM: {}", e))?;
++                let mut child = std::process::Command::new(std::env::var("TPM_SBOM_PYTHON")?)
++                    .arg(std::env::var("TPM_SBOM_SCRIPT")?)
++                    .stdin(std::process::Stdio::piped())
++                    .stdout(std::process::Stdio::piped())
++                    .stderr(std::process::Stdio::piped()).spawn()?;
++                {
++                    use std::io::Write;
++                    child.stdin.take().unwrap().write_all(&buf)?;
++                }
++                let result = child.wait_with_output()?;
++                if !result.status.success() {
++                    anyhow::bail!("SBOM identity transform failed: {}", String::from_utf8_lossy(&result.stderr));
++                }
++                buf = result.stdout;
+                 rust_sboms.push((sbom.package_name, buf));
+             }
+ 
