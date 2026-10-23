@@ -1,0 +1,27 @@
+{
+  "regressionPassed": 174,
+  "newTestsPassed": 6,
+  "distinctTotal": 180,
+  "mutationKilled": "omitted final collection",
+  "productionBinaryUnchanged": true,
+  "bilingualParity": "passed",
+  "p1": "NO_GO",
+  "nativeInstrumentation": "NOT_IMPLEMENTED: prerequisite byte reproducibility failed",
+  "finalSources": {
+    "scripts\\experiments\\native_build_probe.py": "ef0440c0f6ba9f0bd1340bdee8db26154013ae05019418a49bca03e892165b70",
+    "scripts\\experiments\\failure_recovery_probe.py": "40a870406939a6c1cfd7c132c40444017b74aec13d788f2d07e66a6891a38189",
+    "tests\\integration\\test_failure_recovery_probe.py": "538660ede44ad40252665072d0c9e96056e02375fb18f07095fdaccef92ca64e",
+    "tests\\unit\\test_native_build_probe.py": "615c7d13e4522df9df502c0575ed1febef46f0729f26a7c1c458a5a549d6183f"
+  },
+  "submissionReview": {
+    "passed": 182,
+    "warnings": 1,
+    "mutation": "Both timeout and failed-child cases reject omitted final checkpoint",
+    "sourceSha256": {
+      "scripts\\experiments\\native_build_probe.py": "ef0440c0f6ba9f0bd1340bdee8db26154013ae05019418a49bca03e892165b70",
+      "scripts\\experiments\\failure_recovery_probe.py": "5a107e86897a301cfb83a85c5da9df406d969399f6a672ff5e887874eb1d1165",
+      "tests\\integration\\test_failure_recovery_probe.py": "e4158a1d18a9d9b2d5410a63f2e5b80179e453cd0b111872b35cd7d0f71569f6",
+      "tests\\unit\\test_native_build_probe.py": "615c7d13e4522df9df502c0575ed1febef46f0729f26a7c1c458a5a549d6183f"
+    }
+  }
+}

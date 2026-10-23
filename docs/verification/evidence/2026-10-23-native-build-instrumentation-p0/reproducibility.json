@@ -1,0 +1,69 @@
+{
+  "status": "FAIL_BYTE_REPRODUCIBILITY",
+  "binaryLengths": [
+    5805056,
+    5805056
+  ],
+  "binaryHashes": [
+    "1e9c26865ee7473d534eb87a995652884aaf46879250d6dc8cfe2cf8da3a0df6",
+    "47ae68b55ce5be8b7db2ba4e5a132ea09194c4bb824f884ad5f2fe0d273c84f2"
+  ],
+  "differentBytes": 19,
+  "diffOffsets": [
+    264,
+    4974148,
+    4974176,
+    4974204,
+    4974584,
+    4974585,
+    4974586,
+    4974587,
+    4974588,
+    4974589,
+    4974590,
+    4974592,
+    4974593,
+    4974594,
+    4974595,
+    4974596,
+    4974597,
+    4974598,
+    4974599
+  ],
+  "metadataRanges": [
+    {
+      "kind": "COFF timestamp",
+      "start": 264,
+      "length": 4
+    },
+    {
+      "kind": "debug timestamp",
+      "start": 4974148,
+      "length": 4
+    },
+    {
+      "kind": "CodeView GUID",
+      "start": 4974584,
+      "length": 16
+    },
+    {
+      "kind": "debug timestamp",
+      "start": 4974176,
+      "length": 4
+    },
+    {
+      "kind": "debug timestamp",
+      "start": 4974204,
+      "length": 4
+    }
+  ],
+  "allDifferencesInMetadata": true,
+  "sbomDifferences": [
+    "serialNumber",
+    "metadata.timestamp",
+    "metadata.component.bom-ref",
+    "metadata.component.components[0].bom-ref",
+    "dependencies[0].ref"
+  ],
+  "warning": "Classification only. No bytes normalized, ignored or stripped to claim a pass. No native instrumentation qualified."
+}

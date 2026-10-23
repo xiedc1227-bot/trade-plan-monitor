@@ -1,0 +1,242 @@
+{
+  "attempts": [
+    {
+      "round": 1,
+      "shape": "decimal",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 0.859375,
+      "finalCleanupCpu": 0.078125,
+      "totalCpu": 0.9375,
+      "totalWall": 0.9626829999033362,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 1,
+      "shape": "decimal",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 0.65625,
+      "finalCleanupCpu": 0.109375,
+      "totalCpu": 0.765625,
+      "totalWall": 0.7639426002278924,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 2,
+      "shape": "decimal",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 0.59375,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 0.6875,
+      "totalWall": 0.6837712000124156,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 2,
+      "shape": "decimal",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 0.84375,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 0.9375,
+      "totalWall": 0.9704952000174671,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 3,
+      "shape": "decimal",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 0.859375,
+      "finalCleanupCpu": 0.109375,
+      "totalCpu": 0.96875,
+      "totalWall": 0.9768881001509726,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 3,
+      "shape": "decimal",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 0.578125,
+      "finalCleanupCpu": 0.109375,
+      "totalCpu": 0.6875,
+      "totalWall": 0.6917940001003444,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 1,
+      "shape": "dense",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 2.421875,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.515625,
+      "totalWall": 2.530104999896139,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 1,
+      "shape": "dense",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 2.28125,
+      "finalCleanupCpu": 0.109375,
+      "totalCpu": 2.390625,
+      "totalWall": 2.427273999899626,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 2,
+      "shape": "dense",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 2.265625,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.359375,
+      "totalWall": 2.387526100035757,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 2,
+      "shape": "dense",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 2.390625,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.484375,
+      "totalWall": 2.5460522000212222,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 3,
+      "shape": "dense",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 2.46875,
+      "finalCleanupCpu": 0.109375,
+      "totalCpu": 2.578125,
+      "totalWall": 2.6237442998681217,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 3,
+      "shape": "dense",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 2.28125,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.375,
+      "totalWall": 2.438330699922517,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    }
+  ],
+  "qualification": "DIAGNOSTIC_ONLY",
+  "limits": "3 rounds; 3 calls per fresh child; automatic GC on; final full collection included for both variants. Scope variant retains cleanup obligation until that endpoint. No caller-frame, native-bound or concurrency qualification.",
+  "medians": [
+    {
+      "shape": "decimal",
+      "variant": "full",
+      "totalCpu": 0.9375
+    },
+    {
+      "shape": "decimal",
+      "variant": "scope",
+      "totalCpu": 0.6875
+    },
+    {
+      "shape": "dense",
+      "variant": "full",
+      "totalCpu": 2.515625
+    },
+    {
+      "shape": "dense",
+      "variant": "scope",
+      "totalCpu": 2.375
+    }
+  ],
+  "admissions": [
+    {
+      "shape": "decimal",
+      "raw": 16478553,
+      "work": 197697036,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 8.00006091594696e-06
+      }
+    },
+    {
+      "shape": "dense",
+      "raw": 12126534,
+      "work": 145472808,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 1.0400079190731049e-05
+      }
+    }
+  ],
+  "sourceSha256": "40a870406939a6c1cfd7c132c40444017b74aec13d788f2d07e66a6891a38189",
+  "environmentCaveat": "Windows toolchain installation active: diagnostic only, no mixed-load acceptance.",
+  "sourceFingerprints": {
+    "scripts\\experiments\\failure_recovery_probe.py": "40a870406939a6c1cfd7c132c40444017b74aec13d788f2d07e66a6891a38189",
+    "scripts\\experiments\\failure_boundary.py": "87c498c020848426733bf7e06a9651ae076cf2ac0b229617507a98ade5a24a94"
+  }
+}

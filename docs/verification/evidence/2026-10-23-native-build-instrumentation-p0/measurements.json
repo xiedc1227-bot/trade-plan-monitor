@@ -1,0 +1,243 @@
+{
+  "attempts": [
+    {
+      "round": 1,
+      "shape": "decimal",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 0.75,
+      "finalCleanupCpu": 0.078125,
+      "totalCpu": 0.828125,
+      "totalWall": 0.8392176001798362,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 1,
+      "shape": "decimal",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 0.46875,
+      "finalCleanupCpu": 0.046875,
+      "totalCpu": 0.515625,
+      "totalWall": 0.5594363000709563,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 2,
+      "shape": "decimal",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 0.484375,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 0.578125,
+      "totalWall": 0.5703382000792772,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 2,
+      "shape": "decimal",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 0.734375,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 0.828125,
+      "totalWall": 0.836398100014776,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 3,
+      "shape": "decimal",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 0.734375,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 0.828125,
+      "totalWall": 0.8344306999351829,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 3,
+      "shape": "decimal",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 0.46875,
+      "finalCleanupCpu": 0.109375,
+      "totalCpu": 0.578125,
+      "totalWall": 0.5832895000930876,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba"
+    },
+    {
+      "round": 1,
+      "shape": "dense",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 2.046875,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.140625,
+      "totalWall": 2.1574405001010746,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 1,
+      "shape": "dense",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 1.9375,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.03125,
+      "totalWall": 2.0629459000192583,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 2,
+      "shape": "dense",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 1.875,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 1.96875,
+      "totalWall": 2.0225714999251068,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 2,
+      "shape": "dense",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 2.078125,
+      "finalCleanupCpu": 0.078125,
+      "totalCpu": 2.15625,
+      "totalWall": 2.1599969000089914,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 3,
+      "shape": "dense",
+      "variant": "full",
+      "calls": 3,
+      "validationCpu": 2.15625,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.25,
+      "totalWall": 2.2998657000716776,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    },
+    {
+      "round": 3,
+      "shape": "dense",
+      "variant": "scope",
+      "calls": 3,
+      "validationCpu": 2.046875,
+      "finalCleanupCpu": 0.09375,
+      "totalCpu": 2.140625,
+      "totalWall": 2.146740899886936,
+      "collected": 0,
+      "automaticGc": true,
+      "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+    }
+  ],
+  "qualification": "DIAGNOSTIC_ONLY",
+  "limits": "3 rounds; 3 calls per fresh child; automatic GC on; final full collection included for both variants. Scope variant retains cleanup obligation until that endpoint. No caller-frame, native-bound or concurrency qualification.",
+  "medians": [
+    {
+      "shape": "decimal",
+      "variant": "full",
+      "totalCpu": 0.828125
+    },
+    {
+      "shape": "decimal",
+      "variant": "scope",
+      "totalCpu": 0.578125
+    },
+    {
+      "shape": "dense",
+      "variant": "full",
+      "totalCpu": 2.15625
+    },
+    {
+      "shape": "dense",
+      "variant": "scope",
+      "totalCpu": 2.03125
+    }
+  ],
+  "admissions": [
+    {
+      "shape": "decimal",
+      "raw": 16478553,
+      "work": 197697036,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 6.400048732757568e-06
+      }
+    },
+    {
+      "shape": "dense",
+      "raw": 12126534,
+      "work": 145472808,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 6.100162863731384e-06
+      }
+    }
+  ],
+  "sourceSha256": "e8d82ff872e8d3a877ed6d3fc6c516b1f041173bf411a167552f2fc86f3aa0b2",
+  "sourceFingerprints": {
+    "scripts\\experiments\\failure_recovery_probe.py": "e8d82ff872e8d3a877ed6d3fc6c516b1f041173bf411a167552f2fc86f3aa0b2",
+    "scripts\\experiments\\failure_boundary.py": "87c498c020848426733bf7e06a9651ae076cf2ac0b229617507a98ade5a24a94",
+    "scripts\\experiments\\native_build_probe.py": "bcf6d94f07405dccc630c0ee95b07ab9de7f06c73977be5d18b0f99b55781980"
+  },
+  "environmentCaveat": "Windows toolchain installation was active during diagnostics; no production or mixed-load acceptance claim."
+}

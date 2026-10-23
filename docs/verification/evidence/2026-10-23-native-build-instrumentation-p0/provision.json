@@ -1,0 +1,41 @@
+{
+  "environment": {
+    "VCToolsVersion": "14.44.35207",
+    "WindowsSDKVersion": "10.0.26100.0\\",
+    "VCToolsInstallDir": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\",
+    "WindowsSdkDir": "C:\\Program Files (x86)\\Windows Kits\\10\\"
+  },
+  "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "tools": {
+    "cl": {
+      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.EXE",
+      "sha256": "fe251ef50a1545b1b0835ee17b1e785459712b38d79e45b5c1d3d28970a36619",
+      "exitCode": 0,
+      "fileVersion": "19.44.35229.0",
+      "productVersion": "14.44.35229.0"
+    },
+    "rustc": {
+      "path": "C:\\Users\\xiedc\\.cargo\\bin\\rustc.EXE",
+      "sha256": "6f4bef66261261fcb43131be8720bab817d403a09edec7455c371974b90bdb7e",
+      "exitCode": 0,
+      "stdout": "rustc 1.94.0 (4a4ef493e 2026-03-02)\nbinary: rustc\ncommit-hash: 4a4ef493e3a1488c6e321570238084b38948f6db\ncommit-date: 2026-03-02\nhost: x86_64-pc-windows-msvc\nrelease: 1.94.0\nLLVM version: 21.1.8\n",
+      "stderr": ""
+    },
+    "cargo": {
+      "path": "C:\\Users\\xiedc\\.cargo\\bin\\cargo.EXE",
+      "sha256": "6f4bef66261261fcb43131be8720bab817d403a09edec7455c371974b90bdb7e",
+      "exitCode": 0,
+      "stdout": "cargo 1.94.0 (85eff7c80 2026-01-15)\n",
+      "stderr": ""
+    }
+  },
+  "installation": {
+    "buildToolsInstaller": "17.14.42",
+    "rustup": "1.29.1",
+    "maturin": "1.13.1",
+    "restartRequested": false,
+    "rustupInstallerSha256": "6f4bef66261261fcb43131be8720bab817d403a09edec7455c371974b90bdb7e",
+    "buildToolsInstallerSha256": "68978bb28916156802e60e04c5ee50b94348d802fe151a3ca24433f27984187b"
+  },
+  "runnerSha256": "2e0ae295f380be523c7eecf9018f1d16693598f07bdd5f9d18cd025bb1b27a09"
+}
