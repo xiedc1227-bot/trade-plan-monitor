@@ -1,0 +1,464 @@
+{
+  "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+  "rows": 2008,
+  "maxRawBytes": 35587,
+  "phaseRounds": [
+    {
+      "wall": 2.6841251000296324,
+      "cpu": 2.6875,
+      "stages": {
+        "parse": {
+          "wall": 0.6952950130216777,
+          "cpu": 0.734375,
+          "calls": 2008
+        },
+        "normalize": {
+          "wall": 1.259715704480186,
+          "cpu": 1.3125,
+          "calls": 2008
+        },
+        "encode_hash": {
+          "wall": 0.4448847940657288,
+          "cpu": 0.421875,
+          "calls": 2008
+        },
+        "literal": {
+          "wall": 0.20340769761241972,
+          "cpu": 0.140625,
+          "calls": 2008
+        }
+      },
+      "equal": true
+    },
+    {
+      "wall": 2.4426808999851346,
+      "cpu": 2.390625,
+      "stages": {
+        "parse": {
+          "wall": 0.6268686940893531,
+          "cpu": 0.640625,
+          "calls": 2008
+        },
+        "normalize": {
+          "wall": 1.1497342030052096,
+          "cpu": 1.046875,
+          "calls": 2008
+        },
+        "encode_hash": {
+          "wall": 0.40480850520543754,
+          "cpu": 0.5,
+          "calls": 2008
+        },
+        "literal": {
+          "wall": 0.1853117044083774,
+          "cpu": 0.125,
+          "calls": 2008
+        }
+      },
+      "equal": true
+    },
+    {
+      "wall": 2.370914800092578,
+      "cpu": 2.34375,
+      "stages": {
+        "parse": {
+          "wall": 0.6098830022383481,
+          "cpu": 0.875,
+          "calls": 2008
+        },
+        "normalize": {
+          "wall": 1.1218467084690928,
+          "cpu": 0.921875,
+          "calls": 2008
+        },
+        "encode_hash": {
+          "wall": 0.3917267001233995,
+          "cpu": 0.28125,
+          "calls": 2008
+        },
+        "literal": {
+          "wall": 0.17728258878923953,
+          "cpu": 0.203125,
+          "calls": 2008
+        }
+      },
+      "equal": true
+    }
+  ],
+  "profiles": {
+    "original": {
+      "totalSeconds": 4.681323900000001,
+      "functions": [
+        {
+          "file": "canonical.py",
+          "line": 128,
+          "function": "verified_market_index_snapshot_json",
+          "primitiveCalls": 2008,
+          "calls": 2008,
+          "selfSeconds": 0.009362500000000001,
+          "cumulativeSeconds": 3.2757697
+        },
+        {
+          "file": "canonical.py",
+          "line": 138,
+          "function": "_verified_market_index_value",
+          "primitiveCalls": 2008,
+          "calls": 2008,
+          "selfSeconds": 0.0245989,
+          "cumulativeSeconds": 3.1381496
+        },
+        {
+          "file": "canonical.py",
+          "line": 50,
+          "function": "canonical_value",
+          "primitiveCalls": 2008,
+          "calls": 1236442,
+          "selfSeconds": 0.9512715,
+          "cumulativeSeconds": 2.7181408
+        },
+        {
+          "file": "canonical.py",
+          "line": 30,
+          "function": "canonical_decimal",
+          "primitiveCalls": 447344,
+          "calls": 447344,
+          "selfSeconds": 0.5066176,
+          "cumulativeSeconds": 1.0248204
+        },
+        {
+          "file": "canonical.py",
+          "line": 83,
+          "function": "_encode_canonical_value",
+          "primitiveCalls": 8032,
+          "calls": 8032,
+          "selfSeconds": 0.0036581,
+          "cumulativeSeconds": 0.4018932
+        },
+        {
+          "file": "encoder.py",
+          "line": 185,
+          "function": "encode",
+          "primitiveCalls": 8032,
+          "calls": 8032,
+          "selfSeconds": 0.0081127,
+          "cumulativeSeconds": 0.3867959
+        },
+        {
+          "file": "encoder.py",
+          "line": 207,
+          "function": "iterencode",
+          "primitiveCalls": 8032,
+          "calls": 8032,
+          "selfSeconds": 0.37577720000000003,
+          "cumulativeSeconds": 0.37577720000000003
+        },
+        {
+          "file": "canonical.py",
+          "line": 148,
+          "function": "digest",
+          "primitiveCalls": 6024,
+          "calls": 6024,
+          "selfSeconds": 0.0118318,
+          "cumulativeSeconds": 0.3191041
+        },
+        {
+          "file": "canonical.py",
+          "line": 156,
+          "function": "<lambda>",
+          "primitiveCalls": 72280,
+          "calls": 72280,
+          "selfSeconds": 0.018096400000000002,
+          "cumulativeSeconds": 0.033463900000000005
+        },
+        {
+          "file": "canonical.py",
+          "line": 142,
+          "function": "<genexpr>",
+          "primitiveCalls": 74288,
+          "calls": 74288,
+          "selfSeconds": 0.006691900000000001,
+          "cumulativeSeconds": 0.006691900000000001
+        },
+        {
+          "file": "encoder.py",
+          "line": 105,
+          "function": "__init__",
+          "primitiveCalls": 8032,
+          "calls": 8032,
+          "selfSeconds": 0.0020156,
+          "cumulativeSeconds": 0.0020156
+        },
+        {
+          "file": "canonical.py",
+          "line": 166,
+          "function": "<genexpr>",
+          "primitiveCalls": 2008,
+          "calls": 2008,
+          "selfSeconds": 0.0002629,
+          "cumulativeSeconds": 0.0002629
+        }
+      ],
+      "equal": true
+    },
+    "c256": {
+      "totalSeconds": 7.134530699999997,
+      "functions": [
+        {
+          "file": "validator_scan.py",
+          "line": 130,
+          "function": "latest",
+          "primitiveCalls": 1,
+          "calls": 1,
+          "selfSeconds": 0.04145,
+          "cumulativeSeconds": 7.134475200000001
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 95,
+          "function": "record",
+          "primitiveCalls": 2008,
+          "calls": 2008,
+          "selfSeconds": 0.0315976,
+          "cumulativeSeconds": 7.0892176000000005
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 46,
+          "function": "verified",
+          "primitiveCalls": 2008,
+          "calls": 2008,
+          "selfSeconds": 0.0326057,
+          "cumulativeSeconds": 5.5520443
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 46,
+          "function": "normalize",
+          "primitiveCalls": 2008,
+          "calls": 1236442,
+          "selfSeconds": 1.1486482,
+          "cumulativeSeconds": 4.903733
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 64,
+          "function": "<genexpr>",
+          "primitiveCalls": 42168,
+          "calls": 1007184,
+          "selfSeconds": 0.2050742,
+          "cumulativeSeconds": 4.7433225000000006
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 66,
+          "function": "<genexpr>",
+          "primitiveCalls": 82561,
+          "calls": 82561,
+          "selfSeconds": 0.017251600000000002,
+          "cumulativeSeconds": 4.453372
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 28,
+          "function": "bound",
+          "primitiveCalls": 94312,
+          "calls": 2177305,
+          "selfSeconds": 0.8194733000000001,
+          "cumulativeSeconds": 1.6727658
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 40,
+          "function": "<genexpr>",
+          "primitiveCalls": 1047344,
+          "calls": 1047344,
+          "selfSeconds": 0.3016265,
+          "cumulativeSeconds": 1.3791601
+        },
+        {
+          "file": "canonical.py",
+          "line": 30,
+          "function": "canonical_decimal",
+          "primitiveCalls": 447344,
+          "calls": 447344,
+          "selfSeconds": 0.5285711000000001,
+          "cumulativeSeconds": 1.0748250000000001
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 91,
+          "function": "pieces",
+          "primitiveCalls": 16064,
+          "calls": 16064,
+          "selfSeconds": 0.014591000000000002,
+          "cumulativeSeconds": 0.6765233
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 100,
+          "function": "_pieces",
+          "primitiveCalls": 16064,
+          "calls": 16064,
+          "selfSeconds": 0.0174302,
+          "cumulativeSeconds": 0.5790105
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 39,
+          "function": "digest",
+          "primitiveCalls": 6024,
+          "calls": 6024,
+          "selfSeconds": 0.007756900000000001,
+          "cumulativeSeconds": 0.5343379
+        },
+        {
+          "file": "encoder.py",
+          "line": 185,
+          "function": "encode",
+          "primitiveCalls": 8032,
+          "calls": 8032,
+          "selfSeconds": 0.0091007,
+          "cumulativeSeconds": 0.4167873
+        },
+        {
+          "file": "encoder.py",
+          "line": 207,
+          "function": "iterencode",
+          "primitiveCalls": 8032,
+          "calls": 8032,
+          "selfSeconds": 0.4046595,
+          "cumulativeSeconds": 0.4046595
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 86,
+          "function": "literal_equal",
+          "primitiveCalls": 2008,
+          "calls": 2008,
+          "selfSeconds": 0.0046598,
+          "cumulativeSeconds": 0.18342950000000002
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 62,
+          "function": "<genexpr>",
+          "primitiveCalls": 1007184,
+          "calls": 1007184,
+          "selfSeconds": 0.0950111,
+          "cumulativeSeconds": 0.0950111
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 42,
+          "function": "<genexpr>",
+          "primitiveCalls": 158857,
+          "calls": 158857,
+          "selfSeconds": 0.025179200000000002,
+          "cumulativeSeconds": 0.0549544
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 63,
+          "function": "<lambda>",
+          "primitiveCalls": 72280,
+          "calls": 72280,
+          "selfSeconds": 0.018474300000000003,
+          "cumulativeSeconds": 0.0340863
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 110,
+          "function": "<genexpr>",
+          "primitiveCalls": 26104,
+          "calls": 26104,
+          "selfSeconds": 0.0060472,
+          "cumulativeSeconds": 0.008314700000000001
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 50,
+          "function": "<genexpr>",
+          "primitiveCalls": 74288,
+          "calls": 74288,
+          "selfSeconds": 0.0069487,
+          "cumulativeSeconds": 0.0069487
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 83,
+          "function": "check",
+          "primitiveCalls": 16064,
+          "calls": 16064,
+          "selfSeconds": 0.0044469,
+          "cumulativeSeconds": 0.0062765
+        },
+        {
+          "file": "encoder.py",
+          "line": 105,
+          "function": "__init__",
+          "primitiveCalls": 8032,
+          "calls": 8032,
+          "selfSeconds": 0.0024815,
+          "cumulativeSeconds": 0.0024815
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 73,
+          "function": "<genexpr>",
+          "primitiveCalls": 2008,
+          "calls": 2008,
+          "selfSeconds": 0.00025600000000000004,
+          "cumulativeSeconds": 0.00025600000000000004
+        },
+        {
+          "file": "bounded_c_producer.py",
+          "line": 75,
+          "function": "__init__",
+          "primitiveCalls": 1,
+          "calls": 1,
+          "selfSeconds": 2.2e-06,
+          "cumulativeSeconds": 2.4000000000000003e-06
+        },
+        {
+          "file": "validator_scan.py",
+          "line": 145,
+          "function": "<genexpr>",
+          "primitiveCalls": 6,
+          "calls": 6,
+          "selfSeconds": 2.2e-06,
+          "cumulativeSeconds": 2.2e-06
+        }
+      ],
+      "equal": true
+    }
+  },
+  "producerCounters": {
+    "traversals": 8032,
+    "chunks": 8032,
+    "bytes": 80270367,
+    "calls": 8032,
+    "maximum": 35587,
+    "largeRoots": 0
+  },
+  "limits": "Read-only diagnostic; profiling/counters are instrumented separate passes, not performance acceptance or native-memory proof. No SQL/authority timing; prebuilt raw and expected output excluded. All passes compare full output.",
+  "source": "import cProfile, hashlib, json, pstats, sys, gc\nfrom pathlib import Path\nfrom collections import defaultdict\nfrom time import perf_counter, thread_time\nROOT = Path.cwd()\nsys.path.insert(0, str(ROOT))\nfrom scripts.experiments.c_benchmark import rows_from, CODES\nfrom scripts.experiments import c_validator\nfrom scripts.experiments.bounded_c_producer import Producer\nfrom trade_plan_monitor.state.projections import _latest_index_records\nOUT = ROOT / '.pytest_cache/bep-next-analysis'\nOUT.mkdir(exist_ok=True)\nDB = ROOT / '.pytest_cache/active-monitor-cpu-implementation/monitor.sqlite3'\nsha = hashlib.sha256(DB.read_bytes()).hexdigest()\nrows = rows_from(DB)\nexpected = _latest_index_records(iter(rows), CODES)\nreport = {'inputSha256':sha, 'rows':len(rows), 'maxRawBytes':max(len(r.payload[9]) for r in rows), 'phaseRounds':[], 'profiles':{}}\nfor i in range(3):\n    stages = defaultdict(lambda: {'wall':0.,'cpu':0.,'calls':0})\n    def observe(stage, wall, cpu):\n        stages[stage]['wall'] += wall\n        stages[stage]['cpu'] += cpu\n        stages[stage]['calls'] += 1\n    gc.collect()\n    start, cpu = perf_counter(), thread_time()\n    result = c_validator.latest(iter(rows), CODES, observe)\n    used, wall = thread_time()-cpu, perf_counter()-start\n    assert result == expected\n    report['phaseRounds'].append({'wall':wall, 'cpu':used, 'stages':dict(stages),'equal':True})\n    del result\nfor name, fn in [('original',_latest_index_records),('c256',c_validator.latest)]:\n    profiler = cProfile.Profile()\n    result = profiler.runcall(fn, iter(rows), CODES)\n    assert result == expected\n    stats = pstats.Stats(profiler)\n    selected = []\n    for (file,line,function),(cc,nc,tt,ct,callers) in stats.stats.items():\n        if any(x in file.replace('\\\\','/') for x in ('bounded_c_producer','validator_scan','canonical.py','json/encoder.py')):\n            selected.append({'file':Path(file).name,'line':line,'function':function,'primitiveCalls':cc,'calls':nc,'selfSeconds':tt,'cumulativeSeconds':ct})\n    report['profiles'][name] = {'totalSeconds':stats.total_tt,'functions':sorted(selected,key=lambda r:r['cumulativeSeconds'],reverse=True),'equal':True}\n    del result\ncounters={'traversals':0,'chunks':0,'bytes':0,'calls':0,'maximum':0,'largeRoots':0}\noriginal_pieces = c_validator._namespace['pieces']\ndef counting(value):\n    from scripts.experiments.bounded_c_producer import bound\n    producer=c_validator._producer.get()\n    before=producer.calls\n    counters['traversals']+=1\n    counters['largeRoots']+=int(bound(value)>producer.target)\n    for chunk in producer.pieces(value):\n        counters['chunks']+=1\n        counters['bytes']+=len(chunk)\n        yield chunk\n    counters['calls']+=producer.calls-before\n    counters['maximum']=max(counters['maximum'],producer.maximum)\ntry:\n    c_validator._namespace['pieces']=counting\n    assert c_validator.latest(iter(rows), CODES)==expected\nfinally:\n    c_validator._namespace['pieces']=original_pieces\nreport['producerCounters']=counters\nassert hashlib.sha256(DB.read_bytes()).hexdigest()==sha\nreport['limits']='Read-only diagnostic; profiling/counters are instrumented separate passes, not performance acceptance or native-memory proof. No SQL/authority timing; prebuilt raw and expected output excluded. All passes compare full output.'\nreport['source']=Path(__file__).read_text(encoding='utf-8-sig')\n(OUT/'analysis.json').write_text(json.dumps(report,indent=2),encoding='utf8')\nprint(json.dumps({k:v for k,v in report.items() if k not in ('source','profiles')},indent=2))\nfor name,p in report['profiles'].items():\n    print(name, json.dumps(p['functions'][:12],indent=2))\n",
+  "head": "d0ba9774b0aa46b2a6fc3fae4c207f6c7afbbacb",
+  "runtime": {
+    "python": "3.14.7",
+    "pydantic": "2.13.4",
+    "pydantic-core": "2.46.4",
+    "SQLAlchemy": "2.0.52"
+  },
+  "sourceSha256": {
+    "scripts/experiments/bounded_c_producer.py": "dc4a80bb3e7f96c59372fabff39adeedc1918b99e40efc68c6a8a589704ed541",
+    "scripts/experiments/c_validator.py": "342a0d0ee74371e1272735aa81945482bd00fd31f1cd2c896cea05e334d5c975",
+    "scripts/experiments/validator_scan.py": "2ac7dfff321c985585365a252792b0c0c35ff050638c222552688c5101bbdb34",
+    "scripts/experiments/evidence_representation.py": "80c7708bda9c55f7893278a2ba9c75b73115bfc5aa34211722d937cafd039db2",
+    "scripts/experiments/global_evidence_scan.py": "f3b29fbe5aa43ec77f83386cbd18b0156d5815882bb76c58b4603da3baac2bd1",
+    "scripts/experiments/global_evidence_budget.py": "e4cb90a520eb7d91806cf4f1377a23a6ba518c145a5ea643375005e0b268683f",
+    "src/trade_plan_monitor/market_index/canonical.py": "981b325b015db54c96eaef3cedc1ea3e7b92e715fcfa26f15393d877e4044628",
+    "src/trade_plan_monitor/market_index/models.py": "0359183532e54fdf387e8b56fd9b1a75034de0dd6434d9d315c0e4571b87c319"
+  },
+  "discardedReportAttempts": "Two earlier attempts failed after measurement on the unknown encoding name utf8-sig. No result from those attempts is used. This dataset uses the corrected utf-8-sig report writer.",
+  "decision": "P1_NO_GO; analysis only; no production/experimental implementation change"
+}
