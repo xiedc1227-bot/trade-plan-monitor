@@ -1,0 +1,91 @@
+{
+  "status": "ANALYSIS_ONLY",
+  "baselineCommit": "c7ba0d4a58a74f92b55770da14954515c396b378",
+  "newRuntimeExperiments": false,
+  "inputs": [
+    {
+      "path": "scripts/experiments/owner_observer.c",
+      "sha256": "6fc8433f51bac636d59dbcf1c161145346e8277d4fb915807667d74c1e29b5b6"
+    },
+    {
+      "path": "scripts/experiments/owner_probe_child.py",
+      "sha256": "6b57faca2b385808647c268b62bf5b99156e47cf00a444ed210842a7ec83fcfe"
+    },
+    {
+      "path": "scripts/experiments/native_allocation_child.py",
+      "sha256": "0a01450045c79c99a820f604e8385321443c4c50f39ceb17036cec06cf0e101a"
+    },
+    {
+      "path": "tests/native/test_owner_ledger.c",
+      "sha256": "b42b5b5f45130a10906b155d7b843071b645294d3b4afd4ad8d28815731f21b7"
+    },
+    {
+      "path": "docs/verification/evidence/2026-10-23-native-owner-accounting-p0/review-measurements.json",
+      "sha256": "25bf5623c080a38dffbce5270e94b9c62740e86dc105678755d5f31360974bec"
+    },
+    {
+      "path": "docs/verification/evidence/2026-10-23-native-owner-accounting-p0/admission.json",
+      "sha256": "3e4795f60752e85c35cb8aabc5dd92698e19a7a971dd2c85aaa87f2dad3a3316"
+    }
+  ],
+  "reviewedRounds": [
+    {
+      "round": 1,
+      "rowPayloadBytes": 8388608,
+      "ownerBeforeRelease": 16778428,
+      "ownerAfterRelease": 2524,
+      "ownerDecrease": 16775904,
+      "rawDecrease": 8388641,
+      "objectDecrease": 8387727,
+      "unknownAfterRowRelease": 96,
+      "unknownAtEnd": 182,
+      "errorStageOwnerRetained": 15624682,
+      "arenaRetained": 5242880,
+      "tableBytes": 10485760,
+      "lost": 0
+    },
+    {
+      "round": 2,
+      "rowPayloadBytes": 8388608,
+      "ownerBeforeRelease": 16778428,
+      "ownerAfterRelease": 2524,
+      "ownerDecrease": 16775904,
+      "rawDecrease": 8388641,
+      "objectDecrease": 8387727,
+      "unknownAfterRowRelease": 96,
+      "unknownAtEnd": 182,
+      "errorStageOwnerRetained": 15624682,
+      "arenaRetained": 5242880,
+      "tableBytes": 10485760,
+      "lost": 0
+    },
+    {
+      "round": 3,
+      "rowPayloadBytes": 8388608,
+      "ownerBeforeRelease": 16778428,
+      "ownerAfterRelease": 2524,
+      "ownerDecrease": 16775904,
+      "rawDecrease": 8388641,
+      "objectDecrease": 8387727,
+      "unknownAfterRowRelease": 96,
+      "unknownAtEnd": 175,
+      "errorStageOwnerRetained": 15625406,
+      "arenaRetained": 5242880,
+      "tableBytes": 10485760,
+      "lost": 0
+    }
+  ],
+  "historicalChildWallMedians": {
+    "baseline": 0.2666070000268519,
+    "observed": 0.28058290015906096
+  },
+  "interpretation": [
+    "Owner totals and domain totals are the same ledger grouped differently; equality is not independent backing reconciliation.",
+    "Per-domain decreases include snapshot/probe allocation differences; do not treat them as exact per-pointer data.",
+    "Dense-error scope includes pydantic import and TypeAdapter construction; retained owner bytes do not prove an error leak.",
+    "Current release/arena_free/sql_free retire entries before backing calls; resize/sql_resize add new records only after return.",
+    "No new speedup, physical upper bound, budget reduction or legal-row success is claimed."
+  ],
+  "p0": "NOT_QUALIFIED",
+  "p1": "NO_GO"
+}
