@@ -1,0 +1,98 @@
+{
+  "verified_at": "2026-10-24T01:14:15.020563+08:00",
+  "plan_version_id": "3c426adf-09d2-48ca-af3d-177caa4f8f65",
+  "plan_id": "605296-SS-WATCH-20261023",
+  "status": "ACTIVE",
+  "plan_hash": "669cd27f9159b8e672b62dbbba1422ad2ff4f113366b4654ddfe0c74fc51de17",
+  "review_id": "d28eacf1-3447-488e-8216-c31ff4e7f11e",
+  "review_revision": 1,
+  "activation": {
+    "symbol": "605296.SH",
+    "plan_version_id": "3c426adf-09d2-48ca-af3d-177caa4f8f65",
+    "activated_at": "2026-10-24T01:10:21.921326+08:00",
+    "revision": 1
+  },
+  "technical_alerts": [
+    {
+      "condition": {
+        "comparator": "LT",
+        "field": "close",
+        "offset": 0,
+        "reference": {
+          "as_of": "2026-10-15",
+          "mode": "FIXED",
+          "source": "原报告所载2026-10-15盘中低点26.59元",
+          "unit": "FEN",
+          "value": "2659"
+        },
+        "type": "DAILY_PRICE_COMPARE"
+      },
+      "confirmation": {
+        "kind": "OFFICIAL_DAILY_CLOSE"
+      },
+      "kind": "RISK_ALERT",
+      "rule_id": "A1"
+    }
+  ],
+  "ordinary_rule_count": 0,
+  "risk_branch_count": 0,
+  "history_count": 3,
+  "other_drafts_unchanged": true,
+  "review_unchanged": true,
+  "inventory_unchanged": true,
+  "activation_unchanged_since_success": true,
+  "inventory_row_counts": {
+    "position_lot": 0,
+    "position_inventory_state": 0,
+    "position_opening_balance": 0,
+    "position_inventory_confirmation": 0
+  },
+  "health_observation": {
+    "observedAt": "2026-10-24T01:10:47.640239+08:00",
+    "runtimeGeneration": "a20f74b7-a9fb-4007-8d00-76c5756b67c5",
+    "startedAt": "2026-10-24T01:09:06.586328+08:00",
+    "stoppedAt": null
+  },
+  "runtime_status": {
+    "lifecycle": "RUNNING",
+    "mode": "STANDBY",
+    "reasonCode": "SESSION_CLOSED",
+    "lastProgressAt": "2026-10-24T01:10:41.930699+08:00",
+    "nextWakeAt": "2026-10-24T01:11:11.930685+08:00"
+  },
+  "plan_scope": {
+    "scopeKey": "plan:605296.SH",
+    "status": "WAITING",
+    "reasonCode": "AWAITING_FIRST_EVALUATION",
+    "requiredTarget": {
+      "kind": "OFFICIAL_CLOSE",
+      "tradeDate": "2026-10-23"
+    },
+    "dataCutoff": null,
+    "nextRetryAt": null,
+    "progress": {
+      "requiredCount": 1,
+      "completedCount": 0
+    },
+    "kind": "PLAN",
+    "symbol": "605296.SH",
+    "planFamily": "CONDITION_PLAN",
+    "planVersionId": "3c426adf-09d2-48ca-af3d-177caa4f8f65",
+    "planHash": "669cd27f9159b8e672b62dbbba1422ad2ff4f113366b4654ddfe0c74fc51de17",
+    "activationRevision": 1,
+    "readOnly": true
+  },
+  "regression": {
+    "passed": 63,
+    "warnings": 1,
+    "scope": "targeted offline integration suite",
+    "full_suite_claimed": false,
+    "ruff": "passed"
+  },
+  "tested_sources_sha256_lf": {
+    "src/trade_plan_monitor/web/plan_service.py": "48bc7f6b099c07b5fb6b7ce42a44644235ed34bb2d8bebc1b49370589c7571af",
+    "tests/integration/test_plan_activation_event_timezone.py": "8e2fa4da23275a3d3fd233bfe8ed95e339d8c50329b1e4164ba31add1ad678b1"
+  },
+  "screenshot_sha256": "c8f19fbe2ba2e4660dee15d85a3b1796e0189263dfdf76957eced2454288841e",
+  "ci_added": false
+}

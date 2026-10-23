@@ -153,7 +153,8 @@ class PersistentPlanWebLifecycle:
         if clock is not None and not callable(clock):
             raise TypeError("clock must be callable")
         self._database_path = database_path
-        self._clock = clock or (lambda: datetime.now(UTC))
+        source_clock = clock or (lambda: datetime.now(UTC))
+        self._clock = lambda: _shanghai_datetime(source_clock())
         self._engine: Engine | None = None
         self._session_factory: sessionmaker[Session] | None = None
 
