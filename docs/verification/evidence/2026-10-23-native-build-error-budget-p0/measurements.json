@@ -1,0 +1,511 @@
+{
+  "inputs": {
+    ".pytest_cache\\active-monitor-cpu-implementation\\monitor.sqlite3": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+    ".pytest_cache\\cna-measurements\\decimal.sqlite3": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba",
+    ".pytest_cache\\cna-measurements\\dense.sqlite3": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee"
+  },
+  "cpu": [
+    {
+      "round": 1,
+      "variant": "original",
+      "wall": 1.9494004999287426,
+      "cpu": 1.9375
+    },
+    {
+      "round": 1,
+      "variant": "fused",
+      "wall": 2.1351572000421584,
+      "cpu": 2.078125
+    },
+    {
+      "round": 1,
+      "variant": "boundary",
+      "wall": 2.224581199930981,
+      "cpu": 2.140625
+    },
+    {
+      "round": 2,
+      "variant": "boundary",
+      "wall": 2.1962025000248104,
+      "cpu": 2.171875
+    },
+    {
+      "round": 2,
+      "variant": "fused",
+      "wall": 2.215568499872461,
+      "cpu": 2.203125
+    },
+    {
+      "round": 2,
+      "variant": "original",
+      "wall": 2.0863787999842316,
+      "cpu": 2.078125
+    },
+    {
+      "round": 3,
+      "variant": "original",
+      "wall": 2.2812566000502557,
+      "cpu": 2.203125
+    },
+    {
+      "round": 3,
+      "variant": "fused",
+      "wall": 2.6284081002231687,
+      "cpu": 2.5625
+    },
+    {
+      "round": 3,
+      "variant": "boundary",
+      "wall": 2.840783999999985,
+      "cpu": 2.828125
+    }
+  ],
+  "memory": [
+    {
+      "shape": "decimal",
+      "mode": "success",
+      "variant": "original",
+      "rawBytes": 16472833,
+      "live": 7903674,
+      "peak": 156404206,
+      "drained": 22308,
+      "retainedChain": false,
+      "wall": 0.6119234999641776,
+      "cpu": 0.578125,
+      "processBefore": {
+        "workingSetBytes": 232734720,
+        "privateBytes": 1038712832,
+        "cpuSeconds": 25.578125
+      },
+      "processHeld": {
+        "workingSetBytes": 228630528,
+        "privateBytes": 1034457088,
+        "cpuSeconds": 26.171875
+      },
+      "processDrained": {
+        "workingSetBytes": 228663296,
+        "privateBytes": 1035505664,
+        "cpuSeconds": 26.25
+      }
+    },
+    {
+      "shape": "decimal",
+      "mode": "success",
+      "variant": "fused",
+      "rawBytes": 16472833,
+      "live": 7903132,
+      "peak": 25040625,
+      "drained": 21502,
+      "retainedChain": false,
+      "wall": 0.4673153997864574,
+      "cpu": 0.4375,
+      "processBefore": {
+        "workingSetBytes": 228671488,
+        "privateBytes": 1035505664,
+        "cpuSeconds": 26.34375
+      },
+      "processHeld": {
+        "workingSetBytes": 228786176,
+        "privateBytes": 1033748480,
+        "cpuSeconds": 26.796875
+      },
+      "processDrained": {
+        "workingSetBytes": 228814848,
+        "privateBytes": 1034006528,
+        "cpuSeconds": 26.890625
+      }
+    },
+    {
+      "shape": "decimal",
+      "mode": "success",
+      "variant": "boundary",
+      "rawBytes": 16472833,
+      "live": 7896732,
+      "peak": 25034215,
+      "drained": 15002,
+      "retainedChain": false,
+      "wall": 0.5010488000698388,
+      "cpu": 0.484375,
+      "processBefore": {
+        "workingSetBytes": 228818944,
+        "privateBytes": 1034133504,
+        "cpuSeconds": 26.96875
+      },
+      "processHeld": {
+        "workingSetBytes": 233689088,
+        "privateBytes": 1039908864,
+        "cpuSeconds": 27.46875
+      },
+      "processDrained": {
+        "workingSetBytes": 229109760,
+        "privateBytes": 1035673600,
+        "cpuSeconds": 27.5625
+      }
+    },
+    {
+      "shape": "decimal",
+      "mode": "invalid",
+      "variant": "original",
+      "rawBytes": 16472833,
+      "live": 49475748,
+      "peak": 98838898,
+      "drained": 19608,
+      "retainedChain": false,
+      "wall": 0.23597949999384582,
+      "cpu": 0.234375,
+      "processBefore": {
+        "workingSetBytes": 229113856,
+        "privateBytes": 1035673600,
+        "cpuSeconds": 27.640625
+      },
+      "processHeld": {
+        "workingSetBytes": 282263552,
+        "privateBytes": 1088286720,
+        "cpuSeconds": 27.875
+      },
+      "processDrained": {
+        "workingSetBytes": 230395904,
+        "privateBytes": 1036218368,
+        "cpuSeconds": 27.984375
+      }
+    },
+    {
+      "shape": "decimal",
+      "mode": "invalid",
+      "variant": "fused",
+      "rawBytes": 16472833,
+      "live": 25110266,
+      "peak": 25110298,
+      "drained": 20876,
+      "retainedChain": true,
+      "wall": 0.20574010000564158,
+      "cpu": 0.203125,
+      "processBefore": {
+        "workingSetBytes": 230404096,
+        "privateBytes": 1036349440,
+        "cpuSeconds": 28.078125
+      },
+      "processHeld": {
+        "workingSetBytes": 253644800,
+        "privateBytes": 1059897344,
+        "cpuSeconds": 28.28125
+      },
+      "processDrained": {
+        "workingSetBytes": 230109184,
+        "privateBytes": 1036087296,
+        "cpuSeconds": 28.375
+      }
+    },
+    {
+      "shape": "decimal",
+      "mode": "invalid",
+      "variant": "boundary",
+      "rawBytes": 16472833,
+      "live": 21146,
+      "peak": 25110314,
+      "drained": 20646,
+      "retainedChain": false,
+      "wall": 0.30011269985698164,
+      "cpu": 0.296875,
+      "processBefore": {
+        "workingSetBytes": 230117376,
+        "privateBytes": 1036369920,
+        "cpuSeconds": 28.46875
+      },
+      "processHeld": {
+        "workingSetBytes": 232816640,
+        "privateBytes": 1038209024,
+        "cpuSeconds": 28.765625
+      },
+      "processDrained": {
+        "workingSetBytes": 230346752,
+        "privateBytes": 1036410880,
+        "cpuSeconds": 28.859375
+      }
+    },
+    {
+      "shape": "dense",
+      "mode": "success",
+      "variant": "original",
+      "rawBytes": 12120814,
+      "live": 76967458,
+      "peak": 206397645,
+      "drained": 25378,
+      "retainedChain": false,
+      "wall": 5.261823100037873,
+      "cpu": 5.140625,
+      "processBefore": {
+        "workingSetBytes": 301867008,
+        "privateBytes": 1107316736,
+        "cpuSeconds": 30.453125
+      },
+      "processHeld": {
+        "workingSetBytes": 310239232,
+        "privateBytes": 1115897856,
+        "cpuSeconds": 36.03125
+      },
+      "processDrained": {
+        "workingSetBytes": 305770496,
+        "privateBytes": 1113677824,
+        "cpuSeconds": 36.1875
+      }
+    },
+    {
+      "shape": "dense",
+      "mode": "success",
+      "variant": "fused",
+      "rawBytes": 12120814,
+      "live": 76968048,
+      "peak": 143507241,
+      "drained": 25472,
+      "retainedChain": false,
+      "wall": 7.075618299888447,
+      "cpu": 6.96875,
+      "processBefore": {
+        "workingSetBytes": 305770496,
+        "privateBytes": 1113694208,
+        "cpuSeconds": 36.328125
+      },
+      "processHeld": {
+        "workingSetBytes": 318099456,
+        "privateBytes": 1123471360,
+        "cpuSeconds": 43.75
+      },
+      "processDrained": {
+        "workingSetBytes": 313446400,
+        "privateBytes": 1120862208,
+        "cpuSeconds": 43.890625
+      }
+    },
+    {
+      "shape": "dense",
+      "mode": "success",
+      "variant": "boundary",
+      "rawBytes": 12120814,
+      "live": 76968098,
+      "peak": 143507281,
+      "drained": 25472,
+      "retainedChain": false,
+      "wall": 7.3051596998702735,
+      "cpu": 7.1875,
+      "processBefore": {
+        "workingSetBytes": 313372672,
+        "privateBytes": 1120784384,
+        "cpuSeconds": 44.03125
+      },
+      "processHeld": {
+        "workingSetBytes": 319660032,
+        "privateBytes": 1124737024,
+        "cpuSeconds": 51.875
+      },
+      "processDrained": {
+        "workingSetBytes": 315506688,
+        "privateBytes": 1123639296,
+        "cpuSeconds": 52.0625
+      }
+    },
+    {
+      "shape": "dense",
+      "mode": "invalid",
+      "variant": "original",
+      "rawBytes": 12120814,
+      "live": 36510727,
+      "peak": 193153327,
+      "drained": 25676,
+      "retainedChain": false,
+      "wall": 2.0849452998954803,
+      "cpu": 2.0625,
+      "processBefore": {
+        "workingSetBytes": 315527168,
+        "privateBytes": 1123639296,
+        "cpuSeconds": 52.21875
+      },
+      "processHeld": {
+        "workingSetBytes": 364482560,
+        "privateBytes": 1172504576,
+        "cpuSeconds": 54.28125
+      },
+      "processDrained": {
+        "workingSetBytes": 319164416,
+        "privateBytes": 1129291776,
+        "cpuSeconds": 54.421875
+      }
+    },
+    {
+      "shape": "dense",
+      "mode": "invalid",
+      "variant": "fused",
+      "rawBytes": 12120814,
+      "live": 156794850,
+      "peak": 156794882,
+      "drained": 25796,
+      "retainedChain": true,
+      "wall": 1.9459269000217319,
+      "cpu": 1.828125,
+      "processBefore": {
+        "workingSetBytes": 318377984,
+        "privateBytes": 1127100416,
+        "cpuSeconds": 54.59375
+      },
+      "processHeld": {
+        "workingSetBytes": 651874304,
+        "privateBytes": 1467109376,
+        "cpuSeconds": 56.421875
+      },
+      "processDrained": {
+        "workingSetBytes": 323923968,
+        "privateBytes": 1132081152,
+        "cpuSeconds": 56.765625
+      }
+    },
+    {
+      "shape": "dense",
+      "mode": "invalid",
+      "variant": "boundary",
+      "rawBytes": 12120814,
+      "live": 26346,
+      "peak": 156795090,
+      "drained": 25896,
+      "retainedChain": false,
+      "wall": 2.2312400999944657,
+      "cpu": 2.21875,
+      "processBefore": {
+        "workingSetBytes": 323932160,
+        "privateBytes": 1132208128,
+        "cpuSeconds": 56.921875
+      },
+      "processHeld": {
+        "workingSetBytes": 335327232,
+        "privateBytes": 1153798144,
+        "cpuSeconds": 59.140625
+      },
+      "processDrained": {
+        "workingSetBytes": 327032832,
+        "privateBytes": 1135702016,
+        "cpuSeconds": 59.296875
+      }
+    }
+  ],
+  "admissions": [
+    {
+      "shape": "decimal",
+      "raw": 16478553,
+      "work": 197697036,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 6.09993003308773e-06
+      }
+    },
+    {
+      "shape": "dense",
+      "raw": 12126534,
+      "work": 145472808,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 6.100162863731384e-06
+      }
+    }
+  ],
+  "medians": {
+    "original": {
+      "wall": 2.0863787999842316,
+      "cpu": 2.078125
+    },
+    "fused": {
+      "wall": 2.215568499872461,
+      "cpu": 2.203125
+    },
+    "boundary": {
+      "wall": 2.224581199930981,
+      "cpu": 2.171875
+    }
+  },
+  "build": {
+    "binarySha256": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e",
+    "buildInfo": "profile=release pgo=false",
+    "buildProfile": "release",
+    "toolchain": {
+      "rustc": null,
+      "cargo": null,
+      "cl": null
+    },
+    "qualification": "NOT_PROVEN: actual compiler/CRT/allocator and artifact binding missing"
+  },
+  "nativeEnvelope": {
+    "status": "NOT_PROVEN",
+    "missing": [
+      "native allocator interception",
+      "parser/error conversion allocation bounds",
+      "driver/cast and encoder reallocations",
+      "aggregate concurrent process ceiling"
+    ],
+    "observation": "Process snapshots include trace instrumentation and retained expected models; not peaks or bounds."
+  },
+  "sourceSha256": {
+    "scripts\\experiments\\failure_boundary_benchmark.py": "77355713bd1d5469deb140d3f7c77ff10b6338a35e1082c19627c694d80c313f",
+    "scripts\\experiments\\failure_boundary.py": "87c498c020848426733bf7e06a9651ae076cf2ac0b229617507a98ade5a24a94"
+  },
+  "decision": "P1_NO_GO: native envelope and legal SQL availability fail",
+  "limits": "3 CPU rounds; one traced pass per shape/mode/variant; prebuilt raw and expected excluded from trace. Failure GC is synchronous and included. No production integration or native allocation guarantee.",
+  "validation": {
+    "primary": "211 passed, 1 existing warning",
+    "supplemental": "30 passed",
+    "ruff": "check and format passed",
+    "nativeAllocationFailureInjection": "deferred: qualified build/interception unavailable",
+    "reducedBundleConcurrency": "deferred: native envelope unqualified",
+    "browser": "deferred: P1 NO-GO",
+    "finalCandidate": "32 passed, overlaps primary selection; includes 8 concurrent failures",
+    "scopeAndDocuments": "passed: paired literals/links, inspected source fingerprints unchanged; only parallel README tracked changes"
+  },
+  "finalSourceSha256": {
+    "scripts\\experiments\\failure_boundary_benchmark.py": "a3425266760a845aa5096f42869a37d72e21f06e031b6836a03cf1eca611ec5e",
+    "scripts\\experiments\\failure_boundary.py": "87c498c020848426733bf7e06a9651ae076cf2ac0b229617507a98ade5a24a94"
+  },
+  "sourceChangeAfterMeasurement": "Only two diagnostic string literals were wrapped; no logic changes.",
+  "parallelChangesExcluded": [
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "submissionReview": {
+    "combined": "242 passed, 1 existing warning",
+    "revisedCandidate": "33 passed (overlapping)",
+    "mutation": "removed failure collection killed by weak-reference assertion; process-local only",
+    "implementationChanged": false,
+    "testChange": "remove test-side GC; assert release before delivery; unknown subclass propagation",
+    "ruff": "passed",
+    "scope": "13 P0 files only; README/AI extraction/daily inventory excluded",
+    "preservedTrackedFiles": 1880
+  }
+}
