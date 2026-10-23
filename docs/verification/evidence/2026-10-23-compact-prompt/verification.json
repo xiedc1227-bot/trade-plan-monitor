@@ -1,0 +1,46 @@
+{
+  "final_run": "run-v5",
+  "pipeline_passed": true,
+  "manual_review_file": "manual-output-review.json",
+  "runs": [
+    {
+      "run": "run-v1",
+      "pipeline_passed": false,
+      "prompt_sha256": "4f61ea11828f999aa1e30598c9a3136b0083fd6bb9fc33594290ddfe85d2e93e"
+    },
+    {
+      "run": "run-v2",
+      "pipeline_passed": true,
+      "prompt_sha256": "fb8390a0fdc8de7ae475eee872572c5fa6674d619d954f5e50de9b5f9aecd490"
+    },
+    {
+      "run": "run-v3",
+      "pipeline_passed": true,
+      "prompt_sha256": "d013f2c75a678f50c0f84525ba92c17e0fd7ebdd28ead35a5d7e8c2a67513e35"
+    },
+    {
+      "run": "run-v4",
+      "pipeline_passed": true,
+      "prompt_sha256": "3de68e9054c1baed73a75e6bd6e825b6c9c13452e2942d958f262e551dd9c92c"
+    },
+    {
+      "run": "run-v5",
+      "pipeline_passed": true,
+      "prompt_sha256": "3681cf9c6cfa42f6b2dea3160565749a20afb9a3b3509631bfed0283d8bce51c"
+    }
+  ],
+  "generation_calls": 20,
+  "extraction_calls": 9,
+  "provider_attempts": 29,
+  "final_generation_calls": 4,
+  "final_extraction_calls": 2,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "configuration_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "status": "PASSED_WITH_NONBLOCKING_PROSE_NOTES",
+  "manual_acceptance_passed": true
+}

@@ -1,0 +1,112 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7378,
+        "completion_tokens": 1550,
+        "total_tokens": 8928
+      },
+      "removed_input_review_lines": [
+        "- 所选输出模式：仅提醒观察版（用户明确指定只生成独立技术提醒，无买卖、无风险退出）。",
+        "- 底仓／机动仓划分：本次规则不依赖分桶，省略。",
+        "- 模拟库存：本次未请求模拟，省略。",
+        "| 模拟库存 | 本次未请求，省略 |"
+      ],
+      "source_sha256": "e787936644dde1e98d2b4dfe62970cffa9246053b45782eb9fcd5ef2136fee3b",
+      "source_chars": 587,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BGGF-ALERT-DRAFT-01",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7396,
+        "completion_tokens": 1432,
+        "total_tokens": 8828
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：仅提醒观察版（无普通买卖规则、无风险分支）。",
+        "- 本次规则不依赖底仓／机动仓划分，故不讨论划分。"
+      ],
+      "source_sha256": "85db16a519aa00f10118e3ff234afe4971a66ce7c909f97ea6b04f7bfcc5c9f9",
+      "source_chars": 884,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-ALERT-DRAFT-01",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7326,
+        "completion_tokens": 1160,
+        "total_tokens": 8486
+      },
+      "removed_input_review_lines": [
+        "- 来源：本次给定合成事实；复权口径：QFQ（软件契约）；指标公式版本：daily-ta-v2。",
+        "- 所选输出模式：仅提醒观察版（独立提醒），且导入被阻断。",
+        "- 理论数量与当前权限：本次无交易数量；提醒规则不依赖模拟库存。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7346,
+        "completion_tokens": 1813,
+        "total_tokens": 9159
+      },
+      "removed_input_review_lines": [
+        "- 所选输出模式：交易计划草稿（因关键依赖不受支持，A阻断，不降级为独立价格提醒）。",
+        "- 底仓／机动仓划分：本次买入规则不依赖分桶，省略。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

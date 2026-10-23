@@ -1,0 +1,122 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7043,
+        "completion_tokens": 1625,
+        "total_tokens": 8668
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：仅提醒观察版（无普通买卖规则、无风险退出分支）。",
+        "- 建议划分：不适用（空仓，且本次为独立提醒，不涉及底仓/机动仓划分）。",
+        "- 模拟库存：本次未涉及。",
+        "| 模拟库存 | 不涉及 | 本次未请求 |",
+        "流程区别：提取、保存、审核、启用、执行相互独立；本轮仅生成A/B，未执行真实AI提取，未保存草稿，未审核、未启用，不产生任何真实或模拟委托。"
+      ],
+      "source_sha256": "dd3824ad4826fb9e82375228faad84a37ceef190d0b490398b9dd6f241c603ed",
+      "source_chars": 590,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BAOGANG-ALERT-DRAFT-01",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7061,
+        "completion_tokens": 1998,
+        "total_tokens": 9059
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：仅提醒观察版（两条独立RISK_ALERT，无普通买卖与风险分支）。",
+        "- 建议划分：本次未提供底仓／机动仓划分，不推定；提醒规则不依赖该划分。",
+        "- 模拟库存：本次未涉及，省略。",
+        "| 模拟库存 | 不涉及 | 本次未请求模拟 |",
+        "流程区别：提取、保存、审核、启用与执行相互独立；A仅为候选正文，未提取、未保存、未审核、未启用，也不产生任何真实或模拟委托。",
+        "- 底仓／机动仓划分：未提供，提醒规则不依赖，不列为阻断。"
+      ],
+      "source_sha256": "85db16a519aa00f10118e3ff234afe4971a66ce7c909f97ea6b04f7bfcc5c9f9",
+      "source_chars": 884,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-ALERT-DRAFT-01",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 6991,
+        "completion_tokens": 1301,
+        "total_tokens": 8292
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：仅提醒观察版（独立提醒），导入阻断。",
+        "- 建议划分：无依据，不作底仓／机动仓划分建议。",
+        "- 模拟库存：本次未涉及。",
+        "| 模拟库存 | 本次不涉及 |"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7011,
+        "completion_tokens": 2033,
+        "total_tokens": 9044
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：交易计划草稿（本次要求），但因核心买入规则依赖不支持的指数联动，A已阻断。",
+        "- 所选输出模式说明：本次为交易计划草稿，但核心规则阻断，A不提供半成品字段。",
+        "| 主要压力区 | 反弹减仓/机动仓卖出参考 | 未定义 | 未提供价格结构与量价依据 | 否 |",
+        "| 低吸观察区 | 机动仓低吸观察 | 未定义 | 未提供价格结构与量价依据 | 否 |",
+        "- 建议划分：未提供既有底仓/机动仓划分，本次不虚构划分；400股均按实际持仓表述。",
+        "| 模拟库存 | 本次未请求模拟，不涉及；提取、保存、审核、启用均不改变模拟库存。 |"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

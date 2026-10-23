@@ -1,0 +1,89 @@
+{
+  "status": "NOT_FULLY_PASSED",
+  "model": "deepseek-flash",
+  "prompt_sha256": "3cec277c53d188c0d96c16d82b1d2931ed965381eab5e1653e212eeda7dcdc4a",
+  "generation_calls": 4,
+  "extraction_calls": 2,
+  "provider_attempts": 6,
+  "calls": [
+    {
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6678,
+        "completion_tokens": 1624,
+        "total_tokens": 8302
+      }
+    },
+    {
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6730,
+        "completion_tokens": 1861,
+        "total_tokens": 8591
+      }
+    },
+    {
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13969,
+        "completion_tokens": 2836,
+        "total_tokens": 16805
+      }
+    },
+    {
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6748,
+        "completion_tokens": 2394,
+        "total_tokens": 9142
+      }
+    },
+    {
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "length",
+      "usage": {
+        "prompt_tokens": 14488,
+        "completion_tokens": 4096,
+        "total_tokens": 18584
+      }
+    },
+    {
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 6698,
+        "completion_tokens": 1809,
+        "total_tokens": 8507
+      }
+    }
+  ],
+  "accepted_normal_samples": 1,
+  "expected_normal_samples": 2,
+  "correct_blocks": 2,
+  "expected_blocks": 2,
+  "no_deleted_input_followup_requirement_met": false,
+  "case_adaptation": "Same symbols, holdings, caps and price predicates. Removed broker-order status, supplied draft identity/version, explicit count form and preassigned allocation; natural-language reminder/trade intent retained.",
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "configuration_changed": false,
+  "review_confirmed": false,
+  "plan_saved": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

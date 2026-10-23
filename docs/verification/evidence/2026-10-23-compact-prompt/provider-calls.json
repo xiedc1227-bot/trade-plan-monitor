@@ -1,0 +1,350 @@
+[
+  {
+    "run": "run-v1",
+    "case": "missing-position-limit",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 6876,
+      "completion_tokens": 1590,
+      "total_tokens": 8466
+    }
+  },
+  {
+    "run": "run-v1",
+    "case": "sse-one-alert",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 6928,
+      "completion_tokens": 1713,
+      "total_tokens": 8641
+    }
+  },
+  {
+    "run": "run-v1",
+    "case": "sse-one-alert",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 14187,
+      "completion_tokens": 3129,
+      "total_tokens": 17316
+    }
+  },
+  {
+    "run": "run-v1",
+    "case": "szse-two-alerts",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 6946,
+      "completion_tokens": 1963,
+      "total_tokens": 8909
+    }
+  },
+  {
+    "run": "run-v1",
+    "case": "unsupported-index-buy",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 6896,
+      "completion_tokens": 1811,
+      "total_tokens": 8707
+    }
+  },
+  {
+    "run": "run-v2",
+    "case": "missing-position-limit",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 6991,
+      "completion_tokens": 1301,
+      "total_tokens": 8292
+    }
+  },
+  {
+    "run": "run-v2",
+    "case": "sse-one-alert",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7043,
+      "completion_tokens": 1625,
+      "total_tokens": 8668
+    }
+  },
+  {
+    "run": "run-v2",
+    "case": "sse-one-alert",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13716,
+      "completion_tokens": 2638,
+      "total_tokens": 16354
+    }
+  },
+  {
+    "run": "run-v2",
+    "case": "szse-two-alerts",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7061,
+      "completion_tokens": 1998,
+      "total_tokens": 9059
+    }
+  },
+  {
+    "run": "run-v2",
+    "case": "szse-two-alerts",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13988,
+      "completion_tokens": 3701,
+      "total_tokens": 17689
+    }
+  },
+  {
+    "run": "run-v2",
+    "case": "unsupported-index-buy",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7011,
+      "completion_tokens": 2033,
+      "total_tokens": 9044
+    }
+  },
+  {
+    "run": "run-v3",
+    "case": "missing-position-limit",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7192,
+      "completion_tokens": 1265,
+      "total_tokens": 8457
+    }
+  },
+  {
+    "run": "run-v3",
+    "case": "sse-one-alert",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7244,
+      "completion_tokens": 1535,
+      "total_tokens": 8779
+    }
+  },
+  {
+    "run": "run-v3",
+    "case": "sse-one-alert",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13716,
+      "completion_tokens": 2638,
+      "total_tokens": 16354
+    }
+  },
+  {
+    "run": "run-v3",
+    "case": "szse-two-alerts",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7262,
+      "completion_tokens": 1867,
+      "total_tokens": 9129
+    }
+  },
+  {
+    "run": "run-v3",
+    "case": "szse-two-alerts",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13988,
+      "completion_tokens": 3701,
+      "total_tokens": 17689
+    }
+  },
+  {
+    "run": "run-v3",
+    "case": "unsupported-index-buy",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7212,
+      "completion_tokens": 1569,
+      "total_tokens": 8781
+    }
+  },
+  {
+    "run": "run-v4",
+    "case": "missing-position-limit",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7266,
+      "completion_tokens": 1538,
+      "total_tokens": 8804
+    }
+  },
+  {
+    "run": "run-v4",
+    "case": "sse-one-alert",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7318,
+      "completion_tokens": 1458,
+      "total_tokens": 8776
+    }
+  },
+  {
+    "run": "run-v4",
+    "case": "sse-one-alert",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13707,
+      "completion_tokens": 2628,
+      "total_tokens": 16335
+    }
+  },
+  {
+    "run": "run-v4",
+    "case": "szse-two-alerts",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7336,
+      "completion_tokens": 1785,
+      "total_tokens": 9121
+    }
+  },
+  {
+    "run": "run-v4",
+    "case": "szse-two-alerts",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13988,
+      "completion_tokens": 3701,
+      "total_tokens": 17689
+    }
+  },
+  {
+    "run": "run-v4",
+    "case": "unsupported-index-buy",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7286,
+      "completion_tokens": 1769,
+      "total_tokens": 9055
+    }
+  },
+  {
+    "run": "run-v5",
+    "case": "missing-position-limit",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7326,
+      "completion_tokens": 1160,
+      "total_tokens": 8486
+    }
+  },
+  {
+    "run": "run-v5",
+    "case": "sse-one-alert",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7378,
+      "completion_tokens": 1550,
+      "total_tokens": 8928
+    }
+  },
+  {
+    "run": "run-v5",
+    "case": "sse-one-alert",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13707,
+      "completion_tokens": 2628,
+      "total_tokens": 16335
+    }
+  },
+  {
+    "run": "run-v5",
+    "case": "szse-two-alerts",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7396,
+      "completion_tokens": 1432,
+      "total_tokens": 8828
+    }
+  },
+  {
+    "run": "run-v5",
+    "case": "szse-two-alerts",
+    "stage": "extraction",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 13988,
+      "completion_tokens": 3701,
+      "total_tokens": 17689
+    }
+  },
+  {
+    "run": "run-v5",
+    "case": "unsupported-index-buy",
+    "stage": "generation",
+    "attempts": 1,
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 7346,
+      "completion_tokens": 1813,
+      "total_tokens": 9159
+    }
+  }
+]

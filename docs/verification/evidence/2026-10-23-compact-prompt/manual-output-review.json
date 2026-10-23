@@ -1,0 +1,33 @@
+{
+  "final_run": "run-v5",
+  "acceptance_passed": true,
+  "entire_appendices_manually_read": true,
+  "order_fill_status_requested": false,
+  "allocation_requested": false,
+  "mode_count_identity_version_requested": false,
+  "simulation_inventory_requested": false,
+  "explicit_threshold_reconfirmation_requested": false,
+  "false_broker_order_capability": false,
+  "normal_pending_confirmations_empty": true,
+  "missing_limit_only_pending": true,
+  "unsupported_dependency_not_dropped": true,
+  "raw_response_modified": false,
+  "pending_sections": {
+    "missing-position-limit": "待确认项：position.max_qty（最大计划持仓，须为正数100股整数倍）；缺失导致独立提醒规则无法导入。\n\n验证状态：静态检查／未执行真实AI验证；本次仅生成A/B，未提取、未保存、未审核、未启用、未修改任何库存。",
+    "sse-one-alert": "待确认项：无\n\n验证状态：静态检查／未执行真实AI验证（本轮仅生成A/B，真实AI提取由外层程序随后执行）。",
+    "szse-two-alerts": "待确认项：无\n\n验证状态：静态检查／未执行真实AI验证；本轮仅生成A/B，未调用提取接口，未保存草稿，未启用计划。",
+    "unsupported-index-buy": "待确认项：上证指数状态联动与动态数量（200股／100股自动选择、S0/S1动态切换、明显破坏自动暂停）当前软件不支持，阻断买入规则；S0完整低吸条件未定义；Q0研究单笔数量未确定；三个核心研究位置缺个股依据；最新有效行情与参考价及日期缺失。\n\n验证状态：静态检查／未执行真实AI验证；本次为离线合成测试，未联网取行情，未调用提取接口，未保存、未审核、未启用任何计划。"
+  },
+  "nonblocking_observations": [
+    "Some irrelevant allocation/simulation rows say not involved or omit; no input is requested.",
+    "Unsupported-case research prose mentions missing deadline; decisions use defaults and pending list does not request one.",
+    "Raw B describes generation-stage verification status; actual extraction is recorded separately."
+  ],
+  "iteration_findings": {
+    "run-v1": "Two-alert request exceeded input budget due to comma-generated clauses.",
+    "run-v2": "Allocation/nonblocking research items in pending list and misleading activation label.",
+    "run-v3": "Threshold research-meaning reconfirmation and hypothetical allocation request remained.",
+    "run-v4": "Unspecified deadline unnecessarily listed as pending.",
+    "run-v5": "Acceptance met; only nonblocking prose observations remain."
+  }
+}

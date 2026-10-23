@@ -1,0 +1,21 @@
+{
+  "structure_counts": {
+    "en": [
+      10,
+      17,
+      1
+    ],
+    "zh-CN": [
+      10,
+      17,
+      1
+    ]
+  },
+  "machine_examples_identical": true,
+  "chinese_matches_live_prompt": true,
+  "semantic_parity_manually_reviewed": true,
+  "prompt_sha256": {
+    "en": "acc9224242917d6760d9da77cb7392a99555050ce2a8ad34d63163a880a05bb3",
+    "zh-CN": "3681cf9c6cfa42f6b2dea3160565749a20afb9a3b3509631bfed0283d8bce51c"
+  }
+}

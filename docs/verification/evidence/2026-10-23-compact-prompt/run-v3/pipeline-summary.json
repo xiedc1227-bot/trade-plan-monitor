@@ -1,0 +1,115 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7244,
+        "completion_tokens": 1535,
+        "total_tokens": 8779
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：仅提醒观察版（独立技术提醒1条，无买卖、无风险退出）。",
+        "- 建议划分：不适用（空仓，且本次不涉及建仓，不做底仓／机动仓划分）。",
+        "- 模拟库存：本次未涉及，省略。"
+      ],
+      "source_sha256": "dd3824ad4826fb9e82375228faad84a37ceef190d0b490398b9dd6f241c603ed",
+      "source_chars": 590,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BAOGANG-ALERT-DRAFT-01",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7262,
+        "completion_tokens": 1867,
+        "total_tokens": 9129
+      },
+      "removed_input_review_lines": [
+        "- 所选输出模式：仅提醒观察版（普通BUY/SELL规则为0，风险退出分支为0，提醒2条）。",
+        "- 建议划分：本次未提供底仓／机动仓划分，且提醒规则不依赖该划分，故不作划分建议，也不视为已有划分。",
+        "- 模拟库存：本次未请求模拟，省略。",
+        "| 模拟库存 | 本次未请求，省略 |"
+      ],
+      "source_sha256": "85db16a519aa00f10118e3ff234afe4971a66ce7c909f97ea6b04f7bfcc5c9f9",
+      "source_chars": 884,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-ALERT-DRAFT-01",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7192,
+        "completion_tokens": 1265,
+        "total_tokens": 8457
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：仅提醒观察版（独立提醒），本次未启用。",
+        "- 建议划分：不适用（本次仅提醒，不涉及底仓／机动仓划分）。",
+        "- 模拟库存：本次未涉及。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 7212,
+        "completion_tokens": 1569,
+        "total_tokens": 8781
+      },
+      "removed_input_review_lines": [
+        "- 输出模式：交易计划草稿（本次请求），但因核心买入规则依赖软件不支持的指数联动，A已阻断。",
+        "- 所选输出模式：交易计划草稿，但买入部分阻断；未授权降级为独立价格提醒。",
+        "- 底仓/机动仓划分：用户未提供，本次不擅自划分；买入规则若依赖划分需另行核对。",
+        "- 模拟库存：本次未请求模拟，省略。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

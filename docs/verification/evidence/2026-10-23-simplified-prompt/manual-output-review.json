@@ -1,0 +1,29 @@
+{
+  "order_status_requests": false,
+  "plan_identity_version_requests": false,
+  "mode_or_count_requests": false,
+  "simulation_inventory_requests": false,
+  "allocation_pending_item_reintroduced": true,
+  "findings": [
+    {
+      "case": "szse-two-alerts",
+      "section": "B.6",
+      "excerpt": "底仓/机动仓划分未定。",
+      "finding": "Reminder-only research reintroduces removed allocation input as a future pending item without a dependent trade rule."
+    },
+    {
+      "case": "szse-two-alerts",
+      "section": "B.6",
+      "excerpt": "若审核要求研究价位完整性，可能被要求补充。",
+      "finding": "Adds a speculative extra evidence request for explicitly authorized synthetic independent thresholds."
+    },
+    {
+      "case": "unsupported-index-buy",
+      "section": "B.5",
+      "excerpt": "执行才产生真实委托。",
+      "finding": "Incorrect tool capability statement: current tool has no broker order execution."
+    }
+  ],
+  "no_deleted_input_followup_requirement_met": false,
+  "raw_response_modified": false
+}

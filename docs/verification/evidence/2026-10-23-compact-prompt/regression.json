@@ -1,0 +1,27 @@
+{
+  "focused": {
+    "passed": 50,
+    "command": "python -m pytest tests/unit/test_compact_prompt_replay.py tests/unit/test_current_review_contract.py tests/unit/test_empty_array_contract_replay.py tests/unit/test_current_plan_extraction_security.py -q"
+  },
+  "unit": {
+    "passed": 3476,
+    "warnings": 1,
+    "command": "python -m pytest tests/unit -q -m \"not live\" --basetemp=../Temp/compact-alert-prompt-20261023/pytest-unit-v2 --tb=short"
+  },
+  "integration": {
+    "passed": 82,
+    "warnings": 1,
+    "command": "python -m pytest tests/integration/test_current_plan_api.py tests/integration/test_configured_ai_web.py tests/integration/test_ai_provider_contract.py tests/integration/test_ai_browser_contract.py tests/integration/test_daily_plan_boundaries.py tests/integration/test_daily_simulation_review_regressions.py -q -m \"not live\" --basetemp=../Temp/compact-alert-prompt-20261023/pytest-integration-v2 --tb=short"
+  },
+  "new_cases": 6,
+  "source_validation_changed": false,
+  "tests_skipped": false,
+  "initial_attempts": [
+    "New missing-binding test expected parse rejection; existing behavior is successful parsing with activationBlocking source-review issue. Assertion corrected to exact blocker.",
+    "New test mistakenly used JSON alias activationBlocking instead of Python activation_blocking; corrected.",
+    "First broad unit run: 3290 passed, 185 system-temp setup PermissionErrors, one stale new-test assertion failure; rerun with corrected assertion and isolated temporary directory passed.",
+    "First integration command referenced removed test_daily_plan_review.py and collected no tests; corrected existing-file selector passed."
+  ],
+  "lint": "ruff check and ruff format --check passed for new test",
+  "warnings_detail": "Existing Starlette TestClient httpx deprecation warning"
+}
