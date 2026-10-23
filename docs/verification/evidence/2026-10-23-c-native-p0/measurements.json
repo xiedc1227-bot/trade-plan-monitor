@@ -1,0 +1,321 @@
+{
+  "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+  "attempts": [
+    {
+      "round": 1,
+      "variant": "original",
+      "wall": 1.9446159999351948,
+      "cpu": 1.953125,
+      "equal": true
+    },
+    {
+      "round": 1,
+      "variant": "c256",
+      "wall": 2.4230253999121487,
+      "cpu": 2.390625,
+      "equal": true
+    },
+    {
+      "round": 1,
+      "variant": "fused",
+      "wall": 2.159820399945602,
+      "cpu": 2.140625,
+      "equal": true
+    },
+    {
+      "round": 2,
+      "variant": "fused",
+      "wall": 2.217214100062847,
+      "cpu": 2.21875,
+      "equal": true
+    },
+    {
+      "round": 2,
+      "variant": "c256",
+      "wall": 2.529001299990341,
+      "cpu": 2.515625,
+      "equal": true
+    },
+    {
+      "round": 2,
+      "variant": "original",
+      "wall": 2.1773534000385553,
+      "cpu": 2.15625,
+      "equal": true
+    },
+    {
+      "round": 3,
+      "variant": "original",
+      "wall": 2.083151699975133,
+      "cpu": 2.046875,
+      "equal": true
+    },
+    {
+      "round": 3,
+      "variant": "c256",
+      "wall": 2.4450121000409126,
+      "cpu": 2.4375,
+      "equal": true
+    },
+    {
+      "round": 3,
+      "variant": "fused",
+      "wall": 2.164537799777463,
+      "cpu": 2.15625,
+      "equal": true
+    }
+  ],
+  "memory": [
+    {
+      "shape": "decimal",
+      "variant": "original",
+      "mode": "success",
+      "rawBytes": 16472833,
+      "live": 7902816,
+      "peak": 156403182,
+      "drained": 20064,
+      "equal": true
+    },
+    {
+      "shape": "decimal",
+      "variant": "c256",
+      "mode": "success",
+      "rawBytes": 16472833,
+      "live": 7895318,
+      "peak": 25037905,
+      "drained": 12084,
+      "equal": true
+    },
+    {
+      "shape": "decimal",
+      "variant": "fused",
+      "mode": "success",
+      "rawBytes": 16472833,
+      "live": 7900400,
+      "peak": 25037617,
+      "drained": 17284,
+      "equal": true
+    },
+    {
+      "shape": "decimal",
+      "variant": "original",
+      "mode": "invalid_OHLC",
+      "error": "ProjectionError",
+      "errorCount": null,
+      "live": 49462428,
+      "peak": 98839146,
+      "drained": 5646
+    },
+    {
+      "shape": "decimal",
+      "variant": "c256",
+      "mode": "invalid_OHLC",
+      "error": "ProjectionError",
+      "errorCount": 480,
+      "live": 25108114,
+      "peak": 25108244,
+      "drained": 17666
+    },
+    {
+      "shape": "decimal",
+      "variant": "fused",
+      "mode": "invalid_OHLC",
+      "error": "ProjectionError",
+      "errorCount": 480,
+      "live": 25099140,
+      "peak": 25099270,
+      "drained": 8716
+    },
+    {
+      "shape": "dense",
+      "variant": "original",
+      "mode": "success",
+      "rawBytes": 12120814,
+      "live": 76967698,
+      "peak": 206397909,
+      "drained": 25064,
+      "equal": true
+    },
+    {
+      "shape": "dense",
+      "variant": "c256",
+      "mode": "success",
+      "rawBytes": 12120814,
+      "live": 76965750,
+      "peak": 144180577,
+      "drained": 22384,
+      "equal": true
+    },
+    {
+      "shape": "dense",
+      "variant": "fused",
+      "mode": "success",
+      "rawBytes": 12120814,
+      "live": 76958182,
+      "peak": 143497351,
+      "drained": 15134,
+      "equal": true
+    },
+    {
+      "shape": "dense",
+      "variant": "original",
+      "mode": "invalid_OHLC",
+      "error": "ProjectionError",
+      "errorCount": null,
+      "live": 36509581,
+      "peak": 193152503,
+      "drained": 24296
+    },
+    {
+      "shape": "dense",
+      "variant": "c256",
+      "mode": "invalid_OHLC",
+      "error": "ProjectionError",
+      "errorCount": 40000,
+      "live": 156794448,
+      "peak": 156794578,
+      "drained": 24816
+    },
+    {
+      "shape": "dense",
+      "variant": "fused",
+      "mode": "invalid_OHLC",
+      "error": "ProjectionError",
+      "errorCount": 40000,
+      "live": 156794716,
+      "peak": 156794846,
+      "drained": 25116
+    }
+  ],
+  "admissions": [
+    {
+      "shape": "decimal",
+      "raw": 16478553,
+      "work": 197697036,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 5.5998098105192184e-06
+      }
+    },
+    {
+      "shape": "dense",
+      "raw": 12126534,
+      "work": 145472808,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 1.8200138583779335e-05
+      }
+    }
+  ],
+  "medians": {
+    "original": {
+      "wall": 2.083151699975133,
+      "cpu": 2.046875
+    },
+    "c256": {
+      "wall": 2.4450121000409126,
+      "cpu": 2.4375
+    },
+    "fused": {
+      "wall": 2.164537799777463,
+      "cpu": 2.15625
+    }
+  },
+  "provenance": {
+    "python": "3.14.7",
+    "sqlite": "3.50.4",
+    "packages": {
+      "pydantic": "2.13.4",
+      "pydantic-core": "2.46.4",
+      "SQLAlchemy": "2.0.52"
+    },
+    "nativeBinarySha256": {
+      "_pydantic_core.cp314-win_amd64.pyd": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e"
+    },
+    "bundledRustSourceCount": 0,
+    "qualification": "NOT_PROVEN: installed binary identity is not matching native allocation source/proof"
+  },
+  "sourceSha256": {
+    "scripts/experiments/fused_c_benchmark.py": "0f00ad5413b1c0e86cb52543c9cebf4af405b4ebf865ab42a28315282238167b",
+    "scripts/experiments/fused_c_validator.py": "f6dfd2a5d7df25c34868f23d2d126b1fc3470df6d3fc7ccb36d854a38721d281"
+  },
+  "decision": "P1_NO_GO; native qualification and legal-row SQL availability fail",
+  "limits": "3 diagnostic rounds, no SQL in CPU. Single traced full-validator/error pass per shape/variant excludes prebuilt raw and expected outputs. Native allocator transients/absolute process peaks remain unproven; no reduced admission or browser integration.",
+  "tests": {
+    "regression": "........................................................................ [ 35%]\n........................................................................ [ 71%]\n.........................................................                [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n201 passed, 1 warning in 14.40s\n",
+    "authorityAndFinalCandidate": "........................................................................ [ 87%]\n..........                                                               [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n82 passed, 1 warning in 48.69s\n"
+  },
+  "finalSourceSha256": {
+    "scripts/experiments/fused_c_validator.py": "f6dfd2a5d7df25c34868f23d2d126b1fc3470df6d3fc7ccb36d854a38721d281",
+    "scripts/experiments/fused_c_benchmark.py": "d5b82134934e0540f6399fb2dede387ad45588371c92ac076a70292e1579a812",
+    "tests/integration/test_fused_c_normalization.py": "f8e9bc8233ddef7fbc9c5ec4ebe991837590cd35bacc4fb910dc3075d9ba831e"
+  },
+  "finalSourceNote": "Only diagnostic string wrapping changed in benchmark after measurement; normalization adapter unchanged.",
+  "head": "d0ba9774b0aa46b2a6fc3fae4c207f6c7afbbacb",
+  "submissionReview": {
+    "regression": "........................................................................ [ 29%]\n........................................................................ [ 59%]\n........................................................................ [ 88%]\n...........................                                              [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n243 passed, 1 warning in 62.84s (0:01:02)\n",
+    "mutations": [
+      {
+        "mutation": "wrong accumulated mapping bound",
+        "killed": true
+      },
+      {
+        "mutation": "bypassed bar_set_hash check",
+        "killed": true
+      },
+      {
+        "mutation": "bypassed request_set_hash check",
+        "killed": true
+      }
+    ],
+    "files": [
+      "docs/specifications/backtesting/PROPOSAL-c-encoding-native-admission.md",
+      "docs/specifications/backtesting/PROPOSAL-c-encoding-native-admission.zh-CN.md",
+      "docs/specifications/backtesting/SPEC-c-encoding-native-admission.md",
+      "docs/specifications/backtesting/SPEC-c-encoding-native-admission.zh-CN.md",
+      "docs/specifications/backtesting/TASKS-c-encoding-native-admission.md",
+      "docs/specifications/backtesting/TASKS-c-encoding-native-admission.zh-CN.md",
+      "docs/verification/c-native-p0-2026-10-23.md",
+      "docs/verification/c-native-p0-2026-10-23.zh-CN.md",
+      "docs/verification/evidence/2026-10-23-c-encoding-next/analysis.json",
+      "docs/verification/evidence/2026-10-23-c-native-p0/measurements.json",
+      "scripts/experiments/fused_c_benchmark.py",
+      "scripts/experiments/fused_c_validator.py",
+      "tests/integration/test_fused_c_normalization.py"
+    ],
+    "preservedTrackedFileCount": 1867,
+    "decision": "Isolated P0 approved for submission; native and availability gates still block P1."
+  }
+}
