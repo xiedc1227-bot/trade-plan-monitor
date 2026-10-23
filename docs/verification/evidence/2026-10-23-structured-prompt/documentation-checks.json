@@ -1,0 +1,14 @@
+{
+  "README.md": {
+    "prompt_sha256": "e645fed633ee2f7bd0c3db30a71f266942b06f2362b44924e39ce91f32b0a0e0",
+    "characters": 18520,
+    "previous_characters": 31852,
+    "machine_examples_unchanged": true
+  },
+  "README.zh-CN.md": {
+    "prompt_sha256": "35ddaf64e0a33e5f668f4a5b24e2dc49b3fde0f1420ac5e180c0ec0b2988139c",
+    "characters": 7014,
+    "previous_characters": 11666,
+    "machine_examples_unchanged": true
+  }
+}

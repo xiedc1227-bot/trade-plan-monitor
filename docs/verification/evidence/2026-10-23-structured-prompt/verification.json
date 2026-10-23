@@ -1,0 +1,27 @@
+{
+  "final_run": "run-v2",
+  "pipeline_passed": true,
+  "runs": [
+    {
+      "run": "run-v1",
+      "pipeline_passed": false,
+      "prompt_sha256": "2245d87dad5040ec275d29858b81fd1e288361b49768872342bd29151822b7d3"
+    },
+    {
+      "run": "run-v2",
+      "pipeline_passed": true,
+      "prompt_sha256": "35ddaf64e0a33e5f668f4a5b24e2dc49b3fde0f1420ac5e180c0ec0b2988139c"
+    }
+  ],
+  "generation_calls": 8,
+  "extraction_calls": 4,
+  "provider_attempts": 12,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "configuration_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "harness_change": "none; same four cases and strict checks as prior run"
+}

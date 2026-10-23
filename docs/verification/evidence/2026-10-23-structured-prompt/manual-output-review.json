@@ -1,0 +1,11 @@
+{
+  "final_run": "run-v2",
+  "all_appendices_read": true,
+  "no_fixed_section_requirement": true,
+  "no_fee_calculations": true,
+  "no_deleted_input_requests": true,
+  "normal_pending_lists_empty": true,
+  "missing_cap_only_confirmation": true,
+  "unsupported_rule_blocked": true,
+  "remaining_deviation": "Unsupported appendix expands unselected future strategies and generic missing parameters/deadlines despite the prompt restriction; not part of A and not repaired."
+}

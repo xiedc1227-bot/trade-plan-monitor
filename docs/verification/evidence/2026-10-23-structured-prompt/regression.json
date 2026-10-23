@@ -1,0 +1,6 @@
+{
+  "command": ".venv/Scripts/python.exe -X utf8 -m pytest tests/unit/test_compact_prompt_replay.py tests/unit/test_current_review_contract.py tests/unit/test_empty_array_contract_replay.py tests/unit/test_current_plan_extraction_security.py -q",
+  "result": "50 passed in 2.27s",
+  "production_changes": false,
+  "validation_relaxed": false
+}

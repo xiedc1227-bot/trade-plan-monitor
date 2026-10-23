@@ -1,0 +1,37 @@
+{
+  "final_run": "run-v4",
+  "pipeline_passed": true,
+  "runs": [
+    {
+      "run": "run-v1",
+      "pipeline_passed": true,
+      "prompt_sha256": "6b3efb3d727d007eca8c9394d136468c4ec11eb069cd323b2babf5bbba8894ab"
+    },
+    {
+      "run": "run-v2",
+      "pipeline_passed": true,
+      "prompt_sha256": "b6932fad9df2369ace128731c162ce1836be85d2c7986d776dabf54768cef640"
+    },
+    {
+      "run": "run-v3",
+      "pipeline_passed": true,
+      "prompt_sha256": "dfc7acb21c49ea125348b5ea301a35a0adae4036dbb1b3193167aef2bf029f6a"
+    },
+    {
+      "run": "run-v4",
+      "pipeline_passed": true,
+      "prompt_sha256": "75da8bfc4d2a8c1e4d11c7690462b971770a3304a2c047b592944f038bf81002"
+    }
+  ],
+  "generation_calls": 16,
+  "extraction_calls": 8,
+  "provider_attempts": 24,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "configuration_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "harness_change": "run-v4 transport calls B an appendix string, no longer unconditionally six sections; case facts and checks unchanged"
+}

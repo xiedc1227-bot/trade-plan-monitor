@@ -1,0 +1,15 @@
+{
+  "final_run": "run-v4",
+  "all_four_appendices_read": true,
+  "no_fee_or_pnl_calculations": true,
+  "no_deleted_input_requests": true,
+  "normal_pending_lists_empty": true,
+  "missing_limit_only_pending": "position.max_qty",
+  "unsupported_dependency_blocks_whole_buy": true,
+  "known_prose_deviations": [
+    "Two-alert appendix merges six sections into five",
+    "Unsupported appendix mentions undefined deadlines but explicitly requests no deadline confirmation",
+    "Unsupported appendix incorrectly describes LT/GT as the only daily-price comparators"
+  ],
+  "raw_output_repaired": false
+}

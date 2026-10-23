@@ -1,0 +1,102 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4594,
+        "completion_tokens": 572,
+        "total_tokens": 5166
+      },
+      "removed_input_review_lines": [
+        "本次仅生成一条独立技术提醒，不涉及买入、卖出或风险退出，也不构成对底仓或机动仓的任何安排。",
+        "如果某交易日正式收盘低于12.07元，那么按该条提醒提示人工复核；如果收盘不低于12.07元，那么不触发。该提醒只提示，不产生任何委托或库存变更。"
+      ],
+      "source_sha256": "e8d0fe4bc0ef9516f7174f3fc5619a76d171c86ecbb0350a875802a4b2e8eec8",
+      "source_chars": 597,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BAOGANG-600010-ALERT-20261021",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4609,
+        "completion_tokens": 726,
+        "total_tokens": 5335
+      },
+      "removed_input_review_lines": [],
+      "source_sha256": "9ca9d1316e96014a081cdb761bc48c791abd175606b64497bf525796a1e26114",
+      "source_chars": 884,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-ALERT-20261021",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4542,
+        "completion_tokens": 243,
+        "total_tokens": 4785
+      },
+      "removed_input_review_lines": [],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4561,
+        "completion_tokens": 315,
+        "total_tokens": 4876
+      },
+      "removed_input_review_lines": [
+        "如果后续软件支持原生指数联动与动态数量，那么可在补齐S0/S1定义、区域价位、确认与期限后重新拟完整版本；如果用户明确选定某一静态大盘分支及对应数量，那么可另拟不含动态切换的完整版本。当前候选规则不代表已审核或启用。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}
