@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { initialResultSettledKey } from "../runtime-status/initialResultStartup";
 import BacktestReadFeedback from "../components/backtests/BacktestReadFeedback.vue";
 import { backtestReturnTarget } from "../composables/backtestNavigation";
 import {
   computed,
+  inject,
   defineAsyncComponent,
   onBeforeUnmount,
   shallowRef,
@@ -54,6 +56,7 @@ interface ReadonlyResultPageFrame {
   readonly nextCursor: string | null;
 }
 
+const notifyInitialResultSettled = inject(initialResultSettledKey, () => {});
 const props = defineProps<Props>();
 const BacktestEquityChart = defineAsyncComponent(
   () => import("../components/backtests/BacktestEquityChart.vue"),
@@ -220,6 +223,14 @@ const results = useBacktestResults({
   runId,
   selectedTab,
 });
+watch(
+  () => [results.summaryState.value, identityError.value] as const,
+  ([state, error]) => {
+    if (state === "READY" || state === "FAILED" || error !== null) notifyInitialResultSettled(route.path);
+  },
+  { immediate: true },
+);
+
 const loopRun = computed(() => results.summary.value !== null && "report" in results.summary.value ? results.summary.value : null);
 const review = useBacktestReview({
   runId, enabled: () => resultsEnabled.value && loopRun.value !== null,

@@ -1,0 +1,20 @@
+{
+  "result_baseline": {
+    "cpu": 1.9921875,
+    "result": 1.9627581000095233
+  },
+  "result_candidate": {
+    "cpu": 2.0234375,
+    "result": 1.9806877500377595
+  },
+  "mixed_baseline": {
+    "cpu": 4.7265625,
+    "result": 4.5174617999000475,
+    "monitor": 4.064096549991518
+  },
+  "mixed_candidate": {
+    "cpu": 4.6796875,
+    "result": 4.502801750088111,
+    "monitor": 4.055023200111464
+  }
+}

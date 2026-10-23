@@ -10,6 +10,8 @@ import type {
 import type { BacktestApi } from "../../src/api/backtests";
 import BacktestRunDetailView from "../../src/views/BacktestRunDetailView.vue";
 
+import { initialResultSettledKey } from "../../src/runtime-status/initialResultStartup";
+
 const RUN_ID = "a".repeat(64);
 const OTHER_RUN_ID = "b".repeat(64);
 const JOB_ID = "run-job-001";
@@ -218,6 +220,7 @@ function deferred<Value>() {
 
 async function mountDetail(options: {
   api?: BacktestApi;
+  settled?: (path: string) => void;
   blockCompletedCanonicalization?: boolean;
   url?: string;
 } = {}): Promise<{ router: Router; wrapper: VueWrapper }> {
@@ -234,7 +237,7 @@ async function mountDetail(options: {
   }
   const wrapper = mount(BacktestRunDetailView, {
     attachTo: document.body,
-    global: { plugins: [router] },
+    global: { plugins: [router], provide: { [initialResultSettledKey as symbol]: options.settled ?? (() => {}) } },
     props: { api: options.api ?? apiWith() },
   });
   await flushPromises();
@@ -246,6 +249,19 @@ afterEach(() => {
 });
 
 describe("BacktestRunDetailView", () => {
+  it.each(["success", "failure"])("notifies startup only after initial %s, across URL canonicalization", async outcome => {
+    const pending = deferred<BacktestRunView>(); const settled = vi.fn();
+    const { wrapper, router } = await mountDetail({ settled, api: apiWith({ getRun: () => pending.promise }) });
+    expect(router.currentRoute.value.query.tab).toBe("summary"); expect(settled).not.toHaveBeenCalled();
+    if (outcome === "success") pending.resolve(run()); else pending.reject(new Error("unavailable"));
+    await flushPromises(); expect(settled).toHaveBeenCalledWith(`/backtests/${RUN_ID}`); wrapper.unmount();
+  });
+  it("does not notify startup for a response arriving after unmount", async () => {
+    const pending = deferred<BacktestRunView>(); const settled = vi.fn();
+    const { wrapper } = await mountDetail({ settled, api: apiWith({ getRun: () => pending.promise }) });
+    wrapper.unmount(); pending.resolve(run()); await flushPromises(); expect(settled).not.toHaveBeenCalled();
+  });
+
   it("keeps the previous summary visible when an explicit refresh fails", async () => {
     const getRun = vi.fn<BacktestApi["getRun"]>().mockResolvedValueOnce(run()).mockRejectedValueOnce(new Error("unavailable"));
     const { wrapper } = await mountDetail({ api: apiWith({ getRun }) });

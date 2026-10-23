@@ -1,0 +1,20 @@
+{
+  "cpu": 595.578125,
+  "readers": [
+    {
+      "outstanding": 0,
+      "pauses": 0,
+      "flights": {
+        "physical_validations": 123,
+        "joins": 0,
+        "mismatches": 0,
+        "budget_fallbacks": 0,
+        "active_calls": 0,
+        "queued_owners": 0,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39820239
+      }
+    }
+  ],
+  "socketTasks": []
+}

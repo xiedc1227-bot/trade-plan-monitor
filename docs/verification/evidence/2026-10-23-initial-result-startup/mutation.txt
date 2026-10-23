@@ -1,0 +1,38 @@
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+ ❯ tests/unit/initialResultStartup.spec.ts (6 tests | 2 failed) 6ms
+   × waits for settlement and starts exactly once 4ms
+   × accepts early settlement but ignores a different identity 0ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  22:38:45
+   Duration  635ms (transform 18ms, setup 0ms, import 31ms, tests 6ms, environment 482ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/initialResultStartup.spec.ts > waits for settlement and starts exactly once
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ tests/unit/initialResultStartup.spec.ts:7:41
+      5|  vi.useFakeTimers(); const start=vi.fn(); const gate=createInitialResu…
+      6|  gate.mount(); gate.route("/result", true); vi.advanceTimersByTime(499…
+      7|  gate.settled("/result"); expect(start).toHaveBeenCalledTimes(1); vi.r…
+       |                                         ^
+      8| });
+      9| it("caps waiting even without route resolution or a result", () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/unit/initialResultStartup.spec.ts > accepts early settlement but ignores a different identity
+AssertionError: expected "vi.fn()" to be called once, but got 0 times
+ ❯ tests/unit/initialResultStartup.spec.ts:19:143
+     17| it("accepts early settlement but ignores a different identity", () => {
+     18|  vi.useFakeTimers(); const start=vi.fn(); const gate=createInitialResu…
+     19|  gate.settled("/old"); gate.mount(); gate.route("/result",true); expec…
+       |                                                                                                                                               ^
+     20| });
+     21| it("cannot start after unmount, including late route and result callba…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

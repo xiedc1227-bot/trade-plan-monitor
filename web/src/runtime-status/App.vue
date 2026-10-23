@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, provide, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { apiFetchKey } from "../api/context";
 import type { MonitorStreamConnectionState } from "../composables/useMonitorStream";
 import AppShell from "../layouts/AppShell.vue";
@@ -10,10 +10,12 @@ import { runtimeContextKey } from "./context";
 import { createMonitorProtocol } from "./protocol";
 import { useRuntimeMonitorStore } from "./store";
 import { createRuntimeMonitor } from "./stream";
+import { createInitialResultStartup, initialResultSettledKey } from "./initialResultStartup";
 import { isRuntimeHealth } from "./validators";
 
 const props = defineProps<{ fetchImplementation?: typeof fetch; createSocket?: (url: string) => WebSocket }>();
 const route = useRoute();
+const router = useRouter();
 const store = useRuntimeMonitorStore();
 const protocol = createMonitorProtocol({ origin: window.location.origin, validateHealth: isRuntimeHealth,
   ...(props.fetchImplementation ? { fetchImplementation: props.fetchImplementation } : {}),
@@ -21,6 +23,8 @@ const protocol = createMonitorProtocol({ origin: window.location.origin, validat
 const api = createRuntimeApi(protocol);
 const monitor = createRuntimeMonitor({ api, protocol, store, origin: window.location.origin,
   ...(props.createSocket ? { createSocket: props.createSocket } : {}) });
+const startup = createInitialResultStartup(monitor.start);
+provide(initialResultSettledKey, startup.settled);
 provide(apiFetchKey, protocol.fetch);
 provide(runtimeContextKey, { api, monitor, store });
 const connectionState = computed<MonitorStreamConnectionState>(() => {
@@ -38,8 +42,17 @@ watch(
     if (surface !== null && previous !== null) monitor.navigation();
   },
 );
-onMounted(monitor.start);
-onBeforeUnmount(monitor.stop);
+function resolveStartup(): void {
+  if (route.matched.length) startup.route(route.path, route.name === "backtest-run-detail");
+}
+watch(() => route.path, resolveStartup);
+onMounted(() => {
+  store.setTransport("CONNECTING");
+  startup.mount();
+  resolveStartup();
+  void router.isReady().then(resolveStartup);
+});
+onBeforeUnmount(() => { startup.dispose(); monitor.stop(); });
 function reload(): void { window.location.reload(); }
 </script>
 
