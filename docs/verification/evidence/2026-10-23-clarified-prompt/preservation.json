@@ -1,0 +1,135 @@
+{
+  "before": {
+    "draft": {
+      "id": "daa0387c-26b2-4e5f-8ea1-b4ea142ecedb",
+      "plan_id": "605296-20261023-ALERT01",
+      "version": 1,
+      "status": "DRAFT",
+      "plan_hash": "d544f88adf633d658c4539de6909391a4b45a9312393f35874f67057c55e0118",
+      "confirmed_at": null,
+      "review_id": null,
+      "review_revision": 0,
+      "technical_alerts": 1,
+      "ordinary_rules": 0,
+      "risk_branches": 0
+    },
+    "protected": {
+      "active_plan": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "plan_activation_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_lot": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_opening_balance": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_confirmation": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "risk_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "manual_event_risk": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "daily_records": {
+        "count": 4,
+        "sha256": "f2ae9b3259c436b17121ee0b241d470bab8cba41b247d9d0ee18ff98a6fc68ca"
+      },
+      "draft_bytes": {
+        "count": 1,
+        "sha256": "8e90f2bee1750e54c2b2a5539ea3d01577d2d075ac9de0e8e5a83191730950c1"
+      },
+      "review_bytes": {
+        "count": 1,
+        "sha256": "6239e101ba0784d5b481b5f011657b08af2e174e8c61bf8a2aecba03689976ec"
+      },
+      "storage_constraint": {
+        "count": 1,
+        "sha256": "5eb393768b1918e6991d58ac5fa4c3f57c9ca11326e6ef5dda3d354540dcb7fc"
+      }
+    },
+    "config_sha256": "89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428"
+  },
+  "after": {
+    "draft": {
+      "id": "daa0387c-26b2-4e5f-8ea1-b4ea142ecedb",
+      "plan_id": "605296-20261023-ALERT01",
+      "version": 1,
+      "status": "DRAFT",
+      "plan_hash": "d544f88adf633d658c4539de6909391a4b45a9312393f35874f67057c55e0118",
+      "confirmed_at": null,
+      "review_id": null,
+      "review_revision": 0,
+      "technical_alerts": 1,
+      "ordinary_rules": 0,
+      "risk_branches": 0
+    },
+    "protected": {
+      "active_plan": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "plan_activation_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_lot": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_opening_balance": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "position_inventory_confirmation": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "risk_state": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "manual_event_risk": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "daily_records": {
+        "count": 4,
+        "sha256": "f2ae9b3259c436b17121ee0b241d470bab8cba41b247d9d0ee18ff98a6fc68ca"
+      },
+      "draft_bytes": {
+        "count": 1,
+        "sha256": "8e90f2bee1750e54c2b2a5539ea3d01577d2d075ac9de0e8e5a83191730950c1"
+      },
+      "review_bytes": {
+        "count": 1,
+        "sha256": "6239e101ba0784d5b481b5f011657b08af2e174e8c61bf8a2aecba03689976ec"
+      },
+      "storage_constraint": {
+        "count": 1,
+        "sha256": "5eb393768b1918e6991d58ac5fa4c3f57c9ca11326e6ef5dda3d354540dcb7fc"
+      }
+    },
+    "config_sha256": "89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428"
+  },
+  "unchanged": true
+}

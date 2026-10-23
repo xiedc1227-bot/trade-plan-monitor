@@ -1,0 +1,165 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4769,
+        "completion_tokens": 664,
+        "total_tokens": 5433
+      },
+      "expected_cost": "无",
+      "cost_lines": [
+        "- 持仓成本：无。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "removed_input_review_lines": [
+        "本提醒仅为条件触发提示，不构成任何买卖授权，不修改实际或模拟库存，不确认审核或启用。"
+      ],
+      "source_sha256": "e7fe2f513ad1b9053cf86b6f2c1fddc0625580d8e1176ba3ef1512d13cc3b6d7",
+      "source_chars": 591,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BGGF-600010-ALERT-001",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4787,
+        "completion_tokens": 651,
+        "total_tokens": 5438
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "- 当前实际持仓：200股；持仓成本：80.00元／股（账户核算资料，按原值保留）。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "removed_input_review_lines": [],
+      "source_sha256": "3c9cc14fc0e9530608b7110a45693d86ec644158cbdc57dcf752926872902728",
+      "source_chars": 893,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-000858-ALERT-20261021",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4717,
+        "completion_tokens": 357,
+        "total_tokens": 5074
+      },
+      "expected_cost": "未知",
+      "cost_lines": [
+        "- 本次输入：实际持仓未知；持仓成本未知；最大计划持仓未知。",
+        "- 持仓成本：未知，按原值保留为未知，不按0处理，不参与本次提醒条件。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "removed_input_review_lines": [
+        "等待确认本标的最大计划持仓（正整数、100股整数倍）。确认后可按“正式日收盘严格低于1400.00元”的独立提醒重新拟定完整版本；在此之前不生成交易价位、低吸分支或数量安排。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4737,
+        "completion_tokens": 472,
+        "total_tokens": 5209
+      },
+      "expected_cost": "35",
+      "cost_lines": [
+        "- 实际持仓：400股；持仓成本：35元／股（账户核算资料，按原值保留）。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "removed_input_review_lines": [
+        "- 等待软件具备指数联动与动态数量能力，或由用户明确授权并选定某一静态分支（含具体数量、确认级别与暂停条件）后，再另拟完整版本。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "source-exit-reassessment",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4846,
+        "completion_tokens": 713,
+        "total_tokens": 5559
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "当前实际持仓：200股；持仓成本：80.00元／股（账户核算资料，按原值保留）。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "source_conditions_present": true,
+      "removed_input_review_lines": [
+        "等待人工按上述两条提醒的正式收盘确认结果进行观察；不自动交易，不修改实际或模拟库存。"
+      ],
+      "source_sha256": "f32116732f9b8bd793523d3ca4d8c48dc9c6e9864fe9aae01b75f06aaedb6117",
+      "source_chars": 891,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-000858-ALERT-20261021",
+        "version": 1
+      },
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

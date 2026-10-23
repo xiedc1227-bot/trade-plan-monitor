@@ -1,0 +1,52 @@
+{
+  "final_run": "run-v7",
+  "pipeline_passed": true,
+  "runs": [
+    {
+      "run": "run-v1",
+      "pipeline_passed": false,
+      "prompt_sha256": "d87764d5a10ad49a395c88a5082b41a77547ea8f33e54131f2913be0736f655e"
+    },
+    {
+      "run": "run-v2",
+      "pipeline_passed": false,
+      "prompt_sha256": "de99cf64aa79bb998aaadbebe646e8575d816406572597c90f097dac5bb77325"
+    },
+    {
+      "run": "run-v3",
+      "pipeline_passed": true,
+      "prompt_sha256": "2c89fc7cb75a34b70b8229a190648f21489dd10ddcfa460e313188a586bc214d"
+    },
+    {
+      "run": "run-v4",
+      "pipeline_passed": true,
+      "prompt_sha256": "4098c9a55d619c44a7df7ba360452c13d42b6b10bca762fe342b02497cca5cda"
+    },
+    {
+      "run": "run-v5",
+      "pipeline_passed": true,
+      "prompt_sha256": "7a179752c5788c9ed5d0e03486cc8056e95bea987760c80ff89b709636e7f73c"
+    },
+    {
+      "run": "run-v6",
+      "pipeline_passed": true,
+      "prompt_sha256": "408af43b1283b4c7124180b2fa732c1e3c6615a56a32fbaa3adf247476c4ea7f"
+    },
+    {
+      "run": "run-v7",
+      "pipeline_passed": true,
+      "prompt_sha256": "2ae757609dce142e3958f2c6d7d290223e8029f4859435f4eb5e48271f743e96"
+    }
+  ],
+  "generation_calls": 35,
+  "extraction_calls": 21,
+  "provider_attempts": 56,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "configuration_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "harness_change": "Same five cases and unchanged harness from validity-prompt verification; only README prompt changed; snapshot targets latest saved Shennong draft"
+}

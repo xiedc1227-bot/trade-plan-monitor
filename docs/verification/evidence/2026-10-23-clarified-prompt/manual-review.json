@@ -1,0 +1,24 @@
+{
+  "final_run": "run-v7",
+  "actual_provider_language": "zh-CN",
+  "english_semantic_parity_reviewed": true,
+  "all_five_current_cases_accepted": true,
+  "cost_raw_values_preserved": true,
+  "no_fee_or_pnl_calculations": true,
+  "validity_exact_all_five": true,
+  "source_exit_reassessment_preserved": true,
+  "removed_inputs_not_requested": true,
+  "unsupported_dependency_not_weakened": true,
+  "no_unselected_static_branch_requested_in_final": true,
+  "no_reminder_capacity_calculation_in_final": true,
+  "intermediate_findings": {
+    "run-v1": "All three positive A outputs omitted required heading; B contained unrelated unsupported-capability labels and a misleading relationship statement about two reminders.",
+    "run-v2": "All three positive A outputs still omitted heading; machine extraction alone succeeded, so overall acceptance failed.",
+    "run-v3": "Machine pipeline passed; B for unsupported-index-buy listed unrelated missing trading parameters and suggested a static branch.",
+    "run-v4": "Machine pipeline passed; reminder B calculated capacity and unsupported B offered conditional alternatives.",
+    "run-v5": "Machine pipeline passed; unsupported B still suggested a static branch and additional future risk input; one reminder labelled background data gaps as current missing inputs.",
+    "run-v6": "Machine pipeline passed; unsupported B still gave the unselected static-branch alternative.",
+    "run-v7": "Machine pipeline passed; blocking and action scope accepted after removing the conflicting static-branch workflow text."
+  },
+  "remaining_prose_observation": "The final unsupported B still restates in one sentence that other trading parameters were not defined. It does not request them, propose another branch, invent a value, or add them to A. This sentence is retained unchanged, not claimed to be perfectly minimal prose."
+}

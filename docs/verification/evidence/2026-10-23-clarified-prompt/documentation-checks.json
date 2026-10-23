@@ -1,0 +1,24 @@
+{
+  "README.md": {
+    "prompt_sha256": "2d37f886b4ef0eec1746425fa497ceaa8fd9079b80586f5042ab7d990df866ed",
+    "characters": 19781,
+    "previous_characters": 18934,
+    "reminder_example_unchanged": true,
+    "duplicate_root_example_removed": true,
+    "outside_prompt_unchanged": true,
+    "trade_rules_unchanged": true,
+    "market_sizing_table_unchanged": true,
+    "input_fields_unchanged": true
+  },
+  "README.zh-CN.md": {
+    "prompt_sha256": "2ae757609dce142e3958f2c6d7d290223e8029f4859435f4eb5e48271f743e96",
+    "characters": 7228,
+    "previous_characters": 7137,
+    "reminder_example_unchanged": true,
+    "duplicate_root_example_removed": true,
+    "outside_prompt_unchanged": true,
+    "trade_rules_unchanged": true,
+    "market_sizing_table_unchanged": true,
+    "input_fields_unchanged": true
+  }
+}
