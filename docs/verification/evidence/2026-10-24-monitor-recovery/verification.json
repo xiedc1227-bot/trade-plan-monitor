@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "red": {
+    "failed": 2,
+    "passed": 1,
+    "reason": "degraded failure did not restart"
+  },
+  "green": {
+    "unit": {
+      "tests": 3508,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "runtime": {
+      "tests": 205,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "new_regressions": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "protected_records_unchanged": true,
+  "draft": {
+    "id": "3c426adf-09d2-48ca-af3d-177caa4f8f65",
+    "plan_id": "605296-SS-WATCH-20261023",
+    "version": 1,
+    "status": "DRAFT",
+    "plan_hash": "669cd27f9159b8e672b62dbbba1422ad2ff4f113366b4654ddfe0c74fc51de17",
+    "confirmed_at": null,
+    "review_id": null,
+    "review_revision": 0,
+    "technical_alerts": 1,
+    "ordinary_rules": 0,
+    "risk_branches": 0
+  },
+  "historical_trigger_confirmed": false,
+  "production_fault_injection": false,
+  "runtime_generation_stable": true,
+  "complete_backend_suite_passed": false,
+  "full_suite_limit": "Duplicate test module collection conflict; expanded capacity/replay runs interrupted. All unit and selected runtime suites completed.",
+  "sha256": {
+    "health-before.json": "df52898d92f46db1d4f40fb6eaeb204cb35536209c893bd669116113be581f3d",
+    "health-after-first.json": "0dd52c2dfef225d353d82c61fdc75e1cd0e04351264e67b29dc9369d883f0aaf",
+    "health-after-final.json": "a647f28aafe9430b5cf3dca31b494972040cd541f6ee1036c857af32e1c9085b",
+    "protected-before.json": "f6adb43e2b59d17566079b90f673c01f3e5ed05ae00185681ae35585d88c1b12",
+    "protected-after.json": "f6adb43e2b59d17566079b90f673c01f3e5ed05ae00185681ae35585d88c1b12",
+    "unit.log": "3d30dbe569bd86e5b5519ac60be4c6de47744cdd791ff7f2fece1b5265142d54",
+    "focused.log": "1622f7d6ba5ab433872a70a196a157edc115730b5b12e3f1b482affd72256083",
+    "runtime-final.log": "e7f6a5c3fb2d7aa571dc0a5af9a6016026ea88610714ba75948c530b551ad3ed"
+  },
+  "hash_byte_basis": "Archived evidence bytes with LF line endings"
+}

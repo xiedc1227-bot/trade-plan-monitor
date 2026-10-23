@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -122,9 +123,10 @@ from trade_plan_monitor.state.repositories import (
     EpisodeNotFoundError,
     FiveMinuteBarRecord,
 )
-from trade_plan_monitor.state.runtime_liveness import LegacyPlansRequireReview
+from trade_plan_monitor.state.runtime_liveness import LegacyPlansRequireReview, RuntimeLivenessError
 from trade_plan_monitor.state.unit_of_work import UnitOfWork
 
+_LOGGER = logging.getLogger(__name__)
 _MAX_FETCHED_MINUTES = 1_000
 _MAX_CURRENT_DAY_MINUTES = 240
 _MAX_CURRENT_DAY_BUCKETS = _MAX_CURRENT_DAY_MINUTES // 5
@@ -3526,7 +3528,7 @@ class RuntimeLifecycleService:
         finally:
             self._unexpected_run_exit = (
                 startup is not None
-                and startup.status is RuntimeServiceStatus.RUNNING
+                and startup.status in {RuntimeServiceStatus.RUNNING, RuntimeServiceStatus.DEGRADED}
                 and (not self._stopping or self._liveness_failed)
             )
             try:
@@ -3707,7 +3709,7 @@ class RuntimeLifecycleService:
 
     @property
     def unexpected_run_exit(self) -> bool:
-        """Whether a RUNNING loop ended before an explicit stop request."""
+        """Whether an admitted scheduling/recovery loop ended without explicit stop."""
 
         return self._unexpected_run_exit
 
@@ -4066,6 +4068,17 @@ class RuntimeLifecycleService:
             return
         if not task.cancelled() and task.exception() is None:
             return
+        error = None if task.cancelled() else task.exception()
+        code = "HEARTBEAT_CANCELLED" if task.cancelled() else "HEARTBEAT_FAILED"
+        if isinstance(error, RuntimeLivenessError):
+            # Only known local categories; never log raw exception/provider content.
+            code = {
+                "runtime liveness changed": "LIVENESS_REVISION_CHANGED",
+                "runtime clock moved backwards": "LIVENESS_CLOCK_BACKWARDS",
+                "runtime interruption exceeds 120 hours": "LIVENESS_INTERRUPTION_EXPIRED",
+                "invalid runtime liveness": "LIVENESS_STORAGE_INVALID",
+            }.get(str(error), "LIVENESS_FAILED")
+        _LOGGER.warning("Runtime heartbeat stopped admission: code=%s", code)
         self._liveness_failed = True
         self._accepting_work = False
         self._read_only = True

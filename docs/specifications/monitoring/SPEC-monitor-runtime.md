@@ -156,11 +156,12 @@ For the bounded production index-only scope, valid index semantics and a trusted
 
 ### LPC006 Recoverable Web Supervisor Contract
 
-- Only an unexpected post-start `run()` return or exception observed while health was `RUNNING` is restartable. The supervisor creates a fresh runtime instance for every attempt; it never reuses a stopped lifecycle.
+- An unexpected post-start `run()` return or exception is restartable after successful admission into `RUNNING` or `DEGRADED`. An admitted read-only recovery loop, including heartbeat failure during degraded startup recovery, must not be mistaken for explicit shutdown. The supervisor creates a fresh runtime instance for every attempt; it never reuses a stopped lifecycle. Replacement repeats all startup and capability checks; restarting does not authorize monitoring or clear a data/configuration blocker.
 - One Web composition permits at most three restarts, delayed by exactly `1`, `2`, and `4` seconds. A process restart creates a new composition and resets that budget.
 - During every restart delay and after the budget is exhausted, projected health is `DEGRADED`, `read_only=true`, and `next_poll_at=null`; a dead runner can never remain visibly `RUNNING`.
 - Explicit stop, caller cancellation, startup/configuration/migration failure, and cleanup failure are terminal for that composition and are never automatically retried.
 - Restart delays are owned, cancellable, and joined by the composition. Replacement occurs only after the failed runtime has completed exact cleanup, so service bindings never point at a closed runtime boundary and no task is orphaned.
+- Heartbeat failure and supervisor recovery/termination emit allowlisted diagnostic codes and bounded attempt/delay values. Known liveness revision, clock, interruption and storage failures are distinguished without logging raw exception text, traceback, credentials or provider payloads. These logs explain subsequent incidents; they do not reconstruct an unrecorded historical cause.
 
 T051 projects this secret-free contract without reinterpretation. The Vue health surface displays lifecycle/observation timestamps, completed-minute and evaluation timestamps with their backend ages, poll/retry/cooldown, provider capability/latency, ordered gaps, executor utilization, database/WAL/checkpoint/backup, and delivery facts. It never renders unexpected raw provider/transport errors, derives health or freshness, or changes runtime state. Text/shape markers accompany color, and real-browser WCAG 2.1 A/AA, keyboard, responsive, and reduced-motion checks cover the projection.
 

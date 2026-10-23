@@ -457,27 +457,32 @@ class MonitorWebComposition:
                 if self._stopping:
                     return
                 self._runner_failed = True
+                _LOGGER.warning("Monitor recovery halted: code=RUNTIME_RUNNER_CANCELLED")
                 raise
             except Exception:
-                pass
+                _LOGGER.warning("Monitor runner exited: code=RUNTIME_RUNNER_EXCEPTION")
             if self._stopping:
                 return
 
             try:
                 exit_health = self._validated_health(runtime.health())
             except Exception:
+                _LOGGER.warning("Monitor recovery halted: code=RUNTIME_HEALTH_INVALID")
                 return
             self._last_runtime_health = exit_health
             unexpected_exit = getattr(runtime, "unexpected_run_exit", False)
             if type(unexpected_exit) is not bool:
+                _LOGGER.warning("Monitor recovery halted: code=RUNTIME_EXIT_FLAG_INVALID")
                 return
             cleanup_failed = getattr(runtime, "cleanup_failed", False)
             if type(cleanup_failed) is not bool or cleanup_failed:
                 self._runner_failed = True
+                _LOGGER.warning("Monitor recovery halted: code=RUNTIME_CLEANUP_FAILED")
                 return
             if getattr(runtime, "configuration_restart_required", False) is True:
                 self._configuration_restart_required = True
                 self._runner_failed = False
+                _LOGGER.warning("Monitor recovery halted: code=CONFIGURATION_RESTART_REQUIRED")
                 await self._stop_runtime(runtime)
                 return
             if not unexpected_exit and exit_health.status is not RuntimeServiceStatus.RUNNING:
@@ -488,15 +493,25 @@ class MonitorWebComposition:
             try:
                 await self._stop_runtime(runtime)
             except Exception:
+                _LOGGER.warning("Monitor recovery halted: code=RUNTIME_CLEANUP_FAILED")
                 return
             if self._runtime_factory is None or self._restart_attempts >= len(
                 _RUNTIME_RESTART_DELAYS_SECONDS
             ):
+                _LOGGER.warning(
+                    "Monitor recovery halted: code=%s",
+                    "RUNTIME_RESTART_NOT_CONFIGURED" if self._runtime_factory is None
+                    else "RUNTIME_RESTART_BUDGET_EXHAUSTED",
+                )
                 return
 
             delay = _RUNTIME_RESTART_DELAYS_SECONDS[self._restart_attempts]
             self._restart_attempts += 1
             self._restart_pending = True
+            _LOGGER.warning(
+                "Monitor recovery: code=RUNTIME_RESTART_SCHEDULED attempt=%s delay_seconds=%s",
+                self._restart_attempts, delay,
+            )
             try:
                 await self._restart_sleep(delay)
             except asyncio.CancelledError:
@@ -545,6 +560,7 @@ class MonitorWebComposition:
                     return
                 raise
             except Exception:
+                _LOGGER.warning("Monitor recovery halted: code=RUNTIME_REPLACEMENT_START_FAILED")
                 if replacement is not None and getattr(
                     replacement, "configuration_restart_required", False
                 ) is True:
@@ -558,6 +574,7 @@ class MonitorWebComposition:
             if not self._needs_runner(replacement, status):
                 return
             self._runner_failed = False
+            _LOGGER.warning("Monitor recovery: code=RUNTIME_REPLACEMENT_STARTED")
 
     @staticmethod
     def _needs_runner(runtime: MonitorRuntime, status: RuntimeServiceStatus) -> bool:

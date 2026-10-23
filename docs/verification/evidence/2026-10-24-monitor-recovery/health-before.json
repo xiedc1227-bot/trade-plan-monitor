@@ -1,0 +1,224 @@
+{
+  "monitorContractVersion": 2,
+  "runtimeGeneration": "9e8ca266-9b64-4491-876b-4c279be43464",
+  "observedAt": "2026-10-24T00:08:07.539639+08:00",
+  "runtimeStatus": {
+    "lifecycle": "RUNNING",
+    "mode": "STANDBY",
+    "reasonCode": "NO_ACTIVE_PLANS",
+    "nextWakeAt": "2026-10-24T00:08:27.953496+08:00",
+    "nextRetryAt": null,
+    "lastProgressAt": "2026-10-24T00:07:57.95351+08:00",
+    "coordinator": {
+      "state": "SCHEDULED",
+      "progressDueAt": "2026-10-24T00:08:27.953496+08:00"
+    },
+    "scopes": [
+      {
+        "scopeKey": "calendar:SSE",
+        "status": "READY",
+        "reasonCode": null,
+        "requiredTarget": null,
+        "dataCutoff": null,
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": 1,
+          "completedCount": 1
+        },
+        "kind": "CALENDAR"
+      },
+      {
+        "scopeKey": "index:000001.SH",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": "2026-10-23T15:00:00+08:00",
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "INDEX",
+        "indexCode": "000001.SH"
+      },
+      {
+        "scopeKey": "index:000688.SH",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": "2026-10-23T15:00:00+08:00",
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "INDEX",
+        "indexCode": "000688.SH"
+      },
+      {
+        "scopeKey": "index:399001.SZ",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": "2026-10-23T15:00:00+08:00",
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "INDEX",
+        "indexCode": "399001.SZ"
+      },
+      {
+        "scopeKey": "index:399006.SZ",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": "2026-10-23T15:00:00+08:00",
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "INDEX",
+        "indexCode": "399006.SZ"
+      },
+      {
+        "scopeKey": "index:399107.SZ",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": "2026-10-23T15:00:00+08:00",
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "INDEX",
+        "indexCode": "399107.SZ"
+      },
+      {
+        "scopeKey": "provider:index:idx_mins",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": null,
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "PROVIDER"
+      },
+      {
+        "scopeKey": "provider:index:index_daily",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": null,
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "PROVIDER"
+      },
+      {
+        "scopeKey": "provider:index:rt_idx_min_daily",
+        "status": "WAITING",
+        "reasonCode": "PUBLICATION_PENDING",
+        "requiredTarget": null,
+        "dataCutoff": null,
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": null,
+          "completedCount": null
+        },
+        "kind": "PROVIDER"
+      },
+      {
+        "scopeKey": "provider:stock:trade_cal",
+        "status": "READY",
+        "reasonCode": null,
+        "requiredTarget": null,
+        "dataCutoff": null,
+        "nextRetryAt": null,
+        "progress": {
+          "requiredCount": 1,
+          "completedCount": 1
+        },
+        "kind": "PROVIDER"
+      }
+    ]
+  },
+  "startedAt": "2026-10-23T23:58:52.120955+08:00",
+  "stoppedAt": null,
+  "lastCompletedMinute": null,
+  "lastCompletedMinuteAgeSeconds": null,
+  "latestEvaluationAt": null,
+  "latestEvaluationAgeSeconds": null,
+  "gaps": [],
+  "cooldownUntil": null,
+  "providers": [
+    {
+      "capability": "current_day_minutes",
+      "status": "UNVERIFIED",
+      "checkedAt": "2026-10-23T23:58:53.096461+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "daily_bars",
+      "status": "UNVERIFIED",
+      "checkedAt": "2026-10-23T23:58:53.096461+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "daily_limits",
+      "status": "UNVERIFIED",
+      "checkedAt": "2026-10-23T23:58:53.096461+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "realtime_minutes",
+      "status": "UNVERIFIED",
+      "checkedAt": "2026-10-23T23:58:53.096461+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    },
+    {
+      "capability": "trading_calendar",
+      "status": "UNVERIFIED",
+      "checkedAt": "2026-10-23T23:58:53.096461+08:00",
+      "latencyMs": 0,
+      "errorCode": null,
+      "nextRetryAt": null
+    }
+  ],
+  "executor": {
+    "maxWorkers": 1,
+    "activeCount": 0,
+    "waitingCount": 0
+  },
+  "database": {
+    "status": "READY",
+    "walStatus": "READY",
+    "lastCheckpointAt": null,
+    "lastBackupAt": null,
+    "errorCode": null
+  },
+  "delivery": {
+    "status": "READY",
+    "pendingCount": 0,
+    "failedCount": 0,
+    "lastDeliveredAt": null,
+    "nextRetryAt": null,
+    "errorCode": null
+  }
+}
