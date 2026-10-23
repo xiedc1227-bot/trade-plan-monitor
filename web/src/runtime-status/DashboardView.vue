@@ -13,7 +13,7 @@ import OverviewStatus from "./OverviewStatus.vue";
 import PlanRow from "./PlanRow.vue";
 const { store } = useRuntimeContext();
 const connectionStatus = computed<ConnectionStatus>(() =>
-  store.transport === "LIVE" ? "CONNECTED" : store.transport === "CONNECTING" ? "UNKNOWN" : "DISCONNECTED",
+  store.transport === "LIVE" ? "CONNECTED" : ["CONNECTING", "AWAITING_HEARTBEAT"].includes(store.transport) ? "UNKNOWN" : "DISCONNECTED",
 );
 const marketIndexOverview = useMarketIndexOverview({
   api: createMarketIndexOverviewApi(resolveApiFetch()),

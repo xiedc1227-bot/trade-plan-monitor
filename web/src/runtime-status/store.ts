@@ -6,7 +6,7 @@ import { monotonicDeadline } from "./deadlines";
 import { isRuntimeDashboard } from "./validators";
 
 export type PlanEntry = RuntimeDashboardResponse["symbols"][number];
-export type TransportState = "CONNECTING" | "LIVE" | "DISCONNECTED" | "RECONNECTING" | "RELOAD_REQUIRED";
+export type TransportState = "CONNECTING" | "AWAITING_HEARTBEAT" | "LIVE" | "DISCONNECTED" | "RECONNECTING" | "RELOAD_REQUIRED";
 
 export function presentationKey(row: PlanEntry, ruleId = ""): string {
   return JSON.stringify([row.symbol, row.planVersionId, row.planHash, row.activationRevision, ruleId]);

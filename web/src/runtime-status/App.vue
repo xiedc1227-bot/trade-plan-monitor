@@ -29,9 +29,11 @@ provide(apiFetchKey, protocol.fetch);
 provide(runtimeContextKey, { api, monitor, store });
 const connectionState = computed<MonitorStreamConnectionState>(() => {
   switch (store.transport) {
-    case "LIVE": return { code: "LIVE", label: "传输连接正常", marker: "●" };
+    case "LIVE": return { code: "LIVE", label: store.runtimeStatus?.lifecycle === "STOPPED"
+      ? "传输连接正常；监控已停止" : "传输连接正常", marker: "●" };
     case "RELOAD_REQUIRED": return { code: "UNAVAILABLE", label: "应用版本已变化，请重新加载页面", marker: "!" };
     case "CONNECTING": return { code: "CONNECTING", label: "正在连接监控服务", marker: "…" };
+    case "AWAITING_HEARTBEAT": return { code: "CONNECTING", label: "连接已建立，等待监控状态", marker: "…" };
     default: return { code: "DISCONNECTED", label: "传输断开，正在重新连接", marker: "×" };
   }
 });

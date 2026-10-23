@@ -100,7 +100,11 @@ export function createRuntimeMonitor({ api, protocol, store, origin, createSocke
     let candidate: WebSocket;
     try { candidate = createSocket(url.toString()); } catch { store.setTransport("DISCONNECTED"); scheduleRetry(); return; }
     socket = candidate; lastHeartbeat = null;
-    candidate.addEventListener("open", () => { if (candidate === socket) armSilence(candidate, 40_000); });
+    candidate.addEventListener("open", () => {
+      if (!active() || candidate !== socket) return;
+      store.setTransport("AWAITING_HEARTBEAT");
+      armSilence(candidate, 40_000);
+    });
     candidate.addEventListener("message", (event) => { if (active() && candidate === socket) receive(event.data); });
     candidate.addEventListener("close", (event) => {
       if (candidate !== socket) return;
