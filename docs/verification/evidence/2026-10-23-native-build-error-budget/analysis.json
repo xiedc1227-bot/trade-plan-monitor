@@ -1,0 +1,270 @@
+{
+  "baseCommit": "487f5177b2fb3591dab90f1ea949ff3772bff2b7",
+  "scope": "analysis only; no production or experiment implementation changes",
+  "provenance": {
+    "sourceUrl": "https://github.com/pydantic/pydantic/tree/main/pydantic-core",
+    "artifacts": [
+      {
+        "filename": "pydantic_core-2.46.4-cp314-cp314-win_amd64.whl",
+        "url": "https://files.pythonhosted.org/packages/fc/b6/6b8de4c0a7d7ab3004c439c80c5c1e0a3e8d78bbae19379b01960383d9e5/pydantic_core-2.46.4-cp314-cp314-win_amd64.whl",
+        "sha256": "811ff8e9c313ab425368bcbb36e5c4ebd7108c2bbf4e4089cfbb0b01eff63fac",
+        "pypiDigestMatches": true,
+        "wheelBinarySha256": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e",
+        "installedBinaryMatches": true,
+        "WHEELSha256": "cf8e9b7925e7b2a016baf94bf9eed55bfbd2250e6347384531c94acc351c4bdf",
+        "METADATASha256": "e2d0298dfb8712190ad250722e11a46a4391e71d687d5c7667c09e935cadc63b",
+        "RECORDSha256": "51b438059ab28099fe970ddeade3b46b7d28eccecdf378a9820eeaa4c4d401f6",
+        "provenanceError": "HTTP Error 404: Not Found",
+        "normalizedProvenanceStatus": 404,
+        "normalizedProvenanceUrl": "https://pypi.org/integrity/pydantic-core/2.46.4/pydantic_core-2.46.4-cp314-cp314-win_amd64.whl/provenance"
+      },
+      {
+        "filename": "pydantic_core-2.46.4.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/9d/56/921726b776ace8d8f5db44c4ef961006580d91dc52b803c489fafd1aa249/pydantic_core-2.46.4.tar.gz",
+        "sha256": "62f875393d7f270851f20523dd2e29f082bcc82292d66db2b64ea71f64b6e1c1",
+        "pypiDigestMatches": true,
+        "rustSourceCount": 124,
+        "sourceFiles": {
+          "Cargo.toml": "20fcd4066f125dec91012a0cdb7f7c901963226c98906a7e414210a64ac1fcc3",
+          "Cargo.lock": "c3c27fc600d7dafd149229c6501271dbc5f6b4f7b1bfa116b32e77217c2b5038",
+          "pyproject.toml": "80f7cf0e108619c32894e828db550bfe6928d4f14ce244ef492fe782609f9926",
+          "src/lib.rs": "a279facf0c432941aa9ff7b224273dff2f7f6c6a9d06fafcdf118fdb4fb4c0fb",
+          "src/errors/validation_exception.rs": "190d904fe58e6ee2d30efb79eaeccaa6261c9983343ce05d5bcc0f81ddb02282",
+          "src/errors/line_error.rs": "1cb6c976f51d9412d4ba07d5e2c3804dae3dd7844c6f5fdbc3709c5956a15e9d",
+          "src/input/input_json.rs": "33ee49905d8b11e9ad79c75eb56f67ac548b9971638351bb9035072124e1f1cb",
+          "src/validators/list.rs": "a8457144b51056697b8e485c069205717b163869556dd8cc409efdb7c03dd1d8",
+          "src/validators/tuple.rs": "522af3d6e59b322608e4ea9c8a382a2a4bc515b96c8499ae194417a2f22e572e",
+          "src/validators/function.rs": "fd585c961ed5e592fcd37f36af8563f79e8600cb042986687ed2a3c81c59c41c",
+          "src/input/return_enums.rs": "bc07c085ecf212e0fde539f390f0adae6478babfa5ca7876f2961fae048c8b9c"
+        },
+        "provenanceError": "HTTP Error 404: Not Found",
+        "normalizedProvenanceStatus": 404,
+        "normalizedProvenanceUrl": "https://pypi.org/integrity/pydantic-core/2.46.4/pydantic_core-2.46.4.tar.gz/provenance"
+      }
+    ],
+    "installedBinarySha256": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e",
+    "githubSourceComparison": {
+      "commit": "cf67d4b3193c3fe43ede18612ed62785eee11382",
+      "files": {
+        "Cargo.toml": {
+          "equal": true,
+          "sourceSha256": "20fcd4066f125dec91012a0cdb7f7c901963226c98906a7e414210a64ac1fcc3"
+        },
+        "Cargo.lock": {
+          "equal": true,
+          "sourceSha256": "c3c27fc600d7dafd149229c6501271dbc5f6b4f7b1bfa116b32e77217c2b5038"
+        },
+        "src/errors/validation_exception.rs": {
+          "equal": true,
+          "sourceSha256": "190d904fe58e6ee2d30efb79eaeccaa6261c9983343ce05d5bcc0f81ddb02282"
+        }
+      }
+    },
+    "lockedDependencies": [
+      {
+        "name": "jiter",
+        "version": "0.14.0",
+        "checksum": "b6f3b5d3f84b36f4ad09fd1da896d23d9852a1aa86556578dd0289f43dce311d"
+      },
+      {
+        "name": "pyo3",
+        "version": "0.28.3",
+        "checksum": "91fd8e38a3b50ed1167fb981cd6fd60147e091784c427b8f7183a7ee32c31c12"
+      },
+      {
+        "name": "serde_json",
+        "version": "1.0.149",
+        "checksum": "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+      },
+      {
+        "name": "smallvec",
+        "version": "1.15.1",
+        "checksum": "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+      }
+    ],
+    "sbomTools": [
+      {
+        "vendor": "CycloneDX",
+        "name": "cargo-cyclonedx",
+        "version": "0.5.9"
+      }
+    ],
+    "sbomRelevantDependencies": [
+      {
+        "name": "jiter",
+        "version": "0.14.0",
+        "purl": "pkg:cargo/jiter@0.14.0"
+      },
+      {
+        "name": "pyo3",
+        "version": "0.28.3",
+        "purl": "pkg:cargo/pyo3@0.28.3"
+      },
+      {
+        "name": "serde_json",
+        "version": "1.0.149",
+        "purl": "pkg:cargo/serde_json@1.0.149"
+      },
+      {
+        "name": "smallvec",
+        "version": "1.15.1",
+        "purl": "pkg:cargo/smallvec@1.15.1"
+      }
+    ],
+    "sourceBuildFiles": [
+      "pydantic_core-2.46.4/.cargo/config.toml",
+      "pydantic_core-2.46.4/build.rs"
+    ]
+  },
+  "buildEvidence": {
+    "checkedAt": "2026-10-23",
+    "commit": "cf67d4b3193c3fe43ede18612ed62785eee11382",
+    "workflow": {
+      "url": "https://github.com/pydantic/pydantic/blob/cf67d4b3193c3fe43ede18612ed62785eee11382/.github/workflows/ci.yml",
+      "gitBlobSha": "171cad83daec49d4478ed3f0e62316694f049d34",
+      "rustToolchain": "stable",
+      "windows314Job": "core-build-pgo"
+    },
+    "action": {
+      "url": "https://github.com/pydantic/pydantic/blob/cf67d4b3193c3fe43ede18612ed62785eee11382/.github/actions/core-build-pgo-wheel/action.yml",
+      "gitBlobSha": "9959322ee12fa49dbf0ff90e6d5ab86ce753b6ed",
+      "declaredGenerate": "-Cprofile-generate",
+      "declaredUse": "-Cprofile-use"
+    },
+    "runtime": {
+      "build_info": "profile=release pgo=false",
+      "build_profile": "release"
+    },
+    "jobs": [
+      {
+        "id": 74621209775,
+        "name": "core / Build PGO-optimized on windows / 3.14",
+        "url": "https://github.com/pydantic/pydantic/actions/runs/25424600075/job/74621209775",
+        "conclusion": "success",
+        "runAttempt": 2
+      },
+      {
+        "id": 74623425077,
+        "name": "release-pydantic-core",
+        "url": "https://github.com/pydantic/pydantic/actions/runs/25424600075/job/74623425077",
+        "conclusion": "success",
+        "runAttempt": 2
+      }
+    ],
+    "jobLogStatus": 410,
+    "artifactQueryName": "pydantic_core_pypi_files_windows_3.14",
+    "artifactQueryResults": [],
+    "limitation": "Workflow and successful jobs do not bind the installed wheel hash to compiler, flags, allocator or PGO artifact. Runtime pgo=false remains unexplained; no tamper claim."
+  },
+  "errorLifetime": {
+    "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee",
+    "rawBytes": 12120814,
+    "measurements": [
+      {
+        "variant": "original",
+        "live": 36510865,
+        "peak": 193157635,
+        "afterGc": 36390231,
+        "afterOuterChainFramesCleared": 25944,
+        "afterRelease": 25816,
+        "chain": [
+          {
+            "type": "ProjectionError",
+            "errorCount": null,
+            "hasCause": false,
+            "hasContext": false
+          }
+        ]
+      },
+      {
+        "variant": "fused",
+        "live": 156795944,
+        "peak": 156795944,
+        "afterGc": 156792590,
+        "afterOuterChainFramesCleared": 156787878,
+        "afterRelease": 26414,
+        "chain": [
+          {
+            "type": "ProjectionError",
+            "errorCount": null,
+            "hasCause": true,
+            "hasContext": true
+          },
+          {
+            "type": "ValidationError",
+            "errorCount": 40000,
+            "hasCause": false,
+            "hasContext": false
+          }
+        ]
+      }
+    ],
+    "sourceSha256": "5325abf07d6dc96a81c63763a024c61321595b2e245e62c725b9b33685863d18",
+    "limits": "One pass per variant; prebuilt input excluded; no native transient/absolute-process certification. Diagnostic frame clearing is not a proposed production patch."
+  },
+  "admissionArithmetic": [
+    {
+      "shape": "decimal",
+      "rawJsonBytes": 16472833,
+      "currentWork": 197697036,
+      "constant": 23040,
+      "decodedTextGenerations": 2,
+      "decodedTextTerm": 131782664,
+      "withoutDecodedText": 65914372,
+      "metadata": 131072,
+      "encoder256": 3149824,
+      "total256": 69195268,
+      "headroom256": -2086404,
+      "encoder64": 790528,
+      "total64": 66835972,
+      "headroom64": 272892,
+      "limit": 67108864,
+      "certified": false
+    },
+    {
+      "shape": "dense",
+      "rawJsonBytes": 12120814,
+      "currentWork": 145472808,
+      "constant": 23040,
+      "decodedTextGenerations": 2,
+      "decodedTextTerm": 96966512,
+      "withoutDecodedText": 48506296,
+      "metadata": 131072,
+      "encoder256": 3149824,
+      "total256": 51787192,
+      "headroom256": 15321672,
+      "encoder64": 790528,
+      "total64": 49427896,
+      "headroom64": 17680968,
+      "limit": 67108864,
+      "certified": false
+    }
+  ],
+  "diagnosticSources": {
+    ".pytest_cache/native-source-fetch.py": "import base64,csv,hashlib,io,json,tarfile,urllib.request,zipfile\nfrom pathlib import Path\nout=Path('.pytest_cache/native-source-analysis')\nout.mkdir(exist_ok=True)\n\ndef get(url):\n    with urllib.request.urlopen(url,timeout=30) as response:\n        return response.read()\nmetadata=json.loads(get('https://pypi.org/pypi/pydantic_core/2.46.4/json'))\nchosen=[u for u in metadata['urls'] if u['packagetype']=='sdist' or u['filename'].endswith('cp314-cp314-win_amd64.whl')]\nassert len(chosen)==2\nreport={'sourceUrl':metadata['info']['project_urls'].get('Source'),'artifacts':[]}\nlocal=Path('.venv/Lib/site-packages/pydantic_core/_pydantic_core.cp314-win_amd64.pyd')\nlocal_sha=hashlib.sha256(local.read_bytes()).hexdigest()\nreport['installedBinarySha256']=local_sha\nfor u in chosen:\n    blob=get(u['url'])\n    sha=hashlib.sha256(blob).hexdigest()\n    assert sha==u['digests']['sha256']\n    (out/u['filename']).write_bytes(blob)\n    item={'filename':u['filename'],'url':u['url'],'sha256':sha,'pypiDigestMatches':True}\n    if u['packagetype']=='bdist_wheel':\n        with zipfile.ZipFile(io.BytesIO(blob)) as z:\n            member=next(n for n in z.namelist() if n.endswith('.pyd'))\n            item['wheelBinarySha256']=hashlib.sha256(z.read(member)).hexdigest()\n            item['installedBinaryMatches']=item['wheelBinarySha256']==local_sha\n            for label in ('WHEEL','METADATA','RECORD'):\n                name=next(n for n in z.namelist() if n.endswith('.dist-info/'+label))\n                item[label+'Sha256']=hashlib.sha256(z.read(name)).hexdigest()\n    else:\n        with tarfile.open(fileobj=io.BytesIO(blob),mode='r:gz') as t:\n            names=t.getnames()\n            item['rustSourceCount']=sum(n.endswith('.rs') for n in names)\n            wanted=['Cargo.toml','Cargo.lock','pyproject.toml','src/lib.rs','src/errors/validation_exception.rs','src/errors/line_error.rs','src/input/input_json.rs','src/validators/list.rs','src/validators/tuple.rs','src/validators/function.rs','src/input/return_enums.rs']\n            item['sourceFiles']={}\n            for rel in wanted:\n                matches=[n for n in names if n.endswith('/'+rel)]\n                if len(matches)==1:\n                    data=t.extractfile(matches[0]).read()\n                    dest=out/'source'/rel\n                    dest.parent.mkdir(parents=True,exist_ok=True)\n                    dest.write_bytes(data)\n                    item['sourceFiles'][rel]=hashlib.sha256(data).hexdigest()\n    provenance='https://pypi.org/integrity/pydantic_core/2.46.4/'+u['filename']+'/provenance'\n    try:\n        data=get(provenance)\n        (out/(u['filename']+'.provenance.json')).write_bytes(data)\n        item['provenance']=json.loads(data)\n    except Exception as e:\n        item['provenanceError']=str(e)\n    report['artifacts'].append(item)\n(out/'provenance.json').write_text(json.dumps(report,indent=2),encoding='utf8')\nprint(json.dumps(report,indent=2))\n",
+    ".pytest_cache/native-provenance-check.py": "import hashlib\nimport json\nimport tarfile\nimport tomllib\nimport urllib.error\nimport urllib.request\nfrom pathlib import Path\n\nroot = Path('.pytest_cache/native-source-analysis')\nreport = json.loads((root / 'provenance.json').read_text(encoding='utf8'))\nfor artifact in report['artifacts']:\n    url = 'https://pypi.org/integrity/pydantic-core/2.46.4/' + artifact['filename'] + '/provenance'\n    try:\n        with urllib.request.urlopen(url, timeout=30) as response:\n            data = response.read()\n        artifact['normalizedProvenanceStatus'] = 200\n        (root / (artifact['filename'] + '.attestation.json')).write_bytes(data)\n    except urllib.error.HTTPError as error:\n        artifact['normalizedProvenanceStatus'] = error.code\n    artifact['normalizedProvenanceUrl'] = url\n\nreport['githubSourceComparison'] = {'commit': 'cf67d4b3193c3fe43ede18612ed62785eee11382', 'files': {}}\nfor name, rel in [('Cargo.toml', 'Cargo.toml'), ('Cargo.lock', 'Cargo.lock'), ('validation_exception.rs', 'src/errors/validation_exception.rs')]:\n    # apply_patch adds a trailing newline to the connector text. Remove only that transport newline.\n    remote = (root / ('github-' + name)).read_bytes()\n    source = (root / 'source' / rel).read_bytes()\n    report['githubSourceComparison']['files'][rel] = {\n        'equal': remote == source or remote == source + b'\\n',\n        'sourceSha256': hashlib.sha256(source).hexdigest(),\n    }\n\nlock = tomllib.loads((root / 'source/Cargo.lock').read_text(encoding='utf8'))\nreport['lockedDependencies'] = [{k: p[k] for k in ('name','version','checksum') if k in p} for p in lock['package'] if p['name'] in ('jiter','pyo3','smallvec','serde_json')]\nsbom = json.loads(Path('.venv/Lib/site-packages/pydantic_core-2.46.4.dist-info/sboms/pydantic-core.cyclonedx.json').read_text(encoding='utf8'))\nreport['sbomTools'] = sbom['metadata'].get('tools')\nreport['sbomRelevantDependencies'] = [{k:c[k] for k in ('name','version','purl') if k in c} for c in sbom['components'] if c['name'] in ('jiter','pyo3','smallvec','serde_json')]\nwith tarfile.open(root / 'pydantic_core-2.46.4.tar.gz', 'r:gz') as archive:\n    report['sourceBuildFiles'] = [n for n in archive.getnames() if n.endswith(('/rust-toolchain','.cargo_vcs_info.json','/.cargo/config.toml','/build.rs'))]\n    for name in report['sourceBuildFiles']:\n        (root / ('build-' + Path(name).name)).write_bytes(archive.extractfile(name).read())\n(root / 'provenance-complete.json').write_text(json.dumps(report, indent=2), encoding='utf8')\nprint(json.dumps(report, indent=2))\n",
+    ".pytest_cache/error-lifetime-probe.py": "\"\"\"Read frozen synthetic input; measure traced error ownership, not native bounds.\"\"\"\nimport gc\nimport hashlib\nimport json\nimport sys\nimport traceback\nimport tracemalloc\nfrom dataclasses import replace\nfrom pathlib import Path\n\nsys.path.insert(0, str(Path.cwd()))\nfrom scripts.experiments.c_benchmark import CODES, rows_from\nfrom scripts.experiments.fused_c_validator import latest\nfrom trade_plan_monitor.state.projections import _latest_index_records\n\npath = Path('.pytest_cache/cna-measurements/dense.sqlite3')\nbefore = hashlib.sha256(path.read_bytes()).hexdigest()\nrows = rows_from(path)\nassert len(rows) == 1\npayload = list(rows[0].payload)\npayload[9] = payload[9].replace(b'\"high_points\":\"1.', b'\"high_points\":\"0.')\nassert payload[9] != rows[0].payload[9]\nrow = replace(rows[0], payload=tuple(payload))\ndel rows, payload\n\ndef chain_summary(root):\n    todo, visited, result = [root], set(), []\n    while todo:\n        error = todo.pop()\n        if id(error) in visited:\n            continue\n        visited.add(id(error))\n        result.append(dict(type=type(error).__name__, errorCount=error.error_count() if hasattr(error, 'error_count') else None, hasCause=error.__cause__ is not None, hasContext=error.__context__ is not None))\n        for related in (error.__cause__, error.__context__):\n            if related is not None:\n                todo.append(related)\n    return result\n\ndef clear_frames(root):\n    todo, visited = [root], set()\n    while todo:\n        error = todo.pop()\n        if id(error) in visited:\n            continue\n        visited.add(id(error))\n        for related in (error.__cause__, error.__context__):\n            if related is not None:\n                todo.append(related)\n        if error.__traceback__:\n            traceback.clear_frames(error.__traceback__)\n            error.__traceback__ = None\n\ndef measure(name, verify):\n    gc.collect()\n    tracemalloc.start()\n    held = None\n    try:\n        verify(iter((row,)), CODES)\n    except Exception as error:\n        held = error\n    assert held is not None\n    live, peak = tracemalloc.get_traced_memory()\n    chain = chain_summary(held)\n    gc.collect()\n    after_gc = tracemalloc.get_traced_memory()[0]\n    clear_frames(held)\n    gc.collect()\n    after_frames = tracemalloc.get_traced_memory()[0]\n    held = None\n    gc.collect()\n    after_release = tracemalloc.get_traced_memory()[0]\n    tracemalloc.stop()\n    return dict(variant=name, live=live, peak=peak, afterGc=after_gc, afterOuterChainFramesCleared=after_frames, afterRelease=after_release, chain=chain)\n\nreport = dict(inputSha256=before, rawBytes=len(row.payload[9]), measurements=[])\nfor name, verify in [('original', _latest_index_records), ('fused', latest)]:\n    report['measurements'].append(measure(name, verify))\n    print(json.dumps(report['measurements'][-1]), flush=True)\nassert hashlib.sha256(path.read_bytes()).hexdigest() == before\nreport['sourceSha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()\nreport['limits'] = 'One pass per variant; prebuilt input excluded; no native transient/absolute-process certification. Diagnostic frame clearing is not a proposed production patch.'\nPath('.pytest_cache/native-source-analysis/error-lifetime.json').write_text(json.dumps(report,indent=2),encoding='utf8')\n"
+  },
+  "inspectedSourceSha256": {
+    "src/trade_plan_monitor/state/projections.py": "911dd34dcce43d1d99beeeb33b41f44ef7338d217e3fcef7104eb50b6e81ed71",
+    "src/trade_plan_monitor/state/index_evidence.py": "ddebda6f0401da9dd9e54ca87d796abe62d65e429af37c610fee23bc8544dc07",
+    "src/trade_plan_monitor/market_index/models.py": "0359183532e54fdf387e8b56fd9b1a75034de0dd6434d9d315c0e4571b87c319",
+    "scripts/experiments/global_evidence_scan.py": "f3b29fbe5aa43ec77f83386cbd18b0156d5815882bb76c58b4603da3baac2bd1",
+    "scripts/experiments/evidence_representation.py": "80c7708bda9c55f7893278a2ba9c75b73115bfc5aa34211722d937cafd039db2",
+    "scripts/experiments/validator_scan.py": "2ac7dfff321c985585365a252792b0c0c35ff050638c222552688c5101bbdb34",
+    "scripts/experiments/fused_c_validator.py": "f6dfd2a5d7df25c34868f23d2d126b1fc3470df6d3fc7ccb36d854a38721d281",
+    "scripts/experiments/bounded_c_producer.py": "dc4a80bb3e7f96c59372fabff39adeedc1918b99e40efc68c6a8a589704ed541"
+  },
+  "decision": "P1_NO_GO; release-source identity improved, actual-build/native envelope and legal SQL availability still unqualified",
+  "limits": "No new performance acceptance, native allocator interception, absolute process bounds, SQL admission candidate or browser run. Error probe performs one traced pass per variant, excluding prebuilt input; source retrieval is read-only and does not install or execute fetched code. Arithmetic removes a hypothetical component only, never a certified budget reduction.",
+  "analysisChecks": {
+    "bilingualSectionIdsAndInlineLiterals": "passed",
+    "localLinks": "passed",
+    "sourceAndBaseFingerprints": "passed",
+    "admissionArithmetic": "passed",
+    "officialWheelGenerator": "passed",
+    "trackedAndStagedFilesUnchanged": "passed",
+    "applicationTests": "not rerun: analysis-only change",
+    "browserValidation": "not run: no integration enabled"
+  }
+}
