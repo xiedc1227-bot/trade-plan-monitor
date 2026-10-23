@@ -1,0 +1,966 @@
+{
+  "scope": "Dependency-free diagnostic only; no pydantic/runtime qualification",
+  "commands": [
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\rustc.exe",
+        "-Vv"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2",
+      "exitCode": 0,
+      "stdout": "rustc 1.94.0 (4a4ef493e 2026-03-02)\nbinary: rustc\ncommit-hash: 4a4ef493e3a1488c6e321570238084b38948f6db\ncommit-date: 2026-03-02\nhost: x86_64-pc-windows-msvc\nrelease: 1.94.0\nLLVM version: 21.1.8\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\cargo.exe",
+        "-V"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2",
+      "exitCode": 0,
+      "stdout": "cargo 1.94.0 (85eff7c80 2026-01-15)\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-qualification\\venv\\Scripts\\maturin.exe",
+        "--version"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2",
+      "exitCode": 0,
+      "stdout": "maturin 1.13.1\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\cargo.exe",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-qualification\\venv\\Scripts\\maturin.exe",
+        "build",
+        "--bindings",
+        "bin",
+        "--release",
+        "--locked",
+        "--offline",
+        "--verbose",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--out",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\wheels"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "\u9983\u6546 Found bin bindings\n   Compiling determinism-canary v0.1.0 (D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\source)\n     Running `C:\\Users\\xiedc\\.rustup\\toolchains\\1.94.0-x86_64-pc-windows-msvc\\bin\\rustc.exe --crate-name determinism_canary --edition=2024 src\\main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C lto=fat -C codegen-units=1 --check-cfg cfg(docsrs,test) --check-cfg \"cfg(feature, values())\" -C metadata=62e66965f3d4850c --out-dir D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\target\\x86_64-pc-windows-msvc\\release\\deps --target x86_64-pc-windows-msvc -C strip=symbols -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\target\\x86_64-pc-windows-msvc\\release\\deps -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\target\\release\\deps --remap-path-prefix D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\source=/qualification/source`\n    Finished `release` profile [optimized] target(s) in 1.65s\n\u9983\u645d Built wheel to D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\wheels\\determinism_canary-0.1.0-py3-none-win_amd64.whl\n"
+    },
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\cargo.exe",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-qualification\\venv\\Scripts\\maturin.exe",
+        "build",
+        "--bindings",
+        "bin",
+        "--release",
+        "--locked",
+        "--offline",
+        "--verbose",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--out",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\wheels"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "\u9983\u6546 Found bin bindings\n   Compiling determinism-canary v0.1.0 (D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\source)\n     Running `C:\\Users\\xiedc\\.rustup\\toolchains\\1.94.0-x86_64-pc-windows-msvc\\bin\\rustc.exe --crate-name determinism_canary --edition=2024 src\\main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C lto=fat -C codegen-units=1 --check-cfg cfg(docsrs,test) --check-cfg \"cfg(feature, values())\" -C metadata=62e66965f3d4850c --out-dir D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\target\\x86_64-pc-windows-msvc\\release\\deps --target x86_64-pc-windows-msvc -C strip=symbols -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\target\\x86_64-pc-windows-msvc\\release\\deps -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\target\\release\\deps --remap-path-prefix D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\source=/qualification/source`\n    Finished `release` profile [optimized] target(s) in 1.29s\n\u9983\u645d Built wheel to D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\wheels\\determinism_canary-0.1.0-py3-none-win_amd64.whl\n"
+    },
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\cargo.exe",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-qualification\\venv\\Scripts\\maturin.exe",
+        "build",
+        "--bindings",
+        "bin",
+        "--release",
+        "--locked",
+        "--offline",
+        "--verbose",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--out",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\wheels"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "\u9983\u6546 Found bin bindings\n   Compiling determinism-canary v0.1.0 (D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\source)\n     Running `C:\\Users\\xiedc\\.rustup\\toolchains\\1.94.0-x86_64-pc-windows-msvc\\bin\\rustc.exe --crate-name determinism_canary --edition=2024 src\\main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C lto=fat -C codegen-units=1 --check-cfg cfg(docsrs,test) --check-cfg \"cfg(feature, values())\" -C metadata=62e66965f3d4850c --out-dir D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\target\\x86_64-pc-windows-msvc\\release\\deps --target x86_64-pc-windows-msvc -C strip=symbols -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\target\\x86_64-pc-windows-msvc\\release\\deps -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\target\\release\\deps --remap-path-prefix D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\source=/qualification/source`\n    Finished `release` profile [optimized] target(s) in 1.51s\n\u9983\u645d Built wheel to D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\wheels\\determinism_canary-0.1.0-py3-none-win_amd64.whl\n"
+    },
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\cargo.exe",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-qualification\\venv\\Scripts\\maturin.exe",
+        "build",
+        "--bindings",
+        "bin",
+        "--release",
+        "--locked",
+        "--offline",
+        "--verbose",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--out",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\wheels"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "\u9983\u6546 Found bin bindings\n   Compiling determinism-canary v0.1.0 (D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\source)\n     Running `C:\\Users\\xiedc\\.rustup\\toolchains\\1.94.0-x86_64-pc-windows-msvc\\bin\\rustc.exe --crate-name determinism_canary --edition=2024 src\\main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C lto=fat -C codegen-units=1 --check-cfg cfg(docsrs,test) --check-cfg \"cfg(feature, values())\" -C metadata=62e66965f3d4850c --out-dir D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\target\\x86_64-pc-windows-msvc\\release\\deps --target x86_64-pc-windows-msvc -C strip=symbols -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\target\\x86_64-pc-windows-msvc\\release\\deps -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\target\\release\\deps --remap-path-prefix D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\source=/qualification/source`\n    Finished `release` profile [optimized] target(s) in 1.97s\n\u9983\u645d Built wheel to D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\wheels\\determinism_canary-0.1.0-py3-none-win_amd64.whl\n"
+    },
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\cargo.exe",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-qualification\\venv\\Scripts\\maturin.exe",
+        "build",
+        "--bindings",
+        "bin",
+        "--release",
+        "--locked",
+        "--offline",
+        "--verbose",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--out",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\wheels"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "\u9983\u6546 Found bin bindings\n   Compiling determinism-canary v0.1.0 (D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\source)\n     Running `C:\\Users\\xiedc\\.rustup\\toolchains\\1.94.0-x86_64-pc-windows-msvc\\bin\\rustc.exe --crate-name determinism_canary --edition=2024 src\\main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C lto=fat -C codegen-units=1 --check-cfg cfg(docsrs,test) --check-cfg \"cfg(feature, values())\" -C metadata=62e66965f3d4850c --out-dir D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\target\\x86_64-pc-windows-msvc\\release\\deps --target x86_64-pc-windows-msvc -C strip=symbols -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\target\\x86_64-pc-windows-msvc\\release\\deps -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\target\\release\\deps --remap-path-prefix D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\source=/qualification/source -Clink-arg=/Brepro`\n    Finished `release` profile [optimized] target(s) in 1.51s\n\u9983\u645d Built wheel to D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\wheels\\determinism_canary-0.1.0-py3-none-win_amd64.whl\n"
+    },
+    {
+      "argv": [
+        "C:\\Users\\xiedc\\.cargo\\bin\\cargo.exe",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-qualification\\venv\\Scripts\\maturin.exe",
+        "build",
+        "--bindings",
+        "bin",
+        "--release",
+        "--locked",
+        "--offline",
+        "--verbose",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--out",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\wheels"
+      ],
+      "cwd": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\source",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "\u9983\u6546 Found bin bindings\n   Compiling determinism-canary v0.1.0 (D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\source)\n     Running `C:\\Users\\xiedc\\.rustup\\toolchains\\1.94.0-x86_64-pc-windows-msvc\\bin\\rustc.exe --crate-name determinism_canary --edition=2024 src\\main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C lto=fat -C codegen-units=1 --check-cfg cfg(docsrs,test) --check-cfg \"cfg(feature, values())\" -C metadata=62e66965f3d4850c --out-dir D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\target\\x86_64-pc-windows-msvc\\release\\deps --target x86_64-pc-windows-msvc -C strip=symbols -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\target\\x86_64-pc-windows-msvc\\release\\deps -L dependency=D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\target\\release\\deps --remap-path-prefix D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\source=/qualification/source -Clink-arg=/Brepro`\n    Finished `release` profile [optimized] target(s) in 1.48s\n\u9983\u645d Built wheel to D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\wheels\\determinism_canary-0.1.0-py3-none-win_amd64.whl\n"
+    }
+  ],
+  "cases": [
+    {
+      "variant": "baseline",
+      "trial": "A",
+      "epoch": null,
+      "flags": [
+        "--remap-path-prefix",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\A\\source=/qualification/source"
+      ],
+      "pe": {
+        "sha256": "41ec7930b883c8229ceaa465c13784328b095ad9167a16c8962541887bc19665",
+        "length": 116224,
+        "timestamp": 1792741680,
+        "debug": [
+          {
+            "type": 2,
+            "timestamp": 1792741680,
+            "bytes": 47,
+            "guid": "6fae3bb3d128424a94601c2c1432f2e1",
+            "age": 1,
+            "pdb": "determinism_canary.pdb"
+          },
+          {
+            "type": 12,
+            "timestamp": 1792741680,
+            "bytes": 20
+          },
+          {
+            "type": 13,
+            "timestamp": 1792741680,
+            "bytes": 796
+          }
+        ]
+      },
+      "wheelSha256": "069d59a50dc9d411b5958e18fca74268a9413c5b2528f4a284c0da2d345fe54b",
+      "sbom": {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "serialNumber": "urn:uuid:74e6f033-59bc-4234-854a-cf577ff57f2f",
+        "metadata": {
+          "timestamp": "2026-10-23T07:47:58.892584200Z",
+          "tools": [
+            {
+              "vendor": "CycloneDX",
+              "name": "cargo-cyclonedx",
+              "version": "0.5.9"
+            }
+          ],
+          "component": {
+            "type": "application",
+            "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/baseline/A/source#determinism-canary@0.1.0",
+            "name": "determinism-canary",
+            "version": "0.1.0",
+            "scope": "required",
+            "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.",
+            "components": [
+              {
+                "type": "application",
+                "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/baseline/A/source#determinism-canary@0.1.0 bin-target-0",
+                "name": "determinism-canary",
+                "version": "0.1.0",
+                "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.#src/main.rs"
+              }
+            ]
+          },
+          "properties": [
+            {
+              "name": "cdx:rustc:sbom:target:all_targets",
+              "value": "true"
+            }
+          ]
+        },
+        "components": [],
+        "dependencies": [
+          {
+            "ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/baseline/A/source#determinism-canary@0.1.0"
+          }
+        ]
+      },
+      "zipDates": [
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "variant": "baseline",
+      "trial": "B",
+      "epoch": null,
+      "flags": [
+        "--remap-path-prefix",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\baseline\\B\\source=/qualification/source"
+      ],
+      "pe": {
+        "sha256": "4a9c3ba894cce8f56714bb96994ca3531fa0403bba64b669d8fe3407cb13efd0",
+        "length": 116224,
+        "timestamp": 1792741683,
+        "debug": [
+          {
+            "type": 2,
+            "timestamp": 1792741683,
+            "bytes": 47,
+            "guid": "106e49f0d16c424cb90bb4e6bae76cb5",
+            "age": 1,
+            "pdb": "determinism_canary.pdb"
+          },
+          {
+            "type": 12,
+            "timestamp": 1792741683,
+            "bytes": 20
+          },
+          {
+            "type": 13,
+            "timestamp": 1792741683,
+            "bytes": 796
+          }
+        ]
+      },
+      "wheelSha256": "0f44464af464be47a1ffe2f9a6ad20d16c8b0de4a3a5c10e2021431c16bfb58a",
+      "sbom": {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "serialNumber": "urn:uuid:a7f3cfe7-0c1c-4737-b895-68218950eb8f",
+        "metadata": {
+          "timestamp": "2026-10-23T07:48:02.214761600Z",
+          "tools": [
+            {
+              "vendor": "CycloneDX",
+              "name": "cargo-cyclonedx",
+              "version": "0.5.9"
+            }
+          ],
+          "component": {
+            "type": "application",
+            "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/baseline/B/source#determinism-canary@0.1.0",
+            "name": "determinism-canary",
+            "version": "0.1.0",
+            "scope": "required",
+            "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.",
+            "components": [
+              {
+                "type": "application",
+                "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/baseline/B/source#determinism-canary@0.1.0 bin-target-0",
+                "name": "determinism-canary",
+                "version": "0.1.0",
+                "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.#src/main.rs"
+              }
+            ]
+          },
+          "properties": [
+            {
+              "name": "cdx:rustc:sbom:target:all_targets",
+              "value": "true"
+            }
+          ]
+        },
+        "components": [],
+        "dependencies": [
+          {
+            "ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/baseline/B/source#determinism-canary@0.1.0"
+          }
+        ]
+      },
+      "zipDates": [
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1980,
+          1,
+          1,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "variant": "epoch",
+      "trial": "A",
+      "epoch": "1700000000",
+      "flags": [
+        "--remap-path-prefix",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\A\\source=/qualification/source"
+      ],
+      "pe": {
+        "sha256": "bca7634d83a4aff2e26352343273733246d31007f4586c7d34759756e044bcc3",
+        "length": 116224,
+        "timestamp": 1792741686,
+        "debug": [
+          {
+            "type": 2,
+            "timestamp": 1792741686,
+            "bytes": 47,
+            "guid": "cf6631681a2d3e4ab27d40032315acde",
+            "age": 1,
+            "pdb": "determinism_canary.pdb"
+          },
+          {
+            "type": 12,
+            "timestamp": 1792741686,
+            "bytes": 20
+          },
+          {
+            "type": 13,
+            "timestamp": 1792741686,
+            "bytes": 796
+          }
+        ]
+      },
+      "wheelSha256": "4763ecb2d37d7b807f019a7acde1aa4eca939dd94a95b8f43c8e2fe466f7c4a7",
+      "sbom": {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+          "timestamp": "2023-11-14T22:13:20.000000000Z",
+          "tools": [
+            {
+              "vendor": "CycloneDX",
+              "name": "cargo-cyclonedx",
+              "version": "0.5.9"
+            }
+          ],
+          "component": {
+            "type": "application",
+            "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch/A/source#determinism-canary@0.1.0",
+            "name": "determinism-canary",
+            "version": "0.1.0",
+            "scope": "required",
+            "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.",
+            "components": [
+              {
+                "type": "application",
+                "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch/A/source#determinism-canary@0.1.0 bin-target-0",
+                "name": "determinism-canary",
+                "version": "0.1.0",
+                "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.#src/main.rs"
+              }
+            ]
+          },
+          "properties": [
+            {
+              "name": "cdx:rustc:sbom:target:all_targets",
+              "value": "true"
+            }
+          ]
+        },
+        "components": [],
+        "dependencies": [
+          {
+            "ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch/A/source#determinism-canary@0.1.0"
+          }
+        ]
+      },
+      "zipDates": [
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ]
+      ]
+    },
+    {
+      "variant": "epoch",
+      "trial": "B",
+      "epoch": "1700000000",
+      "flags": [
+        "--remap-path-prefix",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch\\B\\source=/qualification/source"
+      ],
+      "pe": {
+        "sha256": "2b7b6e3092eaa259920b138dfa370913302d9a7b19936dd50bfb832effce6e3b",
+        "length": 116224,
+        "timestamp": 1792741690,
+        "debug": [
+          {
+            "type": 2,
+            "timestamp": 1792741690,
+            "bytes": 47,
+            "guid": "2de3ee42fce6bf48947b2359832ade63",
+            "age": 1,
+            "pdb": "determinism_canary.pdb"
+          },
+          {
+            "type": 12,
+            "timestamp": 1792741690,
+            "bytes": 20
+          },
+          {
+            "type": 13,
+            "timestamp": 1792741690,
+            "bytes": 796
+          }
+        ]
+      },
+      "wheelSha256": "7a1e9f4ad58ee9a3f0453111c290ea167967921e1cbcea48d4a4e1c01f76718e",
+      "sbom": {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+          "timestamp": "2023-11-14T22:13:20.000000000Z",
+          "tools": [
+            {
+              "vendor": "CycloneDX",
+              "name": "cargo-cyclonedx",
+              "version": "0.5.9"
+            }
+          ],
+          "component": {
+            "type": "application",
+            "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch/B/source#determinism-canary@0.1.0",
+            "name": "determinism-canary",
+            "version": "0.1.0",
+            "scope": "required",
+            "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.",
+            "components": [
+              {
+                "type": "application",
+                "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch/B/source#determinism-canary@0.1.0 bin-target-0",
+                "name": "determinism-canary",
+                "version": "0.1.0",
+                "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.#src/main.rs"
+              }
+            ]
+          },
+          "properties": [
+            {
+              "name": "cdx:rustc:sbom:target:all_targets",
+              "value": "true"
+            }
+          ]
+        },
+        "components": [],
+        "dependencies": [
+          {
+            "ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch/B/source#determinism-canary@0.1.0"
+          }
+        ]
+      },
+      "zipDates": [
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ]
+      ]
+    },
+    {
+      "variant": "epoch-brepro",
+      "trial": "A",
+      "epoch": "1700000000",
+      "flags": [
+        "--remap-path-prefix",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\A\\source=/qualification/source",
+        "-Clink-arg=/Brepro"
+      ],
+      "pe": {
+        "sha256": "2096ce4914f9bd97fb495014524a3187df19ded190a991db4d4d6b2e0aa9b0da",
+        "length": 116736,
+        "timestamp": 739577184,
+        "debug": [
+          {
+            "type": 2,
+            "timestamp": 739577184,
+            "bytes": 47,
+            "guid": "323889ae3d4a809a97a71b41b01a0ee2",
+            "age": 1,
+            "pdb": "determinism_canary.pdb"
+          },
+          {
+            "type": 12,
+            "timestamp": 739577184,
+            "bytes": 20
+          },
+          {
+            "type": 13,
+            "timestamp": 739577184,
+            "bytes": 796
+          },
+          {
+            "type": 16,
+            "timestamp": 739577184,
+            "bytes": 36
+          }
+        ]
+      },
+      "wheelSha256": "8362dbdb223432751f4cd755cad202c344babf63084c7e7d6ec667fff8a1c4ba",
+      "sbom": {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+          "timestamp": "2023-11-14T22:13:20.000000000Z",
+          "tools": [
+            {
+              "vendor": "CycloneDX",
+              "name": "cargo-cyclonedx",
+              "version": "0.5.9"
+            }
+          ],
+          "component": {
+            "type": "application",
+            "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch-brepro/A/source#determinism-canary@0.1.0",
+            "name": "determinism-canary",
+            "version": "0.1.0",
+            "scope": "required",
+            "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.",
+            "components": [
+              {
+                "type": "application",
+                "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch-brepro/A/source#determinism-canary@0.1.0 bin-target-0",
+                "name": "determinism-canary",
+                "version": "0.1.0",
+                "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.#src/main.rs"
+              }
+            ]
+          },
+          "properties": [
+            {
+              "name": "cdx:rustc:sbom:target:all_targets",
+              "value": "true"
+            }
+          ]
+        },
+        "components": [],
+        "dependencies": [
+          {
+            "ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch-brepro/A/source#determinism-canary@0.1.0"
+          }
+        ]
+      },
+      "zipDates": [
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ]
+      ]
+    },
+    {
+      "variant": "epoch-brepro",
+      "trial": "B",
+      "epoch": "1700000000",
+      "flags": [
+        "--remap-path-prefix",
+        "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-artifact-analysis\\run-2\\epoch-brepro\\B\\source=/qualification/source",
+        "-Clink-arg=/Brepro"
+      ],
+      "pe": {
+        "sha256": "2096ce4914f9bd97fb495014524a3187df19ded190a991db4d4d6b2e0aa9b0da",
+        "length": 116736,
+        "timestamp": 739577184,
+        "debug": [
+          {
+            "type": 2,
+            "timestamp": 739577184,
+            "bytes": 47,
+            "guid": "323889ae3d4a809a97a71b41b01a0ee2",
+            "age": 1,
+            "pdb": "determinism_canary.pdb"
+          },
+          {
+            "type": 12,
+            "timestamp": 739577184,
+            "bytes": 20
+          },
+          {
+            "type": 13,
+            "timestamp": 739577184,
+            "bytes": 796
+          },
+          {
+            "type": 16,
+            "timestamp": 739577184,
+            "bytes": 36
+          }
+        ]
+      },
+      "wheelSha256": "074f74ffff1d7b9ecb46eb107533862529098063404fa5385ec15bd0f7bed0b9",
+      "sbom": {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+          "timestamp": "2023-11-14T22:13:20.000000000Z",
+          "tools": [
+            {
+              "vendor": "CycloneDX",
+              "name": "cargo-cyclonedx",
+              "version": "0.5.9"
+            }
+          ],
+          "component": {
+            "type": "application",
+            "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch-brepro/B/source#determinism-canary@0.1.0",
+            "name": "determinism-canary",
+            "version": "0.1.0",
+            "scope": "required",
+            "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.",
+            "components": [
+              {
+                "type": "application",
+                "bom-ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch-brepro/B/source#determinism-canary@0.1.0 bin-target-0",
+                "name": "determinism-canary",
+                "version": "0.1.0",
+                "purl": "pkg:cargo/determinism-canary@0.1.0?download_url=file://.#src/main.rs"
+              }
+            ]
+          },
+          "properties": [
+            {
+              "name": "cdx:rustc:sbom:target:all_targets",
+              "value": "true"
+            }
+          ]
+        },
+        "components": [],
+        "dependencies": [
+          {
+            "ref": "path+file:///D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest_cache/native-artifact-analysis/run-2/epoch-brepro/B/source#determinism-canary@0.1.0"
+          }
+        ]
+      },
+      "zipDates": [
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ],
+        [
+          2023,
+          11,
+          14,
+          22,
+          13,
+          20
+        ]
+      ]
+    }
+  ],
+  "scriptSha256": "a0ac4d4ccf253593f8b04db49c279269f6f67471f279d4770e4e373511f983c1",
+  "status": "COMPLETE",
+  "recipeSource": "import hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport struct\nimport subprocess\nimport sys\nimport time\nimport zipfile\n\nroot = Path.cwd()\nout = root / '.pytest_cache/native-artifact-analysis/run-2'\nout.mkdir(parents=True, exist_ok=False)\nvs = Path(r'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat')\ncommand = '\"\"' + str(vs) + '\" -no_logo -arch=x64 && set\"'\nr = subprocess.run('cmd.exe /d /s /c ' + command, capture_output=True, text=True, errors='replace', check=True)\nenv = os.environ.copy()\nfor line in r.stdout.splitlines():\n    if '=' in line:\n        k, v = line.split('=', 1)\n        if k:\n            env[k.upper()] = v\nenv['PATH'] = r'C:\\Users\\xiedc\\.cargo\\bin;' + env['PATH']\nfor k in ['RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'CARGO_BUILD_RUSTFLAGS', 'SOURCE_DATE_EPOCH', 'LINK', '_LINK_', 'CL', '_CL_']:\n    env.pop(k, None)\nenv['RUSTUP_TOOLCHAIN'] = '1.94.0'\nenv['CARGO_INCREMENTAL'] = '0'\nenv['CARGO_HOME'] = str(out / 'cargo-home')\nreport = {'scope': 'Dependency-free diagnostic only; no pydantic/runtime qualification', 'commands': [], 'cases': [], 'scriptSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}\n\ndef save():\n    (out / 'analysis.json').write_text(json.dumps(report, indent=2), encoding='utf8')\n\ndef call(argv, cwd):\n    if argv[0] in ('rustc', 'cargo'):\n        argv = [str(Path(r'C:\\Users\\xiedc\\.cargo\\bin') / (argv[0] + '.exe')), *argv[1:]]\n    r = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, errors='replace', timeout=90)\n    report['commands'].append(dict(argv=argv, cwd=str(cwd), exitCode=r.returncode, stdout=r.stdout, stderr=r.stderr))\n    save()\n    r.check_returncode()\n    return r\n\ndef pe(b):\n    pe_at = struct.unpack_from('<I', b, 0x3c)[0]\n    opt = pe_at + 24\n    size_opt = struct.unpack_from('<H', b, pe_at + 20)[0]\n    sections = []\n    for i in range(struct.unpack_from('<H', b, pe_at + 6)[0]):\n        pos = opt + size_opt + 40 * i\n        name = b[pos:pos+8].rstrip(b'\\0').decode()\n        size, rva, raw_size, raw = struct.unpack_from('<IIII', b, pos+8)\n        sections.append((name, rva, max(size,raw_size), raw, raw_size))\n    def off(rva):\n        return next(raw+rva-start for _,start,size,raw,_ in sections if start<=rva<start+size)\n    rva, length = struct.unpack_from('<II', b, opt+112+8*6)\n    entries=[]\n    if rva:\n        pos=off(rva)\n        for at in range(pos, pos+length, 28):\n            _,ts,major,minor,typ,n,adr,raw=struct.unpack_from('<IIHHIIII',b,at)\n            e=dict(type=typ,timestamp=ts,bytes=n)\n            if typ==2 and b[raw:raw+4]==b'RSDS':\n                e.update(guid=b[raw+4:raw+20].hex(),age=struct.unpack_from('<I',b,raw+20)[0],pdb=b[raw+24:raw+n].rstrip(b'\\0').decode(errors='replace'))\n            entries.append(e)\n    return dict(sha256=hashlib.sha256(b).hexdigest(),length=len(b),timestamp=struct.unpack_from('<I',b,pe_at+8)[0],debug=entries)\n\ntry:\n    call(['rustc','-Vv'],out)\n    call(['cargo','-V'],out)\n    maturin=str(root/'.pytest_cache/native-qualification/venv/Scripts/maturin.exe')\n    call([maturin,'--version'],out)\n    for variant in ['baseline','epoch','epoch-brepro']:\n        if variant!='baseline':\n            env['SOURCE_DATE_EPOCH']='1700000000'\n        for trial in ['A','B']:\n            dest=out/variant/trial\n            src=dest/'source'\n            (src/'src').mkdir(parents=True)\n            (src/'Cargo.toml').write_text('[package]\\nname=\"determinism-canary\"\\nversion=\"0.1.0\"\\nedition=\"2024\"\\n[profile.release]\\nlto=\"fat\"\\ncodegen-units=1\\nstrip=true\\n',encoding='utf8')\n            (src/'src/main.rs').write_text('fn main() { println!(\"{}\", 42); }\\n',encoding='utf8')\n            env['CARGO_TARGET_DIR']=str(dest/'target')\n            flags=['--remap-path-prefix',str(src)+'=/qualification/source']\n            if variant=='epoch-brepro':\n                flags+=['-Clink-arg=/Brepro']\n            env['CARGO_ENCODED_RUSTFLAGS']='\\x1f'.join(flags)\n            call(['cargo','generate-lockfile','--offline'],src)\n            call([maturin,'build','--bindings','bin','--release','--locked','--offline','--verbose','--target','x86_64-pc-windows-msvc','--out',str(dest/'wheels')],src)\n            w=next((dest/'wheels').glob('*.whl'))\n            with zipfile.ZipFile(w) as z:\n                bom=json.loads(z.read(next(n for n in z.namelist() if n.endswith('cyclonedx.json'))))\n                b=z.read(next(n for n in z.namelist() if n.endswith('.exe')))\n                report['cases'].append(dict(variant=variant,trial=trial,epoch=env.get('SOURCE_DATE_EPOCH'),flags=flags,pe=pe(b),wheelSha256=hashlib.sha256(w.read_bytes()).hexdigest(),sbom=bom,zipDates=[list(i.date_time) for i in z.infolist()]))\n            save()\n            time.sleep(1.1)\n    report['status']='COMPLETE'\nexcept BaseException as error:\n    report['failure']=repr(error)\n    raise\nfinally:\n    save()\nprint(json.dumps([dict(variant=c['variant'],trial=c['trial'],pe=c['pe'],serial=c['sbom'].get('serialNumber'),time=c['sbom']['metadata'].get('timestamp')) for c in report['cases']],indent=2))\n"
+}

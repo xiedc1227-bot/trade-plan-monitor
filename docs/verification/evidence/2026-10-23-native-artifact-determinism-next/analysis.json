@@ -1,0 +1,471 @@
+{
+  "baseCommit": "e74605d7f1db9736bd89d52930207b5a05e1f5f8",
+  "scope": "Analysis and dependency-free diagnostics only; no full-core rebuild, native hooks, reduced budget, runtime replacement or browser acceptance",
+  "sourceReferences": [
+    {
+      "url": "https://github.com/PyO3/maturin/blob/v1.13.1/Cargo.lock",
+      "blob": "71cc3ab4b8e2446f8bfbbdc98f1715751c28c461",
+      "note": "maturin v1.13.1 locks cargo-cyclonedx 0.5.9; registry checksum 5d162f67705f0f5038759d73bf546a083bf30e8677c2e944b416bca48d9d69a8"
+    },
+    {
+      "url": "https://github.com/PyO3/maturin/blob/v1.13.1/src/sbom.rs",
+      "blob": "6d9412a6a164642930c9f6ea0bcea74f13b385a2",
+      "note": "SBOM generated from cargo metadata and serialized before wheel writing"
+    },
+    {
+      "url": "https://github.com/CycloneDX/cyclonedx-rust-cargo/blob/cargo-cyclonedx-0.5.9/cargo-cyclonedx/src/generator.rs",
+      "blob": "7866d42e0e93dc0e9a486510f5c361dbea911d4f",
+      "note": "SOURCE_DATE_EPOCH sets timestamp and omits optional serialNumber; bom-ref uses package.id"
+    },
+    {
+      "url": "https://github.com/PyO3/maturin/blob/v1.13.1/src/module_writer/wheel_writer.rs",
+      "blob": "f47ee4c2485549fcb9a52768e5a7f0d6bd6f660a",
+      "note": "Wheel writer hashes actual written member content and regenerates RECORD"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/debug/pe-format",
+      "note": "IMAGE_DEBUG_TYPE_REPRO=16; content-derived time fields are not wall-clock dates"
+    },
+    {
+      "url": "https://cyclonedx.org/docs/1.5/json/",
+      "note": "serialNumber recommended, not required; dependency identities must remain unique"
+    },
+    {
+      "url": "https://reproducible-builds.org/docs/source-date-epoch/",
+      "note": "Use fixed source epoch, not current build time"
+    }
+  ],
+  "originalBuilds": [
+    {
+      "name": "R1",
+      "wheelSha256": "a97010879d154e245910a914c8b403d6a2509130d3c988f08c59c0d26cfb4840",
+      "wheelBytes": 2165251,
+      "nativeSha256": "1e9c26865ee7473d534eb87a995652884aaf46879250d6dc8cfe2cf8da3a0df6",
+      "nativeBytes": 5805056,
+      "codeViewPath": "_pydantic_core.pdb",
+      "sbomTools": [
+        {
+          "vendor": "CycloneDX",
+          "name": "cargo-cyclonedx",
+          "version": "0.5.9"
+        }
+      ],
+      "zipMetadata": [
+        {
+          "name": "pydantic_core/__init__.py",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/_pydantic_core.cp314-win_amd64.pyd",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2179792896,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/_pydantic_core.pyi",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/core_schema.py",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/py.typed",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/METADATA",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/WHEEL",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/licenses/LICENSE",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/sboms/pydantic-core.cyclonedx.json",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/RECORD",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        }
+      ]
+    },
+    {
+      "name": "R2",
+      "wheelSha256": "94d60f84d814cabd91a27dd99bc9d40d1545a601eda616b9fb567aab889b5837",
+      "wheelBytes": 2165255,
+      "nativeSha256": "47ae68b55ce5be8b7db2ba4e5a132ea09194c4bb824f884ad5f2fe0d273c84f2",
+      "nativeBytes": 5805056,
+      "codeViewPath": "_pydantic_core.pdb",
+      "sbomTools": [
+        {
+          "vendor": "CycloneDX",
+          "name": "cargo-cyclonedx",
+          "version": "0.5.9"
+        }
+      ],
+      "zipMetadata": [
+        {
+          "name": "pydantic_core/__init__.py",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/_pydantic_core.cp314-win_amd64.pyd",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2179792896,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/_pydantic_core.pyi",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/core_schema.py",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core/py.typed",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/METADATA",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/WHEEL",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/licenses/LICENSE",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/sboms/pydantic-core.cyclonedx.json",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        },
+        {
+          "name": "pydantic_core-2.46.4.dist-info/RECORD",
+          "date": [
+            1980,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "extra": "",
+          "comment": "",
+          "attrs": 2175008768,
+          "method": 8
+        }
+      ]
+    }
+  ],
+  "canaryVariants": [
+    {
+      "variant": "baseline",
+      "binaryEqual": false,
+      "wheelEqual": false,
+      "sbomDifferences": [
+        "/dependencies/0/ref",
+        "/metadata/component/bom-ref",
+        "/metadata/component/components/0/bom-ref",
+        "/metadata/timestamp",
+        "/serialNumber"
+      ],
+      "binaryHashes": [
+        "41ec7930b883c8229ceaa465c13784328b095ad9167a16c8962541887bc19665",
+        "4a9c3ba894cce8f56714bb96994ca3531fa0403bba64b669d8fe3407cb13efd0"
+      ],
+      "binaryBytes": [
+        116224,
+        116224
+      ]
+    },
+    {
+      "variant": "epoch",
+      "binaryEqual": false,
+      "wheelEqual": false,
+      "sbomDifferences": [
+        "/dependencies/0/ref",
+        "/metadata/component/bom-ref",
+        "/metadata/component/components/0/bom-ref"
+      ],
+      "binaryHashes": [
+        "bca7634d83a4aff2e26352343273733246d31007f4586c7d34759756e044bcc3",
+        "2b7b6e3092eaa259920b138dfa370913302d9a7b19936dd50bfb832effce6e3b"
+      ],
+      "binaryBytes": [
+        116224,
+        116224
+      ]
+    },
+    {
+      "variant": "epoch-brepro",
+      "binaryEqual": true,
+      "wheelEqual": false,
+      "sbomDifferences": [
+        "/dependencies/0/ref",
+        "/metadata/component/bom-ref",
+        "/metadata/component/components/0/bom-ref"
+      ],
+      "binaryHashes": [
+        "2096ce4914f9bd97fb495014524a3187df19ded190a991db4d4d6b2e0aa9b0da",
+        "2096ce4914f9bd97fb495014524a3187df19ded190a991db4d4d6b2e0aa9b0da"
+      ],
+      "binaryBytes": [
+        116736,
+        116736
+      ]
+    }
+  ],
+  "canaryEpoch": 1700000000,
+  "canaryEpochPurpose": "Synthetic fixed test value only; not actual source release date",
+  "attempts": [
+    {
+      "id": "run-1",
+      "status": "FAILED_LAUNCH",
+      "reason": "Windows subprocess could not resolve rustc.exe using child env PATH; no build ran"
+    },
+    {
+      "id": "run-2",
+      "status": "COMPLETE",
+      "builds": 6
+    }
+  ],
+  "linker": {
+    "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link.exe",
+    "sha256": "a364af801a8539e4324d9489313dbf001d959128451fc99a27b24676bbac058f",
+    "version": "14.44.35229.0",
+    "helpListsBrepro": false
+  },
+  "installedRuntimeSha256": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e",
+  "qualification": {
+    "fullCoreReproducibility": "NOT_PASSED",
+    "nativeAllocation": "NOT_PROVEN",
+    "legalLargeRowAvailability": "UNCHANGED_FAIL",
+    "P1": "NO_GO"
+  },
+  "verification": {
+    "bilingualStableIds": "MATCH",
+    "bilingualInlineLiterals": "MATCH",
+    "bilingualNumbers": "MATCH",
+    "relativeFileLinks": "EXIST",
+    "diagnosticBuilds": 6,
+    "successfulDiagnosticCommands": 15,
+    "recipeFingerprint": "MATCH",
+    "installedRuntime": "UNCHANGED",
+    "productionCodeChanges": false,
+    "browserAcceptance": "NOT_RUN_ANALYSIS_ONLY"
+  }
+}
