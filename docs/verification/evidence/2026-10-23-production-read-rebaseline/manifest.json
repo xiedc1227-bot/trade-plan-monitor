@@ -1,0 +1,32 @@
+{
+  "protectedSource": {
+    "src/trade_plan_monitor/web/runtime_status_read_service.py": "677e9652ffc8c3249aba8cb6ce15152f95c4e770670274b51d370aa4897dde1d",
+    "src/trade_plan_monitor/web/monitor_read_ownership.py": "d3b59c4891db646348163802c4998c799b49af970e3ae1d0360031c98108cc7c",
+    "src/trade_plan_monitor/state/index_evidence_flights.py": "d390f239edb82c03e4c959abbdb6bac57f222494a72fa1cf5e181ca98551eee5",
+    "src/trade_plan_monitor/state/projections.py": "911dd34dcce43d1d99beeeb33b41f44ef7338d217e3fcef7104eb50b6e81ed71",
+    "src/trade_plan_monitor/backtest/results.py": "6bcc3fb592f92fb9871fe386333543489c1388013b6e18cff9493c0e5ccc1228",
+    "web/src/runtime-status/App.vue": "172b6d2a7de00ddd5402ededb44239d9b9ba86a745ab821aa31a687bef07620f",
+    "web/src/runtime-status/stream.ts": "9349aa5baab8532e2bb44d82d2bba5763c7e6bf8a4f592793bc9a3effe8a11b7"
+  },
+  "evidenceFiles": {
+    "browser-controlled.mjs": "490acd518b99b6ae8a6c3b0da168b2217b4000a993b39dba58f021cf9a47643e",
+    "browser.mjs": "0bfad58e8786bd2dde65a342d9f3e26a34156409f2832f87d6302add2dfb28ff",
+    "controlled-entry.png": "d092f9955391d02d33e555c1bc303fa9de6ca5ea43424c123f362cb10adf3931",
+    "measure.py": "88e9e89e389efa42c43dcfb2e320f3481f3ad4246a6fdf98c1f50653da3cb497",
+    "measurements.json": "c8407ac147f53f2010bb12f40aea070e11d39eefbbbb94028d85d87d7709b65a",
+    "server.py": "02eae292f19f1bab7f0542dfc2ec5be7b9a6c1c5a98dae650ccfc9408446a1bf",
+    "summarize.py": "970a399416eb6240dcc07a0bc6036b944c2a9d432bff6cb71f7d0280aba0e1e1",
+    ".gitattributes": "c089985639038cc07dc37c07a8d0d543df7ddf9b1873a948000494a6e230530d"
+  },
+  "productionDiff": [],
+  "originalCaptureHashes": {
+    "browser-controlled.mjs": "9183fc913ce57377e20d1d4501b130d4b18005a66f437b59ecdee47c26abcd41",
+    "browser.mjs": "0bfad58e8786bd2dde65a342d9f3e26a34156409f2832f87d6302add2dfb28ff",
+    "controlled-entry.png": "d092f9955391d02d33e555c1bc303fa9de6ca5ea43424c123f362cb10adf3931",
+    "measure.py": "88e9e89e389efa42c43dcfb2e320f3481f3ad4246a6fdf98c1f50653da3cb497",
+    "measurements.json": "52e79fc24cf45f4b6ce835c06fa3f5a308a65fa15f4c3c7888a4e7be6833dbea",
+    "server.py": "02eae292f19f1bab7f0542dfc2ec5be7b9a6c1c5a98dae650ccfc9408446a1bf",
+    "summarize.py": "970a399416eb6240dcc07a0bc6036b944c2a9d432bff6cb71f7d0280aba0e1e1"
+  },
+  "textEncoding": "UTF-8; archived text uses LF line endings"
+}
