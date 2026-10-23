@@ -1,0 +1,53 @@
+{
+  "baseCommit": "e74605d7f1db9736bd89d52930207b5a05e1f5f8",
+  "focusedPassed": 34,
+  "regressionPassed": 166,
+  "totalPassed": 200,
+  "regressionSeconds": 32.84,
+  "initialNegativeFailures": 12,
+  "mutation": {
+    "scope": "process memory only; no source-file changes",
+    "condition": "ntpath.isreserved(p) replaced with False",
+    "expectedFailures": 4
+  },
+  "artifactReaudit": {
+    "wheels": 9,
+    "sbomMappings": 6,
+    "fullHashesAndRecord": "PASS",
+    "allocationFingerprintsAndMedians": "PASS"
+  },
+  "restrictedAttempt": "Interrupted after stalling in asynchronous drain; identical selection passed with normal local process permissions",
+  "nativeRebuildDuringReview": false,
+  "performanceRerunDuringReview": false,
+  "productionChanges": false,
+  "browserAcceptance": false,
+  "P1": "NO_GO",
+  "nativeBounds": "NOT_PROVEN",
+  "legalLargeRowAvailability": "NOT_PROVEN",
+  "sourceHashes": {
+    "scripts/experiments/maturin-sbom-identity.patch": "b459414c798318a0c22fca3e18d55b066d55ad9d5ad1d77c61039a35ad582679",
+    "scripts/experiments/native_alloc_observer.rs": "3a43e38da7d98edee228d8cd1699335c8aa805794c559bf2931fe8e8e77445f0",
+    "scripts/experiments/native_allocation_child.py": "0a01450045c79c99a820f604e8385321443c4c50f39ceb17036cec06cf0e101a",
+    "scripts/experiments/native_allocation_probe.py": "0d0d70b167b51bff66bc5859f0da46f57f4fa6103fac25fc160a0f3e93bce9fc",
+    "scripts/experiments/native_artifact_audit.py": "4e8651e354762675401eda75a65ac260f990fb625adc04a3172bac7f4e5c2d76",
+    "scripts/experiments/native_determinism_probe.py": "6fafae575744e415a87e2faf986ca653c4cafb31df35ebd42d660d498639cc2c",
+    "scripts/experiments/sbom_identity.py": "eba9e02fbc6105aa49ae885a542407799867c2463614095a86d5664cb1301a9d",
+    "tests/unit/test_native_allocation_probe.py": "ae64b3b1fca59f06570aa53d23395f6a84f29be0218fe55ab4d4dbdf86ec6f81",
+    "tests/unit/test_native_artifact_audit.py": "f4f7a6f4cedf77c7b3aef8f66f90c6448d9a7d744a0ecbbecbc00801b626d822",
+    "tests/unit/test_native_determinism_probe.py": "4199f0a6813fab7e8a76efb4ad34ad7a1c0bdaf66373eff1311ab70fca20bbf3",
+    "tests/unit/test_sbom_identity.py": "dc32595be8ec26db7176b1970a2a14a2ff29f48b1260a71f3bd2cc9fdbbbdbb2"
+  },
+  "historicalEvidenceHashes": {
+    "builds.json": "d7df4d724df2df182d15fe0371b7e5eeedfe5339146990b5f6895ce41386e398",
+    "final-builds.json": "87590734f82ae479f5bcb72e6119fd57ba725c42926c3b90a604c05f9a85fb43",
+    "instrumented-builds.json": "8f2409ce07dc454d449da804ba80252ea90e8c98ccd7eaa48e11e77adbf3578d",
+    "allocations.json": "05f13fe33ffbc0aa85366466d53cbe11c702db20826e72e2f05049565e221edd",
+    "summary.json": "4c0a6afd4de4a84946324720d3655df4aa33625f1813caef11a3c45438ad56c5"
+  },
+  "installedNativeSha256": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e",
+  "excludedChanges": [
+    "AI extraction",
+    "daily inventory",
+    "README"
+  ]
+}

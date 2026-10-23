@@ -1,0 +1,98 @@
+{
+  "rounds": 3,
+  "regressionPassed": 166,
+  "focusedPassed": 19,
+  "P1": "NO_GO",
+  "nativeBounds": "NOT_PROVEN",
+  "cases": [
+    {
+      "shape": "decimal",
+      "releaseCpu": 0.359375,
+      "instrumentedCpu": 0.359375,
+      "overheadPercent": 0.0,
+      "rustPeak": 62108326,
+      "admission": {
+        "raw": 16478553,
+        "work": 197697036,
+        "rows": 1,
+        "status": "availability_failed",
+        "scan": {
+          "metadataQueries": 1,
+          "payloadQueries": 0,
+          "rows": 0,
+          "actualRawPeak": 0
+        },
+        "ledger": {
+          "used": 0,
+          "peak": 131072,
+          "categories": {
+            "metadata": 0
+          },
+          "peaks": {
+            "metadata": 131072
+          },
+          "waiters": 0,
+          "waitSeconds": 6.500165909528732e-06
+        }
+      }
+    },
+    {
+      "shape": "dense",
+      "releaseCpu": 1.59375,
+      "instrumentedCpu": 1.703125,
+      "overheadPercent": 6.8627450980392135,
+      "rustPeak": 139943398,
+      "admission": {
+        "raw": 12126534,
+        "work": 145472808,
+        "rows": 1,
+        "status": "availability_failed",
+        "scan": {
+          "metadataQueries": 1,
+          "payloadQueries": 0,
+          "rows": 0,
+          "actualRawPeak": 0
+        },
+        "ledger": {
+          "used": 0,
+          "peak": 131072,
+          "categories": {
+            "metadata": 0
+          },
+          "peaks": {
+            "metadata": 131072
+          },
+          "waiters": 0,
+          "waitSeconds": 6.800051778554916e-06
+        }
+      }
+    }
+  ],
+  "pythonDomainControl": {
+    "before": [
+      44357288,
+      44357288,
+      351167,
+      0
+    ],
+    "during": [
+      44357288,
+      44357288,
+      351167,
+      0
+    ],
+    "bytes": 8388608
+  },
+  "sourceHashes": {
+    "scripts\\experiments\\native_allocation_child.py": "0a01450045c79c99a820f604e8385321443c4c50f39ceb17036cec06cf0e101a",
+    "scripts\\experiments\\native_allocation_probe.py": "95927cc40dbe98a2177dd10e4ecfa03575231846a73eb3e473fd842e303629d9",
+    "scripts\\experiments\\native_alloc_observer.rs": "3a43e38da7d98edee228d8cd1699335c8aa805794c559bf2931fe8e8e77445f0",
+    "scripts\\experiments\\native_artifact_audit.py": "689e05cba0db380ac18ffab2fbe985e215f1398e7653f64013fe72dd2ad36a87",
+    "scripts\\experiments\\native_build_probe.py": "ef0440c0f6ba9f0bd1340bdee8db26154013ae05019418a49bca03e892165b70",
+    "scripts\\experiments\\native_determinism_probe.py": "02c122fe65dec468108f04fc001974fa7287152c08ab7801c90b0209aebfe2a8",
+    "scripts\\experiments\\sbom_identity.py": "eba9e02fbc6105aa49ae885a542407799867c2463614095a86d5664cb1301a9d",
+    "scripts\\experiments\\maturin-sbom-identity.patch": "b459414c798318a0c22fca3e18d55b066d55ad9d5ad1d77c61039a35ad582679"
+  },
+  "backendArchiveSha256": "2bfb3ec1ef1c15163ac006b09f895d17bd7ce0229416be952cd49065842acfc0",
+  "installedNativeSha256": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e"
+}

@@ -1,0 +1,661 @@
+{
+  "attempts": [
+    {
+      "variant": "R",
+      "round": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "",
+      "result": {
+        "nativePath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-determinism-p0\\allocations\\R-import\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd",
+        "nativeSha256": "9dd446e5a9bb8dfde009c4c156df02f523146fb4560ef0aa4ff59875b03c629a",
+        "cases": [
+          {
+            "shape": "decimal",
+            "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba",
+            "outputSha256": "e6444f3d9642b9e352b22cadd9375efb690b6632fe0356165371d42fdfa3c19c",
+            "cpu": 0.359375,
+            "wall": 0.3622883001808077,
+            "before": null,
+            "afterValidRelease": null,
+            "afterPhysicalRelease": null,
+            "tamperRejected": true,
+            "admission": {
+              "raw": 16478553,
+              "work": 197697036,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 7.2999391704797745e-06
+              }
+            }
+          },
+          {
+            "shape": "dense",
+            "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee",
+            "outputSha256": "19b2ad258afc6a6408a0c6f87c0e35af965adb51584dbb9ccd6db27f29dfde1b",
+            "cpu": 1.59375,
+            "wall": 1.5893385000526905,
+            "before": null,
+            "afterValidRelease": null,
+            "afterPhysicalRelease": null,
+            "tamperRejected": true,
+            "admission": {
+              "raw": 12126534,
+              "work": 145472808,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 1.1499971151351929e-05
+              }
+            }
+          }
+        ],
+        "qualification": "DIAGNOSTIC_ONLY",
+        "pythonDomainControl": {
+          "before": null,
+          "during": null,
+          "bytes": 8388608
+        }
+      }
+    },
+    {
+      "variant": "I",
+      "round": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "",
+      "result": {
+        "nativePath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-determinism-p0\\allocations\\I-import\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd",
+        "nativeSha256": "26fefa0aef62c79f92ff46945caf472eeda698cce6532d2cd5e067e606cff24a",
+        "cases": [
+          {
+            "shape": "decimal",
+            "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba",
+            "outputSha256": "e6444f3d9642b9e352b22cadd9375efb690b6632fe0356165371d42fdfa3c19c",
+            "cpu": 0.34375,
+            "wall": 0.36535670002922416,
+            "before": [
+              44690542,
+              45145696,
+              353660,
+              0
+            ],
+            "afterValidRelease": [
+              44690542,
+              45163238,
+              356568,
+              0
+            ],
+            "afterPhysicalRelease": [
+              44690542,
+              62108326,
+              370515,
+              0
+            ],
+            "tamperRejected": true,
+            "admission": {
+              "raw": 16478553,
+              "work": 197697036,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 6.500165909528732e-06
+              }
+            }
+          },
+          {
+            "shape": "dense",
+            "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee",
+            "outputSha256": "19b2ad258afc6a6408a0c6f87c0e35af965adb51584dbb9ccd6db27f29dfde1b",
+            "cpu": 1.75,
+            "wall": 1.7931725999806076,
+            "before": [
+              44690542,
+              84550886,
+              530548,
+              0
+            ],
+            "afterValidRelease": [
+              44690542,
+              84550886,
+              770583,
+              0
+            ],
+            "afterPhysicalRelease": [
+              44690542,
+              139943398,
+              1930624,
+              0
+            ],
+            "tamperRejected": true,
+            "admission": {
+              "raw": 12126534,
+              "work": 145472808,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 6.800051778554916e-06
+              }
+            }
+          }
+        ],
+        "qualification": "DIAGNOSTIC_ONLY",
+        "pythonDomainControl": {
+          "before": [
+            44357288,
+            44357288,
+            351167,
+            0
+          ],
+          "during": [
+            44357288,
+            44357288,
+            351167,
+            0
+          ],
+          "bytes": 8388608
+        }
+      }
+    },
+    {
+      "variant": "I",
+      "round": 1,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "",
+      "result": {
+        "nativePath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-determinism-p0\\allocations\\I-import\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd",
+        "nativeSha256": "26fefa0aef62c79f92ff46945caf472eeda698cce6532d2cd5e067e606cff24a",
+        "cases": [
+          {
+            "shape": "decimal",
+            "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba",
+            "outputSha256": "e6444f3d9642b9e352b22cadd9375efb690b6632fe0356165371d42fdfa3c19c",
+            "cpu": 0.40625,
+            "wall": 0.3969934000633657,
+            "before": [
+              44690542,
+              45145696,
+              353660,
+              0
+            ],
+            "afterValidRelease": [
+              44690542,
+              45163238,
+              356568,
+              0
+            ],
+            "afterPhysicalRelease": [
+              44690542,
+              62108326,
+              370515,
+              0
+            ],
+            "tamperRejected": true,
+            "admission": {
+              "raw": 16478553,
+              "work": 197697036,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 8.00006091594696e-06
+              }
+            }
+          },
+          {
+            "shape": "dense",
+            "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee",
+            "outputSha256": "19b2ad258afc6a6408a0c6f87c0e35af965adb51584dbb9ccd6db27f29dfde1b",
+            "cpu": 1.703125,
+            "wall": 1.7513615998905152,
+            "before": [
+              44690542,
+              84550886,
+              530548,
+              0
+            ],
+            "afterValidRelease": [
+              44690542,
+              84550886,
+              770583,
+              0
+            ],
+            "afterPhysicalRelease": [
+              44690542,
+              139943398,
+              1930624,
+              0
+            ],
+            "tamperRejected": true,
+            "admission": {
+              "raw": 12126534,
+              "work": 145472808,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 6.00004568696022e-06
+              }
+            }
+          }
+        ],
+        "qualification": "DIAGNOSTIC_ONLY",
+        "pythonDomainControl": {
+          "before": [
+            44357288,
+            44357288,
+            351167,
+            0
+          ],
+          "during": [
+            44357288,
+            44357288,
+            351167,
+            0
+          ],
+          "bytes": 8388608
+        }
+      }
+    },
+    {
+      "variant": "R",
+      "round": 1,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "",
+      "result": {
+        "nativePath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-determinism-p0\\allocations\\R-import\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd",
+        "nativeSha256": "9dd446e5a9bb8dfde009c4c156df02f523146fb4560ef0aa4ff59875b03c629a",
+        "cases": [
+          {
+            "shape": "decimal",
+            "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba",
+            "outputSha256": "e6444f3d9642b9e352b22cadd9375efb690b6632fe0356165371d42fdfa3c19c",
+            "cpu": 0.375,
+            "wall": 0.3741232000757009,
+            "before": null,
+            "afterValidRelease": null,
+            "afterPhysicalRelease": null,
+            "tamperRejected": true,
+            "admission": {
+              "raw": 16478553,
+              "work": 197697036,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 1.5900004655122757e-05
+              }
+            }
+          },
+          {
+            "shape": "dense",
+            "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee",
+            "outputSha256": "19b2ad258afc6a6408a0c6f87c0e35af965adb51584dbb9ccd6db27f29dfde1b",
+            "cpu": 1.59375,
+            "wall": 1.6015127000864595,
+            "before": null,
+            "afterValidRelease": null,
+            "afterPhysicalRelease": null,
+            "tamperRejected": true,
+            "admission": {
+              "raw": 12126534,
+              "work": 145472808,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 8.800067007541656e-06
+              }
+            }
+          }
+        ],
+        "qualification": "DIAGNOSTIC_ONLY",
+        "pythonDomainControl": {
+          "before": null,
+          "during": null,
+          "bytes": 8388608
+        }
+      }
+    },
+    {
+      "variant": "R",
+      "round": 2,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "",
+      "result": {
+        "nativePath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-determinism-p0\\allocations\\R-import\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd",
+        "nativeSha256": "9dd446e5a9bb8dfde009c4c156df02f523146fb4560ef0aa4ff59875b03c629a",
+        "cases": [
+          {
+            "shape": "decimal",
+            "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba",
+            "outputSha256": "e6444f3d9642b9e352b22cadd9375efb690b6632fe0356165371d42fdfa3c19c",
+            "cpu": 0.359375,
+            "wall": 0.3921310999430716,
+            "before": null,
+            "afterValidRelease": null,
+            "afterPhysicalRelease": null,
+            "tamperRejected": true,
+            "admission": {
+              "raw": 16478553,
+              "work": 197697036,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 5.90016134083271e-06
+              }
+            }
+          },
+          {
+            "shape": "dense",
+            "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee",
+            "outputSha256": "19b2ad258afc6a6408a0c6f87c0e35af965adb51584dbb9ccd6db27f29dfde1b",
+            "cpu": 1.75,
+            "wall": 1.7712083999067545,
+            "before": null,
+            "afterValidRelease": null,
+            "afterPhysicalRelease": null,
+            "tamperRejected": true,
+            "admission": {
+              "raw": 12126534,
+              "work": 145472808,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 8.700182661414146e-06
+              }
+            }
+          }
+        ],
+        "qualification": "DIAGNOSTIC_ONLY",
+        "pythonDomainControl": {
+          "before": null,
+          "during": null,
+          "bytes": 8388608
+        }
+      }
+    },
+    {
+      "variant": "I",
+      "round": 2,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "",
+      "result": {
+        "nativePath": "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-determinism-p0\\allocations\\I-import\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd",
+        "nativeSha256": "26fefa0aef62c79f92ff46945caf472eeda698cce6532d2cd5e067e606cff24a",
+        "cases": [
+          {
+            "shape": "decimal",
+            "inputSha256": "54f245335aae2ff03da26b75338c6076f4833349e974bfa5e02d866e2dc3c6ba",
+            "outputSha256": "e6444f3d9642b9e352b22cadd9375efb690b6632fe0356165371d42fdfa3c19c",
+            "cpu": 0.359375,
+            "wall": 0.3821495999582112,
+            "before": [
+              44690542,
+              45145696,
+              353660,
+              0
+            ],
+            "afterValidRelease": [
+              44690542,
+              45163238,
+              356568,
+              0
+            ],
+            "afterPhysicalRelease": [
+              44690542,
+              62108326,
+              370515,
+              0
+            ],
+            "tamperRejected": true,
+            "admission": {
+              "raw": 16478553,
+              "work": 197697036,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 7.4999406933784485e-06
+              }
+            }
+          },
+          {
+            "shape": "dense",
+            "inputSha256": "2f5a02319c08924ea44dd18e1383b07961b76987f8411560b73808fbced0fdee",
+            "outputSha256": "19b2ad258afc6a6408a0c6f87c0e35af965adb51584dbb9ccd6db27f29dfde1b",
+            "cpu": 1.65625,
+            "wall": 1.73869220004417,
+            "before": [
+              44690542,
+              84550886,
+              530548,
+              0
+            ],
+            "afterValidRelease": [
+              44690542,
+              84550886,
+              770583,
+              0
+            ],
+            "afterPhysicalRelease": [
+              44690542,
+              139943398,
+              1930624,
+              0
+            ],
+            "tamperRejected": true,
+            "admission": {
+              "raw": 12126534,
+              "work": 145472808,
+              "rows": 1,
+              "status": "availability_failed",
+              "scan": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              },
+              "ledger": {
+                "used": 0,
+                "peak": 131072,
+                "categories": {
+                  "metadata": 0
+                },
+                "peaks": {
+                  "metadata": 131072
+                },
+                "waiters": 0,
+                "waitSeconds": 8.499948307871819e-06
+              }
+            }
+          }
+        ],
+        "qualification": "DIAGNOSTIC_ONLY",
+        "pythonDomainControl": {
+          "before": [
+            44357288,
+            44357288,
+            351167,
+            0
+          ],
+          "during": [
+            44357288,
+            44357288,
+            351167,
+            0
+          ],
+          "bytes": 8388608
+        }
+      }
+    }
+  ],
+  "qualification": "RUST_DOMAIN_ONLY",
+  "p1": "NO_GO",
+  "completed": true
+}
