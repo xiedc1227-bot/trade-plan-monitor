@@ -1,0 +1,2916 @@
+{
+  "analysisDate": "2026-10-23",
+  "baselineCommit": "72bd9250bede490109ccd5758cbb78cdc4e21082",
+  "decision": "Proposal only; production unchanged; P1 remains NO-GO",
+  "runtime": {
+    "python": "3.14.7",
+    "pydantic": "2.13.4",
+    "sqlite": "3.50.4",
+    "sqlalchemy": "2.0.52"
+  },
+  "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+  "limitations": [
+    "Three diagnostic timing rounds; not fixed A/A or ABBA performance acceptance, API timing or p95.",
+    "CPU-full and concurrency published results were rerun sequentially after other probes exited; no controlled host-wide idle guarantee.",
+    "Thread/process CPU on this Windows runtime is quantized; cProfile is a separate instrumented pass and cumulative times overlap.",
+    "Earlier dashboard-only 1628-row exploratory probe excluded; published CPU probes use all five ALWAYS_ON_INDEX_CODES and 2008 rows.",
+    "Prebuilt raw leader inputs are outside tracemalloc/input budget; concurrency/slot probes use per-request independent budgets. No global-memory, authority, cancellation or drain acceptance.",
+    "Memory boundary events are live bytes and cumulative peaks, not exclusive allocation attribution. Native/RSS and prebuilt raw input excluded.",
+    "Slot probe acquires before connection/transaction; production integration must retain existing independent authority/transaction/clock boundaries.",
+    "No production code edits, service restart, browser acceptance, commit or push during this analysis."
+  ],
+  "summary": {
+    "sequential": [
+      {
+        "stage": "preflight",
+        "wallMedian": 0.026885499944910407,
+        "cpuMedian": 0.03125
+      },
+      {
+        "stage": "scan",
+        "wallMedian": 0.03886230010539293,
+        "cpuMedian": 0.03125
+      },
+      {
+        "stage": "compare",
+        "wallMedian": 0.04635490011423826,
+        "cpuMedian": 0.046875
+      },
+      {
+        "stage": "validate",
+        "wallMedian": 1.8468422000296414,
+        "cpuMedian": 1.84375
+      }
+    ],
+    "concurrency": [
+      {
+        "stage": "preflight",
+        "readers": 1,
+        "wallMedian": 0.028558099875226617,
+        "cpuMedian": 0.03125
+      },
+      {
+        "stage": "preflight",
+        "readers": 8,
+        "wallMedian": 0.7118148999288678,
+        "cpuMedian": 4.15625
+      },
+      {
+        "stage": "scan",
+        "readers": 1,
+        "wallMedian": 0.06704049999825656,
+        "cpuMedian": 0.078125
+      },
+      {
+        "stage": "scan",
+        "readers": 8,
+        "wallMedian": 1.2695720999035984,
+        "cpuMedian": 7.171875
+      },
+      {
+        "stage": "compare",
+        "readers": 1,
+        "wallMedian": 0.07299469993449748,
+        "cpuMedian": 0.078125
+      },
+      {
+        "stage": "compare",
+        "readers": 8,
+        "wallMedian": 1.3345001998823136,
+        "cpuMedian": 7.015625
+      }
+    ],
+    "scanSlots": [
+      {
+        "slots": 8,
+        "wallMedian": 1.322647900087759,
+        "cpuMedian": 6.765625,
+        "successes": 24
+      },
+      {
+        "slots": 4,
+        "wallMedian": 0.8225769000127912,
+        "cpuMedian": 2.515625,
+        "successes": 24
+      },
+      {
+        "slots": 2,
+        "wallMedian": 0.5360526998993009,
+        "cpuMedian": 0.921875,
+        "successes": 24
+      },
+      {
+        "slots": 1,
+        "wallMedian": 0.5892724001314491,
+        "cpuMedian": 0.59375,
+        "successes": 24
+      }
+    ]
+  },
+  "probes": {
+    "memory-detailed": {
+      "scope": "Single process-local boundary probe; prebuilt raw input excluded; wrapper overhead; no native/RSS cap or timing claim",
+      "jsonBytes": 16472833,
+      "accepted": true,
+      "representation": {
+        "utf8Bytes": 16472833,
+        "textCharacters": 16472825,
+        "textObjectBytes": 32945708,
+        "maximumCodePoint": 35777
+      },
+      "events": [
+        {
+          "event": "full.enter",
+          "live": 0,
+          "peak": 0
+        },
+        {
+          "event": "model_validate_json.enter",
+          "live": 32946766,
+          "peak": 32947060
+        },
+        {
+          "event": "model_validate_json.return",
+          "live": 57247373,
+          "peak": 98838172
+        },
+        {
+          "event": "_verified_market_index_value.enter",
+          "live": 57247512,
+          "peak": 98838172
+        },
+        {
+          "event": "model_dump.enter",
+          "live": 57247913,
+          "peak": 98838172
+        },
+        {
+          "event": "model_dump.return",
+          "live": 57475187,
+          "peak": 98838172
+        },
+        {
+          "event": "_encode_canonical_value.enter",
+          "live": 73973570,
+          "peak": 98838172
+        },
+        {
+          "event": "_encode_canonical_value.return",
+          "live": 90437267,
+          "peak": 98838172
+        },
+        {
+          "event": "sha256.enter",
+          "live": 90437397,
+          "peak": 106900898
+        },
+        {
+          "event": "sha256.return",
+          "live": 90437731,
+          "peak": 106900898
+        },
+        {
+          "event": "_encode_canonical_value.enter",
+          "live": 73974378,
+          "peak": 106900898
+        },
+        {
+          "event": "_encode_canonical_value.return",
+          "live": 73974676,
+          "peak": 106900898
+        },
+        {
+          "event": "sha256.enter",
+          "live": 73974930,
+          "peak": 106900898
+        },
+        {
+          "event": "sha256.return",
+          "live": 73975200,
+          "peak": 106900898
+        },
+        {
+          "event": "_encode_canonical_value.enter",
+          "live": 73975882,
+          "peak": 106900898
+        },
+        {
+          "event": "_encode_canonical_value.return",
+          "live": 106921559,
+          "peak": 115068947
+        },
+        {
+          "event": "sha256.enter",
+          "live": 90449062,
+          "peak": 156340002
+        },
+        {
+          "event": "sha256.return",
+          "live": 90449396,
+          "peak": 156340002
+        },
+        {
+          "event": "_verified_market_index_value.return",
+          "live": 73967942,
+          "peak": 156340002
+        },
+        {
+          "event": "_encode_canonical_value.enter",
+          "live": 73968196,
+          "peak": 156340002
+        },
+        {
+          "event": "_encode_canonical_value.return",
+          "live": 106914159,
+          "peak": 156340002
+        },
+        {
+          "event": "full.return",
+          "live": 7841664,
+          "peak": 156340002
+        }
+      ]
+    },
+    "cpu-full": {
+      "scope": "Sequential read-only microprobes; three rounds, thread CPU; not simultaneous API attribution or performance acceptance. Scan/compare timed subregions exclude preflight; profiled compare includes preflight and setup. Raw leader inputs prebuilt outside ledger; not memory acceptance.",
+      "rows": 2008,
+      "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+      "records": [
+        {
+          "round": 1,
+          "stage": "preflight",
+          "wall": 0.026885499944910407,
+          "cpu": 0.03125
+        },
+        {
+          "round": 1,
+          "stage": "scan",
+          "wall": 0.04060050006955862,
+          "cpu": 0.03125
+        },
+        {
+          "round": 1,
+          "stage": "compare",
+          "wall": 0.04631279991008341,
+          "cpu": 0.046875
+        },
+        {
+          "round": 1,
+          "stage": "validate",
+          "wall": 1.8682450000196695,
+          "cpu": 1.875,
+          "count": 5
+        },
+        {
+          "round": 2,
+          "stage": "validate",
+          "wall": 1.8448779999744147,
+          "cpu": 1.84375,
+          "count": 5
+        },
+        {
+          "round": 2,
+          "stage": "compare",
+          "wall": 0.04635490011423826,
+          "cpu": 0.046875
+        },
+        {
+          "round": 2,
+          "stage": "scan",
+          "wall": 0.037977200001478195,
+          "cpu": 0.046875
+        },
+        {
+          "round": 2,
+          "stage": "preflight",
+          "wall": 0.02716659987345338,
+          "cpu": 0.015625
+        },
+        {
+          "round": 3,
+          "stage": "preflight",
+          "wall": 0.026686600176617503,
+          "cpu": 0.03125
+        },
+        {
+          "round": 3,
+          "stage": "scan",
+          "wall": 0.03886230010539293,
+          "cpu": 0.03125
+        },
+        {
+          "round": 3,
+          "stage": "compare",
+          "wall": 0.048350500175729394,
+          "cpu": 0.046875
+        },
+        {
+          "round": 3,
+          "stage": "validate",
+          "wall": 1.8468422000296414,
+          "cpu": 1.828125,
+          "count": 5
+        }
+      ],
+      "profiles": {
+        "preflight": [
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'fetchmany' of 'sqlite3.Cursor' objects>",
+            "calls": 64,
+            "selfSeconds": 0.0178858,
+            "cumulativeSeconds": 0.0178858
+          },
+          {
+            "file": "global_evidence_scan.py",
+            "line": 30,
+            "function": "shape",
+            "calls": 2008,
+            "selfSeconds": 0.0114117,
+            "cumulativeSeconds": 0.013832800000000001
+          },
+          {
+            "file": "dataclasses.py",
+            "line": 1782,
+            "function": "_replace",
+            "calls": 2008,
+            "selfSeconds": 0.0022122,
+            "cumulativeSeconds": 0.0036615000000000003
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.len>",
+            "calls": 32135,
+            "selfSeconds": 0.0017032000000000002,
+            "cumulativeSeconds": 0.0017032000000000002
+          },
+          {
+            "file": "<string>",
+            "line": 2,
+            "function": "__init__",
+            "calls": 4016,
+            "selfSeconds": 0.0014054,
+            "cumulativeSeconds": 0.0014054
+          },
+          {
+            "file": "evidence_representation.py",
+            "line": 19,
+            "function": "_byte_shape",
+            "calls": 2008,
+            "selfSeconds": 0.0008780000000000001,
+            "cumulativeSeconds": 0.0197289
+          },
+          {
+            "file": "dataclasses.py",
+            "line": 1763,
+            "function": "replace",
+            "calls": 2008,
+            "selfSeconds": 0.0008323,
+            "cumulativeSeconds": 0.0050181
+          },
+          {
+            "file": "evidence_representation.py",
+            "line": 26,
+            "function": "shapes",
+            "calls": 2009,
+            "selfSeconds": 0.0007385,
+            "cumulativeSeconds": 0.038919300000000004
+          },
+          {
+            "file": "evidence_representation.py",
+            "line": 41,
+            "function": "measure",
+            "calls": 1,
+            "selfSeconds": 0.0007052,
+            "cumulativeSeconds": 0.039907000000000005
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.getattr>",
+            "calls": 8051,
+            "selfSeconds": 0.0005785,
+            "cumulativeSeconds": 0.0005825
+          },
+          {
+            "file": "dataclasses.py",
+            "line": 1472,
+            "function": "_is_dataclass_instance",
+            "calls": 2008,
+            "selfSeconds": 0.0003707,
+            "cumulativeSeconds": 0.0005243
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.max>",
+            "calls": 4019,
+            "selfSeconds": 0.00028280000000000004,
+            "cumulativeSeconds": 0.00028280000000000004
+          },
+          {
+            "file": "result.py",
+            "line": 744,
+            "function": "manyrows",
+            "calls": 64,
+            "selfSeconds": 0.0002313,
+            "cumulativeSeconds": 0.0181808
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'values' of 'dict' objects>",
+            "calls": 2008,
+            "selfSeconds": 0.0001955,
+            "cumulativeSeconds": 0.0001955
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.hasattr>",
+            "calls": 2011,
+            "selfSeconds": 0.00015480000000000002,
+            "cumulativeSeconds": 0.00015480000000000002
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'execute' of 'sqlite3.Cursor' objects>",
+            "calls": 3,
+            "selfSeconds": 0.0001166,
+            "cumulativeSeconds": 0.0001166
+          },
+          {
+            "file": "result.py",
+            "line": 1395,
+            "function": "fetchmany",
+            "calls": 64,
+            "selfSeconds": 3.1700000000000005e-05,
+            "cumulativeSeconds": 0.018216200000000002
+          },
+          {
+            "file": "cursor.py",
+            "line": 2263,
+            "function": "_fetchmany_impl",
+            "calls": 64,
+            "selfSeconds": 2.8800000000000002e-05,
+            "cumulativeSeconds": 0.0179495
+          }
+        ],
+        "compare": [
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'fetchone' of 'sqlite3.Cursor' objects>",
+            "calls": 2011,
+            "selfSeconds": 0.034740400000000005,
+            "cumulativeSeconds": 0.034740400000000005
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'fetchmany' of 'sqlite3.Cursor' objects>",
+            "calls": 64,
+            "selfSeconds": 0.0175049,
+            "cumulativeSeconds": 0.0175049
+          },
+          {
+            "file": "global_evidence_scan.py",
+            "line": 30,
+            "function": "shape",
+            "calls": 2008,
+            "selfSeconds": 0.011314600000000001,
+            "cumulativeSeconds": 0.0138613
+          },
+          {
+            "file": "index_evidence.py",
+            "line": 54,
+            "function": "<genexpr>",
+            "calls": 42168,
+            "selfSeconds": 0.0101668,
+            "cumulativeSeconds": 0.0101668
+          },
+          {
+            "file": "index_evidence.py",
+            "line": 47,
+            "function": "exact",
+            "calls": 2008,
+            "selfSeconds": 0.0065382,
+            "cumulativeSeconds": 0.017289000000000002
+          },
+          {
+            "file": "index_evidence.py",
+            "line": 63,
+            "function": "<genexpr>",
+            "calls": 42168,
+            "selfSeconds": 0.005077,
+            "cumulativeSeconds": 0.0085289
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.sum>",
+            "calls": 6024,
+            "selfSeconds": 0.004687500000000001,
+            "cumulativeSeconds": 0.015361300000000001
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method sys.getsizeof>",
+            "calls": 44176,
+            "selfSeconds": 0.0041752000000000004,
+            "cumulativeSeconds": 0.0041752000000000004
+          },
+          {
+            "file": "evidence_representation.py",
+            "line": 51,
+            "function": "_read",
+            "calls": 2009,
+            "selfSeconds": 0.0033406,
+            "cumulativeSeconds": 0.0587212
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.len>",
+            "calls": 44187,
+            "selfSeconds": 0.0026905,
+            "cumulativeSeconds": 0.0026905
+          },
+          {
+            "file": "dataclasses.py",
+            "line": 1782,
+            "function": "_replace",
+            "calls": 2008,
+            "selfSeconds": 0.0024052,
+            "cumulativeSeconds": 0.0038494000000000002
+          },
+          {
+            "file": "evidence_cohort.py",
+            "line": 111,
+            "function": "_compare",
+            "calls": 1,
+            "selfSeconds": 0.0018601000000000002,
+            "cumulativeSeconds": 0.0792065
+          },
+          {
+            "file": "index_evidence.py",
+            "line": 62,
+            "function": "<genexpr>",
+            "calls": 6024,
+            "selfSeconds": 0.0017028000000000002,
+            "cumulativeSeconds": 0.014557200000000001
+          },
+          {
+            "file": "<string>",
+            "line": 2,
+            "function": "__init__",
+            "calls": 4016,
+            "selfSeconds": 0.0013945000000000001,
+            "cumulativeSeconds": 0.0013945000000000001
+          },
+          {
+            "file": "evidence_representation.py",
+            "line": 26,
+            "function": "shapes",
+            "calls": 2009,
+            "selfSeconds": 0.0009881,
+            "cumulativeSeconds": 0.0389685
+          },
+          {
+            "file": "index_evidence.py",
+            "line": 60,
+            "function": "retained_size",
+            "calls": 2008,
+            "selfSeconds": 0.0008691,
+            "cumulativeSeconds": 0.0165116
+          },
+          {
+            "file": "result.py",
+            "line": 565,
+            "function": "iterrows",
+            "calls": 2009,
+            "selfSeconds": 0.0008673000000000001,
+            "cumulativeSeconds": 0.0368959
+          },
+          {
+            "file": "evidence_representation.py",
+            "line": 19,
+            "function": "_byte_shape",
+            "calls": 2008,
+            "selfSeconds": 0.0008622,
+            "cumulativeSeconds": 0.0199451
+          }
+        ],
+        "validate": [
+          {
+            "file": "canonical.py",
+            "line": 50,
+            "function": "canonical_value",
+            "calls": 1236442,
+            "selfSeconds": 0.9338698000000001,
+            "cumulativeSeconds": 2.654304
+          },
+          {
+            "file": "canonical.py",
+            "line": 30,
+            "function": "canonical_decimal",
+            "calls": 447344,
+            "selfSeconds": 0.49358430000000003,
+            "cumulativeSeconds": 1.0009009
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.isinstance>",
+            "calls": 5529575,
+            "selfSeconds": 0.4359526,
+            "cumulativeSeconds": 0.46269920000000003
+          },
+          {
+            "file": "encoder.py",
+            "line": 207,
+            "function": "iterencode",
+            "calls": 8032,
+            "selfSeconds": 0.3690821,
+            "cumulativeSeconds": 0.3690821
+          },
+          {
+            "file": "models.py",
+            "line": 80,
+            "function": "_validate_decimal_expansion",
+            "calls": 445392,
+            "selfSeconds": 0.2776815,
+            "cumulativeSeconds": 0.5863273
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'validate_json' of 'pydantic_core._pydantic_core.SchemaValidator' objects>",
+            "calls": 2008,
+            "selfSeconds": 0.2707699,
+            "cumulativeSeconds": 1.2143965
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'as_tuple' of 'decimal.Decimal' objects>",
+            "calls": 892736,
+            "selfSeconds": 0.2348183,
+            "cumulativeSeconds": 0.462558
+          },
+          {
+            "file": "models.py",
+            "line": 112,
+            "function": "validate_bar",
+            "calls": 74232,
+            "selfSeconds": 0.19559710000000002,
+            "cumulativeSeconds": 0.9301527
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'isoformat' of 'datetime.datetime' objects>",
+            "calls": 160456,
+            "selfSeconds": 0.1459959,
+            "cumulativeSeconds": 0.1459959
+          },
+          {
+            "file": "<string>",
+            "line": 1,
+            "function": "<lambda>",
+            "calls": 892736,
+            "selfSeconds": 0.13646470000000002,
+            "cumulativeSeconds": 0.22773970000000002
+          },
+          {
+            "file": "models.py",
+            "line": 75,
+            "function": "_validate_shanghai_datetime",
+            "calls": 162408,
+            "selfSeconds": 0.1094167,
+            "cumulativeSeconds": 0.14272110000000002
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method __new__ of type object at <address>>",
+            "calls": 892736,
+            "selfSeconds": 0.09127500000000001,
+            "cumulativeSeconds": 0.09127500000000001
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.format>",
+            "calls": 447344,
+            "selfSeconds": 0.08790020000000001,
+            "cumulativeSeconds": 0.08790020000000001
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.any>",
+            "calls": 892736,
+            "selfSeconds": 0.069262,
+            "cumulativeSeconds": 0.069262
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'utcoffset' of 'datetime.datetime' objects>",
+            "calls": 316840,
+            "selfSeconds": 0.06892200000000001,
+            "cumulativeSeconds": 0.06892200000000001
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'to_python' of 'pydantic_core._pydantic_core.SchemaSerializer' objects>",
+            "calls": 2008,
+            "selfSeconds": 0.0637837,
+            "cumulativeSeconds": 0.0637837
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<built-in method builtins.len>",
+            "calls": 904775,
+            "selfSeconds": 0.057096400000000005,
+            "cumulativeSeconds": 0.057096400000000005
+          },
+          {
+            "file": "~",
+            "line": 0,
+            "function": "<method 'rstrip' of 'str' objects>",
+            "calls": 688896,
+            "selfSeconds": 0.0563762,
+            "cumulativeSeconds": 0.0563762
+          }
+        ]
+      }
+    },
+    "concurrency": {
+      "scope": "Isolated SQL/sizing/compare CPU probes; each thread has its own explicit read transaction and independent experimental budget; prebuilt leader raw is outside the ledger. Not global-budget, authority, shared-proof, memory or API acceptance. Each stage includes connection, metadata and preflight; scan adds full payload traversal; compare adds full typed equality. Three rounds; barriers synchronize start only.",
+      "rows": 2008,
+      "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+      "batches": [
+        {
+          "round": 1,
+          "stage": "preflight",
+          "readers": 1,
+          "wall": 0.02910930011421442,
+          "cpu": 0.03125,
+          "workers": [
+            {
+              "wall": 0.02848339988850057,
+              "cpu": 0.03125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "stage": "preflight",
+          "readers": 8,
+          "wall": 0.6956420000642538,
+          "cpu": 3.703125,
+          "workers": [
+            {
+              "wall": 0.6921647000126541,
+              "cpu": 0.453125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.6727064000442624,
+              "cpu": 0.453125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.6914069999475032,
+              "cpu": 0.53125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.6935189999639988,
+              "cpu": 0.46875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.685669100144878,
+              "cpu": 0.5,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.6940897000022233,
+              "cpu": 0.46875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.6786291000898927,
+              "cpu": 0.46875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.6120080000255257,
+              "cpu": 0.359375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "stage": "scan",
+          "readers": 1,
+          "wall": 0.06704049999825656,
+          "cpu": 0.078125,
+          "workers": [
+            {
+              "wall": 0.06642289995215833,
+              "cpu": 0.078125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "stage": "scan",
+          "readers": 8,
+          "wall": 1.2762426999397576,
+          "cpu": 7.171875,
+          "workers": [
+            {
+              "wall": 1.2621115001384169,
+              "cpu": 0.921875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2693956000730395,
+              "cpu": 0.96875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2659178001340479,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2739431001245975,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2681829000357538,
+              "cpu": 0.921875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2676242000889033,
+              "cpu": 0.796875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2310514999553561,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2715608000289649,
+              "cpu": 0.890625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "stage": "compare",
+          "readers": 1,
+          "wall": 0.0726914000697434,
+          "cpu": 0.078125,
+          "workers": [
+            {
+              "wall": 0.07231449987739325,
+              "cpu": 0.078125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "stage": "compare",
+          "readers": 8,
+          "wall": 1.3345001998823136,
+          "cpu": 7.09375,
+          "workers": [
+            {
+              "wall": 1.2876006998121738,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3262693001888692,
+              "cpu": 0.875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3321511999238282,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3308749999850988,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3324275000486523,
+              "cpu": 0.875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3275071999523789,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3305172000546008,
+              "cpu": 0.890625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.330290999962017,
+              "cpu": 0.921875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "stage": "preflight",
+          "readers": 8,
+          "wall": 0.7292217998765409,
+          "cpu": 4.28125,
+          "workers": [
+            {
+              "wall": 0.7219991001766175,
+              "cpu": 0.46875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7012048000469804,
+              "cpu": 0.515625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7147801001556218,
+              "cpu": 0.515625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.723299799952656,
+              "cpu": 0.53125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7073377000633627,
+              "cpu": 0.59375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7266522999852896,
+              "cpu": 0.546875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7274581000674516,
+              "cpu": 0.5625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7267301001120359,
+              "cpu": 0.546875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "stage": "preflight",
+          "readers": 1,
+          "wall": 0.02807040000334382,
+          "cpu": 0.03125,
+          "workers": [
+            {
+              "wall": 0.027741200057789683,
+              "cpu": 0.03125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "stage": "scan",
+          "readers": 8,
+          "wall": 1.2695720999035984,
+          "cpu": 7.296875,
+          "workers": [
+            {
+              "wall": 1.263736299937591,
+              "cpu": 0.890625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2645630999468267,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2601793999783695,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2432919000275433,
+              "cpu": 0.921875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2534111000131816,
+              "cpu": 0.921875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2606689999811351,
+              "cpu": 0.921875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2681468999944627,
+              "cpu": 0.890625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2550820000469685,
+              "cpu": 0.984375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "stage": "scan",
+          "readers": 1,
+          "wall": 0.0669167002197355,
+          "cpu": 0.0625,
+          "workers": [
+            {
+              "wall": 0.06650399998761714,
+              "cpu": 0.0625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "stage": "compare",
+          "readers": 8,
+          "wall": 1.3377350000664592,
+          "cpu": 6.921875,
+          "workers": [
+            {
+              "wall": 1.3253035999368876,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3344137000385672,
+              "cpu": 0.875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3287587999366224,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.319407399976626,
+              "cpu": 0.96875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3354832001496106,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3298204001039267,
+              "cpu": 0.828125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3094689000863582,
+              "cpu": 0.765625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3297468000091612,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "stage": "compare",
+          "readers": 1,
+          "wall": 0.07737480010837317,
+          "cpu": 0.078125,
+          "workers": [
+            {
+              "wall": 0.0769764999859035,
+              "cpu": 0.078125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "stage": "preflight",
+          "readers": 1,
+          "wall": 0.028558099875226617,
+          "cpu": 0.03125,
+          "workers": [
+            {
+              "wall": 0.028161800000816584,
+              "cpu": 0.03125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "stage": "preflight",
+          "readers": 8,
+          "wall": 0.7118148999288678,
+          "cpu": 4.15625,
+          "workers": [
+            {
+              "wall": 0.706328900065273,
+              "cpu": 0.5,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7087630000896752,
+              "cpu": 0.546875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7050645998679101,
+              "cpu": 0.546875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7021578999701887,
+              "cpu": 0.5,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7033802999649197,
+              "cpu": 0.515625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7083342000842094,
+              "cpu": 0.5,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.7099102998618037,
+              "cpu": 0.46875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            },
+            {
+              "wall": 0.6936582000926137,
+              "cpu": 0.578125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 0,
+                "rows": 0,
+                "actualRawPeak": 0
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "stage": "scan",
+          "readers": 1,
+          "wall": 0.06821110006421804,
+          "cpu": 0.078125,
+          "workers": [
+            {
+              "wall": 0.06783149996772408,
+              "cpu": 0.078125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "stage": "scan",
+          "readers": 8,
+          "wall": 1.26305149984546,
+          "cpu": 6.421875,
+          "workers": [
+            {
+              "wall": 1.2474551999475807,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2559001001063734,
+              "cpu": 0.828125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2612430001609027,
+              "cpu": 0.84375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2570706000551581,
+              "cpu": 0.703125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2588941999711096,
+              "cpu": 0.828125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.241799799958244,
+              "cpu": 0.75,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2482547999825329,
+              "cpu": 0.8125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2402876999694854,
+              "cpu": 0.796875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "stage": "compare",
+          "readers": 1,
+          "wall": 0.07299469993449748,
+          "cpu": 0.078125,
+          "workers": [
+            {
+              "wall": 0.07260060007683933,
+              "cpu": 0.078125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "stage": "compare",
+          "readers": 8,
+          "wall": 1.3277004999108613,
+          "cpu": 7.015625,
+          "workers": [
+            {
+              "wall": 1.3116953999269754,
+              "cpu": 0.859375,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3257476000580937,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3066139000002295,
+              "cpu": 0.8125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3166161999106407,
+              "cpu": 0.828125,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3224456999450922,
+              "cpu": 0.890625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.32606830005534,
+              "cpu": 0.90625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3130121000576764,
+              "cpu": 0.921875,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.313069799914956,
+              "cpu": 0.890625,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "scan-slots": {
+      "scope": "Read-only scheduling sensitivity probe with eight complete independent metadata+payload+typed-compare operations. Permit acquired before connection/transaction; not wired into flight/cohort/budget lifecycle. Each task retains its own experimental Budget and uncharged prebuilt leader raw. Not authority, global memory, cancellation, drain, availability or end-to-end acceptance. Three alternating rounds, no artificial scan delay.",
+      "rows": 2008,
+      "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+      "batches": [
+        {
+          "round": 1,
+          "slots": 8,
+          "readers": 8,
+          "wall": 1.322647900087759,
+          "cpu": 6.765625,
+          "workers": [
+            {
+              "wall": 1.3166441998910159,
+              "cpu": 0.875,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3147218998055905,
+              "cpu": 0.828125,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3157785998191684,
+              "cpu": 0.84375,
+              "wait": 1.9997823983430862e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.278194700134918,
+              "cpu": 0.921875,
+              "wait": 2.200016751885414e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3159552998840809,
+              "cpu": 0.890625,
+              "wait": 2.09989957511425e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3098281999118626,
+              "cpu": 0.875,
+              "wait": 1.8998980522155762e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3203237000852823,
+              "cpu": 0.671875,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.1532596999313682,
+              "cpu": 0.859375,
+              "wait": 3.00002284348011e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "slots": 4,
+          "readers": 8,
+          "wall": 0.8183339999523014,
+          "cpu": 2.625,
+          "workers": [
+            {
+              "wall": 0.8118791000451893,
+              "cpu": 0.296875,
+              "wait": 0.3974064998328686,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.41414459981024265,
+              "cpu": 0.34375,
+              "wait": 1.2998934835195541e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.41643240000121295,
+              "cpu": 0.34375,
+              "wait": 1.0998919606208801e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.3983924000058323,
+              "cpu": 0.3125,
+              "wait": 1.700129359960556e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8087469001766294,
+              "cpu": 0.3125,
+              "wait": 0.3983051001559943,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8167155000846833,
+              "cpu": 0.296875,
+              "wait": 0.4160653001163155,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8161347999703139,
+              "cpu": 0.328125,
+              "wait": 0.41405859985388815,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.3975969001185149,
+              "cpu": 0.390625,
+              "wait": 1.700129359960556e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "slots": 2,
+          "readers": 8,
+          "wall": 0.5360526998993009,
+          "cpu": 0.90625,
+          "workers": [
+            {
+              "wall": 0.533232299843803,
+              "cpu": 0.09375,
+              "wait": 0.401070199906826,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.40104299993254244,
+              "cpu": 0.078125,
+              "wait": 0.2683031999040395,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5346919000148773,
+              "cpu": 0.125,
+              "wait": 0.4017779000569135,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.13380619999952614,
+              "cpu": 0.09375,
+              "wait": 2.299901098012924e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2684887000359595,
+              "cpu": 0.140625,
+              "wait": 0.1338130000513047,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2682427999097854,
+              "cpu": 0.140625,
+              "wait": 0.13413779996335506,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.4018263998441398,
+              "cpu": 0.125,
+              "wait": 0.2685372999403626,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.13421869999729097,
+              "cpu": 0.109375,
+              "wait": 1.500127837061882e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 1,
+          "slots": 1,
+          "readers": 8,
+          "wall": 0.5877338999416679,
+          "cpu": 0.59375,
+          "workers": [
+            {
+              "wall": 0.5862696999683976,
+              "cpu": 0.078125,
+              "wait": 0.5134920999407768,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2216340999584645,
+              "cpu": 0.078125,
+              "wait": 0.1453798001166433,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2950828999746591,
+              "cpu": 0.078125,
+              "wait": 0.2216458001639694,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.3670369000174105,
+              "cpu": 0.078125,
+              "wait": 0.29510170011781156,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5134737000335008,
+              "cpu": 0.078125,
+              "wait": 0.4405243000946939,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.4405737998895347,
+              "cpu": 0.0625,
+              "wait": 0.36705220001749694,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.14535959996283054,
+              "cpu": 0.0625,
+              "wait": 0.07275930000469089,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.07282970007508993,
+              "cpu": 0.078125,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "slots": 1,
+          "readers": 8,
+          "wall": 0.5892724001314491,
+          "cpu": 0.5625,
+          "workers": [
+            {
+              "wall": 0.5134407000150532,
+              "cpu": 0.0625,
+              "wait": 0.4399619000032544,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5876542001497,
+              "cpu": 0.046875,
+              "wait": 0.5133930000010878,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.43994089984335005,
+              "cpu": 0.078125,
+              "wait": 0.36611759988591075,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.21919540013186634,
+              "cpu": 0.078125,
+              "wait": 0.14559349999763072,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.14556260011158884,
+              "cpu": 0.078125,
+              "wait": 0.07382410019636154,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.3661019999999553,
+              "cpu": 0.078125,
+              "wait": 0.29157410003244877,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2915576999075711,
+              "cpu": 0.0625,
+              "wait": 0.21922269999049604,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.07390810013748705,
+              "cpu": 0.0625,
+              "wait": 1.700129359960556e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "slots": 2,
+          "readers": 8,
+          "wall": 0.5361409999895841,
+          "cpu": 0.921875,
+          "workers": [
+            {
+              "wall": 0.4001664000097662,
+              "cpu": 0.109375,
+              "wait": 0.2604608000256121,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5339909999165684,
+              "cpu": 0.125,
+              "wait": 0.40007849992252886,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.13081540004350245,
+              "cpu": 0.125,
+              "wait": 1.200009137392044e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.3982065001036972,
+              "cpu": 0.125,
+              "wait": 0.2602725999895483,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2602321000304073,
+              "cpu": 0.09375,
+              "wait": 0.13079249998554587,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5342038997914642,
+              "cpu": 0.109375,
+              "wait": 0.3982059999834746,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.26032280013896525,
+              "cpu": 0.109375,
+              "wait": 0.13097860012203455,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.13087889994494617,
+              "cpu": 0.109375,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "slots": 4,
+          "readers": 8,
+          "wall": 0.8452683999203146,
+          "cpu": 2.515625,
+          "workers": [
+            {
+              "wall": 0.8415329998824745,
+              "cpu": 0.3125,
+              "wait": 0.4301505999173969,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8343803000170738,
+              "cpu": 0.296875,
+              "wait": 0.4127623001113534,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8438359000720084,
+              "cpu": 0.34375,
+              "wait": 0.40783520019613206,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.43036690005101264,
+              "cpu": 0.328125,
+              "wait": 1.0998919606208801e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.4128936000633985,
+              "cpu": 0.328125,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.4324227999895811,
+              "cpu": 0.328125,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8354745001997799,
+              "cpu": 0.3125,
+              "wait": 0.4323376000393182,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.4080707998946309,
+              "cpu": 0.265625,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 2,
+          "slots": 8,
+          "readers": 8,
+          "wall": 1.356637499993667,
+          "cpu": 6.875,
+          "workers": [
+            {
+              "wall": 1.3545699999667704,
+              "cpu": 0.859375,
+              "wait": 8.00006091594696e-07,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3468096000142395,
+              "cpu": 0.9375,
+              "wait": 1.2998934835195541e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3545776999089867,
+              "cpu": 0.875,
+              "wait": 1.0998919606208801e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3397816999349743,
+              "cpu": 0.859375,
+              "wait": 1.00000761449337e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3458604998886585,
+              "cpu": 0.859375,
+              "wait": 1.00000761449337e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3503876000177115,
+              "cpu": 0.8125,
+              "wait": 1.700129359960556e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3234147001057863,
+              "cpu": 0.84375,
+              "wait": 1.200009137392044e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3339631000999361,
+              "cpu": 0.828125,
+              "wait": 1.400010660290718e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "slots": 8,
+          "readers": 8,
+          "wall": 1.3109755001496524,
+          "cpu": 6.671875,
+          "workers": [
+            {
+              "wall": 1.2597345998510718,
+              "cpu": 0.71875,
+              "wait": 1.0998919606208801e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2735309000127017,
+              "cpu": 0.859375,
+              "wait": 1.0998919606208801e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3056975998915732,
+              "cpu": 0.921875,
+              "wait": 1.800013706088066e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3046898001339287,
+              "cpu": 0.8125,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3091799998655915,
+              "cpu": 0.828125,
+              "wait": 1.4998950064182281e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.2732993001118302,
+              "cpu": 0.859375,
+              "wait": 1.100124791264534e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.3056620000861585,
+              "cpu": 0.859375,
+              "wait": 1.800013706088066e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 1.290388299850747,
+              "cpu": 0.796875,
+              "wait": 1.600012183189392e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "slots": 4,
+          "readers": 8,
+          "wall": 0.8225769000127912,
+          "cpu": 2.21875,
+          "workers": [
+            {
+              "wall": 0.8110618002247065,
+              "cpu": 0.34375,
+              "wait": 0.40325170010328293,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.40369589999318123,
+              "cpu": 0.265625,
+              "wait": 4.300149157643318e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.4187729998957366,
+              "cpu": 0.234375,
+              "wait": 1.200009137392044e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8192507999483496,
+              "cpu": 0.34375,
+              "wait": 0.4068102000746876,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8049943998921663,
+              "cpu": 0.3125,
+              "wait": 0.4035513000562787,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.8210402000695467,
+              "cpu": 0.296875,
+              "wait": 0.41866419999860227,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.40318530006334186,
+              "cpu": 0.21875,
+              "wait": 1.500127837061882e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.40713639999739826,
+              "cpu": 0.203125,
+              "wait": 1.8998980522155762e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "slots": 2,
+          "readers": 8,
+          "wall": 0.5285344999283552,
+          "cpu": 0.984375,
+          "workers": [
+            {
+              "wall": 0.39740439993329346,
+              "cpu": 0.125,
+              "wait": 0.2663846998475492,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2662559000309557,
+              "cpu": 0.125,
+              "wait": 0.1342525000218302,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5271732001565397,
+              "cpu": 0.125,
+              "wait": 0.3975739001762122,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.3973627998493612,
+              "cpu": 0.109375,
+              "wait": 0.26625990006141365,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.26622159988619387,
+              "cpu": 0.109375,
+              "wait": 0.13401669985614717,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5271236998960376,
+              "cpu": 0.109375,
+              "wait": 0.3974327000323683,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.13422379991970956,
+              "cpu": 0.140625,
+              "wait": 1.0998919606208801e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.13407899998128414,
+              "cpu": 0.140625,
+              "wait": 1.800013706088066e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        },
+        {
+          "round": 3,
+          "slots": 1,
+          "readers": 8,
+          "wall": 0.5928346998989582,
+          "cpu": 0.59375,
+          "workers": [
+            {
+              "wall": 0.2957754998933524,
+              "cpu": 0.078125,
+              "wait": 0.22081719990819693,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.37162819993682206,
+              "cpu": 0.078125,
+              "wait": 0.2957954998128116,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.591181900119409,
+              "cpu": 0.078125,
+              "wait": 0.5192524001467973,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.1462244000285864,
+              "cpu": 0.0625,
+              "wait": 0.07277110009454191,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.5192976999096572,
+              "cpu": 0.0625,
+              "wait": 0.4463768999557942,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.2207906001713127,
+              "cpu": 0.078125,
+              "wait": 0.14623550022952259,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.44635700015351176,
+              "cpu": 0.078125,
+              "wait": 0.37164520006626844,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            },
+            {
+              "wall": 0.07284000003710389,
+              "cpu": 0.078125,
+              "wait": 1.500127837061882e-06,
+              "stats": {
+                "metadataQueries": 1,
+                "payloadQueries": 1,
+                "rows": 2008,
+                "actualRawPeak": 37206
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reproduction": {
+    "instructions": "From repository root at baseline commit, save each source under .pytest_cache/validator-analysis/<name>.py and run separately using .venv/Scripts/python.exe. Requires the existing local frozen monitor fixture; no fixture payloads are published. memory-detailed generates its valid large fixture locally. Never run timing probes simultaneously.",
+    "sources": {
+      "memory-detailed": "import sys, json, tracemalloc, hashlib\nfrom pathlib import Path\nsys.path.insert(0, str(Path.cwd()))\nfrom scripts.experiments.global_evidence_large import large_candidate\nfrom trade_plan_monitor.market_index import canonical, models\nfrom trade_plan_monitor.state import projections\nfrom trade_plan_monitor.runtime.market_indexes import DASHBOARD_INDEX_CODES\nfrom pydantic import BaseModel\nrow=large_candidate()\ntext_value=row.payload[9].decode('utf-8')\nrepresentation=dict(utf8Bytes=len(row.payload[9]),textCharacters=len(text_value),textObjectBytes=sys.getsizeof(text_value),maximumCodePoint=max(map(ord,text_value)))\ndel text_value\nevents=[]\ndef mark(name):\n    used, peak=tracemalloc.get_traced_memory()\n    events.append(dict(event=name, live=used, peak=peak))\ndef wrap(owner,name):\n    original=getattr(owner,name)\n    def measured(*args,**kwargs):\n        mark(name+'.enter')\n        value=original(*args,**kwargs)\n        mark(name+'.return')\n        return value\n    setattr(owner,name,measured)\nfor owner,name in [(models.MarketIndexSnapshot,'model_validate_json'),(BaseModel,'model_dump'),(canonical,'_encode_canonical_value'),(canonical,'_verified_market_index_value'),(canonical,'sha256')]:wrap(owner,name)\ntracemalloc.start();mark('full.enter')\nresult=projections._latest_index_records(iter((row,)),DASHBOARD_INDEX_CODES)\nmark('full.return');tracemalloc.stop()\nreport=dict(scope='Single process-local boundary probe; prebuilt raw input excluded; wrapper overhead; no native/RSS cap or timing claim',jsonBytes=len(row.payload[9]),accepted=bool(result),representation=representation,events=events)\nPath('.pytest_cache/validator-analysis/memory-detailed.json').write_text(json.dumps(report,indent=2))\nprint(json.dumps(report,indent=2))\n\n",
+      "cpu-full": "import sys,json,hashlib,cProfile,pstats\nfrom pathlib import Path\nfrom time import perf_counter, thread_time\nsys.path.insert(0,str(Path.cwd()))\nfrom scripts.experiments.bounded_benchmark import frozen_engine\nfrom scripts.experiments.global_evidence_scan import COLUMNS,FROM,ORDER\nfrom scripts.experiments.evidence_representation import OrderedScan\nfrom scripts.experiments.global_evidence_budget import Budget\nfrom scripts.experiments.evidence_cohort import Flights,Flight\nfrom trade_plan_monitor.state.index_evidence import RawIndexCandidate,HEAD_FIELDS\nfrom trade_plan_monitor.state.projections import _latest_index_records\nfrom trade_plan_monitor.runtime.market_indexes import ALWAYS_ON_INDEX_CODES as codes\npath=Path('.pytest_cache/active-monitor-cpu-implementation/monitor.sqlite3')\nbefore=hashlib.sha256(path.read_bytes()).hexdigest();engine=frozen_engine(path)\nwith engine.connect() as c,c.begin():\n    mapping=c.exec_driver_sql('select mapping_version from market_index_snapshot_head limit 1').scalar_one()\n    sql='select '+','.join(COLUMNS)+FROM+' where h.mapping_version=? and h.index_code in ('+','.join('?' for _ in codes)+')'+ORDER\n    with c.exec_driver_sql(sql,(mapping,*(code.value for code in codes))) as cursor:\n        raw=tuple(RawIndexCandidate.from_values(tuple(v[:len(HEAD_FIELDS)]),tuple(v[len(HEAD_FIELDS):])) for v in cursor)\nrecords=[]\ndef execute(stage):\n    budget=Budget()\n    with engine.connect() as c,c.begin():\n        scan=OrderedScan(c,budget,mapping,codes)\n        with scan.metadata():\n            if stage=='preflight':\n                output=scan.measure()\n            else:\n                scan.measure()\n                with scan.acquire(scan.preflight[1],'scan') as work:\n                    if stage=='scan':\n                        count=0\n                        for candidate in scan.rows(work):count+=1\n                        output=count\n                    else:\n                        output=Flights(budget)._compare(Flight(('s',),raw,None,None),scan,work)\n                        assert output\n        stats=scan.stats\n    budget.drain()\n    return output,stats\n# Timed subregions exclude preflight for scan/compare; setup is outside the timer.\ndef timed(stage):\n    if stage=='validate':\n        start,cpu=perf_counter(),thread_time();value=_latest_index_records(iter(raw),codes)\n        return dict(stage=stage,wall=perf_counter()-start,cpu=thread_time()-cpu,count=len(value))\n    budget=Budget()\n    with engine.connect() as c,c.begin():\n        scan=OrderedScan(c,budget,mapping,codes)\n        with scan.metadata():\n            if stage!='preflight':scan.measure()\n            def op():\n                if stage=='preflight':return scan.measure()\n                with scan.acquire(scan.preflight[1],'scan') as work:\n                    if stage=='compare':\n                        assert Flights(budget)._compare(Flight(('s',),raw,None,None),scan,work)\n                    else:\n                        for candidate in scan.rows(work):pass\n            start,cpu=perf_counter(),thread_time();op();elapsed,used=perf_counter()-start,thread_time()-cpu\n    budget.drain();return dict(stage=stage,wall=elapsed,cpu=used)\nfor round_number in range(3):\n    for stage in (('preflight','scan','compare','validate') if round_number%2==0 else ('validate','compare','scan','preflight')):\n        records.append(dict(round=round_number+1,**timed(stage)))\nprofiles={}\nfor stage in ('preflight','compare','validate'):\n    profile=cProfile.Profile();profile.enable();(timed(stage) if stage=='validate' else execute(stage));profile.disable()\n    stats=pstats.Stats(profile)\n    rows=[]\n    for (file,line,func),(cc,nc,tt,ct,callers) in stats.stats.items():\n        rows.append(dict(file=Path(file).name,line=line,function=func,calls=nc,selfSeconds=tt,cumulativeSeconds=ct))\n    profiles[stage]=sorted(rows,key=lambda x:x['selfSeconds'],reverse=True)[:18]\nengine.dispose();assert hashlib.sha256(path.read_bytes()).hexdigest()==before\nreport=dict(scope='Sequential read-only microprobes; three rounds, thread CPU; not simultaneous API attribution or performance acceptance. Scan/compare timed subregions exclude preflight; profiled compare includes preflight and setup. Raw leader inputs prebuilt outside ledger; not memory acceptance.',rows=len(raw),inputSha256=before,records=records,profiles=profiles)\nPath('.pytest_cache/validator-analysis/cpu-full.json').write_text(json.dumps(report,indent=2))\nprint(json.dumps(dict(rows=len(raw),records=records,profiles=profiles),indent=2))\n\n",
+      "concurrency": "import sys,json,hashlib,cProfile,pstats\nfrom pathlib import Path\nfrom time import perf_counter, thread_time\nsys.path.insert(0,str(Path.cwd()))\nfrom scripts.experiments.bounded_benchmark import frozen_engine\nfrom scripts.experiments.global_evidence_scan import COLUMNS,FROM,ORDER\nfrom scripts.experiments.evidence_representation import OrderedScan\nfrom scripts.experiments.global_evidence_budget import Budget\nfrom scripts.experiments.evidence_cohort import Flights,Flight\nfrom trade_plan_monitor.state.index_evidence import RawIndexCandidate,HEAD_FIELDS\nfrom trade_plan_monitor.state.projections import _latest_index_records\nfrom trade_plan_monitor.runtime.market_indexes import ALWAYS_ON_INDEX_CODES as codes\npath=Path('.pytest_cache/active-monitor-cpu-implementation/monitor.sqlite3')\nbefore=hashlib.sha256(path.read_bytes()).hexdigest();engine=frozen_engine(path)\nwith engine.connect() as c,c.begin():\n    mapping=c.exec_driver_sql('select mapping_version from market_index_snapshot_head limit 1').scalar_one()\n    sql='select '+','.join(COLUMNS)+FROM+' where h.mapping_version=? and h.index_code in ('+','.join('?' for _ in codes)+')'+ORDER\n    with c.exec_driver_sql(sql,(mapping,*(code.value for code in codes))) as cursor:\n        raw=tuple(RawIndexCandidate.from_values(tuple(v[:len(HEAD_FIELDS)]),tuple(v[len(HEAD_FIELDS):])) for v in cursor)\nrecords=[]\ndef execute(stage):\n    budget=Budget()\n    with engine.connect() as c,c.begin():\n        scan=OrderedScan(c,budget,mapping,codes)\n        with scan.metadata():\n            if stage=='preflight':\n                output=scan.measure()\n            else:\n                scan.measure()\n                with scan.acquire(scan.preflight[1],'scan') as work:\n                    if stage=='scan':\n                        count=0\n                        for candidate in scan.rows(work):count+=1\n                        output=count\n                    else:\n                        output=Flights(budget)._compare(Flight(('s',),raw,None,None),scan,work)\n                        assert output\n        stats=scan.stats\n    budget.drain()\n    return output,stats\n# Timed subregions exclude preflight for scan/compare; setup is outside the timer.\ndef timed(stage):\n    if stage=='validate':\n        start,cpu=perf_counter(),thread_time();value=_latest_index_records(iter(raw),codes)\n        return dict(stage=stage,wall=perf_counter()-start,cpu=thread_time()-cpu,count=len(value))\n    budget=Budget()\n    with engine.connect() as c,c.begin():\n        scan=OrderedScan(c,budget,mapping,codes)\n        with scan.metadata():\n            if stage!='preflight':scan.measure()\n            def op():\n                if stage=='preflight':return scan.measure()\n                with scan.acquire(scan.preflight[1],'scan') as work:\n                    if stage=='compare':\n                        assert Flights(budget)._compare(Flight(('s',),raw,None,None),scan,work)\n                    else:\n                        for candidate in scan.rows(work):pass\n            start,cpu=perf_counter(),thread_time();op();elapsed,used=perf_counter()-start,thread_time()-cpu\n    budget.drain();return dict(stage=stage,wall=elapsed,cpu=used)\nfrom concurrent.futures import ThreadPoolExecutor\nfrom threading import Barrier\nfrom time import process_time\nbatches=[]\nfor round_number in range(3):\n    for stage in ('preflight','scan','compare'):\n        for readers in ((1,8) if round_number%2==0 else (8,1)):\n            barrier=Barrier(readers)\n            def run():\n                barrier.wait(timeout=15)\n                start,cpu=perf_counter(),thread_time()\n                _,stats=execute(stage)\n                return dict(wall=perf_counter()-start,cpu=thread_time()-cpu,stats=stats)\n            start,cpu=perf_counter(),process_time()\n            with ThreadPoolExecutor(max_workers=readers) as pool:\n                workers=list(pool.map(lambda _:run(),range(readers)))\n            batches.append(dict(round=round_number+1,stage=stage,readers=readers,wall=perf_counter()-start,cpu=process_time()-cpu,workers=workers))\nengine.dispose()\nassert hashlib.sha256(path.read_bytes()).hexdigest()==before\nreport=dict(scope='Isolated SQL/sizing/compare CPU probes; each thread has its own explicit read transaction and independent experimental budget; prebuilt leader raw is outside the ledger. Not global-budget, authority, shared-proof, memory or API acceptance. Each stage includes connection, metadata and preflight; scan adds full payload traversal; compare adds full typed equality. Three rounds; barriers synchronize start only.',rows=len(raw),inputSha256=before,batches=batches)\nPath('.pytest_cache/validator-analysis/concurrency.json').write_text(json.dumps(report,indent=2))\nfrom statistics import median\nprint(json.dumps([dict(stage=s,readers=n,wallMedian=median(x['wall'] for x in batches if x['stage']==s and x['readers']==n),cpuMedian=median(x['cpu'] for x in batches if x['stage']==s and x['readers']==n)) for s in ('preflight','scan','compare') for n in (1,8)],indent=2))\n",
+      "scan-slots": "import sys,json,hashlib,cProfile,pstats\nfrom pathlib import Path\nfrom time import perf_counter, thread_time\nsys.path.insert(0,str(Path.cwd()))\nfrom scripts.experiments.bounded_benchmark import frozen_engine\nfrom scripts.experiments.global_evidence_scan import COLUMNS,FROM,ORDER\nfrom scripts.experiments.evidence_representation import OrderedScan\nfrom scripts.experiments.global_evidence_budget import Budget\nfrom scripts.experiments.evidence_cohort import Flights,Flight\nfrom trade_plan_monitor.state.index_evidence import RawIndexCandidate,HEAD_FIELDS\nfrom trade_plan_monitor.state.projections import _latest_index_records\nfrom trade_plan_monitor.runtime.market_indexes import ALWAYS_ON_INDEX_CODES as codes\npath=Path('.pytest_cache/active-monitor-cpu-implementation/monitor.sqlite3')\nbefore=hashlib.sha256(path.read_bytes()).hexdigest();engine=frozen_engine(path)\nwith engine.connect() as c,c.begin():\n    mapping=c.exec_driver_sql('select mapping_version from market_index_snapshot_head limit 1').scalar_one()\n    sql='select '+','.join(COLUMNS)+FROM+' where h.mapping_version=? and h.index_code in ('+','.join('?' for _ in codes)+')'+ORDER\n    with c.exec_driver_sql(sql,(mapping,*(code.value for code in codes))) as cursor:\n        raw=tuple(RawIndexCandidate.from_values(tuple(v[:len(HEAD_FIELDS)]),tuple(v[len(HEAD_FIELDS):])) for v in cursor)\nrecords=[]\ndef execute(stage):\n    budget=Budget()\n    with engine.connect() as c,c.begin():\n        scan=OrderedScan(c,budget,mapping,codes)\n        with scan.metadata():\n            if stage=='preflight':\n                output=scan.measure()\n            else:\n                scan.measure()\n                with scan.acquire(scan.preflight[1],'scan') as work:\n                    if stage=='scan':\n                        count=0\n                        for candidate in scan.rows(work):count+=1\n                        output=count\n                    else:\n                        output=Flights(budget)._compare(Flight(('s',),raw,None,None),scan,work)\n                        assert output\n        stats=scan.stats\n    budget.drain()\n    return output,stats\n# Timed subregions exclude preflight for scan/compare; setup is outside the timer.\ndef timed(stage):\n    if stage=='validate':\n        start,cpu=perf_counter(),thread_time();value=_latest_index_records(iter(raw),codes)\n        return dict(stage=stage,wall=perf_counter()-start,cpu=thread_time()-cpu,count=len(value))\n    budget=Budget()\n    with engine.connect() as c,c.begin():\n        scan=OrderedScan(c,budget,mapping,codes)\n        with scan.metadata():\n            if stage!='preflight':scan.measure()\n            def op():\n                if stage=='preflight':return scan.measure()\n                with scan.acquire(scan.preflight[1],'scan') as work:\n                    if stage=='compare':\n                        assert Flights(budget)._compare(Flight(('s',),raw,None,None),scan,work)\n                    else:\n                        for candidate in scan.rows(work):pass\n            start,cpu=perf_counter(),thread_time();op();elapsed,used=perf_counter()-start,thread_time()-cpu\n    budget.drain();return dict(stage=stage,wall=elapsed,cpu=used)\nfrom concurrent.futures import ThreadPoolExecutor\nfrom threading import Barrier,BoundedSemaphore\nfrom time import process_time\nfrom statistics import median\nbatches=[]\nfor round_number in range(3):\n    for slots in ((8,4,2,1) if round_number%2==0 else (1,2,4,8)):\n        barrier=Barrier(8);permit=BoundedSemaphore(slots)\n        def run():\n            barrier.wait(timeout=15)\n            start,cpu=perf_counter(),thread_time()\n            with permit:\n                granted=perf_counter()\n                _,stats=execute('compare')\n            return dict(wall=perf_counter()-start,cpu=thread_time()-cpu,wait=granted-start,stats=stats)\n        start,cpu=perf_counter(),process_time()\n        with ThreadPoolExecutor(max_workers=8) as pool:\n            workers=list(pool.map(lambda _:run(),range(8)))\n        batches.append(dict(round=round_number+1,slots=slots,readers=8,wall=perf_counter()-start,cpu=process_time()-cpu,workers=workers))\nengine.dispose()\nassert hashlib.sha256(path.read_bytes()).hexdigest()==before\nreport=dict(scope='Read-only scheduling sensitivity probe with eight complete independent metadata+payload+typed-compare operations. Permit acquired before connection/transaction; not wired into flight/cohort/budget lifecycle. Each task retains its own experimental Budget and uncharged prebuilt leader raw. Not authority, global memory, cancellation, drain, availability or end-to-end acceptance. Three alternating rounds, no artificial scan delay.',rows=len(raw),inputSha256=before,batches=batches)\nPath('.pytest_cache/validator-analysis/scan-slots.json').write_text(json.dumps(report,indent=2))\nprint(json.dumps([dict(slots=n,wallMedian=median(x['wall'] for x in batches if x['slots']==n),cpuMedian=median(x['cpu'] for x in batches if x['slots']==n),successes=sum(len(x['workers']) for x in batches if x['slots']==n)) for n in (8,4,2,1)],indent=2))\n"
+    }
+  }
+}
