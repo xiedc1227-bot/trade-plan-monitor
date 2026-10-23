@@ -1,0 +1,371 @@
+{
+  "baselineCommit": "786950f9650c07239dfe3c70bd5031d228e7d7d1",
+  "decision": "PROPOSAL_ONLY_P1_BLOCKED",
+  "scope": "Read-only frozen-database and synthetic-input diagnostics; no production or test changes, service restart, integration, commit or push.",
+  "runtime": {
+    "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+    "pydantic": "2.13.4",
+    "pydanticCore": "2.46.4",
+    "sqlite": "3.50.4",
+    "sqlalchemy": "2.0.52"
+  },
+  "cpu": {
+    "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+    "rows": 2008,
+    "attempts": [
+      {
+        "round": 1,
+        "variant": "original",
+        "wall": 2.631614799844101,
+        "cpu": 2.5,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "iterencode",
+        "wall": 4.785821399884298,
+        "cpu": 4.71875,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c_whole_unbounded",
+        "wall": 2.1674782000482082,
+        "cpu": 2.109375,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c_subtrees_64k",
+        "wall": 2.719152200035751,
+        "cpu": 2.6875,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c_subtrees_256k",
+        "wall": 2.5155994000378996,
+        "cpu": 2.5,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c_subtrees_256k",
+        "wall": 2.369440799811855,
+        "cpu": 2.34375,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c_subtrees_64k",
+        "wall": 2.348550599999726,
+        "cpu": 2.3125,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c_whole_unbounded",
+        "wall": 1.9089200999587774,
+        "cpu": 1.890625,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "iterencode",
+        "wall": 4.187985199969262,
+        "cpu": 4.171875,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "original",
+        "wall": 1.9046104999724776,
+        "cpu": 1.875,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "original",
+        "wall": 1.9232594000641257,
+        "cpu": 1.890625,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "iterencode",
+        "wall": 4.154173800023273,
+        "cpu": 4.078125,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c_whole_unbounded",
+        "wall": 1.980262199882418,
+        "cpu": 1.96875,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c_subtrees_64k",
+        "wall": 2.3639904998708516,
+        "cpu": 2.328125,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c_subtrees_256k",
+        "wall": 2.292935000034049,
+        "cpu": 2.28125,
+        "equal": true
+      }
+    ],
+    "median": {
+      "original": {
+        "wall": 1.9232594000641257,
+        "cpu": 1.890625
+      },
+      "iterencode": {
+        "wall": 4.187985199969262,
+        "cpu": 4.171875
+      },
+      "c_whole_unbounded": {
+        "wall": 1.980262199882418,
+        "cpu": 1.96875
+      },
+      "c_subtrees_64k": {
+        "wall": 2.3639904998708516,
+        "cpu": 2.328125
+      },
+      "c_subtrees_256k": {
+        "wall": 2.369440799811855,
+        "cpu": 2.34375
+      }
+    },
+    "firstRow": {
+      "jsonBytes": 1887,
+      "tokens": 230,
+      "maxTokenChars": 66
+    },
+    "limits": "Three alternating rounds; full validator output equality on frozen input only; generic planner and encoder native allocations NOT bounded. No full differential/tamper/owner acceptance."
+  },
+  "parser": {
+    "attempts": [
+      {
+        "shape": "long_decimal",
+        "variant": "text",
+        "count": 480,
+        "digits": 8500,
+        "jsonBytes": 16472833,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 7836944,
+        "tracedPeak": 98837258,
+        "tracedAfter": 31660,
+        "tracedDrained": 22644,
+        "wallWithTracing": 0.19059820007532835
+      },
+      {
+        "shape": "long_decimal",
+        "variant": "bytes",
+        "count": 480,
+        "digits": 8500,
+        "jsonBytes": 16472833,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 7831586,
+        "tracedPeak": 7901571,
+        "tracedAfter": 26262,
+        "tracedDrained": 17270,
+        "wallWithTracing": 0.15579280001111329
+      },
+      {
+        "shape": "long_decimal",
+        "variant": "bytes_invalid_ohlc",
+        "count": 480,
+        "digits": 8500,
+        "jsonBytes": 16472833,
+        "status": "ValidationError",
+        "errorCount": 480,
+        "tracedLive": 25103848,
+        "tracedPeak": 25103848,
+        "tracedAfter": 25103848,
+        "tracedDrained": 18990,
+        "wallWithTracing": 0.17259540013037622
+      },
+      {
+        "shape": "dense_bars",
+        "variant": "text",
+        "count": 40000,
+        "digits": 1,
+        "jsonBytes": 12120814,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 76833390,
+        "tracedPeak": 113196091,
+        "tracedAfter": 34586,
+        "tracedDrained": 25594,
+        "wallWithTracing": 1.3218553999904543
+      },
+      {
+        "shape": "dense_bars",
+        "variant": "bytes",
+        "count": 40000,
+        "digits": 1,
+        "jsonBytes": 12120814,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 76833382,
+        "tracedPeak": 76833598,
+        "tracedAfter": 34586,
+        "tracedDrained": 25594,
+        "wallWithTracing": 1.2914434999693185
+      },
+      {
+        "shape": "dense_bars",
+        "variant": "bytes_invalid_ohlc",
+        "count": 40000,
+        "digits": 1,
+        "jsonBytes": 12120814,
+        "status": "ValidationError",
+        "errorCount": 40000,
+        "tracedLive": 156789930,
+        "tracedPeak": 156789930,
+        "tracedAfter": 156789954,
+        "tracedDrained": 25626,
+        "wallWithTracing": 1.7750183001626283
+      }
+    ],
+    "limits": "One diagnostic per shape/path; raw input and original acceptance prebuilt/excluded. Tracemalloc excludes untracked native allocations; timings under tracing not performance acceptance. Error paths deliberately retain ValidationError until explicit release."
+  },
+  "producerChecks": [
+    {
+      "case": "large_decimal",
+      "target": 65536,
+      "chunks": 24081,
+      "maxChunkBytes": 8504,
+      "outputBytes": 16472833,
+      "equal": true,
+      "sha256": "fc011c66ebd5703d0adae55c2990781c63841c26a78fd515989557e0d7d409fa"
+    },
+    {
+      "case": "large_decimal",
+      "target": 262144,
+      "chunks": 1041,
+      "maxChunkBytes": 34298,
+      "outputBytes": 16472833,
+      "equal": true,
+      "sha256": "fc011c66ebd5703d0adae55c2990781c63841c26a78fd515989557e0d7d409fa"
+    },
+    {
+      "case": "unicode_controls",
+      "target": 65536,
+      "chunks": 1,
+      "maxChunkBytes": 230,
+      "outputBytes": 230,
+      "equal": true,
+      "sha256": "8fdbd15aa9388588e080074f736de9b9f001fbd4680cec1bdcc8b8da4d7980de"
+    },
+    {
+      "case": "unicode_controls",
+      "target": 262144,
+      "chunks": 1,
+      "maxChunkBytes": 230,
+      "outputBytes": 230,
+      "equal": true,
+      "sha256": "8fdbd15aa9388588e080074f736de9b9f001fbd4680cec1bdcc8b8da4d7980de"
+    },
+    {
+      "case": "large_array",
+      "target": 65536,
+      "chunks": 101,
+      "maxChunkBytes": 10010,
+      "outputBytes": 500551,
+      "equal": true,
+      "sha256": "8de6c993e03b8ca7541f578be2bc3721af3023b775bd8903603132a070e73e6d"
+    },
+    {
+      "case": "large_array",
+      "target": 262144,
+      "chunks": 27,
+      "maxChunkBytes": 40043,
+      "outputBytes": 500551,
+      "equal": true,
+      "sha256": "8de6c993e03b8ca7541f578be2bc3721af3023b775bd8903603132a070e73e6d"
+    }
+  ],
+  "probeSource": {
+    "probe.py": {
+      "sha256": "082f7e2743c9b0fb3466a3de09143ee81b29304e8600f87cc1a738f7216cb455",
+      "text": "\"\"\"Read-only diagnostic: not an admission implementation or native-bound proof.\"\"\"\nimport gc\nimport hashlib\nimport json\nimport sqlite3\nimport sys\nimport tracemalloc\nfrom datetime import timezone, timedelta\nfrom pathlib import Path\nfrom statistics import median\nfrom time import perf_counter, thread_time\n\nROOT = Path(__file__).resolve().parents[2]\nsys.path.insert(0, str(ROOT))\nfrom scripts.experiments.global_evidence_large import large_candidate\nfrom scripts.experiments import global_evidence_large as fixture_module\nfrom scripts.experiments.global_evidence_scan import COLUMNS, FROM, ORDER\nfrom scripts.experiments import validator_scan as candidate\nfrom trade_plan_monitor.market_index import canonical\nfrom trade_plan_monitor.market_index.models import MarketIndexSnapshot\nfrom trade_plan_monitor.runtime.market_indexes import ALWAYS_ON_INDEX_CODES as CODES\nfrom trade_plan_monitor.state.index_evidence import HEAD_FIELDS, RawIndexCandidate\nfrom trade_plan_monitor.state.projections import _latest_index_records\n\nOUT = Path(__file__).parent\nOPTIONS = dict(ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(',', ':'))\n\ndef c_whole(value):\n    yield json.dumps(value, **OPTIONS).encode('utf8')\n\ndef sized(value, sizes):\n    if type(value) is str:\n        return 2 + 6 * len(value)\n    if value is None or type(value) is bool:\n        return 5\n    if type(value) is int:\n        assert -(2**63) <= value < 2**63\n        return 20\n    if type(value) is list:\n        n = 2 + len(value) + sum(sized(v, sizes) for v in value)\n    elif type(value) is dict:\n        n = 2 + 2 * len(value) + sum(2 + 6 * len(k) + sized(v, sizes) for k,v in value.items())\n    else:\n        raise TypeError(type(value))\n    sizes[id(value)] = n\n    return n\n\ndef c_subtrees(value, target=256*1024):\n    # Generic full planning adds CPU and unbounded descriptor storage: diagnostic only.\n    sizes = {}\n    sized(value, sizes)\n    def emit(v):\n        bound = sizes.get(id(v)) if type(v) in (dict,list) else sized(v, sizes)\n        if bound <= target:\n            yield from c_whole(v)\n        elif type(v) is dict:\n            yield b'{'\n            for i,k in enumerate(sorted(v)):\n                if i: yield b','\n                yield from c_whole(k)\n                yield b':'\n                yield from emit(v[k])\n            yield b'}'\n        elif type(v) is list:\n            yield b'['\n            group, budget, first = [], 2, True\n            for item in v:\n                item_bound = sizes.get(id(item)) if type(item) in (dict,list) else sized(item,sizes)\n                if group and budget + item_bound + 1 > target:\n                    if not first: yield b','\n                    yield json.dumps(group, **OPTIONS)[1:-1].encode('utf8')\n                    group, budget, first = [], 2, False\n                if item_bound + 2 > target:\n                    if not first: yield b','\n                    yield from emit(item)\n                    first = False\n                else:\n                    group.append(item)\n                    budget += item_bound + 1\n            if group:\n                if not first: yield b','\n                yield json.dumps(group, **OPTIONS)[1:-1].encode('utf8')\n            yield b']'\n        else:\n            raise ValueError('scalar cannot fit diagnostic envelope')\n    yield from emit(value)\n\ndef frozen_rows():\n    path = ROOT / '.pytest_cache/active-monitor-cpu-implementation/monitor.sqlite3'\n    fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()\n    con = sqlite3.connect(path.resolve().as_uri()+'?mode=ro', uri=True)\n    con.execute('pragma query_only=on')\n    con.execute('begin')\n    mapping=con.execute('select mapping_version from market_index_snapshot_head limit 1').fetchone()[0]\n    query='select '+','.join(COLUMNS)+FROM+' where h.mapping_version=? and h.index_code in ('+','.join('?' for _ in CODES)+')'+ORDER\n    rows=tuple(RawIndexCandidate.from_values(tuple(v[:len(HEAD_FIELDS)]),tuple(v[len(HEAD_FIELDS):])) for v in con.execute(query,(mapping,*(c.value for c in CODES))))\n    con.close()\n    assert hashlib.sha256(path.read_bytes()).hexdigest()==fingerprint\n    return rows, fingerprint\n\ndef cpu():\n    rows, fingerprint = frozen_rows()\n    expected = _latest_index_records(iter(rows), CODES)\n    original_pieces = candidate.pieces\n    variants = ('original','iterencode','c_whole_unbounded','c_subtrees_64k','c_subtrees_256k')\n    data=[]\n    for round_ in range(3):\n        for name in (variants if round_%2==0 else variants[::-1]):\n            gc.collect()\n            candidate.pieces = {'iterencode':original_pieces,'c_whole_unbounded':c_whole,'c_subtrees_64k':lambda v:c_subtrees(v,64*1024),'c_subtrees_256k':c_subtrees}.get(name,original_pieces)\n            start, used=perf_counter(),thread_time()\n            result=(_latest_index_records if name=='original' else candidate.latest)(iter(rows),CODES)\n            wall,cpu_used=perf_counter()-start,thread_time()-used\n            assert result==expected\n            data.append(dict(round=round_+1,variant=name,wall=wall,cpu=cpu_used,equal=True))\n            del result\n    candidate.pieces=original_pieces\n    normalized=canonical.canonical_value(MarketIndexSnapshot.model_validate_json(rows[0].payload[9]))\n    tokens=list(json.JSONEncoder(**OPTIONS).iterencode(normalized))\n    return dict(inputSha256=fingerprint,rows=len(rows),attempts=data,\n      median={name:{k:median(r[k] for r in data if r['variant']==name) for k in ('wall','cpu')} for name in variants},\n      firstRow=dict(jsonBytes=len(rows[0].payload[9]),tokens=len(tokens),maxTokenChars=max(map(len,tokens))),\n      limits='Three alternating rounds; full validator output equality on frozen input only; generic planner and encoder native allocations NOT bounded. No full differential/tamper/owner acceptance.')\n\ndef parser():\n    data=[]\n    for label,count,digits in [('long_decimal',480,8500),('dense_bars',40000,1)]:\n        # Historical Shanghai DST cannot satisfy this model's fixed +08:00 contract.\n        original_zone = fixture_module.ZoneInfo\n        try:\n            if label == 'dense_bars':\n                fixture_module.ZoneInfo = lambda _: timezone(timedelta(hours=8))\n            row=large_candidate(count=count,digits=digits)\n        finally:\n            fixture_module.ZoneInfo = original_zone\n        raw=row.payload[9]\n        assert len(raw)<=16*1024*1024\n        # Establish full original acceptance outside traced scopes, then discard it.\n        accepted=_latest_index_records(iter((row,)),CODES)\n        assert accepted\n        del accepted\n        for name in ('text','bytes','bytes_invalid_ohlc'):\n            source=raw if name!='bytes_invalid_ohlc' else raw.replace(b'\"high_points\":\"1.',b'\"high_points\":\"0.')\n            gc.collect()\n            tracemalloc.start()\n            start=perf_counter()\n            error=None\n            try:\n                parsed=MarketIndexSnapshot.model_validate_json(source.decode('utf8') if name=='text' else source)\n                kept,peak=tracemalloc.get_traced_memory()\n                status='accepted'\n                del parsed\n            except Exception as e:\n                error=e\n                kept,peak=tracemalloc.get_traced_memory()\n                status=type(e).__name__\n            elapsed=perf_counter()-start\n            after=tracemalloc.get_traced_memory()[0]\n            # Retention of the real error object is intentional and measured.\n            errors=error.error_count() if error is not None and hasattr(error,'error_count') else 0\n            error=None\n            gc.collect()\n            drained=tracemalloc.get_traced_memory()[0]\n            tracemalloc.stop()\n            data.append(dict(shape=label,variant=name,count=count,digits=digits,jsonBytes=len(raw),\n                             status=status,errorCount=errors,tracedLive=kept,tracedPeak=peak,\n                             tracedAfter=after,tracedDrained=drained,wallWithTracing=elapsed))\n        del row,raw,source\n    return dict(attempts=data,limits='One diagnostic per shape/path; raw input and original acceptance prebuilt/excluded. Tracemalloc excludes untracked native allocations; timings under tracing not performance acceptance. Error paths deliberately retain ValidationError until explicit release.')\n\nif __name__=='__main__':\n    mode=sys.argv[1]\n    report=cpu() if mode=='cpu' else parser()\n    (OUT/(mode+'.json')).write_text(json.dumps(report,indent=2),encoding='utf8')\n    print(json.dumps(report.get('median',report),indent=2))\n"
+    },
+    "checks.py": {
+      "sha256": "0bd497dca7321c9b2522be3624b6d162e482a3b77df715282a5875abb3ed9a47",
+      "text": "\"\"\"Additional producer diagnostic; byte equivalence does not prove native bounds.\"\"\"\nimport hashlib\nimport importlib.util\nimport json\nfrom pathlib import Path\n\nbase=Path(__file__).parent\nspec=importlib.util.spec_from_file_location('probe',base/'probe.py')\nprobe=importlib.util.module_from_spec(spec)\nspec.loader.exec_module(probe)\nrow=probe.large_candidate()\nvalue=probe.canonical.canonical_value(probe.MarketIndexSnapshot.model_validate_json(row.payload[9]))\ncases=[('large_decimal',value),('unicode_controls', {'s':'中文😀\"\\\\'+''.join(map(chr,range(32))), 'a':[None,True,False,-1,2147483647]}),('large_array', [{'key':'x'*10000} for _ in range(50)])]\nchecks=[]\nfor label,value in cases:\n    reference=json.dumps(value,**probe.OPTIONS).encode('utf8')\n    for target in (64*1024,256*1024):\n        offset,maximum,count=0,0,0\n        for chunk in probe.c_subtrees(value,target):\n            assert reference[offset:offset+len(chunk)]==chunk\n            offset+=len(chunk)\n            maximum=max(maximum,len(chunk))\n            count+=1\n        assert offset==len(reference) and maximum<=target\n        checks.append(dict(case=label,target=target,chunks=count,maxChunkBytes=maximum,outputBytes=offset,equal=True,sha256=hashlib.sha256(reference).hexdigest()))\n(base/'checks.json').write_text(json.dumps(checks,indent=2),encoding='utf8')\nprint(json.dumps(checks,indent=2))\n"
+    }
+  },
+  "sourceTimingNote": "CPU measurements preceded a parser-only fixture correction: fixed UTC+08 for historical dense bars and its imports. CPU producer and timed code are unchanged. Embedded source is the corrected reproducible version.",
+  "setupFailures": [
+    {
+      "phase": "synthetic dense fixture construction before timed measurement",
+      "reason": "Historical Asia/Shanghai daylight-saving offsets violate the existing fixed +08:00 model contract.",
+      "correction": "Use fixed +08:00 for dense synthetic fixture; unchanged original full validator accepts it.",
+      "measurementEffect": "Initial parser invocation did not publish measurements; corrected invocation reran both shapes. No measured request failure was replaced."
+    }
+  ],
+  "sourceSha256": {
+    "src/trade_plan_monitor/market_index/canonical.py": "981b325b015db54c96eaef3cedc1ea3e7b92e715fcfa26f15393d877e4044628",
+    "src/trade_plan_monitor/market_index/models.py": "0359183532e54fdf387e8b56fd9b1a75034de0dd6434d9d315c0e4571b87c319",
+    "src/trade_plan_monitor/state/index_evidence.py": "ddebda6f0401da9dd9e54ca87d796abe62d65e429af37c610fee23bc8544dc07",
+    "src/trade_plan_monitor/state/index_evidence_flights.py": "d390f239edb82c03e4c959abbdb6bac57f222494a72fa1cf5e181ca98551eee5",
+    "src/trade_plan_monitor/state/projections.py": "911dd34dcce43d1d99beeeb33b41f44ef7338d217e3fcef7104eb50b6e81ed71",
+    "scripts/experiments/validator_scan.py": "2ac7dfff321c985585365a252792b0c0c35ff050638c222552688c5101bbdb34",
+    "scripts/experiments/evidence_representation.py": "80c7708bda9c55f7893278a2ba9c75b73115bfc5aa34211722d937cafd039db2",
+    "scripts/experiments/global_evidence_scan.py": "f3b29fbe5aa43ec77f83386cbd18b0156d5815882bb76c58b4603da3baac2bd1",
+    "scripts/experiments/global_evidence_large.py": "137b73c2cb1c972fda2238dac48fb12f56177c55e10d782b22f868f6942b7829"
+  },
+  "runtimeFileSha256": {
+    "encoder.py": "498ba55bf9907208e58426f98dd72e2756417ab5478b141284abd373863e621c",
+    "_pydantic_core.pyi": "940af2cc4bf6740ca19f4d5f7fae5d7e0826bab8096faee6aa33a2d96163aa04",
+    "_pydantic_core.cp314-win_amd64.pyd": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e"
+  },
+  "schemaSha256": "81d678fc04b3d5637776895db8a905bd246e35cbea3c364a64e955087d414fdd",
+  "preservedTrackedFiles": 1853,
+  "preservedManifestSha256": "ed41a8b86dc7e9995e9f8d7bb89b616f4e469e363d4d8c485bd247bcf437db2f",
+  "verification": {
+    "pairedIds": [
+      "BEP01",
+      "BEP02",
+      "BEP03",
+      "BEP04",
+      "BEP05",
+      "BEP06",
+      "BEP07",
+      "BEP08",
+      "BEP09"
+    ],
+    "pairedInlineLiterals": true,
+    "pairedNumericTokens": true,
+    "localLinks": [
+      "../../verification/validator-scan-2026-10-23.md",
+      "../../verification/evidence/2026-10-23-bounded-encoding-analysis/analysis.json",
+      "../../verification/validator-scan-2026-10-23.zh-CN.md",
+      "../../verification/evidence/2026-10-23-bounded-encoding-analysis/analysis.json"
+    ],
+    "frozenMonitorUnchanged": true,
+    "existingTrackedFilesUnchanged": true
+  },
+  "limitations": [
+    "Traced parser allocations exclude prebuilt raw input and untracked native allocation.",
+    "Three-round CPU diagnostics and single traced parser runs are not acceptance or p95 evidence.",
+    "Generic subtree planning has unbounded descriptor storage and no enforced lease/native proof.",
+    "No complete tamper, cancellation, authority, browser or native-bound qualification was run for this analysis probe.",
+    "Exact installed pydantic-core native source tag unavailable; no matching native allocation proof claimed."
+  ],
+  "sources": [
+    "https://github.com/python/cpython/blob/v3.14.7/Lib/json/encoder.py",
+    "https://github.com/python/cpython/blob/v3.14.7/Modules/_json.c",
+    "https://pydantic.dev/docs/validation/latest/concepts/json/",
+    "https://pydantic.dev/docs/validation/latest/concepts/performance/",
+    "https://docs.python.org/3.14/library/tracemalloc.html"
+  ]
+}
