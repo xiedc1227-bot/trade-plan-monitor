@@ -1,0 +1,23 @@
+{
+  "final_run": "run-v3",
+  "all_five_appendices_read": true,
+  "costs_preserved": true,
+  "exact_general_validity_in_all_five": true,
+  "no_fee_pnl_or_monetary_cost_calculations": true,
+  "normal_reminder_counts": [
+    1,
+    2
+  ],
+  "negative_sources_exactly_blocked": true,
+  "supplemental_source_conditions": [
+    "2026-11-03收盘前退出",
+    "2026-11-04收盘后重评"
+  ],
+  "source_conditions_preserved_in_human_rules": true,
+  "machine_exit_execution_tested": false,
+  "remaining_deviations": [
+    "Unsupported appendix expands future alternatives and generic missing parameters",
+    "Missing-cap appendix incorrectly attributes threshold to reference-close source"
+  ],
+  "raw_output_repaired": false
+}

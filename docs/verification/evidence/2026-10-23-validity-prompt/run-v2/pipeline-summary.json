@@ -1,0 +1,171 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4684,
+        "completion_tokens": 738,
+        "total_tokens": 5422
+      },
+      "expected_cost": "无",
+      "cost_lines": [
+        "- 实际持仓：0股；持仓成本：无；最大计划持仓：500股（用户明确输入）。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [
+        "- 该提醒为独立价格提醒，不依赖模拟库存，不附加大盘状态、量能、相对强弱或S1／S2等研究门槛。",
+        "- 计划标识BAOGANG-600010-ALERT-20261021为本次生成过程拟定，尚未保存；文档不代表已审核、已启用或已提取通过。"
+      ],
+      "source_sha256": "e8d0fe4bc0ef9516f7174f3fc5619a76d171c86ecbb0350a875802a4b2e8eec8",
+      "source_chars": 597,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BAOGANG-600010-ALERT-20261021",
+        "version": 1
+      },
+      "passed": false
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4702,
+        "completion_tokens": 734,
+        "total_tokens": 5436
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "当前实际持仓200股，持仓成本80.00元/股，最大计划持仓800股。计划可加仓额度为max(0, 800−200)=600股，仅为计划数量，非券商实时可买额度；本次不涉及任何买入。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "removed_input_review_lines": [
+        "当前软件无原生指数联动与动态数量能力，本次未使用；提醒不依赖模拟库存。文档中的候选规则不代表已审核或启用，本轮未执行提取、未启用、未交易、未修改任何实际或模拟库存。"
+      ],
+      "source_sha256": "3bffb1f5863cf42c6decc034d1e7fee6ce36f8d051d1010bf2951dff28dccb44",
+      "source_chars": 890,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY000858-ALERT-20261021",
+        "version": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4632,
+        "completion_tokens": 453,
+        "total_tokens": 5085
+      },
+      "expected_cost": "未知",
+      "cost_lines": [
+        "- 持仓成本：未知。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4652,
+        "completion_tokens": 749,
+        "total_tokens": 5401
+      },
+      "expected_cost": "35",
+      "cost_lines": [
+        "- 持仓成本：35 元／股（账户事实，供程序核算参考）。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "removed_input_review_lines": [
+        "- 如果后续由用户明确选定某一静态大盘分支、对应数量与确认条件，那么可另拟一份完整版本再行研究；本次未作此选择，故不展开。",
+        "- 本文件为研究草稿，未审核、未启用、未交易、未修改实际或模拟库存。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "source-exit-reassessment",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4761,
+        "completion_tokens": 1109,
+        "total_tokens": 5870
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "已知账户事实（按原值保留，供程序核算参考）：当前实际持仓200股；持仓成本80.00元／股；最大计划持仓800股。计划可加仓数量＝max(0, 800－200)＝600股，仅为计划数量，不是券商实时可买额度，本次不据此产生任何买入规则。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": true,
+      "source_conditions_present": true,
+      "removed_input_review_lines": [
+        "两条提醒相互独立，各自按自身条件成立，不凑数、不合并、不附带数量或清仓要求。提醒仅提示人工关注，不改变实际或模拟库存。",
+        "- 在2026-11-03收盘前退出（人工执行，涉及现有持仓，具体底仓／机动仓归属与可卖数量需人工核对）。",
+        "当前工具无原生指数联动、动态数量与S1／S2切换能力，本次未使用这些能力，也未以人工补充伪装。文档中的候选提醒不代表已审核或已启用；本任务不确认审核、不启用、不交易、不修改实际或模拟库存。",
+        "计划标识WLY000858-ALERT-20261021为本次拟定，尚未保存；版本按新建契约取1。计划持续有效，直至人工停用；原报告明确的退出与重评条件不因计划持续有效而取消、延后或自动延长。"
+      ],
+      "source_sha256": "3bffb1f5863cf42c6decc034d1e7fee6ce36f8d051d1010bf2951dff28dccb44",
+      "source_chars": 890,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY000858-ALERT-20261021",
+        "version": 1
+      },
+      "passed": true
+    }
+  ],
+  "all_passed": false,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

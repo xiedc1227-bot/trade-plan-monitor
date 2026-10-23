@@ -1,0 +1,167 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4663,
+        "completion_tokens": 527,
+        "total_tokens": 5190
+      },
+      "expected_cost": "无",
+      "cost_lines": [
+        "已知事实：实际持仓0股，成本无，计划持仓上限500股（该上限仅作必填参数，本提醒不涉及买入数量）。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [
+        "如果后续某个交易日正式收盘价低于12.07元，那么触发该提醒，仅作提示，不产生任何委托或库存变更。如果收盘价不低于12.07元，那么不触发。"
+      ],
+      "source_sha256": "e8d0fe4bc0ef9516f7174f3fc5619a76d171c86ecbb0350a875802a4b2e8eec8",
+      "source_chars": 597,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BAOGANG-600010-ALERT-20261021",
+        "version": 1
+      },
+      "passed": false
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [
+        "General validity missing or not expressed exactly in B",
+        "A does not use the documented compact source heading"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4681,
+        "completion_tokens": 840,
+        "total_tokens": 5521
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "- 持仓成本：80.00元／股。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [],
+      "source_sha256": "9f2f510bf6124efca5cecdf5918f1cd7798978550482c1ce99276dd64d4b5919",
+      "source_chars": 882,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-000858-ALERT-20261021",
+        "version": 1
+      },
+      "passed": false
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4611,
+        "completion_tokens": 298,
+        "total_tokens": 4909
+      },
+      "expected_cost": "未知",
+      "cost_lines": [
+        "已知事实：标的为贵州茅台（600519.SH）；合成参考收盘价1420.00元，日期2026-10-21；拟研究独立提醒为“正式日收盘严格低于1400.00元”，确认方式为官方日线收盘。实际持仓、持仓成本、最大计划持仓均未知。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4631,
+        "completion_tokens": 221,
+        "total_tokens": 4852
+      },
+      "expected_cost": "35",
+      "cost_lines": [
+        "已知事实：招商银行（600036.SH，沪市主板），实际持仓400股，成本35元/股，持仓上限1200股。用户要求新增买入在运行时依据上证指数状态自动选择200股或100股，并动态切换S0/S1，大盘明显破坏时自动暂停。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [
+        "其他交易参数未完整定义，不编造。若后续软件支持指数联动与动态数量，或用户明确选定某一静态分支及对应数量、条件，可再另拟完整版本；当前候选规则不代表已审核或启用。"
+      ],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": true,
+      "passed": true
+    },
+    {
+      "case": "source-exit-reassessment",
+      "findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4740,
+        "completion_tokens": 873,
+        "total_tokens": 5613
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "当前实际持仓200股；持仓成本80.00元/股；计划最大持仓800股。计划可加仓数量为上限减实际持仓，但本次不生成任何买入规则，该数值不构成买入授权。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "source_conditions_present": true,
+      "removed_input_review_lines": [],
+      "source_sha256": "3bffb1f5863cf42c6decc034d1e7fee6ce36f8d051d1010bf2951dff28dccb44",
+      "source_chars": 890,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY000858-ALERT-20261021",
+        "version": 1
+      },
+      "passed": false
+    }
+  ],
+  "all_passed": false,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

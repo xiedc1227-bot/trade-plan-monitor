@@ -1,0 +1,32 @@
+{
+  "final_run": "run-v3",
+  "pipeline_passed": true,
+  "runs": [
+    {
+      "run": "run-v1",
+      "pipeline_passed": false,
+      "prompt_sha256": "17da43076b12f2db65e1b1161da38a2bda226d47799f0299edbcb400ea16607f"
+    },
+    {
+      "run": "run-v2",
+      "pipeline_passed": false,
+      "prompt_sha256": "9cb31e0c00e25121aa602713930148ad8bade2e7924b30984b44c7b99e2cee80"
+    },
+    {
+      "run": "run-v3",
+      "pipeline_passed": true,
+      "prompt_sha256": "66344ee6be4ef20088ae85667faf681c0522561ba1241a58a30540d758c06ea0"
+    }
+  ],
+  "generation_calls": 15,
+  "extraction_calls": 9,
+  "provider_attempts": 24,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "configuration_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "harness_change": "original four cases unchanged; add one source-exit/reassessment contrast, exact general-validity and source-condition checks; existing strict extraction checks unchanged"
+}
