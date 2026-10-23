@@ -1,0 +1,22 @@
+{
+  "regressionPassed": 166,
+  "regressionSeconds": 28.21,
+  "canaryChildren": 8,
+  "nativeCases": 5,
+  "mutationExit": 22,
+  "tableBytes": 10485760,
+  "P0": "NOT_QUALIFIED",
+  "P1": "NO_GO",
+  "sourceHashes": {
+    "scripts/experiments/owner_observer.c": "6fc8433f51bac636d59dbcf1c161145346e8277d4fb915807667d74c1e29b5b6",
+    "scripts/experiments/build_owner_observer.py": "006d300d926757d8d79d1b622d387a13d1db6e97003a709011f2bf6a3c5b0c4f",
+    "scripts/experiments/owner_probe_child.py": "6b57faca2b385808647c268b62bf5b99156e47cf00a444ed210842a7ec83fcfe",
+    "tests/native/test_owner_ledger.c": "b42b5b5f45130a10906b155d7b843071b645294d3b4afd4ad8d28815731f21b7",
+    ".pytest_cache/native-owner-review/owner_observer.pyd": "12ae4d3a856f019b4f23f769f2e578a8770c3e8aa5778892f0747206fc137517"
+  },
+  "historicalEvidenceHashes": {
+    "manifest.json": "38c727688fa1a399d71b9c40fb8faf3ddf3c92f066cf423c21d318ee30695890",
+    "measurements.json": "50f14d09bafb98a06d6ce24a67a11919066540d16981a12406cf1c923c866240",
+    "summary.json": "2f32ca2d6520a586c71ff6527ca016aa771287d2602538874e6dcd2fbb78975e"
+  }
+}

@@ -1,0 +1,170 @@
+[
+  {
+    "round": 0,
+    "shape": "decimal",
+    "result": {
+      "raw": 16478553,
+      "work": 197697036,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 1.2999866157770157e-05
+      }
+    }
+  },
+  {
+    "round": 0,
+    "shape": "dense",
+    "result": {
+      "raw": 12126534,
+      "work": 145472808,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 9.699957445263863e-06
+      }
+    }
+  },
+  {
+    "round": 1,
+    "shape": "decimal",
+    "result": {
+      "raw": 16478553,
+      "work": 197697036,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 5.600042641162872e-06
+      }
+    }
+  },
+  {
+    "round": 1,
+    "shape": "dense",
+    "result": {
+      "raw": 12126534,
+      "work": 145472808,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 5.7998113334178925e-06
+      }
+    }
+  },
+  {
+    "round": 2,
+    "shape": "decimal",
+    "result": {
+      "raw": 16478553,
+      "work": 197697036,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 5.600042641162872e-06
+      }
+    }
+  },
+  {
+    "round": 2,
+    "shape": "dense",
+    "result": {
+      "raw": 12126534,
+      "work": 145472808,
+      "rows": 1,
+      "status": "availability_failed",
+      "scan": {
+        "metadataQueries": 1,
+        "payloadQueries": 0,
+        "rows": 0,
+        "actualRawPeak": 0
+      },
+      "ledger": {
+        "used": 0,
+        "peak": 131072,
+        "categories": {
+          "metadata": 0
+        },
+        "peaks": {
+          "metadata": 131072
+        },
+        "waiters": 0,
+        "waitSeconds": 5.299923941493034e-06
+      }
+    }
+  }
+]

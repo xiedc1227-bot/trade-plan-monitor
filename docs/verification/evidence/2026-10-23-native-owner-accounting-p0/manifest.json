@@ -1,0 +1,8 @@
+{
+  "scripts\\experiments\\owner_observer.c": "e299458578464d0fde72979d082efdcd949c1976138c0deea67236b53958abf9",
+  ".pytest_cache\\native-owner-p0\\owner_observer.pyd": "1652856d89a2b6b1f2ad29d5a26f38c94faf9dba1eb5d9b9737273640a58603b",
+  "finalPythonSources": {
+    "scripts\\experiments\\build_owner_observer.py": "064f6f41a4aed5f096a4218de52798e3072dbb5e1ce572ce217945ed189a9175",
+    "scripts\\experiments\\owner_probe_child.py": "40af7db550d48cf487e3ba7fd54832b1eda604c1b57a0b426d0bdcc71b647f88"
+  }
+}

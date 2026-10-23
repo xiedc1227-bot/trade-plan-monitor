@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+    "/nologo",
+    "/LD",
+    "/O2",
+    "/W3",
+    "/IC:\\Program Files\\Python314\\include",
+    "D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\scripts\\experiments\\owner_observer.c",
+    "/link",
+    "/LIBPATH:C:\\Program Files\\Python314\\libs",
+    "/OUT:D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.pytest_cache\\native-owner-review\\owner_observer.pyd"
+  ],
+  "exitCode": 0,
+  "stdout": "owner_observer.c\n  \u59dd\uff45\u6e6a\u9352\u6d98\u7f13\u6434\ufffd owner_observer.lib \u935c\u5c7d\ufffd\u7845\u8584 owner_observer.exp\n",
+  "stderr": ""
+}

@@ -1,0 +1,24 @@
+{
+  "P0": "NOT_QUALIFIED",
+  "P1": "NO_GO",
+  "regressionPassed": 166,
+  "canaryChildren": 8,
+  "admissionChecks": 6,
+  "baselineWallMedian": 0.29527639993466437,
+  "observedWallMedian": 0.304061200004071,
+  "diagnosticOverheadPercent": 2.9751108017269434,
+  "tableBytes": 8388608,
+  "capacity": 262144,
+  "coverage": "LOGICAL_DOMAINS_ONLY",
+  "initialFailures": [
+    "Compiler lookup required absolute path",
+    "Build output console encoding failed after successful compile; fixed printing"
+  ],
+  "notPerformed": [
+    "preinitialization native launcher",
+    "deduplicated backing bounds",
+    "oracle separation for full-validator benchmark",
+    "funded legal-row candidate",
+    "service/browser acceptance"
+  ]
+}
