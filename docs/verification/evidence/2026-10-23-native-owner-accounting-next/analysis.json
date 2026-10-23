@@ -1,0 +1,234 @@
+{
+  "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "gilDisabled": 0,
+  "sqliteVersion": "3.50.4",
+  "sqliteSourceId": "2025-07-30 19:33:53 4d8adfb30e03f9cf27f800a2c1ba3c48fb4ca1b08b0f5ed59a4d5ecbf45e20a3",
+  "sqliteOptions": [
+    "ATOMIC_INTRINSICS=0",
+    "COMPILER=msvc-1944",
+    "DEFAULT_AUTOVACUUM",
+    "DEFAULT_CACHE_SIZE=-2000",
+    "DEFAULT_FILE_FORMAT=4",
+    "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+    "DEFAULT_MMAP_SIZE=0",
+    "DEFAULT_PAGE_SIZE=4096",
+    "DEFAULT_PCACHE_INITSZ=20",
+    "DEFAULT_RECURSIVE_TRIGGERS",
+    "DEFAULT_SECTOR_SIZE=4096",
+    "DEFAULT_SYNCHRONOUS=2",
+    "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+    "DEFAULT_WAL_SYNCHRONOUS=2",
+    "DEFAULT_WORKER_THREADS=0",
+    "DIRECT_OVERFLOW_READ",
+    "ENABLE_FTS3",
+    "ENABLE_FTS4",
+    "ENABLE_FTS5",
+    "ENABLE_MATH_FUNCTIONS",
+    "ENABLE_RTREE",
+    "MALLOC_SOFT_LIMIT=1024",
+    "MAX_ATTACHED=10",
+    "MAX_COLUMN=2000",
+    "MAX_COMPOUND_SELECT=500",
+    "MAX_DEFAULT_PAGE_SIZE=8192",
+    "MAX_EXPR_DEPTH=1000",
+    "MAX_FUNCTION_ARG=1000",
+    "MAX_LENGTH=1000000000",
+    "MAX_LIKE_PATTERN_LENGTH=50000",
+    "MAX_MMAP_SIZE=0x7fff0000",
+    "MAX_PAGE_COUNT=0xfffffffe",
+    "MAX_PAGE_SIZE=65536",
+    "MAX_SQL_LENGTH=1000000000",
+    "MAX_TRIGGER_DEPTH=1000",
+    "MAX_VARIABLE_NUMBER=32766",
+    "MAX_VDBE_OP=250000000",
+    "MAX_WORKER_THREADS=8",
+    "MUTEX_W32",
+    "OMIT_AUTOINIT",
+    "SYSTEM_MALLOC",
+    "TEMP_STORE=1",
+    "THREADSAFE=1"
+  ],
+  "sqliteDll": "C:\\Program Files\\Python314\\DLLs\\sqlite3.dll",
+  "sqliteDllSha256": "9a8fb79d6b7e581d127314028dcecf754b8d7fe4aca1247f82c1f33ee8fccc7e",
+  "driverPath": "C:\\Program Files\\Python314\\DLLs\\_sqlite3.pyd",
+  "driverSha256": "ec9694e5929747e93e05bc32427d24350dc4de5074b61a37bc961c3048794a67",
+  "rounds": [
+    [
+      {
+        "phase": "baseline",
+        "pythonTracedLive": 168,
+        "pythonTracedPeak": 168,
+        "sqliteLive": 0,
+        "sqlitePeak": 69432
+      },
+      {
+        "phase": "python_8MiB",
+        "pythonTracedLive": 8388929,
+        "pythonTracedPeak": 8388929,
+        "sqliteLive": 0,
+        "sqlitePeak": 69432
+      },
+      {
+        "phase": "python_released",
+        "pythonTracedLive": 392,
+        "pythonTracedPeak": 8389073,
+        "sqliteLive": 0,
+        "sqlitePeak": 69432
+      },
+      {
+        "phase": "sqlite_table_8MiB",
+        "pythonTracedLive": 2808,
+        "pythonTracedPeak": 8389073,
+        "sqliteLive": 9072792,
+        "sqlitePeak": 9072792
+      },
+      {
+        "phase": "python_result_retained",
+        "pythonTracedLive": 8392247,
+        "pythonTracedPeak": 8392247,
+        "sqliteLive": 9072792,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "connection_closed_result_retained",
+        "pythonTracedLive": 8390025,
+        "pythonTracedPeak": 8392615,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "result_released",
+        "pythonTracedLive": 1608,
+        "pythonTracedPeak": 8392615,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      }
+    ],
+    [
+      {
+        "phase": "baseline",
+        "pythonTracedLive": 224,
+        "pythonTracedPeak": 224,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "python_8MiB",
+        "pythonTracedLive": 8389137,
+        "pythonTracedPeak": 8389137,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "python_released",
+        "pythonTracedLive": 752,
+        "pythonTracedPeak": 8389417,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "sqlite_table_8MiB",
+        "pythonTracedLive": 3168,
+        "pythonTracedPeak": 8389417,
+        "sqliteLive": 9072792,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "python_result_retained",
+        "pythonTracedLive": 8392607,
+        "pythonTracedPeak": 8392607,
+        "sqliteLive": 9072792,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "connection_closed_result_retained",
+        "pythonTracedLive": 8390385,
+        "pythonTracedPeak": 8392975,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "result_released",
+        "pythonTracedLive": 1968,
+        "pythonTracedPeak": 8392975,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      }
+    ],
+    [
+      {
+        "phase": "baseline",
+        "pythonTracedLive": 224,
+        "pythonTracedPeak": 224,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "python_8MiB",
+        "pythonTracedLive": 8389137,
+        "pythonTracedPeak": 8389137,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "python_released",
+        "pythonTracedLive": 752,
+        "pythonTracedPeak": 8389417,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "sqlite_table_8MiB",
+        "pythonTracedLive": 3168,
+        "pythonTracedPeak": 8389417,
+        "sqliteLive": 9072792,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "python_result_retained",
+        "pythonTracedLive": 8392607,
+        "pythonTracedPeak": 8392607,
+        "sqliteLive": 9072792,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "connection_closed_result_retained",
+        "pythonTracedLive": 8390385,
+        "pythonTracedPeak": 8392975,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      },
+      {
+        "phase": "result_released",
+        "pythonTracedLive": 1968,
+        "pythonTracedPeak": 8392975,
+        "sqliteLive": 0,
+        "sqlitePeak": 17477816
+      }
+    ]
+  ],
+  "qualification": "READ_ONLY_COUNTER_DIAGNOSTIC_NOT_ALLOCATOR_COVERAGE",
+  "analysisContext": {
+    "baseCommit": "e688dba09b43c03422a48509c2b7287391f11c87",
+    "pythonMallocEnvironment": null,
+    "withPymalloc": null,
+    "recipeSha256": "1eb7b5ba5eb0c0c53104a75b65f5931a3d727220b2f56f82a5f04fb714e07509",
+    "replay": "Fresh process: module identity, all SQLite counters and lifetime invariants matched; Python bookkeeping totals are diagnostic, not byte-reproducibility requirements.",
+    "peaks": "Lifetime SQLite high-water marks are not reset between rounds and not synchronized with Python peaks.",
+    "applicationSourceHashes": {
+      "scripts/experiments/native_alloc_observer.rs": "3a43e38da7d98edee228d8cd1699335c8aa805794c559bf2931fe8e8e77445f0",
+      "scripts/experiments/native_allocation_child.py": "0a01450045c79c99a820f604e8385321443c4c50f39ceb17036cec06cf0e101a",
+      "scripts/experiments/evidence_representation.py": "80c7708bda9c55f7893278a2ba9c75b73115bfc5aa34211722d937cafd039db2",
+      "scripts/experiments/global_evidence_scan.py": "f3b29fbe5aa43ec77f83386cbd18b0156d5815882bb76c58b4603da3baac2bd1",
+      "scripts/experiments/global_evidence_budget.py": "e4cb90a520eb7d91806cf4f1377a23a6ba518c145a5ea643375005e0b268683f",
+      "scripts/experiments/evidence_cohort.py": "78cb94e42c63cf6c2584a21fc26646a656ee6a9c7e551c5ed2744396f2756d42",
+      "src/trade_plan_monitor/state/index_evidence_flights.py": "d390f239edb82c03e4c959abbdb6bac57f222494a72fa1cf5e181ca98551eee5",
+      "src/trade_plan_monitor/web/monitor_read_ownership.py": "d3b59c4891db646348163802c4998c799b49af970e3ae1d0360031c98108cc7c",
+      "src/trade_plan_monitor/web/runtime_status_read_service.py": "677e9652ffc8c3249aba8cb6ce15152f95c4e770670274b51d370aa4897dde1d"
+    },
+    "installedCoreSha256": "5ba0685a9153952ce1b5e1e8e5939685a675c0ca5786e720cfef255cb1b62a3e",
+    "P1": "NO_GO",
+    "nativeHooksImplemented": false,
+    "productionChanged": false
+  }
+}
