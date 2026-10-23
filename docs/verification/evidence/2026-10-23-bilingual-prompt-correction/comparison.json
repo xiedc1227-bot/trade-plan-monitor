@@ -1,0 +1,473 @@
+{
+  "pairs": [
+    {
+      "case": "sse-one-alert",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 9,
+        "chinese": 9
+      },
+      "english_status": "SUCCEEDED",
+      "chinese_status": "SUCCEEDED",
+      "english_issues": [],
+      "chinese_issues": [],
+      "full_draft_differences": [],
+      "policy_equal_except_generated_plan_id": true,
+      "english_vs_historical_differences": [
+        {
+          "path": "alert_rules[0].condition.reference.as_of",
+          "left": "2026-10-21",
+          "right": null
+        },
+        {
+          "path": "plan_id",
+          "left": "BAOGANG-600010-ALERT-01",
+          "right": "BGGF-600010-RISK-ALERT-01"
+        }
+      ],
+      "chinese_vs_historical_differences": [
+        {
+          "path": "alert_rules[0].condition.reference.as_of",
+          "left": "2026-10-21",
+          "right": null
+        },
+        {
+          "path": "plan_id",
+          "left": "BAOGANG-600010-ALERT-01",
+          "right": "BGGF-600010-RISK-ALERT-01"
+        }
+      ]
+    },
+    {
+      "case": "szse-two-alerts",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 11,
+        "chinese": 11
+      },
+      "english_status": "SUCCEEDED",
+      "chinese_status": "SUCCEEDED",
+      "english_issues": [],
+      "chinese_issues": [],
+      "full_draft_differences": [],
+      "policy_equal_except_generated_plan_id": true,
+      "english_vs_historical_differences": [
+        {
+          "path": "plan_id",
+          "left": "WLY-ALERT-20261021",
+          "right": "WLY-000858-ALERT-20261021"
+        }
+      ],
+      "chinese_vs_historical_differences": [
+        {
+          "path": "plan_id",
+          "left": "WLY-ALERT-20261021",
+          "right": "WLY-000858-ALERT-20261021"
+        }
+      ]
+    },
+    {
+      "case": "missing-position-limit",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 1,
+        "chinese": 1
+      },
+      "result": "both_correctly_blocked",
+      "historical_block_matches": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 1,
+        "chinese": 1
+      },
+      "result": "both_correctly_blocked",
+      "historical_block_matches": true
+    },
+    {
+      "case": "source-exit-reassessment",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 11,
+        "chinese": 11
+      },
+      "english_status": "SUCCEEDED",
+      "chinese_status": "SUCCEEDED",
+      "english_issues": [],
+      "chinese_issues": [],
+      "full_draft_differences": [],
+      "policy_equal_except_generated_plan_id": true,
+      "english_vs_historical_differences": [
+        {
+          "path": "plan_id",
+          "left": "WLY000858-ALERT-20261021",
+          "right": "WLY-000858-ALERT-20261021"
+        }
+      ],
+      "chinese_vs_historical_differences": [
+        {
+          "path": "plan_id",
+          "left": "WLY000858-ALERT-20261021",
+          "right": "WLY-000858-ALERT-20261021"
+        }
+      ]
+    }
+  ],
+  "offline_replays": [
+    {
+      "run": "run-en-1",
+      "case": "sse-one-alert",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-en-1",
+      "case": "szse-two-alerts",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-en-1",
+      "case": "source-exit-reassessment",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-zh-1",
+      "case": "sse-one-alert",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-zh-1",
+      "case": "szse-two-alerts",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-zh-1",
+      "case": "source-exit-reassessment",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    }
+  ],
+  "generation_calls": 10,
+  "extraction_calls": 6,
+  "provider_attempts": 16,
+  "calls": [
+    {
+      "run": "run-en-1",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4917,
+        "completion_tokens": 455,
+        "total_tokens": 5372
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13717,
+        "completion_tokens": 2675,
+        "total_tokens": 16392
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4935,
+        "completion_tokens": 550,
+        "total_tokens": 5485
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13987,
+        "completion_tokens": 3696,
+        "total_tokens": 17683
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4865,
+        "completion_tokens": 273,
+        "total_tokens": 5138
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4885,
+        "completion_tokens": 195,
+        "total_tokens": 5080
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "source-exit-reassessment",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4994,
+        "completion_tokens": 654,
+        "total_tokens": 5648
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "source-exit-reassessment",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13996,
+        "completion_tokens": 3709,
+        "total_tokens": 17705
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 5011,
+        "completion_tokens": 549,
+        "total_tokens": 5560
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13717,
+        "completion_tokens": 2675,
+        "total_tokens": 16392
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 5029,
+        "completion_tokens": 572,
+        "total_tokens": 5601
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13987,
+        "completion_tokens": 3698,
+        "total_tokens": 17685
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4959,
+        "completion_tokens": 209,
+        "total_tokens": 5168
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4979,
+        "completion_tokens": 185,
+        "total_tokens": 5164
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "source-exit-reassessment",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 5088,
+        "completion_tokens": 640,
+        "total_tokens": 5728
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "source-exit-reassessment",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13996,
+        "completion_tokens": 3709,
+        "total_tokens": 17705
+      }
+    }
+  ],
+  "head": "369ba177e57213b968fd3aa35c0f929fa06150fa",
+  "regression": {
+    "passed": 50,
+    "elapsed_seconds": 1.69
+  },
+  "literal_review": [
+    {
+      "run": "run-en-1",
+      "case": "sse-one-alert",
+      "exact_sentence": true,
+      "original_findings": [],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-en-1",
+      "case": "szse-two-alerts",
+      "exact_sentence": true,
+      "original_findings": [],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-en-1",
+      "case": "missing-position-limit",
+      "exact_sentence": true,
+      "original_findings": [],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-en-1",
+      "case": "unsupported-index-buy",
+      "exact_sentence": true,
+      "original_findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-en-1",
+      "case": "source-exit-reassessment",
+      "exact_sentence": true,
+      "original_findings": [],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-zh-1",
+      "case": "sse-one-alert",
+      "exact_sentence": true,
+      "original_findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-zh-1",
+      "case": "szse-two-alerts",
+      "exact_sentence": true,
+      "original_findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-zh-1",
+      "case": "missing-position-limit",
+      "exact_sentence": true,
+      "original_findings": [],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-zh-1",
+      "case": "unsupported-index-buy",
+      "exact_sentence": true,
+      "original_findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    },
+    {
+      "run": "run-zh-1",
+      "case": "source-exit-reassessment",
+      "exact_sentence": true,
+      "original_findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "remaining_automated_findings": [],
+      "corrected_automated_pass": true
+    }
+  ],
+  "extraction_contract_modified": false,
+  "production_files_modified_by_this_task": false,
+  "response_repaired": false,
+  "model_budget_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false
+}

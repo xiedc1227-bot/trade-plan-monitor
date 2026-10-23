@@ -1,0 +1,24 @@
+{
+  "case": "missing-position-limit",
+  "findings": [
+    "General validity missing or not expressed exactly in B"
+  ],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4596,
+    "completion_tokens": 242,
+    "total_tokens": 4838
+  },
+  "expected_cost": "未知",
+  "cost_lines": [
+    "已知事实：合成参考收盘价1420.00元，日期2026-10-21（离线合成测试数据，非真实行情）。实际持仓未知，成本未知，最大计划持仓未知。",
+    "计划在人工停用前持续有效。持仓成本为未知，不作为零处理，也不影响上述提醒本身。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": false,
+  "removed_input_review_lines": [],
+  "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+  "source_chars": 10,
+  "correctly_blocked": false,
+  "passed": false
+}

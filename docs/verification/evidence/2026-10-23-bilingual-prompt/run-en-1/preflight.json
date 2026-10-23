@@ -1,0 +1,12 @@
+{
+  "language": "en",
+  "readme": "README.md",
+  "model": "deepseek-flash",
+  "max_input_chars": 50000,
+  "max_output_tokens": 4096,
+  "timeout_seconds": 30,
+  "max_retries": 2,
+  "prompt_sha256": "2d37f886b4ef0eec1746425fa497ceaa8fd9079b80586f5042ab7d990df866ed",
+  "started_at_utc": "2026-10-23T15:33:33.164725+00:00",
+  "synthetic_only": true
+}

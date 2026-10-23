@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "text": "计划持续有效，直至人工停用。",
+      "expected": true
+    },
+    {
+      "text": "已知事实。计划持续有效，直至人工停用。",
+      "expected": true
+    },
+    {
+      "text": "已知事实。\n\n计划持续有效，直至人工停用。",
+      "expected": true
+    },
+    {
+      "text": "计划在人工停用前持续有效。",
+      "expected": false
+    },
+    {
+      "text": "本计划持续有效，直至人工停用。",
+      "expected": false
+    },
+    {
+      "text": "计划持续有效，直至人工停用",
+      "expected": false
+    }
+  ],
+  "all_passed": true
+}

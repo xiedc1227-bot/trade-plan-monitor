@@ -1,0 +1,36 @@
+{
+  "case": "sse-one-alert",
+  "findings": [
+    "General validity missing or not expressed exactly in B"
+  ],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4648,
+    "completion_tokens": 552,
+    "total_tokens": 5200
+  },
+  "expected_cost": "无",
+  "cost_lines": [
+    "账户与约束：实际持仓0股，成本无，最大计划持仓500股（正数100股整数倍，满足软件契约）。本提醒不涉及数量、加减仓或清算义务，不计算可加仓容量。计划在人工停用前持续有效。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": false,
+  "removed_input_review_lines": [],
+  "source_sha256": "e8d0fe4bc0ef9516f7174f3fc5619a76d171c86ecbb0350a875802a4b2e8eec8",
+  "source_chars": 597,
+  "extraction_status": "SUCCEEDED",
+  "issues": [],
+  "assumptions": [],
+  "warnings": [],
+  "symbol": "600010.SH",
+  "max_qty": 500,
+  "ordinary_rules": 0,
+  "risk_branches": 0,
+  "alerts": 1,
+  "executable_structure": true,
+  "proposed_identity": {
+    "plan_id": "BAOGANG-600010-ALERT-20261021",
+    "version": 1
+  },
+  "passed": false
+}

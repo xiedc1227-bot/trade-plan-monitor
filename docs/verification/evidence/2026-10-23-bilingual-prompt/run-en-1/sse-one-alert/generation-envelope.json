@@ -1,0 +1,13 @@
+{
+  "request_id": "4ea91f7d-75e6-456c-b65d-4d5e950eb0d2",
+  "provider_id": "00000000-0000-4000-8000-0000000000d5",
+  "model": "deepseek-flash",
+  "content": "{\"A\":\"计划根字段语义值\\nschema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\\nplan_id=BAOGANG-600010-ALERT-20261021 version=1 symbol=600010.SH name=包钢股份 market=SSE\\nmetadata.report_at=null metadata.reference_price_fen=1234\\nactivation.mode=MANUAL levels=null position.max_qty=500\\n无普通规则\\n无风险分支\\nalert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE\\nalert_rules[0].condition.reference: mode=FIXED value=\\\"1207\\\" unit=FEN as_of=2026-10-21 source=\\\"2026-10-21合成观察约定\\\"\",\"B\":\"结论：仅生成一条独立技术提醒——包钢股份（600010.SH，沪市主板）最新正式完整日K收盘严格低于12.07元时触发提醒，正式收盘确认，仅提醒，不含买入、卖出或风险退出分支。\\n\\n事实与来源：本环境为离线合成测试，未联网取行情，以下均为给定事实而非最新真实数据。合成报告时间时区未知，故report_at=null；合成报告参考价12.34元（1234分），完整日K收盘同为12.34元，来源日期2026-10-21。提醒阈值12.07元（1207分）依据用户明确的合成结构线，来源文字“2026-10-21合成观察约定”。\\n\\n触发逻辑（if/then）：若某交易日正式完整日K收盘价严格低于12.07元，则触发该提醒；收盘价等于或高于12.07元不触发。盘中价格不构成确认。\\n\\n账户与约束：实际持仓0股，成本无，最大计划持仓500股（正数100股整数倍，满足软件契约）。本提醒不涉及数量、加减仓或清算义务，不计算可加仓容量。计划在人工停用前持续有效。\\n\\n当前必要缺项（仅列人工附件，不并入该价格提醒）：更多日K序列、量能数据、财报与公告、指数资料均未提供，故不评估趋势、指标、市场状态或相对强弱。\\n\\n原文未设财报前退出条件，也未设1—3个月重新评估期限，故不添加此类期限。\"}",
+  "finish_reason": "stop",
+  "usage": {
+    "prompt_tokens": 4648,
+    "completion_tokens": 552,
+    "total_tokens": 5200
+  },
+  "attempts": 1
+}

@@ -1,0 +1,28 @@
+{
+  "request_id": "23738438-1f40-4f5b-80b8-be6d14493ec2",
+  "provider_id": "00000000-0000-4000-8000-0000000000d5",
+  "model": "deepseek-flash",
+  "prompt_version": "plan-extract-v9",
+  "source_text_sha256": "8296299c25e04af8919197578b9468ff78de031f24403c91932153ffb1858a96",
+  "draft": null,
+  "mapping": null,
+  "evidence": [],
+  "assumptions": [],
+  "warnings": [],
+  "unmapped_text": [],
+  "validation_issues": [
+    {
+      "code": "AI_OUTPUT_TRUNCATED",
+      "path": "draft",
+      "severity": "ERROR",
+      "message": "AI output was truncated before completion; no draft was created.",
+      "activationBlocking": true
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 14391,
+    "completion_tokens": 4096,
+    "total_tokens": 18487
+  },
+  "status": "INVALID_OUTPUT"
+}

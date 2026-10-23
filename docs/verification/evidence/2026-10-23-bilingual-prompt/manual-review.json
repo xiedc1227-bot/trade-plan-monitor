@@ -1,0 +1,49 @@
+{
+  "scope": "One unchanged English prompt round and one unchanged Chinese control round, same five cases and delivery wrapper as clarified-prompt/run-v7",
+  "all_cases_fully_accepted": false,
+  "english": {
+    "positive_extraction_successes": 2,
+    "positive_cases": 3,
+    "negative_cases_correctly_blocked": 2,
+    "exact_validity_sentence_cases": 0,
+    "semantic_validity_preserved_cases": 5,
+    "cost_values_preserved_cases": 5,
+    "source_exit_reassessment_preserved_in_b": true,
+    "findings": [
+      {"case": "all", "kind": "literal_delivery", "detail": "All five B outputs paraphrase the prescribed validity statement into Chinese. Semantics are retained, but neither prescribed English nor Chinese literal is present. This is not a machine-policy change."},
+      {"case": "sse-one-alert", "kind": "appendix_scope", "quote": "当前必要缺项（仅列人工附件，不并入该价格提醒）", "detail": "Labels unrelated history, volume, reports and index information as currently necessary missing inputs."},
+      {"case": "unsupported-index-buy", "kind": "appendix_accuracy", "quote": "不支持指数联动、动态数量与S1/S2确认级别切换", "detail": "S1/S2 conflicts with the requested S0/S1. The rule remains blocked."},
+      {"case": "unsupported-index-buy", "kind": "appendix_scope", "quote": "其他交易参数（低买区、压力区、风险线、确认条件、数量基准Q0等）未完整定义", "detail": "Lists unrelated missing parameters, contrary to the accepted narrow blocker-only appendix requirement. Does not authorize an alternative branch."},
+      {"case": "source-exit-reassessment", "kind": "extraction_failure", "detail": "finish_reason=length; 4096 completion tokens; AI_OUTPUT_TRUNCATED; no draft. A has 20 lines versus 11 in Chinese. A differs only in whitespace, diagnosed without altering the submitted source."},
+      {"case": "source-exit-reassessment", "kind": "appendix_scope", "quote": "等待动作：等待人工启用", "detail": "Adds operating-process wording to the research appendix; no activation was performed."}
+    ]
+  },
+  "chinese": {
+    "positive_extraction_successes": 3,
+    "positive_cases": 3,
+    "negative_cases_correctly_blocked": 2,
+    "exact_validity_sentence_cases": 5,
+    "semantic_validity_preserved_cases": 5,
+    "cost_values_preserved_cases": 5,
+    "source_exit_reassessment_preserved_in_b": true,
+    "findings": [
+      {"case": "sse-one-alert", "kind": "appendix_scope", "quote": "当前必要缺项", "detail": "Puts unrelated history, volume, reports and index gaps under a necessary-input heading, although the following sentence says these do not affect the reminder."},
+      {"case": "unsupported-index-buy", "kind": "appendix_scope", "quote": "保留待人工补充", "detail": "Adds a future request for unspecified report exit/reassessment terms while the only current action should be waiting for the unsupported capability."},
+      {"case": "source-exit-reassessment", "kind": "appendix_ambiguity", "quote": "上述为账户资料，不写入A", "detail": "Follows a sentence listing cost, actual holdings and maximum holdings. The wording incorrectly appears to exclude maximum holdings from A; actual A correctly retains position.max_qty=800."}
+    ]
+  },
+  "shared_safety": {
+    "cost_not_added_to_a": true,
+    "no_fee_or_pnl_calculations": true,
+    "no_removed_inputs_requested": true,
+    "no_unapproved_static_branch_or_reminder_downgrade": true,
+    "no_trade_or_liquidation_rules_in_successful_reminder_drafts": true,
+    "no_future_extraction_success_claims": true
+  },
+  "limitations": [
+    "README prompt language varies; synthetic facts, software context and JSON delivery wrapper remain Chinese and byte-identical after the prompt. This is not a fully English end-user-input test.",
+    "One round per language is not a statistical reliability estimate; no unchanged-prompt retries selected a preferred output.",
+    "Historical Chinese run-v7 remains historical evidence, not a replacement for the fresh control failures.",
+    "Offline replay harness setup errors (import path, strict UUID decoding, provider identity mismatch) were corrected before all six raw responses reproduced their recorded outcomes. These were not new live calls or production changes."
+  ]
+}

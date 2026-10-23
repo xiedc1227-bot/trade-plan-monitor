@@ -1,0 +1,13 @@
+{
+  "request_id": "26c24281-59b2-415f-a13f-fc4d76afad6c",
+  "provider_id": "00000000-0000-4000-8000-0000000000d5",
+  "model": "deepseek-flash",
+  "content": "{\"A\":\"计划根字段语义值\\nschema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\\nplan_id=WLY000858-ALERT-20261021 version=1 symbol=000858.SZ name=五粮液 market=SZSE\\nmetadata.report_at=null metadata.reference_price_fen=7890\\nactivation.mode=MANUAL levels=null position.max_qty=800\\n无普通规则\\n无风险分支\\nalert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE\\nalert_rules[0].condition.reference: mode=FIXED value=\\\"7432\\\" unit=FEN as_of=2026-10-21 source=\\\"2026-10-21合成双向观察约定\\\"\\nalert_rules[1]: kind=RISK_ALERT rule_id=A2 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=GT confirmation.kind=OFFICIAL_DAILY_CLOSE\\nalert_rules[1].condition.reference: mode=FIXED value=\\\"8567\\\" unit=FEN as_of=2026-10-21 source=\\\"2026-10-21合成双向观察约定\\\"\",\"B\":\"本次结论：仅生成两条独立技术提醒，均为正式完整日K收盘确认，仅提醒，不构成交易、减仓或清仓义务。计划持续有效，直至人工停用。\\n\\n标的与账户事实：五粮液000858.SZ，深市主板；当前实际持仓200股，持仓成本80.00元／股，最大计划持仓800股。持仓成本仅作账户核算资料保留，不进入A。\\n\\n提醒一（A1）：如果最新正式完整日K收盘严格低于74.32元，那么触发提醒。阈值来源为“2026-10-21合成双向观察约定”，参考价及正式收盘78.90元（2026-10-21）。\\n\\n提醒二（A2）：如果最新正式完整日K收盘严格高于85.67元，那么触发提醒。阈值来源同上。\\n\\n两条提醒各自独立判定，不判断能否同时触发，不计算加仓额度，不附带买卖价位或低吸分支。\\n\\n原报告对已有持仓的明确人工管理条件保留如下：在2026-11-03收盘前退出；在2026-11-04收盘后重评。该条件属人工规则，本次A未将其改写为提醒或机器买卖规则。\\n\\n未使用的研究背景：本次未提供指数、技术指标、量能及财报明细，均不影响上述两条提醒的成立与确认。\\n\\n数据说明：本环境为离线合成测试，report_at未知为null，未联网获取行情，未声称提取通过。\"}",
+  "finish_reason": "stop",
+  "usage": {
+    "prompt_tokens": 5088,
+    "completion_tokens": 640,
+    "total_tokens": 5728
+  },
+  "attempts": 1
+}

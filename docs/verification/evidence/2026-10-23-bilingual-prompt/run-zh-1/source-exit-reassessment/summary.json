@@ -1,0 +1,35 @@
+{
+  "case": "source-exit-reassessment",
+  "findings": [],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4848,
+    "completion_tokens": 787,
+    "total_tokens": 5635
+  },
+  "expected_cost": "80.00",
+  "cost_lines": [
+    "当前实际持仓：200股；持仓成本：80.00元／股；最大计划持仓：800股。上述为账户资料，不写入A，也不代表任何交易授权。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": true,
+  "source_conditions_present": true,
+  "removed_input_review_lines": [],
+  "source_sha256": "f32116732f9b8bd793523d3ca4d8c48dc9c6e9864fe9aae01b75f06aaedb6117",
+  "source_chars": 891,
+  "extraction_status": "SUCCEEDED",
+  "issues": [],
+  "assumptions": [],
+  "warnings": [],
+  "symbol": "000858.SZ",
+  "max_qty": 800,
+  "ordinary_rules": 0,
+  "risk_branches": 0,
+  "alerts": 2,
+  "executable_structure": true,
+  "proposed_identity": {
+    "plan_id": "WLY-000858-ALERT-20261021",
+    "version": 1
+  },
+  "passed": true
+}

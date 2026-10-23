@@ -1,0 +1,167 @@
+{
+  "cases": [
+    {
+      "case": "sse-one-alert",
+      "findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4648,
+        "completion_tokens": 552,
+        "total_tokens": 5200
+      },
+      "expected_cost": "无",
+      "cost_lines": [
+        "账户与约束：实际持仓0股，成本无，最大计划持仓500股（正数100股整数倍，满足软件契约）。本提醒不涉及数量、加减仓或清算义务，不计算可加仓容量。计划在人工停用前持续有效。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [],
+      "source_sha256": "e8d0fe4bc0ef9516f7174f3fc5619a76d171c86ecbb0350a875802a4b2e8eec8",
+      "source_chars": 597,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "600010.SH",
+      "max_qty": 500,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 1,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "BAOGANG-600010-ALERT-20261021",
+        "version": 1
+      },
+      "passed": false
+    },
+    {
+      "case": "szse-two-alerts",
+      "findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4666,
+        "completion_tokens": 708,
+        "total_tokens": 5374
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "标的与事实：五粮液 000858.SZ，深市主板。当前实际持有 200 股，持仓成本 80.00 元/股（账户会计信息，仅作记录，不参与任何提醒触发判断），计划最大持仓 800 股。合成报告时区未知，report_at 记为 null；2026-10-21 参考价与正式收盘价均为 78.90 元（7890 分）。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [],
+      "source_sha256": "f32116732f9b8bd793523d3ca4d8c48dc9c6e9864fe9aae01b75f06aaedb6117",
+      "source_chars": 891,
+      "extraction_status": "SUCCEEDED",
+      "issues": [],
+      "assumptions": [],
+      "warnings": [],
+      "symbol": "000858.SZ",
+      "max_qty": 800,
+      "ordinary_rules": 0,
+      "risk_branches": 0,
+      "alerts": 2,
+      "executable_structure": true,
+      "proposed_identity": {
+        "plan_id": "WLY-000858-ALERT-20261021",
+        "version": 1
+      },
+      "passed": false
+    },
+    {
+      "case": "missing-position-limit",
+      "findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4596,
+        "completion_tokens": 242,
+        "total_tokens": 4838
+      },
+      "expected_cost": "未知",
+      "cost_lines": [
+        "已知事实：合成参考收盘价1420.00元，日期2026-10-21（离线合成测试数据，非真实行情）。实际持仓未知，成本未知，最大计划持仓未知。",
+        "计划在人工停用前持续有效。持仓成本为未知，不作为零处理，也不影响上述提醒本身。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": false,
+      "passed": false
+    },
+    {
+      "case": "unsupported-index-buy",
+      "findings": [
+        "General validity missing or not expressed exactly in B"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4616,
+        "completion_tokens": 290,
+        "total_tokens": 4906
+      },
+      "expected_cost": "35",
+      "cost_lines": [
+        "标的：招商银行 600036.SH（沪市主板）。实际持仓400股，成本35元/股（账户会计信息，仅作记录），计划最大持仓1200股。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "removed_input_review_lines": [],
+      "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+      "source_chars": 10,
+      "correctly_blocked": false,
+      "passed": false
+    },
+    {
+      "case": "source-exit-reassessment",
+      "findings": [
+        "General validity missing or not expressed exactly in B",
+        "No extracted draft",
+        "Extraction/review did not fully pass"
+      ],
+      "generation_finish_reason": "stop",
+      "generation_usage": {
+        "prompt_tokens": 4725,
+        "completion_tokens": 711,
+        "total_tokens": 5436
+      },
+      "expected_cost": "80.00",
+      "cost_lines": [
+        "账户事实（会计信息，不进入A）：当前实际持有200股，成本80.00元/股，计划最大持仓800股。"
+      ],
+      "cost_preserved": true,
+      "general_validity_exact": false,
+      "source_conditions_present": true,
+      "removed_input_review_lines": [],
+      "source_sha256": "8296299c25e04af8919197578b9468ff78de031f24403c91932153ffb1858a96",
+      "source_chars": 891,
+      "extraction_status": "INVALID_OUTPUT",
+      "issues": [
+        {
+          "code": "AI_OUTPUT_TRUNCATED",
+          "path": "draft",
+          "severity": "ERROR",
+          "message": "AI output was truncated before completion; no draft was created.",
+          "activationBlocking": true
+        }
+      ],
+      "assumptions": [],
+      "warnings": [],
+      "passed": false
+    }
+  ],
+  "all_passed": false,
+  "config_unchanged": true,
+  "application_database_opened": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false
+}

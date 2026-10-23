@@ -1,0 +1,37 @@
+{
+  "case": "source-exit-reassessment",
+  "findings": [
+    "General validity missing or not expressed exactly in B",
+    "No extracted draft",
+    "Extraction/review did not fully pass"
+  ],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4725,
+    "completion_tokens": 711,
+    "total_tokens": 5436
+  },
+  "expected_cost": "80.00",
+  "cost_lines": [
+    "账户事实（会计信息，不进入A）：当前实际持有200股，成本80.00元/股，计划最大持仓800股。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": false,
+  "source_conditions_present": true,
+  "removed_input_review_lines": [],
+  "source_sha256": "8296299c25e04af8919197578b9468ff78de031f24403c91932153ffb1858a96",
+  "source_chars": 891,
+  "extraction_status": "INVALID_OUTPUT",
+  "issues": [
+    {
+      "code": "AI_OUTPUT_TRUNCATED",
+      "path": "draft",
+      "severity": "ERROR",
+      "message": "AI output was truncated before completion; no draft was created.",
+      "activationBlocking": true
+    }
+  ],
+  "assumptions": [],
+  "warnings": [],
+  "passed": false
+}

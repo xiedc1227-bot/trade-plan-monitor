@@ -1,0 +1,9 @@
+计划根字段语义值
+schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1
+plan_id=BAOGANG-600010-ALERT-20261021 version=1 symbol=600010.SH name=包钢股份 market=SSE
+metadata.report_at=null metadata.reference_price_fen=1234
+activation.mode=MANUAL levels=null position.max_qty=500
+无普通规则
+无风险分支
+alert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE
+alert_rules[0].condition.reference: mode=FIXED value="1207" unit=FEN as_of=2026-10-21 source="2026-10-21合成观察约定"

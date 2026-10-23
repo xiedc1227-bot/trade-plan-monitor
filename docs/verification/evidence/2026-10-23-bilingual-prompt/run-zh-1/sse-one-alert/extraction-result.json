@@ -1,0 +1,512 @@
+{
+  "request_id": "94bc4768-faf8-4bf6-a013-f423a41e7252",
+  "provider_id": "00000000-0000-4000-8000-0000000000d5",
+  "model": "deepseek-flash",
+  "prompt_version": "plan-extract-v9",
+  "source_text_sha256": "e4bb54f0daaeda048c5e6edeb60d6b801198c1c3bd3494bc10e9a3f749e5c6c4",
+  "draft": {
+    "schema_version": 5,
+    "execution_mode": "CONDITION_PLAN",
+    "execution_version": "condition-plan-v1",
+    "plan_id": "BGGF-600010-RISK-ALERT-01",
+    "version": 1,
+    "symbol": "600010.SH",
+    "name": "包钢股份",
+    "market": "SSE",
+    "metadata": {
+      "report_at": null,
+      "reference_price_fen": 1234
+    },
+    "activation": {
+      "mode": "MANUAL"
+    },
+    "levels": null,
+    "position": {
+      "max_qty": 500,
+      "core_target_qty": null,
+      "tactical_target_qty": null,
+      "allocation_provenance": null,
+      "allocation_evidence": null
+    },
+    "trading_rules": {
+      "settlement": "NEXT_EXCHANGE_SESSION",
+      "tick_size_fen": 1,
+      "special_state_restrictions": "BLOCK_UNVERIFIED"
+    },
+    "monitoring": {
+      "indicator_formula_version": "daily-ta-v2",
+      "price_basis": "QFQ",
+      "source_requirement": "ONE_VERIFIED_PROVIDER",
+      "comparability_requirement": "CURRENT_QUOTE_BASIS",
+      "macd_min_observations": 26
+    },
+    "ordinary_rules": [],
+    "risk_branches": [],
+    "execution_policy": {
+      "same_signal": "ONE_PLANNED_QUANTITY",
+      "risk_priority": "SEVERE_THEN_ORDINARY",
+      "ordinary_conflict": "BLOCK_BOTH"
+    },
+    "alert_rules": [
+      {
+        "kind": "RISK_ALERT",
+        "rule_id": "A1",
+        "condition": {
+          "type": "DAILY_PRICE_COMPARE",
+          "field": "close",
+          "offset": 0,
+          "comparator": "LT",
+          "reference": {
+            "mode": "FIXED",
+            "value": "1207",
+            "unit": "FEN",
+            "as_of": "2026-10-21",
+            "source": "2026-10-21合成观察约定"
+          }
+        },
+        "confirmation": {
+          "kind": "OFFICIAL_DAILY_CLOSE"
+        }
+      }
+    ]
+  },
+  "daily_mapping": {
+    "mapping_version": "daily-mapping-v1",
+    "candidate_content_hash": "38d38ce246640fb01eb13ab60760b53ace58f17fc2dccc712896e3e484b40dd6",
+    "clauses": [
+      {
+        "clause_id": "clause-0a109063554a993f",
+        "start": 0,
+        "end": 8,
+        "excerpt": "计划根字段语义值",
+        "disposition": "CONTEXT",
+        "paths": [],
+        "reason": "Heading only",
+        "exclusions": [],
+        "remainders": [],
+        "semantic_role": "COMMENTARY"
+      },
+      {
+        "clause_id": "clause-120df09b3d528503",
+        "start": 9,
+        "end": 91,
+        "excerpt": "schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1",
+        "disposition": "POLICY",
+        "paths": [
+          "schema_version",
+          "execution_mode",
+          "execution_version"
+        ],
+        "reason": "Product constants",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-3edbfcb2a44aa7c6",
+        "start": 92,
+        "end": 173,
+        "excerpt": "plan_id=BGGF-600010-RISK-ALERT-01 version=1 symbol=600010.SH name=包钢股份 market=SSE",
+        "disposition": "POLICY",
+        "paths": [
+          "symbol",
+          "market"
+        ],
+        "reason": "Bind symbol and market; keep plan_id, version and name in draft only.",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-bd044112ea5eaab3",
+        "start": 174,
+        "end": 231,
+        "excerpt": "metadata.report_at=null metadata.reference_price_fen=1234",
+        "disposition": "CONTEXT",
+        "paths": [],
+        "reason": "All metadata values remain display-only in draft, never evidence bindings.",
+        "exclusions": [],
+        "remainders": [],
+        "semantic_role": "COMMENTARY"
+      },
+      {
+        "clause_id": "clause-eb7b645342bc8b31",
+        "start": 232,
+        "end": 287,
+        "excerpt": "activation.mode=MANUAL levels=null position.max_qty=500",
+        "disposition": "POLICY",
+        "paths": [
+          "activation.mode",
+          "position.max_qty"
+        ],
+        "reason": "levels=null is retained in draft but omitted from paths and bindings.",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-1b52f98d89676932",
+        "start": 288,
+        "end": 293,
+        "excerpt": "无普通规则",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules"
+        ],
+        "reason": "Empty ordinary rules",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-8a90f7428645ffa2",
+        "start": 294,
+        "end": 299,
+        "excerpt": "无风险分支",
+        "disposition": "POLICY",
+        "paths": [
+          "risk_branches"
+        ],
+        "reason": "Empty risk branches",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-5dc5efec60559969",
+        "start": 300,
+        "end": 481,
+        "excerpt": "alert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE",
+        "disposition": "POLICY",
+        "paths": [
+          "alert_rules[0].kind",
+          "alert_rules[0].rule_id",
+          "alert_rules[0].condition.type",
+          "alert_rules[0].condition.field",
+          "alert_rules[0].condition.offset",
+          "alert_rules[0].condition.comparator",
+          "alert_rules[0].confirmation.kind"
+        ],
+        "reason": "Risk alert rule",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-e957a6328a0279a5",
+        "start": 482,
+        "end": 593,
+        "excerpt": "alert_rules[0].condition.reference: mode=FIXED value=\"1207\" unit=FEN as_of=2026-10-21 source=\"2026-10-21合成观察约定\"",
+        "disposition": "POLICY",
+        "paths": [
+          "alert_rules[0].condition.reference.mode",
+          "alert_rules[0].condition.reference.value",
+          "alert_rules[0].condition.reference.unit",
+          "alert_rules[0].condition.reference.as_of",
+          "alert_rules[0].condition.reference.source"
+        ],
+        "reason": "Fixed reference",
+        "exclusions": [],
+        "remainders": []
+      }
+    ],
+    "bindings": [
+      {
+        "path": "schema_version",
+        "value": 5,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_mode",
+        "value": "CONDITION_PLAN",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_version",
+        "value": "condition-plan-v1",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "symbol",
+        "value": "600010.SH",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-3edbfcb2a44aa7c6"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "market",
+        "value": "SSE",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-3edbfcb2a44aa7c6"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "activation.mode",
+        "value": "MANUAL",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-eb7b645342bc8b31"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "position.max_qty",
+        "value": 500,
+        "origin": "SOURCE",
+        "unit": "SHARES",
+        "clause_ids": [
+          "clause-eb7b645342bc8b31"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.settlement",
+        "value": "NEXT_EXCHANGE_SESSION",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.tick_size_fen",
+        "value": 1,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.special_state_restrictions",
+        "value": "BLOCK_UNVERIFIED",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.indicator_formula_version",
+        "value": "daily-ta-v2",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.price_basis",
+        "value": "QFQ",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.source_requirement",
+        "value": "ONE_VERIFIED_PROVIDER",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.comparability_requirement",
+        "value": "CURRENT_QUOTE_BASIS",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.macd_min_observations",
+        "value": 26,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules",
+        "value": [],
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-1b52f98d89676932"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "risk_branches",
+        "value": [],
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-8a90f7428645ffa2"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_policy.same_signal",
+        "value": "ONE_PLANNED_QUANTITY",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_policy.risk_priority",
+        "value": "SEVERE_THEN_ORDINARY",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_policy.ordinary_conflict",
+        "value": "BLOCK_BOTH",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].kind",
+        "value": "RISK_ALERT",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-5dc5efec60559969"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].rule_id",
+        "value": "A1",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-5dc5efec60559969"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.type",
+        "value": "DAILY_PRICE_COMPARE",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-5dc5efec60559969"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.field",
+        "value": "close",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-5dc5efec60559969"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.offset",
+        "value": 0,
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-5dc5efec60559969"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.comparator",
+        "value": "LT",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-5dc5efec60559969"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].confirmation.kind",
+        "value": "OFFICIAL_DAILY_CLOSE",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-5dc5efec60559969"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.mode",
+        "value": "FIXED",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-e957a6328a0279a5"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.value",
+        "value": "1207",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-e957a6328a0279a5"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.unit",
+        "value": "FEN",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-e957a6328a0279a5"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.as_of",
+        "value": "2026-10-21",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-e957a6328a0279a5"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.source",
+        "value": "2026-10-21合成观察约定",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-e957a6328a0279a5"
+        ],
+        "supplement_id": null
+      }
+    ],
+    "supplements": []
+  },
+  "assumptions": [],
+  "warnings": [],
+  "validation_issues": [],
+  "usage": {
+    "prompt_tokens": 13719,
+    "completion_tokens": 2659,
+    "total_tokens": 16378
+  },
+  "status": "SUCCEEDED"
+}

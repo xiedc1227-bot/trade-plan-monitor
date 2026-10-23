@@ -1,0 +1,36 @@
+{
+  "case": "szse-two-alerts",
+  "findings": [
+    "General validity missing or not expressed exactly in B"
+  ],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4666,
+    "completion_tokens": 708,
+    "total_tokens": 5374
+  },
+  "expected_cost": "80.00",
+  "cost_lines": [
+    "标的与事实：五粮液 000858.SZ，深市主板。当前实际持有 200 股，持仓成本 80.00 元/股（账户会计信息，仅作记录，不参与任何提醒触发判断），计划最大持仓 800 股。合成报告时区未知，report_at 记为 null；2026-10-21 参考价与正式收盘价均为 78.90 元（7890 分）。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": false,
+  "removed_input_review_lines": [],
+  "source_sha256": "f32116732f9b8bd793523d3ca4d8c48dc9c6e9864fe9aae01b75f06aaedb6117",
+  "source_chars": 891,
+  "extraction_status": "SUCCEEDED",
+  "issues": [],
+  "assumptions": [],
+  "warnings": [],
+  "symbol": "000858.SZ",
+  "max_qty": 800,
+  "ordinary_rules": 0,
+  "risk_branches": 0,
+  "alerts": 2,
+  "executable_structure": true,
+  "proposed_identity": {
+    "plan_id": "WLY-000858-ALERT-20261021",
+    "version": 1
+  },
+  "passed": false
+}

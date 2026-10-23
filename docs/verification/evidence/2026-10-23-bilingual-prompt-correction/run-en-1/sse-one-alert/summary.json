@@ -1,0 +1,36 @@
+{
+  "case": "sse-one-alert",
+  "findings": [],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4917,
+    "completion_tokens": 455,
+    "total_tokens": 5372
+  },
+  "expected_cost": "无",
+  "cost_lines": [
+    "账户事实：实际持仓0股，成本无，最大计划持仓500股（A中position.max_qty=500）。",
+    "未使用的研究背景（不构成本提醒的依赖项，也不请求补充）：本次仅有单一合成参考价与阈值，缺少更多日K、量能、财报与指数资料；这些缺项不影响上述独立价格提醒的成立与执行。原文未设财报前退出或1—3个月期限，故不附加此类条件。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": true,
+  "removed_input_review_lines": [],
+  "source_sha256": "1a9726ed5781f3d2d5414de214d89178a11dc62419961e1cea805971b3212db5",
+  "source_chars": 591,
+  "compact_roots_exact": true,
+  "extraction_status": "SUCCEEDED",
+  "issues": [],
+  "assumptions": [],
+  "warnings": [],
+  "symbol": "600010.SH",
+  "max_qty": 500,
+  "ordinary_rules": 0,
+  "risk_branches": 0,
+  "alerts": 1,
+  "executable_structure": true,
+  "proposed_identity": {
+    "plan_id": "BAOGANG-600010-ALERT-01",
+    "version": 1
+  },
+  "passed": true
+}

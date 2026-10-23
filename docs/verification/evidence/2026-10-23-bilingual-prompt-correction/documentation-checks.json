@@ -1,0 +1,16 @@
+{
+  "documents": {
+    "README.md": {
+      "prompt_sha256": "d4ccf7a796726e460e1442c4625c5591d1a44f7b68bdbd0b53f04991d379c1bb",
+      "outside_prompt_unchanged": true,
+      "reminder_example_unchanged": true
+    },
+    "README.zh-CN.md": {
+      "prompt_sha256": "4d9cd7f38f9eec0b7896af44945a754e54122388e93eea795543ec4513c4a5e1",
+      "outside_prompt_unchanged": true,
+      "reminder_example_unchanged": true
+    }
+  },
+  "previous_evidence_manifest_verified": true,
+  "previous_evidence_files": 104
+}

@@ -1,0 +1,36 @@
+{
+  "case": "source-exit-reassessment",
+  "findings": [],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4994,
+    "completion_tokens": 654,
+    "total_tokens": 5648
+  },
+  "expected_cost": "80.00",
+  "cost_lines": [
+    "离线合成测试，非真实行情；未联网，未取得最新真实数据。标的为五粮液000858.SZ（深市主板）。合成报告时区未知，report_at=null；参考价与正式收盘均为78.90元（2026-10-21）。账户事实：实际持有200股，成本80.00元/股，计划上限800股。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": true,
+  "source_conditions_present": true,
+  "removed_input_review_lines": [],
+  "source_sha256": "3bffb1f5863cf42c6decc034d1e7fee6ce36f8d051d1010bf2951dff28dccb44",
+  "source_chars": 890,
+  "compact_roots_exact": true,
+  "extraction_status": "SUCCEEDED",
+  "issues": [],
+  "assumptions": [],
+  "warnings": [],
+  "symbol": "000858.SZ",
+  "max_qty": 800,
+  "ordinary_rules": 0,
+  "risk_branches": 0,
+  "alerts": 2,
+  "executable_structure": true,
+  "proposed_identity": {
+    "plan_id": "WLY000858-ALERT-20261021",
+    "version": 1
+  },
+  "passed": true
+}

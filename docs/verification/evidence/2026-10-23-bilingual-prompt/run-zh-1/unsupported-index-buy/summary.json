@@ -1,0 +1,22 @@
+{
+  "case": "unsupported-index-buy",
+  "findings": [],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4739,
+    "completion_tokens": 432,
+    "total_tokens": 5171
+  },
+  "expected_cost": "35",
+  "cost_lines": [
+    "- 持仓成本：35元／股（账户核算资料，按原值保留）。",
+    "- 持仓成本35元／股按原值保留，仅作账户核算资料，不写入交易规则。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": true,
+  "removed_input_review_lines": [],
+  "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+  "source_chars": 10,
+  "correctly_blocked": true,
+  "passed": true
+}

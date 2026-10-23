@@ -1,0 +1,38 @@
+{
+  "case": "szse-two-alerts",
+  "findings": [
+    "General validity missing or not expressed exactly in B"
+  ],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 5029,
+    "completion_tokens": 572,
+    "total_tokens": 5601
+  },
+  "expected_cost": "80.00",
+  "cost_lines": [
+    "已知事实：当前实际持仓200股，持仓成本80.00元／股，最大计划持仓800股；2026-10-21参考价及正式收盘78.90元；合成报告时区未知，report_at=null。",
+    "两条提醒相互独立，仅提示价格条件成立，不构成买卖授权，也不判断能否同时触发。指数、技术指标、量能及财报明细属于未使用的研究背景，本提醒不依赖这些资料，无需补充。无财报前退出期限。持仓成本仅作账户核算资料保留，不进入A。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": false,
+  "removed_input_review_lines": [],
+  "source_sha256": "9ca9d1316e96014a081cdb761bc48c791abd175606b64497bf525796a1e26114",
+  "source_chars": 884,
+  "compact_roots_exact": true,
+  "extraction_status": "SUCCEEDED",
+  "issues": [],
+  "assumptions": [],
+  "warnings": [],
+  "symbol": "000858.SZ",
+  "max_qty": 800,
+  "ordinary_rules": 0,
+  "risk_branches": 0,
+  "alerts": 2,
+  "executable_structure": true,
+  "proposed_identity": {
+    "plan_id": "WLY-ALERT-20261021",
+    "version": 1
+  },
+  "passed": false
+}

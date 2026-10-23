@@ -1,0 +1,365 @@
+{
+  "pairs": [
+    {
+      "case": "sse-one-alert",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": false,
+      "source_a_whitespace_normalized_equal_diagnostic_only": false,
+      "source_a_lines": {
+        "english": 9,
+        "chinese": 9
+      },
+      "english_status": "SUCCEEDED",
+      "chinese_status": "SUCCEEDED",
+      "english_issues": [],
+      "chinese_issues": [],
+      "full_draft_differences": [
+        {
+          "path": "plan_id",
+          "left": "BAOGANG-600010-ALERT-20261021",
+          "right": "BGGF-600010-RISK-ALERT-01"
+        }
+      ],
+      "policy_equal_except_generated_plan_id": true,
+      "english_vs_historical_differences": [
+        {
+          "path": "alert_rules[0].condition.reference.as_of",
+          "left": "2026-10-21",
+          "right": null
+        },
+        {
+          "path": "plan_id",
+          "left": "BAOGANG-600010-ALERT-20261021",
+          "right": "BGGF-600010-RISK-ALERT-01"
+        }
+      ],
+      "chinese_vs_historical_differences": [
+        {
+          "path": "alert_rules[0].condition.reference.as_of",
+          "left": "2026-10-21",
+          "right": null
+        }
+      ]
+    },
+    {
+      "case": "szse-two-alerts",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 11,
+        "chinese": 11
+      },
+      "english_status": "SUCCEEDED",
+      "chinese_status": "SUCCEEDED",
+      "english_issues": [],
+      "chinese_issues": [],
+      "full_draft_differences": [],
+      "policy_equal_except_generated_plan_id": true,
+      "english_vs_historical_differences": [],
+      "chinese_vs_historical_differences": []
+    },
+    {
+      "case": "missing-position-limit",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 1,
+        "chinese": 1
+      },
+      "result": "both_correctly_blocked",
+      "historical_block_matches": true
+    },
+    {
+      "case": "unsupported-index-buy",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": true,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 1,
+        "chinese": 1
+      },
+      "result": "both_correctly_blocked",
+      "historical_block_matches": true
+    },
+    {
+      "case": "source-exit-reassessment",
+      "case_and_wrapper_identical": true,
+      "source_a_identical": false,
+      "source_a_whitespace_normalized_equal_diagnostic_only": true,
+      "source_a_lines": {
+        "english": 20,
+        "chinese": 11
+      },
+      "english_status": "INVALID_OUTPUT",
+      "chinese_status": "SUCCEEDED",
+      "english_issues": [
+        {
+          "code": "AI_OUTPUT_TRUNCATED",
+          "path": "draft",
+          "severity": "ERROR",
+          "message": "AI output was truncated before completion; no draft was created.",
+          "activationBlocking": true
+        }
+      ],
+      "chinese_issues": [],
+      "result": "not_equivalent_no_validated_draft_on_one_side"
+    }
+  ],
+  "offline_replays": [
+    {
+      "run": "run-en-1",
+      "case": "sse-one-alert",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-en-1",
+      "case": "szse-two-alerts",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-en-1",
+      "case": "source-exit-reassessment",
+      "status": "INVALID_OUTPUT",
+      "exact_replay": true,
+      "issue_codes": [
+        "AI_OUTPUT_TRUNCATED"
+      ]
+    },
+    {
+      "run": "run-zh-1",
+      "case": "sse-one-alert",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-zh-1",
+      "case": "szse-two-alerts",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    },
+    {
+      "run": "run-zh-1",
+      "case": "source-exit-reassessment",
+      "status": "SUCCEEDED",
+      "exact_replay": true,
+      "issue_codes": []
+    }
+  ],
+  "generation_calls": 10,
+  "extraction_calls": 6,
+  "provider_attempts": 16,
+  "calls": [
+    {
+      "run": "run-en-1",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4648,
+        "completion_tokens": 552,
+        "total_tokens": 5200
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13717,
+        "completion_tokens": 2660,
+        "total_tokens": 16377
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4666,
+        "completion_tokens": 708,
+        "total_tokens": 5374
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13997,
+        "completion_tokens": 3700,
+        "total_tokens": 17697
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4596,
+        "completion_tokens": 242,
+        "total_tokens": 4838
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4616,
+        "completion_tokens": 290,
+        "total_tokens": 4906
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "source-exit-reassessment",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4725,
+        "completion_tokens": 711,
+        "total_tokens": 5436
+      }
+    },
+    {
+      "run": "run-en-1",
+      "case": "source-exit-reassessment",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "length",
+      "usage": {
+        "prompt_tokens": 14391,
+        "completion_tokens": 4096,
+        "total_tokens": 18487
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "sse-one-alert",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4771,
+        "completion_tokens": 543,
+        "total_tokens": 5314
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "sse-one-alert",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13719,
+        "completion_tokens": 2659,
+        "total_tokens": 16378
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "szse-two-alerts",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4789,
+        "completion_tokens": 603,
+        "total_tokens": 5392
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "szse-two-alerts",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13997,
+        "completion_tokens": 3700,
+        "total_tokens": 17697
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "missing-position-limit",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4719,
+        "completion_tokens": 505,
+        "total_tokens": 5224
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "unsupported-index-buy",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4739,
+        "completion_tokens": 432,
+        "total_tokens": 5171
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "source-exit-reassessment",
+      "stage": "generation",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 4848,
+        "completion_tokens": 787,
+        "total_tokens": 5635
+      }
+    },
+    {
+      "run": "run-zh-1",
+      "case": "source-exit-reassessment",
+      "stage": "extraction",
+      "attempts": 1,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13997,
+        "completion_tokens": 3690,
+        "total_tokens": 17687
+      }
+    }
+  ],
+  "head": "369ba177e57213b968fd3aa35c0f929fa06150fa",
+  "regression": {
+    "passed": 50,
+    "elapsed_seconds": 1.67
+  },
+  "extraction_contract_modified": false,
+  "production_files_modified": false,
+  "response_repaired": false,
+  "model_budget_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false
+}

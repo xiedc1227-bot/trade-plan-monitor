@@ -1,0 +1,20 @@
+计划根字段语义值
+schema_version=5
+execution_mode=CONDITION_PLAN
+execution_version=condition-plan-v1
+plan_id=WLY-000858-ALERT-20261021
+version=1
+symbol=000858.SZ
+name=五粮液
+market=SZSE
+metadata.report_at=null
+metadata.reference_price_fen=7890
+activation.mode=MANUAL
+levels=null
+position.max_qty=800
+无普通规则
+无风险分支
+alert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE
+alert_rules[0].condition.reference: mode=FIXED value="7432" unit=FEN as_of=2026-10-21 source="2026-10-21合成双向观察约定"
+alert_rules[1]: kind=RISK_ALERT rule_id=A2 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=GT confirmation.kind=OFFICIAL_DAILY_CLOSE
+alert_rules[1].condition.reference: mode=FIXED value="8567" unit=FEN as_of=2026-10-21 source="2026-10-21合成双向观察约定"

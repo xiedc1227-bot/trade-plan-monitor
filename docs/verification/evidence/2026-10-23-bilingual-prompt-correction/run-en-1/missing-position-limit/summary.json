@@ -1,0 +1,22 @@
+{
+  "case": "missing-position-limit",
+  "findings": [],
+  "generation_finish_reason": "stop",
+  "generation_usage": {
+    "prompt_tokens": 4865,
+    "completion_tokens": 273,
+    "total_tokens": 5138
+  },
+  "expected_cost": "未知",
+  "cost_lines": [
+    "当前阻断原因：本次没有足够信息确定position.max_qty（最大计划持仓），而Schema 5要求该字段为正数100股整数倍；实际持仓、成本、最大计划持仓均未知，不得猜测，也不得沿用上一标的800股或默认其他股数。因此A按规则整体阻断，不提供可导入正文。",
+    "已知事实：标的为贵州茅台600519.SH；拟研究内容仅为一条独立提醒（RISK_ALERT），条件为正式日收盘严格低于1400.00元，确认方式为OFFICIAL_DAILY_CLOSE；参考价1420.00元/2026-10-21。该提醒不依赖持仓成本或持仓数量，但软件必填上限缺失导致无法完整表达。"
+  ],
+  "cost_preserved": true,
+  "general_validity_exact": true,
+  "removed_input_review_lines": [],
+  "source_sha256": "7c35131f4e0ebb44095286af1383e1d08a3892b2d456dfb874d88cb918c8a47a",
+  "source_chars": 10,
+  "correctly_blocked": true,
+  "passed": true
+}
