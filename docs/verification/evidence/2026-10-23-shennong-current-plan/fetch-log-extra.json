@@ -1,0 +1,19 @@
+[
+  {
+    "name": "eastmoney-qfq",
+    "url": "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.605296&klt=101&fqt=1&beg=20250901&end=20261023&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+    "error": "RemoteProtocolError: Server disconnected without sending a response."
+  },
+  {
+    "name": "eastmoney-index",
+    "url": "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000001&klt=101&fqt=0&beg=20250901&end=20261023&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+    "error": "RemoteProtocolError: Server disconnected without sending a response."
+  },
+  {
+    "name": "sse-ann",
+    "url": "https://query.sse.com.cn/security/stock/queryCompanyBulletin.do?isPagination=true&productId=605296&keyWord=&securityType=0101&reportType2=&reportType=ALL&beginDate=2026-10-23&endDate=2026-10-23&pageHelp.pageSize=20&pageHelp.pageNo=1",
+    "status": 200,
+    "characters": 2989,
+    "retrieved_at_utc": "2026-10-23T14:06:24.337628+00:00"
+  }
+]

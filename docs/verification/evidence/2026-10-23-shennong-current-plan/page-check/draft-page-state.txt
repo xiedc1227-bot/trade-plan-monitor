@@ -1,0 +1,438 @@
+Browser tab: 1, Title: "计划详情 · Trade Plan Monitor", URL: "http://127.0.0.1:8765/plans/daa0387c-26b2-4e5f-8ea1-b4ea142ecedb".
+0 AXWebArea 计划详情 · Trade Plan Monitor, URL: 127.0.0.1:8765/plans/daa0387c-26b2-4e5f-8ea1-b4ea142ecedb
+	1 container app
+		2 link Description: 跳到主要内容, Value: 127.0.0.1:8765/plans/daa0387c-26b2-4e5f-8ea1-b4ea142ecedb#main-content
+		3 container
+			4 link Description: 交易计划监控, Value: 127.0.0.1:8765/
+			5 container 主要导航
+				6 content list
+					7 link Description: 监控总览, Value: 127.0.0.1:8765/
+					8 link Description: 计划, Value: 127.0.0.1:8765/plans
+					9 link Description: 提醒, Value: 127.0.0.1:8765/alerts
+					10 link Description: 系统, Value: 127.0.0.1:8765/system
+					11 link Description: 回测, Value: 127.0.0.1:8765/backtests
+		427 text ● 传输连接正常
+		13 container
+			14 heading 计划工作台, Value: 1
+				15 text 计划工作台
+			16 text 每条规则明确日线或5分钟确认方式与执行窗口，条件组可混合两种周期。提醒不改变模拟仓位，确认模拟交易才更新仓位；不连接券商。
+			17 container 计划版本
+				18 button v1 · 605296.SH · DRAFT · 待审核或不兼容
+				19 button v1 · 605296.SH · DRAFT · 待审核或不兼容
+			20 container 粘贴原文并提取候选
+				21 container
+					22 heading 粘贴原文并提取候选, Value: 2, ID: plan-workbench-title
+						23 text 粘贴原文并提取候选
+					24 text 草稿隔离 · 不自动启用
+				25 text 选择已配置供应商，粘贴计划原文，并逐项核对证据、不确定项和遗漏。后端计划契约与确定性校验始终是权威来源。
+				26 container 当前 AI 配置
+					27 heading 当前 AI 配置, Value: 2, ID: provider-selector-title
+						28 text 当前 AI 配置
+					29 text 配置文件只读
+					30 text 已配置供应商
+					31 pop up button (collapsed, settable) 已配置供应商, Value: DeepSeek · deepseek-flash, ID: ai-provider, Secondary Actions: Expand
+						32 menu
+							33 (selected) DeepSeek · deepseek-flash
+							34 DeepSeek Pro · deepseek-v4-pro
+					35 definition list
+						36 container 模型
+							37 text 模型
+						38 text deepseek-flash
+						39 container 服务地址
+							40 text 服务地址
+						41 text https://api.deepseek.com/
+						42 container 原文长度上限
+							43 text 原文长度上限
+						44 text 50000 个字符
+						45 container 密钥状态
+							46 text 密钥状态
+						47 text 已配置
+					48 text 修改 config/app.yaml 后需要重启 Web 服务；页面不会读取或写入密钥原值。
+				49 container 交易计划原文
+					50 heading 交易计划原文, Value: 2, ID: source-editor-title
+						51 text 交易计划原文
+					52 text 612 / 50000
+					53 container
+						54 text 粘贴中文计划原文
+						55 text entry area (settable) 粘贴中文计划原文, ID: plan-source-text, Value: 计划根字段语义值
+schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1
+plan_id=605296-20261023-ALERT01 version=1 symbol=605296.SH name=云南神农农业产业集团股份有限公司 market=SSE
+metadata.report_at=null metadata.reference_price_fen=3030
+activation.mode=MANUAL levels=null position.max_qty=300
+无普通规则
+无风险分支
+alert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE
+alert_rules[0].condition.reference: mode=FIXED value="2659" unit=FEN as_of=2026-10-15 source="原报告所载2026-10-15盘中低点26.59元"
+						56 text 原文只作为不可信纯文本发送和展示；AI 提取不会启用计划或参与实时判断。
+						57 button 生成计划草稿
+				58 text 尚未提交提取任务。AI 只生成待审核草稿，不会创建启用命令。
+			59 container 编辑规则、周期与执行窗口
+				60 heading 编辑规则、周期与执行窗口, Value: 2, ID: daily-editor-title
+					61 text 编辑规则、周期与执行窗口
+				62 text 未知参数保持空白。ALL表示全部满足，ANY表示任一满足。固定参照需值、单位、日期与来源；动态参照需指标、公式与完整窗口。
+				63 text 模拟数量统一按100股整数倍；买入后下一交易日可卖，系统计算结算日期。
+				64 text 普通规则默认持续有效直到人工停用或审核启用新版本替换；单次信号仍按其执行窗口到期。原文或历史日期限制保留为DATE_RANGE，不会自动转换。保存草稿不替换已启用版本。
+				65 text 原文有期限而改为持续有效时，在该规则有效期模式的人工补充理由中引用完整原句并写明“改为持续有效”，重新审核后明确启用。
+				66 container
+					67 text schema_version
+					68 text field schema_version, Value: 5, ID: daily-.schema_version
+					69 text execution_mode
+					70 text field execution_mode, Value: CONDITION_PLAN, ID: daily-.execution_mode
+					71 text execution_version
+					72 text field execution_version, Value: condition-plan-v1, ID: daily-.execution_version
+					73 text plan_id
+					74 text field (settable) plan_id, Value: 605296-20261023-ALERT01, ID: daily-.plan_id
+					75 text version
+					76 stepper (settable, integer) version, Value: 1, ID: daily-.version
+					77 text 股票代码
+					78 text field (settable) 股票代码, Value: 605296.SH, ID: daily-.symbol
+					79 text 计划名称
+					80 text field (settable) 计划名称, Value: 云南神农农业产业集团股份有限公司, ID: daily-.name
+					81 text 交易所
+					82 pop up button (collapsed, settable) 交易所, Value: SSE, ID: daily-.market, Secondary Actions: Expand
+						83 menu
+							84 (disabled) 待确认
+							85 (selected) SSE
+							86 SZSE
+							87 BSE
+					88 text metadata
+					89 container metadata
+						90 text metadata
+						91 text report_at
+						92 date field (settable) report_at, ID: daily-.metadata.report_at
+							93 container
+								94 stepper
+								95 stepper
+								96 stepper
+								97 stepper
+								98 stepper
+								99 stepper
+							100 pop up button 显示当地日期和时间选择器 显示当地日期和时间选择器
+						101 text reference_price_fen
+						102 stepper (settable, integer) reference_price_fen, Value: 3030, ID: daily-.metadata.reference_price_fen
+						103 button 清除可选reference_price_fen
+					104 text 计划启用方式
+					105 pop up button (collapsed, settable) Description: 选择明确条件或模式, Value: DailyManualActivation, ID: daily-.activation, Secondary Actions: Expand
+						106 menu
+							107 (disabled) 请选择，保持未知直到人工定义
+							108 (selected) DailyManualActivation
+							109 DailyDayActivation
+							110 DailyRangeActivation
+					111 container 计划启用方式
+						112 text 计划启用方式
+						113 text 模式
+						114 text field 模式, Value: MANUAL, ID: daily-.activation.mode
+					115 button 清除可选计划启用方式
+					116 text 价格区间和风险线
+					117 button 填写价格区间和风险线
+					118 text 待人工定义 拟定仓位政策
+					119 container 拟定仓位政策
+						120 text 拟定仓位政策
+						121 text 最大持仓（股）
+						122 stepper (settable, integer) 最大持仓（股）, Value: 300, ID: daily-.position.max_qty
+						123 button 清除可选最大持仓（股）
+						124 text 拟定CORE（股）
+						125 stepper (settable) 拟定CORE（股）, ID: daily-.position.core_target_qty
+						126 text 拟定TACTICAL（股）
+						127 stepper (settable) 拟定TACTICAL（股）, ID: daily-.position.tactical_target_qty
+						128 text 已登记或建议
+						129 pop up button (collapsed, settable) 已登记或建议, Value: 待确认, ID: daily-.position.allocation_provenance, Secondary Actions: Expand
+							130 menu
+								131 (disabled) 待确认
+								132 EXISTING_CONFIRMED
+								133 PROPOSED
+						134 text 仓位政策依据
+						135 text field (settable) 仓位政策依据, ID: daily-.position.allocation_evidence
+					136 text 固定模拟交易规则
+					137 container 固定模拟交易规则
+						138 text 固定模拟交易规则
+						139 text settlement
+						140 text field settlement, Value: NEXT_EXCHANGE_SESSION, ID: daily-.trading_rules.settlement
+						141 text tick_size_fen
+						142 text field tick_size_fen, Value: 1, ID: daily-.trading_rules.tick_size_fen
+						143 text special_state_restrictions
+						144 text field special_state_restrictions, Value: BLOCK_UNVERIFIED, ID: daily-.trading_rules.special_state_restrictions
+					145 text 指标计算口径（可选）
+					146 container 指标计算口径（可选）
+						147 text 指标计算口径（可选）
+						148 text indicator_formula_version
+						149 text field indicator_formula_version, Value: daily-ta-v2, ID: daily-.monitoring.indicator_formula_version
+						150 text price_basis
+						151 text field price_basis, Value: QFQ, ID: daily-.monitoring.price_basis
+						152 text source_requirement
+						153 text field source_requirement, Value: ONE_VERIFIED_PROVIDER, ID: daily-.monitoring.source_requirement
+						154 text comparability_requirement
+						155 text field comparability_requirement, Value: CURRENT_QUOTE_BASIS, ID: daily-.monitoring.comparability_requirement
+						156 text macd_min_observations
+						157 stepper (settable, integer) macd_min_observations, Value: 26, ID: daily-.monitoring.macd_min_observations
+					158 button 清除可选指标计算口径（可选）
+					159 text 买入与卖出规则
+					160 button 添加买入与卖出规则
+					161 text 技术风险退出（可选）
+					162 button 添加技术风险退出（可选）
+					163 text 提醒执行规则
+					164 container 提醒执行规则
+						165 text 提醒执行规则
+						166 text same_signal
+						167 text field same_signal, Value: ONE_PLANNED_QUANTITY, ID: daily-.execution_policy.same_signal
+						168 text risk_priority
+						169 text field risk_priority, Value: SEVERE_THEN_ORDINARY, ID: daily-.execution_policy.risk_priority
+						170 text ordinary_conflict
+						171 text field ordinary_conflict, Value: BLOCK_BOTH, ID: daily-.execution_policy.ordinary_conflict
+					172 button 清除可选提醒执行规则
+					173 text 仅提醒的独立条件（不改变模拟仓位） alert_rules[0]
+					174 container alert_rules[0]
+						175 text alert_rules[0]
+						176 text 核验事实类型
+						177 text field 核验事实类型, Value: RISK_ALERT, ID: daily-.alert_rules[0].kind
+						178 button 清除可选核验事实类型
+						179 text 规则名称
+						180 text field (settable) 规则名称, Value: A1, ID: daily-.alert_rules[0].rule_id
+						181 button 清除可选规则名称
+						182 text 交易条件（日线 / 5分钟 / 混合）
+						183 pop up button (collapsed, settable) Description: 选择明确条件或模式, Value: UnifiedPriceCompare, ID: daily-.alert_rules[0].condition, Secondary Actions: Expand
+							184 menu
+								185 (disabled) 请选择，保持未知直到人工定义
+								186 (selected) UnifiedPriceCompare
+								187 DailyPriceInRange
+								188 DailyVolumeRatio
+								189 DailyCandleRatio
+								190 DailyIndicatorCompare
+								191 DailyCloseSequence
+								192 先行完整收盘条件
+								193 人工核验条件
+								194 5分钟收盘价区间
+								195 5分钟收盘价跌破
+								196 5分钟量比
+								197 ALL全部满足（日线 / 5分钟可混合）
+								198 ANY任一满足（日线 / 5分钟可混合）
+						199 container 交易条件（日线 / 5分钟 / 混合）
+							200 text 交易条件（日线 / 5分钟 / 混合）
+							201 text 条件类型 / ALL全部满足 / ANY任一满足
+							202 text field 条件类型 / ALL全部满足 / ANY任一满足, Value: DAILY_PRICE_COMPARE, ID: daily-.alert_rules[0].condition.type
+							203 text field
+							204 pop up button (collapsed, settable) field, Value: close, ID: daily-.alert_rules[0].condition.field, Secondary Actions: Expand
+								205 menu
+									206 (disabled) 待确认
+									207 open
+									208 high
+									209 low
+									210 (selected) close
+							211 text offset
+							212 stepper (settable, integer) offset, Value: 0, ID: daily-.alert_rules[0].condition.offset
+							213 text comparator
+							214 pop up button (collapsed, settable) comparator, Value: LT, ID: daily-.alert_rules[0].condition.comparator, Secondary Actions: Expand
+								215 menu
+									216 (disabled) 待确认
+									217 (selected) LT
+									218 LTE
+									219 EQ
+									220 GTE
+									221 GT
+							222 text 固定或动态参照
+							223 pop up button (collapsed, settable) Description: 选择明确条件或模式, Value: UnifiedFixedReference, ID: daily-.alert_rules[0].condition.reference, Secondary Actions: Expand
+								224 menu
+									225 (disabled) 请选择，保持未知直到人工定义
+									226 (selected) UnifiedFixedReference
+									227 DynamicDailyReference
+							228 container 固定或动态参照
+								229 text 固定或动态参照
+								230 text 模式
+								231 text field 模式, Value: FIXED, ID: daily-.alert_rules[0].condition.reference.mode
+								232 text value
+								233 pop up button (collapsed, settable) Description: 选择明确条件或模式, Value: number, ID: daily-.alert_rules[0].condition.reference.value-choice, Secondary Actions: Expand
+									234 menu
+										235 (disabled) 请选择，保持未知直到人工定义
+										236 (selected) number
+										237 string
+								238 stepper (settable, integer) value, Value: 2659, ID: daily-.alert_rules[0].condition.reference.value
+								239 text unit
+								240 pop up button (collapsed, settable) unit, Value: FEN, ID: daily-.alert_rules[0].condition.reference.unit, Secondary Actions: Expand
+									241 menu
+										242 (disabled) 待确认
+										243 (selected) FEN
+										244 INDICATOR
+								245 text as_of
+								246 date field (settable) as_of, Value: 2026-10-15, ID: daily-.alert_rules[0].condition.reference.as_of
+									247 container
+										248 stepper
+										249 stepper
+										250 stepper
+									251 pop up button 显示日期选择器 显示日期选择器
+								252 button 清除可选as_of
+								253 text source
+								254 text field (settable) source, Value: 原报告所载2026-10-15盘中低点26.59元, ID: daily-.alert_rules[0].condition.reference.source
+						255 button 清除可选交易条件（日线 / 5分钟 / 混合）
+						256 text 确认方式
+						257 pop up button (collapsed, settable) Description: 选择明确条件或模式, Value: OfficialDailyConfirmation, ID: daily-.alert_rules[0].confirmation, Secondary Actions: Expand
+							258 menu
+								259 (disabled) 请选择，保持未知直到人工定义
+								260 (selected) OfficialDailyConfirmation
+								261 CompletedMinuteConfirmation
+						262 container 确认方式
+							263 text 确认方式
+							264 text 核验事实类型
+							265 text field 核验事实类型, Value: OFFICIAL_DAILY_CLOSE, ID: daily-.alert_rules[0].confirmation.kind
+						266 button 清除可选确认方式
+					267 button 移除此仅提醒的独立条件（不改变模拟仓位）
+					268 button 添加仅提醒的独立条件（不改变模拟仓位）
+				269 button 检查当前参数与来源
+			270 container 来源、人工补充与当前审核
+				271 heading 来源、人工补充与当前审核, Value: 2, ID: daily-review-title
+					272 text 来源、人工补充与当前审核
+				273 text 基本面由用户在生成计划时审核，不参与条件监控。补充只定义拟定交易政策。模拟仓位仅由期初初始化和明确模拟交易更新。任何语义修改都需重新审核。
+				274 heading 逐句原文, Value: 3
+					275 text 逐句原文
+				276 text 计划根字段语义值
+				277 text CONTEXT · Heading only
+				278 text 仅标注基本面或公告审核的原文片段
+				279 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-0a109063554a993f
+				280 button (disabled) 标注为非监控背景
+				281 text 本句实际对应的技术参数路径（逗号分隔）
+				282 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-0a109063554a993f
+				283 text 此句与当前参数的具体对应说明（至少20字）
+				284 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-0a109063554a993f
+				285 text schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1
+				286 text POLICY · Product constants
+				287 text 仅标注基本面或公告审核的原文片段
+				288 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-120df09b3d528503
+				289 button (disabled) 标注为非监控背景
+				290 text 本句实际对应的技术参数路径（逗号分隔）
+				291 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-120df09b3d528503
+				292 text 此句与当前参数的具体对应说明（至少20字）
+				293 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-120df09b3d528503
+				294 text plan_id=605296-20261023-ALERT01 version=1 symbol=605296.SH name=云南神农农业产业集团股份有限公司 market=SSE
+				295 text POLICY · Bind symbol and market; keep plan_id, version and name in draft only.
+				296 text 仅标注基本面或公告审核的原文片段
+				297 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-7f4f0225b9db9bf8
+				298 button (disabled) 标注为非监控背景
+				299 text 本句实际对应的技术参数路径（逗号分隔）
+				300 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-7f4f0225b9db9bf8
+				301 text 此句与当前参数的具体对应说明（至少20字）
+				302 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-7f4f0225b9db9bf8
+				303 text metadata.report_at=null metadata.reference_price_fen=3030
+				304 text CONTEXT · All metadata values remain display-only in draft, never evidence bindings.
+				305 text 仅标注基本面或公告审核的原文片段
+				306 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-3053f44e0e266d94
+				307 button (disabled) 标注为非监控背景
+				308 text 本句实际对应的技术参数路径（逗号分隔）
+				309 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-3053f44e0e266d94
+				310 text 此句与当前参数的具体对应说明（至少20字）
+				311 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-3053f44e0e266d94
+				312 text activation.mode=MANUAL levels=null position.max_qty=300
+				313 text POLICY · levels=null is retained in draft but omitted from paths and bindings.
+				314 text 仅标注基本面或公告审核的原文片段
+				315 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-2da59934d20e86f2
+				316 button (disabled) 标注为非监控背景
+				317 text 本句实际对应的技术参数路径（逗号分隔）
+				318 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-2da59934d20e86f2
+				319 text 此句与当前参数的具体对应说明（至少20字）
+				320 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-2da59934d20e86f2
+				321 text 无普通规则
+				322 text POLICY · Empty ordinary rules
+				323 text 仅标注基本面或公告审核的原文片段
+				324 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-4a10863e0a1a7fb1
+				325 button (disabled) 标注为非监控背景
+				326 text 本句实际对应的技术参数路径（逗号分隔）
+				327 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-4a10863e0a1a7fb1
+				328 text 此句与当前参数的具体对应说明（至少20字）
+				329 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-4a10863e0a1a7fb1
+				330 text 无风险分支
+				331 text POLICY · Empty risk branches
+				332 text 仅标注基本面或公告审核的原文片段
+				333 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-25acac9da591ee51
+				334 button (disabled) 标注为非监控背景
+				335 text 本句实际对应的技术参数路径（逗号分隔）
+				336 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-25acac9da591ee51
+				337 text 此句与当前参数的具体对应说明（至少20字）
+				338 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-25acac9da591ee51
+				339 text alert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE
+				340 text POLICY · Risk alert rule
+				341 text 仅标注基本面或公告审核的原文片段
+				342 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-c30a22124c8d1046
+				343 button (disabled) 标注为非监控背景
+				344 text 本句实际对应的技术参数路径（逗号分隔）
+				345 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-c30a22124c8d1046
+				346 text 此句与当前参数的具体对应说明（至少20字）
+				347 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-c30a22124c8d1046
+				348 text alert_rules[0].condition.reference: mode=FIXED value="2659" unit=FEN as_of=2026-10-15 source="原报告所载2026-10-15盘中低点26.59元"
+				349 text POLICY · Fixed reference
+				350 text 仅标注基本面或公告审核的原文片段
+				351 text field (settable) 仅标注基本面或公告审核的原文片段, ID: exclude-clause-1b0120dcb1422eee
+				352 button (disabled) 标注为非监控背景
+				353 text 本句实际对应的技术参数路径（逗号分隔）
+				354 text field (settable) 本句实际对应的技术参数路径（逗号分隔）, ID: paths-clause-1b0120dcb1422eee
+				355 text 此句与当前参数的具体对应说明（至少20字）
+				356 text entry area (settable) 此句与当前参数的具体对应说明（至少20字）, ID: clause-clause-1b0120dcb1422eee
+				357 button (collapsed) 逐项参数来源与人工补充（32）, Secondary Actions: Expand
+					358 text 逐项参数来源与人工补充（32）
+				359 heading 需要独立人工定义的参数, Value: 3
+					360 text 需要独立人工定义的参数
+				361 text 当前参数已有来源或已登记补充。继续核对全部条件与日期。
+				362 text 已登记人工补充 0 项，可分批填写其余定义。
+				363 button (disabled) 单独登记上述人工补充
+				364 container
+					365 heading 服务端待确认项（0）, Value: 3
+						366 text 服务端待确认项（0）
+				367 button 保存待审核版本
+				368 button 确认当前完整审核
+				369 button (disabled) 启用当前审核绑定
+				370 text 已保存版本 1 · 待审核
+				371 link Description: 打开此版本继续审核（可刷新恢复）, Value: 127.0.0.1:8765/plans/daa0387c-26b2-4e5f-8ea1-b4ea142ecedb
+			372 container 模拟仓位与技术核验
+				373 heading 模拟仓位与技术核验, Value: 2, ID: daily-operations-title
+					374 text 模拟仓位与技术核验
+				375 text 提醒不会改变模拟仓位。只有你确认一次模拟交易，系统才更新仓位；不提交真实订单。
+				376 button 刷新当前状态
+				377 heading 仅提醒草稿：待审核，尚未启用, Value: 3
+					378 text 仅提醒草稿：待审核，尚未启用
+				379 text 模拟库存受历史记录或存储结构兼容性限制。仅提醒规则不依赖模拟库存；是否监测仍取决于本版本的人工审核和启用状态。
+				380 text 该版本尚未启用，暂不执行技术提醒监测。
+				381 text 选择独立操作
+				382 pop up button (collapsed, settable) 选择独立操作, Value: 人工核验证据, ID: daily-operation-kind, Secondary Actions: Expand
+					383 menu
+						384 (selected) 人工核验证据
+						385 期初模拟仓位
+						386 独立风险重评
+				387 container
+					388 heading 人工核验证据, Value: 3
+						389 text 人工核验证据
+					390 text 逐日技术条件、严重技术结构及量价恶化、当前可交易或全日停牌。可交易与停牌的官方资料需发布时间、核验时间和具体事实；提交后立即重新评估，各规则遵循已审核的确认方式与执行窗口。
+					391 text 核验事实类型
+					392 pop up button (collapsed, settable) 核验事实类型, Value: 待确认, ID: operation-FACT-.kind, Secondary Actions: Expand
+						393 menu
+							394 (disabled) 待确认
+							395 价格结构核验
+							396 量能或蜡烛核验
+							397 技术条件核验
+							398 TRADE_VIABILITY
+							399 信号失效证据
+							400 新的独立结构证据
+							401 严重结构失效
+							402 严重价格量能恶化
+							403 当前可交易核验
+							404 全日停牌核验
+					405 text 事实适用交易日
+					406 date field (settable) 事实适用交易日, Value: 2026-10-23, ID: operation-FACT-.tradeDate
+						407 container
+							408 stepper
+							409 stepper
+							410 stepper
+						411 pop up button 显示日期选择器 显示日期选择器
+					412 text 具体核验证据
+					413 text field (settable) 具体核验证据, ID: operation-FACT-.evidence
+					414 text 核验条件实际满足
+					415 pop up button (collapsed, settable) 核验条件实际满足, Value: 待确认, ID: operation-FACT-.satisfied, Secondary Actions: Expand
+						416 menu
+							417 (disabled) 待确认
+							418 是
+							419 否
+					420 text 官方资料核验
+					421 button 填写官方资料核验
+					422 text 待人工定义
+					423 text 当前绑定尚未就绪，请先刷新当前状态。
+					424 button (disabled) 确认登记人工核验证据
+		425 container
+			426 text PLAN / MONITOR  —  让每一步，有据可循。 交易计划 · 持续监控 · 人工决策
+
+The focused UI element is 14 heading 计划工作台, Value: 1

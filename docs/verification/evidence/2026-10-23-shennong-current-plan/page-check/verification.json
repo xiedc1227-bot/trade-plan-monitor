@@ -1,0 +1,21 @@
+{
+  "plan_version_id": "daa0387c-26b2-4e5f-8ea1-b4ea142ecedb",
+  "plan_id": "605296-20261023-ALERT01",
+  "url": "http://127.0.0.1:8765/plans/daa0387c-26b2-4e5f-8ea1-b4ea142ecedb",
+  "verification_method": "Live in-app browser accessibility tree plus read-only persisted-state comparison",
+  "technical_alerts": 1,
+  "ordinary_rules": 0,
+  "risk_branches": 0,
+  "server_pending_items": 0,
+  "status": "DRAFT",
+  "review_confirmed": false,
+  "activated": false,
+  "inventory_changed": false,
+  "page_preserved_for_user": true,
+  "web_service_started": true,
+  "limitations": [
+    "Header displayed connecting to monitor service; live monitoring readiness was not established.",
+    "Historical simulation inventory compatibility warning remains; page explicitly separates it from alert-only review status."
+  ],
+  "evidence": "draft-page-state.txt"
+}

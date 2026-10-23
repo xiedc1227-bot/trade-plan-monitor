@@ -1,0 +1,113 @@
+{
+  "final_run": "run-v3",
+  "passed": true,
+  "runs": [
+    {
+      "run": "run-v1",
+      "summary": {
+        "findings": [],
+        "prompt_sha256": "66344ee6be4ef20088ae85667faf681c0522561ba1241a58a30540d758c06ea0",
+        "report_full_sha256": "89b8d8b8a19953a53a18b6fe7fc47bc68cb958ee2dad88134d2022b5310a7ade",
+        "report_excerpt_sha256": "8433d374a92eb1c7f88feee4d79e8ee527d794ec194e828fe2fd178e966760f6",
+        "generation_request_chars": 33655,
+        "source_sha256": "d8a063c854bc8155dea9ba7564c11038492c22bfc9617d135d87d9271f272734",
+        "cost_none_preserved": true,
+        "validity_exact": true,
+        "status": "SUCCEEDED",
+        "issues": [],
+        "assumptions": [],
+        "warnings": [],
+        "symbol": "605296.SH",
+        "max_qty": 300,
+        "ordinary_rules": 0,
+        "risk_branches": 0,
+        "alerts": 1,
+        "plan_id": "605296-20261023-RA",
+        "version": 1,
+        "structure_executable": true,
+        "passed": true,
+        "configuration_unchanged": true,
+        "application_database_opened": false,
+        "plan_saved": false,
+        "review_confirmed": false,
+        "activated": false,
+        "inventory_changed": false
+      }
+    },
+    {
+      "run": "run-v2",
+      "summary": {
+        "findings": [
+          "no draft",
+          "extraction or source review incomplete"
+        ],
+        "prompt_sha256": "66344ee6be4ef20088ae85667faf681c0522561ba1241a58a30540d758c06ea0",
+        "report_full_sha256": "89b8d8b8a19953a53a18b6fe7fc47bc68cb958ee2dad88134d2022b5310a7ade",
+        "report_excerpt_sha256": "8433d374a92eb1c7f88feee4d79e8ee527d794ec194e828fe2fd178e966760f6",
+        "generation_request_chars": 33863,
+        "source_sha256": "72223e78c97cfe70a32f75c6e6016e16ffe0dd4985ad286ff823d622ef9a3139",
+        "cost_none_preserved": true,
+        "validity_exact": true,
+        "status": "INVALID_OUTPUT",
+        "issues": [
+          {
+            "code": "AI_FIELD_EVIDENCE_INVALID",
+            "path": "mapping",
+            "severity": "ERROR",
+            "message": "Plan source mapping is invalid.",
+            "activationBlocking": true
+          }
+        ],
+        "assumptions": [],
+        "warnings": [],
+        "passed": false,
+        "configuration_unchanged": true,
+        "application_database_opened": false,
+        "plan_saved": false,
+        "review_confirmed": false,
+        "activated": false,
+        "inventory_changed": false
+      }
+    },
+    {
+      "run": "run-v3",
+      "summary": {
+        "findings": [],
+        "prompt_sha256": "66344ee6be4ef20088ae85667faf681c0522561ba1241a58a30540d758c06ea0",
+        "report_full_sha256": "89b8d8b8a19953a53a18b6fe7fc47bc68cb958ee2dad88134d2022b5310a7ade",
+        "report_excerpt_sha256": "8433d374a92eb1c7f88feee4d79e8ee527d794ec194e828fe2fd178e966760f6",
+        "generation_request_chars": 33963,
+        "source_sha256": "99153867d727c3440ba7015870fcd54406165fc9ea6869c71822e149428cce33",
+        "cost_none_preserved": true,
+        "validity_exact": true,
+        "status": "SUCCEEDED",
+        "issues": [],
+        "assumptions": [],
+        "warnings": [],
+        "symbol": "605296.SH",
+        "max_qty": 300,
+        "ordinary_rules": 0,
+        "risk_branches": 0,
+        "alerts": 1,
+        "plan_id": "605296-20261023-ALERT01",
+        "version": 1,
+        "structure_executable": true,
+        "passed": true,
+        "configuration_unchanged": true,
+        "application_database_opened": false,
+        "plan_saved": false,
+        "review_confirmed": false,
+        "activated": false,
+        "inventory_changed": false
+      }
+    }
+  ],
+  "calls": 6,
+  "provider_attempts": 6,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "activated": false,
+  "inventory_changed": false
+}

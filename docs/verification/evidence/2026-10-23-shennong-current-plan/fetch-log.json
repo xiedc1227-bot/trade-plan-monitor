@@ -1,0 +1,37 @@
+[
+  {
+    "name": "eastmoney",
+    "url": "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.605296&klt=101&fqt=0&beg=20250901&end=20261023&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+    "status": 200,
+    "characters": 21207,
+    "retrieved_at_utc": "2026-10-23T14:05:36.459847+00:00"
+  },
+  {
+    "name": "yahoo-stock",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/605296.SS?period1=1756684800&period2=1792886400&interval=1d&events=div%2Csplits",
+    "status": 200,
+    "characters": 30775,
+    "retrieved_at_utc": "2026-10-23T14:05:37.201431+00:00"
+  },
+  {
+    "name": "yahoo-index",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/000001.SS?period1=1756684800&period2=1792886400&interval=1d",
+    "status": 200,
+    "characters": 29219,
+    "retrieved_at_utc": "2026-10-23T14:05:37.468620+00:00"
+  },
+  {
+    "name": "sina",
+    "url": "https://hq.sinajs.cn/list=sh605296,sh000001",
+    "status": 200,
+    "characters": 421,
+    "retrieved_at_utc": "2026-10-23T14:05:36.393618+00:00"
+  },
+  {
+    "name": "announcement",
+    "url": "https://money.finance.sina.com.cn/corp/view/vCB_AllBulletinDetail.php?id=12653528&stockid=605296",
+    "status": 200,
+    "characters": 25502,
+    "retrieved_at_utc": "2026-10-23T14:05:36.417195+00:00"
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "final_run": "run-v3",
+  "cost_none_preserved": true,
+  "no_fee_or_pnl_calculations": true,
+  "exact_general_validity": true,
+  "report_reassessment_conditions_preserved": true,
+  "current_reminder_missing_parameters": [],
+  "future_human_research": [
+    "Actual Q3 disclosure and contents",
+    "Gross-margin/cashflow/revenue/impairment checks",
+    "Definitions of volume expansion, effective MA50 recovery and material impairment before any future trade proposal"
+  ],
+  "generation_excerpt_used": true,
+  "full_report_sha256": "89b8d8b8a19953a53a18b6fe7fc47bc68cb958ee2dad88134d2022b5310a7ade",
+  "first_run_limitation": "B omitted concrete fundamental reassessment gates",
+  "second_run_failure": "AI_FIELD_EVIDENCE_INVALID; offline exact replay: source binding is absent from its exact clause; source label contained explanatory comma-separated clauses",
+  "last_run_complete": true
+}

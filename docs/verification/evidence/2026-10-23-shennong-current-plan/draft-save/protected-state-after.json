@@ -1,0 +1,47 @@
+{
+  "active_plan": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "plan_activation_state": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "position_lot": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "position_inventory_state": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "position_opening_balance": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "position_inventory_confirmation": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "risk_state": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "manual_event_risk": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "daily_records_except_extraction_and_review": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "existing_plan_version": {
+    "count": 1,
+    "sha256": "e959a529fea26523e8ae9c68e7357213e476f49f9890ac2f4fa2b47d9282c59c"
+  },
+  "existing_plan_review_provenance": {
+    "count": 1,
+    "sha256": "313ecdf8da1a04a98de842ecd6edbb782aab3c5a987b6c0831aacdf3ba3f1ca3"
+  },
+  "configuration": "89923ea019712573b0f8118164eda1ee2a8371c4ee57faf2a2ad48fd6b8ab428"
+}

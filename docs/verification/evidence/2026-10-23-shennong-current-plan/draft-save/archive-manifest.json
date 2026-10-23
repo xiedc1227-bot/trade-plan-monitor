@@ -1,0 +1,142 @@
+{
+  "plan_id": "605296-20261023-ALERT01",
+  "version": 1,
+  "plan_version_id": "daa0387c-26b2-4e5f-8ea1-b4ea142ecedb",
+  "extraction_id": "870179cc-ef04-4dd4-ab87-a4db8740ae81",
+  "files": [
+    {
+      "path": "A.txt",
+      "bytes": 708,
+      "sha256": "f1934fd9fa28b40758172ec199fab8ebae608bbe9deb175fd35546763b8eef1a"
+    },
+    {
+      "path": "analyze_market.py",
+      "bytes": 4191,
+      "sha256": "dbbc50ac24a346020befba97561b3b413683fdde8dedd6d10fa65d3dad522c25"
+    },
+    {
+      "path": "announcement-text.txt",
+      "bytes": 4714,
+      "sha256": "3152f7bca4848b753971e64d4b66a48207424a4a7ceed15e0ba047670c556260"
+    },
+    {
+      "path": "archive.py",
+      "bytes": 3841,
+      "sha256": "20dbd2177ae8fa4ab3c4003ddfd43cfcfac8c5b3b3f64d0904273a8c8522e378"
+    },
+    {
+      "path": "B.txt",
+      "bytes": 4740,
+      "sha256": "3db44f7832a310eaa93ea547127d83763cb182b5fa66886b39877a6471f7b50d"
+    },
+    {
+      "path": "eastmoney.txt",
+      "bytes": 21215,
+      "sha256": "5dda1d454d095be7b785f930eee94bf3963f043dfee3352bc13061f03a4fa568"
+    },
+    {
+      "path": "fetch-log-extra.json",
+      "bytes": 1049,
+      "sha256": "cc4ba7b787953230033cc56c6ca51ead51cada9eeadcdcb961332045d4d47bc8"
+    },
+    {
+      "path": "fetch-log.json",
+      "bytes": 1361,
+      "sha256": "10b475f09b247d6bf76e2d119a935dc78a236002d28cc61b1cb8e521f9098e55"
+    },
+    {
+      "path": "fetch_extra.py",
+      "bytes": 1756,
+      "sha256": "386df26821fdd9baae59c9dced82bd032e7f0b2a19815faf3d239218c2580dbf"
+    },
+    {
+      "path": "fetch_market.py",
+      "bytes": 1728,
+      "sha256": "5eb2fdfd8b3990aae5d5f622d274d99dda7c2ff5a08feb5d5f09eebc7fdb47d7"
+    },
+    {
+      "path": "manual-review.json",
+      "bytes": 914,
+      "sha256": "6414dcc0ccea51897064516c8d7e905fbf0150a1327c8070e48ffe27f91288b7"
+    },
+    {
+      "path": "market-analysis.json",
+      "bytes": 2038,
+      "sha256": "28103014aef656028395998929bf41aa03a189529ebd3f4fb8d9eca23a094c5d"
+    },
+    {
+      "path": "preservation.json",
+      "bytes": 4666,
+      "sha256": "451a3c1c03b04e3eeebd7f24a399abefc84b64b5643362f4db9c45d2928f57ad"
+    },
+    {
+      "path": "provider-calls.json",
+      "bytes": 1547,
+      "sha256": "ad5540a78c205407b2eac63822f319574f7f3f87dc31030841eded464eec2f8d"
+    },
+    {
+      "path": "regression.json",
+      "bytes": 286,
+      "sha256": "205c0fe0530aa123d12e3859d129dff5c8c713c74ca541ae2e287c035d75388b"
+    },
+    {
+      "path": "report-excerpt.md",
+      "bytes": 40196,
+      "sha256": "0ca1e8ff36f88b473fd055965fa61d5fa79bd117b1f29b0d717efcb64b394552"
+    },
+    {
+      "path": "run-v1/record.json",
+      "bytes": 174998,
+      "sha256": "946de2a19c225e93223404a0308c2e18f012bf174a32c0317ce5679b6e37a721"
+    },
+    {
+      "path": "run-v2/record.json",
+      "bytes": 162583,
+      "sha256": "a3d9d3a14f213d23a272f88a24680429b5edd22bb56a96809229c9c4d47ad5f8"
+    },
+    {
+      "path": "run-v3/record.json",
+      "bytes": 175819,
+      "sha256": "a1b9346debe71f4463efb6e42e1aafacc27172f08e5ad7193ffe085aa96ffdd1"
+    },
+    {
+      "path": "sina.txt",
+      "bytes": 439,
+      "sha256": "2435410d84b253ce4de899b66f1d2034c3aa604a47ee3a6eb638db727408060b"
+    },
+    {
+      "path": "sse-ann.txt",
+      "bytes": 3161,
+      "sha256": "945f565e6d1df919227d4d244d19ac411db2d98e348974cfddf082f9fdb2cc1f"
+    },
+    {
+      "path": "verification.json",
+      "bytes": 3962,
+      "sha256": "fd7637e643286af3d0861ffe3b6c0b1dc8f2e66849daaae1b11293b5cd5a9019"
+    },
+    {
+      "path": "verify_plan.py",
+      "bytes": 10638,
+      "sha256": "168d0f737cc6711a98af3a3f27918375eabd3c19866b57052eed4b91c5616de9"
+    },
+    {
+      "path": "verify_snapshot.py",
+      "bytes": 3186,
+      "sha256": "4572d178fc4d47eaf15aae567b004183dc3df4b95425db1bf0e8493e7f8597fa"
+    },
+    {
+      "path": "yahoo-index.txt",
+      "bytes": 29219,
+      "sha256": "b3c52f5fee1458cd0d5428c26d848043337d03e80610764a6665f9a4782e0345"
+    },
+    {
+      "path": "yahoo-stock.txt",
+      "bytes": 30775,
+      "sha256": "d5600ef994ecaacfc61d3b8497f4c5333be8a330aa627cbf2128076fc0eddc05"
+    }
+  ],
+  "state": "SAVED_DRAFT_AWAITING_HUMAN_REVIEW",
+  "save_verification": "draft-save-verification.json",
+  "research_appendix": "B.txt",
+  "original_ai_verification": "verification.json"
+}

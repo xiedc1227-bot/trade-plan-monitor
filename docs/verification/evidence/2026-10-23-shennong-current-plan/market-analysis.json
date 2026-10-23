@@ -1,0 +1,66 @@
+{
+  "as_of": "2026-10-23",
+  "source": "Yahoo chart daily; stock adjusted-close factors normalized to latest unadjusted close; index raw",
+  "bars": 275,
+  "latest_stock": {
+    "date": "2026-10-23",
+    "open": 29.889999389648438,
+    "high": 30.489999771118164,
+    "low": 29.489999771118164,
+    "close": 30.239999771118164,
+    "volume": 3506650,
+    "raw_close": 30.239999771118164
+  },
+  "latest_index": {
+    "date": "2026-10-23",
+    "open": 3623.56689453125,
+    "high": 3691.398681640625,
+    "low": 3574.271240234375,
+    "close": 3690.475341796875,
+    "volume": 3744683648,
+    "raw_close": 3690.475341796875
+  },
+  "stock": {
+    "MA20": 30.664499759674072,
+    "MA50": 31.799600028991698,
+    "MA60": 31.454500039418537,
+    "MA200": 29.455250053405763,
+    "RSI14": 47.05026097968763,
+    "previous_RSI14": 45.69598543907458,
+    "ATR14": 1.567316450499739,
+    "atr_pct": 5.182924809399843,
+    "MACD_DIF": -0.8102630972222542,
+    "DEA": -0.8232190062740846,
+    "histogram": 0.025911818103660833,
+    "boll_upper": 34.322321169390435,
+    "boll_lower": 27.00667834995771,
+    "boll_width_pct": 23.857042758784203,
+    "prior20_mean_volume": 3754956.5,
+    "volume_ratio": 0.9338723364704757,
+    "return5": 5.292480829053803,
+    "return20": -7.324551697095982
+  },
+  "index": {
+    "I": 3690.475341796875,
+    "M20": 3803.8837768554686,
+    "M60": 3871.567069498698,
+    "M20_5": 3847.739221191406,
+    "L20": 3649.864990234375,
+    "damage": false,
+    "weak": true,
+    "state": "走弱",
+    "return5": -0.6944731403092375,
+    "return20": -4.776769296418893
+  },
+  "relative_strength": false,
+  "latest_cross_check": {
+    "eastmoney_close": "30.24",
+    "turnover_yuan": "105189344.00",
+    "change_pct": "0.80",
+    "sina_close": "30.240",
+    "sina_volume_shares": 3506650,
+    "sina_quote_time": "2026-10-23 15:34:59",
+    "exchange_close_time": "2026-10-23 15:00:00 Asia/Shanghai",
+    "retrieved_time": "2026-10-23 22:05 Asia/Shanghai"
+  }
+}

@@ -1,0 +1,457 @@
+{
+  "id": "daa0387c-26b2-4e5f-8ea1-b4ea142ecedb",
+  "plan_id": "605296-20261023-ALERT01",
+  "version": 1,
+  "symbol": "605296.SH",
+  "plan_hash": "d544f88adf633d658c4539de6909391a4b45a9312393f35874f67057c55e0118",
+  "status": "DRAFT",
+  "can_activate": false,
+  "obsolete_reason": null,
+  "revision": 0,
+  "created_at": "2026-10-23T22:22:13.710505+08:00",
+  "plan_json": "{\"activation\":{\"mode\":\"MANUAL\"},\"alert_rules\":[{\"condition\":{\"comparator\":\"LT\",\"field\":\"close\",\"offset\":0,\"reference\":{\"as_of\":\"2026-10-15\",\"mode\":\"FIXED\",\"source\":\"原报告所载2026-10-15盘中低点26.59元\",\"unit\":\"FEN\",\"value\":\"2659\"},\"type\":\"DAILY_PRICE_COMPARE\"},\"confirmation\":{\"kind\":\"OFFICIAL_DAILY_CLOSE\"},\"kind\":\"RISK_ALERT\",\"rule_id\":\"A1\"}],\"execution_mode\":\"CONDITION_PLAN\",\"execution_policy\":{\"ordinary_conflict\":\"BLOCK_BOTH\",\"risk_priority\":\"SEVERE_THEN_ORDINARY\",\"same_signal\":\"ONE_PLANNED_QUANTITY\"},\"execution_version\":\"condition-plan-v1\",\"levels\":null,\"market\":\"SSE\",\"metadata\":{\"reference_price_fen\":3030,\"report_at\":null},\"monitoring\":{\"comparability_requirement\":\"CURRENT_QUOTE_BASIS\",\"indicator_formula_version\":\"daily-ta-v2\",\"macd_min_observations\":26,\"price_basis\":\"QFQ\",\"source_requirement\":\"ONE_VERIFIED_PROVIDER\"},\"name\":\"云南神农农业产业集团股份有限公司\",\"ordinary_rules\":[],\"plan_id\":\"605296-20261023-ALERT01\",\"position\":{\"allocation_evidence\":null,\"allocation_provenance\":null,\"core_target_qty\":null,\"max_qty\":300,\"tactical_target_qty\":null},\"risk_branches\":[],\"schema_version\":5,\"symbol\":\"605296.SH\",\"trading_rules\":{\"settlement\":\"NEXT_EXCHANGE_SESSION\",\"special_state_restrictions\":\"BLOCK_UNVERIFIED\",\"tick_size_fen\":1},\"version\":1}",
+  "source_text": "计划根字段语义值\nschema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1\nplan_id=605296-20261023-ALERT01 version=1 symbol=605296.SH name=云南神农农业产业集团股份有限公司 market=SSE\nmetadata.report_at=null metadata.reference_price_fen=3030\nactivation.mode=MANUAL levels=null position.max_qty=300\n无普通规则\n无风险分支\nalert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE\nalert_rules[0].condition.reference: mode=FIXED value=\"2659\" unit=FEN as_of=2026-10-15 source=\"原报告所载2026-10-15盘中低点26.59元\"",
+  "review_issues": [],
+  "validation_issues": [],
+  "content_hash": "f7e3b8c06121667b06af89c1cb3375c2e914c60c0e7275d3e7681ebdf4c96eb6",
+  "source_hash": "99153867d727c3440ba7015870fcd54406165fc9ea6869c71822e149428cce33",
+  "review_evidence_hash": "336c732e8343b4511893af06ef636184cbac2cd5326d7f1a6048ebc6e992de7a",
+  "review_revision": 0,
+  "review_id": null,
+  "mapping": null,
+  "required_review_issues": [],
+  "resolved_issue_ids": [],
+  "unresolved_review_issues": [],
+  "execution_readiness": null,
+  "daily_mapping": {
+    "mapping_version": "daily-mapping-v1",
+    "candidate_content_hash": "f7e3b8c06121667b06af89c1cb3375c2e914c60c0e7275d3e7681ebdf4c96eb6",
+    "clauses": [
+      {
+        "clause_id": "clause-0a109063554a993f",
+        "start": 0,
+        "end": 8,
+        "excerpt": "计划根字段语义值",
+        "disposition": "CONTEXT",
+        "paths": [],
+        "reason": "Heading only",
+        "exclusions": [],
+        "remainders": [],
+        "semantic_role": "COMMENTARY"
+      },
+      {
+        "clause_id": "clause-120df09b3d528503",
+        "start": 9,
+        "end": 91,
+        "excerpt": "schema_version=5 execution_mode=CONDITION_PLAN execution_version=condition-plan-v1",
+        "disposition": "POLICY",
+        "paths": [
+          "schema_version",
+          "execution_mode",
+          "execution_version"
+        ],
+        "reason": "Product constants",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-7f4f0225b9db9bf8",
+        "start": 92,
+        "end": 183,
+        "excerpt": "plan_id=605296-20261023-ALERT01 version=1 symbol=605296.SH name=云南神农农业产业集团股份有限公司 market=SSE",
+        "disposition": "POLICY",
+        "paths": [
+          "symbol",
+          "market"
+        ],
+        "reason": "Bind symbol and market; keep plan_id, version and name in draft only.",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-3053f44e0e266d94",
+        "start": 184,
+        "end": 241,
+        "excerpt": "metadata.report_at=null metadata.reference_price_fen=3030",
+        "disposition": "CONTEXT",
+        "paths": [],
+        "reason": "All metadata values remain display-only in draft, never evidence bindings.",
+        "exclusions": [],
+        "remainders": [],
+        "semantic_role": "COMMENTARY"
+      },
+      {
+        "clause_id": "clause-2da59934d20e86f2",
+        "start": 242,
+        "end": 297,
+        "excerpt": "activation.mode=MANUAL levels=null position.max_qty=300",
+        "disposition": "POLICY",
+        "paths": [
+          "activation.mode",
+          "position.max_qty"
+        ],
+        "reason": "levels=null is retained in draft but omitted from paths and bindings.",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-4a10863e0a1a7fb1",
+        "start": 298,
+        "end": 303,
+        "excerpt": "无普通规则",
+        "disposition": "POLICY",
+        "paths": [
+          "ordinary_rules"
+        ],
+        "reason": "Empty ordinary rules",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-25acac9da591ee51",
+        "start": 304,
+        "end": 309,
+        "excerpt": "无风险分支",
+        "disposition": "POLICY",
+        "paths": [
+          "risk_branches"
+        ],
+        "reason": "Empty risk branches",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-c30a22124c8d1046",
+        "start": 310,
+        "end": 491,
+        "excerpt": "alert_rules[0]: kind=RISK_ALERT rule_id=A1 condition.type=DAILY_PRICE_COMPARE condition.field=close condition.offset=0 condition.comparator=LT confirmation.kind=OFFICIAL_DAILY_CLOSE",
+        "disposition": "POLICY",
+        "paths": [
+          "alert_rules[0].kind",
+          "alert_rules[0].rule_id",
+          "alert_rules[0].condition.type",
+          "alert_rules[0].condition.field",
+          "alert_rules[0].condition.offset",
+          "alert_rules[0].condition.comparator",
+          "alert_rules[0].confirmation.kind"
+        ],
+        "reason": "Risk alert rule",
+        "exclusions": [],
+        "remainders": []
+      },
+      {
+        "clause_id": "clause-1b0120dcb1422eee",
+        "start": 492,
+        "end": 612,
+        "excerpt": "alert_rules[0].condition.reference: mode=FIXED value=\"2659\" unit=FEN as_of=2026-10-15 source=\"原报告所载2026-10-15盘中低点26.59元\"",
+        "disposition": "POLICY",
+        "paths": [
+          "alert_rules[0].condition.reference.mode",
+          "alert_rules[0].condition.reference.value",
+          "alert_rules[0].condition.reference.unit",
+          "alert_rules[0].condition.reference.as_of",
+          "alert_rules[0].condition.reference.source"
+        ],
+        "reason": "Fixed reference",
+        "exclusions": [],
+        "remainders": []
+      }
+    ],
+    "bindings": [
+      {
+        "path": "schema_version",
+        "value": 5,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_mode",
+        "value": "CONDITION_PLAN",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_version",
+        "value": "condition-plan-v1",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "symbol",
+        "value": "605296.SH",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-7f4f0225b9db9bf8"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "market",
+        "value": "SSE",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-7f4f0225b9db9bf8"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "activation.mode",
+        "value": "MANUAL",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-2da59934d20e86f2"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "position.max_qty",
+        "value": 300,
+        "origin": "SOURCE",
+        "unit": "SHARES",
+        "clause_ids": [
+          "clause-2da59934d20e86f2"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.settlement",
+        "value": "NEXT_EXCHANGE_SESSION",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.tick_size_fen",
+        "value": 1,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "trading_rules.special_state_restrictions",
+        "value": "BLOCK_UNVERIFIED",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.indicator_formula_version",
+        "value": "daily-ta-v2",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.price_basis",
+        "value": "QFQ",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.source_requirement",
+        "value": "ONE_VERIFIED_PROVIDER",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.comparability_requirement",
+        "value": "CURRENT_QUOTE_BASIS",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "monitoring.macd_min_observations",
+        "value": 26,
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "JSON",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "ordinary_rules",
+        "value": [],
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-4a10863e0a1a7fb1"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "risk_branches",
+        "value": [],
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-25acac9da591ee51"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_policy.same_signal",
+        "value": "ONE_PLANNED_QUANTITY",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_policy.risk_priority",
+        "value": "SEVERE_THEN_ORDINARY",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "execution_policy.ordinary_conflict",
+        "value": "BLOCK_BOTH",
+        "origin": "PRODUCT_CONTRACT",
+        "unit": "TEXT",
+        "clause_ids": [],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].kind",
+        "value": "RISK_ALERT",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-c30a22124c8d1046"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].rule_id",
+        "value": "A1",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-c30a22124c8d1046"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.type",
+        "value": "DAILY_PRICE_COMPARE",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-c30a22124c8d1046"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.field",
+        "value": "close",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-c30a22124c8d1046"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.offset",
+        "value": 0,
+        "origin": "SOURCE",
+        "unit": "JSON",
+        "clause_ids": [
+          "clause-c30a22124c8d1046"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.comparator",
+        "value": "LT",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-c30a22124c8d1046"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].confirmation.kind",
+        "value": "OFFICIAL_DAILY_CLOSE",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-c30a22124c8d1046"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.mode",
+        "value": "FIXED",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-1b0120dcb1422eee"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.value",
+        "value": "2659",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-1b0120dcb1422eee"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.unit",
+        "value": "FEN",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-1b0120dcb1422eee"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.as_of",
+        "value": "2026-10-15",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-1b0120dcb1422eee"
+        ],
+        "supplement_id": null
+      },
+      {
+        "path": "alert_rules[0].condition.reference.source",
+        "value": "原报告所载2026-10-15盘中低点26.59元",
+        "origin": "SOURCE",
+        "unit": "TEXT",
+        "clause_ids": [
+          "clause-1b0120dcb1422eee"
+        ],
+        "supplement_id": null
+      }
+    ],
+    "supplements": []
+  },
+  "daily_issues": []
+}
