@@ -1,0 +1,633 @@
+{
+  "decision": "P1_NO_GO",
+  "cpu": {
+    "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+    "attempts": [
+      {
+        "round": 1,
+        "variant": "original",
+        "wall": 2.484377000015229,
+        "cpu": 2.40625,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "iterative",
+        "wall": 5.359849100001156,
+        "cpu": 5.34375,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c64",
+        "wall": 3.255060799885541,
+        "cpu": 3.25,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c256",
+        "wall": 2.928946499945596,
+        "cpu": 2.8125,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c256",
+        "wall": 3.029464300023392,
+        "cpu": 2.984375,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c64",
+        "wall": 3.2490140001755208,
+        "cpu": 3.25,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "iterative",
+        "wall": 5.15015079989098,
+        "cpu": 5.09375,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "original",
+        "wall": 2.4028873001225293,
+        "cpu": 2.40625,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "original",
+        "wall": 2.415555100189522,
+        "cpu": 2.21875,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "iterative",
+        "wall": 5.159315799828619,
+        "cpu": 5.15625,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c64",
+        "wall": 3.26894410001114,
+        "cpu": 3.234375,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c256",
+        "wall": 2.9441714000422508,
+        "cpu": 2.953125,
+        "equal": true
+      }
+    ],
+    "memory": [],
+    "admissions": [],
+    "medians": {
+      "original": {
+        "wall": 2.415555100189522,
+        "cpu": 2.40625
+      },
+      "iterative": {
+        "wall": 5.159315799828619,
+        "cpu": 5.15625
+      },
+      "c64": {
+        "wall": 3.255060799885541,
+        "cpu": 3.25
+      },
+      "c256": {
+        "wall": 2.9441714000422508,
+        "cpu": 2.953125
+      }
+    },
+    "limits": "3 diagnostic rounds; memory is one traced full-validator pass per shape/variant, excludes prebuilt raw and expected output and untracked native allocations. No production integration or native-bound claim."
+  },
+  "memoryAndAdmission": {
+    "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+    "attempts": [
+      {
+        "round": 1,
+        "variant": "original",
+        "wall": 2.001652200007811,
+        "cpu": 1.96875,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "iterative",
+        "wall": 4.318010600050911,
+        "cpu": 4.296875,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c64",
+        "wall": 2.850907600019127,
+        "cpu": 2.84375,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c256",
+        "wall": 2.5810246001929045,
+        "cpu": 2.578125,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c256",
+        "wall": 2.6384926000609994,
+        "cpu": 2.609375,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c64",
+        "wall": 2.8367016999982297,
+        "cpu": 2.75,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "iterative",
+        "wall": 4.5862879999913275,
+        "cpu": 4.546875,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "original",
+        "wall": 2.094895000103861,
+        "cpu": 2.078125,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "original",
+        "wall": 2.461582599906251,
+        "cpu": 2.4375,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "iterative",
+        "wall": 5.3824114999733865,
+        "cpu": 5.328125,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c64",
+        "wall": 3.408546900143847,
+        "cpu": 3.40625,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c256",
+        "wall": 3.1438913999591023,
+        "cpu": 3.046875,
+        "equal": true
+      }
+    ],
+    "memory": [
+      {
+        "shape": "decimal",
+        "variant": "original",
+        "jsonBytes": 16472833,
+        "live": 7905766,
+        "peak": 156406582,
+        "drained": 23264,
+        "equal": true
+      },
+      {
+        "shape": "decimal",
+        "variant": "c256",
+        "jsonBytes": 16472833,
+        "live": 7896818,
+        "peak": 25039755,
+        "drained": 13634,
+        "equal": true
+      },
+      {
+        "shape": "dense",
+        "variant": "original",
+        "jsonBytes": 12120814,
+        "live": 76967098,
+        "peak": 206397959,
+        "drained": 24614,
+        "equal": true
+      },
+      {
+        "shape": "dense",
+        "variant": "c256",
+        "jsonBytes": 12120814,
+        "live": 76968100,
+        "peak": 144183507,
+        "drained": 24784,
+        "equal": true
+      }
+    ],
+    "admissions": [
+      {
+        "shape": "decimal",
+        "raw": 16478553,
+        "work": 197697036,
+        "rows": 1,
+        "status": "availability_failed",
+        "scan": {
+          "metadataQueries": 1,
+          "payloadQueries": 0,
+          "rows": 0,
+          "actualRawPeak": 0
+        },
+        "ledger": {
+          "used": 0,
+          "peak": 131072,
+          "categories": {
+            "metadata": 0
+          },
+          "peaks": {
+            "metadata": 131072
+          },
+          "waiters": 0,
+          "waitSeconds": 6.600050255656242e-06
+        }
+      },
+      {
+        "shape": "dense",
+        "raw": 12126534,
+        "work": 145472808,
+        "rows": 1,
+        "status": "availability_failed",
+        "scan": {
+          "metadataQueries": 1,
+          "payloadQueries": 0,
+          "rows": 0,
+          "actualRawPeak": 0
+        },
+        "ledger": {
+          "used": 0,
+          "peak": 131072,
+          "categories": {
+            "metadata": 0
+          },
+          "peaks": {
+            "metadata": 131072
+          },
+          "waiters": 0,
+          "waitSeconds": 6.8999361246824265e-06
+        }
+      }
+    ],
+    "medians": {
+      "original": {
+        "wall": 2.094895000103861,
+        "cpu": 2.078125
+      },
+      "iterative": {
+        "wall": 4.5862879999913275,
+        "cpu": 4.546875
+      },
+      "c64": {
+        "wall": 2.850907600019127,
+        "cpu": 2.84375
+      },
+      "c256": {
+        "wall": 2.6384926000609994,
+        "cpu": 2.609375
+      }
+    },
+    "limits": "3 diagnostic rounds; memory is one traced full-validator pass per shape/variant, excludes prebuilt raw and expected output and untracked native allocations. No production integration or native-bound claim."
+  },
+  "earlierDiagnostic": {
+    "inputSha256": "5b0a4e2af54280752420b5394facae69a5c6ea2de02106ec8a1d791db0f0d8a2",
+    "attempts": [
+      {
+        "round": 1,
+        "variant": "original",
+        "wall": 2.501242200145498,
+        "cpu": 2.421875,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "iterative",
+        "wall": 4.722584899980575,
+        "cpu": 4.6875,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c64",
+        "wall": 3.364528500009328,
+        "cpu": 3.28125,
+        "equal": true
+      },
+      {
+        "round": 1,
+        "variant": "c256",
+        "wall": 2.845166499959305,
+        "cpu": 2.78125,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c256",
+        "wall": 2.740548999980092,
+        "cpu": 2.71875,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "c64",
+        "wall": 3.404490499990061,
+        "cpu": 3.34375,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "iterative",
+        "wall": 4.741722999839112,
+        "cpu": 4.671875,
+        "equal": true
+      },
+      {
+        "round": 2,
+        "variant": "original",
+        "wall": 2.1912702000699937,
+        "cpu": 2.171875,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "original",
+        "wall": 2.259212600067258,
+        "cpu": 2.234375,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "iterative",
+        "wall": 4.582712299888954,
+        "cpu": 4.484375,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c64",
+        "wall": 3.4295207001268864,
+        "cpu": 3.296875,
+        "equal": true
+      },
+      {
+        "round": 3,
+        "variant": "c256",
+        "wall": 2.7000775998458266,
+        "cpu": 2.578125,
+        "equal": true
+      }
+    ],
+    "memory": [
+      {
+        "shape": "decimal",
+        "variant": "original",
+        "jsonBytes": 16472833,
+        "live": 7902516,
+        "peak": 156403182,
+        "drained": 19914,
+        "equal": true
+      },
+      {
+        "shape": "decimal",
+        "variant": "c256",
+        "jsonBytes": 16472833,
+        "live": 7901468,
+        "peak": 25044405,
+        "drained": 18184,
+        "equal": true
+      },
+      {
+        "shape": "dense",
+        "variant": "original",
+        "jsonBytes": 12120814,
+        "live": 76967448,
+        "peak": 206398009,
+        "drained": 24964,
+        "equal": true
+      },
+      {
+        "shape": "dense",
+        "variant": "c256",
+        "jsonBytes": 12120814,
+        "live": 76968250,
+        "peak": 144183457,
+        "drained": 24934,
+        "equal": true
+      }
+    ],
+    "admissions": [
+      {
+        "shape": "decimal",
+        "raw": 16478553,
+        "work": 197697036,
+        "rows": 1,
+        "status": "availability_failed",
+        "scan": {
+          "metadataQueries": 1,
+          "payloadQueries": 0,
+          "rows": 0,
+          "actualRawPeak": 0
+        },
+        "ledger": {
+          "used": 0,
+          "peak": 131072,
+          "categories": {
+            "metadata": 0
+          },
+          "peaks": {
+            "metadata": 131072
+          },
+          "waiters": 0,
+          "waitSeconds": 6.09993003308773e-06
+        }
+      },
+      {
+        "shape": "dense",
+        "raw": 12126534,
+        "work": 145472808,
+        "rows": 1,
+        "status": "availability_failed",
+        "scan": {
+          "metadataQueries": 1,
+          "payloadQueries": 0,
+          "rows": 0,
+          "actualRawPeak": 0
+        },
+        "ledger": {
+          "used": 0,
+          "peak": 131072,
+          "categories": {
+            "metadata": 0
+          },
+          "peaks": {
+            "metadata": 131072
+          },
+          "waiters": 0,
+          "waitSeconds": 7.0999376475811005e-06
+        }
+      }
+    ],
+    "medians": {
+      "original": {
+        "wall": 2.259212600067258,
+        "cpu": 2.234375
+      },
+      "iterative": {
+        "wall": 4.722584899980575,
+        "cpu": 4.671875
+      },
+      "c64": {
+        "wall": 3.404490499990061,
+        "cpu": 3.296875
+      },
+      "c256": {
+        "wall": 2.740548999980092,
+        "cpu": 2.71875
+      }
+    },
+    "limits": "3 diagnostic rounds; memory is one traced full-validator pass per shape/variant, excludes prebuilt raw and expected output and untracked native allocations. No production integration or native-bound claim."
+  },
+  "parserLifetime": {
+    "attempts": [
+      {
+        "shape": "long_decimal",
+        "variant": "text",
+        "count": 480,
+        "digits": 8500,
+        "jsonBytes": 16472833,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 7837294,
+        "tracedPeak": 98837258,
+        "tracedAfter": 32010,
+        "tracedDrained": 22994,
+        "wallWithTracing": 0.18299890006892383
+      },
+      {
+        "shape": "long_decimal",
+        "variant": "bytes",
+        "count": 480,
+        "digits": 8500,
+        "jsonBytes": 16472833,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 7831036,
+        "tracedPeak": 7901071,
+        "tracedAfter": 25712,
+        "tracedDrained": 16720,
+        "wallWithTracing": 0.15694500016979873
+      },
+      {
+        "shape": "long_decimal",
+        "variant": "bytes_invalid_ohlc",
+        "count": 480,
+        "digits": 8500,
+        "jsonBytes": 16472833,
+        "status": "ValidationError",
+        "errorCount": 480,
+        "tracedLive": 25102598,
+        "tracedPeak": 25102598,
+        "tracedAfter": 25102598,
+        "tracedDrained": 17790,
+        "wallWithTracing": 0.1730275999289006
+      },
+      {
+        "shape": "dense_bars",
+        "variant": "text",
+        "count": 40000,
+        "digits": 1,
+        "jsonBytes": 12120814,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 76833340,
+        "tracedPeak": 113196041,
+        "tracedAfter": 34536,
+        "tracedDrained": 25544,
+        "wallWithTracing": 1.2737402999773622
+      },
+      {
+        "shape": "dense_bars",
+        "variant": "bytes",
+        "count": 40000,
+        "digits": 1,
+        "jsonBytes": 12120814,
+        "status": "accepted",
+        "errorCount": 0,
+        "tracedLive": 76833332,
+        "tracedPeak": 76833548,
+        "tracedAfter": 34536,
+        "tracedDrained": 25544,
+        "wallWithTracing": 1.3259955998510122
+      },
+      {
+        "shape": "dense_bars",
+        "variant": "bytes_invalid_ohlc",
+        "count": 40000,
+        "digits": 1,
+        "jsonBytes": 12120814,
+        "status": "ValidationError",
+        "errorCount": 40000,
+        "tracedLive": 156789880,
+        "tracedPeak": 156789880,
+        "tracedAfter": 156789904,
+        "tracedDrained": 25576,
+        "wallWithTracing": 1.7615902000106871
+      }
+    ],
+    "limits": "One diagnostic per shape/path; raw input and original acceptance prebuilt/excluded. Tracemalloc excludes untracked native allocations; timings under tracing not performance acceptance. Error paths deliberately retain ValidationError until explicit release."
+  },
+  "measurementSchedule": "Use cpu for sequential final CPU comparison. CPU timings inside memoryAndAdmission overlapped regression tests and are excluded from timing conclusions. earlierDiagnostic used the earlier per-call lease. Final memory tracing remains a Python allocation diagnostic, not native or process peak evidence.",
+  "parserProbeSource": "\"\"\"Read-only diagnostic: not an admission implementation or native-bound proof.\"\"\"\nimport gc\nimport hashlib\nimport json\nimport sqlite3\nimport sys\nimport tracemalloc\nfrom datetime import timezone, timedelta\nfrom pathlib import Path\nfrom statistics import median\nfrom time import perf_counter, thread_time\n\nROOT = Path(__file__).resolve().parents[2]\nsys.path.insert(0, str(ROOT))\nfrom scripts.experiments.global_evidence_large import large_candidate\nfrom scripts.experiments import global_evidence_large as fixture_module\nfrom scripts.experiments.global_evidence_scan import COLUMNS, FROM, ORDER\nfrom scripts.experiments import validator_scan as candidate\nfrom trade_plan_monitor.market_index import canonical\nfrom trade_plan_monitor.market_index.models import MarketIndexSnapshot\nfrom trade_plan_monitor.runtime.market_indexes import ALWAYS_ON_INDEX_CODES as CODES\nfrom trade_plan_monitor.state.index_evidence import HEAD_FIELDS, RawIndexCandidate\nfrom trade_plan_monitor.state.projections import _latest_index_records\n\nOUT = Path(__file__).parent\nOPTIONS = dict(ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(',', ':'))\n\ndef c_whole(value):\n    yield json.dumps(value, **OPTIONS).encode('utf8')\n\ndef sized(value, sizes):\n    if type(value) is str:\n        return 2 + 6 * len(value)\n    if value is None or type(value) is bool:\n        return 5\n    if type(value) is int:\n        assert -(2**63) <= value < 2**63\n        return 20\n    if type(value) is list:\n        n = 2 + len(value) + sum(sized(v, sizes) for v in value)\n    elif type(value) is dict:\n        n = 2 + 2 * len(value) + sum(2 + 6 * len(k) + sized(v, sizes) for k,v in value.items())\n    else:\n        raise TypeError(type(value))\n    sizes[id(value)] = n\n    return n\n\ndef c_subtrees(value, target=256*1024):\n    # Generic full planning adds CPU and unbounded descriptor storage: diagnostic only.\n    sizes = {}\n    sized(value, sizes)\n    def emit(v):\n        bound = sizes.get(id(v)) if type(v) in (dict,list) else sized(v, sizes)\n        if bound <= target:\n            yield from c_whole(v)\n        elif type(v) is dict:\n            yield b'{'\n            for i,k in enumerate(sorted(v)):\n                if i: yield b','\n                yield from c_whole(k)\n                yield b':'\n                yield from emit(v[k])\n            yield b'}'\n        elif type(v) is list:\n            yield b'['\n            group, budget, first = [], 2, True\n            for item in v:\n                item_bound = sizes.get(id(item)) if type(item) in (dict,list) else sized(item,sizes)\n                if group and budget + item_bound + 1 > target:\n                    if not first: yield b','\n                    yield json.dumps(group, **OPTIONS)[1:-1].encode('utf8')\n                    group, budget, first = [], 2, False\n                if item_bound + 2 > target:\n                    if not first: yield b','\n                    yield from emit(item)\n                    first = False\n                else:\n                    group.append(item)\n                    budget += item_bound + 1\n            if group:\n                if not first: yield b','\n                yield json.dumps(group, **OPTIONS)[1:-1].encode('utf8')\n            yield b']'\n        else:\n            raise ValueError('scalar cannot fit diagnostic envelope')\n    yield from emit(value)\n\ndef frozen_rows():\n    path = ROOT / '.pytest_cache/active-monitor-cpu-implementation/monitor.sqlite3'\n    fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()\n    con = sqlite3.connect(path.resolve().as_uri()+'?mode=ro', uri=True)\n    con.execute('pragma query_only=on')\n    con.execute('begin')\n    mapping=con.execute('select mapping_version from market_index_snapshot_head limit 1').fetchone()[0]\n    query='select '+','.join(COLUMNS)+FROM+' where h.mapping_version=? and h.index_code in ('+','.join('?' for _ in CODES)+')'+ORDER\n    rows=tuple(RawIndexCandidate.from_values(tuple(v[:len(HEAD_FIELDS)]),tuple(v[len(HEAD_FIELDS):])) for v in con.execute(query,(mapping,*(c.value for c in CODES))))\n    con.close()\n    assert hashlib.sha256(path.read_bytes()).hexdigest()==fingerprint\n    return rows, fingerprint\n\ndef cpu():\n    rows, fingerprint = frozen_rows()\n    expected = _latest_index_records(iter(rows), CODES)\n    original_pieces = candidate.pieces\n    variants = ('original','iterencode','c_whole_unbounded','c_subtrees_64k','c_subtrees_256k')\n    data=[]\n    for round_ in range(3):\n        for name in (variants if round_%2==0 else variants[::-1]):\n            gc.collect()\n            candidate.pieces = {'iterencode':original_pieces,'c_whole_unbounded':c_whole,'c_subtrees_64k':lambda v:c_subtrees(v,64*1024),'c_subtrees_256k':c_subtrees}.get(name,original_pieces)\n            start, used=perf_counter(),thread_time()\n            result=(_latest_index_records if name=='original' else candidate.latest)(iter(rows),CODES)\n            wall,cpu_used=perf_counter()-start,thread_time()-used\n            assert result==expected\n            data.append(dict(round=round_+1,variant=name,wall=wall,cpu=cpu_used,equal=True))\n            del result\n    candidate.pieces=original_pieces\n    normalized=canonical.canonical_value(MarketIndexSnapshot.model_validate_json(rows[0].payload[9]))\n    tokens=list(json.JSONEncoder(**OPTIONS).iterencode(normalized))\n    return dict(inputSha256=fingerprint,rows=len(rows),attempts=data,\n      median={name:{k:median(r[k] for r in data if r['variant']==name) for k in ('wall','cpu')} for name in variants},\n      firstRow=dict(jsonBytes=len(rows[0].payload[9]),tokens=len(tokens),maxTokenChars=max(map(len,tokens))),\n      limits='Three alternating rounds; full validator output equality on frozen input only; generic planner and encoder native allocations NOT bounded. No full differential/tamper/owner acceptance.')\n\ndef parser():\n    data=[]\n    for label,count,digits in [('long_decimal',480,8500),('dense_bars',40000,1)]:\n        # Historical Shanghai DST cannot satisfy this model's fixed +08:00 contract.\n        original_zone = fixture_module.ZoneInfo\n        try:\n            if label == 'dense_bars':\n                fixture_module.ZoneInfo = lambda _: timezone(timedelta(hours=8))\n            row=large_candidate(count=count,digits=digits)\n        finally:\n            fixture_module.ZoneInfo = original_zone\n        raw=row.payload[9]\n        assert len(raw)<=16*1024*1024\n        # Establish full original acceptance outside traced scopes, then discard it.\n        accepted=_latest_index_records(iter((row,)),CODES)\n        assert accepted\n        del accepted\n        for name in ('text','bytes','bytes_invalid_ohlc'):\n            source=raw if name!='bytes_invalid_ohlc' else raw.replace(b'\"high_points\":\"1.',b'\"high_points\":\"0.')\n            gc.collect()\n            tracemalloc.start()\n            start=perf_counter()\n            error=None\n            try:\n                parsed=MarketIndexSnapshot.model_validate_json(source.decode('utf8') if name=='text' else source)\n                kept,peak=tracemalloc.get_traced_memory()\n                status='accepted'\n                del parsed\n            except Exception as e:\n                error=e\n                kept,peak=tracemalloc.get_traced_memory()\n                status=type(e).__name__\n            elapsed=perf_counter()-start\n            after=tracemalloc.get_traced_memory()[0]\n            # Retention of the real error object is intentional and measured.\n            errors=error.error_count() if error is not None and hasattr(error,'error_count') else 0\n            error=None\n            gc.collect()\n            drained=tracemalloc.get_traced_memory()[0]\n            tracemalloc.stop()\n            data.append(dict(shape=label,variant=name,count=count,digits=digits,jsonBytes=len(raw),\n                             status=status,errorCount=errors,tracedLive=kept,tracedPeak=peak,\n                             tracedAfter=after,tracedDrained=drained,wallWithTracing=elapsed))\n        del row,raw,source\n    return dict(attempts=data,limits='One diagnostic per shape/path; raw input and original acceptance prebuilt/excluded. Tracemalloc excludes untracked native allocations; timings under tracing not performance acceptance. Error paths deliberately retain ValidationError until explicit release.')\n\nif __name__=='__main__':\n    mode=sys.argv[1]\n    report=cpu() if mode=='cpu' else parser()\n    (OUT/(mode+'.json')).write_text(json.dumps(report,indent=2),encoding='utf8')\n    print(json.dumps(report.get('median',report),indent=2))\n",
+  "sourceSha256": {
+    "scripts/experiments/bounded_c_producer.py": "dc4a80bb3e7f96c59372fabff39adeedc1918b99e40efc68c6a8a589704ed541",
+    "scripts/experiments/c_validator.py": "342a0d0ee74371e1272735aa81945482bd00fd31f1cd2c896cea05e334d5c975",
+    "scripts/experiments/c_benchmark.py": "c5908d20e4252ea505247e41aad1fb53c70e648a4e5b7817c983f4b1ff2fd20f",
+    "tests/integration/test_bounded_c_producer.py": "3b7e7e5075279acd4244a30a6bc4b6e31bbdee0d166ecaa938ea8440ea085551"
+  },
+  "preservedTrackedFiles": 1853,
+  "tests": "........................................................................ [ 35%]\n........................................................................ [ 70%]\n............................................................             [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n204 passed, 1 warning in 63.88s (0:01:03)\n",
+  "staticChecks": "Ruff check and format pass",
+  "postReviewStopTests": "................................                                         [100%]\n32 passed in 2.24s\n",
+  "timingSourceNote": "Final timing preceded an explicit storage-stop check between encoder units; normal measurements never trigger it. Final hashes include the correction; targeted contracts rerun.",
+  "hardFailures": [
+    "Supported decimal and dense rows rejected by SQL preallocation; no payload execute.",
+    "Native writer/parser/driver bound remains unproven. Encoder reservation multiplier is diagnostic, not a proof.",
+    "C producer CPU remains above original regression ceiling."
+  ],
+  "scope": "No production import/registration, authority policy, database migration, live service restart or parallel AI extraction/daily-inventory edits. No commit/push. Not a production or browser acceptance run.",
+  "preReviewTestSha256": "ebcadb79d46b013109ad3d2b52d2d8442a4f77d93ed333fccbf4301bf83106f8",
+  "submissionReview": {
+    "regression": "........................................................................ [ 35%]\n........................................................................ [ 70%]\n.............................................................            [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\Workspace\\Projects\\ai-quant-pilot\\trade-plan-monitor\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n205 passed, 1 warning in 61.12s (0:01:01)\n",
+    "finalProducer": "................................                                         [100%]\n32 passed in 2.17s\n",
+    "mutations": [
+      {
+        "field": "bar_set_hash",
+        "mutationKilled": true
+      },
+      {
+        "field": "request_set_hash",
+        "mutationKilled": true
+      }
+    ],
+    "scope": "14 explicit P0 files; no production, AI extraction or daily-inventory changes; P1 remains NO-GO."
+  }
+}
