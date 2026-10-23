@@ -1,0 +1,22 @@
+{
+  "run": "run-v1",
+  "all_four_appendices_read": true,
+  "costs_preserved": [
+    "无",
+    "80.00元/股",
+    "未知",
+    "35元／股"
+  ],
+  "no_fee_pnl_or_monetary_cost_calculations": true,
+  "cost_not_in_a": true,
+  "normal_samples_fully_passed": true,
+  "negative_samples_blocked": true,
+  "no_deleted_input_requests": true,
+  "remaining_prose_deviations": [
+    "Hypothetical future-strategy input suggestions",
+    "Generic missing parameters/deadlines in unsupported appendix",
+    "Missing-cap appendix expands hypothetical future source with unverified threshold provenance"
+  ],
+  "responses_repaired": false,
+  "accounting_feature_tested": false
+}

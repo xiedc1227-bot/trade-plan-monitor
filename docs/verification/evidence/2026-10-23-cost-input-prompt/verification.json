@@ -1,0 +1,22 @@
+{
+  "final_run": "run-v1",
+  "pipeline_passed": true,
+  "runs": [
+    {
+      "run": "run-v1",
+      "pipeline_passed": true,
+      "prompt_sha256": "1ed6998161dafd5fb1c0781e8fbfe3f3e29b472bd9fbd9992884e43c15c7d094"
+    }
+  ],
+  "generation_calls": 4,
+  "extraction_calls": 2,
+  "provider_attempts": 6,
+  "response_repaired": false,
+  "validation_relaxed": false,
+  "configuration_changed": false,
+  "plan_saved": false,
+  "review_confirmed": false,
+  "plan_activated": false,
+  "inventory_changed": false,
+  "harness_change": "restore original sample cost phrases; add B cost preservation and A cost-exclusion checks; existing extraction checks unchanged"
+}

@@ -532,6 +532,8 @@ Copy the complete prompt below and supply this symbol's inputs. Only section A i
 
 2026-10-23 structural simplification: the prompt now has only necessary inputs, trading principles/market effects, A format and an on-demand B appendix. Duplicate constraints are consolidated and the six-section appendix requirement is removed. Original trading/risk/index/position rules and both A examples remain. The Chinese prompt shrank from 10452 to 7014 characters. Real verification of the same four cases fully extracted one/two reminders without trading/risk exits; missing limits and unsupported index linkage correctly blocked. Some future-strategy expansion remains in B; see [verification](docs/verification/2026-10-23-structured-prompt.md). [Real AI verification](docs/operations/trade-prompt-ai-verification.md) is a separate procedure outside the copyable prompt.
 
+A subsequent user-requested revision restores optional per-share holding cost and its unchanged value in B; software still calculates fees and PnL. Real deepseek-flash verification of the same four cases retained all costs in B without fee/PnL calculations, fully accepted normal sources and correctly blocked missing limits and unsupported conditions. Some unnecessary future-strategy expansion remains in the appendices. See [cost-input verification](docs/verification/2026-10-23-cost-input-prompt.md).
+
 <!-- generic-trade-plan-prompt:start -->
 ````text
 You are an A-share medium-term swing-trading coach and risk adviser. Use the stock report, the inputs below and latest valid market data to produce A (compact extraction source) and B (human research appendix).
@@ -540,11 +542,12 @@ You are an A-share medium-term swing-trading coach and risk adviser. Use the sto
 
 Supply the stock report and:
 - Current actual holdings: [shares; 0 if flat]
+- Holding cost: [average cost per share, yuan/share; none if flat, unknown if unavailable]
 - Maximum planned holdings: [shares]
 
 Identify the stock from the report; clarify identity conflicts only. Priority: explicit current input > latest explicit same-symbol conversation record > report. Do not inherit another stock's values, dates or strategy parameters. Never guess unknowns; unknown holdings are not zero, and an unknown limit blocks A because position.max_qty is required.
 
-Define conditions, prices, quantities and timing; leave fee/PnL calculations to software. Do not request holding cost, fee parameters, cash balance, order/fill status, simulation inventory, reminder count, output mode or technical identity/version. Proposed CORE/TACTICAL allocation is not actual inventory; verify existing allocation only when a trade rule depends on it.
+Define conditions, prices, quantities and timing; leave fee/PnL calculations to software. Holding cost is an optional account fact: preserve the supplied value in B for software accounting reference, without adding undefined fields to A. Unknown cost is not zero and does not block plans or reminders independent of cost. Do not request fee parameters, cash balance, order/fill status, simulation inventory, reminder count, output mode or technical identity/version. Proposed CORE/TACTICAL allocation is not actual inventory; verify existing allocation only when a trade rule depends on it.
 
 Select a trade draft or independent reminders from user intent. Reminders need explicit authority and valid conditions; derive count from independent conditions without padding. They contain no BUY, SELL, risk-exit branches or quantity/liquidation obligations. Distinguish strategy proposals from confirmed facts.
 
