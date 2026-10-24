@@ -24,6 +24,8 @@
 
 ## 开发边界
 
+已批准并正在实施的扩展，并非当前能力：[market-linkage-p1](../specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) 为 `confirmation-selection`、`quantity-policy` 和 `market-linkage-workflow` 增加 `WEAK_MINIMUM`、`BROKEN_STRONG` 的逐次人工授权。[有序任务](../../tasks/market-linkage-p1.zh-CN.md)已在 2026-10-24 获得用户批准及明确实施授权。P0 仍是已实现的能力边界。
+
 领域逻辑放在 `src/trade_plan_monitor`；HTTP 适配与 Vue 展示后端权威结果。行情 I/O 位于短 SQLite 事务之外。当前模拟库存、历史真实持仓记录及回测行情/结果库保持隔离。冻结 Schema 1–4 字节/哈希仅被读取或重放，不静默转换成活动 Schema 5/6 计划。既有 Schema 5 字节/哈希保持不变。
 
 按依赖顺序实现：契约与审核 → 归一化证据 → 纯求值 → 原子持久化 → 自有运行时与出站箱 → 投影/API → Vue。遵循相应现行规格与确定性测试。真实供应商调用、用户数据库迁移及部署仍需单独授权；本地验收不能证明实时可用性。

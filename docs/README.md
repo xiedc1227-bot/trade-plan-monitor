@@ -2,6 +2,8 @@
 
 Daily market linkage: [capability and operations](operations/market-linkage-p0.md), [specifications](specifications/monitoring/SPEC-market-linkage-p0.md), [verification](verification/2026-10-24-market-linkage-p0.md).
 
+P1 human-reviewed buy exceptions are approved and under implementation: [specification and six review decisions](specifications/monitoring/SPEC-market-linkage-p1.md) · [implementation and acceptance tasks](../tasks/market-linkage-p1.md). Existing Schema 6 exception routes remain blocked; staged acceptance will establish new opt-in support.
+
 ## Start here
 
 English documents are canonical implementation inputs; matching `.zh-CN.md` files are equivalent Chinese review copies. Use the [project README](../README.md) for installation and routine checks, the [capability map](architecture/CAPABILITY-MAP.md) for module boundaries, and [One Trade Plan Workflow](specifications/monitoring/SPEC-unified-plan.md) for current product behavior.

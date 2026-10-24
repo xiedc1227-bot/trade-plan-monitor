@@ -24,6 +24,8 @@ A local single-user application binds to `127.0.0.1` and monitors at most 10 A-s
 
 ## Development boundaries
 
+Approved extension under implementation, not current capability: [market-linkage-p1](../specifications/monitoring/SPEC-market-linkage-p1.md) extends `confirmation-selection`, `quantity-policy` and `market-linkage-workflow` with per-occurrence human authorization for `WEAK_MINIMUM` and `BROKEN_STRONG`. Its [ordered tasks](../../tasks/market-linkage-p1.md) were approved with explicit implementation authorization on 2026-10-24. P0 remains the implemented boundary.
+
 Domain logic stays in `src/trade_plan_monitor`; HTTP adapters and Vue render backend authority. Market I/O occurs outside short SQLite transactions. Current simulation inventory, historical actual-position records and backtest market/result stores remain isolated. Frozen Schema 1–4 bytes/hashes are read or replayed, never silently converted into an active Schema 5/6 plan. Existing Schema 5 bytes/hashes remain unchanged.
 
 Implement in dependency order: contract and review → normalized evidence → pure evaluation → atomic persistence → owned runtime and outbox → projections/API → Vue. Follow the relevant maintained specifications and deterministic tests. Real provider calls, user-database migration and deployment remain separately authorized operations; local acceptance does not prove live readiness.

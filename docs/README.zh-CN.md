@@ -2,6 +2,8 @@
 
 日线大盘联动：[能力与操作](operations/market-linkage-p0.zh-CN.md)、[规格](specifications/monitoring/SPEC-market-linkage-p0.zh-CN.md)、[验收](verification/2026-10-24-market-linkage-p0.zh-CN.md)。
 
+P1 人工复评买入例外已批准，正在实施：[规格及六项审核决策](specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) · [实施与验收任务](../tasks/market-linkage-p1.zh-CN.md)。既有 Schema 6 例外路径继续阻断；新增主动启用能力须逐阶段验收。
+
 ## 从这里开始
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
