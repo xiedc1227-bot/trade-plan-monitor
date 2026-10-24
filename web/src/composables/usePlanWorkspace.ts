@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, shallowRef } from "vue";
 import type { ActivePlanView, ConfiguredAIRuntimeView, DailyMapping, DailyReviewPreview, DailySupplement,
   PlanExtractionCommand, PlanVersionView, PlanVersionPage, PlanVersionSummary, DailyReviewPreviewCommand, DailySupplementCommand } from "../api/generated";
 import { createConditionPlanApi, isConditionPlanJson } from "../api/conditionPlans";
+import type { PlanEditorContract } from "../api/conditionPlans";
 import { createAIPlanApi } from "../api/ai";
 import { resolveApiFetch } from "../api/context";
 import { usePlanDrafting } from "./usePlanDrafting";
@@ -33,7 +34,11 @@ export function usePlanWorkspace() {
   const candidate = shallowRef<Json>(null);
   const source = shallowRef("");
   const provider = shallowRef<ConfiguredAIRuntimeView | null>(null);
-  const schema = shallowRef<Schema>({});
+  const fixedSchema = shallowRef<Schema>({});
+  const linkedSchema = shallowRef<Schema>({});
+  const linkedDefinitions = shallowRef<Record<string, string>>({});
+  const schema = computed(() => candidate.value !== null && typeof candidate.value === "object" &&
+    !Array.isArray(candidate.value) && candidate.value.schema_version === 6 ? linkedSchema.value : fixedSchema.value);
   const mapping = shallowRef<DailyMapping | null>(null);
   const preview = shallowRef<DailyReviewPreview | null>(null);
   const saved = shallowRef<PlanVersionView | null>(null);
@@ -43,7 +48,18 @@ export function usePlanWorkspace() {
   const error = shallowRef("");
   const notice = shallowRef("");
   const controller = new AbortController();
-  const values = computed(() => semanticValues(candidate.value));
+  const values = computed(() => {
+    const result = semanticValues(candidate.value);
+    const plan = candidate.value;
+    if (plan !== null && typeof plan === "object" && !Array.isArray(plan) && plan.schema_version === 6 && Array.isArray(plan.ordinary_rules)) {
+      plan.ordinary_rules.forEach((rule, i) => {
+        if (rule !== null && typeof rule === "object" && !Array.isArray(rule) && "market_policy" in rule) {
+          for (const [key, value] of Object.entries(linkedDefinitions.value)) result[`ordinary_rules[${i}].market_policy.expanded.${key}`] = value;
+        }
+      });
+    }
+    return result;
+  });
   const definitions = computed(() => schema.value.$defs ?? {});
   onBeforeUnmount(() => controller.abort());
 
@@ -61,8 +77,10 @@ export function usePlanWorkspace() {
   }
   async function load(versionId?: string) {
     await action(async () => {
-      const contract = await request<{ candidateSchema: Schema }>("/api/v1/plan-editor-schema");
-      schema.value = contract.candidateSchema;
+      const contract = await request<PlanEditorContract>("/api/v1/plan-editor-schema");
+      fixedSchema.value = contract.candidateSchema;
+      linkedSchema.value = contract.linkedCandidateSchema ?? {};
+      linkedDefinitions.value = contract.linkedPolicyDefinitions ?? {};
       const runtime = await api.getRuntime();
       providers.value = [runtime, ...(runtime.alternativeProviders ?? [])];
       provider.value = providers.value.find(p => p.enabled && p.configured) ?? runtime;

@@ -119,6 +119,7 @@ test("one production workspace extracts, edits mixed periods, reviews, explicitl
   expect(reminderCycle.snapshot.alerts).toMatchObject([{ rule_id: "five-minute-low-risk", alert_kind: "RISK_ALERT", outcome: "SATISFIED" }]);
   expect(reminderCycle.event_ids).toHaveLength(1);
   await page.goto(`${base}/alerts`);
+  await expect(page.getByText("传输连接正常；监控已停止")).toBeVisible();
   await expect(page.getByRole("heading", { name: "提醒历史" })).toBeVisible();
   await expect(page.locator("[data-risk-reminder]")).toBeVisible();
   await page.getByLabel("信号类型").selectOption("RISK_ALERT");
@@ -136,7 +137,7 @@ test("one production workspace extracts, edits mixed periods, reviews, explicitl
   await reminderRow.getByRole("button", { name: "查看证据" }).click();
   await expect(page.getByRole("heading", { name: "仅提醒的风险条件" })).toBeVisible();
   await expect(page.getByText("生成提醒时数量")).toHaveCount(0);
-  const acknowledgement = page.waitForResponse(r => r.url().endsWith("/alert-acknowledgements") && r.request().method() === "POST");
+  const acknowledgement = page.waitForResponse(r => r.url().endsWith("/alert-acknowledgements") && r.request().method() === "POST", { timeout: 10_000 });
   await reminderRow.getByRole("button", { name: "确认已查看（不代表成交）" }).click();
   const acknowledged = await acknowledgement;
   expect(acknowledged.status(), await acknowledged.text()).toBe(200);

@@ -41,6 +41,7 @@ from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.routers.ai import ConfiguredAIRuntimeView
 from trade_plan_monitor.web.routers.health import RuntimeHealthResponse
 from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+from trade_plan_monitor.web.runtime_status_websocket import RuntimeStatusEventStream
 
 
 class NoNetworkAI(ConfiguredAIWebLifecycle):
@@ -107,6 +108,7 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--linked", action="store_true")
     args = parser.parse_args()
     with TemporaryDirectory(prefix="tpm-daily-browser-") as directory:
         root = Path(directory)
@@ -158,12 +160,31 @@ def main():
             }
         ]
         chain.plan = UnifiedTradePlan.model_validate(plan_data)
+        if args.linked:
+            from tests.unit.test_market_linkage_contract import linked_payload
+
+            from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
+            linked = linked_payload()
+            linked.update(risk_branches=[], alert_rules=plan_data["alert_rules"])
+            linked["position"]["max_qty"] = 1000
+            linked["ordinary_rules"][0].update(validity={"mode": "PLAN_ACTIVE"},
+                independent_signal={"mode": "ONCE_PER_RULE"}, condition={
+                    "type": "DAILY_PRICE_IN_RANGE", "field": "close", "offset": 0,
+                    "range": linked["levels"]["low_buy"]})
+            chain.plan = MarketLinkedTradePlan.model_validate(linked)
         ai.plan = chain.plan
         ai.source = (
             "合成离线条件计划：日线收盘低于40元且完整5分钟收盘低于40元时，确认模拟买入100股。"
             "完整5分钟收盘低于9.50元只作风险提醒，不卖出，也不改变模拟持仓。"
             "公告与基本面仅在生成计划时由用户审核，不参与条件监控。"
         )
+        if args.linked:
+            from trade_plan_monitor.domain.market_linkage_definitions import (
+                EXPANDED_LINKAGE_POLICY_ZH,
+            )
+            ai.source = "合成离线大盘联动计划，Q0 为 300 股。" + "。".join(
+                EXPANDED_LINKAGE_POLICY_ZH.values()
+            )
         ai._review_store = chain.plans
         app = create_app(
             runtime_factory=lambda: OfflineRuntime(chain),
@@ -175,6 +196,11 @@ def main():
             static_directory=Path(__file__).resolve().parents[2] / "web/dist",
             ai_lifecycle_factory=lambda: ai,
             read_service=reader,
+            websocket_service=RuntimeStatusEventStream(
+                unit_of_work_factory=chain.plans._unit_of_work,
+                read_service=reader,
+                heartbeat_interval_seconds=1,
+            ),
             monitor_contract_version=2,
         )
         chain.app = app
@@ -215,6 +241,11 @@ def main():
                 details = work.plans.get_version_details(active.plan_version_id)
                 chain.plan = load_plan_json(details.payload_json)
                 chain.version = {"id": details.id, "contentHash": details.content_hash}
+            if args.linked:
+                from tests.integration.test_market_linkage_runtime import linked_inputs
+                return chain.runtime.run_inputs(
+                    plan=chain.plan, inputs=linked_inputs(chain)
+                ).model_dump(mode="json")
             chain.evaluate(series=chain.series(), official=FRIDAY)
             for kind in ("PRICE_STRUCTURE", "VOLUME_OR_CANDLE", "TECHNICAL"):
                 chain.post(
@@ -244,9 +275,43 @@ def main():
 
                 chain.plan = load_plan_json(details.payload_json)
                 chain.version = {"id": details.id, "contentHash": details.content_hash}
+            if args.linked:
+                from tests.integration.test_market_linkage_runtime import linked_inputs
+                return chain.runtime.run_inputs(
+                    plan=chain.plan, inputs=linked_inputs(chain)
+                ).model_dump(mode="json")
             return chain.runtime.run_inputs(
                 plan=chain.plan, inputs=minute_inputs(chain, series=chain.series())
             ).model_dump(mode="json")
+
+        @app.post("/_test/linked-broken")
+        def linked_broken():
+            from tests.integration.test_market_linkage_runtime import linked_inputs
+
+            from trade_plan_monitor.market_data.daily_data import DailySeries
+            from trade_plan_monitor.market_index.snapshots import build_market_index_snapshot
+            chain.now += timedelta(seconds=1)
+            inputs = linked_inputs(chain)
+            source = inputs.linked_index
+            bars = []
+            for i, bar in enumerate(source.official_daily_bars):
+                points = Decimal(200-i-(2 if i == 59 else 0))
+                bars.append(bar.model_copy(update={"open_points": points, "high_points": points+1,
+                    "low_points": points-1, "close_points": points, "provider_revision": 2}))
+            changed = build_market_index_snapshot(index_code=source.index_code,
+                decision_cutoff=source.decision_cutoff, requests=source.fact_requests,
+                five_minute_bars=source.five_minute_bars, official_daily_bars=tuple(bars),
+                content_revision=2, observed_at=chain.now, observed_no_later_than=chain.now)
+            base = inputs.series.bars[0]
+            stock = tuple(
+                base.model_copy(update={"bar_id": "linked-" + str(day), "trade_date": day})
+                for day in inputs.session_dates
+                if FRIDAY - timedelta(days=20) <= day <= FRIDAY
+            )
+            series = DailySeries.model_validate({**inputs.series.model_dump(),
+                "bars": stock, "session_dates": inputs.session_dates})
+            return chain.runtime.run_inputs(plan=chain.plan, inputs=inputs.model_copy(update={
+                "linked_index": changed, "series": series})).model_dump(mode="json")
 
         @app.post("/_test/risk-reminder")
         def risk_reminder():

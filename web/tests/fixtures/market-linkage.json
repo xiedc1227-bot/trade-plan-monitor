@@ -1,0 +1,176 @@
+{
+  "version": "market-linkage-evidence-v1",
+  "rule_id": "low-buy",
+  "content_hash": "479f1059aef24ac2dd6c85e64a57b8252bea5cbe0d00ef0521d368c507fbed40",
+  "decision_session": "2026-09-18",
+  "evidence_cutoff": "2026-09-18T16:00:00+08:00",
+  "market": {
+    "formula_version": "market-linkage-v1",
+    "facts": {
+      "formula_version": "market-linkage-index-v1",
+      "reference_market": {
+        "selection": "AUTO_BOARD",
+        "mapping_version": "board-index-map-v1",
+        "index_code": "000001.SH"
+      },
+      "decision_session": "2026-09-18",
+      "evidence_cutoff": "2026-09-18T16:00:00+08:00",
+      "close": "159",
+      "ma20": "149.5",
+      "ma60": "129.5",
+      "ma20_5": "144.5",
+      "low20": "138",
+      "source_hashes": [
+        [
+          "formula",
+          "b61e9f480ca8638a927434c74f62e3a799b3680171a2ebb461dbc33d7e166d40"
+        ],
+        [
+          "close",
+          "b85cfda9a988f894c409e0b39cc1214e9bd120ff4a777ab9ced350989d97ff94"
+        ],
+        [
+          "ma20",
+          "0ce66060e7c92f0fb5c6ae283675d6939db4dbc55298883580b434be9acd5aa4"
+        ],
+        [
+          "ma60",
+          "cf3c951b38494bce2ffb8bca688c370a04b31dcc7a4cc64da9b2f816f3a640b0"
+        ],
+        [
+          "ma20_5",
+          "01c31fbd4a3d7d1812e6d02fd049388e33557041c8829b6053af82420c78698e"
+        ],
+        [
+          "low20",
+          "53af0c0a928a468a99d593c4c15e2edacffadb3e2ca78aa661dc4d9a65117325"
+        ]
+      ],
+      "reasons": []
+    },
+    "regime": "NORMAL_TRANSITION",
+    "below_low20": "UNSATISFIED",
+    "below_ma60": "UNSATISFIED",
+    "below_ma20": "UNSATISFIED",
+    "falling_ma20": "UNSATISFIED",
+    "broken": "UNSATISFIED",
+    "weak": "UNSATISFIED"
+  },
+  "strength": null,
+  "selection": {
+    "group": "S0",
+    "blocker": null,
+    "needs_strength": false
+  },
+  "calculation": {
+    "formula_version": "market-linkage-calculation-v1",
+    "base_quantity": 300,
+    "factor": "1",
+    "ceiling": 300,
+    "minimum": 100,
+    "increment": 100,
+    "candidate_quantity": 300,
+    "capacity": 300,
+    "authorized_quantity": 0,
+    "blockers": [
+      "CONFIRMATION_UNKNOWN"
+    ],
+    "calculation_hash": "c73681e189ccf928aeb0a6039be9586d58b9727be7537b21782b5a3b9ea4b55c"
+  },
+  "quantity_rules": {
+    "version": "cn-equity-buy-grid-2026-07-06",
+    "board": "SSE_MAIN",
+    "effective_from": "2026-07-06",
+    "published_on": "2026-04-24",
+    "minimum": 100,
+    "increment": 100,
+    "source_url": "https://www.sse.com.cn/lawandrules/sselawsrules2025/trade/universal/c/c_20260424_10816492.shtml",
+    "article": "3.3.8"
+  },
+  "confirmation": [
+    {
+      "outcome": "MISSING_INPUT",
+      "condition": {
+        "type": "ALL",
+        "conditions": [
+          {
+            "type": "REVIEWED_FACT",
+            "fact_kind": "PRICE_STRUCTURE",
+            "evidence_requirement": "Synthetic reviewer checks complete official evidence",
+            "validity_scope": "TRADE_DATE"
+          },
+          {
+            "type": "REVIEWED_FACT",
+            "fact_kind": "VOLUME_OR_CANDLE",
+            "evidence_requirement": "Synthetic reviewer checks complete official evidence",
+            "validity_scope": "TRADE_DATE"
+          },
+          {
+            "type": "REVIEWED_FACT",
+            "fact_kind": "TECHNICAL",
+            "evidence_requirement": "Synthetic reviewer checks complete official evidence",
+            "validity_scope": "TRADE_DATE"
+          }
+        ]
+      },
+      "bar_ids": [],
+      "session_dates": [],
+      "basis_id": null,
+      "operands": [],
+      "fact_ids": [],
+      "reason": null,
+      "children": [
+        {
+          "outcome": "MISSING_INPUT",
+          "condition": {
+            "type": "REVIEWED_FACT",
+            "fact_kind": "PRICE_STRUCTURE",
+            "evidence_requirement": "Synthetic reviewer checks complete official evidence",
+            "validity_scope": "TRADE_DATE"
+          },
+          "bar_ids": [],
+          "session_dates": [],
+          "basis_id": null,
+          "operands": [],
+          "fact_ids": [],
+          "reason": "REVIEWED_FACT_REQUIRED",
+          "children": []
+        },
+        {
+          "outcome": "MISSING_INPUT",
+          "condition": {
+            "type": "REVIEWED_FACT",
+            "fact_kind": "VOLUME_OR_CANDLE",
+            "evidence_requirement": "Synthetic reviewer checks complete official evidence",
+            "validity_scope": "TRADE_DATE"
+          },
+          "bar_ids": [],
+          "session_dates": [],
+          "basis_id": null,
+          "operands": [],
+          "fact_ids": [],
+          "reason": "REVIEWED_FACT_REQUIRED",
+          "children": []
+        },
+        {
+          "outcome": "MISSING_INPUT",
+          "condition": {
+            "type": "REVIEWED_FACT",
+            "fact_kind": "TECHNICAL",
+            "evidence_requirement": "Synthetic reviewer checks complete official evidence",
+            "validity_scope": "TRADE_DATE"
+          },
+          "bar_ids": [],
+          "session_dates": [],
+          "basis_id": null,
+          "operands": [],
+          "fact_ids": [],
+          "reason": "REVIEWED_FACT_REQUIRED",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "consumed_hash": "fab06449f6d6affe7a17e045c3d2745a135a59df2c8ee863f0ae3adf4652f22d",
+  "evidence_hash": "dd9c395ebfaf5aa11c34d1a3c36f3eb90956d76270d652595839ad79e266db99"
+}

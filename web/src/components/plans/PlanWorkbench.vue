@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from "vue";
+import { computed, watch } from "vue";
 import { usePlanWorkspace } from "../../composables/usePlanWorkspace";
 import PlanSourceExtraction from "./PlanSourceExtraction.vue";
 import PlanFieldEditor from "./PlanFieldEditor.vue";
@@ -8,6 +8,8 @@ import PlanSimulationPanel from "./PlanSimulationPanel.vue";
 const props = defineProps<{ planVersionId?: string | undefined }>();
 const work = usePlanWorkspace();
 const { source, provider, providers, extraction, versions, historyOnly, candidate, schema, definitions, preview, saved, activated, mapping, values, busy, error, notice } = work;
+const linkedCandidate = computed(() => candidate.value !== null && typeof candidate.value === "object"
+  && !Array.isArray(candidate.value) && candidate.value.schema_version === 6);
 watch(() => props.planVersionId, id => work.load(id), { immediate: true });
 </script>
 
@@ -24,6 +26,12 @@ watch(() => props.planVersionId, id => work.load(id), { immediate: true });
       <h2 id="daily-editor-title">编辑规则、周期与执行窗口</h2>
       <p>未知参数保持空白。ALL表示全部满足，ANY表示任一满足。固定参照需值、单位、日期与来源；动态参照需指标、公式与完整窗口。</p>
       <p>模拟数量统一按100股整数倍；买入后下一交易日可卖，系统计算结算日期。</p>
+      <aside v-if="linkedCandidate" aria-label="大盘联动审核说明">
+        <p>请逐项核对原文中的大盘状态、相对强势、确认组和基础数量。必要输入不足时暂停买入。</p>
+        <p>正常或过渡状态使用原始条件 S0 和基础数量；偏弱时使用 S1 和基础数量的一半，按官方规则与模拟单位向下取整。</p>
+        <p>S1 在完整 S0 上增加：相邻两日收盘均在低吸区、收盘不下降、成交量不高于此前20日均量、RSI14上升，且无更高优先级风险。S2 再要求两日收盘分别不低于各自当日 MA20。</p>
+        <p>相对强势要求个股5日和20日收益率均严格高于对应指数，且收盘不低于 MA20。破位或数量不足涉及的例外路径仍然阻断。确认后冻结整笔数量，容量不足不缩量。</p>
+      </aside>
       <p>普通规则默认持续有效直到人工停用或审核启用新版本替换；单次信号仍按其执行窗口到期。原文或历史日期限制保留为DATE_RANGE，不会自动转换。保存草稿不替换已启用版本。</p>
       <p>原文有期限而改为持续有效时，在该规则有效期模式的人工补充理由中引用完整原句并写明“改为持续有效”，重新审核后明确启用。</p>
       <PlanFieldEditor :schema="schema" :definitions="definitions" path="" :model-value="candidate" :hidden-fields="[]" @update:model-value="work.edit" />

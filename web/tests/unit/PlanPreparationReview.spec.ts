@@ -112,6 +112,7 @@ describe("exact single preparation review", () => {
     const parameter = fresh();
     if (parameter.candidate?.kind !== "EXTRACTION") throw new Error("fixture variant");
     parameter.candidate.issues.push("DAILY_SOURCE_BINDING_REQUIRED: ordinary_rules[0].quantity");
+    if (parameter.candidate.draft.schema_version !== 5) throw new Error("fixed fixture required");
     parameter.candidate.draft.ordinary_rules[0]!.quantity = null;
     expect(inspectPreparationReview(parameter).blockers.length).toBeGreaterThan(0);
     const clause = fresh();

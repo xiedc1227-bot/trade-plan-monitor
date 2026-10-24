@@ -2,6 +2,7 @@
 import { RouterLink } from "vue-router";
 import { computed } from "vue";
 import ExplicitConditionEvidence from "../components/plans/ExplicitConditionEvidence.vue";
+import MarketLinkageEvidence from "../components/plans/MarketLinkageEvidence.vue";
 import { useRuntimeContext } from "./context";
 import { displayTime, reasonLabel } from "./presentation";
 import type { PlanEntry } from "./store";
@@ -51,6 +52,7 @@ function actionable(ruleId?: string): boolean {
       </ul>
     </template>
     <template v-else-if="row.planFamily === 'CONDITION_PLAN'">
+      <MarketLinkageEvidence v-for="decision in row.planRuntime.marketLinkage ?? []" :key="decision.rule_id" :decision="decision" :stale="row.availability !== 'CURRENT'" />
       <p>评估时间：{{ displayTime(row.planRuntime.evaluatedAt) }}</p>
       <p v-if="row.availability === 'CACHED'">历史缓存，等待当前权威输入。</p>
       <p :data-actionable="actionable()">{{ actionable() ? '当前提醒有效' : '当前提醒无效' }}</p>

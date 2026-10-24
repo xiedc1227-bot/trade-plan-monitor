@@ -5,14 +5,17 @@ import type { Schema } from "../components/plans/planSchema";
 
 export interface PlanEditorContract {
   candidateSchema: Schema;
+  linkedCandidateSchema?: Schema;
+  linkedPolicyDefinitions?: Record<string, string>;
   operationSchemas: Record<string, Schema>;
 }
 
 export function isConditionPlanJson(value: string): boolean {
   try {
     const document: unknown = JSON.parse(value);
-    return isRecord(document) && document.schema_version === 5 &&
-      document.execution_mode === "CONDITION_PLAN" && document.execution_version === "condition-plan-v1";
+    return isRecord(document) && document.execution_mode === "CONDITION_PLAN" &&
+      (document.schema_version === 5 && document.execution_version === "condition-plan-v1" ||
+       document.schema_version === 6 && document.execution_version === "condition-plan-v2");
   } catch { return false; }
 }
 

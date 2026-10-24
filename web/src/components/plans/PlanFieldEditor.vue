@@ -11,6 +11,10 @@ const selected = computed(() => {
   if (!choices.value.length) return resolved.value;
   if (props.modelValue !== null && typeof props.modelValue === "object" && !Array.isArray(props.modelValue)) {
     const data = props.modelValue;
+    if (choices.value.some(s => s.properties?.market_policy)) {
+      const quantityKind = "market_policy" in data ? "market_policy" : "quantity";
+      return choices.value.find(s => s.properties?.[quantityKind]) ?? {};
+    }
     for (const key of ["type", "kind", "mode", "status", "side"]) {
       const match = choices.value.find(s => s.properties?.[key]?.const !== undefined && s.properties[key]?.const === data[key]);
       if (match) return match;

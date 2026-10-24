@@ -2,6 +2,7 @@
 import { computed, onMounted, shallowRef } from "vue";
 import type { DailyStateView, DailyInventoryResource, PlanVersionView, DailySimulationReceipt, DailyRuleReminderState } from "../../api/generated";
 import PlanOperationForm from "./PlanOperationForm.vue";
+import MarketLinkageEvidence from "./MarketLinkageEvidence.vue";
 import { type Json, type Schema } from "./planSchema";
 const props = defineProps<{ version: PlanVersionView; request: <T>(url: string, body?: object, key?: string) => Promise<T> }>();
 const inventory = shallowRef<DailyInventoryResource | null>(null);
@@ -104,6 +105,7 @@ onMounted(async () => {
     <div v-if="runtime" class="daily-runtime"><h3>{{ reminderDraftState ?? `计划当前状态：${stateLabels[runtime.status] ?? runtime.status}` }}</h3>
       <p v-if="reminderOnly && inventory?.status === 'UNSUPPORTED'" role="status">模拟库存受历史记录或存储结构兼容性限制。仅提醒规则不依赖模拟库存；是否监测仍取决于本版本的人工审核和启用状态。</p>
       <template v-if="runtime.snapshot">
+        <MarketLinkageEvidence v-for="decision in runtime.snapshot.marketLinkage ?? []" :key="decision.rule_id" :decision="decision" :stale="!currentVersion || runtime.reason === 'MARKET_LINKAGE_SOURCE_CHANGED'" />
         <ul v-if="runtime.snapshot.dataBlockers.length"><li v-for="blocker in runtime.snapshot.dataBlockers" :key="blocker">{{ blocker }}</li></ul>
         <article v-for="signal in runtime.snapshot.signals" :key="signal.signalId" class="daily-signal">
           <h4>{{ signal.side === 'BUY' ? '计划买入' : '计划卖出' }} · {{ stateLabels[signal.state] ?? signal.state }}</h4>
