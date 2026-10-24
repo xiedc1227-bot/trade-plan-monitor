@@ -2,13 +2,13 @@
 
 Daily market linkage: [capability and operations](operations/market-linkage-p0.md), [specifications](specifications/monitoring/SPEC-market-linkage-p0.md), [verification](verification/2026-10-24-market-linkage-p0.md).
 
-P1 human-reviewed buy exceptions are approved and under implementation: [specification and six review decisions](specifications/monitoring/SPEC-market-linkage-p1.md) · [implementation and acceptance tasks](../tasks/market-linkage-p1.md). Existing Schema 6 exception routes remain blocked; staged acceptance will establish new opt-in support.
+P1 human-reviewed buy exceptions: [operations and both quantity rules](operations/market-linkage-p1.md) · [specification and six decisions](specifications/monitoring/SPEC-market-linkage-p1.md) · [tasks](../tasks/market-linkage-p1.md) · [executed acceptance status](verification/2026-10-24-market-linkage-p1.md). Schema 7 requires separate per-occurrence approval and execution; existing Schema 6 exception routes remain blocked.
 
 ## Start here
 
 English documents are canonical implementation inputs; matching `.zh-CN.md` files are equivalent Chinese review copies. Use the [project README](../README.md) for installation and routine checks, the [capability map](architecture/CAPABILITY-MAP.md) for module boundaries, and [One Trade Plan Workflow](specifications/monitoring/SPEC-unified-plan.md) for current product behavior.
 
-One `/plans` workspace uses Schema 5 fixed plans, Schema 6 daily linked plans and `plan-extract-v9`: source → draft → edit/review → explicit activation → mixed daily/five-minute monitoring → reminders and explicit whole-trade simulation. Fundamentals are generation-time review only. Alerts/acknowledgement never change inventory. Frozen Schema 1–4 readers and independent research retain their original bytes/hashes; they cannot authorize new live operations.
+One `/plans` workspace uses Schema 5 fixed plans, Schema 6 daily linked plans, Schema 7 per-occurrence exceptions and `plan-extract-v10`: source → draft → edit/review → explicit activation → mixed daily/five-minute monitoring → reminders and explicit whole-trade simulation. Exception approval alone never trades. Fundamentals are generation-time review only. Alerts/acknowledgement never change inventory. Frozen Schema 1–4 readers and independent research retain their original bytes/hashes; they cannot authorize new live operations.
 
 Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-status.json`](../openapi.runtime-status.json). The installed entry uses monitor contract `2`. Local acceptance does not certify live-provider availability, user-database migration, manual NVDA review or deployment; these remain separate verification work.
 

@@ -2,13 +2,13 @@
 
 日线大盘联动：[能力与操作](operations/market-linkage-p0.zh-CN.md)、[规格](specifications/monitoring/SPEC-market-linkage-p0.zh-CN.md)、[验收](verification/2026-10-24-market-linkage-p0.zh-CN.md)。
 
-P1 人工复评买入例外已批准，正在实施：[规格及六项审核决策](specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) · [实施与验收任务](../tasks/market-linkage-p1.zh-CN.md)。既有 Schema 6 例外路径继续阻断；新增主动启用能力须逐阶段验收。
+P1 人工复评买入例外：[操作与两条数量规则](operations/market-linkage-p1.zh-CN.md) · [规格及六项决策](specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) · [任务](../tasks/market-linkage-p1.zh-CN.md) · [已执行验收状态](verification/2026-10-24-market-linkage-p1.zh-CN.md)。Schema 7 要求逐机会批准与执行相互独立；既有 Schema 6 例外路径继续阻断。
 
 ## 从这里开始
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
 
-单一 `/plans` 工作台使用 Schema 5 固定计划、Schema 6 日线联动计划与 `plan-extract-v9`：原文 → 草稿 → 修改/审核 → 明确启用 → 日线/五分钟混合监测 → 提醒及明确整单模拟。基本面仅在生成计划时审核。提醒/已读绝不改变库存。冻结 Schema 1–4 读取与独立研究保留原有字节/哈希，不能授权新实时操作。
+单一 `/plans` 工作台使用 Schema 5 固定计划、Schema 6 日线联动计划、Schema 7 逐机会例外及 `plan-extract-v10`：原文 → 草稿 → 修改/审核 → 明确启用 → 日线/五分钟混合监测 → 提醒及明确整单模拟。单独批准例外不产生交易。基本面仅在生成计划时审核。提醒/已读绝不改变库存。冻结 Schema 1–4 读取与独立研究保留原有字节/哈希，不能授权新实时操作。
 
 机器 API 权威位于 [`openapi.json`](../openapi.json) 和 [`openapi.runtime-status.json`](../openapi.runtime-status.json)。安装入口使用监控协议 `2`。本地验收不认证真实供应商可用性、用户数据库迁移、人工 NVDA 审阅或部署；这些仍是单独验证工作。
 
