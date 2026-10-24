@@ -140,6 +140,22 @@ def test_refetch_keeps_candidate_but_correction_invalidates(exception_chain):
     assert corrected.snapshot["exception_candidates"][0]["candidate"]["state"] == "INVALIDATED"
 
 
+def test_temporarily_unknown_basis_blocks_without_destroying_frozen_approval(exception_chain):
+    chain = exception_chain
+    approved = approve_current(chain)
+    chain.now = datetime.combine(TUESDAY, time(9), SH)
+    unavailable = exception_inputs(chain).model_copy(update={
+        "series": None, "data_blockers": ("PRICE_BASIS_UNVERIFIED",)})
+    blocked = chain.runtime.run_inputs(plan=chain.plan, inputs=unavailable)
+    candidate = blocked.snapshot["exception_candidates"][0]["candidate"]
+    assert candidate["state"] == "APPROVED"
+    assert candidate["approval_id"] == approved.event.event_id
+    assert blocked.snapshot["signals"][0]["executable_qty"] == 0
+    chain.now = datetime.combine(TUESDAY, time(9, 35), SH)
+    recovered = chain.runtime.run_inputs(plan=chain.plan, inputs=exception_inputs(chain))
+    assert recovered.snapshot["signals"][0]["executable_qty"] == approved.candidate.frozen_quantity
+
+
 def test_rejection_and_clone_cannot_create_another_occurrence(exception_chain):
     chain = exception_chain
     first = chain.runtime.run_inputs(plan=chain.plan, inputs=exception_inputs(chain))
@@ -217,3 +233,69 @@ def test_completion_proof_tracks_candidate_authority_revision(exception_chain):
             decision="REJECT", reason="Declined"), now=chain.now)
         assert not condition_completion_matches(work.daily.session, proof=proof,
             snapshot=result.snapshot, now=chain.now)
+
+
+def test_calendar_correction_blocks_existing_approval_before_reevaluation(exception_chain):
+    from trade_plan_monitor.runtime.market_exceptions import exception_signal_current
+    from trade_plan_monitor.state.market_exception_service import ExceptionAuthorityError
+    from trade_plan_monitor.state.models import TradingCalendar
+
+    chain = exception_chain
+    approved = approve_current(chain)
+    with chain.plans._unit_of_work() as work:
+        calendar = work.daily.session.get(TradingCalendar, ("SSE", TUESDAY))
+        calendar.is_open = False
+        work.daily.session.flush()
+        with pytest.raises(ExceptionAuthorityError, match="CALENDAR"):
+            current_exception_authority(work, approved.candidate, chain.now)
+        signal = work.daily.get(approved.candidate.binding.occurrence_id)["payload"]
+        assert not exception_signal_current(work.daily, signal, chain.now)
+
+
+def test_signal_rejects_resealed_approval_with_different_receipt(exception_chain):
+    from copy import deepcopy
+
+    from trade_plan_monitor.domain.daily_hash import daily_hash
+    from trade_plan_monitor.runtime.market_exceptions import exception_signal_current
+
+    chain = exception_chain
+    approved = approve_current(chain)
+    with chain.plans._unit_of_work() as work:
+        signal = deepcopy(work.daily.get(approved.candidate.binding.occurrence_id)["payload"])
+        event = signal["market_linkage"]["calculation"]["approval"]
+        event["reason"] = "Different immutable evidence"
+        event["event_hash"] = daily_hash(event["version"], {
+            key: value for key, value in event.items() if key != "event_hash"})
+        assert not exception_signal_current(work.daily, signal, chain.now)
+
+
+def test_risk_blocked_close_cannot_reset_unapproved_occurrence(exception_chain, monkeypatch):
+    from types import SimpleNamespace
+
+    from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
+    from trade_plan_monitor.domain.unified_plan_models import UnifiedResetPolicy
+    from trade_plan_monitor.runtime import market_exceptions
+
+    chain = exception_chain
+    inputs = exception_inputs(chain)
+    result = chain.runtime.run_inputs(plan=chain.plan, inputs=inputs)
+    rule = chain.plan.ordinary_rules[0]
+    reset_rule = rule.model_copy(update={"independent_signal": UnifiedResetPolicy(
+        mode="LATER_CLOSE_RESET_THEN_CONFIRM", reset_condition=rule.condition)})
+    plan = chain.plan.model_copy(update={"ordinary_rules": (reset_rule,)})
+    completed = SimpleNamespace(bars=(SimpleNamespace(trade_date=TUESDAY),))
+    monkeypatch.setattr(market_exceptions, "evaluate_unified_condition",
+                        lambda *args, **kwargs: SimpleNamespace(outcome="SATISFIED"))
+    decision = MarketExceptionDecision.model_validate(result.snapshot["market_linkage"][0])
+    with chain.plans._unit_of_work() as work:
+        active = work.plans.get_active(plan.symbol)
+        review = work.daily.get("review-" + active.plan_version_id)["payload"]
+        chain.now = datetime.combine(TUESDAY, time(16), SH)
+        args = dict(now=chain.now, previous=(), completed_series=(completed,))
+        clear = market_exceptions.synchronize_candidates(work, plan, active, review,
+            {rule.rule_id: decision}, **args)
+        assert clear[0]["reset_trade_date"] == str(TUESDAY)
+        blocked = market_exceptions.synchronize_candidates(work, plan, active, review,
+            {rule.rule_id: decision}, **args, risks=({"status": "CONFIRMED",
+                "kind": "SEVERE_TECHNICAL", "confirmed_trade_date": str(TUESDAY)},))
+        assert "reset_trade_date" not in blocked[0]

@@ -2,6 +2,8 @@
 
 from datetime import datetime, time
 
+from sqlalchemy import select
+
 from trade_plan_monitor.decision.daily_lifecycle import next_session
 from trade_plan_monitor.decision.market_exception_decision import (
     MarketExceptionDecision,
@@ -29,6 +31,7 @@ from trade_plan_monitor.state.market_exception_service import (
     terminate_exception,
 )
 from trade_plan_monitor.state.market_linkage_authority import linked_index_current
+from trade_plan_monitor.state.models import TradingCalendar
 
 
 def candidate_shadow(candidate):
@@ -43,7 +46,7 @@ def candidate_shadow(candidate):
 
 
 def synchronize_candidates(work, plan, active, review, linkages, *, now, previous,
-                           completed_series=(), facts=()):
+                           completed_series=(), facts=(), risks=(), source_missing=False):
     repo = ExceptionRepository(work.daily)
     shadows = []
     for row in repo.list(plan.symbol):
@@ -57,8 +60,9 @@ def synchronize_candidates(work, plan, active, review, linkages, *, now, previou
                 or active.plan_version_id != b.plan_version_id
                 or active.revision != b.activation_revision
                 or review["review_id"] != b.review_id or review["content_hash"] != b.content_hash
-                or decision is None or decision.consumed_hash != b.consumed_hash
-                or decision.calculation.route != b.route):
+                or not source_missing and (
+                    decision is None or decision.consumed_hash != b.consumed_hash
+                    or decision.calculation.route != b.route)):
             terminal = "INVALIDATED"
         if terminal:
             row = terminate_exception(work.daily, row["id"], state=terminal,
@@ -71,6 +75,10 @@ def synchronize_candidates(work, plan, active, review, linkages, *, now, previou
         if rule is not None and isinstance(rule.independent_signal, UnifiedResetPolicy):
             for series in completed_series:
                 day = series.bars[-1].trade_date
+                if any(r["status"] in {"CONFIRMED", "FULFILLED"}
+                       and blocks_new_entry({**r, "status": "CONFIRMED"}, now.date())
+                       and r.get("confirmed_trade_date", "") >= str(day) for r in risks):
+                    continue
                 if day > b.decision_session and evaluate_unified_condition(
                         rule.independent_signal.reset_condition, series, facts=facts,
                         macd_min_observations=(500 if plan.monitoring is None
@@ -78,6 +86,20 @@ def synchronize_candidates(work, plan, active, review, linkages, *, now, previou
                     shadow["reset_trade_date"] = str(day)
         shadows.append(shadow)
     return (*previous, *shadows)
+
+
+def exception_calendar_current(daily, binding):
+    """The frozen next-session window must still match the owned exchange calendar."""
+    exchange = {"SH": "SSE", "SZ": "SZSE", "BJ": "BSE"}[binding.symbol[-2:]]
+    decision = daily.session.get(TradingCalendar, (exchange, binding.decision_session))
+    next_day = daily.session.scalars(select(TradingCalendar).where(
+        TradingCalendar.exchange == exchange,
+        TradingCalendar.cal_date > binding.decision_session,
+        TradingCalendar.is_open.is_(True),
+    ).order_by(TradingCalendar.cal_date).limit(1)).first()
+    return (decision is not None and decision.is_open and next_day is not None
+        and next_day.cal_date == binding.execution_date
+        and next_day.previous_trade_date == binding.decision_session)
 
 
 def record_candidate(work, plan, active, review, decision, seed, *, sessions, now):
@@ -125,6 +147,8 @@ def current_exception_authority(work, candidate, now):
     state = head["payload"]
     if not isinstance(plan, MarketExceptionTradePlan) or candidate.signal_seed is None:
         raise ExceptionAuthorityError("EXCEPTION_CURRENT_PLAN_REQUIRED")
+    if not exception_calendar_current(work.daily, b):
+        raise ExceptionAuthorityError("EXCEPTION_CALENDAR_CHANGED_OR_UNKNOWN")
     if (state["plan_version_id"] != b.plan_version_id or state["review_id"] != b.review_id
             or state["activation_revision"] != b.activation_revision
             or datetime.fromisoformat(state["evaluated_at"]) > now):
@@ -206,7 +230,10 @@ def exception_signal_current(daily, signal, now):
     if row is None:
         return False
     candidate = ExceptionCandidate.model_validate(row["payload"])
+    original = daily.get(event.event_id)
     return (candidate.state == "APPROVED" and candidate.approval_id == event.event_id
+        and original is not None and original["payload"] == event.model_dump(mode="json")
+        and exception_calendar_current(daily, candidate.binding)
         and candidate.binding.occurrence_id == signal["signal_id"]
         and candidate.frozen_quantity == signal["planned_qty"]
         and candidate.binding.plan_version_id == signal["plan_version_id"]

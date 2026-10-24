@@ -771,7 +771,9 @@ class DailyRuntimeEvaluationService:
                             else "MISSING_INPUT",
                         )
             previous = synchronize_candidates(work, plan, active, binding, linkage_by_rule,
-                now=now, previous=previous, completed_series=completed_series, facts=facts)
+                now=now, previous=previous, completed_series=completed_series,
+                facts=facts, risks=risks,
+                source_missing=series is None or inputs.linked_index is None)
             if not risk_blocked and ordinary_eligible:
                 for rule in plan.ordinary_rules:
                     if isinstance(plan, UnifiedTradePlan):
@@ -862,15 +864,19 @@ class DailyRuntimeEvaluationService:
             signals = []
             for row in signal_rows:
                 signal = row["payload"]
+                exception_unknown = bool(
+                    (signal.get("market_linkage") or {}).get("approval_binding")
+                    and (series is None or inputs.linked_index is None))
                 if signal["state"] != "SIMULATED" and not exception_signal_current(
                         work.daily, signal, now):
                     signal = {**signal, "state": "INVALIDATED", "executable_qty": 0,
                               "blockers": ["EXCEPTION_AUTHORITY_ENDED"]}
-                if signal.get("market_linkage") and signal["state"] not in {
+                if (signal.get("market_linkage") and not exception_unknown
+                        and signal["state"] not in {
                     "SIMULATED",
                     "INVALIDATED",
                     "EXPIRED",
-                }:
+                }):
                     current_linkage = linkage_by_rule.get(signal["rule_id"])
                     if current_linkage is None or (
                         current_linkage.consumed_hash != signal["market_linkage"]["consumed_hash"]
@@ -921,6 +927,10 @@ class DailyRuntimeEvaluationService:
                     risk_blocked=risk_blocked,
                     risk_known=risk_known,
                 )
+                if (exception_unknown and checked["state"] not in {
+                        "SIMULATED", "INVALIDATED", "EXPIRED"}):
+                    checked = {**checked, "executable_qty": 0, "blockers": [
+                        *checked["blockers"], "EXCEPTION_CURRENT_EVIDENCE_REQUIRED"]}
                 if checked != row["payload"]:
                     row = work.daily.save(
                         row["id"],
