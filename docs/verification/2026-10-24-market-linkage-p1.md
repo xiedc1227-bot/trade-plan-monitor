@@ -72,3 +72,9 @@ GREEN: 33 source/update/new-and-old-storage tests passed in 4.41s; after adding 
 RED: authorization tests failed collection before the service existed. Added strict preview/decision commands, immutable previews, server-context revision binding, exact quantity validation, command replay and explicit rejection. No inventory writes occur in this service. Both routes freeze only a valid displayed quantity; missing/invalid broken-route input never defaults.
 
 GREEN: **21 authorization/storage tests passed in 3.49s** and full Ruff passed. Covered weak exact minimum, legal broken quantities below/above half Q0, empty/zero/off-grid/over-ceiling inputs, inventory/evaluation/evidence changes, unknown capacity, risk blocks, identical retries and rejection. Production authority collection and signal creation remain assigned to MLP1-T09; no HTTP access is exposed yet.
+
+## MLV1-09 — Terminal lifecycle and contention (MLP1-T08)
+
+Implemented explicit revocation, server expiry/invalidation and immutable retry receipts. Initial concurrent two-connection testing exposed SQLite read-to-write snapshot contention. The service now obtains its write fence before reading command authority and maps busy contention to an explicit conflict without treating other database failures as success. Terminal command construction preceded the first new lifecycle run; the concurrency fix followed its failing test.
+
+GREEN: **31 tests passed in 5.94s**, including approval versus approval/rejection from separate connections, fresh-process reopening, revoke/retry, rejection/expiry/invalidation retention, backdating and early-expiry rejection. Ruff passed. Execution races remain assigned to MLP1-T10. Production correction and independent-reset continuity are completed with MLP1-T09.

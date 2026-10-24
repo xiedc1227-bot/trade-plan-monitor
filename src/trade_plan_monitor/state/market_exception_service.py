@@ -3,7 +3,8 @@
 from typing import Literal
 
 from pydantic import Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import OperationalError
 
 from trade_plan_monitor.decision.market_exception_policy import validate_exception_quantity
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, PositiveWholeQty, Qty
@@ -64,6 +65,13 @@ class ExceptionDecisionCommand(DailyValue):
         return self
 
 
+class ExceptionRevocationCommand(DailyValue):
+    command_id: Identifier
+    approval_id: Digest
+    expected_revision: Revision
+    reason: str = Field(min_length=1, max_length=2000)
+
+
 class ExceptionPreview(DailyValue):
     version: Literal["market-linkage-exception-preview-v1"] = "market-linkage-exception-preview-v1"
     preview_id: Digest
@@ -94,16 +102,24 @@ class ExceptionReceipt(DailyValue):
     event: ExceptionEvent
 
 
+def _lock(daily, identity):
+    """Acquire the write fence before reading a snapshot that might become stale."""
+    try:
+        daily.session.execute(update(DailyRecord).where(DailyRecord.id == identity).values(
+            revision=DailyRecord.revision))
+    except OperationalError as error:
+        if getattr(error.orig, "sqlite_errorcode", 0) & 255 in {5, 6}:
+            raise ExceptionAuthorityError("EXCEPTION_CONCURRENT_COMMAND") from error
+        raise
+    daily.session.expire_all()
+
+
 def _candidate(daily, candidate_id, expected_revision, now, allowed=("PENDING",)):
+    _lock(daily, candidate_id)
     repo = ExceptionRepository(daily)
     row = repo.get(candidate_id)
     if row is None:
         raise ExceptionAuthorityError("EXCEPTION_NOT_FOUND", status=404)
-    candidate = ExceptionCandidate.model_validate(row["payload"])
-    daily.lock_symbol(candidate.binding.symbol)
-    # Refresh after acquiring SQLite's write lock, before checking authority.
-    daily.session.expire_all()
-    row = repo.get(candidate_id)
     candidate = ExceptionCandidate.model_validate(row["payload"])
     if row["revision"] != expected_revision:
         raise ExceptionAuthorityError("EXCEPTION_REVISION_CONFLICT")
@@ -176,6 +192,7 @@ def _replay(daily, command):
 
 
 def decide_exception(daily, command, *, current, now):
+    _lock(daily, command.candidate_id)
     replay, request_hash = _replay(daily, command)
     if replay is not None:
         return replay
@@ -206,3 +223,54 @@ def decide_exception(daily, command, *, current, now):
     row = ExceptionRepository(daily).transition(
         updated, event, expected_revision=command.expected_revision)
     return ExceptionReceipt(candidate=updated, revision=row["revision"], event=event)
+
+
+def revoke_exception(daily, command, *, now):
+    _lock(daily, command.approval_id)
+    replay, request_hash = _replay(daily, command)
+    if replay is not None:
+        return replay
+    row = daily.get(command.approval_id)
+    if row is None or row["kind"] != "EXCEPTION_EVENT":
+        raise ExceptionAuthorityError("EXCEPTION_APPROVAL_NOT_FOUND", status=404)
+    approval = ExceptionEvent.model_validate(row["payload"])
+    if approval.to_state != "APPROVED" or approval.event_id != command.approval_id:
+        raise ExceptionAuthorityError("EXCEPTION_APPROVAL_NOT_FOUND", status=404)
+    candidate = _candidate(daily, approval.candidate_id, command.expected_revision, now,
+                           allowed=("APPROVED",))
+    if candidate.approval_id != command.approval_id:
+        raise ExceptionAuthorityError("EXCEPTION_FOREIGN_APPROVAL")
+    updated, event = transition_candidate(
+        candidate, to_state="REVOKED", command_id=command.command_id,
+        expected_revision=command.expected_revision, now=now, reason=command.reason,
+        request_hash=request_hash)
+    row = ExceptionRepository(daily).transition(
+        updated, event, expected_revision=command.expected_revision)
+    return ExceptionReceipt(candidate=updated, revision=row["revision"], event=event)
+
+
+def terminate_exception(daily, candidate_id, *, state, reason, now):
+    """Owned runtime expiry/invalidation; cannot create or undo a grant."""
+    if state not in {"EXPIRED", "INVALIDATED"}:
+        raise ValueError("invalid system termination")
+    _lock(daily, candidate_id)
+    repo = ExceptionRepository(daily)
+    row = repo.get(candidate_id)
+    if row is None:
+        raise ExceptionAuthorityError("EXCEPTION_NOT_FOUND", status=404)
+    candidate = ExceptionCandidate.model_validate(row["payload"])
+    daily.lock_symbol(candidate.binding.symbol)
+    daily.session.expire_all()
+    row = repo.get(candidate_id)
+    candidate = ExceptionCandidate.model_validate(row["payload"])
+    if candidate.state not in {"PENDING", "APPROVED"}:
+        return row
+    if state == "EXPIRED" and now < candidate.binding.expires_at:
+        raise ValueError("cannot expire before the original close")
+    if now < candidate.created_at:
+        raise ValueError("cannot backdate termination")
+    updated, event = transition_candidate(
+        candidate, to_state=state, command_id="system-" + daily_hash(
+            "exception-system-command-v1", {"candidate_id": candidate_id, "state": state}),
+        expected_revision=row["revision"], now=now, reason=reason)
+    return repo.transition(updated, event, expected_revision=row["revision"])

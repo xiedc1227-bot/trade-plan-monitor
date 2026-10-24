@@ -96,7 +96,7 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T08 — Enforce terminal lifecycle and concurrent commands
 
-- [ ] Implement revocation, expiry and invalidation without reopening occurrences; guard duplicate commands and concurrent approval/revoke attempts with durable constraints and atomic revisions.
+- [x] Implement revocation, expiry and invalidation without reopening occurrences; guard duplicate commands and concurrent approval/revoke attempts with durable constraints and atomic revisions.
 - Depends on: MLP1-T07. Acceptance: MLP1-A06–MLP1-A08; holidays, delayed evidence, backdating, quantity change and cross-plan/route reuse are covered.
 - Files/scope: exception service/repository, existing independent-signal authority seam, `tests/integration/test_market_exception_concurrency.py`, V06 authorization tests; M.
 - Verify: full V06 using real temporary SQLite, injected transaction failures and fresh-process reopen; execution races are completed in MLP1-T10.
