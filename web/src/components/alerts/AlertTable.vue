@@ -145,7 +145,7 @@ function evidenceLabel(row: EvidenceRow): string {
 
 function acknowledge(item: PublicAlertView): void {
   if (
-    item.acknowledgedAt === null &&
+    (item.acknowledgedAt === null || item.acknowledgedAt === undefined) &&
     !props.pendingAcknowledgements.has(item.eventId)
   ) {
     emit("acknowledge", item);

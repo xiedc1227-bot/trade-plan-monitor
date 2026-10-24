@@ -24,6 +24,16 @@ const page: AlertPage = { ...query, items: [obsolete, current], total: 2 };
 function api(body: object) { return createAlertApi(async () => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } })); }
 
 describe("daily alert compatibility boundary", () => {
+  it.each([false, true])("acknowledges an unread reminder with an omitted timestamp: %s", async omitted => {
+    const item = { ...reminder };
+    if (omitted) delete item.acknowledgedAt;
+    const supplied: AlertPage = { ...page, items: [item], total: 1 };
+    const validated = await api(supplied).listAlerts(query);
+    const wrapper = mount(AlertTable, { props: { busy: false, page: validated,
+      pendingAcknowledgements: new Set<string>(), query } });
+    await wrapper.get(`[data-acknowledge='${item.eventId}']`).trigger("click");
+    expect(wrapper.emitted("acknowledge")).toEqual([[item]]);
+  });
   it("reads obsolete and current daily reminders together without converting historical fills", async () => {
     await expect(api(page).listAlerts(query)).resolves.toEqual(page);
     const receipt = { ...obsolete, acknowledgedAt: at, revision: 1 };
