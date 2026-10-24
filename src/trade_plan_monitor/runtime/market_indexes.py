@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from types import MappingProxyType
 
+from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
 from trade_plan_monitor.domain.plan_models import TradePlan
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import (
@@ -91,6 +92,16 @@ class RuntimeMarketIndexService:
         self._recoveries: dict[MarketIndexCode, _Recovery] = {}
         self._recovery_deferrals: dict[MarketIndexCode, datetime] = {}
         self._recovery_inflight: set[MarketIndexCode] = set()
+        self._linked_indexes: frozenset[MarketIndexCode] = frozenset()
+
+    def set_linked_plans(self, plans: tuple[MarketLinkedTradePlan, ...]) -> None:
+        """Union daily needs into the existing scheduled acquisition, once per index."""
+        if type(plans) is not tuple or any(not isinstance(p, MarketLinkedTradePlan) for p in plans):
+            raise TypeError("linked plans must be a tuple of MarketLinkedTradePlan")
+        self._linked_indexes = frozenset(p.reference_market.index_code for p in plans)
+
+    def _daily_count(self, code: MarketIndexCode) -> int:
+        return 60 if code in self._linked_indexes else 2
 
     def next_recovery_due_at(self, *, now: datetime | None = None) -> datetime | None:
         """Earliest pending retry for the existing serial runtime scheduler."""
@@ -301,7 +312,8 @@ class RuntimeMarketIndexService:
                 decision_cutoff=cutoff,
                 observed_no_later_than=observed_no_later_than,
                 minimum_bar_counts={
-                    code: (turnover_minute_count if code in MARKET_TURNOVER_INDEX_CODES else 1, 2)
+                    code: (turnover_minute_count if code in MARKET_TURNOVER_INDEX_CODES else 1,
+                           self._daily_count(code))
                     for code in targets
                 },
             )
@@ -376,7 +388,8 @@ class RuntimeMarketIndexService:
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
                 index_code: (
-                    turnover_minute_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
+                    turnover_minute_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1,
+                    self._daily_count(index_code)
                 )
                 for index_code in targets
             },
@@ -409,6 +422,8 @@ class RuntimeMarketIndexService:
         grouped: dict[MarketIndexCode, list[tuple[MarketIndexFactRequest, ...]]] = {
             index_code: [()] for index_code in ALWAYS_ON_INDEX_CODES
         }
+        for index_code in self._linked_indexes:
+            grouped.setdefault(index_code, [()])
         for plan in plans:
             binding = plan.reference_market
             if plan.schema_version == 1 or binding is None:
@@ -424,7 +439,8 @@ class RuntimeMarketIndexService:
             observed_no_later_than=observed_no_later_than,
             minimum_bar_counts={
                 index_code: (
-                    turnover_minute_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1, 2
+                    turnover_minute_count if index_code in MARKET_TURNOVER_INDEX_CODES else 1,
+                    self._daily_count(index_code)
                 )
                 for index_code in requirements
             },

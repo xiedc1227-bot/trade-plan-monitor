@@ -798,6 +798,10 @@ class RuntimeEvaluationService:
             market_index_batch=market_index_batch, associated_identities=identities,
         )
 
+    def set_linked_index_plans(self, plans) -> None:
+        if self._market_index_service is not None:
+            self._market_index_service.set_linked_plans(plans)
+
     async def prepare_intraday_market_indexes(
         self,
         *,
@@ -2790,6 +2794,9 @@ class RuntimeDeadlineCoordinator:
         legacy_plans = tuple(plan for plan in plans if isinstance(plan, TradePlan))
         explicit_plans = tuple(plan for plan in plans if isinstance(plan, ExplicitTradePlan))
         daily_plans = tuple(plan for plan in plans if isinstance(plan, DailyTradePlan))
+        from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
+        linked_plans = tuple(plan for plan in plans if isinstance(plan, MarketLinkedTradePlan))
+        self._evaluation_service.set_linked_index_plans(linked_plans)
         if daily_plans and self._daily_evaluation_service is None:
             raise RuntimeError("daily plan runtime is not composed")
         if explicit_plans and self._explicit_evaluation_service is None:
@@ -2830,7 +2837,7 @@ class RuntimeDeadlineCoordinator:
             if not isinstance(plan, DailyTradePlan)
         )
         market_index_batch = None
-        if legacy_plans and five_minute_bucket_end(bar_end) == bar_end:
+        if (legacy_plans or linked_plans) and five_minute_bucket_end(bar_end) == bar_end:
             market_index_batch = await self._evaluation_service.prepare_intraday_market_indexes(
                 plans=legacy_plans,
                 bucket_end=bar_end,

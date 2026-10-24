@@ -34,7 +34,9 @@ from trade_plan_monitor.backtest.preparation_review import (
     frozen_preparation,
 )
 from trade_plan_monitor.backtest.research_input import _confirmed
-from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+from trade_plan_monitor.domain.market_linkage_validation import (
+    CurrentPlanDraft,
+)
 from trade_plan_monitor.web.preparation_confirmations import (
     PreparationConfirmationSummary,
     confirmation_summary,
@@ -129,7 +131,7 @@ class _PreparationCandidateBase(ApiValue):
     evidence_hash: Sha256Hex
     validation: Literal["VALID", "INVALID", "UNRESOLVED"]
     issues: tuple[Annotated[str, Field(max_length=512)], ...] = Field(max_length=128)
-    draft: UnifiedPlanDraft | None = None
+    draft: CurrentPlanDraft | None = None
     mapping: DailyMapping | None = None
     opening_account: OpeningAccountFacts | None = None
     frozen: PreparationFrozenManifest | None = None
@@ -142,7 +144,7 @@ class _PreparationCandidateBase(ApiValue):
 
 class PreparationExtractionCandidate(_PreparationCandidateBase):
     kind: Literal["EXTRACTION"]
-    draft: UnifiedPlanDraft
+    draft: CurrentPlanDraft
     mapping: DailyMapping
     opening_account: OpeningAccountFacts
     frozen: None = None
@@ -459,7 +461,7 @@ class CollectionCandidateView(ApiValue):
     evidence_hash: Sha256Hex
     validation: Literal["VALID", "INVALID", "UNRESOLVED"]
     issues: tuple[Annotated[str, Field(max_length=512)], ...] = Field(max_length=128)
-    draft: UnifiedPlanDraft | None = None
+    draft: CurrentPlanDraft | None = None
     mapping: DailyMapping | None = None
     opening_account: OpeningAccountFacts | None = None
     update: PlanUpdateExtractionOutput | None = None

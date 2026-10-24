@@ -19,7 +19,6 @@ from trade_plan_monitor.backtest.loop_report import LoopReportWriter, decode_loo
 from trade_plan_monitor.backtest.loop_runner import LoopFrame, LoopRunner
 from trade_plan_monitor.backtest.loop_session import LoopSession
 from trade_plan_monitor.backtest.time import SHANGHAI, format_shanghai_datetime
-from trade_plan_monitor.decision.unified_conditions import requires_daily
 from trade_plan_monitor.market_data.aggregation import aggregate_five_minute_bar
 from trade_plan_monitor.market_data.daily_data import (
     DailyAdmissionError,
@@ -70,6 +69,16 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
                                 identity=identity,
                             )
             run = stored.run_input
+            linked_source = stored.dataset.linked_index_source
+            for row in run.schedule.entries:
+                if row.version.snapshot.schema_version == 6 and (
+                    linked_source is None
+                    or linked_source.reference_market != row.version.snapshot.reference_market
+                ):
+                    raise ValueError("LINKED_INDEX_REPLAY_HISTORY_MISSING")
+            if linked_source is not None:
+                for bar in linked_source.bars:
+                    _insert(spool, bar.observed_at, "INDEX", bar.model_dump_json())
             for factor in stored.dataset.adjustment_factors:
                 _insert(
                     spool,
@@ -96,6 +105,7 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
                         cancellation_token,
                         progress_callback,
                         adjustment_factors=stored.dataset.adjustment_factors,
+                        linked_source=linked_source,
                     )
                     cycle = LoopRunner(session, report_writer=writer).run(
                         frames, cancellation_token=cancellation_token
@@ -136,16 +146,26 @@ def _insert(spool, at, kind, payload, *, identity=None):
 class _Frames:
     """One bounded rolling context, with no scripted trade/fact/response operations."""
 
-    def __init__(self, spool, plan, run, calendar, token, progress, *, adjustment_factors=()):
+    def __init__(
+        self,
+        spool,
+        plan,
+        run,
+        calendar,
+        token,
+        progress,
+        *,
+        adjustment_factors=(),
+        linked_source=None,
+    ):
         self.spool, self.plan, self.run, self.calendar = spool, plan, run, calendar
         self.token, self.progress = token, progress
         self.minutes, self.fives, self.limits = {}, {}, {}
         self.daily = {}
         self.adjustment_factors = adjustment_factors
+        self.linked_source = linked_source
         self.latest, self.target = None, None
-        self.daily_needed = bool(plan.risk_branches) or any(
-            requires_daily(rule.condition) for rule in (*plan.ordinary_rules, *plan.alert_rules)
-        )
+        self.daily_needed = loop_dataset_requirements(plan).requires_daily
 
     def __iter__(self):
         total = int(
@@ -288,6 +308,13 @@ class _Frames:
             else tuple(bar for end, bar in self.fives.items() if end <= target),
             minute_target=target,
             trading_calendar=calendar,
+            linked_index=(
+                self.linked_source.snapshot_at(
+                    now, tuple(day.cal_date for day in calendar if day.is_open)
+                )
+                if self.plan.schema_version == 6 and self.linked_source is not None
+                else None
+            ),
         )
 
     def _daily_series(self, now, calendar):

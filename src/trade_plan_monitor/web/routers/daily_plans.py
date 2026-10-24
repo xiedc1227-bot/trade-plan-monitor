@@ -82,14 +82,21 @@ class DailyReviewPreview(ApiValue):
 
 class DailyEditorSchemaView(ApiValue):
     schema_version: Literal[5] = 5
+    supported_schema_versions: tuple[int, ...] = (5, 6)
+    linked_candidate_schema: dict
+    linked_policy_definitions: dict[str, str]
     candidate_schema: dict
     operation_schemas: dict
 
 
 @router.get("/plan-editor-schema", response_model=DailyEditorSchemaView)
 async def editor_schema():
+    from trade_plan_monitor.domain.market_linkage_definitions import EXPANDED_LINKAGE_POLICY
+    from trade_plan_monitor.domain.market_linkage_validation import MarketLinkedPlanDraft
     return DailyEditorSchemaView(
         candidate_schema=UnifiedPlanDraft.model_json_schema(),
+        linked_candidate_schema=MarketLinkedPlanDraft.model_json_schema(),
+        linked_policy_definitions=EXPANDED_LINKAGE_POLICY,
         operation_schemas={
             "FACT": DailyFactCommand.model_json_schema(by_alias=True),
             "POSITION": DailyPositionCommand.model_json_schema(by_alias=True),

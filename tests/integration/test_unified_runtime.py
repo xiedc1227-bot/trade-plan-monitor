@@ -711,8 +711,9 @@ def test_real_production_pipeline_prepares_minute_only_rule_from_fake_sdk(
     assert sdk.calls == []
 
 
+@pytest.mark.parametrize("linked", [False, True])
 def test_real_production_adapter_keeps_official_daily_and_minute_cutoffs_separate(
-    current_chain, tmp_path, monkeypatch,
+    current_chain, tmp_path, monkeypatch, linked,
 ):
     import asyncio
 
@@ -726,6 +727,14 @@ def test_real_production_adapter_keeps_official_daily_and_minute_cutoffs_separat
 
     chain = current_chain
     inputs = minute_inputs(chain)
+    if linked:
+        from tests.integration.test_market_linkage_runtime import index_snapshot
+        from tests.unit.test_market_linkage_contract import linked_payload
+
+        from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
+
+        chain.plan = MarketLinkedTradePlan.model_validate(linked_payload())
+        linked_snapshot, _ = index_snapshot(chain.plan)
     with chain.plans._unit_of_work() as work:
         work.history.upsert_minutes(inputs.minute_prefix)
         work.commit()
@@ -766,12 +775,20 @@ def test_real_production_adapter_keeps_official_daily_and_minute_cutoffs_separat
             return call()
     pipeline.provider = FakeProvider()
     pipeline._controller = FakeController()
+    if linked:
+        # Capture belongs to the real shared service, not a second index fetcher.
+        pipeline.index_service._latest_by_index[linked_snapshot.index_code] = linked_snapshot
     prepared = asyncio.run(pipeline.prepare_daily_inputs(
         chain.plan, chain.now, fixture.FRIDAY, inputs.minute_prefix))
     assert prepared.series.bars[-1].trade_date == fixture.FRIDAY
-    assert prepared.minute_target.date() == fixture.TUESDAY
-    assert prepared.five_minute_bars == inputs.five_minute_bars
+    if linked:
+        assert prepared.minute_target is None
+        assert prepared.five_minute_bars == ()
+    else:
+        assert prepared.minute_target.date() == fixture.TUESDAY
+        assert prepared.five_minute_bars == inputs.five_minute_bars
     assert prepared.data_blockers == ()
+    assert prepared.linked_index == (linked_snapshot if linked else None)
     assert [call[0] for call in calls] == [
         "historical_daily_bars", "daily_adjustment_factors"]
 

@@ -150,6 +150,11 @@ def simulate_inventory(
     lots = accounting.lots(symbol, now.date())
     if cause["kind"] == "SIGNAL":
         signal = cause["payload"]
+        from trade_plan_monitor.state.market_linkage_authority import linked_index_current
+        if signal.get("market_linkage") and not linked_index_current(
+            work.daily.session, state, now
+        ):
+            _reject("MARKET_LINKAGE_SOURCE_CHANGED")
         if state["data_blockers"]:
             _reject("DAILY_SIMULATION_CURRENT_EVALUATION_REQUIRED")
         if signal["plan_version_id"] != details.id or signal["state"] == "SIMULATED":

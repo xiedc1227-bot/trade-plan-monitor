@@ -25,6 +25,10 @@ from trade_plan_monitor.backtest.dataset import (
     exchange_for_symbol,
 )
 from trade_plan_monitor.backtest.loop_input import MAX_LOOP_RECORDS
+from trade_plan_monitor.backtest.market_linkage_input import (
+    LinkedIndexReplaySource,
+    freeze_linked_index,
+)
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
 from trade_plan_monitor.backtest.plan_schedule import (
     MAX_SCHEDULED_ENTRIES,
@@ -76,6 +80,8 @@ def loop_dataset_requirements(plan: UnifiedTradePlan) -> LoopDatasetRequirements
         ),
         default=1 if daily else 0,
     )
+    if plan.schema_version == 6:
+        daily_count = max(daily_count, 21)
     minute_count = max(
         (leaf.window_bars + 1 for leaf in leaves if leaf.type == "MINUTE_VOLUME_TO_MEAN_GTE"),
         default=1 if minutes else 0,
@@ -168,6 +174,8 @@ class LoopDaySelection(ResearchValue):
 
 
 class LoopDatasetManifest(ResearchValue):
+    linked_index_source: LinkedIndexReplaySource | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     schema_version: Literal["monitor-loop-dataset-v1"] = LOOP_DATASET_VERSION
     dataset_hash: Sha256Hex
     scope: DatasetScope
@@ -293,6 +301,8 @@ class LoopDatasetPlanBinding(ResearchValue):
 
 
 class ScheduledLoopDatasetManifest(ResearchValue):
+    linked_index_source: LinkedIndexReplaySource | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     schema_version: Literal["monitor-loop-dataset-v2"] = "monitor-loop-dataset-v2"
     dataset_hash: Sha256Hex
     scope: DatasetScope
@@ -577,6 +587,15 @@ def select_loop_dataset(
         )
         day += timedelta(days=1)
     blockers.extend(_calendar_chain_blockers(calendars))
+    linked_source = None
+    linked_plan = next((row.version.snapshot for row in request.schedule.entries
+                        if row.version.snapshot.schema_version == 6), None)
+    if linked_plan is not None:
+        try:
+            linked_source = freeze_linked_index(connection, plan=linked_plan, calendar=calendars,
+                started_at=boundary.started_at, cutoff=boundary.evidence_cutoff)
+        except ValueError as error:
+            blockers.append(str(error))
     if scheduled:
         for row in relevant_schedule_entries(request.schedule, boundary):
             needed = loop_dataset_requirements(row.version.snapshot)
@@ -641,6 +660,7 @@ def select_loop_dataset(
         days=tuple(days),
         warmup_blockers=warmup_blockers,
         **({'adjustment_factors': adjustment_factors} if adjustment_factors else {}),
+        **({'linked_index_source': linked_source} if linked_source is not None else {}),
     )
     return LoopDatasetFreezeResult(ready=True, manifest=manifest, blockers=())
 

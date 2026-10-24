@@ -4600,6 +4600,8 @@ class ProductionMonitorPipeline:
             minute_prefix=minute_prefix, five_minute_bars=minute_bars,
             trading_calendar=days, minute_target=minute_target,
             runtime_generation=str(self._runtime_generation),
+            linked_index=(self.index_service.latest_snapshots().get(plan.reference_market.index_code)
+                          if plan.schema_version == 6 else None),
         )
 
     @staticmethod

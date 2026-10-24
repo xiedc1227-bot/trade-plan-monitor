@@ -59,6 +59,7 @@ APPROVED_PATHS = {
     "/api/v1/backtest-runs/{run_id}/fills",
     "/api/v1/backtest-runs/{run_id}/market-index-series",
     "/api/v1/backtest-runs/{run_id}/rule-changes/{source_id}",
+    "/api/v1/backtest-runs/{run_id}/review-context",
     "/api/v1/backtest-service",
     "/api/v1/backtest-service/recovery-requests",
     "/api/v1/backtest-service/stop-requests",

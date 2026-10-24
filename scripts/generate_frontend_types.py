@@ -349,7 +349,15 @@ class _TypeScriptRenderer:
                         tags = [tag for tag, target in mapping.items() if target == reference]
                         if not tags:
                             raise ValueError("OpenAPI discriminator variant has no mapped tag")
-                        tag_type = " | ".join(_typescript_literal(tag) for tag in tags)
+                        # JSON discriminator mappings always have string keys;
+                        # numeric literal properties must retain their JSON type.
+                        target_schema = self._schemas.get(
+                            str(reference).removeprefix(_SCHEMA_REF_PREFIX), {}
+                        )
+                        property_schema = target_schema.get("properties", {}).get(name, {})
+                        literal = property_schema.get("const")
+                        tag_type = (_typescript_literal(literal) if literal is not None
+                                    else " | ".join(_typescript_literal(tag) for tag in tags))
                         rendered.append(
                             f"({self._schema_type(variant, level=level)} & "
                             f"{{ {_typescript_key(name)}: {tag_type} }})"
@@ -381,6 +389,9 @@ class _TypeScriptRenderer:
         if schema_type == "null":
             return "null"
         if schema_type == "array":
+            if "prefixItems" in schema:
+                return "[" + ", ".join(self._schema_type(item, level=level + 1)
+                    for item in schema["prefixItems"]) + "]"
             return f"Array<{self._schema_type(schema.get('items'), level=level + 1)}>"
         if schema_type == "object" or "properties" in schema or "additionalProperties" in schema:
             return self._object_type(schema, level=level)

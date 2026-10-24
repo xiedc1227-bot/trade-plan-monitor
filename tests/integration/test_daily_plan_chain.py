@@ -484,6 +484,9 @@ def test_real_sdk_normalizer_production_adapter_and_official_scheduler(chain):
     )
 
     class EmptyLegacy:
+        def set_linked_index_plans(self, plans):
+            assert plans == ()  # Unlinked daily plans acquire no index dependency.
+
         async def run_official_close_batch(self, *, plans, **kwargs):
             assert plans == ()
             return ()

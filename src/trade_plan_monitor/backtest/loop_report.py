@@ -26,6 +26,7 @@ from trade_plan_monitor.backtest.plan_schedule import (
 from trade_plan_monitor.backtest.reminder_capture import CapturedReminder
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.backtest.research_report import ResearchReminder, ResearchRuleEvidence
+from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.unified_conditions import evaluate_unified_condition
 from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.state.daily_state_models import (
@@ -182,6 +183,8 @@ def project_loop_valuation(
 
 
 class LoopEvaluation(ResearchValue):
+    market_linkage: tuple[MarketLinkageDecision, ...] | None = Field(
+        default=None, max_length=2, exclude_if=lambda value: value is None)
     kind: Literal["EVALUATED"] = "EVALUATED"
     evaluation_id: Sha256Hex | None
     duplicate: bool
@@ -587,6 +590,8 @@ class LoopReportWriter:
                     alerts=tuple(snapshot.get("alerts", ())),
                     risk_action=snapshot["risk_action"],
                     conditions=conditions,
+                    market_linkage=(tuple(snapshot["market_linkage"])
+                                    if snapshot.get("market_linkage") is not None else None),
                     blockers=inputs.data_blockers,
                 )
             )

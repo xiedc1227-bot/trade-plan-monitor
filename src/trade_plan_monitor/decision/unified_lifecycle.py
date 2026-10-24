@@ -29,7 +29,15 @@ def confirm_signal(
     bars=(),
     target=None,
     trading_calendar=(),
+    linkage=None,
 ):
+    from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule
+
+    if isinstance(rule, MarketLinkedRule) and (
+        linkage is None or linkage.rule_id != rule.rule_id
+        or linkage.calculation.authorized_quantity <= 0
+    ):
+        return None
     daily = rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
     staged = isinstance(rule.independent_signal, OncePerRule | AfterRuleCompleted)
     if staged and any(s["rule_id"] == rule.rule_id for s in previous):
@@ -44,6 +52,15 @@ def confirm_signal(
     if daily and series is None or not daily and (target is None or not bars):
         return None
     day = series.bars[-1].trade_date if daily else target.date()
+    if isinstance(rule, MarketLinkedRule):
+        from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
+        from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
+
+        linkage = MarketLinkageDecision.model_validate_json(linkage.model_dump_json())
+        if (linkage.content_hash != daily_plan_content_sha256(plan)
+                or linkage.decision_session != day
+                or linkage.calculation.base_quantity != rule.quantity_policy.base_quantity):
+            return None
     if isinstance(rule.independent_signal, AfterRuleCompleted):
         predecessor = next(
             s
@@ -141,7 +158,10 @@ def confirm_signal(
         "bucket": rule.bucket,
         "lineage": plan.plan_id,
         "state": "CONFIRMED",
-        "planned_qty": rule.quantity,
+        "planned_qty": (linkage.calculation.candidate_quantity
+                        if isinstance(rule, MarketLinkedRule) else rule.quantity),
+        **({"market_linkage": linkage.model_dump(mode="json")}
+           if isinstance(rule, MarketLinkedRule) else {}),
         "simulated_qty": 0,
         "confirmed_trade_date": str(day),
         "execution_date": None if execution is None else str(execution),

@@ -63,7 +63,50 @@ def compact_schema(schema: dict) -> str:
                 result[key] = [visit(value) for value in result[key]]
         return result
 
-    return json.dumps(visit(schema), ensure_ascii=False, separators=(",", ":"))
+    compact = visit(schema)
+    counts, references, shared = {}, {}, {}
+
+    def walk(node, transform):
+        if not isinstance(node, dict):
+            return node
+        result = dict(node)
+        for key in ("$defs", "definitions", "properties", "patternProperties", "dependentSchemas"):
+            if key in result:
+                result[key] = {name: walk(value, transform) for name, value in result[key].items()}
+        for key in ("items", "additionalProperties", "contains", "not", "if", "then", "else"):
+            if key in result:
+                result[key] = walk(result[key], transform)
+        for key in ("allOf", "anyOf", "oneOf", "prefixItems"):
+            if key in result:
+                result[key] = [walk(value, transform) for value in result[key]]
+        return transform(node, result)
+
+    def key_for(node):
+        return json.dumps(node, sort_keys=True, separators=(",", ":"))
+
+    def count(original, result):
+        key = key_for(original)
+        if len(key) > 250 and any(k in original for k in ("anyOf", "oneOf")):
+            counts[key] = counts.get(key, 0) + 1
+        return result
+
+    def factor(original, result):
+        key = key_for(original)
+        if counts.get(key, 0) <= 1:
+            return result
+        if key not in references:
+            name = "SharedCondition" + str(len(references))
+            while name in compact.get("$defs", {}) or name in shared:
+                name += "_"
+            references[key] = name
+            shared[name] = result
+        return {"$ref": "#/$defs/" + references[key]}
+
+    walk(compact, count)
+    compact = walk(compact, factor)
+    if shared:
+        compact.setdefault("$defs", {}).update(shared)
+    return json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
 
 
 def source_clause_evidence(text: str) -> list[dict]:

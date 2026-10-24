@@ -174,6 +174,8 @@ def test_plan_capability_reports_current_condition_activation() -> None:
 
     assert capability.status_code == 200
     assert capability.json() == {
+        "supportedSchemaVersions": [5, 6],
+        "linkedExecutionVersion": "condition-plan-v2",
         "schemaVersion": 5,
         "executionMode": "CONDITION_PLAN",
         "executionVersion": "condition-plan-v1",

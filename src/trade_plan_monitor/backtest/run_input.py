@@ -24,6 +24,7 @@ from trade_plan_monitor.backtest.dataset import (
 from trade_plan_monitor.backtest.index_data import build_backtest_index_requirement
 from trade_plan_monitor.backtest.models import ExecutionConfig, PositionLot
 from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
+from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.plan_models import PositionBucket, TradePlan
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
@@ -35,6 +36,7 @@ RUN_FORMULA_V1 = "backtest-run-v1"
 RUN_FORMULA_V2 = "backtest-run-v2"
 RUN_FORMULA_V3 = "backtest-run-v3"
 RUN_FORMULA_V4 = "backtest-run-v4"
+RUN_FORMULA_V7 = "backtest-run-v7"
 RUN_INPUT_SCHEMA_VERSION = "backtest-run-input-v1"
 FIVE_MINUTE_CONTEXT_BARS = 512
 DAILY_CONTEXT_BARS = 499
@@ -43,7 +45,7 @@ MAX_INITIAL_LOTS = 200
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 _RunFormulaVersion = Literal[
-    "backtest-run-v1", "backtest-run-v2", "backtest-run-v3", "backtest-run-v4"
+    "backtest-run-v1", "backtest-run-v2", "backtest-run-v3", "backtest-run-v4", "backtest-run-v7"
 ]
 _Sha256Hex = Annotated[
     str,
@@ -90,7 +92,7 @@ class BacktestRunInput(_RunInputValue):
 
     schema_version: Literal["backtest-run-input-v1"] = RUN_INPUT_SCHEMA_VERSION
     run_formula_version: _RunFormulaVersion
-    plan_snapshot: TradePlan | UnifiedTradePlan
+    plan_snapshot: MarketLinkedTradePlan | TradePlan | UnifiedTradePlan
     plan_sha256: _Sha256Hex
     plan_version_id: UUID | None = None
     dataset_hash: _Sha256Hex
@@ -106,7 +108,8 @@ class BacktestRunInput(_RunInputValue):
     execution_config: ExecutionConfig
     manual_event_risk: bool
     research_input: UnifiedResearchInput | None = Field(
-        default=None, exclude_if=lambda value: value is None,
+        default=None,
+        exclude_if=lambda value: value is None,
     )
     reference_market_binding: ReferenceMarketBinding | None = Field(
         default=None,
@@ -153,14 +156,39 @@ class BacktestRunInput(_RunInputValue):
         if plan_version_id is not None and not isinstance(plan_version_id, UUID):
             raise TypeError("plan_version_id must be a UUID or None")
         if isinstance(plan, UnifiedTradePlan):
-            plan = UnifiedTradePlan.model_validate(plan.model_dump(mode="python"))
-            return cls(run_formula_version=RUN_FORMULA_V4, plan_snapshot=plan,
-                plan_sha256=plan_sha256(plan), plan_version_id=plan_version_id,
-                dataset_hash=manifest.dataset_hash, start=manifest.scope.start,
-                end=manifest.scope.end, initial_cash_fen=initial_cash_fen,
-                initial_lots=initial_lots, indicator_formula_version="daily-ta-v2",
-                execution_config=execution_config, manual_event_risk=manual_event_risk,
-                research_input=research_input)
+            plan = type(plan).model_validate(plan.model_dump(mode="python"))
+            linked = isinstance(plan, MarketLinkedTradePlan)
+            identity = {}
+            if linked:
+                requirement = build_backtest_index_requirement(plan)
+                if not manifest.market_index_data_hash or not any(
+                    item.symbol == plan.symbol
+                    and item.index_code == plan.reference_market.index_code
+                    for item in manifest.reference_market_bindings
+                ):
+                    raise ValueError("LINKED_INDEX_REPLAY_HISTORY_MISSING")
+                identity = dict(
+                    reference_market_binding=plan.reference_market,
+                    market_index_data_hash=manifest.market_index_data_hash,
+                    index_requirement_hash=requirement.index_requirement_hash,
+                    formula_definition_hash=requirement.formula_definition_hash,
+                )
+            return cls(
+                run_formula_version=RUN_FORMULA_V7 if linked else RUN_FORMULA_V4,
+                plan_snapshot=plan,
+                plan_sha256=plan_sha256(plan),
+                plan_version_id=plan_version_id,
+                dataset_hash=manifest.dataset_hash,
+                start=manifest.scope.start,
+                end=manifest.scope.end,
+                initial_cash_fen=initial_cash_fen,
+                initial_lots=initial_lots,
+                indicator_formula_version="daily-ta-v2",
+                execution_config=execution_config,
+                manual_event_risk=manual_event_risk,
+                research_input=research_input,
+                **identity,
+            )
         if research_input is not None:
             raise ValueError("RESEARCH_INPUT_FORBIDDEN")
         requirement = build_backtest_index_requirement(plan)
@@ -231,8 +259,11 @@ class BacktestRunInput(_RunInputValue):
         if current:
             if self.research_input is None:
                 raise ValueError("RESEARCH_INPUT_REQUIRED")
-            if self.run_formula_version != RUN_FORMULA_V4:
-                raise ValueError("CURRENT_PLAN_REQUIRES_V4")
+            linked = isinstance(self.plan_snapshot, MarketLinkedTradePlan)
+            if self.run_formula_version != (RUN_FORMULA_V7 if linked else RUN_FORMULA_V4):
+                raise ValueError(
+                    "LINKED_PLAN_REQUIRES_V7" if linked else "CURRENT_PLAN_REQUIRES_V4"
+                )
             if self.manual_event_risk:
                 raise ValueError("MANUAL_EVENT_RISK_UNSUPPORTED")
             if self.research_input.review.content_hash != daily_plan_content_sha256(
@@ -245,17 +276,34 @@ class BacktestRunInput(_RunInputValue):
                 raise ValueError("RESEARCH_OPERATION_OUTSIDE_RUN")
             if not self.research_input.inventory_known and self.initial_lots:
                 raise ValueError("UNKNOWN_INVENTORY_FORBIDS_LOTS")
-            if any((p.dataset_hash, p.symbol) != (self.dataset_hash, self.plan_snapshot.symbol)
-                for p in self.research_input.adjustment_proofs):
+            if any(
+                (p.dataset_hash, p.symbol) != (self.dataset_hash, self.plan_snapshot.symbol)
+                for p in self.research_input.adjustment_proofs
+            ):
                 raise ValueError("RESEARCH_ADJUSTMENT_BINDING_MISMATCH")
             if self.indicator_formula_version != "daily-ta-v2":
                 raise ValueError("indicator formula version must match the plan snapshot")
             self._validate_common_lots(current=True)
             if self.plan_sha256 != plan_sha256(self.plan_snapshot):
                 raise ValueError("plan_sha256 must match the canonical plan snapshot")
-            if any(value is not None for value in (self.reference_market_binding,
-                self.market_index_data_hash, self.index_requirement_hash,
-                self.formula_definition_hash)):
+            if linked:
+                requirement = build_backtest_index_requirement(self.plan_snapshot)
+                if (
+                    self.reference_market_binding != self.plan_snapshot.reference_market
+                    or self.market_index_data_hash is None
+                    or self.index_requirement_hash != requirement.index_requirement_hash
+                    or self.formula_definition_hash != requirement.formula_definition_hash
+                ):
+                    raise ValueError("LINKED_INDEX_REPLAY_BINDING_MISMATCH")
+            elif any(
+                value is not None
+                for value in (
+                    self.reference_market_binding,
+                    self.market_index_data_hash,
+                    self.index_requirement_hash,
+                    self.formula_definition_hash,
+                )
+            ):
                 raise ValueError("CURRENT_PLAN_FORBIDS_INDEX_IDENTITY")
             return self
         if self.research_input is not None:
@@ -350,7 +398,7 @@ class BacktestRunInput(_RunInputValue):
             "execution_config": self.execution_config.model_dump(mode="python", round_trip=True),
             "manual_event_risk": self.manual_event_risk,
         }
-        if self.run_formula_version == RUN_FORMULA_V3:
+        if self.run_formula_version in (RUN_FORMULA_V3, RUN_FORMULA_V7):
             preimage.update(
                 {
                     "reference_market_binding": self.reference_market_binding,
@@ -359,7 +407,7 @@ class BacktestRunInput(_RunInputValue):
                     "formula_definition_hash": self.formula_definition_hash,
                 }
             )
-        if self.run_formula_version == RUN_FORMULA_V4:
+        if self.run_formula_version in (RUN_FORMULA_V4, RUN_FORMULA_V7):
             preimage["research_input"] = self.research_input
         return sha256(
             (self.run_formula_version + "\0" + canonical_json(preimage)).encode("utf-8")
@@ -403,6 +451,7 @@ __all__ = [
     "RUN_FORMULA_V2",
     "RUN_FORMULA_V3",
     "RUN_FORMULA_V4",
+    "RUN_FORMULA_V7",
     "RUN_INPUT_SCHEMA_VERSION",
     "BacktestInitialLotInput",
     "BacktestRunInput",

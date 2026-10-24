@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from uuid import UUID, uuid4
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.decision.daily_conditions import evaluate_daily_condition
 from trade_plan_monitor.decision.daily_lifecycle import (
@@ -15,6 +15,7 @@ from trade_plan_monitor.decision.daily_lifecycle import (
     next_session,
 )
 from trade_plan_monitor.decision.daily_risk import advance_daily_risks, risk_execution
+from trade_plan_monitor.decision.market_linkage import evaluate_market_linkage
 from trade_plan_monitor.decision.unified_conditions import (
     evaluate_unified_condition,
     requires_daily,
@@ -27,6 +28,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
     DailyTradePlan,
     DailyValue,
 )
+from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule, MarketLinkedTradePlan
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_fulfilled, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import (
@@ -42,6 +44,7 @@ from trade_plan_monitor.market_data.aggregation import (
 )
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
 from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime, TradingDay
+from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.notifications.daily_models import DailyAlertPayload, daily_alert_key
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_repository import DailyRepository, daily_hash
@@ -50,6 +53,17 @@ from trade_plan_monitor.state.repositories import MarketHistoryRepository
 
 
 class DailyRuntimeInputs(DailyValue):
+    linked_index: MarketIndexSnapshot | None = None
+
+    @field_validator("linked_index", mode="before")
+    @classmethod
+    def index_json(cls, value):
+        if isinstance(value, dict):
+            return (MarketIndexSnapshot.model_validate_json(json.dumps(value))
+                    if isinstance(value.get("decision_cutoff"), str)
+                    else MarketIndexSnapshot.model_validate(value))
+        return value
+
     evaluated_at: ShanghaiDatetime
     official_trade_date: date | None
     series: DailySeries | None
@@ -480,6 +494,45 @@ class DailyRuntimeEvaluationService:
                 if series is None
                 else daily_hash("daily-series-v1", series.model_dump(mode="json")),
             }
+            linked_source_current = True
+            if isinstance(plan, MarketLinkedTradePlan):
+                target["linked_index"] = (None if inputs.linked_index is None
+                                          else inputs.linked_index.snapshot_hash)
+                if inputs.linked_index is not None:
+                    from trade_plan_monitor.market_index.canonical import (
+                        validate_market_index_snapshot_integrity,
+                    )
+                    validate_market_index_snapshot_integrity(inputs.linked_index)
+                    if (inputs.linked_index.index_code != plan.reference_market.index_code
+                            or inputs.linked_index.observed_at > now):
+                        raise ValueError("linked index identity or cutoff mismatch")
+                    work.projections.put_market_index_snapshot(inputs.linked_index,
+                        provider_content_revision=inputs.linked_index.revision)
+                    head = work.projections.get_market_index_head(
+                        mapping_version=inputs.linked_index.mapping_version,
+                        index_code=inputs.linked_index.index_code,
+                        decision_cutoff=inputs.linked_index.decision_cutoff,
+                        request_set_hash=inputs.linked_index.request_set_hash)
+                    # Re-evaluation may reuse a cached snapshot. It cannot roll
+                    # back a correction already admitted by the owned collector.
+                    if head is None or (
+                        inputs.linked_index.revision != head.provider_content_revision
+                        and inputs.linked_index.observed_at > head.snapshot.observed_at
+                    ):
+                        work.projections.advance_market_index_head(
+                            inputs.linked_index,
+                            provider_content_revision=inputs.linked_index.revision,
+                            observed_at=inputs.linked_index.observed_at,
+                        )
+                    from trade_plan_monitor.state.market_linkage_authority import (
+                        linked_index_current,
+                    )
+
+                    linked_source_current = linked_index_current(work.daily.session, {
+                        "market_linkage": True,
+                        "linked_index_source": inputs.linked_index.model_dump(mode="json"),
+                    }, now)
+                    target["linked_source_current"] = linked_source_current
             if ordinary_authority_ended:
                 target["ordinary_authority_ended"] = True
             identity = daily_hash("daily-decision-result-v1", target)
@@ -672,11 +725,40 @@ class DailyRuntimeEvaluationService:
             signal_rows = (() if _alert_only(plan)
                 else work.daily.current_signals(symbol=plan.symbol))
             previous = tuple(r["payload"] for r in signal_rows)
+            linkage_by_rule = {}
+            linked_day = next((day for day in reversed(inputs.session_dates)
+                if datetime.combine(day, time(15), now.tzinfo) <= now), None)
+            if isinstance(plan, MarketLinkedTradePlan) and linked_day is not None:
+                for rule in plan.ordinary_rules:
+                    if isinstance(rule, MarketLinkedRule):
+                        linkage_by_rule[rule.rule_id] = evaluate_market_linkage(
+                            plan,
+                            rule,
+                            series=series,
+                            index_bars=(
+                                ()
+                                if inputs.linked_index is None or not linked_source_current
+                                else inputs.linked_index.official_daily_bars
+                            ),
+                            session_dates=inputs.session_dates,
+                            decision_session=linked_day,
+                            cutoff=now,
+                            facts=facts,
+                            inventory=inventory,
+                            risk="SATISFIED"
+                            if risk_blocked
+                            else "UNSATISFIED"
+                            if risk_known
+                            else "MISSING_INPUT",
+                        )
             if not risk_blocked and ordinary_eligible:
                 for rule in plan.ordinary_rules:
                     if isinstance(plan, UnifiedTradePlan):
                         daily_rule = rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
                         confirmations = completed_series if daily_rule else (series,)
+                        if isinstance(rule, MarketLinkedRule):
+                            confirmations = (series,) if series is not None and (
+                                series.bars[-1].trade_date == linked_day) else ()
                     elif isinstance(rule, DailyEnabledRule):
                         daily_rule, confirmations = True, completed_series
                     else:
@@ -715,6 +797,8 @@ class DailyRuntimeEvaluationService:
                             session_dates=inputs.session_dates,
                             plan_version_id=active.plan_version_id,
                             review_id=binding["review_id"],
+                            **({"linkage": linkage_by_rule.get(rule.rule_id)}
+                               if isinstance(rule, MarketLinkedRule) else {}),
                             **extra,
                         )
                         if signal is not None and work.daily.get(signal["signal_id"]) is None:
@@ -743,6 +827,21 @@ class DailyRuntimeEvaluationService:
             signals = []
             for row in signal_rows:
                 signal = row["payload"]
+                if signal.get("market_linkage") and signal["state"] not in {
+                    "SIMULATED",
+                    "INVALIDATED",
+                    "EXPIRED",
+                }:
+                    current_linkage = linkage_by_rule.get(signal["rule_id"])
+                    if current_linkage is None or (
+                        current_linkage.consumed_hash != signal["market_linkage"]["consumed_hash"]
+                    ):
+                        signal = {
+                            **signal,
+                            "state": "INVALIDATED",
+                            "executable_qty": 0,
+                            "blockers": ["MARKET_LINKAGE_EVIDENCE_CHANGED"],
+                        }
                 if signal["execution_date"] is None:
                     next_day = next_session(
                         date.fromisoformat(signal["confirmed_trade_date"]), inputs.session_dates
@@ -853,6 +952,10 @@ class DailyRuntimeEvaluationService:
                         "evidence": [] if evidence is None else [evidence.model_dump(mode="json")],
                     })
             snapshot = {
+                **({"market_linkage": [v.model_dump(mode="json") for v in linkage_by_rule.values()],
+                    "linked_index_source": None if inputs.linked_index is None
+                        else inputs.linked_index.model_dump(mode="json")}
+                   if isinstance(plan, MarketLinkedTradePlan) else {}),
                 "symbol": plan.symbol,
                 "plan_version_id": active.plan_version_id,
                 "plan_hash": plan_sha256(plan),
@@ -1183,6 +1286,9 @@ def daily_delivery_allowed(session, event, now):
         return False
     head = repo.get("evaluation-head-" + event.symbol)
     if head is None or head["payload"]["plan_version_id"] != event.plan_version_id:
+        return False
+    from trade_plan_monitor.state.market_linkage_authority import linked_index_current
+    if s.get("market_linkage") and not linked_index_current(session, head["payload"], now):
         return False
     if head["payload"].get("minute_target") is not None and not minute_source_current(
         session, head["payload"], now

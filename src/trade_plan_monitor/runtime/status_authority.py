@@ -733,7 +733,10 @@ def condition_completion_matches(session, *, proof, snapshot, now):
     ):
         return False
     from trade_plan_monitor.runtime.daily_service import minute_source_current
+    from trade_plan_monitor.state.market_linkage_authority import linked_index_current
 
+    if not linked_index_current(session, snapshot, now):
+        return False
     if snapshot.get("minute_target") and not minute_source_current(session, snapshot, now):
         return False
     if datetime.fromisoformat(snapshot["evaluated_at"]) > now:
@@ -753,7 +756,7 @@ def condition_completion_matches(session, *, proof, snapshot, now):
 def capture_condition_completion_proof(
     session, *, plan, result, runtime_generation, configuration_revision, now, consumed_inputs
 ):
-    """Only a new committed schema5 evaluation with exact consumed sources installs proof."""
+    """Only a new committed current evaluation with exact sources installs proof."""
     import json
 
     from trade_plan_monitor.domain.plan_hash import plan_sha256
@@ -768,6 +771,10 @@ def capture_condition_completion_proof(
     ):
         return None
     snapshot = result.snapshot
+    from trade_plan_monitor.state.market_linkage_authority import linked_index_current
+
+    if not linked_index_current(session, snapshot, now):
+        return None
     active = session.get(ActivePlan, plan.symbol)
     state = session.get(PlanActivationState, plan.symbol)
     version = None if active is None else session.get(PlanVersion, active.plan_version_id)

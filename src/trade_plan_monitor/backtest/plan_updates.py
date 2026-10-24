@@ -1,6 +1,5 @@
 """Deterministically materialize declared changes without account or review side effects."""
 
-import json
 from typing import Literal
 
 from pydantic import Field, JsonValue
@@ -10,6 +9,10 @@ from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOut
 from trade_plan_monitor.ai.risk_withdrawal_scope import risk_scope_issue
 from trade_plan_monitor.backtest.models import StableIdentifier
 from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.domain.market_linkage_validation import (
+    CurrentPlanDraft,
+    parse_current_draft,
+)
 from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
@@ -42,7 +45,7 @@ class PlanFieldOrigin(ResearchValue):
 
 
 class MaterializedPlanUpdate(ResearchValue):
-    draft: UnifiedPlanDraft
+    draft: CurrentPlanDraft
     changes: tuple[PlanChange, ...] = Field(max_length=64)
     origins: tuple[PlanFieldOrigin, ...] = Field(max_length=2000)
 
@@ -90,7 +93,7 @@ def materialize_plan_update(
     """Resolve whole sections or stable rules; undeclared draft fields have no effect."""
     if not isinstance(base, UnifiedTradePlan) or not isinstance(output, PlanUpdateExtractionOutput):
         raise TypeError("materialization requires a complete base and typed update")
-    base = UnifiedTradePlan.model_validate(base.model_dump(mode="python"))
+    base = type(base).model_validate(base.model_dump(mode="python"))
     output = PlanUpdateExtractionOutput.model_validate(output.model_dump(mode="python"))
     if output.scope == "UNRESOLVED":
         raise ValueError("ambiguous scope blocks dependent materialization")
@@ -211,7 +214,7 @@ def materialize_plan_update(
         for target, key in sorted(required - explicit, key=lambda pair: (pair[0], pair[1] or "")):
             value = _rules(target, prior[target])[key] if key is not None else prior[target]
             changes.append(_change(target, key, value, value, (), "RETAIN"))
-        draft = UnifiedPlanDraft.model_validate_json(json.dumps(merged))
+        draft = parse_current_draft(merged)
         origins = []
         for path in sorted(semantic_values(draft)):
             target = path.split(".", 1)[0].split("[", 1)[0]

@@ -1070,7 +1070,7 @@ export type CollectionAttemptView = {
 export type CollectionCandidateView = {
   candidateHash: string;
   confirmationSummary?: (components["schemas"]["PreparationConfirmationSummary"]) | (null);
-  draft?: (components["schemas"]["UnifiedPlanDraft"]) | (null);
+  draft?: ((components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 })) | (null);
   evidenceHash: string;
   issues: Array<string>;
   kind: "INITIAL" | "UPDATE" | "MATERIALIZED" | "CORRECTED" | "UNAVAILABLE";
@@ -1092,7 +1092,7 @@ export type CollectionChainReviewDeclaration = {
 export type CollectionCorrectionDeclaration = {
   binding: components["schemas"]["CollectionItemReviewDeclaration"];
   confirmed: true;
-  draft?: (components["schemas"]["UnifiedPlanDraftInput"]) | (null);
+  draft?: ((components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
   evidence: string;
   expected_revision: number;
   mapping?: (components["schemas"]["DailyMapping"]) | (null);
@@ -1264,6 +1264,12 @@ export type ConfiguredAIRuntimeView = {
   revision?: 0;
 };
 
+export type ConfirmationSelection = {
+  blocker: (string) | (null);
+  group: ("S0" | "S1" | "S2") | (null);
+  needs_strength: boolean;
+};
+
 export type ConnectionStatus = "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
 
 export type DailyAlertCenterView = {
@@ -1425,10 +1431,17 @@ export type DailyEditorSchemaView = {
   candidateSchema: {
     [key: string]: unknown;
   };
+  linkedCandidateSchema: {
+    [key: string]: unknown;
+  };
+  linkedPolicyDefinitions: {
+    [key: string]: string;
+  };
   operationSchemas: {
     [key: string]: unknown;
   };
   schemaVersion?: 5;
+  supportedSchemaVersions?: Array<number>;
 };
 
 export type DailyEvaluationApiView = {
@@ -1441,6 +1454,8 @@ export type DailyEvaluationApiView = {
   factRevisions: Array<components["schemas"]["DailyFactRevision"]>;
   fiveMinuteBars?: Array<components["schemas"]["FiveMinuteBar"]>;
   inventory: components["schemas"]["DailyInventoryApiView"];
+  linkedIndexSource?: (components["schemas"]["MarketIndexSnapshot"]) | (null);
+  marketLinkage?: (Array<components["schemas"]["MarketLinkageDecision"]>) | (null);
   minutePrefix?: Array<components["schemas"]["MinuteBar"]>;
   minuteTarget?: (string) | (null);
   nextAction: "REVIEW_RISK_EXIT" | "CONFIRM_SIMULATED_TRADE" | "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION";
@@ -1809,6 +1824,7 @@ export type DailySignalApiView = {
   executionDate: (string) | (null);
   executionWindow?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
   lineage: string;
+  marketLinkage?: (components["schemas"]["MarketLinkageDecision"]) | (null);
   occurrenceMode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   planVersionId: string;
   plannedQty: number;
@@ -1836,6 +1852,7 @@ export type DailySignalState = {
   execution_date: (string) | (null);
   execution_window?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
   lineage: string;
+  market_linkage?: (components["schemas"]["MarketLinkageDecision"]) | (null);
   occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   plan_version_id: string;
   planned_qty: number;
@@ -2031,6 +2048,22 @@ export type DiagnosticEvaluationView = {
   stateMutationApplied: false;
 };
 
+export type DraftMarketPolicy = {
+  base_confirmation: ("S0") | (null);
+  exception_policy: ("BLOCK_P1") | (null);
+  policy_version: ("market-linkage-v1") | (null);
+};
+
+export type DraftQuantityPolicy = {
+  base_quantity: (number) | (null);
+  capacity_policy: ("BLOCK_FULL") | (null);
+  mode: ("MARKET_FACTOR") | (null);
+  normal_factor: ("1") | (null);
+  rounding: ("LEGAL_FLOOR") | (null);
+  signal_quantity_policy: ("FREEZE") | (null);
+  weak_factor: ("0.5") | (null);
+};
+
 export type DraftReviewIssue = {
   kind: components["schemas"]["ReviewIssueKind"];
   material: boolean;
@@ -2130,10 +2163,12 @@ export type ExplicitPlanCapabilityView = {
   executionMode?: "CONDITION_PLAN";
   executionVersion?: "condition-plan-v1";
   isolatedTrustedReviewOnly?: false;
+  linkedExecutionVersion?: "condition-plan-v2";
   pendingRequirements?: Array<string>;
   publicActivationAvailable?: true;
   schemaVersion?: 5;
   supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
+  supportedSchemaVersions?: Array<number>;
 };
 
 export type ExtractionIssue = {
@@ -2264,6 +2299,52 @@ export type LegacyPlanPreviewResponse = {
   plans?: Array<components["schemas"]["LegacyPlanItemView"]>;
 };
 
+export type LinkedDraftRisk = {
+  condition: ((components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
+  evidence_mode: ("TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION") | (null);
+  holding_scope?: (components["schemas"]["RiskHoldingScope"]) | (null);
+  involves_core: (boolean) | (null);
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  priority: (number) | (null);
+  risk_comparison?: ("LT" | "LTE") | (null);
+  risk_line_fen?: (number) | (null);
+  rule_id?: (string) | (null);
+  scope_evidence: (string) | (null);
+  suspension_confirmation_policy?: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
+  target_core_qty: (number) | (null);
+  target_tactical_qty: (number) | (null);
+};
+
+export type LinkedDraftRiskInput = {
+  condition: ((components["schemas"]["UnifiedPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })) | (null);
+  evidence_mode: ("TWO_OFFICIAL_CLOSES" | "STRUCTURE_AND_DETERIORATION") | (null);
+  holding_scope?: (components["schemas"]["RiskHoldingScope"]) | (null);
+  involves_core: (boolean) | (null);
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  priority: (number) | (null);
+  risk_comparison?: ("LT" | "LTE") | (null);
+  risk_line_fen?: (number) | (null);
+  rule_id?: (string) | (null);
+  scope_evidence: (string) | (null);
+  suspension_confirmation_policy?: ("RESUME_FIRST_CLOSE" | "RESTART_ADJACENT_PAIR") | (null);
+  target_core_qty: (number) | (null);
+  target_tactical_qty: (number) | (null);
+};
+
+export type LinkedIndexFacts = {
+  close?: (string) | (null);
+  decision_session: string;
+  evidence_cutoff: string;
+  formula_version?: "market-linkage-index-v1";
+  low20?: (string) | (null);
+  ma20?: (string) | (null);
+  ma20_5?: (string) | (null);
+  ma60?: (string) | (null);
+  reasons?: Array<string>;
+  reference_market: components["schemas"]["ReferenceMarketBinding"];
+  source_hashes?: Array<[string, string]>;
+};
+
 export type LoopAccountContext = {
   core_qty?: (number) | (null);
   dependent_rule_ids?: Array<string>;
@@ -2378,6 +2459,7 @@ export type LoopEvaluation = {
   evaluation_id: (string) | (null);
   inventory: components["schemas"]["DailyInventoryView"];
   kind?: "EVALUATED";
+  market_linkage?: (Array<components["schemas"]["MarketLinkageDecision"]>) | (null);
   minute_target: (string) | (null);
   official_trade_date: (string) | (null);
   risk_action: components["schemas"]["DailyRiskAction"];
@@ -2488,7 +2570,7 @@ export type LoopPlanVersion = {
   information_cutoff: string;
   plan_hash: string;
   review: components["schemas"]["LoopPlanReview"];
-  snapshot: components["schemas"]["UnifiedTradePlan"];
+  snapshot: (components["schemas"]["MarketLinkedTradePlan"]) | (components["schemas"]["UnifiedTradePlan"]);
   source_hashes: Array<string>;
   version_id: string;
 };
@@ -2554,6 +2636,21 @@ export type ManualEventRiskView = {
 
 export type ManualEventRiskViewStatus = "UNKNOWN" | "CLEAR" | "RISK_PRESENT";
 
+export type MarketIndexBar = {
+  amount?: (string) | (null);
+  bar_at: string;
+  close_points: string;
+  high_points: string;
+  index_code: components["schemas"]["MarketIndexCode"];
+  interval: components["schemas"]["MarketIndexInterval"];
+  low_points: string;
+  observed_at: string;
+  open_points: string;
+  provider_revision: number;
+  source_kind: components["schemas"]["MarketIndexSourceKind"];
+  volume?: (string) | (null);
+};
+
 export type MarketIndexBarPage = {
   hasMore: boolean;
   items?: Array<components["schemas"]["MarketIndexBarView"]>;
@@ -2582,6 +2679,17 @@ export type MarketIndexCode = "000001.SH" | "399001.SZ" | "399107.SZ" | "399006.
 export type MarketIndexFactUnit = "POINTS" | "RATIO";
 
 export type MarketIndexHealth = "LIVE" | "STALE" | "GAPPED" | "BLOCKED";
+
+export type MarketIndexIndicatorFact = {
+  comparison_value?: (string) | (null);
+  formula_definition_hash: string;
+  health?: "LIVE";
+  input_cutoff: string;
+  request: (components["schemas"]["SmaFactRequest"] & { formula_id: "SMA" }) | (components["schemas"]["SmaLookbackFactRequest"] & { formula_id: "SMA_LOOKBACK" }) | (components["schemas"]["ReturnFactRequest"] & { formula_id: "RETURN" });
+  source_bar_hash: string;
+  unit: components["schemas"]["MarketIndexFactUnit"];
+  value: string;
+};
 
 export type MarketIndexInterval = "FIVE_MINUTE" | "OFFICIAL_DAILY";
 
@@ -2628,6 +2736,29 @@ export type MarketIndexOverviewResponse = {
   sequence: number;
 };
 
+export type MarketIndexSnapshot = {
+  bar_set_hash: string;
+  board: components["schemas"]["Board"];
+  completed_bucket_at?: (string) | (null);
+  decision_cutoff: string;
+  display_name: string;
+  fact_requests?: Array<(components["schemas"]["SmaFactRequest"] & { formula_id: "SMA" }) | (components["schemas"]["SmaLookbackFactRequest"] & { formula_id: "SMA_LOOKBACK" }) | (components["schemas"]["ReturnFactRequest"] & { formula_id: "RETURN" })>;
+  five_minute_bars?: Array<components["schemas"]["MarketIndexBar"]>;
+  formula_definition_hash: string;
+  health: components["schemas"]["MarketIndexHealth"];
+  index_code: components["schemas"]["MarketIndexCode"];
+  indicator_facts?: Array<components["schemas"]["MarketIndexIndicatorFact"]>;
+  issues?: Array<components["schemas"]["MarketIndexIssueCode"]>;
+  latest_completed_five_minute?: (components["schemas"]["MarketIndexBar"]) | (null);
+  mapping_version?: "board-index-map-v1";
+  observed_at: string;
+  official_daily_bars?: Array<components["schemas"]["MarketIndexBar"]>;
+  prior_official_close_points?: (string) | (null);
+  request_set_hash: string;
+  revision: number;
+  snapshot_hash: string;
+};
+
 export type MarketIndexSnapshotView = {
   board: components["schemas"]["Board"];
   closePoints: (string) | (null);
@@ -2649,6 +2780,165 @@ export type MarketIndexSnapshotView = {
 };
 
 export type MarketIndexSourceKind = "PROVISIONAL" | "OFFICIAL";
+
+export type MarketLinkageDecision = {
+  calculation: components["schemas"]["QuantityCalculation"];
+  confirmation: Array<components["schemas"]["UnifiedConditionEvidence"]>;
+  consumed_hash: string;
+  content_hash: string;
+  decision_session: string;
+  evidence_cutoff: string;
+  evidence_hash: string;
+  market: components["schemas"]["MarketRegimeEvidence"];
+  quantity_rules: (components["schemas"]["MarketQuantityRules"]) | (null);
+  rule_id: string;
+  selection: components["schemas"]["ConfirmationSelection"];
+  strength: (components["schemas"]["RelativeStrengthEvidence"]) | (null);
+  version?: "market-linkage-evidence-v1";
+};
+
+export type MarketLinkedDraftRule = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" })) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  market_policy: (components["schemas"]["DraftMarketPolicy"]) | (null);
+  quantity_policy: (components["schemas"]["DraftQuantityPolicy"]) | (null);
+  rule_id: (string) | (null);
+  side: ("BUY") | (null);
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY") | (null);
+};
+
+export type MarketLinkedDraftRuleInput = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["UnifiedPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicyInput"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" })) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  market_policy: (components["schemas"]["DraftMarketPolicy"]) | (null);
+  quantity_policy: (components["schemas"]["DraftQuantityPolicy"]) | (null);
+  rule_id: (string) | (null);
+  side: ("BUY") | (null);
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY") | (null);
+};
+
+export type MarketLinkedPlanDraft = {
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v2";
+  levels: (components["schemas"]["UnifiedDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["MarketLinkedDraftRule"]) | (components["schemas"]["UnifiedDraftRule"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  reference_market: (components["schemas"]["ReferenceMarketBinding"]) | (null);
+  risk_branches: Array<components["schemas"]["LinkedDraftRisk"]>;
+  schema_version?: 6;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type MarketLinkedPlanDraftInput = {
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRuleInput"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v2";
+  levels: (components["schemas"]["UnifiedDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["MarketLinkedDraftRuleInput"]) | (components["schemas"]["UnifiedDraftRuleInput"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  reference_market: (components["schemas"]["ReferenceMarketBinding"]) | (null);
+  risk_branches: Array<components["schemas"]["LinkedDraftRiskInput"]>;
+  schema_version?: 6;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type MarketLinkedRule = {
+  bucket: "TACTICAL";
+  condition: (components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
+  confirmation: components["schemas"]["OfficialDailyConfirmation"];
+  execution_window: "NEXT_EXCHANGE_SESSION_ONLY";
+  independent_signal: (components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" });
+  invalidation: "RISK_OR_REVIEWED_INVALIDATION";
+  market_policy: components["schemas"]["MarketPolicy"];
+  quantity_policy: components["schemas"]["QuantityPolicy"];
+  rule_id: string;
+  side: "BUY";
+  status: "ENABLED";
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]);
+  zone: "LOW_BUY";
+};
+
+export type MarketLinkedTradePlan = {
+  activation: (components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" });
+  alert_rules?: Array<components["schemas"]["UnifiedAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: components["schemas"]["UnifiedExecutionPolicy"];
+  execution_version?: "condition-plan-v2";
+  levels: (components["schemas"]["UnifiedLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["MarketLinkedRule"]) | (components["schemas"]["UnifiedRule"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedPositionPolicy"];
+  reference_market: components["schemas"]["ReferenceMarketBinding"];
+  risk_branches: Array<components["schemas"]["UnifiedRiskBranch"]>;
+  schema_version?: 6;
+  symbol: string;
+  trading_rules: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type MarketPolicy = {
+  base_confirmation: "S0";
+  exception_policy: "BLOCK_P1";
+  policy_version: "market-linkage-v1";
+};
+
+export type MarketQuantityRules = {
+  article: string;
+  board: components["schemas"]["Board"];
+  effective_from: string;
+  increment: number;
+  minimum: number;
+  published_on: string;
+  source_url: string;
+  version?: "cn-equity-buy-grid-2026-07-06";
+};
+
+export type MarketRegimeEvidence = {
+  below_low20: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  below_ma20: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  below_ma60: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  broken: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  facts: components["schemas"]["LinkedIndexFacts"];
+  falling_ma20: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  formula_version?: "market-linkage-v1";
+  regime: "BROKEN" | "WEAK" | "NORMAL_TRANSITION" | "UNKNOWN";
+  weak: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+};
 
 export type MarketSessionView = {
   calendarStatus: "KNOWN" | "UNKNOWN";
@@ -2874,7 +3164,7 @@ export type PlanCandidateReview = {
   available_at: (string) | (null);
   bindings: Array<components["schemas"]["SourceBoundField"]>;
   changes?: Array<components["schemas"]["PlanChange"]>;
-  draft: components["schemas"]["UnifiedPlanDraft"];
+  draft: (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   issues: Array<string>;
   schema_version?: "monitor-loop-candidate-evidence-v1";
   source_hash: string;
@@ -2977,7 +3267,7 @@ export type PlanUpdateExtractionOutput = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   clauses: Array<components["schemas"]["DailyClause"]>;
-  draft: components["schemas"]["UnifiedPlanDraft"];
+  draft: (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   inheritance_mode?: "LEGACY" | "PREDECESSOR_PATCH";
   operations: Array<components["schemas"]["PlanUpdateOperation"]>;
   retain_unmentioned: (boolean) | (null);
@@ -2992,7 +3282,7 @@ export type PlanUpdateExtractionOutputInput = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   clauses: Array<components["schemas"]["DailyClause"]>;
-  draft: components["schemas"]["UnifiedPlanDraftInput"];
+  draft: (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 });
   inheritance_mode?: "LEGACY" | "PREDECESSOR_PATCH";
   operations: Array<components["schemas"]["PlanUpdateOperation"]>;
   retain_unmentioned: (boolean) | (null);
@@ -3146,7 +3436,7 @@ export type PreparationCreateCommand = {
 export type PreparationExtractionCandidate = {
   candidateHash: string;
   confirmationSummary?: (components["schemas"]["PreparationConfirmationSummary"]) | (null);
-  draft: components["schemas"]["UnifiedPlanDraft"];
+  draft: (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   evidenceHash: string;
   frozen?: null;
   issues: Array<string>;
@@ -3207,7 +3497,7 @@ export type PreparationReviewDeclaration = {
   account?: (components["schemas"]["LoopAccountInput"]) | (null);
   candidate_hash: string;
   confirmed: true;
-  draft?: (components["schemas"]["UnifiedPlanDraftInput"]) | (null);
+  draft?: ((components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
   evidence: string;
   evidence_hash: string;
   expected_candidate_revision: number;
@@ -3306,10 +3596,65 @@ export type ProviderHealthView = {
   status: components["schemas"]["ProviderCapabilityStatus"];
 };
 
+export type QuantityCalculation = {
+  authorized_quantity: number;
+  base_quantity: number;
+  blockers: Array<string>;
+  calculation_hash: string;
+  candidate_quantity: (number) | (null);
+  capacity: (number) | (null);
+  ceiling: (number) | (null);
+  factor: ("1" | "0.5") | (null);
+  formula_version?: "market-linkage-calculation-v1";
+  increment: (number) | (null);
+  minimum: (number) | (null);
+};
+
+export type QuantityPolicy = {
+  base_quantity: number;
+  capacity_policy: "BLOCK_FULL";
+  mode: "MARKET_FACTOR";
+  normal_factor: "1";
+  rounding: "LEGAL_FLOOR";
+  signal_quantity_policy: "FREEZE";
+  weak_factor: "0.5";
+};
+
 export type RecoveryIssueView = {
   nextRetryAt: string;
   reason: string;
   symbol: string;
+};
+
+export type ReferenceMarketBinding = {
+  index_code: components["schemas"]["MarketIndexCode"];
+  mapping_version?: "board-index-map-v1";
+  selection?: "AUTO_BOARD";
+};
+
+export type RelativeStrengthEvidence = {
+  above_ma20?: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  basis_id?: (string) | (null);
+  cutoff: string;
+  decision_session: string;
+  difference20?: (string) | (null);
+  difference5?: (string) | (null);
+  endpoint_dates?: Array<string>;
+  formula_version?: "market-linkage-strength-v1";
+  index_endpoints?: Array<string>;
+  index_return20?: (string) | (null);
+  index_return5?: (string) | (null);
+  outperform20?: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  outperform5?: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  reasons?: Array<string>;
+  source_hashes?: Array<string>;
+  stock_close?: (string) | (null);
+  stock_endpoints?: Array<string>;
+  stock_ma20?: (string) | (null);
+  stock_provider?: (string) | (null);
+  stock_return20?: (string) | (null);
+  stock_return5?: (string) | (null);
+  strength: "STRONG" | "NOT_STRONG" | "UNKNOWN";
 };
 
 export type RequiredReviewIssueView = {
@@ -3363,6 +3708,7 @@ export type ResearchDecisionEvent = {
   event_id: string;
   inventory_after: components["schemas"]["DailyInventoryView"];
   inventory_before: components["schemas"]["DailyInventoryView"];
+  market_linkage?: (Array<components["schemas"]["MarketLinkageDecision"]>) | (null);
   minute_target: (string) | (null);
   official_trade_date: (string) | (null);
   resulting_risks: Array<components["schemas"]["DailyRiskState"]>;
@@ -3515,6 +3861,12 @@ export type ResearchSimulation = {
   quantity: number;
   risk_kind?: ("ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL") | (null);
   rule_id?: (string) | (null);
+};
+
+export type ReturnFactRequest = {
+  formula_id?: "RETURN";
+  window: components["schemas"]["ReturnWindow"];
+  window_size: number;
 };
 
 export type ReturnIndicatorFactView = {
@@ -3684,6 +4036,11 @@ export type SingleSourcePreparationInput = {
   source: components["schemas"]["PreparationSource"];
 };
 
+export type SmaFactRequest = {
+  formula_id?: "SMA";
+  period: number;
+};
+
 export type SmaIndicatorFactView = {
   formulaDefinitionHash: string;
   formulaId: "SMA";
@@ -3691,6 +4048,12 @@ export type SmaIndicatorFactView = {
   sourceBarHash: string;
   unit: "POINTS";
   value: string;
+};
+
+export type SmaLookbackFactRequest = {
+  formula_id?: "SMA_LOOKBACK";
+  lookback: number;
+  period: number;
 };
 
 export type SmaLookbackIndicatorFactView = {
@@ -4443,6 +4806,7 @@ export interface components {
     ConditionOutcome: ConditionOutcome;
     ConfiguredAIProviderRuntimeView: ConfiguredAIProviderRuntimeView;
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
+    ConfirmationSelection: ConfirmationSelection;
     ConnectionStatus: ConnectionStatus;
     DailyAlertCenterView: DailyAlertCenterView;
     DailyAlertEvent: DailyAlertEvent;
@@ -4516,6 +4880,8 @@ export interface components {
     DeliveryHealthView: DeliveryHealthView;
     DiagnosticEvaluationCommand: DiagnosticEvaluationCommand;
     DiagnosticEvaluationView: DiagnosticEvaluationView;
+    DraftMarketPolicy: DraftMarketPolicy;
+    DraftQuantityPolicy: DraftQuantityPolicy;
     DraftReviewIssue: DraftReviewIssue;
     DynamicDailyReference: DynamicDailyReference;
     EpisodeStatus: EpisodeStatus;
@@ -4547,6 +4913,9 @@ export interface components {
     LegacyPlanInvalidateResult: LegacyPlanInvalidateResult;
     LegacyPlanItemView: LegacyPlanItemView;
     LegacyPlanPreviewResponse: LegacyPlanPreviewResponse;
+    LinkedDraftRisk: LinkedDraftRisk;
+    LinkedDraftRiskInput: LinkedDraftRiskInput;
+    LinkedIndexFacts: LinkedIndexFacts;
     LoopAccountContext: LoopAccountContext;
     LoopAccountDiscrepancy: LoopAccountDiscrepancy;
     LoopAccountInput: LoopAccountInput;
@@ -4580,19 +4949,32 @@ export interface components {
     ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
     ManualEventRiskView: ManualEventRiskView;
     ManualEventRiskViewStatus: ManualEventRiskViewStatus;
+    MarketIndexBar: MarketIndexBar;
     MarketIndexBarPage: MarketIndexBarPage;
     MarketIndexBarView: MarketIndexBarView;
     MarketIndexCode: MarketIndexCode;
     MarketIndexFactUnit: MarketIndexFactUnit;
     MarketIndexHealth: MarketIndexHealth;
+    MarketIndexIndicatorFact: MarketIndexIndicatorFact;
     MarketIndexInterval: MarketIndexInterval;
     MarketIndexIssueCode: MarketIndexIssueCode;
     MarketIndexLatestAcquisition: MarketIndexLatestAcquisition;
     MarketIndexOverviewData: MarketIndexOverviewData;
     MarketIndexOverviewItem: MarketIndexOverviewItem;
     MarketIndexOverviewResponse: MarketIndexOverviewResponse;
+    MarketIndexSnapshot: MarketIndexSnapshot;
     MarketIndexSnapshotView: MarketIndexSnapshotView;
     MarketIndexSourceKind: MarketIndexSourceKind;
+    MarketLinkageDecision: MarketLinkageDecision;
+    MarketLinkedDraftRule: MarketLinkedDraftRule;
+    MarketLinkedDraftRuleInput: MarketLinkedDraftRuleInput;
+    MarketLinkedPlanDraft: MarketLinkedPlanDraft;
+    MarketLinkedPlanDraftInput: MarketLinkedPlanDraftInput;
+    MarketLinkedRule: MarketLinkedRule;
+    MarketLinkedTradePlan: MarketLinkedTradePlan;
+    MarketPolicy: MarketPolicy;
+    MarketQuantityRules: MarketQuantityRules;
+    MarketRegimeEvidence: MarketRegimeEvidence;
     MarketSessionView: MarketSessionView;
     MarketTurnoverSummaryView: MarketTurnoverSummaryView;
     MinuteBar: MinuteBar;
@@ -4668,7 +5050,11 @@ export interface components {
     ProductSourceTreatmentView: ProductSourceTreatmentView;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
+    QuantityCalculation: QuantityCalculation;
+    QuantityPolicy: QuantityPolicy;
     RecoveryIssueView: RecoveryIssueView;
+    ReferenceMarketBinding: ReferenceMarketBinding;
+    RelativeStrengthEvidence: RelativeStrengthEvidence;
     RequiredReviewIssueView: RequiredReviewIssueView;
     ResearchAdjustmentProof: ResearchAdjustmentProof;
     ResearchConditionEvidence: ResearchConditionEvidence;
@@ -4688,6 +5074,7 @@ export interface components {
     ResearchReview: ResearchReview;
     ResearchRuleEvidence: ResearchRuleEvidence;
     ResearchSimulation: ResearchSimulation;
+    ReturnFactRequest: ReturnFactRequest;
     ReturnIndicatorFactView: ReturnIndicatorFactView;
     ReturnWindow: ReturnWindow;
     ReviewIssueKind: ReviewIssueKind;
@@ -4714,7 +5101,9 @@ export interface components {
     SimulationReceipt: SimulationReceipt;
     SinglePlanPreparationInput: SinglePlanPreparationInput;
     SingleSourcePreparationInput: SingleSourcePreparationInput;
+    SmaFactRequest: SmaFactRequest;
     SmaIndicatorFactView: SmaIndicatorFactView;
+    SmaLookbackFactRequest: SmaLookbackFactRequest;
     SmaLookbackIndicatorFactView: SmaLookbackIndicatorFactView;
     SourceBoundField: SourceBoundField;
     SourceClauseView: SourceClauseView;

@@ -10,6 +10,7 @@ from pydantic import Field, field_validator, model_validator
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.models import ExecutionConfig, Sha256Hex
 from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.state.daily_state_models import (
     DailyInventoryView,
@@ -94,6 +95,8 @@ class ResearchMetrics(ResearchValue):
 
 
 class ResearchDecisionEvent(ResearchValue):
+    market_linkage: tuple[MarketLinkageDecision, ...] | None = Field(
+        default=None, max_length=2, exclude_if=lambda value: value is None)
     schema_version: Literal["unified-research-decision-v1"] = "unified-research-decision-v1"
     event_id: Sha256Hex
     at: datetime

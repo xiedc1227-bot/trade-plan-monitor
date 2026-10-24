@@ -7,6 +7,7 @@ from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import DailySupplement
 from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
+from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
@@ -22,6 +23,7 @@ from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
 from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime
+from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 
 Digest = str
 
@@ -88,6 +90,9 @@ class DailyFactState(DailyValue):
 
 
 class DailySignalState(DailyValue):
+    market_linkage: MarketLinkageDecision | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     occurrence_mode: Literal["ONCE_PER_RULE", "AFTER_RULE_COMPLETED"] | None = None
     signal_id: str
     rule_id: str
@@ -125,6 +130,12 @@ class DailySignalState(DailyValue):
 
     @model_validator(mode="after")
     def consumption(self):
+        if self.market_linkage is not None and (
+            self.market_linkage.calculation.authorized_quantity != self.planned_qty
+            or self.market_linkage.rule_id != self.rule_id
+            or self.market_linkage.decision_session != self.confirmed_trade_date
+        ):
+            raise ValueError("linked signal differs from frozen calculation")
         if (
             self.simulated_qty not in {0, self.planned_qty}
             or self.executable_qty not in {0, self.planned_qty}
@@ -321,7 +332,7 @@ def validate_daily_payload(kind, value):
 
         model = (
             CurrentPlanExtractionResult
-            if value.get("draft", {}).get("schema_version") == 5
+            if value.get("draft", {}).get("schema_version") in {5, 6}
             else HistoricalExtractionEvidence
         )
         model.model_validate(value)
@@ -417,6 +428,22 @@ class DailyRuleReminderState(DailyValue):
 
 
 class DailyEvaluationState(DailyValue):
+    linked_index_source: MarketIndexSnapshot | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+
+    @field_validator("linked_index_source", mode="before")
+    @classmethod
+    def index_source_json(cls, value):
+        import json
+        if isinstance(value, dict):
+            return (MarketIndexSnapshot.model_validate_json(json.dumps(value))
+                    if isinstance(value.get("decision_cutoff"), str)
+                    else MarketIndexSnapshot.model_validate(value))
+        return value
+
+    market_linkage: tuple[MarketLinkageDecision, ...] | None = Field(
+        default=None, max_length=2, exclude_if=lambda v: v is None)
     symbol: str
     plan_version_id: str
     plan_hash: str = Field(pattern=r"^[0-9a-f]{64}$")

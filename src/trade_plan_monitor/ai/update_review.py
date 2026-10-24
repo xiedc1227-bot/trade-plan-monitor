@@ -32,8 +32,12 @@ from trade_plan_monitor.backtest.preparation_models import (
     PreparationSource,
 )
 from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.domain.market_linkage_validation import (
+    CurrentPlanDraft,
+    parse_current_draft,
+)
 from trade_plan_monitor.domain.risk_scope import restrict_scope, risk_identity
-from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft, unified_plan_issues
+from trade_plan_monitor.domain.unified_plan_validation import unified_plan_issues
 
 _AMBIGUOUS = re.compile(
     r"待确认|不确定|不要|无需|并非|尚未|不是|不能|不应|假设|假想|假定|示例|"
@@ -87,7 +91,7 @@ class PlanCandidateReview(ResearchValue):
     source_id: StableIdentifier
     source_hash: Sha256Hex
     available_at: LoopTimestamp | None
-    draft: UnifiedPlanDraft
+    draft: CurrentPlanDraft
     bindings: tuple[SourceBoundField, ...] = Field(max_length=2000)
     changes: tuple[PlanChange, ...] = Field(default=(), max_length=64)
     account_context: UpdateAccountContext | None = None
@@ -148,10 +152,10 @@ def _bound_fields(mapping, source):
     }
 
 
-def build_initial_review(draft: UnifiedPlanDraft, mapping: DailyMapping, source: PreparationSource):
+def build_initial_review(draft: CurrentPlanDraft, mapping: DailyMapping, source: PreparationSource):
     """Validate first-source plan evidence; account validation remains a separate prerequisite."""
     source = PreparationSource.model_validate(source.model_dump(mode="python"))
-    draft = UnifiedPlanDraft.model_validate(draft.model_dump(mode="python"))
+    draft = parse_current_draft(draft.model_dump(mode="python"))
     review = build_daily_review(draft, mapping, source.text)
     issues = [f"{i.code}: {i.path}" for i in review.issues]
     if source.execution_available_at is None:

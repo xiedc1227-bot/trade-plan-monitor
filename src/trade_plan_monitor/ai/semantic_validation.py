@@ -17,6 +17,23 @@ def semantic_interpretation_matches(path, value, excerpt, draft):
     text = plain(excerpt)
     if not text.strip():
         return False
+    if ".market_policy.expanded." in path:
+        # Unlike general enum translations, a version label cannot stand in
+        # for all the conditions hidden behind a built-in strategy expansion.
+        from trade_plan_monitor.domain.market_linkage_definitions import EXPANDED_LINKAGE_POLICY_ZH
+        if re.search(
+            r"(?:不|未|暂不)(?:采用|使用|执行|启用)|取消(?:以下|该|此)?(?:定义|规则|政策)|"
+            r"\b(?:do\s+not|don't|never)\s+(?:apply|use|adopt|enable)\b",
+            text, re.I,
+        ):
+            return False
+        def normalized(text):
+            return re.sub(r"[\s;；\"'。，,：:]", "", text).casefold()
+        translations = (
+            str(value),
+            EXPANDED_LINKAGE_POLICY_ZH.get(path.rsplit(".", 1)[-1], str(value)),
+        )
+        return any(normalized(text) in normalized(excerpt) for text in translations)
     if path in {"symbol", "market"}:
         return interpretation_matches(path, value, excerpt, draft)
     if path.endswith((".ratio", ".minimum_ratio")):

@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.control import check_cancelled
 from trade_plan_monitor.backtest.dataset import DatasetManifest
+from trade_plan_monitor.backtest.market_linkage_input import LinkedIndexReplaySource
 from trade_plan_monitor.backtest.research_input import ResearchAdjustmentProof
 from trade_plan_monitor.backtest.research_report import (
     ResearchDecisionEvent,
@@ -47,7 +48,8 @@ def replay_current(
 ):
     run_input = BacktestRunInput.create(
         plan=plan,
-        manifest=DatasetManifest(dataset_hash=reader.dataset_hash, scope=reader.scope, items=()),
+        manifest=(reader.manifest if plan.schema_version == 6 else
+                  DatasetManifest(dataset_hash=reader.dataset_hash, scope=reader.scope, items=())),
         initial_cash_fen=initial_cash_fen,
         initial_lots=initial_lots,
         execution_config=execution_config,
@@ -57,6 +59,22 @@ def replay_current(
     )
     if plan.symbol not in reader.scope.symbols:
         raise ValueError("PLAN_SYMBOL_NOT_IN_DATASET")
+    linked_source = None
+    if plan.schema_version == 6:
+        from trade_plan_monitor.market_index.models import MarketIndexInterval
+        linked_source = LinkedIndexReplaySource(
+            reference_market=plan.reference_market,
+            bars=tuple(
+                sorted(
+                    (
+                        bar
+                        for bar in reader.market_index_bars(plan.reference_market.index_code)
+                        if bar.interval == MarketIndexInterval.OFFICIAL_DAILY
+                    ),
+                    key=lambda bar: (bar.observed_at, bar.bar_at, bar.provider_revision),
+                )
+            ),
+        )
     with TemporaryDirectory(prefix="unified-research-") as temporary:
         directory = Path(temporary)
         with closing(sqlite3.connect(directory / "events.sqlite")) as spool:
@@ -92,6 +110,19 @@ def replay_current(
                 calendar[day.cal_date] = day
             for proof in research_input.adjustment_proofs:
                 _insert(spool, proof.received_at, "PROOF", proof.proof_id, proof.model_dump_json())
+            if linked_source is not None:
+                linked_source.validate_scope(binding=plan.reference_market,
+                    session_dates=tuple(day.cal_date for day in calendar.values() if day.is_open),
+                    started_at=research_input.started_at,
+                    cutoff=datetime.combine(reader.scope.end, time.max, SHANGHAI))
+                for bar in linked_source.bars:
+                    _insert(
+                        spool,
+                        bar.observed_at,
+                        "INDEX",
+                        bar.model_dump_json(),
+                        bar.model_dump_json(),
+                    )
             for operation in research_input.operations:
                 _insert(
                     spool,
@@ -104,7 +135,9 @@ def replay_current(
             calendar = tuple(calendar[day] for day in sorted(calendar))
             session = ResearchSession(directory, run_input, calendar)
             try:
-                return _Replay(spool, session, calendar, cancellation_token).run()
+                return _Replay(
+                    spool, session, calendar, cancellation_token, linked_source=linked_source
+                ).run()
             finally:
                 session.close()
 
@@ -116,7 +149,7 @@ def _insert(spool, at, kind, tie, payload):
 
 
 class _Replay:
-    def __init__(self, spool, session, calendar, cancellation):
+    def __init__(self, spool, session, calendar, cancellation, *, linked_source=None):
         self.spool = spool
         self.session, self.calendar, self.cancellation = session, calendar, cancellation
         self.plan = session.plan
@@ -129,6 +162,7 @@ class _Replay:
         self.operations = {o.operation_id: o for o in self.frozen.operations}
         self.ended = False
         self.valuation = ResearchValuation(session.run_input)
+        self.linked_source = linked_source
 
     def run(self):
         with closing(self.spool.execute("SELECT * FROM event ORDER BY at, tie")) as cursor:
@@ -165,7 +199,12 @@ class _Replay:
                     self.outcomes.append(outcome)
                     if operation.kind in {"DEACTIVATE", "REPLACE"} and outcome.status == "APPLIED":
                         self.ended = True
-            if targets or official is not None or operations or any(r[2] == "PROOF" for r in group):
+            if (
+                targets
+                or official is not None
+                or operations
+                or any(r[2] in {"PROOF", "INDEX"} for r in group)
+            ):
                 self.evaluate(official, max(targets) if targets else self.target, group)
             for operation in operations:
                 if operation.kind not in {"FACT", "DEACTIVATE", "REPLACE"}:
@@ -249,6 +288,8 @@ class _Replay:
 
     def _market(self, kind, payload):
         now = self.session.now
+        if kind == "INDEX":
+            return None, None
         if kind == "LIMIT":
             limit = DailyLimit.model_validate_json(payload)
             self.limits[limit.trade_date] = limit
@@ -360,6 +401,9 @@ class _Replay:
             five_minute_bars=bars,
             minute_target=target,
             trading_calendar=calendar,
+            linked_index=None
+            if self.linked_source is None
+            else self.linked_source.snapshot_at(now, session_dates),
         )
 
     def evaluate(self, official, target, group):
@@ -435,6 +479,8 @@ class _Replay:
                     "resulting_risks": tuple(result.snapshot["risks"]),
                     "risk_action": result.snapshot["risk_action"],
                     "conditions": conditions,
+                    **({"market_linkage": tuple(result.snapshot["market_linkage"])}
+                       if "market_linkage" in result.snapshot else {}),
                     "blockers": tuple(inputs.data_blockers),
                     "inventory_before": before,
                     "inventory_after": DailyInventoryView.model_validate(self.session.inventory()),

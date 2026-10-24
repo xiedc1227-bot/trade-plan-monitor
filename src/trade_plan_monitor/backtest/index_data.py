@@ -214,6 +214,21 @@ class BacktestReferenceMarketResult(_BacktestIndexValue):
 def build_backtest_index_requirement(plan: TradePlan) -> BacktestIndexRequirement:
     """Derive exact requests, paths, dynamic history counts, and identity for a plan."""
 
+    from trade_plan_monitor.domain.market_linkage_models import (
+        MarketLinkedRule,
+        MarketLinkedTradePlan,
+    )
+    from trade_plan_monitor.market_index.canonical import LINKED_INDEX_FORMULA_HASH
+    if isinstance(plan, MarketLinkedTradePlan):
+        paths = tuple(sorted(f"ordinary_rules.{rule.rule_id}.market_policy"
+                      for rule in plan.ordinary_rules if isinstance(rule, MarketLinkedRule)))
+        digest = sha256(b"market-linkage-requirements-v1\0" + canonical_json({
+            "paths": paths, "binding": plan.reference_market,
+            "formula": LINKED_INDEX_FORMULA_HASH, "daily": 60}).encode()).hexdigest()
+        return BacktestIndexRequirement(required=True, binding=plan.reference_market,
+            condition_paths=paths, fact_requests=(SmaFactRequest(period=60),),
+            required_five_minute_count=0, required_official_day_count=60,
+            index_requirement_hash=digest, formula_definition_hash=LINKED_INDEX_FORMULA_HASH)
     if not isinstance(plan, TradePlan):
         raise TypeError("plan must be a TradePlan")
     leaves = iter_plan_index_conditions(plan)

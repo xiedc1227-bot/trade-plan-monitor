@@ -755,7 +755,7 @@ class _ProductionBacktestService:
             ):
                 raise ApiError(ApiErrorCode.CONFLICT)
             plan = load_plan_json(snapshot.plan_json)
-            current = plan.schema_version == 5
+            current = plan.schema_version in {5, 6}
             if current and (snapshot.review_id is None or snapshot.content_hash is None
                 or command.research_input is None
                 or command.research_input.review.content_hash != snapshot.content_hash):

@@ -57,6 +57,21 @@ def _digest(domain: str, payload: bytes) -> str:
     return sha256(domain.encode() + b"\0" + payload).hexdigest()
 
 
+def _validate_linked_source(schedule, dataset):
+    linked = [
+        row.version.snapshot for row in schedule.entries if row.version.snapshot.schema_version == 6
+    ]
+    source = dataset.linked_index_source
+    if linked and source is None:
+        raise ValueError("LINKED_INDEX_REPLAY_HISTORY_MISSING")
+    if source is not None:
+        if not linked or any(plan.reference_market != source.reference_market for plan in linked):
+            raise ValueError("LINKED_INDEX_REPLAY_BINDING_MISMATCH")
+        source.validate_scope(binding=linked[0].reference_market,
+            session_dates=tuple(day.trade_date for day in dataset.days if day.state != "CLOSED"),
+            started_at=dataset.boundary.started_at, cutoff=dataset.boundary.evidence_cutoff)
+
+
 class StoredLoopInput(ResearchValue):
     schema_version: Literal["monitor-loop-stored-input-v1"] = _BUNDLE_DOMAIN
     prepared: FrozenPreparedPlan
@@ -66,6 +81,7 @@ class StoredLoopInput(ResearchValue):
 
     @model_validator(mode="after")
     def bound(self) -> Self:
+        _validate_linked_source(self.run_input.schedule, self.dataset)
         if (
             self.run_input.schedule != self.prepared.schedule
             or self.run_input.initial_account != self.prepared.account
@@ -100,6 +116,7 @@ class ScheduledStoredLoopInput(ResearchValue):
 
     @model_validator(mode="after")
     def bound(self):
+        _validate_linked_source(self.run_input.schedule, self.dataset)
         bindings = tuple(LoopDatasetPlanBinding(
             effective_trade_date=row.effective_trade_date,
             version_id=row.version.version_id, plan_hash=row.version.plan_hash,

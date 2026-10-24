@@ -315,16 +315,37 @@ def read_daily(lifecycle, *, symbol, trade_date):
             and active is not None
             and head["payload"].get("plan_version_id") == active.plan_version_id
         )
+        snapshot = None if head is None else head["payload"]
+        from trade_plan_monitor.state.market_linkage_authority import linked_index_current
+        linked_stale = snapshot is not None and not linked_index_current(
+            work.daily.session, snapshot, lifecycle._clock())
+        if linked_stale:
+            snapshot = {
+                **snapshot,
+                "signals": [
+                    {
+                        **signal,
+                        "executable_qty": 0,
+                        "blockers": list(
+                            dict.fromkeys([*signal["blockers"], "MARKET_LINKAGE_SOURCE_CHANGED"])
+                        ),
+                    }
+                    if signal.get("market_linkage")
+                    else signal
+                    for signal in snapshot["signals"]
+                ],
+            }
         return DailyStateView(
             symbol=symbol,
             evaluated_at=None
             if head is None
             else _shanghai_datetime(datetime.fromisoformat(head["updated_at"])),
             status="CURRENT" if current else "AWAITING_EVALUATION" if active else "INACTIVE",
+            reason="MARKET_LINKAGE_SOURCE_CHANGED" if linked_stale else None,
             snapshot=None
             if head is None
             else DailyEvaluationApiView.model_validate_json(
-                __import__("json").dumps(head["payload"])
+                __import__("json").dumps(snapshot)
             ),
         )
 

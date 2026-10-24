@@ -70,13 +70,17 @@ def test_lifecycle_values_and_explicit_resume_bounds_are_closed(contract):
 
 
 def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
+    from tests.integration.test_market_linkage_api import schema5_projection
+
     version, document = contract
+    document = schema5_projection(document)
     snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
     # The last pre-reuse contract already contains preparation/data and lifecycle APIs.
     before = json.loads(subprocess.check_output(["git", "show", f"81aae039:{snapshot}"], cwd=ROOT))
     assert set(document["paths"]) - set(before["paths"]) == {
         "/api/v1/backtest-plan-selections",
         "/api/v1/backtest-plan-selections/{selection_id}",
+        "/api/v1/backtest-runs/{run_id}/review-context",
     }
     assert set(before["paths"]) - set(document["paths"]) == {"/api/v1/plan-imports"}
 
