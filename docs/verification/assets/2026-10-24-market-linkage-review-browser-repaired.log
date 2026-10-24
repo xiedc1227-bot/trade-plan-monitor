@@ -1,0 +1,87 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/condition-plan.spec.ts tests/e2e/market-linkage.spec.ts --repeat-each 2
+
+
+Running 4 tests using 1 worker
+
+
+
+(node:65828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/4] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+  1) [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('传输连接正常；监控已停止', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('传输连接正常；监控已停止', { exact: true })
+
+
+      120 |   expect(reminderCycle.event_ids).toHaveLength(1);
+      121 |   await page.goto(`${base}/alerts`);
+    > 122 |   await expect(page.getByText("传输连接正常；监控已停止", { exact: true })).toBeVisible();
+          |                                                                 ^
+      123 |   await expect(page.getByRole("heading", { name: "提醒历史" })).toBeVisible();
+      124 |   await expect(page.locator("[data-risk-reminder]")).toBeVisible();
+      125 |   await page.getByLabel("信号类型").selectOption("RISK_ALERT");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\condition-plan.spec.ts:122:65
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome\error-context.md
+
+
+(node:48204) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/4] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+
+(node:118192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[3/4] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+  2) [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('传输连接正常；监控已停止', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('传输连接正常；监控已停止', { exact: true })
+
+
+      120 |   expect(reminderCycle.event_ids).toHaveLength(1);
+      121 |   await page.goto(`${base}/alerts`);
+    > 122 |   await expect(page.getByText("传输连接正常；监控已停止", { exact: true })).toBeVisible();
+          |                                                                 ^
+      123 |   await expect(page.getByRole("heading", { name: "提醒历史" })).toBeVisible();
+      124 |   await expect(page.locator("[data-risk-reminder]")).toBeVisible();
+      125 |   await page.getByLabel("信号类型").selectOption("RISK_ALERT");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\condition-plan.spec.ts:122:65
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome-repeat1\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome-repeat1\error-context.md
+
+
+(node:53228) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/4] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+  2 failed
+    [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+    [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+  2 passed (42.7s)

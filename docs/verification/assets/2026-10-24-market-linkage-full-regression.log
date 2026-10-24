@@ -1,0 +1,257 @@
+........................................................................ [  1%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+......................................F................................. [  6%]
+....................................................s................... [  8%]
+....................................................................F... [  9%]
+........................................................................ [ 11%]
+...................................FF..FF............................... [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+.......................................................................F [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+.........F.............................................................. [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+F.....F................................................................. [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+.......................................................................F [ 45%]
+FF.F.................................................................... [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+...........................................................F............ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 98%]
+.....................................................................F.. [ 99%]
+............                                                             [100%]
+================================== FAILURES ===================================
+__ test_additive_job_schema_requires_verified_migration_for_existing_results __
+tests\integration\test_backtest_jobs.py:404: in test_additive_job_schema_requires_verified_migration_for_existing_results
+    migrated = migrate_result_database(inventory, decision)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\backtest\migration.py:1346: in migrate_result_database
+    raise MigrationPreflightError("RESULT_SCHEMA_MIGRATION_SCOPE_MISMATCH")
+E   trade_plan_monitor.backtest.migration.MigrationPreflightError: RESULT_SCHEMA_MIGRATION_SCOPE_MISMATCH
+_______ test_result_store_is_wal_isolated_canonical_and_conflict_closed _______
+tests\integration\test_backtest_results.py:528: in test_result_store_is_wal_isolated_canonical_and_conflict_closed
+    assert tables == {
+E   AssertionError: assert {'backtest_de...st_run_input'} == {'backtest_de...st_run_input'}
+E
+E     Extra items in the left set:
+E     'backtest_review_event'
+E     Use -v to get more diff
+_ test_generated_documents_and_types_match_mounted_service_routes[compatibility-v1] _
+tests\integration\test_backtest_service_contract.py:24: in test_generated_documents_and_types_match_mounted_service_routes
+    assert json.loads((ROOT / snapshot).read_text(encoding="utf-8")) == document
+E   AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E     Omitting 3 identical items, use -vv to show
+E     Differing items:
+E     {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E     Use -v to get more diff
+_ test_generated_documents_and_types_match_mounted_service_routes[canonical-v2] _
+tests\integration\test_backtest_service_contract.py:24: in test_generated_documents_and_types_match_mounted_service_routes
+    assert json.loads((ROOT / snapshot).read_text(encoding="utf-8")) == document
+E   AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E     Omitting 3 identical items, use -vv to show
+E     Differing items:
+E     {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E     Use -v to get more diff
+_ test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1] _
+tests\integration\test_backtest_service_contract.py:77: in test_all_prior_routes_and_schemas_preserve_their_mounted_meaning
+    snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
+E   AssertionError: assert {'/api/v1/bac...view-context'} == {'/api/v1/bac...election_id}'}
+E
+E     Extra items in the left set:
+E     '/api/v1/backtest-runs/{run_id}/review-context'
+E     Use -v to get more diff
+_ test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2] _
+tests\integration\test_backtest_service_contract.py:77: in test_all_prior_routes_and_schemas_preserve_their_mounted_meaning
+    snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
+E   AssertionError: assert {'/api/v1/bac...view-context'} == {'/api/v1/bac...election_id}'}
+E
+E     Extra items in the left set:
+E     '/api/v1/backtest-runs/{run_id}/review-context'
+E     Use -v to get more diff
+_____ test_real_sdk_normalizer_production_adapter_and_official_scheduler ______
+tests\integration\test_daily_plan_chain.py:500: in test_real_sdk_normalizer_production_adapter_and_official_scheduler
+    result = asyncio.run(coordinator.run_deadline(deadline))[0]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\runtime\service.py:2799: in run_deadline
+    self._evaluation_service.set_linked_index_plans(linked_plans)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'EmptyLegacy' object has no attribute 'set_linked_index_plans'
+__________ test_plan_capability_reports_current_condition_activation __________
+tests\integration\test_explicit_transport.py:176: in test_plan_capability_reports_current_condition_activation
+    assert capability.json() == {
+E   AssertionError: assert {'schemaVersi...: [5, 6], ...} == {'schemaVersi..._ALERT'], ...}
+E
+E     Omitting 7 identical items, use -vv to show
+E     Left contains 2 more items:
+E     {'linkedExecutionVersion': 'condition-plan-v2',
+E      'supportedSchemaVersions': [5, 6]}
+E     Use -v to get more diff
+_ test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1] _
+tests\integration\test_monitor_loop_contract.py:35: in test_committed_run_and_result_contracts_match_actual_routes
+    assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E   AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E     Omitting 3 identical items, use -vv to show
+E     Differing items:
+E     {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E     Use -v to get more diff
+__ test_committed_run_and_result_contracts_match_actual_routes[canonical-v2] __
+tests\integration\test_monitor_loop_contract.py:35: in test_committed_run_and_result_contracts_match_actual_routes
+    assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E   AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E     Omitting 3 identical items, use -vv to show
+E     Differing items:
+E     {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E     Use -v to get more diff
+________ test_openapi_snapshot_is_deterministic_canonical_and_current _________
+tests\integration\test_openapi_snapshot.py:154: in test_openapi_snapshot_is_deterministic_canonical_and_current
+    )
+E   assert '{\n  "compon...  }\n  }\n}\n' == '{\n  "compon...  }\n  }\n}\n'
+E
+E     Skipping 670797 identical leading characters in diff, use -v to show
+E     +        "calculation_hash": {
+E     +             "title": "Calculation Hash",
+E     +             "type": "string"
+E     +           },
+E     -        "candidate_quantity": {...
+E
+E     ...Full output truncated (21081 lines hidden), use '-vv' to show
+____________ test_openapi_change_requires_bilingual_spec_approval _____________
+tests\integration\test_openapi_snapshot.py:161: in test_openapi_change_requires_bilingual_spec_approval
+    ???
+E   AssertionError: assert 'OpenAPI snapshot SHA-256: `885240f12882bcd207420ff2f35390e42b780f0b77bb5d1559868f6c94bf6776`' in '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.\n'
+E    +  where '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.\n' = read_text(encoding='utf-8')
+E    +    where read_text = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/docs/specifications/monitoring/SPEC-unified-plan.md').read_text
+_____ test_openapi_contains_only_approved_paths_and_public_error_schemas ______
+tests\integration\test_openapi_snapshot.py:171: in test_openapi_contains_only_approved_paths_and_public_error_schemas
+    ???
+E   AssertionError: assert {'/api/v1/ai-...cations', ...} == {'/api/v1/ai-...cations', ...}
+E
+E     Extra items in the left set:
+E     '/api/v1/backtest-runs/{run_id}/review-context'
+E     Use -v to get more diff
+___________ test_typescript_contract_is_generated_from_the_snapshot ___________
+tests\integration\test_openapi_snapshot.py:239: in test_typescript_contract_is_generated_from_the_snapshot
+    ???
+E   AssertionError: assert '// This file...};\n  };\n}\n' == '// This file...};\n  };\n}\n'
+E
+E     Skipping 124652 identical leading characters in diff, use -v to show
+E       ing>;
+E     +   calculation_hash: string;
+E         candidate_quantity: (number) | (null);
+E         capacity: (number) | (null);
+E         ceiling: (number) | (null);...
+E
+E     ...Full output truncated (7327 lines hidden), use '-vv' to show
+_____ test_real_degraded_permission_fatal_response_uses_existing_cleanup ______
+tests\integration\test_unified_permission_degraded.py:417: in scenario
+    await asyncio.shield(runner)
+E   asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+tests\integration\test_unified_permission_degraded.py:427: in test_real_degraded_permission_fatal_response_uses_existing_cleanup
+    asyncio.run(scenario())
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\integration\test_unified_permission_degraded.py:416: in scenario
+    async with asyncio.timeout(5):
+               ^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\timeouts.py:115: in __aexit__
+    raise TimeoutError from exc_val
+E   TimeoutError
+------------------------------ Captured log call ------------------------------
+WARNING  trade_plan_monitor.web.monitor_composition:monitor_composition.py:1085 Reference refresh failed: stage=trading_calendar code=REFERENCE_BLOCKED_PERMISSION
+WARNING  trade_plan_monitor.web.monitor_composition:monitor_composition.py:463 Monitor runner exited: code=RUNTIME_RUNNER_EXCEPTION
+WARNING  trade_plan_monitor.web.monitor_composition:monitor_composition.py:511 Monitor recovery: code=RUNTIME_RESTART_SCHEDULED attempt=1 delay_seconds=1.0
+WARNING  trade_plan_monitor.web.monitor_composition:monitor_composition.py:1085 Reference refresh failed: stage=trading_calendar code=REFERENCE_BLOCKED_PERMISSION
+WARNING  trade_plan_monitor.web.monitor_composition:monitor_composition.py:577 Monitor recovery: code=RUNTIME_REPLACEMENT_STARTED
+_ test_workbench_replay_copies_exact_plan_and_runs_existing_loop[FOLLOW_REMINDERS-1] _
+tests\integration\test_workbench_plan_selection.py:438: in test_workbench_replay_copies_exact_plan_and_runs_existing_loop
+    job = wait(
+tests\integration\test_monitor_loop_production_composition.py:443: in wait
+    pytest.fail(f"Expected public state not reached at {path}: {response.text}")
+E   Failed: Expected public state not reached at /api/v1/backtest-jobs/z0000000000000001ef7778ed81594531: {"error":{"code":"NOT_FOUND","message":"Resource not found","details":[],"requestId":"b7c5e49189b74ae98b2d33ea5161413a"}}
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_backtest_jobs.py::test_additive_job_schema_requires_verified_migration_for_existing_results
+FAILED tests/integration/test_backtest_results.py::test_result_store_is_wal_isolated_canonical_and_conflict_closed
+FAILED tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[compatibility-v1]
+FAILED tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[canonical-v2]
+FAILED tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1]
+FAILED tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2]
+FAILED tests/integration/test_daily_plan_chain.py::test_real_sdk_normalizer_production_adapter_and_official_scheduler
+FAILED tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1]
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[canonical-v2]
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_snapshot_is_deterministic_canonical_and_current
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas
+FAILED tests/integration/test_openapi_snapshot.py::test_typescript_contract_is_generated_from_the_snapshot
+FAILED tests/integration/test_unified_permission_degraded.py::test_real_degraded_permission_fatal_response_uses_existing_cleanup
+FAILED tests/integration/test_workbench_plan_selection.py::test_workbench_replay_copies_exact_plan_and_runs_existing_loop[FOLLOW_REMINDERS-1]
+16 failed, 4459 passed, 1 skipped, 4 deselected, 1 warning in 4532.73s (1:15:32)

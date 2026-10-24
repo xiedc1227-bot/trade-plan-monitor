@@ -1,0 +1,40 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/market-linkage.spec.ts tests/e2e/condition-plan.spec.ts
+
+
+Running 2 tests using 1 worker
+
+
+
+(node:113052) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/2] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+  1) [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+
+    Test timeout of 120000ms exceeded.
+
+    Error: page.waitForResponse: Test timeout of 120000ms exceeded.
+
+      137 |   await expect(page.getByRole("heading", { name: "仅提醒的风险条件" })).toBeVisible();
+      138 |   await expect(page.getByText("生成提醒时数量")).toHaveCount(0);
+    > 139 |   const acknowledgement = page.waitForResponse(r => r.url().endsWith("/alert-acknowledgements") && r.request().method() === "POST");
+          |                                ^
+      140 |   await reminderRow.getByRole("button", { name: "确认已查看（不代表成交）" }).click();
+      141 |   const acknowledged = await acknowledgement;
+      142 |   expect(acknowledged.status(), await acknowledged.text()).toBe(200);
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\condition-plan.spec.ts:139:32
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome\error-context.md
+
+
+
+(node:78060) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/2] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+  1 failed
+    [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+  1 passed (2.2m)

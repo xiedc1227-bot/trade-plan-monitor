@@ -1,0 +1,23 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+____ test_normal_market_below_star_minimum_is_not_a_weak_market_exception _____
+
+    def test_normal_market_below_star_minimum_is_not_a_weak_market_exception():
+        from trade_plan_monitor.decision.quantity_policy import calculate_quantity
+
+        result = calculate_quantity(
+            base_quantity=100, regime="NORMAL_TRANSITION", minimum=200, increment=1,
+            capacity=500, condition="SATISFIED", risk="UNSATISFIED", route_blocker=None,
+        )
+        assert result.candidate_quantity is None and result.authorized_quantity == 0
+>       assert result.blockers == ("MARKET_QUANTITY_BELOW_MINIMUM",)
+E       AssertionError: assert ('P1_EXCEPTION_REQUIRED',) == ('MARKET_QUAN...LOW_MINIMUM',)
+E
+E         At index 0 diff: 'P1_EXCEPTION_REQUIRED' != 'MARKET_QUANTITY_BELOW_MINIMUM'
+E         Use -v to get more diff
+
+tests\unit\test_quantity_policy.py:104: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_quantity_policy.py::test_normal_market_below_star_minimum_is_not_a_weak_market_exception
+1 failed, 20 deselected in 0.61s
+MUTATION DETECTED: one expected failure; disk source unchanged

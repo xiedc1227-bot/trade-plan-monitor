@@ -1,0 +1,20 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/condition-plan.spec.ts tests/e2e/market-linkage.spec.ts --repeat-each 2
+
+
+Running 4 tests using 1 worker
+
+
+(node:91284) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/4] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+[2/4] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+(node:42176) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[3/4] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+[4/4] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+  4 passed (35.9s)

@@ -1,0 +1,78 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/condition-plan.spec.ts --repeat-each 3
+
+
+Running 3 tests using 1 worker
+
+(node:27208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/3] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+(node:92612) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/3] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+(node:62116) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[3/3] [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+[chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+ACKNOWLEDGEMENT DIAGNOSTIC {
+  "requests": [
+    "GET /api/v1/dashboard",
+    "GET /api/v1/health",
+    "GET /api/v1/alerts",
+    "FAILED net::ERR_ABORTED",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard",
+    "GET /api/v1/dashboard"
+  ],
+  "page": "跳到主要内容\nPLAN / MONITOR\n交易计划监控\n01\n监控总览\n02\n计划\n03\n提醒\n04\n系统\n05\n回测\n× 传输断开，正在重新连接\nLOCAL WORKSPACE / UTC+08:00\n文字提醒中心\n\n关注需要行动的时刻。提醒、确认与人工成交是彼此独立的操作。\n\n提醒确认失败，请稍后重试。\n\n提醒确认失败，请稍后重试。\n\n重新加载提醒\n提醒历史\n股票代码\n信号类型\n全部\n底仓买入\n机动仓买入\n压力位减仓\n风险线突破\n风险退出\n风险退出待结算\n普通计划买入\n普通计划卖出\n普通计划风险提醒\n日线技术风险减仓\n确认状态\n全部\n未确认\n已确认\n开始时间\n结束时间\n查询\n服务端生成的文字提醒\n提醒\t时间与身份\t操作\nSynthetic reviewed plan · 601021.SH\n风险提醒 · RISK\n仅提醒；不产生交易，也不改变模拟仓位\n历史提醒 · 当前不可操作\nSynthetic reviewed plan 601021.SH 风险提醒：规则 five-minute-low-risk 于 2026-09-22 确认。请查看证据；此提醒不改变模拟仓位。\n\t\n2026-09-22 09:40:15\n51e5a10c-66c7-451d-ad8a-d20db4defd83\n在图表中查看\t收起证据确认已查看（不代表成交）查看计划并审核风险提醒（不改变模拟仓位）\n\n仅提醒的风险条件\n\n规则 five-minute-low-risk · 确认交易日 2026-09-22。\n\n请审核来源证据；此提醒不产生交易，也不改变模拟仓位。\n\n[\n  {\n    \"bar_ids\": [\n      \"2026-09-22T09:40:00+08:00\"\n    ],\n    \"basis_id\": null,\n    \"children\": [],\n    \"condition\": {\n      \"price_fen\": 950,\n      \"timeframe_minutes\": 5,\n      \"type\": \"MINUTE_CLOSE_BELOW\"\n    },\n    \"fact_ids\": [],\n    \"operands\": [\n      \"949\",\n      \"950\"\n    ],\n    \"outcome\": \"SATISFIED\",\n    \"reason\": null,\n    \"session_dates\": []\n  }\n]\n上一页\n第 1 页，共 1 条\n下一页\n实时提醒同步\n\n尚无新的实时提醒更新\n\n实时事件仅触发权威提醒刷新，不作为提醒正文。\n\nPLAN / MONITOR — 让每一步，有据可循。\n交易计划 · 持续监控 · 人工决策"
+}
+
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\asyncio\proactor_events.py", line 166, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Զ������ǿ�ȹر���һ�����е����ӡ�
+
+
+  1) [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+
+    TimeoutError: page.waitForResponse: Timeout 10000ms exceeded while waiting for event "response"
+
+      141 |   page.on("requestfailed", r => acknowledgementRequests.push(`FAILED ${r.failure()?.errorText}`));
+      142 |   page.on("pageerror", e => acknowledgementRequests.push(`PAGE ERROR ${e.message}`));
+    > 143 |   const acknowledgement = page.waitForResponse(r => r.url().endsWith("/alert-acknowledgements") && r.request().method() === "POST", { timeout: 10_000 });
+          |                                ^
+      144 |   await reminderRow.getByRole("button", { name: "确认已查看（不代表成交）" }).click();
+      145 |   const acknowledged = await acknowledgement.catch(async error => {
+      146 |     const diagnostic = JSON.stringify({
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\condition-plan.spec.ts:143:32
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome-repeat2\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\condition-plan-one-product-3115a-nd-simulates-once-in-SQLite-chrome-repeat2\error-context.md
+
+
+  1 failed
+    [chrome] › tests\e2e\condition-plan.spec.ts:34:1 › one production workspace extracts, edits mixed periods, reviews, explicitly enables and simulates once in SQLite
+  2 passed (39.7s)

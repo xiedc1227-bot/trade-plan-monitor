@@ -1,0 +1,100 @@
+........................................................................ [  6%]
+........................FF.............................................. [ 13%]
+....................................................F.....F............. [ 20%]
+........................................................................ [ 27%]
+........................................................................ [ 33%]
+........................................................................ [ 40%]
+........................................................................ [ 47%]
+........................................................................ [ 54%]
+........................................................................ [ 61%]
+........................................................................ [ 67%]
+........................................................................ [ 74%]
+........................................................................ [ 81%]
+........................................................................ [ 88%]
+........................................................................ [ 95%]
+.....................................................                    [100%]
+================================== FAILURES ===================================
+_ test_generated_documents_and_types_match_mounted_service_routes[compatibility-v1] _
+
+contract = (1, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_generated_documents_and_types_match_mounted_service_routes(contract):
+        version, document = contract
+        snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
+        types = "generated.ts" if version == 1 else "generated-runtime-status.ts"
+>       assert json.loads((ROOT / snapshot).read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_backtest_service_contract.py:24: AssertionError
+_ test_generated_documents_and_types_match_mounted_service_routes[canonical-v2] _
+
+contract = (2, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_generated_documents_and_types_match_mounted_service_routes(contract):
+        version, document = contract
+        snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
+        types = "generated.ts" if version == 1 else "generated-runtime-status.ts"
+>       assert json.loads((ROOT / snapshot).read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_backtest_service_contract.py:24: AssertionError
+_ test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1] _
+
+contract = (1, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_committed_run_and_result_contracts_match_actual_routes(contract):
+        version, document = contract
+        snapshot = ROOT / ("openapi.json" if version == 1 else "openapi.runtime-status.json")
+        types = (
+            ROOT / "web/src/api" / ("generated.ts" if version == 1 else "generated-runtime-status.ts")
+        )
+>       assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_monitor_loop_contract.py:35: AssertionError
+__ test_committed_run_and_result_contracts_match_actual_routes[canonical-v2] __
+
+contract = (2, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_committed_run_and_result_contracts_match_actual_routes(contract):
+        version, document = contract
+        snapshot = ROOT / ("openapi.json" if version == 1 else "openapi.runtime-status.json")
+        types = (
+            ROOT / "web/src/api" / ("generated.ts" if version == 1 else "generated-runtime-status.ts")
+        )
+>       assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_monitor_loop_contract.py:35: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[compatibility-v1]
+FAILED tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[canonical-v2]
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1]
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[canonical-v2]
+4 failed, 1057 passed, 1 warning in 710.05s (0:11:50)

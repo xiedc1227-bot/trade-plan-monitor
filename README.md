@@ -647,7 +647,7 @@ Keep source-defined exit and reassessment conditions in their corresponding rule
 
 ## Market effects
 
-Apply this section to low-buy research or when explicitly requested; otherwise do not force its expansion. These are research conventions, not universal market laws or proof of native index-linked support.
+Apply this section to low-buy research or when explicitly requested; otherwise do not force its expansion. These are research conventions, not universal market laws. The approved daily linked subset is supported through Schema 6; capability and evidence boundaries below still apply.
 
 ### 1. Reference index and state
 
@@ -703,7 +703,7 @@ For trade proposals, verify settlement T+1, price limits, special states, minimu
 
 Check actual project capabilities; when inaccessible, label reliance on prior records. Current Schema 5 supports registered complete stock conditions; at most 2 ordinary rules targeting TACTICAL only, with explicit ordering for same-side tranches. Ordinary buys cannot establish CORE; keep that proposal human-only. Ordinary trade quantities and maximum holdings must be positive multiples of 100 shares. Proposed quantities must satisfy both actual market rules and the software contract; otherwise block import without unauthorized rounding.
 
-Index-driven automatic branches, dynamic quantities and runtime S0/S1 confirmation-level switching are unsupported; assess static stock conditions individually. Preserve the actual requested level names in capability explanations; do not replace S0/S1 with S1/S2. Humans verify fundamentals/announcements; there is no broker-order capability.
+Schema 6 supports explicitly sourced daily BUY linkage: board-derived reference index, BROKEN/WEAK/NORMAL_TRANSITION/UNKNOWN, aligned 5/20-session relative strength, S0/S1/S2 selection and Q0-based legal-floor sizing. Q0 must be a positive multiple of 100. Normal uses Q0; ordinary WEAK uses the greatest legal quantity no greater than 0.5*Q0. Both P1 exception routes remain blocked, even when STRONG. The official minimum/increment grid intersects the 100-share simulation contract; insufficient capacity blocks the entire frozen quantity. Five-minute linked confirmation and automatic exception approval remain unsupported. Schema 5 fixed quantities retain their original behavior. Humans verify fundamentals/announcements; there is no broker-order capability.
 
 Block whole rules with unsupported dependencies; do not remove constraints, change quantity/CORE scope, disguise facts as human supplements or substitute unauthorized reminders.
 
@@ -716,7 +716,7 @@ Use the compact root grouping below: after the heading, keep the three schema/ex
 - Root paths have no draft. prefix. symbol retains 6 digits and .SH/.SZ/.BJ, including leading zeros; market is SSE/SZSE/BSE respectively.
 - Propose new identities during generation and follow the verified creation-version contract. Check prior identity/version only when the user explicitly requests an existing-plan update; do not request old-version details for a new plan.
 - Metadata refers to its actual date; unknown time is null, without invented timezone. Fixed references retain the actual source date rather than the generation date; source contains only a short factual source label, with purpose explanations in B.
-- Keep full condition types, compared objects, parameters, units, references, confirmation and applicable quantities, buckets, windows, deadlines and dependencies. ALL/ANY retains all children.
+- Keep full condition types, compared objects, parameters, units, references, confirmation and applicable quantities, buckets, windows, deadlines and dependencies. ALL/ANY retains all children. For a linked BUY use schema_version=6 and condition-plan-v2, explicit market_policy and quantity_policy without quantity, complete S0, Q0 and all eight expanded market/strength/S1/S2/route/unknown definitions. A preset label alone cannot establish source evidence. Missing definitions keep A blocked; never infer them from the version label.
 - Empty groups occupy standalone lines: “无普通规则”, “无风险分支”, “无提醒规则”, meaning real empty arrays; expand nonempty ordinary_rules[i], risk_branches[i], alert_rules[i].
 - Preserve contract types for integer fen, Decimal strings, nulls and arrays. Use levels for actual purposes; independent reminders without zones use null.
 - Omit only verified unchanged PRODUCT_CONTRACT fixed defaults. Do not guess strategy quantities, prices, confirmation, deadlines or grouping. Use the general validity stated in B without inventing an expiry.
