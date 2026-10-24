@@ -54,3 +54,9 @@ RED: the expanded schema exposed a real 50,000-character input-limit regression;
 ```
 
 MLP1-T04 is accepted. Update/preparation, durable authority and all later checkpoints remain pending.
+
+## MLV1-06 — Permission-preserving updates (MLP1-T05)
+
+RED: four new tests failed for missing Schema 7 compact preparation and predecessor snapshot serialization; one authority-injection test already passed. Added explicit typed Schema 7 dispatch for compact preparation, delta prompts and predecessor contexts. Permission edits change review identity and unrelated source clauses cannot authorize them; plan copies reject occurrence authority. Missing permissions remain non-executable. One test initially expected an exception rather than the existing `to_executable()` return-None contract; its assertion was corrected to test that contract.
+
+GREEN: **95 tests passed in 2.20s**, covering exception/linked review, exception updates, delta materialization, retained evidence, prompt budgets and existing preparation updates. Full Ruff passed. MLP1-T05 accepted; MLP1-C02 still requires durable storage acceptance.

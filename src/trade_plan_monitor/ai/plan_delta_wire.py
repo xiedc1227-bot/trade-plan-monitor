@@ -103,7 +103,11 @@ class CompactDeltaOutput(ResearchValue):
 def build_delta_prompt(source, context, feedback=(), repair_context=None):
     from trade_plan_monitor.ai.loop_plan_extraction import encode_untrusted_plan_data
     from trade_plan_monitor.ai.market_linkage_prompt import linkage_prompt_contract
-    from trade_plan_monitor.ai.preparation_wire import LinkedWireDraft, WireDraft
+    from trade_plan_monitor.ai.preparation_wire import (
+        ExceptionWireDraft,
+        LinkedWireDraft,
+        WireDraft,
+    )
     from trade_plan_monitor.ai.prompt_encoding import schema_outline, source_clause_evidence
 
     data = dict(
@@ -229,8 +233,8 @@ def build_delta_prompt(source, context, feedback=(), repair_context=None):
         "the actual earlier rule ID, never self. No implicit third tranche for reserve shares. "
         "Unchanged values need no current-source references. The following are the allowed "
         "target field types, not a request to regenerate the full draft:\n"
-        + schema_outline((LinkedWireDraft if context.snapshot.schema_version == 6
-                          else WireDraft).model_json_schema())
+        + schema_outline({5: WireDraft, 6: LinkedWireDraft, 7: ExceptionWireDraft}[
+            context.snapshot.schema_version].model_json_schema())
         + "\nUNTRUSTED_PLAN_DATA_START\n"
         + encode_untrusted_plan_data(data)
         + "\nUNTRUSTED_PLAN_DATA_END"

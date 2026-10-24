@@ -71,7 +71,7 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T05 — Preserve permission through updates and preparation
 
-- [ ] Carry exact route permission through full updates, patches, preparation and inheritance; permission changes require fresh review; importing/copying a plan never copies occurrence approvals.
+- [x] Carry exact route permission through full updates, patches, preparation and inheritance; permission changes require fresh review; importing/copying a plan never copies occurrence approvals.
 - Depends on: MLP1-T04. Acceptance: MLP1-A01, MLP1-A04; no fallback to fixed rules or older linked format and no inherited live grant.
 - Files/scope: `ai/plan_update_extraction.py`, `ai/preparation_wire.py`, `ai/predecessor_patch.py`, update review seam, `tests/integration/test_market_exception_updates.py`; M.
 - Verify: full V04; cover enabled→disabled, disabled→enabled, missing fields, stale review and plan clones.

@@ -71,7 +71,7 @@
 
 ### MLP1-T05 — 在更新与准备中保留许可
 
-- [ ] 完整更新、补丁、准备及继承均保留准确路径许可；许可变化要求重新审核；导入／复制计划不得复制单次批准。
+- [x] 完整更新、补丁、准备及继承均保留准确路径许可；许可变化要求重新审核；导入／复制计划不得复制单次批准。
 - 依赖：MLP1-T04。验收：MLP1-A01、MLP1-A04；不退回固定规则或旧联动格式，不继承实时授权。
 - 文件／范围：`ai/plan_update_extraction.py`、`ai/preparation_wire.py`、`ai/predecessor_patch.py`、更新审核接点、`tests/integration/test_market_exception_updates.py`；M。
 - 验证：完整 V04；覆盖开启→关闭、关闭→开启、缺少字段、过时审核和复制计划。

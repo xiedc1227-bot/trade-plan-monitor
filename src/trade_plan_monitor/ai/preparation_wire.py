@@ -35,6 +35,7 @@ from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.daily_scope import require_inventory_assertion
 from trade_plan_monitor.domain.market_linkage_validation import (
+    MarketExceptionPlanDraft,
     MarketLinkedPlanDraft,
     parse_current_draft,
 )
@@ -130,9 +131,13 @@ class LinkedWireDraft(MarketLinkedPlanDraft):
     levels: WireLevels | None
 
 
+class ExceptionWireDraft(MarketExceptionPlanDraft):
+    levels: WireLevels | None
+
+
 class CompactPlanOutput(ResearchValue):
     type: Literal["json_object"] | None = Field(default=None, exclude=True)
-    draft: WireDraft | LinkedWireDraft
+    draft: ExceptionWireDraft | LinkedWireDraft | WireDraft
     clauses: tuple[ClauseDecision, ...] = Field(default=(), max_length=512)
     bindings: tuple[EvidenceReference, ...] = Field(default=(), max_length=2000)
     warnings: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
@@ -304,7 +309,7 @@ def build_compact_prompt(source, *, context=None, feedback=(), repair_context=No
         "keep computable alternatives in typed nodes and optional suggestions outside hard "
         "prerequisites. "
         "A reminder has no liquidation authority. Product constants: "
-        "schema_version5/6 as selected above, "
+        "schema_version5/6/7 as selected above, "
         "CONDITION_PLAN, "
         "condition-plan-v1/condition-plan-v2 as selected above; "
         "trading_rules NEXT_EXCHANGE_SESSION/tick_size_fen1/BLOCK_UNVERIFIED; "
