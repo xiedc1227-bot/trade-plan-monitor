@@ -141,6 +141,10 @@ def _summary_for_report(
     if isinstance(report, UnifiedReplayReport):
         if run_input is None:
             raise ValueError("current research persistence requires its frozen run input")
+        from trade_plan_monitor.backtest.exception_replay import validate_exception_outcomes
+        frozen_events = getattr(run_input.research_input, "exception_authorization_events", ())
+        validate_exception_outcomes(frozen_events, report.exception_outcomes,
+                                    report.daily_equity[-1].marked_at)
         return BacktestRunSummary(
             run_id=report.run_id,
             plan_sha256=report.plan_hash,
@@ -164,6 +168,8 @@ def _summary_for_report(
                 "start": report.start,
             },
             assumptions={
+                **({"exceptionProvenance": tuple(sorted({e.provenance for e in frozen_events}))}
+                   if report.exception_outcomes is not None else {}),
                 "adjustmentPolicy": "FROZEN_CERTIFIED_PROOF",
                 "executionConfig": report.execution_config.model_dump(mode="python"),
                 "executionConfigHash": report.execution_config.config_hash,

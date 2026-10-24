@@ -135,6 +135,23 @@ def validate_reference_summary(summary: BacktestRunSummary, reference: LoopInput
 
 def validate_report_input(stored: StoredLoopInput, report: MonitorLoopReport) -> None:
     run = stored.run_input
+    from trade_plan_monitor.backtest.exception_replay import validate_exception_outcomes
+
+    program = run.exception_program
+    if program is None:
+        if any(v is not None for v in (report.exception_outcomes,
+                report.exception_requests, report.exception_provenance)):
+            raise ValueError("exception report requires a frozen program")
+    else:
+        if report.exception_provenance != program.provenances:
+            raise ValueError("exception provenance does not match frozen input")
+        validate_exception_outcomes(program.exception_authorization_events,
+                                    report.exception_outcomes, run.boundary.evidence_cutoff)
+        expected = tuple((o.operation_id, o.at) for o in program.operations
+                         if o.at <= run.boundary.evidence_cutoff)
+        actual = tuple((o.operation_id, o.at) for o in report.exception_requests or ())
+        if expected != actual:
+            raise ValueError("exception requests do not match frozen input")
     selected = run.schedule.select(run.boundary.started_at)
     from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
 
@@ -170,6 +187,18 @@ def audit_record(event: LoopAuditEvent) -> BacktestDetailRecord:
         event_at=event.at,
         payload=json.loads(canonical_json(event)),
     )
+
+
+def validate_exception_operation(run, event):
+    """A published execution request must retain its exact frozen script command."""
+    if event.payload.kind != "REQUESTED" or event.payload.source_operation is None:
+        return
+    operation = event.payload.source_operation
+    program = run.exception_program
+    expected = None if program is None else next((o for o in program.operations
+        if o.operation_id == operation.operation_id), None)
+    if expected != operation:
+        raise ValueError("exception operation does not match frozen input")
 
 
 def decode_audit_record(record: BacktestDetailRecord) -> LoopAuditEvent:
@@ -235,6 +264,7 @@ def stage_loop_report(
         for value in events:
             token.raise_if_cancelled("RUN_REPORT_HANDOFF")
             event = decode_loop_event(value.model_dump_json())
+            validate_exception_operation(stored.run_input, event)
             details.append(audit_record(event))
             fill = fill_record(event)
             if fill is not None:
@@ -304,6 +334,7 @@ def verify_loop_publication(store, connection, summary, reference, *, materializ
             for row in rows:
                 detail = _load_detail_row(tuple(row), expected_run_id=reference.run_id)
                 event = decode_loop_event(canonical_json(detail.payload))
+                validate_exception_operation(stored.run_input, event)
                 if detail != audit_record(event):
                     raise ValueError("loop audit row identity mismatch")
                 payload = event.payload

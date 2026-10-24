@@ -4983,12 +4983,16 @@
           "researchInput": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/ExceptionResearchInput"
+              },
+              {
                 "$ref": "#/components/schemas/UnifiedResearchInput"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Researchinput"
           }
         },
         "required": [
@@ -5698,6 +5702,55 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Event Set Hash",
             "type": "string"
+          },
+          "exception_outcomes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExceptionReplayOutcome"
+                },
+                "maxItems": 10000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Outcomes"
+          },
+          "exception_provenance": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "RECORDED_LOCAL",
+                    "RESEARCH_SCENARIO"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Provenance"
+          },
+          "exception_requests": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExceptionExecutionRequestOutcome"
+                },
+                "maxItems": 10000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Requests"
           },
           "final_account": {
             "$ref": "#/components/schemas/LoopAccountState"
@@ -14947,6 +15000,114 @@
         "title": "ExceptionCandidate",
         "type": "object"
       },
+      "ExceptionCandidateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/ExceptionBinding"
+          },
+          "binding_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Binding Hash",
+            "type": "string"
+          },
+          "candidate_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "frozen_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Quantity"
+          },
+          "last_event_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event Id"
+          },
+          "projection_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Projection Hash",
+            "type": "string"
+          },
+          "signal_seed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionSignalSeedInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "REVOKED",
+              "EXPIRED",
+              "INVALIDATED",
+              "CONSUMED"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "version": {
+            "const": "market-linkage-exception-candidate-v1",
+            "default": "market-linkage-exception-candidate-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "binding",
+          "binding_hash",
+          "created_at",
+          "state",
+          "approval_id",
+          "frozen_quantity",
+          "last_event_id",
+          "projection_hash"
+        ],
+        "title": "ExceptionCandidate",
+        "type": "object"
+      },
       "ExceptionCandidateResource": {
         "additionalProperties": false,
         "properties": {
@@ -15182,6 +15343,56 @@
         "title": "ExceptionEvent",
         "type": "object"
       },
+      "ExceptionExecutionRequestOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "intent_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Id"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "REQUESTED",
+              "BLOCKED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "at",
+          "status",
+          "blockers"
+        ],
+        "title": "ExceptionExecutionRequestOutcome",
+        "type": "object"
+      },
       "ExceptionPreviewApiCommand": {
         "additionalProperties": false,
         "properties": {
@@ -15314,6 +15525,208 @@
         "title": "ExceptionReceiptApiView",
         "type": "object"
       },
+      "ExceptionReplayOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "candidate_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "envelope_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Envelope Hash",
+            "type": "string"
+          },
+          "private_event_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Event Id"
+          },
+          "provenance": {
+            "enum": [
+              "RECORDED_LOCAL",
+              "RESEARCH_SCENARIO"
+            ],
+            "title": "Provenance",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "exception-replay-outcome-v1",
+            "default": "exception-replay-outcome-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_event_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Event Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "APPLIED",
+              "BLOCKED",
+              "VERIFIED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "envelope_hash",
+          "source_event_id",
+          "provenance",
+          "at",
+          "status",
+          "blockers",
+          "candidate_id"
+        ],
+        "title": "ExceptionReplayOutcome",
+        "type": "object"
+      },
+      "ExceptionReplayProgram": {
+        "additionalProperties": false,
+        "properties": {
+          "exception_authorization_events": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FrozenExceptionEvent"
+            },
+            "maxItems": 10000,
+            "title": "Exception Authorization Events",
+            "type": "array"
+          },
+          "operations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResearchSimulation"
+            },
+            "maxItems": 10000,
+            "title": "Operations",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": "exception-replay-program-v1",
+            "default": "exception-replay-program-v1",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "title": "ExceptionReplayProgram",
+        "type": "object"
+      },
+      "ExceptionResearchInput": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment_proofs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResearchAdjustmentProof"
+            },
+            "maxItems": 1500,
+            "title": "Adjustment Proofs",
+            "type": "array"
+          },
+          "calendar_extension": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TradingDay"
+            },
+            "maxItems": 32,
+            "title": "Calendar Extension",
+            "type": "array"
+          },
+          "exception_authorization_events": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FrozenExceptionEvent"
+            },
+            "maxItems": 10000,
+            "title": "Exception Authorization Events",
+            "type": "array"
+          },
+          "inventory_known": {
+            "title": "Inventory Known",
+            "type": "boolean"
+          },
+          "operations": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "DEACTIVATE": "#/components/schemas/ResearchDeactivate",
+                  "FACT": "#/components/schemas/ResearchFact",
+                  "REASSESS": "#/components/schemas/ResearchReassessment",
+                  "REPLACE": "#/components/schemas/ResearchReplace",
+                  "SIMULATE": "#/components/schemas/ResearchSimulation"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ResearchFact"
+                },
+                {
+                  "$ref": "#/components/schemas/ResearchDeactivate"
+                },
+                {
+                  "$ref": "#/components/schemas/ResearchReplace"
+                },
+                {
+                  "$ref": "#/components/schemas/ResearchSimulation"
+                },
+                {
+                  "$ref": "#/components/schemas/ResearchReassessment"
+                }
+              ]
+            },
+            "maxItems": 10000,
+            "title": "Operations",
+            "type": "array"
+          },
+          "review": {
+            "$ref": "#/components/schemas/ResearchReview"
+          },
+          "schema_version": {
+            "const": "unified-research-input-v2",
+            "default": "unified-research-input-v2",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "started_at",
+          "inventory_known",
+          "review"
+        ],
+        "title": "ExceptionResearchInput",
+        "type": "object"
+      },
       "ExceptionRevocationApiCommand": {
         "additionalProperties": false,
         "properties": {
@@ -15349,6 +15762,33 @@
         "title": "ExceptionRevocationApiCommand",
         "type": "object"
       },
+      "ExceptionRoutes": {
+        "additionalProperties": false,
+        "properties": {
+          "broken_strong": {
+            "enum": [
+              "DISABLED",
+              "PER_OCCURRENCE"
+            ],
+            "title": "Broken Strong",
+            "type": "string"
+          },
+          "weak_minimum": {
+            "enum": [
+              "DISABLED",
+              "PER_OCCURRENCE"
+            ],
+            "title": "Weak Minimum",
+            "type": "string"
+          }
+        },
+        "required": [
+          "weak_minimum",
+          "broken_strong"
+        ],
+        "title": "ExceptionRoutes",
+        "type": "object"
+      },
       "ExceptionSignalSeed": {
         "additionalProperties": false,
         "properties": {
@@ -15361,6 +15801,59 @@
           "evidence": {
             "items": {
               "$ref": "#/components/schemas/UnifiedConditionEvidence"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "evidence_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Fingerprint",
+            "type": "string"
+          },
+          "occurrence_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ONCE_PER_RULE",
+                  "AFTER_RULE_COMPLETED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Mode"
+          },
+          "signal_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Signal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal_id",
+          "basis_id",
+          "evidence_fingerprint",
+          "evidence"
+        ],
+        "title": "ExceptionSignalSeed",
+        "type": "object"
+      },
+      "ExceptionSignalSeedInput": {
+        "additionalProperties": false,
+        "properties": {
+          "basis_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Basis Id",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidenceInput"
             },
             "maxItems": 1,
             "minItems": 1,
@@ -16380,6 +16873,61 @@
           "source"
         ],
         "title": "FixedDailyReference",
+        "type": "object"
+      },
+      "FrozenExceptionEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "$ref": "#/components/schemas/ExceptionCandidateInput"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/MarketExceptionDecisionInput"
+          },
+          "envelope_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Envelope Hash",
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/ExceptionEvent"
+          },
+          "order": {
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Order",
+            "type": "integer"
+          },
+          "plan_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Plan Hash",
+            "type": "string"
+          },
+          "provenance": {
+            "enum": [
+              "RECORDED_LOCAL",
+              "RESEARCH_SCENARIO"
+            ],
+            "title": "Provenance",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "frozen-exception-event-v1",
+            "default": "frozen-exception-event-v1",
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_hash",
+          "provenance",
+          "order",
+          "candidate",
+          "decision",
+          "event",
+          "envelope_hash"
+        ],
+        "title": "FrozenExceptionEvent",
         "type": "object"
       },
       "IndexConditionEvidenceView": {
@@ -17702,6 +18250,145 @@
         "title": "LinkedIndexFacts",
         "type": "object"
       },
+      "LinkedIndexFactsInput": {
+        "additionalProperties": false,
+        "description": "Dated linkage facts; the historical market-index-facts-v1 stays byte stable.",
+        "properties": {
+          "close": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "evidence_cutoff": {
+            "format": "date-time",
+            "title": "Evidence Cutoff",
+            "type": "string"
+          },
+          "formula_version": {
+            "const": "market-linkage-index-v1",
+            "default": "market-linkage-index-v1",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "low20": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low20"
+          },
+          "ma20": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ma20"
+          },
+          "ma20_5": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ma20 5"
+          },
+          "ma60": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ma60"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "reference_market": {
+            "$ref": "#/components/schemas/ReferenceMarketBinding"
+          },
+          "source_hashes": {
+            "default": [],
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Source Hashes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reference_market",
+          "decision_session",
+          "evidence_cutoff"
+        ],
+        "title": "LinkedIndexFacts",
+        "type": "object"
+      },
       "LoopAccountContext": {
         "additionalProperties": false,
         "description": "Reviewed source assertions to compare with the ledger, never opening inventory.",
@@ -18458,7 +19145,14 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/MarketLinkageDecision"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MarketExceptionDecision"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MarketLinkageDecision"
+                    }
+                  ]
                 },
                 "maxItems": 2,
                 "type": "array"
@@ -19280,6 +19974,9 @@
           "snapshot": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/MarketExceptionTradePlan"
+              },
+              {
                 "$ref": "#/components/schemas/MarketLinkedTradePlan"
               },
               {
@@ -19360,6 +20057,16 @@
             "format": "date-time",
             "title": "Ready At",
             "type": "string"
+          },
+          "source_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResearchSimulation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -19792,6 +20499,106 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RelativeStrengthEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "const": "market-linkage-evidence-v2",
+            "default": "market-linkage-evidence-v2",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "content_hash",
+          "decision_session",
+          "evidence_cutoff",
+          "market",
+          "strength",
+          "selection",
+          "calculation",
+          "quantity_rules",
+          "confirmation",
+          "consumed_hash",
+          "evidence_hash",
+          "approval_binding"
+        ],
+        "title": "MarketExceptionDecision",
+        "type": "object"
+      },
+      "MarketExceptionDecisionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_binding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/ExceptionCalculation"
+          },
+          "confirmation": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidenceInput"
+            },
+            "title": "Confirmation",
+            "type": "array"
+          },
+          "consumed_hash": {
+            "title": "Consumed Hash",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "evidence_cutoff": {
+            "format": "date-time",
+            "title": "Evidence Cutoff",
+            "type": "string"
+          },
+          "evidence_hash": {
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "market": {
+            "$ref": "#/components/schemas/MarketRegimeEvidenceInput"
+          },
+          "quantity_rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketQuantityRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ConfirmationSelection"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativeStrengthEvidenceInput"
               },
               {
                 "type": "null"
@@ -20725,6 +21532,367 @@
           "reference_market"
         ],
         "title": "MarketExceptionPlanDraft",
+        "type": "object"
+      },
+      "MarketExceptionPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "base_confirmation": {
+            "const": "S0",
+            "title": "Base Confirmation",
+            "type": "string"
+          },
+          "exception_policy": {
+            "const": "REVIEW_PER_OCCURRENCE",
+            "title": "Exception Policy",
+            "type": "string"
+          },
+          "exception_routes": {
+            "$ref": "#/components/schemas/ExceptionRoutes"
+          },
+          "policy_version": {
+            "const": "market-linkage-v2",
+            "title": "Policy Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_version",
+          "base_confirmation",
+          "exception_policy",
+          "exception_routes"
+        ],
+        "title": "MarketExceptionPolicy",
+        "type": "object"
+      },
+      "MarketExceptionRule": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "const": "TACTICAL",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "condition": {
+            "discriminator": {
+              "mapping": {
+                "ALL": "#/components/schemas/UnifiedAll",
+                "ANY": "#/components/schemas/UnifiedAny",
+                "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
+                "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
+                "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGte",
+                "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedPriceCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriceInRange"
+              },
+              {
+                "$ref": "#/components/schemas/DailyVolumeRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCandleRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyIndicatorCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewedDailyFact"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseInRange"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseBelow"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteVolumeToMeanGte"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAll"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAny"
+              }
+            ],
+            "title": "Condition"
+          },
+          "confirmation": {
+            "$ref": "#/components/schemas/OfficialDailyConfirmation"
+          },
+          "execution_window": {
+            "const": "NEXT_EXCHANGE_SESSION_ONLY",
+            "title": "Execution Window",
+            "type": "string"
+          },
+          "independent_signal": {
+            "discriminator": {
+              "mapping": {
+                "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
+                "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicy",
+                "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
+                "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DailyIndependentEvent"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedResetPolicy"
+              },
+              {
+                "$ref": "#/components/schemas/OncePerRule"
+              },
+              {
+                "$ref": "#/components/schemas/AfterRuleCompleted"
+              }
+            ],
+            "title": "Independent Signal"
+          },
+          "invalidation": {
+            "const": "RISK_OR_REVIEWED_INVALIDATION",
+            "title": "Invalidation",
+            "type": "string"
+          },
+          "market_policy": {
+            "$ref": "#/components/schemas/MarketExceptionPolicy"
+          },
+          "quantity_policy": {
+            "$ref": "#/components/schemas/QuantityPolicy"
+          },
+          "rule_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "side": {
+            "const": "BUY",
+            "title": "Side",
+            "type": "string"
+          },
+          "status": {
+            "const": "ENABLED",
+            "title": "Status",
+            "type": "string"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanActiveValidity"
+              },
+              {
+                "$ref": "#/components/schemas/DailyValidity"
+              }
+            ],
+            "title": "Validity"
+          },
+          "zone": {
+            "const": "LOW_BUY",
+            "title": "Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "side",
+          "rule_id",
+          "bucket",
+          "condition",
+          "confirmation",
+          "execution_window",
+          "zone",
+          "validity",
+          "invalidation",
+          "independent_signal",
+          "market_policy",
+          "quantity_policy"
+        ],
+        "title": "MarketExceptionRule",
+        "type": "object"
+      },
+      "MarketExceptionTradePlan": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "discriminator": {
+              "mapping": {
+                "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                "MANUAL": "#/components/schemas/DailyManualActivation",
+                "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DailyManualActivation"
+              },
+              {
+                "$ref": "#/components/schemas/DailyDayActivation"
+              },
+              {
+                "$ref": "#/components/schemas/DailyRangeActivation"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedAlertRule"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+          },
+          "execution_version": {
+            "const": "condition-plan-v3",
+            "default": "condition-plan-v3",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MarketExceptionRule"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedRule"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/UnifiedPositionPolicy"
+          },
+          "reference_market": {
+            "$ref": "#/components/schemas/ReferenceMarketBinding"
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedRiskBranch"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 7,
+            "default": 7,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "trading_rules",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "MarketExceptionTradePlan",
         "type": "object"
       },
       "MarketIndexBar": {
@@ -23214,6 +24382,96 @@
         "title": "MarketRegimeEvidence",
         "type": "object"
       },
+      "MarketRegimeEvidenceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "below_low20": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Below Low20",
+            "type": "string"
+          },
+          "below_ma20": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Below Ma20",
+            "type": "string"
+          },
+          "below_ma60": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Below Ma60",
+            "type": "string"
+          },
+          "broken": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Broken",
+            "type": "string"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/LinkedIndexFactsInput"
+          },
+          "falling_ma20": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Falling Ma20",
+            "type": "string"
+          },
+          "formula_version": {
+            "const": "market-linkage-v1",
+            "default": "market-linkage-v1",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "regime": {
+            "enum": [
+              "BROKEN",
+              "WEAK",
+              "NORMAL_TRANSITION",
+              "UNKNOWN"
+            ],
+            "title": "Regime",
+            "type": "string"
+          },
+          "weak": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Weak",
+            "type": "string"
+          }
+        },
+        "required": [
+          "facts",
+          "regime",
+          "below_low20",
+          "below_ma60",
+          "below_ma20",
+          "falling_ma20",
+          "broken",
+          "weak"
+        ],
+        "title": "MarketRegimeEvidence",
+        "type": "object"
+      },
       "MarketSessionView": {
         "additionalProperties": false,
         "properties": {
@@ -23613,6 +24871,55 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Event Set Hash",
             "type": "string"
+          },
+          "exception_outcomes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExceptionReplayOutcome"
+                },
+                "maxItems": 10000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Outcomes"
+          },
+          "exception_provenance": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "RECORDED_LOCAL",
+                    "RESEARCH_SCENARIO"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Provenance"
+          },
+          "exception_requests": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExceptionExecutionRequestOutcome"
+                },
+                "maxItems": 10000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Requests"
           },
           "final_account": {
             "$ref": "#/components/schemas/LoopAccountState"
@@ -27517,6 +28824,16 @@
             ],
             "title": "Enddate"
           },
+          "exceptionProgram": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionReplayProgram"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "manifestHash": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Manifesthash",
@@ -28253,6 +29570,272 @@
         "title": "RelativeStrengthEvidence",
         "type": "object"
       },
+      "RelativeStrengthEvidenceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "above_ma20": {
+            "default": "MISSING_INPUT",
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Above Ma20",
+            "type": "string"
+          },
+          "basis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Id"
+          },
+          "cutoff": {
+            "format": "date-time",
+            "title": "Cutoff",
+            "type": "string"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "difference20": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference20"
+          },
+          "difference5": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference5"
+          },
+          "endpoint_dates": {
+            "default": [],
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Endpoint Dates",
+            "type": "array"
+          },
+          "formula_version": {
+            "const": "market-linkage-strength-v1",
+            "default": "market-linkage-strength-v1",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "index_endpoints": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Index Endpoints",
+            "type": "array"
+          },
+          "index_return20": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Return20"
+          },
+          "index_return5": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Return5"
+          },
+          "outperform20": {
+            "default": "MISSING_INPUT",
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Outperform20",
+            "type": "string"
+          },
+          "outperform5": {
+            "default": "MISSING_INPUT",
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Outperform5",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "source_hashes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Hashes",
+            "type": "array"
+          },
+          "stock_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Close"
+          },
+          "stock_endpoints": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Stock Endpoints",
+            "type": "array"
+          },
+          "stock_ma20": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Ma20"
+          },
+          "stock_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Provider"
+          },
+          "stock_return20": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Return20"
+          },
+          "stock_return5": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Return5"
+          },
+          "strength": {
+            "enum": [
+              "STRONG",
+              "NOT_STRONG",
+              "UNKNOWN"
+            ],
+            "title": "Strength",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strength",
+          "decision_session",
+          "cutoff"
+        ],
+        "title": "RelativeStrengthEvidence",
+        "type": "object"
+      },
       "RequiredReviewIssueView": {
         "additionalProperties": false,
         "properties": {
@@ -28627,6 +30210,21 @@
             "title": "Event Id",
             "type": "string"
           },
+          "exception_outcomes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExceptionReplayOutcome"
+                },
+                "maxItems": 10000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Outcomes"
+          },
           "inventory_after": {
             "$ref": "#/components/schemas/DailyInventoryView"
           },
@@ -28637,7 +30235,14 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/MarketLinkageDecision"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MarketExceptionDecision"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MarketLinkageDecision"
+                    }
+                  ]
                 },
                 "maxItems": 2,
                 "type": "array"
@@ -28681,7 +30286,14 @@
           },
           "resulting_signals": {
             "items": {
-              "$ref": "#/components/schemas/DailySignalState"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResearchSignalReference"
+                },
+                {
+                  "$ref": "#/components/schemas/DailySignalState"
+                }
+              ]
             },
             "maxItems": 500,
             "title": "Resulting Signals",
@@ -28704,9 +30316,31 @@
             "title": "Schema Version",
             "type": "string"
           },
+          "signal_linkage": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MarketExceptionDecision"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signal Linkage"
+          },
           "signals": {
             "items": {
-              "$ref": "#/components/schemas/DailySignalState"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResearchSignalReference"
+                },
+                {
+                  "$ref": "#/components/schemas/DailySignalState"
+                }
+              ]
             },
             "maxItems": 500,
             "title": "Signals",
@@ -29624,6 +31258,224 @@
           "evidence"
         ],
         "title": "ResearchRuleEvidence",
+        "type": "object"
+      },
+      "ResearchSignalReference": {
+        "additionalProperties": false,
+        "properties": {
+          "basis_id": {
+            "title": "Basis Id",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "bucket": {
+            "const": "TACTICAL",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "confirmation_kind": {
+            "default": "OFFICIAL_DAILY_CLOSE",
+            "enum": [
+              "OFFICIAL_DAILY_CLOSE",
+              "COMPLETED_BAR_CLOSE"
+            ],
+            "title": "Confirmation Kind",
+            "type": "string"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_trade_date": {
+            "format": "date",
+            "title": "Confirmed Trade Date",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DailyConditionEvidence"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedConditionEvidence"
+                }
+              ]
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "evidence_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Fingerprint",
+            "type": "string"
+          },
+          "executable_qty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Executable Qty",
+            "type": "integer"
+          },
+          "execution_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Date"
+          },
+          "execution_window": {
+            "default": "NEXT_EXCHANGE_SESSION_ONLY",
+            "enum": [
+              "NEXT_EXCHANGE_SESSION_ONLY",
+              "CURRENT_SESSION"
+            ],
+            "title": "Execution Window",
+            "type": "string"
+          },
+          "lineage": {
+            "title": "Lineage",
+            "type": "string"
+          },
+          "market_linkage_ref": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Market Linkage Ref",
+            "type": "string"
+          },
+          "occurrence_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ONCE_PER_RULE",
+                  "AFTER_RULE_COMPLETED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Mode"
+          },
+          "plan_version_id": {
+            "title": "Plan Version Id",
+            "type": "string"
+          },
+          "planned_qty": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Planned Qty",
+            "type": "integer"
+          },
+          "reset_trade_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reset Trade Date"
+          },
+          "review_id": {
+            "title": "Review Id",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "risk_invalidated": {
+            "default": false,
+            "title": "Risk Invalidated",
+            "type": "boolean"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "signal_id": {
+            "title": "Signal Id",
+            "type": "string"
+          },
+          "simulated_qty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Simulated Qty",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "CONFIRMED",
+              "READY",
+              "EXPIRED",
+              "INVALIDATED",
+              "SIMULATED"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal_id",
+          "rule_id",
+          "side",
+          "bucket",
+          "lineage",
+          "state",
+          "planned_qty",
+          "simulated_qty",
+          "confirmed_trade_date",
+          "execution_date",
+          "evidence_fingerprint",
+          "evidence",
+          "plan_version_id",
+          "review_id",
+          "basis_id",
+          "executable_qty",
+          "blockers",
+          "market_linkage_ref"
+        ],
+        "title": "ResearchSignalReference",
         "type": "object"
       },
       "ResearchSimulation": {
@@ -31126,6 +32978,16 @@
               }
             ],
             "title": "Enddate"
+          },
+          "exceptionProgram": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionReplayProgram"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "manifestHash": {
             "pattern": "^[0-9a-f]{64}$",
@@ -32752,6 +34614,148 @@
               },
               {
                 "$ref": "#/components/schemas/UnifiedAny"
+              }
+            ],
+            "title": "Condition"
+          },
+          "fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "operands": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Operands",
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "MISSING_INPUT"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "session_dates": {
+            "default": [],
+            "items": {},
+            "title": "Session Dates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "condition"
+        ],
+        "title": "UnifiedConditionEvidence",
+        "type": "object"
+      },
+      "UnifiedConditionEvidenceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "bar_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Bar Ids",
+            "type": "array"
+          },
+          "basis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Id"
+          },
+          "children": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidenceInput"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "condition": {
+            "discriminator": {
+              "mapping": {
+                "ALL": "#/components/schemas/UnifiedAllInput",
+                "ANY": "#/components/schemas/UnifiedAnyInput",
+                "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
+                "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
+                "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
+                "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
+                "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
+                "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGteInput",
+                "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedPriceCompareInput"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriceInRange"
+              },
+              {
+                "$ref": "#/components/schemas/DailyVolumeRatioInput"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCandleRatioInput"
+              },
+              {
+                "$ref": "#/components/schemas/DailyIndicatorCompareInput"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCloseSequenceInput"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewedDailyFact"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseInRange"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseBelow"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteVolumeToMeanGteInput"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAllInput"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAnyInput"
               }
             ],
             "title": "Condition"
@@ -36082,6 +38086,16 @@
               }
             ],
             "title": "Enddate"
+          },
+          "exceptionProgram": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionReplayProgram"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "response": {
             "$ref": "#/components/schemas/BacktestLoopResponseInput"

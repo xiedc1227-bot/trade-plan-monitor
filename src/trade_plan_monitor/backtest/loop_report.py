@@ -9,6 +9,10 @@ from typing import Annotated, Literal
 from pydantic import Field, TypeAdapter, model_validator
 
 from trade_plan_monitor.backtest.canonical import canonical_json
+from trade_plan_monitor.backtest.exception_replay import (
+    ExceptionExecutionRequestOutcome,
+    ExceptionReplayOutcome,
+)
 from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt, LoopAccountState, SignedFen
 from trade_plan_monitor.backtest.loop_input import (
     MAX_LOOP_RECORDS,
@@ -24,8 +28,9 @@ from trade_plan_monitor.backtest.plan_schedule import (
     ScheduledLoopSchedule,
 )
 from trade_plan_monitor.backtest.reminder_capture import CapturedReminder
-from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.backtest.research_input import ResearchSimulation, ResearchValue
 from trade_plan_monitor.backtest.research_report import ResearchReminder, ResearchRuleEvidence
+from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.unified_conditions import evaluate_unified_condition
 from trade_plan_monitor.market_data.models import MinuteBar
@@ -183,7 +188,7 @@ def project_loop_valuation(
 
 
 class LoopEvaluation(ResearchValue):
-    market_linkage: tuple[MarketLinkageDecision, ...] | None = Field(
+    market_linkage: tuple[MarketExceptionDecision | MarketLinkageDecision, ...] | None = Field(
         default=None, max_length=2, exclude_if=lambda value: value is None)
     kind: Literal["EVALUATED"] = "EVALUATED"
     evaluation_id: Sha256Hex | None
@@ -205,6 +210,8 @@ class LoopReminder(ResearchValue):
 
 
 class LoopRequest(ResearchValue):
+    source_operation: ResearchSimulation | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     kind: Literal["REQUESTED"] = "REQUESTED"
     intent_id: Sha256Hex
     cause_id: str
@@ -355,7 +362,16 @@ class LoopMetrics(ResearchValue):
         return self
 
 
-class MonitorLoopReport(ResearchValue):
+class _ExceptionReport(ResearchValue):
+    exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
+    exception_requests: tuple[ExceptionExecutionRequestOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
+    exception_provenance: tuple[Literal["RECORDED_LOCAL", "RESEARCH_SCENARIO"], ...] | None = Field(
+        default=None, max_length=2, exclude_if=lambda value: value is None)
+
+
+class MonitorLoopReport(_ExceptionReport):
     schema_version: Literal["backtest-report-v4"] = LOOP_REPORT_VERSION
     run_id: Sha256Hex
     input_hash: Sha256Hex
@@ -439,7 +455,7 @@ class MonitorLoopReport(ResearchValue):
         return self
 
 
-class ScheduledMonitorLoopReport(ResearchValue):
+class ScheduledMonitorLoopReport(_ExceptionReport):
     """Whole-chain identity with continuous account metrics; distinct from legacy v4."""
 
     schema_version: Literal["backtest-report-v5"] = SCHEDULED_LOOP_REPORT_VERSION
@@ -518,6 +534,7 @@ class LoopReportWriter:
         self._path_valid = self.opening.valuation_valid
         self._notional = self._slippage = 0
         self._finished = False
+        self.exception_program = None
         self._completed_cycle = None
         self._emit(self.opening.at, LoopValuationEvent(valuation=self.opening))
 
@@ -612,13 +629,14 @@ class LoopReportWriter:
         )
         self._reminders[reminder.sequence] = (signature, identity)
 
-    def requested(self, intent):
+    def requested(self, intent, *, operation=None):
         if len(self._requests) >= MAX_LOOP_RECORDS:
             raise ValueError("LOOP_INTENT_LIMIT_EXCEEDED")
         reminder_id = self._reminders[intent.reminder.sequence][1]
         self._requests[intent.intent_id] = self._emit(
-            intent.reminder.captured_at,
+            intent.reminder.captured_at if operation is None else operation.at,
             LoopRequest(
+                source_operation=operation,
                 intent_id=intent.intent_id,
                 cause_id=intent.reminder.event.cause_id,
                 ready_at=intent.ready_at,
@@ -755,6 +773,11 @@ class LoopReportWriter:
             metrics=metrics,
         )
         report_type = MonitorLoopReport
+        if run.exception_program is not None:
+            values.update(
+                exception_outcomes=tuple(self.exception_program.outcomes),
+                exception_requests=tuple(self.exception_program.requests),
+                exception_provenance=run.exception_program.provenances)
         if isinstance(run, ScheduledLoopInput):
             report_type = ScheduledMonitorLoopReport
             values.pop("plan_hash")
@@ -813,6 +836,7 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
     last_transition_at = None
     lifecycle_day = report.boundary.started_at.date()
     risk_requests = set()
+    exception_requests = []
     crossings = () if not scheduled else tuple(sorted({
         max(datetime.combine(row.effective_trade_date, time.min, report.boundary.started_at.tzinfo),
             row.version.available_at)
@@ -887,9 +911,10 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
                 reminder.execution_candidate,
                 reminder.captured_at,
                 reminder.event.signal_type == "RISK_EXIT",
+                reminder.event.quantity,
             )
         elif kind == "REQUESTED":
-            cause, eligible, captured_at, risk = causal_inputs[event.cause_event_id]
+            cause, eligible, captured_at, risk, quantity = causal_inputs[event.cause_event_id]
             if (
                 not eligible
                 or payload.cause_id != cause
@@ -897,6 +922,16 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
                 or payload.intent_id in requests
             ):
                 raise ValueError("LOOP_AUDIT_REQUEST_AUTHORITY_MISMATCH")
+            if payload.source_operation is not None and (
+                payload.source_operation.at != event.at
+                or payload.source_operation.at > payload.ready_at
+                or payload.source_operation.quantity != quantity
+                or risk
+            ):
+                raise ValueError("EXCEPTION_REPLAY_OPERATION_BINDING_MISMATCH")
+            if payload.source_operation is not None:
+                exception_requests.append((payload.source_operation.operation_id,
+                    event.at, payload.intent_id))
             requests[payload.intent_id] = (event.event_id, payload.cause_id, payload.ready_at)
             if risk:
                 risk_requests.add(payload.intent_id)
@@ -939,6 +974,9 @@ def verify_loop_events(report: MonitorLoopReport, events: Iterable[LoopAuditEven
                 opening = final
         _digest_event(digest, event)
     if (
+        tuple(exception_requests) != tuple((item.operation_id, item.at, item.intent_id)
+            for item in report.exception_requests or () if item.status == "REQUESTED")
+        or
         sequence != report.event_count
         or digest.hexdigest() != report.event_set_hash
         or final != report.final_valuation

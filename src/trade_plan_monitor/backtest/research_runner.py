@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.control import check_cancelled
 from trade_plan_monitor.backtest.dataset import DatasetManifest
+from trade_plan_monitor.backtest.exception_replay import apply_frozen_exception
 from trade_plan_monitor.backtest.market_linkage_input import LinkedIndexReplaySource
 from trade_plan_monitor.backtest.research_input import ResearchAdjustmentProof
 from trade_plan_monitor.backtest.research_report import (
@@ -48,7 +49,7 @@ def replay_current(
 ):
     run_input = BacktestRunInput.create(
         plan=plan,
-        manifest=(reader.manifest if plan.schema_version == 6 else
+        manifest=(reader.manifest if plan.schema_version in {6, 7} else
                   DatasetManifest(dataset_hash=reader.dataset_hash, scope=reader.scope, items=())),
         initial_cash_fen=initial_cash_fen,
         initial_lots=initial_lots,
@@ -60,7 +61,7 @@ def replay_current(
     if plan.symbol not in reader.scope.symbols:
         raise ValueError("PLAN_SYMBOL_NOT_IN_DATASET")
     linked_source = None
-    if plan.schema_version == 6:
+    if plan.schema_version in {6, 7}:
         from trade_plan_monitor.market_index.models import MarketIndexInterval
         linked_source = LinkedIndexReplaySource(
             reference_market=plan.reference_market,
@@ -131,6 +132,9 @@ def replay_current(
                     f"{operation.order:05d}",
                     operation.operation_id,
                 )
+            for event in getattr(research_input, "exception_authorization_events", ()):
+                _insert(spool, event.event.received_at, "EXCEPTION",
+                        f"{event.order:05d}", event.envelope_hash)
             spool.commit()
             calendar = tuple(calendar[day] for day in sorted(calendar))
             session = ResearchSession(directory, run_input, calendar)
@@ -160,6 +164,9 @@ class _Replay:
         self.minutes, self.five_bars, self.raw_daily, self.limits = {}, {}, {}, {}
         self.latest_quote, self.proof, self.target = None, None, None
         self.operations = {o.operation_id: o for o in self.frozen.operations}
+        self.exception_events = {e.envelope_hash: e for e in getattr(
+            self.frozen, "exception_authorization_events", ())}
+        self.exception_outcomes = []
         self.ended = False
         self.valuation = ResearchValuation(session.run_input)
         self.linked_source = linked_source
@@ -182,7 +189,7 @@ class _Replay:
             group = tuple(rows)
             targets, official = [], None
             for _, _, kind, payload in group:
-                if kind == "OPERATION":
+                if kind in {"OPERATION", "EXCEPTION"}:
                     continue
                 new_target, new_official = self._market(kind, payload)
                 if new_target is not None:
@@ -203,14 +210,24 @@ class _Replay:
                 targets
                 or official is not None
                 or operations
+                or any(r[2] == "EXCEPTION" for r in group)
                 or any(r[2] in {"PROOF", "INDEX"} for r in group)
             ):
                 self.evaluate(official, max(targets) if targets else self.target, group)
-            for operation in operations:
-                if operation.kind not in {"FACT", "DEACTIVATE", "REPLACE"}:
+            for _, _, kind, payload in group:
+                if kind == "EXCEPTION":
+                    self.exception_outcomes.append(apply_frozen_exception(
+                        self.session, self.exception_events[payload]))
+                    self.evaluate(official, max(targets) if targets else self.target,
+                                  ((at, "authorization-applied", kind, payload),))
+                    self.events[-1] = self.events[-1].model_copy(update={
+                        "exception_outcomes": (self.exception_outcomes[-1],)})
+                elif kind == "OPERATION" and self.operations[payload].kind not in {
+                    "FACT", "DEACTIVATE", "REPLACE"
+                }:
                     self.outcomes.append(
                         self.valuation.operation(
-                            self.session.apply_operation(operation, ended=self.ended)
+                            self.session.apply_operation(self.operations[payload], ended=self.ended)
                         )
                     )
             if operations and self.events:
@@ -270,7 +287,25 @@ class _Replay:
             )
         )
         limitations.extend(self.valuation.blockers)
+        if self.plan.schema_version == 7:
+            from trade_plan_monitor.backtest.research_signal_projection import (
+                compact_signal_evidence,
+            )
+
+            compacted = []
+            for event in self.events:
+                event = ResearchDecisionEvent.model_validate_json(event.model_dump_json())
+                values = {name: getattr(event, name) for name in type(event).model_fields}
+                compacted.append(ResearchDecisionEvent.model_validate(compact_signal_evidence(values)))
+            self.events = compacted
+            limitations.extend((
+                "FROZEN_EXCEPTION_EVENTS_ONLY", "EXPLICIT_EXCEPTION_EXECUTION_ONLY"))
+            limitations.extend(sorted({e.provenance for e in self.exception_events.values()}))
+            if not self.exception_events:
+                limitations.append("EXCEPTION_AUTHORIZATION_NOT_SUPPLIED")
         return UnifiedReplayReport.build(
+            **({"exception_outcomes": tuple(self.exception_outcomes)}
+               if self.plan.schema_version == 7 else {}),
             run_id=self.session.run_input.run_id,
             plan_hash=self.session.run_input.plan_sha256,
             dataset_hash=self.session.run_input.dataset_hash,

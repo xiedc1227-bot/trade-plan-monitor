@@ -80,7 +80,7 @@ def loop_dataset_requirements(plan: UnifiedTradePlan) -> LoopDatasetRequirements
         ),
         default=1 if daily else 0,
     )
-    if plan.schema_version == 6:
+    if plan.schema_version in {6, 7}:
         daily_count = max(daily_count, 21)
     minute_count = max(
         (leaf.window_bars + 1 for leaf in leaves if leaf.type == "MINUTE_VOLUME_TO_MEAN_GTE"),
@@ -589,7 +589,7 @@ def select_loop_dataset(
     blockers.extend(_calendar_chain_blockers(calendars))
     linked_source = None
     linked_plan = next((row.version.snapshot for row in request.schedule.entries
-                        if row.version.snapshot.schema_version == 6), None)
+                        if row.version.snapshot.schema_version in {6, 7}), None)
     if linked_plan is not None:
         try:
             linked_source = freeze_linked_index(connection, plan=linked_plan, calendar=calendars,

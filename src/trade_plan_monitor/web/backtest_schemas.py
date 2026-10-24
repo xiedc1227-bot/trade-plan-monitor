@@ -25,6 +25,14 @@ from pydantic import (
 )
 
 from trade_plan_monitor.backtest.canonical import canonical_decimal
+from trade_plan_monitor.backtest.exception_replay import (
+    ExceptionExecutionRequestOutcome,
+    ExceptionReplayOutcome,
+)
+from trade_plan_monitor.backtest.exception_replay_input import (
+    ExceptionReplayProgram,
+    ExceptionResearchInput,
+)
 from trade_plan_monitor.backtest.loop_account import LoopAccountReceipt, LoopAccountState
 from trade_plan_monitor.backtest.loop_diagnostics import LoopDiagnostics
 from trade_plan_monitor.backtest.loop_input import LoopAccountInput, LoopCosts, LoopResponsePolicy
@@ -432,7 +440,19 @@ class BacktestLoopCostsInput(_BacktestApiInput):
         return self
 
 
-class PreparedBacktestRunCommand(_BacktestApiInput):
+class _ExceptionReplayCommand(_BacktestApiInput):
+    exception_program: ExceptionReplayProgram | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+
+    @field_validator("exception_program", mode="before")
+    @classmethod
+    def parse_exception_program(cls, value):
+        if value is None or isinstance(value, ExceptionReplayProgram):
+            return value
+        return ExceptionReplayProgram.model_validate_json(json.dumps(value))
+
+
+class PreparedBacktestRunCommand(_ExceptionReplayCommand):
     """This one frozen preparation supplies all plan and opening-account authority."""
 
     preparation_id: PreparedIdentifier
@@ -446,7 +466,7 @@ class ScheduledPreparedBacktestRunCommand(PreparedBacktestRunCommand):
     schema_version: Literal["prepared-loop-plan-v2"]
 
 
-class WorkbenchBacktestRunCommand(_BacktestApiInput):
+class WorkbenchBacktestRunCommand(_ExceptionReplayCommand):
     schema_version: Literal["workbench-loop-selection-v1"]
     selection_id: PreparedIdentifier
     selection_hash: Sha256Hex
@@ -476,14 +496,16 @@ class BacktestRunCommand(_BacktestApiInput):
     ]
     execution_config: BacktestExecutionConfigInput
     event_risk_assumption: Literal["NO_EVENT_RISK", "MANUAL_EVENT_RISK"]
-    research_input: UnifiedResearchInput | None = None
+    research_input: ExceptionResearchInput | UnifiedResearchInput | None = None
 
     @field_validator("research_input", mode="before")
     @classmethod
     def parse_research(cls, value):
         if value is None or isinstance(value, UnifiedResearchInput):
             return value
-        return UnifiedResearchInput.model_validate_json(json.dumps(value))
+        model = (ExceptionResearchInput if value.get("schema_version") ==
+                 "unified-research-input-v2" else UnifiedResearchInput)
+        return model.model_validate_json(json.dumps(value))
 
     def canonical_payload(self):
         payload = super().canonical_payload()
@@ -2031,6 +2053,12 @@ class BacktestScheduledReportHeader(ResearchValue):
     """Bounded projection of an already verified immutable report, not its private codec."""
 
     report_schema_version: Literal["backtest-report-v5"]
+    exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
+    exception_requests: tuple[ExceptionExecutionRequestOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
+    exception_provenance: tuple[Literal["RECORDED_LOCAL", "RESEARCH_SCENARIO"], ...] | None = Field(
+        default=None, max_length=2, exclude_if=lambda value: value is None)
     run_id: Sha256Hex
     input_hash: Sha256Hex
     dataset_hash: Sha256Hex

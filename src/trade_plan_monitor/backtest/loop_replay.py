@@ -71,7 +71,7 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
             run = stored.run_input
             linked_source = stored.dataset.linked_index_source
             for row in run.schedule.entries:
-                if row.version.snapshot.schema_version == 6 and (
+                if row.version.snapshot.schema_version in {6, 7} and (
                     linked_source is None
                     or linked_source.reference_market != row.version.snapshot.reference_market
                 ):
@@ -89,6 +89,11 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
                 )
             for at in (run.boundary.started_at, run.boundary.evidence_cutoff):
                 _insert(spool, at, "BOUNDARY", "")
+            if run.exception_program is not None:
+                for event in run.exception_program.exception_authorization_events:
+                    _insert(spool, event.event.received_at, "EXCEPTION", event.envelope_hash)
+                for operation in run.exception_program.operations:
+                    _insert(spool, operation.at, "EXCEPTION_OPERATION", operation.operation_id)
             spool.commit()
             with LoopSession(directory, run, tuple(calendar)) as session:
                 with (directory / "audit.ndjson").open(
@@ -312,7 +317,7 @@ class _Frames:
                 self.linked_source.snapshot_at(
                     now, tuple(day.cal_date for day in calendar if day.is_open)
                 )
-                if self.plan.schema_version == 6 and self.linked_source is not None
+                if self.plan.schema_version in {6, 7} and self.linked_source is not None
                 else None
             ),
         )

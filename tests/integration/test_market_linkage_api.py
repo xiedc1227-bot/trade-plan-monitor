@@ -33,7 +33,14 @@ def schema5_projection(document):
         "ExplicitPlanCapabilityView": (
             "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion"),
         "LoopEvaluation": ("market_linkage",),
-        "ResearchDecisionEvent": ("market_linkage",),
+        "ResearchDecisionEvent": ("market_linkage", "exception_outcomes", "signal_linkage"),
+        "PreparedBacktestRunCommand": ("exceptionProgram",),
+        "ScheduledPreparedBacktestRunCommand": ("exceptionProgram",),
+        "WorkbenchBacktestRunCommand": ("exceptionProgram",),
+        "MonitorLoopReport": ("exception_outcomes", "exception_requests", "exception_provenance"),
+        "BacktestScheduledReportHeader": (
+            "exception_outcomes", "exception_requests", "exception_provenance"),
+        "LoopRequest": ("source_operation",),
     }
     for name, fields in additions.items():
         for field in fields:
@@ -56,7 +63,7 @@ def schema5_projection(document):
         nullable = {"type": "null"} in node.get("anyOf", [])
         union = node["anyOf"][0] if nullable else node
         variants = union.get("oneOf", union.get("anyOf"))
-        expected_count = 2 if name == "LoopPlanVersion" else 3
+        expected_count = 3
         assert len(variants) == expected_count
         if expected_count == 3:
             assert variants[0]["$ref"].startswith("#/components/schemas/MarketException")
@@ -75,6 +82,18 @@ def schema5_projection(document):
     node = schemas["DailyAlertCenterView"]["properties"]["alertKind"]["anyOf"][0]
     assert node.pop("enum") == ["RISK_ALERT", "EXCEPTION_REVIEW"]
     node["const"] = "RISK_ALERT"
+    research = schemas["BacktestRunCommand"]["properties"]["researchInput"]
+    assert research.pop("title") == "Researchinput"
+    node = research["anyOf"]
+    assert node[0]["$ref"].endswith("/ExceptionResearchInput")
+    assert node[-1] == {"type": "null"} and len(node) == 3
+    del node[0]
+    for field in ("signals", "resulting_signals"):
+        node = schemas["ResearchDecisionEvent"]["properties"][field]
+        variants = node["items"]["anyOf"]
+        assert variants == [{"$ref": "#/components/schemas/ResearchSignalReference"},
+                            {"$ref": "#/components/schemas/DailySignalState"}]
+        node["items"] = variants[1]
     return result
 
 

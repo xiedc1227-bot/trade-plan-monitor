@@ -7,6 +7,7 @@ from pydantic import model_validator
 
 from trade_plan_monitor.backtest.control import check_cancelled
 from trade_plan_monitor.backtest.loop_account import calculate_loop_costs
+from trade_plan_monitor.backtest.loop_exception_program import LoopExceptionProgram
 from trade_plan_monitor.backtest.loop_report import LoopAttempt, LoopCycleSummary, LoopReportWriter
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.backtest.response_policy import ReminderResponsePolicy
@@ -57,6 +58,9 @@ class LoopRunner:
             limit=session.run_input.limits.max_intents,
         )
         self.evaluations = self.attempts = self.fills = 0
+        self.exceptions = LoopExceptionProgram(session)
+        if report_writer is not None:
+            report_writer.exception_program = self.exceptions
 
     def _evaluate(self, inputs):
         if self.evaluations >= self.session.run_input.limits.max_evaluations:
@@ -75,6 +79,8 @@ class LoopRunner:
             if self.report_writer is not None:
                 self.report_writer.reminded(reminder)
             previous = len(self.policy.intents)
+            if self.exceptions.retain(reminder):
+                continue
             self.policy.register(reminder)
             if self.report_writer is not None and len(self.policy.intents) > previous:
                 self.report_writer.requested(
@@ -97,6 +103,7 @@ class LoopRunner:
             if frame.minute is not None and frame.minute.symbol != self.session.plan.symbol:
                 raise ValueError("LOOP_FRAME_SYMBOL_MISMATCH")
             self._evaluate(frame.runtime)
+            self.exceptions.apply(self, frame)
             if frame.minute is None:
                 if self.report_writer is not None:
                     self.report_writer.observed(frame.runtime)
@@ -160,6 +167,7 @@ class LoopRunner:
                     self._evaluate(frame.runtime)
             if self.report_writer is not None:
                 self.report_writer.observed(frame.runtime)
+        self.exceptions.finish()
         result = LoopCycleSummary(
             evaluations=self.evaluations,
             intents=len(self.policy.intents),

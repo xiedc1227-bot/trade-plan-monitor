@@ -21,9 +21,14 @@ from trade_plan_monitor.backtest.dataset import (
     INDEX_DATASET_SCHEMA_VERSION,
     DatasetManifest,
 )
+from trade_plan_monitor.backtest.exception_replay_input import (
+    ExceptionReplayProgram,
+    ExceptionResearchInput,
+)
 from trade_plan_monitor.backtest.index_data import build_backtest_index_requirement
 from trade_plan_monitor.backtest.models import ExecutionConfig, PositionLot
 from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
+from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
 from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.plan_models import PositionBucket, TradePlan
@@ -37,6 +42,7 @@ RUN_FORMULA_V2 = "backtest-run-v2"
 RUN_FORMULA_V3 = "backtest-run-v3"
 RUN_FORMULA_V4 = "backtest-run-v4"
 RUN_FORMULA_V7 = "backtest-run-v7"
+RUN_FORMULA_V8 = "backtest-run-v8"
 RUN_INPUT_SCHEMA_VERSION = "backtest-run-input-v1"
 FIVE_MINUTE_CONTEXT_BARS = 512
 DAILY_CONTEXT_BARS = 499
@@ -45,7 +51,8 @@ MAX_INITIAL_LOTS = 200
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 _RunFormulaVersion = Literal[
-    "backtest-run-v1", "backtest-run-v2", "backtest-run-v3", "backtest-run-v4", "backtest-run-v7"
+    "backtest-run-v1", "backtest-run-v2", "backtest-run-v3", "backtest-run-v4",
+    "backtest-run-v7", "backtest-run-v8"
 ]
 _Sha256Hex = Annotated[
     str,
@@ -92,7 +99,7 @@ class BacktestRunInput(_RunInputValue):
 
     schema_version: Literal["backtest-run-input-v1"] = RUN_INPUT_SCHEMA_VERSION
     run_formula_version: _RunFormulaVersion
-    plan_snapshot: MarketLinkedTradePlan | TradePlan | UnifiedTradePlan
+    plan_snapshot: MarketExceptionTradePlan | MarketLinkedTradePlan | TradePlan | UnifiedTradePlan
     plan_sha256: _Sha256Hex
     plan_version_id: UUID | None = None
     dataset_hash: _Sha256Hex
@@ -107,7 +114,7 @@ class BacktestRunInput(_RunInputValue):
     context_bounds: _BacktestContextBounds = Field(default_factory=_BacktestContextBounds)
     execution_config: ExecutionConfig
     manual_event_risk: bool
-    research_input: UnifiedResearchInput | None = Field(
+    research_input: ExceptionResearchInput | UnifiedResearchInput | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
     )
@@ -139,7 +146,7 @@ class BacktestRunInput(_RunInputValue):
         execution_config: ExecutionConfig,
         manual_event_risk: bool,
         plan_version_id: UUID | None = None,
-        research_input: UnifiedResearchInput | None = None,
+        research_input: ExceptionResearchInput | UnifiedResearchInput | None = None,
     ) -> Self:
         if not isinstance(plan, TradePlan | UnifiedTradePlan):
             raise TypeError("plan must be a TradePlan or UnifiedTradePlan")
@@ -174,7 +181,8 @@ class BacktestRunInput(_RunInputValue):
                     formula_definition_hash=requirement.formula_definition_hash,
                 )
             return cls(
-                run_formula_version=RUN_FORMULA_V7 if linked else RUN_FORMULA_V4,
+                run_formula_version=(RUN_FORMULA_V8 if plan.schema_version == 7 else
+                                     RUN_FORMULA_V7 if linked else RUN_FORMULA_V4),
                 plan_snapshot=plan,
                 plan_sha256=plan_sha256(plan),
                 plan_version_id=plan_version_id,
@@ -260,8 +268,18 @@ class BacktestRunInput(_RunInputValue):
             if self.research_input is None:
                 raise ValueError("RESEARCH_INPUT_REQUIRED")
             linked = isinstance(self.plan_snapshot, MarketLinkedTradePlan)
-            if self.run_formula_version != (RUN_FORMULA_V7 if linked else RUN_FORMULA_V4):
+            exception = isinstance(self.plan_snapshot, MarketExceptionTradePlan)
+            if exception != isinstance(self.research_input, ExceptionResearchInput):
+                raise ValueError("EXCEPTION_PLAN_REQUIRES_EXPLICIT_RESEARCH_V2")
+            if exception:
+                ExceptionReplayProgram(exception_authorization_events=
+                    self.research_input.exception_authorization_events).validate_scope(
+                        plans=(self.plan_snapshot,), started_at=self.research_input.started_at)
+            expected_formula = RUN_FORMULA_V8 if exception else (
+                RUN_FORMULA_V7 if linked else RUN_FORMULA_V4)
+            if self.run_formula_version != expected_formula:
                 raise ValueError(
+                    "EXCEPTION_PLAN_REQUIRES_V8" if exception else
                     "LINKED_PLAN_REQUIRES_V7" if linked else "CURRENT_PLAN_REQUIRES_V4"
                 )
             if self.manual_event_risk:
@@ -398,7 +416,7 @@ class BacktestRunInput(_RunInputValue):
             "execution_config": self.execution_config.model_dump(mode="python", round_trip=True),
             "manual_event_risk": self.manual_event_risk,
         }
-        if self.run_formula_version in (RUN_FORMULA_V3, RUN_FORMULA_V7):
+        if self.run_formula_version in (RUN_FORMULA_V3, RUN_FORMULA_V7, RUN_FORMULA_V8):
             preimage.update(
                 {
                     "reference_market_binding": self.reference_market_binding,
@@ -407,7 +425,7 @@ class BacktestRunInput(_RunInputValue):
                     "formula_definition_hash": self.formula_definition_hash,
                 }
             )
-        if self.run_formula_version in (RUN_FORMULA_V4, RUN_FORMULA_V7):
+        if self.run_formula_version in (RUN_FORMULA_V4, RUN_FORMULA_V7, RUN_FORMULA_V8):
             preimage["research_input"] = self.research_input
         return sha256(
             (self.run_formula_version + "\0" + canonical_json(preimage)).encode("utf-8")

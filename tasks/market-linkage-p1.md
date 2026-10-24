@@ -164,28 +164,28 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T16 — Freeze authorization events in research inputs
 
-- [ ] Add versioned research input and integrity-checked event streams with recorded versus hypothetical provenance; preserve old runs, enforce cutoff/identity admission and keep current local approvals inaccessible to workers.
+- [x] Add versioned research input and integrity-checked event streams with recorded versus hypothetical provenance; preserve old runs, enforce cutoff/identity admission and keep current local approvals inaccessible to workers.
 - Depends on: MLP1-T10, MLP1-T12. Acceptance: MLP1-A01, MLP1-A12; no events means no exception grants; future events are not usable early.
 - Files/scope: `backtest/run_input.py`, `backtest/loop_dataset.py`, serialization/admission seams, `tests/integration/test_market_exception_replay.py`; M.
 - Verify: relevant V11 tests and old research golden fixtures; corruption, unsupported event types, wrong plan and missing historical calendar/grid scope reject explicitly.
 
 ### MLP1-T17 — Replay the shared authority and execution lifecycle
 
-- [ ] Feed frozen events into the shared policies in deterministic time order; approval alone does not fill; operation scripts, original windows and full execution gates remain necessary; label research assumptions in results.
+- [x] Feed frozen events into the shared policies in deterministic time order; approval alone does not fill; operation scripts, original windows and full execution gates remain necessary; label research assumptions in results.
 - Depends on: MLP1-T16. Acceptance: MLP1-A09, MLP1-A12; runtime/replay parity under identical inputs and empty-event zero-trade results.
 - Files/scope: `backtest/runner.py`, `backtest/loop_runner.py`, plan schedule/result projection seams, V11 replay tests; M.
 - Verify: relevant V11 tests covering both routes, rejected/revoked/late events and local/backtest inventory isolation.
 
 ### MLP1-T18 — Prove replay causality and update compatibility
 
-- [ ] Add mutation tests for future approval/revocation, corrected prices/basis, updated plans, changed quantities and repeated events; verify both replay entry paths, preparation/updates and result provenance.
+- [x] Add mutation tests for future approval/revocation, corrected prices/basis, updated plans, changed quantities and repeated events; verify both replay entry paths, preparation/updates and result provenance.
 - Depends on: MLP1-T17. Acceptance: MLP1-A04, MLP1-A08, MLP1-A12; no hindsight authority, silent policy downgrade or live-grant export.
 - Files/scope: `tests/integration/test_market_exception_replay_mutations.py`, V11 replay/parity tests and focused update/result fixtures; M.
 - Verify: full V11; explicit pre-cutoff outputs remain equal after future mutations while affected later decisions change correctly.
 
 ### MLP1-C06 — Frozen replay checkpoint
 
-- [ ] V11 and V14–V16 pass; trace MLP1-A01, MLP1-A04, MLP1-A08–MLP1-A09 and MLP1-A12. Missing or hypothetical approval is reported honestly; all runtime/replay comparisons use frozen inputs.
+- [x] V11 and V14–V16 pass; trace MLP1-A01, MLP1-A04, MLP1-A08–MLP1-A09 and MLP1-A12. Missing or hypothetical approval is reported honestly; all runtime/replay comparisons use frozen inputs.
 
 ### MLP1-T19 — Complete backend regression and failure repair
 

@@ -760,7 +760,7 @@ export type BacktestRunCommand = {
   initialCashFen: number;
   initialLots: Array<components["schemas"]["BacktestInitialLotInput"]>;
   planVersionId: string;
-  researchInput?: (components["schemas"]["UnifiedResearchInput"]) | (null);
+  researchInput?: (components["schemas"]["ExceptionResearchInput"]) | (components["schemas"]["UnifiedResearchInput"]) | (null);
 };
 
 export type BacktestRunCoverageView = {
@@ -872,6 +872,9 @@ export type BacktestScheduledReportHeader = {
   dataset_hash: string;
   event_count: number;
   event_set_hash: string;
+  exception_outcomes?: (Array<components["schemas"]["ExceptionReplayOutcome"]>) | (null);
+  exception_provenance?: (Array<"RECORDED_LOCAL" | "RESEARCH_SCENARIO">) | (null);
+  exception_requests?: (Array<components["schemas"]["ExceptionExecutionRequestOutcome"]>) | (null);
   final_account: components["schemas"]["LoopAccountState"];
   final_inventory: components["schemas"]["DailyInventoryView"];
   final_valuation: components["schemas"]["LoopValuation"];
@@ -2202,6 +2205,20 @@ export type ExceptionCandidate = {
   version?: "market-linkage-exception-candidate-v1";
 };
 
+export type ExceptionCandidateInput = {
+  approval_id: (string) | (null);
+  binding: components["schemas"]["ExceptionBinding"];
+  binding_hash: string;
+  candidate_id: string;
+  created_at: string;
+  frozen_quantity: (number) | (null);
+  last_event_id: (string) | (null);
+  projection_hash: string;
+  signal_seed?: (components["schemas"]["ExceptionSignalSeedInput"]) | (null);
+  state: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED" | "INVALIDATED" | "CONSUMED";
+  version?: "market-linkage-exception-candidate-v1";
+};
+
 export type ExceptionCandidateResource = {
   blockers?: Array<string>;
   candidate: components["schemas"]["ExceptionCandidate"];
@@ -2236,6 +2253,14 @@ export type ExceptionEvent = {
   version?: "market-linkage-exception-authorization-v1";
 };
 
+export type ExceptionExecutionRequestOutcome = {
+  at: string;
+  blockers: Array<string>;
+  intent_id?: (string) | (null);
+  operation_id: string;
+  status: "REQUESTED" | "BLOCKED";
+};
+
 export type ExceptionPreviewApiCommand = {
   candidateId: string;
   expectedRevision: number;
@@ -2261,6 +2286,35 @@ export type ExceptionReceiptApiView = {
   revision: number;
 };
 
+export type ExceptionReplayOutcome = {
+  at: string;
+  blockers: Array<string>;
+  candidate_id: string;
+  envelope_hash: string;
+  private_event_id?: (string) | (null);
+  provenance: "RECORDED_LOCAL" | "RESEARCH_SCENARIO";
+  schema_version?: "exception-replay-outcome-v1";
+  source_event_id: string;
+  status: "APPLIED" | "BLOCKED" | "VERIFIED";
+};
+
+export type ExceptionReplayProgram = {
+  exception_authorization_events?: Array<components["schemas"]["FrozenExceptionEvent"]>;
+  operations?: Array<components["schemas"]["ResearchSimulation"]>;
+  schema_version?: "exception-replay-program-v1";
+};
+
+export type ExceptionResearchInput = {
+  adjustment_proofs?: Array<components["schemas"]["ResearchAdjustmentProof"]>;
+  calendar_extension?: Array<components["schemas"]["TradingDay"]>;
+  exception_authorization_events?: Array<components["schemas"]["FrozenExceptionEvent"]>;
+  inventory_known: boolean;
+  operations?: Array<(components["schemas"]["ResearchFact"] & { kind: "FACT" }) | (components["schemas"]["ResearchDeactivate"] & { kind: "DEACTIVATE" }) | (components["schemas"]["ResearchReplace"] & { kind: "REPLACE" }) | (components["schemas"]["ResearchSimulation"] & { kind: "SIMULATE" }) | (components["schemas"]["ResearchReassessment"] & { kind: "REASSESS" })>;
+  review: components["schemas"]["ResearchReview"];
+  schema_version?: "unified-research-input-v2";
+  started_at: string;
+};
+
 export type ExceptionRevocationApiCommand = {
   approvalId: string;
   commandId: string;
@@ -2268,9 +2322,22 @@ export type ExceptionRevocationApiCommand = {
   reason: string;
 };
 
+export type ExceptionRoutes = {
+  broken_strong: "DISABLED" | "PER_OCCURRENCE";
+  weak_minimum: "DISABLED" | "PER_OCCURRENCE";
+};
+
 export type ExceptionSignalSeed = {
   basis_id: string;
   evidence: Array<components["schemas"]["UnifiedConditionEvidence"]>;
+  evidence_fingerprint: string;
+  occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
+  signal_id: string;
+};
+
+export type ExceptionSignalSeedInput = {
+  basis_id: string;
+  evidence: Array<components["schemas"]["UnifiedConditionEvidenceInput"]>;
   evidence_fingerprint: string;
   occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   signal_id: string;
@@ -2425,6 +2492,17 @@ export type FixedDailyReferenceInput = {
   source: string;
   unit: "FEN" | "INDICATOR";
   value: (number) | (string);
+};
+
+export type FrozenExceptionEvent = {
+  candidate: components["schemas"]["ExceptionCandidateInput"];
+  decision: components["schemas"]["MarketExceptionDecisionInput"];
+  envelope_hash: string;
+  event: components["schemas"]["ExceptionEvent"];
+  order: number;
+  plan_hash: string;
+  provenance: "RECORDED_LOCAL" | "RESEARCH_SCENARIO";
+  schema_version?: "frozen-exception-event-v1";
 };
 
 export type IndexConditionEvidenceView = {
@@ -2585,6 +2663,20 @@ export type LinkedIndexFacts = {
   source_hashes?: Array<[string, string]>;
 };
 
+export type LinkedIndexFactsInput = {
+  close?: (number) | (string) | (null);
+  decision_session: string;
+  evidence_cutoff: string;
+  formula_version?: "market-linkage-index-v1";
+  low20?: (number) | (string) | (null);
+  ma20?: (number) | (string) | (null);
+  ma20_5?: (number) | (string) | (null);
+  ma60?: (number) | (string) | (null);
+  reasons?: Array<string>;
+  reference_market: components["schemas"]["ReferenceMarketBinding"];
+  source_hashes?: Array<[string, string]>;
+};
+
 export type LoopAccountContext = {
   core_qty?: (number) | (null);
   dependent_rule_ids?: Array<string>;
@@ -2699,7 +2791,7 @@ export type LoopEvaluation = {
   evaluation_id: (string) | (null);
   inventory: components["schemas"]["DailyInventoryView"];
   kind?: "EVALUATED";
-  market_linkage?: (Array<components["schemas"]["MarketLinkageDecision"]>) | (null);
+  market_linkage?: (Array<(components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"])>) | (null);
   minute_target: (string) | (null);
   official_trade_date: (string) | (null);
   risk_action: components["schemas"]["DailyRiskAction"];
@@ -2810,7 +2902,7 @@ export type LoopPlanVersion = {
   information_cutoff: string;
   plan_hash: string;
   review: components["schemas"]["LoopPlanReview"];
-  snapshot: (components["schemas"]["MarketLinkedTradePlan"]) | (components["schemas"]["UnifiedTradePlan"]);
+  snapshot: (components["schemas"]["MarketExceptionTradePlan"]) | (components["schemas"]["MarketLinkedTradePlan"]) | (components["schemas"]["UnifiedTradePlan"]);
   source_hashes: Array<string>;
   version_id: string;
 };
@@ -2825,6 +2917,7 @@ export type LoopRequest = {
   intent_id: string;
   kind?: "REQUESTED";
   ready_at: string;
+  source_operation?: (components["schemas"]["ResearchSimulation"]) | (null);
 };
 
 export type LoopResponsePolicy = {
@@ -2890,6 +2983,23 @@ export type MarketExceptionDecision = {
   rule_id: string;
   selection: components["schemas"]["ConfirmationSelection"];
   strength: (components["schemas"]["RelativeStrengthEvidence"]) | (null);
+  version?: "market-linkage-evidence-v2";
+};
+
+export type MarketExceptionDecisionInput = {
+  approval_binding: (components["schemas"]["ExceptionBinding"]) | (null);
+  calculation: components["schemas"]["ExceptionCalculation"];
+  confirmation: Array<components["schemas"]["UnifiedConditionEvidenceInput"]>;
+  consumed_hash: string;
+  content_hash: string;
+  decision_session: string;
+  evidence_cutoff: string;
+  evidence_hash: string;
+  market: components["schemas"]["MarketRegimeEvidenceInput"];
+  quantity_rules: (components["schemas"]["MarketQuantityRules"]) | (null);
+  rule_id: string;
+  selection: components["schemas"]["ConfirmationSelection"];
+  strength: (components["schemas"]["RelativeStrengthEvidenceInput"]) | (null);
   version?: "market-linkage-evidence-v2";
 };
 
@@ -2966,6 +3076,51 @@ export type MarketExceptionPlanDraftInput = {
   schema_version?: 7;
   symbol: string;
   trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type MarketExceptionPolicy = {
+  base_confirmation: "S0";
+  exception_policy: "REVIEW_PER_OCCURRENCE";
+  exception_routes: components["schemas"]["ExceptionRoutes"];
+  policy_version: "market-linkage-v2";
+};
+
+export type MarketExceptionRule = {
+  bucket: "TACTICAL";
+  condition: (components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
+  confirmation: components["schemas"]["OfficialDailyConfirmation"];
+  execution_window: "NEXT_EXCHANGE_SESSION_ONLY";
+  independent_signal: (components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" });
+  invalidation: "RISK_OR_REVIEWED_INVALIDATION";
+  market_policy: components["schemas"]["MarketExceptionPolicy"];
+  quantity_policy: components["schemas"]["QuantityPolicy"];
+  rule_id: string;
+  side: "BUY";
+  status: "ENABLED";
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]);
+  zone: "LOW_BUY";
+};
+
+export type MarketExceptionTradePlan = {
+  activation: (components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" });
+  alert_rules?: Array<components["schemas"]["UnifiedAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: components["schemas"]["UnifiedExecutionPolicy"];
+  execution_version?: "condition-plan-v3";
+  levels: (components["schemas"]["UnifiedLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["MarketExceptionRule"]) | (components["schemas"]["UnifiedRule"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedPositionPolicy"];
+  reference_market: components["schemas"]["ReferenceMarketBinding"];
+  risk_branches: Array<components["schemas"]["UnifiedRiskBranch"]>;
+  schema_version?: 7;
+  symbol: string;
+  trading_rules: components["schemas"]["DailyTradingRules"];
   version: number;
 };
 
@@ -3273,6 +3428,18 @@ export type MarketRegimeEvidence = {
   weak: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
 };
 
+export type MarketRegimeEvidenceInput = {
+  below_low20: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  below_ma20: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  below_ma60: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  broken: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  facts: components["schemas"]["LinkedIndexFactsInput"];
+  falling_ma20: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  formula_version?: "market-linkage-v1";
+  regime: "BROKEN" | "WEAK" | "NORMAL_TRANSITION" | "UNKNOWN";
+  weak: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+};
+
 export type MarketSessionView = {
   calendarStatus: "KNOWN" | "UNKNOWN";
   displayTradeDate: (string) | (null);
@@ -3343,6 +3510,9 @@ export type MonitorLoopReport = {
   dataset_hash: string;
   event_count: number;
   event_set_hash: string;
+  exception_outcomes?: (Array<components["schemas"]["ExceptionReplayOutcome"]>) | (null);
+  exception_provenance?: (Array<"RECORDED_LOCAL" | "RESEARCH_SCENARIO">) | (null);
+  exception_requests?: (Array<components["schemas"]["ExceptionExecutionRequestOutcome"]>) | (null);
   final_account: components["schemas"]["LoopAccountState"];
   final_inventory: components["schemas"]["DailyInventoryView"];
   final_valuation: components["schemas"]["LoopValuation"];
@@ -3922,6 +4092,7 @@ export type PreparedBacktestDataView = {
 export type PreparedBacktestRunCommand = {
   costs: components["schemas"]["BacktestLoopCostsInput"];
   endDate?: (string) | (null);
+  exceptionProgram?: (components["schemas"]["ExceptionReplayProgram"]) | (null);
   manifestHash: string;
   preparationId: string;
   response: components["schemas"]["BacktestLoopResponseInput"];
@@ -4017,6 +4188,31 @@ export type RelativeStrengthEvidence = {
   strength: "STRONG" | "NOT_STRONG" | "UNKNOWN";
 };
 
+export type RelativeStrengthEvidenceInput = {
+  above_ma20?: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  basis_id?: (string) | (null);
+  cutoff: string;
+  decision_session: string;
+  difference20?: (number) | (string) | (null);
+  difference5?: (number) | (string) | (null);
+  endpoint_dates?: Array<string>;
+  formula_version?: "market-linkage-strength-v1";
+  index_endpoints?: Array<(number) | (string)>;
+  index_return20?: (number) | (string) | (null);
+  index_return5?: (number) | (string) | (null);
+  outperform20?: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  outperform5?: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  reasons?: Array<string>;
+  source_hashes?: Array<string>;
+  stock_close?: (number) | (string) | (null);
+  stock_endpoints?: Array<(number) | (string)>;
+  stock_ma20?: (number) | (string) | (null);
+  stock_provider?: (string) | (null);
+  stock_return20?: (number) | (string) | (null);
+  stock_return5?: (number) | (string) | (null);
+  strength: "STRONG" | "NOT_STRONG" | "UNKNOWN";
+};
+
 export type RequiredReviewIssueView = {
   allowedResolutions: Array<components["schemas"]["ReviewResolutionKind"]>;
   bindingPath?: (string) | (null);
@@ -4066,17 +4262,19 @@ export type ResearchDecisionEvent = {
   conditions: Array<components["schemas"]["ResearchRuleEvidence"]>;
   evaluation_id: (string) | (null);
   event_id: string;
+  exception_outcomes?: (Array<components["schemas"]["ExceptionReplayOutcome"]>) | (null);
   inventory_after: components["schemas"]["DailyInventoryView"];
   inventory_before: components["schemas"]["DailyInventoryView"];
-  market_linkage?: (Array<components["schemas"]["MarketLinkageDecision"]>) | (null);
+  market_linkage?: (Array<(components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"])>) | (null);
   minute_target: (string) | (null);
   official_trade_date: (string) | (null);
   resulting_risks: Array<components["schemas"]["DailyRiskState"]>;
-  resulting_signals: Array<components["schemas"]["DailySignalState"]>;
+  resulting_signals: Array<(components["schemas"]["ResearchSignalReference"]) | (components["schemas"]["DailySignalState"])>;
   risk_action: components["schemas"]["DailyRiskAction"];
   risks: Array<components["schemas"]["DailyRiskState"]>;
   schema_version?: "unified-research-decision-v1";
-  signals: Array<components["schemas"]["DailySignalState"]>;
+  signal_linkage?: (Array<components["schemas"]["MarketExceptionDecision"]>) | (null);
+  signals: Array<(components["schemas"]["ResearchSignalReference"]) | (components["schemas"]["DailySignalState"])>;
 };
 
 export type ResearchDecisionView = {
@@ -4210,6 +4408,34 @@ export type ResearchReview = {
 export type ResearchRuleEvidence = {
   evidence: components["schemas"]["ResearchConditionEvidence"];
   rule_id: string;
+};
+
+export type ResearchSignalReference = {
+  basis_id: string;
+  blockers: Array<string>;
+  bucket: "TACTICAL";
+  confirmation_kind?: "OFFICIAL_DAILY_CLOSE" | "COMPLETED_BAR_CLOSE";
+  confirmed_at?: (string) | (null);
+  confirmed_trade_date: string;
+  evidence: Array<(components["schemas"]["DailyConditionEvidence"]) | (components["schemas"]["UnifiedConditionEvidence"])>;
+  evidence_fingerprint: string;
+  executable_qty: number;
+  execution_date: (string) | (null);
+  execution_window?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
+  lineage: string;
+  market_linkage_ref: string;
+  occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
+  plan_version_id: string;
+  planned_qty: number;
+  reset_trade_date?: (string) | (null);
+  review_id: string;
+  revision?: (number) | (null);
+  risk_invalidated?: boolean;
+  rule_id: string;
+  side: "BUY" | "SELL";
+  signal_id: string;
+  simulated_qty: number;
+  state: "CONFIRMED" | "READY" | "EXPIRED" | "INVALIDATED" | "SIMULATED";
 };
 
 export type ResearchSimulation = {
@@ -4433,6 +4659,7 @@ export type ScheduledLoopAuditEvent = {
 export type ScheduledPreparedBacktestRunCommand = {
   costs: components["schemas"]["BacktestLoopCostsInput"];
   endDate?: (string) | (null);
+  exceptionProgram?: (components["schemas"]["ExceptionReplayProgram"]) | (null);
   manifestHash: string;
   preparationId: string;
   response: components["schemas"]["BacktestLoopResponseInput"];
@@ -4650,6 +4877,18 @@ export type UnifiedConditionEvidence = {
   basis_id?: (string) | (null);
   children?: Array<components["schemas"]["UnifiedConditionEvidence"]>;
   condition: (components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
+  fact_ids?: Array<string>;
+  operands?: Array<string>;
+  outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
+  reason?: (string) | (null);
+  session_dates?: Array<unknown>;
+};
+
+export type UnifiedConditionEvidenceInput = {
+  bar_ids?: Array<string>;
+  basis_id?: (string) | (null);
+  children?: Array<components["schemas"]["UnifiedConditionEvidenceInput"]>;
+  condition: (components["schemas"]["UnifiedPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" });
   fact_ids?: Array<string>;
   operands?: Array<string>;
   outcome: "SATISFIED" | "UNSATISFIED" | "MISSING_INPUT";
@@ -4974,6 +5213,7 @@ export type WorkbenchBacktestDataView = {
 export type WorkbenchBacktestRunCommand = {
   costs: components["schemas"]["BacktestLoopCostsInput"];
   endDate?: (string) | (null);
+  exceptionProgram?: (components["schemas"]["ExceptionReplayProgram"]) | (null);
   response: components["schemas"]["BacktestLoopResponseInput"];
   schemaVersion: "workbench-loop-selection-v1";
   selectionHash: string;
@@ -5315,14 +5555,21 @@ export interface components {
     ExceptionBinding: ExceptionBinding;
     ExceptionCalculation: ExceptionCalculation;
     ExceptionCandidate: ExceptionCandidate;
+    ExceptionCandidateInput: ExceptionCandidateInput;
     ExceptionCandidateResource: ExceptionCandidateResource;
     ExceptionDecisionApiCommand: ExceptionDecisionApiCommand;
     ExceptionEvent: ExceptionEvent;
+    ExceptionExecutionRequestOutcome: ExceptionExecutionRequestOutcome;
     ExceptionPreviewApiCommand: ExceptionPreviewApiCommand;
     ExceptionPreviewApiView: ExceptionPreviewApiView;
     ExceptionReceiptApiView: ExceptionReceiptApiView;
+    ExceptionReplayOutcome: ExceptionReplayOutcome;
+    ExceptionReplayProgram: ExceptionReplayProgram;
+    ExceptionResearchInput: ExceptionResearchInput;
     ExceptionRevocationApiCommand: ExceptionRevocationApiCommand;
+    ExceptionRoutes: ExceptionRoutes;
     ExceptionSignalSeed: ExceptionSignalSeed;
+    ExceptionSignalSeedInput: ExceptionSignalSeedInput;
     ExecutionStatus: ExecutionStatus;
     ExecutorHealthView: ExecutorHealthView;
     ExplicitAlertView: ExplicitAlertView;
@@ -5337,6 +5584,7 @@ export interface components {
     FiveMinuteBar: FiveMinuteBar;
     FixedDailyReference: FixedDailyReference;
     FixedDailyReferenceInput: FixedDailyReferenceInput;
+    FrozenExceptionEvent: FrozenExceptionEvent;
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
     IndexScopeView: IndexScopeView;
@@ -5353,6 +5601,7 @@ export interface components {
     LinkedDraftRisk: LinkedDraftRisk;
     LinkedDraftRiskInput: LinkedDraftRiskInput;
     LinkedIndexFacts: LinkedIndexFacts;
+    LinkedIndexFactsInput: LinkedIndexFactsInput;
     LoopAccountContext: LoopAccountContext;
     LoopAccountDiscrepancy: LoopAccountDiscrepancy;
     LoopAccountInput: LoopAccountInput;
@@ -5387,10 +5636,14 @@ export interface components {
     ManualEventRiskView: ManualEventRiskView;
     ManualEventRiskViewStatus: ManualEventRiskViewStatus;
     MarketExceptionDecision: MarketExceptionDecision;
+    MarketExceptionDecisionInput: MarketExceptionDecisionInput;
     MarketExceptionDraftRule: MarketExceptionDraftRule;
     MarketExceptionDraftRuleInput: MarketExceptionDraftRuleInput;
     MarketExceptionPlanDraft: MarketExceptionPlanDraft;
     MarketExceptionPlanDraftInput: MarketExceptionPlanDraftInput;
+    MarketExceptionPolicy: MarketExceptionPolicy;
+    MarketExceptionRule: MarketExceptionRule;
+    MarketExceptionTradePlan: MarketExceptionTradePlan;
     MarketIndexBar: MarketIndexBar;
     MarketIndexBarPage: MarketIndexBarPage;
     MarketIndexBarView: MarketIndexBarView;
@@ -5417,6 +5670,7 @@ export interface components {
     MarketPolicy: MarketPolicy;
     MarketQuantityRules: MarketQuantityRules;
     MarketRegimeEvidence: MarketRegimeEvidence;
+    MarketRegimeEvidenceInput: MarketRegimeEvidenceInput;
     MarketSessionView: MarketSessionView;
     MarketTurnoverSummaryView: MarketTurnoverSummaryView;
     MinuteBar: MinuteBar;
@@ -5499,6 +5753,7 @@ export interface components {
     QuantityPolicy: QuantityPolicy;
     ReferenceMarketBinding: ReferenceMarketBinding;
     RelativeStrengthEvidence: RelativeStrengthEvidence;
+    RelativeStrengthEvidenceInput: RelativeStrengthEvidenceInput;
     RequiredReviewIssueView: RequiredReviewIssueView;
     ResearchAdjustmentProof: ResearchAdjustmentProof;
     ResearchConditionEvidence: ResearchConditionEvidence;
@@ -5517,6 +5772,7 @@ export interface components {
     ResearchReplace: ResearchReplace;
     ResearchReview: ResearchReview;
     ResearchRuleEvidence: ResearchRuleEvidence;
+    ResearchSignalReference: ResearchSignalReference;
     ResearchSimulation: ResearchSimulation;
     ReturnFactRequest: ReturnFactRequest;
     ReturnIndicatorFactView: ReturnIndicatorFactView;
@@ -5577,6 +5833,7 @@ export interface components {
     UnifiedAny: UnifiedAny;
     UnifiedAnyInput: UnifiedAnyInput;
     UnifiedConditionEvidence: UnifiedConditionEvidence;
+    UnifiedConditionEvidenceInput: UnifiedConditionEvidenceInput;
     UnifiedDraftAlertRule: UnifiedDraftAlertRule;
     UnifiedDraftAlertRuleInput: UnifiedDraftAlertRuleInput;
     UnifiedDraftLevels: UnifiedDraftLevels;

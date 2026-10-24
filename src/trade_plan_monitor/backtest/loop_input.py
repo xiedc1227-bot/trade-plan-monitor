@@ -8,6 +8,7 @@ from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from trade_plan_monitor.ai.prompts import MAX_SOURCE_TEXT_CHARS
 from trade_plan_monitor.backtest.canonical import canonical_json
+from trade_plan_monitor.backtest.exception_replay_input import ExceptionReplayProgram
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
 from trade_plan_monitor.backtest.plan_schedule import (
     MAX_SCHEDULED_ENTRIES,
@@ -203,7 +204,9 @@ class LoopLimits(ResearchValue):
 
 class MonitorLoopInput(ResearchValue):
     schema_version: Literal["monitor-loop-input-v1"] = LOOP_INPUT_SCHEMA_VERSION
-    run_formula_version: Literal["backtest-run-v5"] = LOOP_RUN_FORMULA_VERSION
+    run_formula_version: Literal["backtest-run-v5", "backtest-run-v8"] = LOOP_RUN_FORMULA_VERSION
+    exception_program: ExceptionReplayProgram | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     schedule: LoopSchedule
     initial_account: LoopAccountInput
     boundary: LoopEndBoundary
@@ -214,6 +217,15 @@ class MonitorLoopInput(ResearchValue):
 
     @model_validator(mode="after")
     def coherent(self) -> Self:
+        exception = any(row.version.snapshot.schema_version == 7 for row in self.schedule.entries)
+        if exception != (self.run_formula_version == "backtest-run-v8") or exception != (
+            self.exception_program is not None
+        ):
+            raise ValueError("EXCEPTION_LOOP_REQUIRES_EXPLICIT_PROGRAM_V8")
+        if self.exception_program is not None:
+            self.exception_program.validate_scope(
+                plans=tuple(row.version.snapshot for row in self.schedule.entries),
+                started_at=self.boundary.started_at)
         if self.initial_account.snapshot_at > self.boundary.started_at:
             raise ValueError("opening account snapshot cannot follow the historical start")
         mark = self.initial_account.opening_mark
@@ -240,14 +252,16 @@ class MonitorLoopInput(ResearchValue):
 
     @property
     def run_id(self) -> str:
-        return sha256((LOOP_RUN_FORMULA_VERSION + "\0" + canonical_json(self)).encode()).hexdigest()
+        return sha256((self.run_formula_version + "\0" + canonical_json(self)).encode()).hexdigest()
 
 
 class ScheduledLoopInput(ResearchValue):
     """One account/run over reviewed daily versions, separately encoded from v1."""
 
     schema_version: Literal["monitor-loop-input-v2"] = "monitor-loop-input-v2"
-    run_formula_version: Literal["backtest-run-v6"] = "backtest-run-v6"
+    run_formula_version: Literal["backtest-run-v6", "backtest-run-v8"] = "backtest-run-v6"
+    exception_program: ExceptionReplayProgram | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     schedule: ScheduledLoopSchedule
     initial_account: LoopAccountInput
     boundary: LoopEndBoundary

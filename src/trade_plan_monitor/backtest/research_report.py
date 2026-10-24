@@ -8,8 +8,14 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.backtest.canonical import canonical_json
+from trade_plan_monitor.backtest.exception_replay import ExceptionReplayOutcome
 from trade_plan_monitor.backtest.models import ExecutionConfig, Sha256Hex
 from trade_plan_monitor.backtest.research_input import ResearchValue
+from trade_plan_monitor.backtest.research_signal_projection import (
+    ResearchSignalReference,
+    validate_signal_references,
+)
+from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.state.daily_state_models import (
@@ -95,7 +101,11 @@ class ResearchMetrics(ResearchValue):
 
 
 class ResearchDecisionEvent(ResearchValue):
-    market_linkage: tuple[MarketLinkageDecision, ...] | None = Field(
+    signal_linkage: tuple[MarketExceptionDecision, ...] | None = Field(
+        default=None, max_length=500, exclude_if=lambda value: value is None)
+    exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
+    market_linkage: tuple[MarketExceptionDecision | MarketLinkageDecision, ...] | None = Field(
         default=None, max_length=2, exclude_if=lambda value: value is None)
     schema_version: Literal["unified-research-decision-v1"] = "unified-research-decision-v1"
     event_id: Sha256Hex
@@ -103,10 +113,11 @@ class ResearchDecisionEvent(ResearchValue):
     evaluation_id: Sha256Hex | None
     official_trade_date: str | None
     minute_target: datetime | None
-    signals: tuple[DailySignalState, ...] = Field(max_length=500)
+    signals: tuple[ResearchSignalReference | DailySignalState, ...] = Field(max_length=500)
     risks: tuple[DailyRiskState, ...] = Field(max_length=2)
     alerts: tuple[ResearchReminder, ...] = Field(max_length=10)
-    resulting_signals: tuple[DailySignalState, ...] = Field(max_length=500)
+    resulting_signals: tuple[ResearchSignalReference | DailySignalState, ...] = Field(
+        max_length=500)
     resulting_risks: tuple[DailyRiskState, ...] = Field(max_length=2)
     risk_action: DailyRiskAction
     conditions: tuple[ResearchRuleEvidence, ...] = Field(max_length=12)
@@ -114,12 +125,19 @@ class ResearchDecisionEvent(ResearchValue):
     inventory_before: DailyInventoryView
     inventory_after: DailyInventoryView
 
+    @model_validator(mode="after")
+    def signal_references(self):
+        validate_signal_references(self)
+        return self
+
 
 class ResearchReminder(DailyRuleReminderState):
     evidence: tuple[ResearchConditionEvidence, ...] = Field(max_length=1)
 
 
 class _UnifiedReplayPayload(ResearchValue):
+    exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
     schema_version: Literal["backtest-report-v3"] = "backtest-report-v3"
     status: Literal["COMPLETED"] = "COMPLETED"
     run_id: Sha256Hex
@@ -165,6 +183,10 @@ class UnifiedReplayReport(_UnifiedReplayPayload):
 
     @model_validator(mode="after")
     def integrity(self):
+        if self.exception_outcomes is not None and tuple(
+            outcome for event in self.current_events for outcome in event.exception_outcomes or ()
+        ) != self.exception_outcomes:
+            raise ValueError("exception outcomes must retain their persisted decision events")
         expected = sha256(
             (
                 "backtest-report-v3\0"
