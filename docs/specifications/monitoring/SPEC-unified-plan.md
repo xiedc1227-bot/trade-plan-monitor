@@ -1,5 +1,7 @@
 # Specification: One Trade Plan Workflow
 
+Current extension (2026-10-24): the approved [market-linkage P0](SPEC-market-linkage-p0.md) adds the opt-in Schema 6 / `condition-plan-v2` branch to the same workflow. References below to Schema 5 describe its unchanged fixed-quantity contract. No saved plan is auto-upgraded.
+
 > Canonical English contract. The matching review copy is `SPEC-unified-plan.zh-CN.md`.
 
 ## U01. Authority and boundary
@@ -292,3 +294,13 @@ Delete `POST /api/v1/plan-imports`, `PlanImportCommand`, `PlanDocumentFormat` an
 ## U28. Reviewed plan library identity, 2026-10-19
 
 OpenAPI snapshot SHA-256: `282b181606f85de400008eaf1ca44d396567f6348572d27f7f5807109be8260f`. Canonical monitor v2 snapshot SHA-256: `8d1bdf473c23f89d6c15635d1e60cd3cf713a92e62c2bef50c4054c0cf684591`. The user authorized clearer chain/predecessor/version display for eight existing records. Add only optional nullable `ReviewedPlanLibraryItem.identity` with `sourceHash`, `planHash`, `planVersionId` and `reviewedVersionHash`, projected from existing immutable reviewed inputs. No route, mutation, stored format/hash, composition rule or historical result changes. See [verification and read-only audit](../../verification/2026-10-19-plan-library-versions.md).
+
+## U-MLP — Approved daily market linkage extension (2026-10-24)
+
+The user approved MLP-D01–MLP-D06 and authorized all P0 tasks. The implementation extends the existing workflow as recorded in [the contract inventory](CONTRACT-market-linkage-p0.md), without adding or removing routes. Both generated profiles add 26 reachable models and modify 15 existing models solely through explicit linked draft/executable variants, optional decision/index evidence and editor capability fields. Existing Schema 5 model definitions and route signatures remain exact; `test_market_linkage_api.py` compares the projected legacy contract to `c7378a4` in both profiles. The existing review-context route is already authorized by [BR02](../backtesting/SPEC-backtest-review.md#br02-read-contract); its missing old test allowlist entry is corrected without route changes.
+
+OpenAPI snapshot SHA-256: `e0ebc4c27b89f22159afcdd912b6d24007722cdf07ea9c32d734551c6e50ac19`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `e839b080b322445052fa34e135a777d8b29244e9ad519959b730e222ccaaac0b`
+
+Generated TypeScript SHA-256: compatibility `6ae388bd5d528ea240793f43433f614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.

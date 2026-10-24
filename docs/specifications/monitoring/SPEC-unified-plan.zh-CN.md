@@ -1,5 +1,7 @@
 # 规格：单一交易计划流程
 
+当前扩展（2026-10-24）：已批准的[大盘联动P0](SPEC-market-linkage-p0.zh-CN.md)在同一流程中增加显式选择的Schema 6 / `condition-plan-v2`分支。下文Schema 5描述其保持不变的固定数量契约，不会自动升级已保存计划。
+
 > 英文规范文件为 `SPEC-unified-plan.md`，本文件为对应的中文审阅副本。
 
 ## U01. 权威来源与边界
@@ -292,3 +294,13 @@ OpenAPI 快照 SHA-256：`2b5963fcb0b5445fac66a4e701b608b22f0a441949da81956345a2
 ## U28. 已审核计划库身份展示，2026-10-19
 
 OpenAPI 快照 SHA-256：`282b181606f85de400008eaf1ca44d396567f6348572d27f7f5807109be8260f`。当前监控 v2 快照 SHA-256：`8d1bdf473c23f89d6c15635d1e60cd3cf713a92e62c2bef50c4054c0cf684591`。用户授权清楚展示八条既有记录的计划链／前序／版本。仅新增可选可空 `ReviewedPlanLibraryItem.identity`，包含 `sourceHash`、`planHash`、`planVersionId` 和 `reviewedVersionHash`，从既有不可变已审核输入投影。不修改路由、写入、存储格式／哈希、组合规则或历史结果。见[验证与只读核查](../../verification/2026-10-19-plan-library-versions.zh-CN.md)。
+
+## U-MLP — 已批准的日线大盘联动扩展（2026-10-24）
+
+用户已批准MLP-D01–MLP-D06并授权全部P0任务。实现按[契约清单](CONTRACT-market-linkage-p0.zh-CN.md)扩展既有流程，没有新增或删除路由。两套生成profile均新增26个可达模型，仅通过显式联动草稿／执行变体、可选决策／指数证据和编辑器能力字段修改15个既有模型。Schema 5模型定义及路由签名保持精确一致；`test_market_linkage_api.py`将两套profile的旧契约投影与`c7378a4`比较。既有review-context路由已经由[BR02](../backtesting/SPEC-backtest-review.zh-CN.md#br02-读取契约)批准，本次仅纠正旧测试白名单遗漏，没有修改路由。
+
+OpenAPI 快照 SHA-256：`e0ebc4c27b89f22159afcdd912b6d24007722cdf07ea9c32d734551c6e50ac19`
+
+规范监控v2 OpenAPI快照SHA-256：`e839b080b322445052fa34e135a777d8b29244e9ad519959b730e222ccaaac0b`
+
+生成TypeScript SHA-256：兼容版`6ae388bd5d528ea240793f43433f614c996c818f1e14c65a965c64518170e36c`；规范版`9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`。
