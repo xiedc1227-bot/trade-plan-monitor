@@ -2,6 +2,8 @@
 
 当前扩展（2026-10-24）：已批准的[大盘联动P0](SPEC-market-linkage-p0.zh-CN.md)在同一流程中增加显式选择的Schema 6 / `condition-plan-v2`分支。下文Schema 5描述其保持不变的固定数量契约，不会自动升级已保存计划。
 
+已批准的[大盘联动 P1](SPEC-market-linkage-p1.zh-CN.md)另提供显式选择的 Schema 7 / `condition-plan-v3`，要求逐次人工批准例外。最终 API 批准记录见 U-MLP1；Schema 6 保留例外阻断。
+
 > 英文规范文件为 `SPEC-unified-plan.md`，本文件为对应的中文审阅副本。
 
 ## U01. 权威来源与边界
@@ -304,3 +306,15 @@ OpenAPI 快照 SHA-256：`e0ebc4c27b89f22159afcdd912b6d24007722cdf07ea9c32d73455
 规范监控v2 OpenAPI快照SHA-256：`e839b080b322445052fa34e135a777d8b29244e9ad519959b730e222ccaaac0b`
 
 生成TypeScript SHA-256：兼容版`6ae388bd5d528ea240793f43433f614c996c818f1e14c65a965c64518170e36c`；规范版`9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`。
+
+## U-MLP1 — 已批准的逐次例外（2026-10-24）
+
+用户已批准全部六项 MLP1 决策，并授权实施及分阶段验收。既有流程新增 `POST /api/v1/plan-exception-previews`、`POST /api/v1/plan-exception-decisions`、`POST /api/v1/plan-exception-revocations`，与已批准的 [MLP1-09](SPEC-market-linkage-p1.zh-CN.md#mlp1-09--api-与诊断) 一致。Schema 7 路径许可本身不授予批准。精确数量、当前证据、修订及原下一交易日窗口仍由服务端拥有；批准与撤销不改变仓位，明确模拟仍是独立操作。
+
+增量草稿／运行／编辑器／命令／报告联合类型携带候选和批准证据，以及必填事件 `actor_kind`；冻结研究使用明确的 v8 输入和来源事件，并有独立执行脚本和来源标签。[MLC1-02–MLC1-07](CONTRACT-market-linkage-p1.zh-CN.md) 记录准确编码。既有 Schema 1–6 语义、旧组件投影及公开错误契约继续由测试覆盖；不删除路径，不静默升级旧计划。本记录将最终产物与已批准 P1 范围对齐，不扩大真实数据商或部署授权。
+
+OpenAPI 快照 SHA-256：`8d0a3bf2cad7272b41cb6d0e644b12593f4a422b738f0b7492c521e8742a6d82`
+
+规范监控v2 OpenAPI快照SHA-256：`5ee3f6311aa13d37e615438d25d741a8568811eb609eca3caa830659236ba9b0`
+
+生成TypeScript SHA-256：兼容版`0db9c542dc72d30f0fccb29902c8a7670a3c9cee3bf0da47b23cc41df3f3f468`；规范版`5a95e2d2311fa6fc505f962c8f5c0ddbf1dc4c807a7d1895293261ced343fc5a`。

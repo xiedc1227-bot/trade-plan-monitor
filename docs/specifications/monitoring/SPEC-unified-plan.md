@@ -2,6 +2,8 @@
 
 Current extension (2026-10-24): the approved [market-linkage P0](SPEC-market-linkage-p0.md) adds the opt-in Schema 6 / `condition-plan-v2` branch to the same workflow. References below to Schema 5 describe its unchanged fixed-quantity contract. No saved plan is auto-upgraded.
 
+The approved [market-linkage P1](SPEC-market-linkage-p1.md) additionally provides opt-in Schema 7 / `condition-plan-v3` with explicit per-occurrence human exception approval. See U-MLP1 for the final API approval record; Schema 6 retains its exception blocks.
+
 > Canonical English contract. The matching review copy is `SPEC-unified-plan.zh-CN.md`.
 
 ## U01. Authority and boundary
@@ -304,3 +306,15 @@ OpenAPI snapshot SHA-256: `e0ebc4c27b89f22159afcdd912b6d24007722cdf07ea9c32d7345
 Canonical monitor v2 OpenAPI snapshot SHA-256: `e839b080b322445052fa34e135a777d8b29244e9ad519959b730e222ccaaac0b`
 
 Generated TypeScript SHA-256: compatibility `6ae388bd5d528ea240793f43433f614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.
+
+## U-MLP1 — Approved per-occurrence exceptions (2026-10-24)
+
+The user approved all six MLP1 decisions and authorized implementation and staged acceptance. The existing workflow gains `POST /api/v1/plan-exception-previews`, `POST /api/v1/plan-exception-decisions` and `POST /api/v1/plan-exception-revocations`, exactly as approved in [MLP1-09](SPEC-market-linkage-p1.md#mlp1-09--api-and-diagnostics). Schema 7 permissions never grant approval by themselves. Exact quantity, current evidence, revisions and the original next-session window remain server-owned; approval and revocation never change inventory. Explicit simulation remains separate.
+
+Additive draft/runtime/editor/command/report unions carry candidate/approval evidence and the required event `actor_kind`; frozen research uses explicit v8 inputs and source events with separate execution scripts and provenance. [MLC1-02–MLC1-07](CONTRACT-market-linkage-p1.md) records the exact encodings. Existing Schema 1–6 semantics, old component projections and public error contracts remain covered by tests; no route is removed and no legacy plan is silently upgraded. This record reconciles the final artifacts with the already approved P1 scope, without extending live-provider or deployment authorization.
+
+OpenAPI snapshot SHA-256: `8d0a3bf2cad7272b41cb6d0e644b12593f4a422b738f0b7492c521e8742a6d82`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `5ee3f6311aa13d37e615438d25d741a8568811eb609eca3caa830659236ba9b0`
+
+Generated TypeScript SHA-256: compatibility `0db9c542dc72d30f0fccb29902c8a7670a3c9cee3bf0da47b23cc41df3f3f468`; canonical `5a95e2d2311fa6fc505f962c8f5c0ddbf1dc4c807a7d1895293261ced343fc5a`.
