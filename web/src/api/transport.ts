@@ -89,7 +89,7 @@ export async function requestJson(
     throw networkError();
   }
 
-  const body = await readJson(response);
+  const body = await readJson(response, input === "/api/v1/plan-editor-schema");
   if (!response.ok) {
     throw parseErrorResponse(body, response.status);
   }
@@ -112,7 +112,7 @@ function networkError(): ApiClientError {
   });
 }
 
-async function readJson(response: Response): Promise<unknown> {
+async function readJson(response: Response, editorContract = false): Promise<unknown> {
   const contentLength = response.headers.get("Content-Length");
   if (
     contentLength !== null &&
@@ -156,7 +156,7 @@ async function readJson(response: Response): Promise<unknown> {
   }
 
   try {
-    return validateAndFreezeJson(JSON.parse(chunks.join("")) as unknown, response.status);
+    return validateAndFreezeJson(JSON.parse(chunks.join("")) as unknown, response.status, editorContract);
   } catch (error) {
     if (error instanceof ApiClientError) {
       throw error;
@@ -165,8 +165,8 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-function validateAndFreezeJson(value: unknown, status: number): unknown {
-  const pending: Array<{ depth: number; value: unknown }> = [{ depth: 0, value }];
+function validateAndFreezeJson(value: unknown, status: number, editorContract = false): unknown {
+  const pending: Array<{ depth: number; value: unknown; path: string }> = [{ depth: 0, value, path: "" }];
   const containers: object[] = [];
   let scheduledNodes = 1;
 
@@ -183,7 +183,7 @@ function validateAndFreezeJson(value: unknown, status: number): unknown {
         if (scheduledNodes > MAX_JSON_NODES || childDepth > MAX_JSON_DEPTH) {
           throw invalidResponse(status);
         }
-        pending.push({ depth: childDepth, value: child });
+        pending.push({ depth: childDepth, value: child, path: `${current.path}[]` });
       }
       continue;
     }
@@ -198,7 +198,11 @@ function validateAndFreezeJson(value: unknown, status: number): unknown {
       if (!Object.hasOwn(current.value, key)) {
         continue;
       }
-      if (isSensitiveKey(key)) {
+      // This single published policy definition describes business approval, not credentials.
+      // Endpoint and exact parent path keep all other authorization fields forbidden.
+      const publicPolicy = editorContract && current.path === ".exceptionPolicyDefinitions"
+        && key === "authorization" && typeof current.value[key] === "string";
+      if (isSensitiveKey(key) && !publicPolicy) {
         throw invalidResponse(status);
       }
       scheduledNodes += 1;
@@ -206,7 +210,7 @@ function validateAndFreezeJson(value: unknown, status: number): unknown {
       if (scheduledNodes > MAX_JSON_NODES || childDepth > MAX_JSON_DEPTH) {
         throw invalidResponse(status);
       }
-      pending.push({ depth: childDepth, value: current.value[key] });
+      pending.push({ depth: childDepth, value: current.value[key], path: `${current.path}.${key}` });
     }
   }
 

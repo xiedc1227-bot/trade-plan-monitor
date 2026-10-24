@@ -84,6 +84,21 @@ def test_current_three_version_prompt_stays_within_existing_input_budget():
     assert len(request.prompt) <= 50_000
 
 
+def test_complete_exception_source_fits_default_budget_with_exact_clause_evidence():
+    from trade_plan_monitor.ai.plan_extraction import build_current_plan_prompt
+    from trade_plan_monitor.domain.market_linkage_definitions import EXPANDED_EXCEPTION_POLICY_ZH
+
+    source = "weak_minimum PER_OCCURRENCE；broken_strong PER_OCCURRENCE；" + "。".join(
+        EXPANDED_EXCEPTION_POLICY_ZH.values())
+    prompt = build_current_plan_prompt(source)
+    PlanExtractionRequest(request_id=uuid4(), config=_config(), prompt=prompt)
+    clauses = json.loads(prompt.split("Canonical source clauses:\n")[1].split(
+        "\nJSON schema:")[0])
+    for actual, expected in zip(clauses, server_source_clauses(source), strict=True):
+        assert {key: actual[key] for key in ("clause_id", "start", "end", "excerpt")} == {
+            key: getattr(expected, key) for key in ("clause_id", "start", "end", "excerpt")}
+
+
 def test_factored_repeated_property_constraints_expand_without_semantic_changes():
     from trade_plan_monitor.ai.prompt_encoding import compact_schema
 

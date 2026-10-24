@@ -50,7 +50,8 @@ watch(() => props.planVersionId, id => work.load(id), { immediate: true });
 
 <style scoped>
 .plan-workbench { display: grid; gap: var(--space-7); width: min(100%, 80rem); box-sizing: border-box; min-width: 0; margin: auto; padding: var(--space-4); }
-.plan-workbench section { display: grid; gap: var(--space-3); }
+.plan-workbench section { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+.plan-workbench > *, .plan-workbench section { min-width: 0; overflow-wrap: anywhere; }
 textarea, select, input { box-sizing: border-box; max-width: 100%; width: 100%; color: var(--color-text-mineral); background: var(--color-surface-graphite); border: var(--border-technical); padding: var(--space-3); }
 button { min-height: 2.75rem; padding: var(--space-2) var(--space-3); }
 .plan-versions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

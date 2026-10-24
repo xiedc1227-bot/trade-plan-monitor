@@ -8,6 +8,7 @@ const labels: Record<string, string> = {
   NORMAL_TRANSITION: "正常或过渡", WEAK: "偏弱", BROKEN: "明显破位", UNKNOWN: "证据不足",
   STRONG: "相对强势", NOT_STRONG: "不满足相对强势", SATISFIED: "满足", UNSATISFIED: "不满足", MISSING_INPUT: "缺少输入",
   P1_EXCEPTION_REQUIRED: "需要例外授权；当前阶段保持阻断", MARKET_BROKEN: "大盘明显破位，暂停普通买入",
+  EXCEPTION_APPROVAL_REQUIRED: "市场条件评估不授予例外权限；逐次批准状态见下方",
   MARKET_INPUT_UNKNOWN: "大盘必要输入不足，暂停买入", MARKET_RULES_UNKNOWN: "适用官方数量规则未核实",
   CAPACITY_INSUFFICIENT: "仓位容量不足，整笔阻断", INVENTORY_UNKNOWN: "模拟持仓未知",
   CONDITION_UNSATISFIED: "所选确认条件未满足", CONDITION_UNKNOWN: "所选确认条件输入不足",
@@ -20,6 +21,7 @@ const labels: Record<string, string> = {
 };
 const facts = computed(() => props.decision.market.facts);
 const sizing = computed(() => props.decision.calculation);
+const exceptionRoute = computed(() => "route" in sizing.value ? sizing.value.route : null);
 const conditionLabels: Record<string, string> = {
   ALL: "全部满足", ANY: "任一满足", REVIEWED_FACT: "人工核验条件",
   DAILY_PRICE_COMPARE: "日线价格比较", DAILY_PRICE_IN_RANGE: "日线价格区间",
@@ -52,7 +54,8 @@ function ratio(value: string | null | undefined) { return value == null ? "待�
     <dl class="linkage-evidence__values">
       <dt>指数收盘 / MA20 / MA60</dt><dd>{{ shown(facts.close) }} / {{ shown(facts.ma20) }} / {{ shown(facts.ma60) }}</dd>
       <dt>5 个交易日前 MA20 / 前 20 日最低价（不含当日）</dt><dd>{{ shown(facts.ma20_5) }} / {{ shown(facts.low20) }}</dd>
-      <dt>基础数量 × 系数 → 合法候选量</dt><dd>{{ sizing.base_quantity }} × {{ shown(sizing.factor) }} → {{ shown(sizing.candidate_quantity) }} 股</dd>
+      <template v-if="exceptionRoute"><dt>基础数量 / 例外申请量</dt><dd>{{ sizing.base_quantity }} / {{ sizing.candidate_quantity ?? '须逐次人工填写' }} 股</dd></template>
+      <template v-else><dt>基础数量 × 系数 → 合法候选量</dt><dd>{{ sizing.base_quantity }} × {{ shown(sizing.factor) }} → {{ shown(sizing.candidate_quantity) }} 股</dd></template>
       <dt>可用容量 / 本次评估授权量</dt><dd>{{ shown(sizing.capacity) }} / {{ sizing.authorized_quantity }} 股</dd>
       <dt>市场最小量 / 递增单位</dt><dd>{{ shown(sizing.minimum) }} / {{ shown(sizing.increment) }} 股；模拟交易仍按 100 股整数倍</dd>
     </dl>

@@ -16,11 +16,11 @@ const runtime = {
 };
 
 describe("AI plan API", () => {
-  it("reads frozen v8 current-family responses without changing their draft or mapping", async () => {
-    const result = { ...partialExtraction, promptVersion: "plan-extract-v8" };
+  it.each(["plan-extract-v8", "plan-extract-v9", "plan-extract-v10"])("reads %s current-family responses without changing their draft or mapping", async (promptVersion) => {
+    const result = { ...partialExtraction, promptVersion };
     const api = createAIPlanApi(vi.fn(async () => jsonResponse(result)) as typeof fetch);
     await expect(api.getExtraction(result.id)).resolves.toMatchObject({
-      promptVersion: "plan-extract-v8", draftPlanJson: result.draftPlanJson,
+      promptVersion, draftPlanJson: result.draftPlanJson,
       dailyMapping: result.dailyMapping,
     });
   });

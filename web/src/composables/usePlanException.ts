@@ -17,7 +17,10 @@ export function usePlanException(resource: Ref<ExceptionCandidateResource>, auth
   const canPreview = computed(() => !busy.value && !blocked.value && candidate.value.state === "PENDING" &&
     (weak.value || enteredQuantity.value !== null && Number.isSafeInteger(enteredQuantity.value) && enteredQuantity.value > 0 && enteredQuantity.value % 100 === 0));
   const canDecide = computed(() => !busy.value && current.value && reason.value.trim().length > 0 && ["PENDING", "APPROVED"].includes(candidate.value.state));
-  function clearPreview() { generation++; preview.value = null; notice.value = "当前输入或依据已变化，请重新生成预览。"; }
+  function clearPreview() {
+    generation++; preview.value = null;
+    notice.value = resource.value.candidate.state === "PENDING" ? "当前输入或依据已变化，请重新生成预览。" : "";
+  }
   watch(proposed, clearPreview);
   watch(() => [resource.value.candidate.projection_hash, resource.value.revision, authorityRevision.value, current.value], () => {
     clearPreview(); receipt.value = null;

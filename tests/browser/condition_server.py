@@ -48,7 +48,8 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
     """Only the external provider is injected; the extraction lifecycle stays real."""
 
     async def start(self):
-        config = _config().model_copy(update={"prompt_version": "plan-extract-v9"})
+        config = _config().model_copy(update={"prompt_version": (
+            "plan-extract-v10" if self.plan.schema_version == 7 else "plan-extract-v9")})
         owner = self
 
         class Provider:
@@ -109,6 +110,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--linked", action="store_true")
+    parser.add_argument("--exception", choices=("WEAK_MINIMUM", "BROKEN_STRONG"))
     args = parser.parse_args()
     with TemporaryDirectory(prefix="tpm-daily-browser-") as directory:
         root = Path(directory)
@@ -172,6 +174,23 @@ def main():
                     "type": "DAILY_PRICE_IN_RANGE", "field": "close", "offset": 0,
                     "range": linked["levels"]["low_buy"]})
             chain.plan = MarketLinkedTradePlan.model_validate(linked)
+        if args.exception:
+            from tests.unit.test_market_exception_contract import exception_payload
+
+            from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
+            raw = exception_payload()
+            chain.route = args.exception
+            raw.update(risk_branches=[], alert_rules=plan_data["alert_rules"])
+            raw["position"]["max_qty"] = 1000
+            zone = dict(low_fen=100, high_fen=200, include_low=True, include_high=True)
+            raw["levels"]["low_buy"] = zone
+            raw["ordinary_rules"][0].update(validity={"mode": "PLAN_ACTIVE"},
+                independent_signal={"mode": "ONCE_PER_RULE"}, condition={
+                    "type": "DAILY_PRICE_IN_RANGE", "field": "close", "offset": 0,
+                    "range": zone})
+            raw["ordinary_rules"][0]["quantity_policy"]["base_quantity"] = (
+                100 if chain.route == "WEAK_MINIMUM" else 500)
+            chain.plan = MarketExceptionTradePlan.model_validate(raw)
         ai.plan = chain.plan
         ai.source = (
             "合成离线条件计划：日线收盘低于40元且完整5分钟收盘低于40元时，确认模拟买入100股。"
@@ -184,6 +203,15 @@ def main():
             )
             ai.source = "合成离线大盘联动计划，Q0 为 300 股。" + "。".join(
                 EXPANDED_LINKAGE_POLICY_ZH.values()
+            )
+        if args.exception:
+            from trade_plan_monitor.domain.market_linkage_definitions import (
+                EXPANDED_EXCEPTION_POLICY_ZH,
+            )
+            ai.source = (
+                "合成离线例外计划。weak_minimum PER_OCCURRENCE；"
+                "broken_strong PER_OCCURRENCE；" + "。".join(
+                    EXPANDED_EXCEPTION_POLICY_ZH.values())
             )
         ai._review_store = chain.plans
         app = create_app(
@@ -219,11 +247,16 @@ def main():
         @app.post("/_test/setup")
         def setup():
             with chain.plans._unit_of_work() as work:
-                for previous, day in (
+                pairs = (
                     (date(2026, 9, 17), FRIDAY),
                     (FRIDAY, TUESDAY),
                     (TUESDAY, WEDNESDAY),
-                ):
+                )
+                if args.exception:
+                    history = tuple(FRIDAY-timedelta(days=i) for i in reversed(range(60)))
+                    pairs = zip((history[0]-timedelta(days=1), *history, TUESDAY),
+                                (*history, TUESDAY, WEDNESDAY), strict=True)
+                for previous, day in pairs:
                     work.daily.session.add(
                         TradingCalendar(
                             exchange="SSE", cal_date=day, is_open=True, previous_trade_date=previous
@@ -241,6 +274,10 @@ def main():
                 details = work.plans.get_version_details(active.plan_version_id)
                 chain.plan = load_plan_json(details.payload_json)
                 chain.version = {"id": details.id, "contentHash": details.content_hash}
+            if args.exception:
+                from tests.integration.test_market_exception_runtime import exception_inputs
+                return chain.runtime.run_inputs(
+                    plan=chain.plan, inputs=exception_inputs(chain)).model_dump(mode="json")
             if args.linked:
                 from tests.integration.test_market_linkage_runtime import linked_inputs
                 return chain.runtime.run_inputs(
@@ -275,6 +312,10 @@ def main():
 
                 chain.plan = load_plan_json(details.payload_json)
                 chain.version = {"id": details.id, "contentHash": details.content_hash}
+            if args.exception:
+                from tests.integration.test_market_exception_runtime import exception_inputs
+                return chain.runtime.run_inputs(
+                    plan=chain.plan, inputs=exception_inputs(chain)).model_dump(mode="json")
             if args.linked:
                 from tests.integration.test_market_linkage_runtime import linked_inputs
                 return chain.runtime.run_inputs(
@@ -283,6 +324,14 @@ def main():
             return chain.runtime.run_inputs(
                 plan=chain.plan, inputs=minute_inputs(chain, series=chain.series())
             ).model_dump(mode="json")
+
+        @app.post("/_test/exception-correction")
+        def exception_correction():
+            if not args.exception:
+                raise ValueError("exception fixture required")
+            from tests.integration.test_market_exception_runtime import exception_inputs
+            return chain.runtime.run_inputs(plan=chain.plan,
+                inputs=exception_inputs(chain, correction=True)).model_dump(mode="json")
 
         @app.post("/_test/linked-broken")
         def linked_broken():

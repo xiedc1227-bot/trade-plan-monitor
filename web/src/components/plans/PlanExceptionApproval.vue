@@ -48,7 +48,7 @@ const labels = { PENDING: "等待逐次审核", APPROVED: "已批准，数量已
   </section>
 </template>
 <style scoped>
-.exception-approval { display: grid; gap: var(--space-3); border: var(--border-technical); padding: var(--space-3); min-width: 0; overflow-wrap: anywhere; }
+.exception-approval { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); border: var(--border-technical); padding: var(--space-3); min-width: 0; overflow-wrap: anywhere; }
 .exception-approval__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .exception-approval input, .exception-approval textarea { width: 100%; box-sizing: border-box; }
 .exception-approval pre { white-space: pre-wrap; overflow-wrap: anywhere; }

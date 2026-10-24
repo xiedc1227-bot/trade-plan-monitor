@@ -153,14 +153,14 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T15 — Verify both browser journeys
 
-- [ ] Test source→review→activation→eligible candidate→preview→approval→separate whole simulation for both routes; also reject/revoke, stale preview, retry/restart, missing evidence and old ordinary paths.
+- [x] Test source→review→activation→eligible candidate→preview→approval→separate whole simulation for both routes; also reject/revoke, stale preview, retry/restart, missing evidence and old ordinary paths.
 - Depends on: MLP1-T14. Acceptance: MLP1-A11; actual local server/API with synthetic data and healthy event-stream behavior, no browser-only authorization mock.
 - Files/scope: `web/tests/e2e/market-exceptions.spec.ts`, local backend fixture and existing `market-linkage.spec.ts` where needed; M.
 - Verify: V10; retain useful screenshots/logs, inspect quantity/evidence displays and prove approval itself leaves inventory unchanged.
 
 ### MLP1-C05 — User workflow checkpoint
 
-- [ ] V09–V10 and V13 pass; trace MLP1-A10–MLP1-A11. Both exception journeys and terminal/error paths work in a real browser; old plans and independent reminders still work.
+- [x] V09–V10 and V13 pass; trace MLP1-A10–MLP1-A11. Both exception journeys and terminal/error paths work in a real browser; old plans and independent reminders still work.
 
 ### MLP1-T16 — Freeze authorization events in research inputs
 

@@ -18,7 +18,6 @@ from trade_plan_monitor.ai.models import (
     ExtractionIssue,
     PlanExtractionStatus,
 )
-from trade_plan_monitor.ai.review import server_source_clauses
 from trade_plan_monitor.domain.daily_plan_models import DailyValue
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.market_linkage_validation import CurrentPlanDraft
@@ -211,11 +210,11 @@ def build_current_plan_prompt(source):
         valid_utf8 = False
     if not valid_utf8:
         raise ValueError("source_text must be valid UTF-8")
-    from trade_plan_monitor.ai.prompt_encoding import compact_schema
+    from trade_plan_monitor.ai.prompt_encoding import compact_schema, source_clause_evidence
 
     schema = compact_schema(CurrentPlanExtractionOutput.model_json_schema())
     clauses = json.dumps(
-        [c.model_dump(mode="json") for c in server_source_clauses(source)],
+        source_clause_evidence(source),
         ensure_ascii=False,
         separators=(",", ":"),
     )

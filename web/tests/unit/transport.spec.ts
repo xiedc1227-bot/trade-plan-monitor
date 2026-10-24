@@ -5,6 +5,20 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiClientError, requestJson } from "../../src/api/transport";
 
+it("permits only the editor's documented occurrence policy, never a credential field", async () => {
+  const response = (value: object) => fetchResponse(new Response(JSON.stringify(value), { status: 200 }));
+  const definition = { exceptionPolicyDefinitions: { authorization: "Plan permission is not occurrence approval" } };
+  await expect(requestJson(response(definition), "/api/v1/plan-editor-schema")).resolves.toHaveProperty("body", definition);
+  for (const [url, value] of [
+    ["/api/test", definition],
+    ["/api/v1/plan-editor-schema", { authorization: "Bearer credential" }],
+    ["/api/v1/plan-editor-schema", { other: definition }],
+    ["/api/v1/plan-editor-schema", { exceptionPolicyDefinitions: { authorization: { token: "credential" } } }],
+  ] as const) {
+    await expect(requestJson(response(value), url)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  }
+});
+
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 function fetchResponse(response: Response): typeof fetch {
