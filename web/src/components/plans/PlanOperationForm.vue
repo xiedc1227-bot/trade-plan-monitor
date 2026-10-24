@@ -6,7 +6,10 @@ const props = defineProps<{ schema: Schema; binding: Record<string, Json>; title
   hiddenFields?: string[]; initialValues?: Record<string, Json>; operation?: string; blocked?: boolean }>();
 const emit = defineEmits<{ submit: [value: Json] }>();
 const value = shallowRef<Json>(null);
-watch(() => [props.schema, props.binding] as const, () => {
+watch(() => [props.schema, props.binding] as const, ([schema, binding], previous) => {
+  if (previous?.[0] === schema && previous[1]
+    && Object.keys(binding).length === Object.keys(previous[1]).length
+    && Object.entries(binding).every(([key, entry]) => Object.hasOwn(previous[1], key) && Object.is(previous[1][key], entry))) return;
   const initial = initialValue(props.schema);
   value.value = initial !== null && typeof initial === "object" && !Array.isArray(initial) ? { ...initial, ...props.initialValues, ...props.binding } : initial;
 }, { immediate: true });

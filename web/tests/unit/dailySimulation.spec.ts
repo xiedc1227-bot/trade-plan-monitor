@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import type { PlanVersionView } from "../../src/api/generated";
 import DailyOperationsPanel from "../../src/components/plans/PlanSimulationPanel.vue";
+import PlanOperationForm from "../../src/components/plans/PlanOperationForm.vue";
 import reviewedVersion from "../fixtures/workbench-reviewed-version.json";
 
 const version = { id: "version-1", symbol: "601021.SH", contentHash: "a".repeat(64) } as PlanVersionView;
@@ -25,6 +26,25 @@ function apiRequest(request: ReturnType<typeof fixture>) {
 }
 
 describe("daily simulation operations", () => {
+  it("preserves edited quantities on an equivalent binding refresh but resets changed authority", async () => {
+    const binding = { symbol: "601021.SH", expectedRevision: 0 };
+    const wrapper = mount(PlanOperationForm, { props: {
+      schema: { type: "object", properties: { coreQty: { type: "integer" }, tacticalQty: { type: "integer" } } },
+      binding, title: "期初模拟仓位", description: "", operation: "POSITION", busy: false,
+    } });
+    const inputs = wrapper.findAll("input[type='number']");
+    await inputs[0]!.setValue("100");
+    await inputs[1]!.setValue("0");
+    await wrapper.setProps({ binding: { ...binding } });
+    expect((inputs[0]!.element as HTMLInputElement).value).toBe("100");
+    expect((inputs[1]!.element as HTMLInputElement).value).toBe("0");
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("submit")?.[0]).toEqual([{ ...binding, coreQty: 100, tacticalQty: 0 }]);
+    await wrapper.setProps({ binding: { ...binding, expectedRevision: 1 } });
+    expect((inputs[0]!.element as HTMLInputElement).value).toBe("");
+    expect(wrapper.get("button").attributes("disabled")).toBeDefined();
+  });
+
   it("shows simulation ownership and removes broker controls", async () => {
     const wrapper = mount(DailyOperationsPanel, { props: { version, request: apiRequest(fixture()) } });
     await flushPromises();
