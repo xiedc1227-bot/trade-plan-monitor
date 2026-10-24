@@ -66,3 +66,9 @@ GREEN: **95 tests passed in 2.20s**, covering exception/linked review, exception
 RED: storage tests failed collection before the new models existed. Added closed candidate/event models, domain hashes, terminal-transition validation, immutable event writes and revision-fenced projections. SQLite's existing kind constraint required additive migration `0026_market_exceptions`; it preserves payload bytes, adds command uniqueness and refuses a downgrade with exception evidence. Tests use disposable databases only.
 
 GREEN: 33 source/update/new-and-old-storage tests passed in 4.41s; after adding the durable command index, 9 storage regression tests passed in 3.72s. The final 5 new storage tests also passed. Verified rollback before commit, reopen, terminal reuse, unknown versions, modified hashes, immutable events, exact legacy bytes and cross-occurrence command uniqueness. Full Ruff passed. MLP1-C02 accepts source contracts and storage only; no production approval or execution capability is claimed.
+
+## MLV1-08 — Exact preview and explicit decision (MLP1-T07)
+
+RED: authorization tests failed collection before the service existed. Added strict preview/decision commands, immutable previews, server-context revision binding, exact quantity validation, command replay and explicit rejection. No inventory writes occur in this service. Both routes freeze only a valid displayed quantity; missing/invalid broken-route input never defaults.
+
+GREEN: **21 authorization/storage tests passed in 3.49s** and full Ruff passed. Covered weak exact minimum, legal broken quantities below/above half Q0, empty/zero/off-grid/over-ceiling inputs, inventory/evaluation/evidence changes, unknown capacity, risk blocks, identical retries and rejection. Production authority collection and signal creation remain assigned to MLP1-T09; no HTTP access is exposed yet.

@@ -89,7 +89,7 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T07 — Implement preview and exact approval commands
 
-- [ ] Build server previews and approval/rejection services with exact digest/revision binding, server receipt time, explicit reasons, full quantity checks and command receipts; atomically freeze quantity on first approval.
+- [x] Build server previews and approval/rejection services with exact digest/revision binding, server receipt time, explicit reasons, full quantity checks and command receipts; atomically freeze quantity on first approval.
 - Depends on: MLP1-C02. Acceptance: MLP1-A05–MLP1-A07; empty broken quantity cannot approve; invalid/stale previews and unknown capacity fail closed.
 - Files/scope: new exception application service, typed command models, repository seam, `tests/integration/test_market_exception_authorization.py`; M.
 - Verify: relevant V06 tests; prove approval leaves inventory unchanged and only the exact displayed quantity is accepted.

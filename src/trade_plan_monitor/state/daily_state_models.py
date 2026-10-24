@@ -345,6 +345,9 @@ def validate_daily_payload(kind, value):
         )
         (ExceptionCandidate if kind == "EXCEPTION_CANDIDATE" else ExceptionEvent).model_validate(
             value)
+    elif kind == "EXCEPTION_PREVIEW":
+        from trade_plan_monitor.state.market_exception_service import ExceptionPreview
+        ExceptionPreview.model_validate(value)
     elif kind == "REASSESSMENT":
         if not isinstance(value, dict) or set(value) != {
             "prior_risk",

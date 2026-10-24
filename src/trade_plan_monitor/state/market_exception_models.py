@@ -107,6 +107,7 @@ class ExceptionEvent(DailyValue):
     candidate_id: Digest
     binding_hash: Digest
     command_id: Identifier
+    request_hash: Digest
     from_state: State
     to_state: State
     expected_revision: Revision
@@ -163,7 +164,7 @@ def new_candidate(binding, now):
 
 
 def transition_candidate(candidate, *, to_state, command_id, expected_revision, now,
-                         reason, quantity=None, preview_hash=None):
+                         reason, quantity=None, preview_hash=None, request_hash=None):
     """Construct evidence only; the repository checks the current locked projection."""
     event_id = daily_hash("exception-event-id-v1", {
         "candidate_id": candidate.candidate_id, "to_state": to_state})
@@ -176,6 +177,7 @@ def transition_candidate(candidate, *, to_state, command_id, expected_revision, 
         expected_revision=expected_revision, received_at=now.isoformat(), reason=reason,
         quantity=frozen, approval_id=approval_id, preview_hash=preview_hash,
     )
+    payload["request_hash"] = request_hash or daily_hash("exception-system-transition-v1", payload)
     payload["event_hash"] = daily_hash(payload["version"], payload)
     event = ExceptionEvent.model_validate(payload)
     updated = seal_candidate(candidate.model_dump(mode="json") | dict(
