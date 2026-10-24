@@ -139,14 +139,14 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T13 — Show plan-level route permissions in review
 
-- [ ] Extend the existing plan review to show independently enabled/disabled routes, complete conditions and different quantity rules; editing permission invalidates review; no occurrence approval in this screen.
+- [x] Extend the existing plan review to show independently enabled/disabled routes, complete conditions and different quantity rules; editing permission invalidates review; no occurrence approval in this screen.
 - Depends on: MLP1-C04. Acceptance: MLP1-A04, MLP1-A10–MLP1-A11; readable user labels and server source bindings, no technical version picker.
 - Files/scope: `web/src/components/plans/ExplicitPlanReviewPanel.vue`, `web/src/composables/usePlanWorkspace.ts`, focused exception review component/helper, `web/tests/unit/marketExceptionReview.spec.ts`; M.
 - Verify: relevant V09 tests and type-check; source omissions and disabled paths remain visible.
 
 ### MLP1-T14 — Build per-occurrence approval and revocation interaction
 
-- [ ] Render eligibility/evidence, read-only weak quantity, initially empty broken quantity, reason and exact preview; support approval/rejection/revocation and a separate simulation action with terminal/stale/error states.
+- [x] Render eligibility/evidence, read-only weak quantity, initially empty broken quantity, reason and exact preview; support approval/rejection/revocation and a separate simulation action with terminal/stale/error states.
 - Depends on: MLP1-T13. Acceptance: MLP1-A05–MLP1-A06, MLP1-A10–MLP1-A11; no auto submit/resize, retry reuses command identity and no server decision is recomputed in Vue.
 - Files/scope: new exception runtime component/composable, existing workspace integration, `web/tests/unit/marketExceptionRuntime.spec.ts`; M.
 - Verify: full V09; keyboard/focus behavior, in-flight duplicate clicks, capacity changes, expiry and service unavailability.

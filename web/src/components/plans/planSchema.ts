@@ -38,7 +38,9 @@ export const fieldLabels: Record<string, string> = {
   market_policy: "大盘联动策略", quantity_policy: "动态数量策略", base_quantity: "研究确定的基础数量 Q0（股）",
   normal_factor: "正常或过渡时数量系数", weak_factor: "偏弱时数量系数", rounding: "按合法单位向下取整",
   capacity_policy: "容量不足时整笔阻断", signal_quantity_policy: "确认后冻结数量", base_confirmation: "原始确认条件组",
-  exception_policy: "例外路径保持阻断", reference_market: "对应板块指数", index_code: "参考指数",
+  exception_policy: "例外授权方式", exception_routes: "两条例外路径的计划许可",
+  weak_minimum: "偏弱市场最小量例外", broken_strong: "破位市场强势例外",
+  reference_market: "对应板块指数", index_code: "参考指数",
   symbol: "股票代码", name: "计划名称", market: "交易所", activation: "计划启用方式",
   levels: "价格区间和风险线", low_buy: "低吸区间", pressure: "压力区间", low_fen: "下界（分）",
   high_fen: "上界（分）", include_low: "包含下界", include_high: "包含上界", risk_line_fen: "风险线（分）",
@@ -66,6 +68,8 @@ export const fieldLabels: Record<string, string> = {
   involvesCore: "重评是否涉及CORE", scopeEvidence: "重评范围具体依据",
 };
 export const choiceLabels: Record<string, string> = {
+  PER_OCCURRENCE: "允许逐次申请（仍需每次人工批准）", DISABLED: "不允许申请",
+  REVIEW_PER_OCCURRENCE: "每个独立信号单独人工批准", BLOCK_P1: "例外路径保持阻断",
   PlanActiveValidity: "持续有效直到人工停用或审核启用新版本替换",
   DailyValidity: "保留原文或历史日期限制（DATE_RANGE）",
   PLAN_ACTIVE: "随当前计划持续有效", MANUAL: "人工启用或停用",

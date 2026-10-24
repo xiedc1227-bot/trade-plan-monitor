@@ -2,11 +2,14 @@ import type { DailyReviewPreview, PlanVersionView, ConfiguredAIRuntimeView } fro
 import { resolveApiFetch } from "./context";
 import { requestJson, invalidResponse } from "./transport";
 import type { Schema } from "../components/plans/planSchema";
+import { validExceptionResponse } from "./planExceptions";
 
 export interface PlanEditorContract {
   candidateSchema: Schema;
   linkedCandidateSchema?: Schema;
   linkedPolicyDefinitions?: Record<string, string>;
+  exceptionCandidateSchema?: Schema;
+  exceptionPolicyDefinitions?: Record<string, string>;
   operationSchemas: Record<string, Schema>;
 }
 
@@ -15,7 +18,8 @@ export function isConditionPlanJson(value: string): boolean {
     const document: unknown = JSON.parse(value);
     return isRecord(document) && document.execution_mode === "CONDITION_PLAN" &&
       (document.schema_version === 5 && document.execution_version === "condition-plan-v1" ||
-       document.schema_version === 6 && document.execution_version === "condition-plan-v2");
+       document.schema_version === 6 && document.execution_version === "condition-plan-v2" ||
+       document.schema_version === 7 && document.execution_version === "condition-plan-v3");
   } catch { return false; }
 }
 
@@ -25,6 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validResponse(url: string, value: unknown): boolean {
   if (!isRecord(value)) return false;
   const path = url.split("?")[0] ?? url;
+  if (path.includes("/plan-exception-")) return validExceptionResponse(path, value);
   if (path.endsWith("/plan-editor-schema")) return isRecord(value.candidateSchema) && isRecord(value.operationSchemas);
   if (path.endsWith("/ai-runtime")) return typeof value.providerId === "string" && typeof value.configured === "boolean";
   if (path.endsWith("/plan-versions")) return Array.isArray(value.items) && Number.isSafeInteger(value.total);

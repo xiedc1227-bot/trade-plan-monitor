@@ -36,9 +36,12 @@ export function usePlanWorkspace() {
   const provider = shallowRef<ConfiguredAIRuntimeView | null>(null);
   const fixedSchema = shallowRef<Schema>({});
   const linkedSchema = shallowRef<Schema>({});
+  const exceptionSchema = shallowRef<Schema>({});
+  const exceptionDefinitions = shallowRef<Record<string, string>>({});
   const linkedDefinitions = shallowRef<Record<string, string>>({});
   const schema = computed(() => candidate.value !== null && typeof candidate.value === "object" &&
-    !Array.isArray(candidate.value) && candidate.value.schema_version === 6 ? linkedSchema.value : fixedSchema.value);
+    !Array.isArray(candidate.value) ? candidate.value.schema_version === 7 ? exceptionSchema.value :
+      candidate.value.schema_version === 6 ? linkedSchema.value : fixedSchema.value : fixedSchema.value);
   const mapping = shallowRef<DailyMapping | null>(null);
   const preview = shallowRef<DailyReviewPreview | null>(null);
   const saved = shallowRef<PlanVersionView | null>(null);
@@ -51,10 +54,10 @@ export function usePlanWorkspace() {
   const values = computed(() => {
     const result = semanticValues(candidate.value);
     const plan = candidate.value;
-    if (plan !== null && typeof plan === "object" && !Array.isArray(plan) && plan.schema_version === 6 && Array.isArray(plan.ordinary_rules)) {
+    if (plan !== null && typeof plan === "object" && !Array.isArray(plan) && [6, 7].includes(Number(plan.schema_version)) && Array.isArray(plan.ordinary_rules)) {
       plan.ordinary_rules.forEach((rule, i) => {
         if (rule !== null && typeof rule === "object" && !Array.isArray(rule) && "market_policy" in rule) {
-          for (const [key, value] of Object.entries(linkedDefinitions.value)) result[`ordinary_rules[${i}].market_policy.expanded.${key}`] = value;
+          for (const [key, value] of Object.entries(plan.schema_version === 7 ? exceptionDefinitions.value : linkedDefinitions.value)) result[`ordinary_rules[${i}].market_policy.expanded.${key}`] = value;
         }
       });
     }
@@ -81,6 +84,8 @@ export function usePlanWorkspace() {
       fixedSchema.value = contract.candidateSchema;
       linkedSchema.value = contract.linkedCandidateSchema ?? {};
       linkedDefinitions.value = contract.linkedPolicyDefinitions ?? {};
+      exceptionSchema.value = contract.exceptionCandidateSchema ?? {};
+      exceptionDefinitions.value = contract.exceptionPolicyDefinitions ?? {};
       const runtime = await api.getRuntime();
       providers.value = [runtime, ...(runtime.alternativeProviders ?? [])];
       provider.value = providers.value.find(p => p.enabled && p.configured) ?? runtime;
