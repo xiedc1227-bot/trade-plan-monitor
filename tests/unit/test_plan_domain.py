@@ -174,7 +174,7 @@ def test_explicit_plan_codec_dispatches_without_widening_legacy_model() -> None:
 @pytest.mark.parametrize(
     ("field", "value", "code"),
     [
-        ("schema_version", 7, "UNSUPPORTED_PLAN_VERSION"),
+        ("schema_version", 8, "UNSUPPORTED_PLAN_VERSION"),
         ("execution_version", "explicit-rules-v2", "UNSUPPORTED_EXECUTION_VERSION"),
     ],
 )

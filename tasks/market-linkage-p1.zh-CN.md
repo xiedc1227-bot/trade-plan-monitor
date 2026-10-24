@@ -46,7 +46,7 @@
 
 ### MLP1-T02 — 增加严格启用的计划契约
 
-- [ ] 增加 Schema 7 策略／路径分支、草稿分发和精确审核哈希；保留 Schema 1–6 往返及 Schema 6 `BLOCK_P1`；缺少标志不能授予许可。
+- [x] 增加 Schema 7 策略／路径分支、草稿分发和精确审核哈希；保留 Schema 1–6 往返及 Schema 6 `BLOCK_P1`；缺少标志不能授予许可。
 - 依赖：MLP1-T01。验收：MLP1-A01；覆盖非法固定／策略混用、边界和不支持的读取行为。
 - 文件／范围：`domain/market_exception_models.py`（新增）、编解码／草稿／哈希接点、`tests/unit/test_market_exception_contract.py`；M，必要时拆分分发接点。
 - 验证：V02 及既有黄金样本；V01 继续通过。

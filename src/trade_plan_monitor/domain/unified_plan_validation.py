@@ -99,6 +99,9 @@ class UnifiedPlanDraft(DailyPlanDraft):
 
     @classmethod
     def from_executable(cls, plan):
+        if cls is UnifiedPlanDraft and plan.schema_version == 7:
+            from trade_plan_monitor.domain.market_linkage_validation import MarketExceptionPlanDraft
+            return MarketExceptionPlanDraft.from_executable(plan)
         if cls is UnifiedPlanDraft and plan.schema_version == 6:
             from trade_plan_monitor.domain.market_linkage_validation import MarketLinkedPlanDraft
             return MarketLinkedPlanDraft.from_executable(plan)
@@ -107,7 +110,10 @@ class UnifiedPlanDraft(DailyPlanDraft):
 
 def unified_plan_issues(draft):
     try:
-        if draft.schema_version == 6:
+        if draft.schema_version == 7:
+            from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
+            MarketExceptionTradePlan.model_validate(draft.executable_payload())
+        elif draft.schema_version == 6:
             from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
             MarketLinkedTradePlan.model_validate(draft.executable_payload())
         else:

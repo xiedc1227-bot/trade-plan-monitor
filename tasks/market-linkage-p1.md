@@ -46,7 +46,7 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T02 — Add strict opt-in plan contracts
 
-- [ ] Add Schema 7 policy/route variants, draft dispatch and exact review hashing; preserve Schema 1–6 round trips and Schema 6 `BLOCK_P1`; missing flags never grant permission.
+- [x] Add Schema 7 policy/route variants, draft dispatch and exact review hashing; preserve Schema 1–6 round trips and Schema 6 `BLOCK_P1`; missing flags never grant permission.
 - Depends on: MLP1-T01. Acceptance: MLP1-A01; invalid mixed/fixed/policy forms, bounds and unsupported reader behavior covered.
 - Files/scope: `domain/market_exception_models.py` (new), codec/draft/hash seams, `tests/unit/test_market_exception_contract.py`; M, split dispatch seams if needed.
 - Verify: V02 and existing golden fixtures; V01 remains green.

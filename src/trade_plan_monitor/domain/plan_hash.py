@@ -16,13 +16,15 @@ def daily_plan_content_sha256(plan: DailyTradePlan) -> str:
     canonical = json.dumps(
         content, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
     )
-    domain = {4: b"daily-plan-review-content-v1\x00", 5: b"plan-review-content-v2\x00",
-              6: b"plan-review-content-v3\x00"}[plan.schema_version]
+    domain = {
+        4: b"daily-plan-review-content-v1\x00", 5: b"plan-review-content-v2\x00",
+        6: b"plan-review-content-v3\x00", 7: b"plan-review-content-v4\x00",
+    }[plan.schema_version]
     return sha256(domain + canonical.encode("utf-8")).hexdigest()
 
 
 def unified_plan_content_sha256(plan) -> str:
-    if plan.schema_version not in {5, 6}:
+    if plan.schema_version not in {5, 6, 7}:
         raise TypeError("plan must use the current condition contract")
     return daily_plan_content_sha256(plan)
 

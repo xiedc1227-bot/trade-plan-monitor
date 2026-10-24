@@ -5,6 +5,10 @@ from typing import Annotated, Literal
 from pydantic import Field, ValidationError, model_validator
 
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier, PositiveWholeQty
+from trade_plan_monitor.domain.market_exception_models import (
+    ExceptionPermission,
+    MarketExceptionTradePlan,
+)
 from trade_plan_monitor.domain.market_linkage_models import (
     MarketLinkedTradePlan,
     MarketPolicy,
@@ -83,8 +87,37 @@ class MarketLinkedPlanDraft(UnifiedPlanDraft):
             return None
 
 
+class DraftExceptionRoutes(DailyValue):
+    weak_minimum: ExceptionPermission | None
+    broken_strong: ExceptionPermission | None
+
+
+class DraftExceptionPolicy(DailyValue):
+    policy_version: Literal["market-linkage-v2"] | None
+    base_confirmation: Literal["S0"] | None
+    exception_policy: Literal["REVIEW_PER_OCCURRENCE"] | None
+    exception_routes: DraftExceptionRoutes | None
+
+
+class MarketExceptionDraftRule(MarketLinkedDraftRule):
+    market_policy: DraftExceptionPolicy | None
+
+
+class MarketExceptionPlanDraft(MarketLinkedPlanDraft):
+    schema_version: Literal[7] = 7
+    execution_version: Literal["condition-plan-v3"] = "condition-plan-v3"
+    ordinary_rules: tuple[MarketExceptionDraftRule | UnifiedDraftRule, ...] = Field(max_length=2)
+
+    def to_executable(self) -> MarketExceptionTradePlan | None:
+        try:
+            return MarketExceptionTradePlan.model_validate(self.executable_payload())
+        except ValidationError:
+            return None
+
+
 CurrentPlanDraft = Annotated[
-    MarketLinkedPlanDraft | UnifiedPlanDraft, Field(discriminator="schema_version")
+    MarketExceptionPlanDraft | MarketLinkedPlanDraft | UnifiedPlanDraft,
+    Field(discriminator="schema_version"),
 ]
 
 

@@ -15,3 +15,18 @@ Executed V01 from `trade-plan-monitor/`:
 ```
 
 Result: **91 passed in 1.20s**. The Python launcher emitted its existing installation-location diagnostic but the tests completed successfully with exit code 0. No P1 functional acceptance is claimed by this baseline. Remaining task results will be appended only after execution.
+
+## MLV1-03 — Strict Schema 7 contracts (MLP1-T02)
+
+RED: initial contract tests produced 9 failures / 1 pass for missing Schema 7 models/dispatch. New incomplete-draft and common-draft-constructor checks then failed twice before implementation. GREEN: 52 exception/linked/unified domain tests passed in 1.58s; 176 old plan/daily/bounded-codec tests passed in 0.45s. The unknown-version fixture now uses 8 because 7 is explicitly supported; the rejection assertion is retained. Targeted Ruff and whitespace checks passed.
+
+The first expanded invocation named nonexistent `test_daily_plan_domain.py`; it ran no tests and was corrected to the actual test files. The default temporary directory failed initialization. An explicit workspace temporary directory fixed that issue; subsequent stack capture localized the remaining wait to Windows `asyncio` socketpair creation. Rerunning offline tests with local communication permitted succeeded. No application logic was changed to bypass the environment restriction.
+
+Accepted commands (temporary paths are invocation-specific):
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_market_exception_contract.py tests/unit/test_market_linkage_contract.py tests/unit/test_unified_plan_domain.py -q --basetemp .test-tmp/p1-t02-accepted
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_plan_domain.py tests/unit/test_daily_plan.py tests/unit/test_bounded_validation_codec.py -q --basetemp .test-tmp/p1-t02-legacy-fixed
+```
+
+This accepts the strict domain/draft/codec/hash slice only. Source review, activation, runtime, approval and execution integration remain unchecked tasks.
