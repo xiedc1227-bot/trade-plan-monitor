@@ -121,21 +121,21 @@
 
 ### MLP1-T11 — 暴露类型化 API 命令与运行视图
 
-- [ ] 增加三个拟议命令族和 Schema 7 运行投影；保留既有保护／错误／幂等约定；拒绝客户端提供授权，如实暴露服务失败。
+- [x] 增加三个拟议命令族和 Schema 7 运行投影；保留既有保护／错误／幂等约定；拒绝客户端提供授权，如实暴露服务失败。
 - 依赖：MLP1-T10。验收：MLP1-A05、MLP1-A10；准确路径、必要字段、状态码及普通投影符合已审核清单。
 - 文件／范围：新增 `web/routers/plan_exceptions.py`、`web/routers/daily_plans.py`、服务／装配注册接点、`tests/integration/test_market_exception_api.py`；M。
 - 验证：V08，覆盖跨来源、伪造身份、非法数量、存储不可用及批准／执行分离。
 
 ### MLP1-T12 — 生成并验证两套客户端契约
 
-- [ ] 从服务端模型生成两份 OpenAPI 和两份 TypeScript 产物；比较旧投影及严格的新命令分支；不得手改生成类型隐藏服务端差异。
+- [x] 从服务端模型生成两份 OpenAPI 和两份 TypeScript 产物；比较旧投影及严格的新命令分支；不得手改生成类型隐藏服务端差异。
 - 依赖：MLP1-T11。验收：MLP1-A01、MLP1-A10；记录精确快照哈希及兼容差异。
 - 文件／范围：`openapi.json`、`openapi.runtime-status.json`、`web/src/api/generated.ts`、`web/src/api/generated-runtime-status.ts`、契约测试；M。
 - 验证：V08、V14 及前端类型检查；如需修复生成器／模型，另记小切片。
 
 ### MLP1-C04 — 后端完整权限检查点
 
-- [ ] V06–V08、V14–V16 通过；对应 MLP1-A05–MLP1-A10。完整本地服务流程批准准确数量，再单独消费一次；每个绕过／竞争场景均有否定断言。
+- [x] V06–V08、V14–V16 通过；对应 MLP1-A05–MLP1-A10。完整本地服务流程批准准确数量，再单独消费一次；每个绕过／竞争场景均有否定断言。
 
 ### MLP1-T13 — 在审核中展示计划级路径许可
 

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { MarketLinkageDecision, UnifiedConditionEvidence } from "../../api/generated";
+import type { MarketExceptionDecision, MarketLinkageDecision, UnifiedConditionEvidence } from "../../api/generated";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 import { choiceLabels } from "./planSchema";
-const props = defineProps<{ decision: MarketLinkageDecision; stale?: boolean }>();
+const props = defineProps<{ decision: MarketLinkageDecision | MarketExceptionDecision; stale?: boolean }>();
 const labels: Record<string, string> = {
   NORMAL_TRANSITION: "正常或过渡", WEAK: "偏弱", BROKEN: "明显破位", UNKNOWN: "证据不足",
   STRONG: "相对强势", NOT_STRONG: "不满足相对强势", SATISFIED: "满足", UNSATISFIED: "不满足", MISSING_INPUT: "缺少输入",

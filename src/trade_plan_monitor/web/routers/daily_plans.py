@@ -85,18 +85,28 @@ class DailyEditorSchemaView(ApiValue):
     supported_schema_versions: tuple[int, ...] = (5, 6, 7)
     linked_candidate_schema: dict
     linked_policy_definitions: dict[str, str]
+    exception_candidate_schema: dict
+    exception_policy_definitions: dict[str, str]
     candidate_schema: dict
     operation_schemas: dict
 
 
 @router.get("/plan-editor-schema", response_model=DailyEditorSchemaView)
 async def editor_schema():
-    from trade_plan_monitor.domain.market_linkage_definitions import EXPANDED_LINKAGE_POLICY
-    from trade_plan_monitor.domain.market_linkage_validation import MarketLinkedPlanDraft
+    from trade_plan_monitor.domain.market_linkage_definitions import (
+        EXPANDED_EXCEPTION_POLICY,
+        EXPANDED_LINKAGE_POLICY,
+    )
+    from trade_plan_monitor.domain.market_linkage_validation import (
+        MarketExceptionPlanDraft,
+        MarketLinkedPlanDraft,
+    )
     return DailyEditorSchemaView(
         candidate_schema=UnifiedPlanDraft.model_json_schema(),
         linked_candidate_schema=MarketLinkedPlanDraft.model_json_schema(),
         linked_policy_definitions=EXPANDED_LINKAGE_POLICY,
+        exception_candidate_schema=MarketExceptionPlanDraft.model_json_schema(),
+        exception_policy_definitions=EXPANDED_EXCEPTION_POLICY,
         operation_schemas={
             "FACT": DailyFactCommand.model_json_schema(by_alias=True),
             "POSITION": DailyPositionCommand.model_json_schema(by_alias=True),

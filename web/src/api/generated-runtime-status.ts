@@ -1081,7 +1081,7 @@ export type CollectionAttemptView = {
 export type CollectionCandidateView = {
   candidateHash: string;
   confirmationSummary?: (components["schemas"]["PreparationConfirmationSummary"]) | (null);
-  draft?: ((components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 })) | (null);
+  draft?: ((components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 })) | (null);
   evidenceHash: string;
   issues: Array<string>;
   kind: "INITIAL" | "UPDATE" | "MATERIALIZED" | "CORRECTED" | "UNAVAILABLE";
@@ -1103,7 +1103,7 @@ export type CollectionChainReviewDeclaration = {
 export type CollectionCorrectionDeclaration = {
   binding: components["schemas"]["CollectionItemReviewDeclaration"];
   confirmed: true;
-  draft?: ((components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
+  draft?: ((components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
   evidence: string;
   expected_revision: number;
   mapping?: (components["schemas"]["DailyMapping"]) | (null);
@@ -1303,7 +1303,7 @@ export type CoordinatorStatusView = {
 export type DailyAlertCenterView = {
   acknowledgedAt?: (string) | (null);
   activationRevision: number;
-  alertKind?: ("RISK_ALERT") | (null);
+  alertKind?: ("RISK_ALERT" | "EXCEPTION_REVIEW") | (null);
   causeId: string;
   confirmedTradeDate: (string) | (null);
   createdAt: string;
@@ -1341,7 +1341,7 @@ export type DailyAlertCenterView = {
 export type DailyAlertEvent = {
   acknowledged_at?: (string) | (null);
   activation_revision: number;
-  alert_kind?: ("RISK_ALERT") | (null);
+  alert_kind?: ("RISK_ALERT" | "EXCEPTION_REVIEW") | (null);
   cause_id: string;
   confirmed_trade_date: (string) | (null);
   created_at: string;
@@ -1459,6 +1459,12 @@ export type DailyEditorSchemaView = {
   candidateSchema: {
     [key: string]: unknown;
   };
+  exceptionCandidateSchema: {
+    [key: string]: unknown;
+  };
+  exceptionPolicyDefinitions: {
+    [key: string]: string;
+  };
   linkedCandidateSchema: {
     [key: string]: unknown;
   };
@@ -1479,11 +1485,12 @@ export type DailyEvaluationApiView = {
   dailyEvidence: (components["schemas"]["DailySeries"]) | (null);
   dataBlockers: Array<string>;
   evaluatedAt: string;
+  exceptionCandidates?: (Array<components["schemas"]["ExceptionCandidateResource"]>) | (null);
   factRevisions: Array<components["schemas"]["DailyFactRevision"]>;
   fiveMinuteBars?: Array<components["schemas"]["FiveMinuteBar"]>;
   inventory: components["schemas"]["DailyInventoryApiView"];
   linkedIndexSource?: (components["schemas"]["MarketIndexSnapshot"]) | (null);
-  marketLinkage?: (Array<components["schemas"]["MarketLinkageDecision"]>) | (null);
+  marketLinkage?: (Array<(components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"])>) | (null);
   minutePrefix?: Array<components["schemas"]["MinuteBar"]>;
   minuteTarget?: (string) | (null);
   nextAction: "REVIEW_RISK_EXIT" | "CONFIRM_SIMULATED_TRADE" | "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION";
@@ -1852,7 +1859,7 @@ export type DailySignalApiView = {
   executionDate: (string) | (null);
   executionWindow?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
   lineage: string;
-  marketLinkage?: (components["schemas"]["MarketLinkageDecision"]) | (null);
+  marketLinkage?: (components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"]) | (null);
   occurrenceMode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   planVersionId: string;
   plannedQty: number;
@@ -1880,7 +1887,7 @@ export type DailySignalState = {
   execution_date: (string) | (null);
   execution_window?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
   lineage: string;
-  market_linkage?: (components["schemas"]["MarketLinkageDecision"]) | (null);
+  market_linkage?: (components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"]) | (null);
   occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   plan_version_id: string;
   planned_qty: number;
@@ -2058,6 +2065,18 @@ export type DiagnosticEvaluationView = {
   stateMutationApplied: false;
 };
 
+export type DraftExceptionPolicy = {
+  base_confirmation: ("S0") | (null);
+  exception_policy: ("REVIEW_PER_OCCURRENCE") | (null);
+  exception_routes: (components["schemas"]["DraftExceptionRoutes"]) | (null);
+  policy_version: ("market-linkage-v2") | (null);
+};
+
+export type DraftExceptionRoutes = {
+  broken_strong: ("DISABLED" | "PER_OCCURRENCE") | (null);
+  weak_minimum: ("DISABLED" | "PER_OCCURRENCE") | (null);
+};
+
 export type DraftMarketPolicy = {
   base_confirmation: ("S0") | (null);
   exception_policy: ("BLOCK_P1") | (null);
@@ -2122,6 +2141,141 @@ export type EvidenceKind = "CONDITION" | "RULE";
 
 export type EvidenceUnit = "FEN" | "SHARES" | "RATIO" | "BARS" | "YUAN" | "COUNT" | "BOOLEAN" | "DATE" | "DATETIME" | "CODE" | "POINTS";
 
+export type ExceptionAuthorityContext = {
+  authority_hash: string;
+  binding_hash: string;
+  blockers: Array<string>;
+  capacity: (number) | (null);
+  evaluation_revision: number;
+  inventory_revision: number;
+};
+
+export type ExceptionBinding = {
+  activation_revision: number;
+  base_quantity: number;
+  consumed_hash: string;
+  content_hash: string;
+  decision_session: string;
+  evidence_cutoff: string;
+  evidence_hash: string;
+  execution_date: string;
+  expires_at: string;
+  grid_hash: string;
+  increment: number;
+  lineage: string;
+  minimum: number;
+  occurrence_id: string;
+  plan_version_id: string;
+  review_id: string;
+  route: "WEAK_MINIMUM" | "BROKEN_STRONG";
+  rule_id: string;
+  symbol: string;
+};
+
+export type ExceptionCalculation = {
+  approval: (components["schemas"]["ExceptionEvent"]) | (null);
+  authorized_quantity: number;
+  base_quantity: number;
+  blockers: Array<string>;
+  calculation_hash: string;
+  candidate_quantity: (number) | (null);
+  capacity: (number) | (null);
+  ceiling: (number) | (null);
+  factor: ("1" | "0.5") | (null);
+  formula_version?: "market-linkage-calculation-v2";
+  increment: (number) | (null);
+  minimum: (number) | (null);
+  route: ("WEAK_MINIMUM" | "BROKEN_STRONG") | (null);
+};
+
+export type ExceptionCandidate = {
+  approval_id: (string) | (null);
+  binding: components["schemas"]["ExceptionBinding"];
+  binding_hash: string;
+  candidate_id: string;
+  created_at: string;
+  frozen_quantity: (number) | (null);
+  last_event_id: (string) | (null);
+  projection_hash: string;
+  signal_seed?: (components["schemas"]["ExceptionSignalSeed"]) | (null);
+  state: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED" | "INVALIDATED" | "CONSUMED";
+  version?: "market-linkage-exception-candidate-v1";
+};
+
+export type ExceptionCandidateResource = {
+  blockers?: Array<string>;
+  candidate: components["schemas"]["ExceptionCandidate"];
+  revision: number;
+};
+
+export type ExceptionDecisionApiCommand = {
+  candidateId: string;
+  commandId: string;
+  decision: "APPROVE" | "REJECT";
+  expectedRevision: number;
+  previewHash?: (string) | (null);
+  previewId?: (string) | (null);
+  reason: string;
+};
+
+export type ExceptionEvent = {
+  approval_id: (string) | (null);
+  binding_hash: string;
+  candidate_id: string;
+  command_id: string;
+  event_hash: string;
+  event_id: string;
+  expected_revision: number;
+  from_state: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED" | "INVALIDATED" | "CONSUMED";
+  preview_hash: (string) | (null);
+  quantity: (number) | (null);
+  reason: string;
+  received_at: string;
+  request_hash: string;
+  to_state: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED" | "INVALIDATED" | "CONSUMED";
+  version?: "market-linkage-exception-authorization-v1";
+};
+
+export type ExceptionPreviewApiCommand = {
+  candidateId: string;
+  expectedRevision: number;
+  proposedQuantity?: (number) | (null);
+};
+
+export type ExceptionPreviewApiView = {
+  bindingHash: string;
+  candidateId: string;
+  createdAt: string;
+  current: components["schemas"]["ExceptionAuthorityContext"];
+  expectedRevision: number;
+  previewHash: string;
+  previewId: string;
+  proposedQuantity: (number) | (null);
+  quantity: number;
+  version?: "market-linkage-exception-preview-v1";
+};
+
+export type ExceptionReceiptApiView = {
+  candidate: components["schemas"]["ExceptionCandidate"];
+  event: components["schemas"]["ExceptionEvent"];
+  revision: number;
+};
+
+export type ExceptionRevocationApiCommand = {
+  approvalId: string;
+  commandId: string;
+  expectedRevision: number;
+  reason: string;
+};
+
+export type ExceptionSignalSeed = {
+  basis_id: string;
+  evidence: Array<components["schemas"]["UnifiedConditionEvidence"]>;
+  evidence_fingerprint: string;
+  occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
+  signal_id: string;
+};
+
 export type ExecutionStatus = "FILLED" | "UNFILLED" | "IGNORED";
 
 export type ExecutorHealthView = {
@@ -2170,6 +2324,7 @@ export type ExplicitConditionEvidenceView = {
 };
 
 export type ExplicitPlanCapabilityView = {
+  exceptionExecutionVersion?: "condition-plan-v3";
   executionMode?: "CONDITION_PLAN";
   executionVersion?: "condition-plan-v1";
   isolatedTrustedReviewOnly?: false;
@@ -2721,6 +2876,99 @@ export type ManualEventRiskView = {
 
 export type ManualEventRiskViewStatus = "UNKNOWN" | "CLEAR" | "RISK_PRESENT";
 
+export type MarketExceptionDecision = {
+  approval_binding: (components["schemas"]["ExceptionBinding"]) | (null);
+  calculation: components["schemas"]["ExceptionCalculation"];
+  confirmation: Array<components["schemas"]["UnifiedConditionEvidence"]>;
+  consumed_hash: string;
+  content_hash: string;
+  decision_session: string;
+  evidence_cutoff: string;
+  evidence_hash: string;
+  market: components["schemas"]["MarketRegimeEvidence"];
+  quantity_rules: (components["schemas"]["MarketQuantityRules"]) | (null);
+  rule_id: string;
+  selection: components["schemas"]["ConfirmationSelection"];
+  strength: (components["schemas"]["RelativeStrengthEvidence"]) | (null);
+  version?: "market-linkage-evidence-v2";
+};
+
+export type MarketExceptionDraftRule = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" })) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  market_policy: (components["schemas"]["DraftExceptionPolicy"]) | (null);
+  quantity_policy: (components["schemas"]["DraftQuantityPolicy"]) | (null);
+  rule_id: (string) | (null);
+  side: ("BUY") | (null);
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY") | (null);
+};
+
+export type MarketExceptionDraftRuleInput = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["UnifiedPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicyInput"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" })) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  market_policy: (components["schemas"]["DraftExceptionPolicy"]) | (null);
+  quantity_policy: (components["schemas"]["DraftQuantityPolicy"]) | (null);
+  rule_id: (string) | (null);
+  side: ("BUY") | (null);
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY") | (null);
+};
+
+export type MarketExceptionPlanDraft = {
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v3";
+  levels: (components["schemas"]["UnifiedDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["MarketExceptionDraftRule"]) | (components["schemas"]["UnifiedDraftRule"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  reference_market: (components["schemas"]["ReferenceMarketBinding"]) | (null);
+  risk_branches: Array<components["schemas"]["LinkedDraftRisk"]>;
+  schema_version?: 7;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type MarketExceptionPlanDraftInput = {
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRuleInput"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v3";
+  levels: (components["schemas"]["UnifiedDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["MarketExceptionDraftRuleInput"]) | (components["schemas"]["UnifiedDraftRuleInput"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  reference_market: (components["schemas"]["ReferenceMarketBinding"]) | (null);
+  risk_branches: Array<components["schemas"]["LinkedDraftRiskInput"]>;
+  schema_version?: 7;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
 export type MarketIndexBar = {
   amount?: (string) | (null);
   bar_at: string;
@@ -3254,7 +3502,7 @@ export type PlanCandidateReview = {
   available_at: (string) | (null);
   bindings: Array<components["schemas"]["SourceBoundField"]>;
   changes?: Array<components["schemas"]["PlanChange"]>;
-  draft: (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
+  draft: (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   issues: Array<string>;
   schema_version?: "monitor-loop-candidate-evidence-v1";
   source_hash: string;
@@ -3374,7 +3622,7 @@ export type PlanUpdateExtractionOutput = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   clauses: Array<components["schemas"]["DailyClause"]>;
-  draft: (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
+  draft: (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   inheritance_mode?: "LEGACY" | "PREDECESSOR_PATCH";
   operations: Array<components["schemas"]["PlanUpdateOperation"]>;
   retain_unmentioned: (boolean) | (null);
@@ -3389,7 +3637,7 @@ export type PlanUpdateExtractionOutputInput = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   clauses: Array<components["schemas"]["DailyClause"]>;
-  draft: (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 });
+  draft: (components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 });
   inheritance_mode?: "LEGACY" | "PREDECESSOR_PATCH";
   operations: Array<components["schemas"]["PlanUpdateOperation"]>;
   retain_unmentioned: (boolean) | (null);
@@ -3543,7 +3791,7 @@ export type PreparationCreateCommand = {
 export type PreparationExtractionCandidate = {
   candidateHash: string;
   confirmationSummary?: (components["schemas"]["PreparationConfirmationSummary"]) | (null);
-  draft: (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
+  draft: (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   evidenceHash: string;
   frozen?: null;
   issues: Array<string>;
@@ -3604,7 +3852,7 @@ export type PreparationReviewDeclaration = {
   account?: (components["schemas"]["LoopAccountInput"]) | (null);
   candidate_hash: string;
   confirmed: true;
-  draft?: ((components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
+  draft?: ((components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
   evidence: string;
   evidence_hash: string;
   expected_candidate_revision: number;
@@ -5049,6 +5297,8 @@ export interface components {
     DeliveryHealthView: DeliveryHealthView;
     DiagnosticEvaluationCommand: DiagnosticEvaluationCommand;
     DiagnosticEvaluationView: DiagnosticEvaluationView;
+    DraftExceptionPolicy: DraftExceptionPolicy;
+    DraftExceptionRoutes: DraftExceptionRoutes;
     DraftMarketPolicy: DraftMarketPolicy;
     DraftQuantityPolicy: DraftQuantityPolicy;
     DraftReviewIssue: DraftReviewIssue;
@@ -5061,6 +5311,18 @@ export interface components {
     EvidenceFactView: EvidenceFactView;
     EvidenceKind: EvidenceKind;
     EvidenceUnit: EvidenceUnit;
+    ExceptionAuthorityContext: ExceptionAuthorityContext;
+    ExceptionBinding: ExceptionBinding;
+    ExceptionCalculation: ExceptionCalculation;
+    ExceptionCandidate: ExceptionCandidate;
+    ExceptionCandidateResource: ExceptionCandidateResource;
+    ExceptionDecisionApiCommand: ExceptionDecisionApiCommand;
+    ExceptionEvent: ExceptionEvent;
+    ExceptionPreviewApiCommand: ExceptionPreviewApiCommand;
+    ExceptionPreviewApiView: ExceptionPreviewApiView;
+    ExceptionReceiptApiView: ExceptionReceiptApiView;
+    ExceptionRevocationApiCommand: ExceptionRevocationApiCommand;
+    ExceptionSignalSeed: ExceptionSignalSeed;
     ExecutionStatus: ExecutionStatus;
     ExecutorHealthView: ExecutorHealthView;
     ExplicitAlertView: ExplicitAlertView;
@@ -5124,6 +5386,11 @@ export interface components {
     ManualEventRiskUnknownReason: ManualEventRiskUnknownReason;
     ManualEventRiskView: ManualEventRiskView;
     ManualEventRiskViewStatus: ManualEventRiskViewStatus;
+    MarketExceptionDecision: MarketExceptionDecision;
+    MarketExceptionDraftRule: MarketExceptionDraftRule;
+    MarketExceptionDraftRuleInput: MarketExceptionDraftRuleInput;
+    MarketExceptionPlanDraft: MarketExceptionPlanDraft;
+    MarketExceptionPlanDraftInput: MarketExceptionPlanDraftInput;
     MarketIndexBar: MarketIndexBar;
     MarketIndexBarPage: MarketIndexBarPage;
     MarketIndexBarView: MarketIndexBarView;
@@ -9436,6 +9703,243 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["DailyEditorSchemaView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-exception-decisions": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["ExceptionDecisionApiCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ExceptionReceiptApiView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-exception-previews": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["ExceptionPreviewApiCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ExceptionPreviewApiView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-exception-revocations": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["ExceptionRevocationApiCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ExceptionReceiptApiView"];
           };
         };
         "400": {

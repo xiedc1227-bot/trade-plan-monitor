@@ -24,11 +24,14 @@ def schema5_projection(document):
             "supportedSchemaVersions",
             "linkedCandidateSchema",
             "linkedPolicyDefinitions",
+            "exceptionCandidateSchema",
+            "exceptionPolicyDefinitions",
         ),
-        "DailyEvaluationApiView": ("marketLinkage", "linkedIndexSource"),
+        "DailyEvaluationApiView": ("marketLinkage", "linkedIndexSource", "exceptionCandidates"),
         "DailySignalApiView": ("marketLinkage",),
         "DailySignalState": ("market_linkage",),
-        "ExplicitPlanCapabilityView": ("supportedSchemaVersions", "linkedExecutionVersion"),
+        "ExplicitPlanCapabilityView": (
+            "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion"),
         "LoopEvaluation": ("market_linkage",),
         "ResearchDecisionEvent": ("market_linkage",),
     }
@@ -53,12 +56,25 @@ def schema5_projection(document):
         nullable = {"type": "null"} in node.get("anyOf", [])
         union = node["anyOf"][0] if nullable else node
         variants = union.get("oneOf", union.get("anyOf"))
-        assert len(variants) == 2
-        assert variants[0]["$ref"].startswith("#/components/schemas/MarketLinked")
-        assert variants[1]["$ref"].startswith("#/components/schemas/Unified")
+        expected_count = 2 if name == "LoopPlanVersion" else 3
+        assert len(variants) == expected_count
+        if expected_count == 3:
+            assert variants[0]["$ref"].startswith("#/components/schemas/MarketException")
+        assert variants[-2]["$ref"].startswith("#/components/schemas/MarketLinked")
+        assert variants[-1]["$ref"].startswith("#/components/schemas/Unified")
         schemas[name]["properties"][field] = (
-            {"anyOf": [variants[1], {"type": "null"}]} if nullable else variants[1]
+            {"anyOf": [variants[-1], {"type": "null"}]} if nullable else variants[-1]
         )
+    for path in ("previews", "decisions", "revocations"):
+        del result["paths"]["/api/v1/plan-exception-" + path]
+    for name in ("DailyAlertPayload", "DailyAlertEvent"):
+        if name in schemas:
+            node = schemas[name]["properties"]["alert_kind"]["anyOf"][0]
+            assert node.pop("enum") == ["RISK_ALERT", "EXCEPTION_REVIEW"]
+            node["const"] = "RISK_ALERT"
+    node = schemas["DailyAlertCenterView"]["properties"]["alertKind"]["anyOf"][0]
+    assert node.pop("enum") == ["RISK_ALERT", "EXCEPTION_REVIEW"]
+    node["const"] = "RISK_ALERT"
     return result
 
 
@@ -156,7 +172,7 @@ def test_public_schema_and_read_projection_preserve_linked_authority(linked_chai
     chain = linked_chain
     command = ready(chain)
     contract = chain.client.get("/api/v1/plan-editor-schema").json()
-    assert contract["supportedSchemaVersions"] == [5, 6]
+    assert contract["supportedSchemaVersions"] == [5, 6, 7]
     assert len(contract["linkedPolicyDefinitions"]) == 8
     first = chain.client.get("/api/v1/plan-runtime/" + chain.plan.symbol).json()
     assert first["snapshot"]["marketLinkage"][0]["calculation"]["authorized_quantity"] == 300

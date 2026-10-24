@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, shallowRef, useTemplateRef, watch, type DeepReadonly } from "vue";
-import type { PlanChange, ReviewedPlanLibraryItem, MarketLinkedPlanDraft, UnifiedPlanDraft } from "../../api/generated-runtime-status";
+import type { PlanChange, ReviewedPlanLibraryItem, MarketExceptionPlanDraft, MarketLinkedPlanDraft, UnifiedPlanDraft } from "../../api/generated-runtime-status";
 import { createPreparationApi, type PreparationApi } from "../../api/preparations";
 import PlanRuleChanges from "./PlanRuleChanges.vue";
 
@@ -12,7 +12,7 @@ const api = props.api ?? createPreparationApi();
 const details = useTemplateRef<HTMLDetailsElement>("details");
 const loading = shallowRef(false);
 const error = shallowRef(false);
-const content = shallowRef<{ draft: DeepReadonly<UnifiedPlanDraft | MarketLinkedPlanDraft> | null; referenceDraft: DeepReadonly<UnifiedPlanDraft | MarketLinkedPlanDraft> | null; changes: readonly PlanChange[] } | null>(null);
+const content = shallowRef<{ draft: DeepReadonly<UnifiedPlanDraft | MarketLinkedPlanDraft | MarketExceptionPlanDraft> | null; referenceDraft: DeepReadonly<UnifiedPlanDraft | MarketLinkedPlanDraft | MarketExceptionPlanDraft> | null; changes: readonly PlanChange[] } | null>(null);
 let controller: AbortController | null = null;
 let generation = 0;
 function reset() { generation++; controller?.abort(); content.value = null; error.value = false; loading.value = false; }

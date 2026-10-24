@@ -62,6 +62,7 @@ from trade_plan_monitor.web.routers.manual_event_risk import ManualEventRiskOper
 from trade_plan_monitor.web.routers.manual_event_risk import router as manual_event_risk_router
 from trade_plan_monitor.web.routers.market_indexes import MarketIndexReadService
 from trade_plan_monitor.web.routers.market_indexes import router as market_indexes_router
+from trade_plan_monitor.web.routers.plan_exceptions import router as plan_exceptions_router
 from trade_plan_monitor.web.routers.plan_library import router as plan_library_router
 from trade_plan_monitor.web.routers.plans import PlanOperationService
 from trade_plan_monitor.web.routers.plans import router as plans_router
@@ -395,6 +396,7 @@ def create_app(
         app.include_router(retained)
         app.include_router(plans_router)
     app.include_router(daily_plans_router)
+    app.include_router(plan_exceptions_router)
     app.include_router(system_router)
     app.include_router(ai_router)
     app.include_router(positions_router)

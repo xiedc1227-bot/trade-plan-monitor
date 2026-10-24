@@ -264,6 +264,13 @@ class PersistentPlanWebLifecycle:
 
         return await self._run(partial(read_daily, self), symbol=symbol, trade_date=trade_date)
 
+    async def mutate_exception(self, *, operation, command, context):
+        from trade_plan_monitor.web.exception_service import mutate_exception
+
+        return await self._run_mutation(partial(mutate_exception, self),
+            operation="EXCEPTION_" + operation, operation_name=operation,
+            command=command, context=context)
+
     async def read_daily_supplements(self, *, candidate_json):
         from trade_plan_monitor.web.daily_service import read_daily_supplements
 

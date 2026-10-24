@@ -121,21 +121,21 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T11 — Expose typed API commands and runtime views
 
-- [ ] Add the three proposed command families and Schema 7 runtime projections; retain existing guard/error/idempotency conventions; reject client-supplied grants and expose service failures honestly.
+- [x] Add the three proposed command families and Schema 7 runtime projections; retain existing guard/error/idempotency conventions; reject client-supplied grants and expose service failures honestly.
 - Depends on: MLP1-T10. Acceptance: MLP1-A05, MLP1-A10; exact paths, required fields, status codes and ordinary projections match the reviewed inventory.
 - Files/scope: new `web/routers/plan_exceptions.py`, `web/routers/daily_plans.py`, service/composition registration seams, `tests/integration/test_market_exception_api.py`; M.
 - Verify: V08 including cross-origin, forged identity, malformed quantities, unavailable storage and approval/execute separation.
 
 ### MLP1-T12 — Generate and verify both client contracts
 
-- [ ] Generate the two OpenAPI and two TypeScript artifacts from server models; compare old projections and strict new command variants; never hand-edit generated types to hide a server mismatch.
+- [x] Generate the two OpenAPI and two TypeScript artifacts from server models; compare old projections and strict new command variants; never hand-edit generated types to hide a server mismatch.
 - Depends on: MLP1-T11. Acceptance: MLP1-A01, MLP1-A10; exact snapshot hashes and compatibility differences are recorded.
 - Files/scope: `openapi.json`, `openapi.runtime-status.json`, `web/src/api/generated.ts`, `web/src/api/generated-runtime-status.ts`, contract tests; M.
 - Verify: V08, V14 and frontend type-check; fix generators/models in a separately recorded small slice if necessary.
 
 ### MLP1-C04 — Complete backend authority checkpoint
 
-- [ ] V06–V08, V14–V16 pass; trace MLP1-A05–MLP1-A10. A complete local service journey approves an exact quantity and separately consumes it once; every bypass/race has a negative assertion.
+- [x] V06–V08, V14–V16 pass; trace MLP1-A05–MLP1-A10. A complete local service journey approves an exact quantity and separately consumes it once; every bypass/race has a negative assertion.
 
 ### MLP1-T13 — Show plan-level route permissions in review
 

@@ -7032,11 +7032,15 @@
                 "discriminator": {
                   "mapping": {
                     "5": "#/components/schemas/UnifiedPlanDraft",
-                    "6": "#/components/schemas/MarketLinkedPlanDraft"
+                    "6": "#/components/schemas/MarketLinkedPlanDraft",
+                    "7": "#/components/schemas/MarketExceptionPlanDraft"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/MarketExceptionPlanDraft"
+                  },
                   {
                     "$ref": "#/components/schemas/MarketLinkedPlanDraft"
                   },
@@ -7202,11 +7206,15 @@
                 "discriminator": {
                   "mapping": {
                     "5": "#/components/schemas/UnifiedPlanDraftInput",
-                    "6": "#/components/schemas/MarketLinkedPlanDraftInput"
+                    "6": "#/components/schemas/MarketLinkedPlanDraftInput",
+                    "7": "#/components/schemas/MarketExceptionPlanDraftInput"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/MarketExceptionPlanDraftInput"
+                  },
                   {
                     "$ref": "#/components/schemas/MarketLinkedPlanDraftInput"
                   },
@@ -8568,7 +8576,10 @@
           "alertKind": {
             "anyOf": [
               {
-                "const": "RISK_ALERT",
+                "enum": [
+                  "RISK_ALERT",
+                  "EXCEPTION_REVIEW"
+                ],
                 "type": "string"
               },
               {
@@ -8822,7 +8833,10 @@
           "alert_kind": {
             "anyOf": [
               {
-                "const": "RISK_ALERT",
+                "enum": [
+                  "RISK_ALERT",
+                  "EXCEPTION_REVIEW"
+                ],
                 "type": "string"
               },
               {
@@ -9766,6 +9780,18 @@
             "title": "Candidateschema",
             "type": "object"
           },
+          "exceptionCandidateSchema": {
+            "additionalProperties": true,
+            "title": "Exceptioncandidateschema",
+            "type": "object"
+          },
+          "exceptionPolicyDefinitions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Exceptionpolicydefinitions",
+            "type": "object"
+          },
           "linkedCandidateSchema": {
             "additionalProperties": true,
             "title": "Linkedcandidateschema",
@@ -9792,7 +9818,8 @@
           "supportedSchemaVersions": {
             "default": [
               5,
-              6
+              6,
+              7
             ],
             "items": {
               "type": "integer"
@@ -9804,6 +9831,8 @@
         "required": [
           "linkedCandidateSchema",
           "linkedPolicyDefinitions",
+          "exceptionCandidateSchema",
+          "exceptionPolicyDefinitions",
           "candidateSchema",
           "operationSchemas"
         ],
@@ -9854,6 +9883,20 @@
             "title": "Evaluatedat",
             "type": "string"
           },
+          "exceptionCandidates": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExceptionCandidateResource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exceptioncandidates"
+          },
           "factRevisions": {
             "items": {
               "$ref": "#/components/schemas/DailyFactRevision"
@@ -9887,7 +9930,14 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/MarketLinkageDecision"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MarketExceptionDecision"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MarketLinkageDecision"
+                    }
+                  ]
                 },
                 "maxItems": 2,
                 "type": "array"
@@ -12590,12 +12640,16 @@
           "marketLinkage": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/MarketExceptionDecision"
+              },
+              {
                 "$ref": "#/components/schemas/MarketLinkageDecision"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Marketlinkage"
           },
           "occurrenceMode": {
             "anyOf": [
@@ -12812,12 +12866,16 @@
           "market_linkage": {
             "anyOf": [
               {
+                "$ref": "#/components/schemas/MarketExceptionDecision"
+              },
+              {
                 "$ref": "#/components/schemas/MarketLinkageDecision"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Market Linkage"
           },
           "occurrence_mode": {
             "anyOf": [
@@ -13910,6 +13968,106 @@
         "title": "DiagnosticEvaluationView",
         "type": "object"
       },
+      "DraftExceptionPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "base_confirmation": {
+            "anyOf": [
+              {
+                "const": "S0",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Confirmation"
+          },
+          "exception_policy": {
+            "anyOf": [
+              {
+                "const": "REVIEW_PER_OCCURRENCE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Policy"
+          },
+          "exception_routes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftExceptionRoutes"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "const": "market-linkage-v2",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          }
+        },
+        "required": [
+          "policy_version",
+          "base_confirmation",
+          "exception_policy",
+          "exception_routes"
+        ],
+        "title": "DraftExceptionPolicy",
+        "type": "object"
+      },
+      "DraftExceptionRoutes": {
+        "additionalProperties": false,
+        "properties": {
+          "broken_strong": {
+            "anyOf": [
+              {
+                "enum": [
+                  "DISABLED",
+                  "PER_OCCURRENCE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broken Strong"
+          },
+          "weak_minimum": {
+            "anyOf": [
+              {
+                "enum": [
+                  "DISABLED",
+                  "PER_OCCURRENCE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weak Minimum"
+          }
+        },
+        "required": [
+          "weak_minimum",
+          "broken_strong"
+        ],
+        "title": "DraftExceptionRoutes",
+        "type": "object"
+      },
       "DraftMarketPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -14339,6 +14497,911 @@
         "title": "EvidenceUnit",
         "type": "string"
       },
+      "ExceptionAuthorityContext": {
+        "additionalProperties": false,
+        "description": "Constructed only by the owned runtime adapter, never accepted from an API.",
+        "properties": {
+          "authority_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Authority Hash",
+            "type": "string"
+          },
+          "binding_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Binding Hash",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "evaluation_revision": {
+            "minimum": 0.0,
+            "title": "Evaluation Revision",
+            "type": "integer"
+          },
+          "inventory_revision": {
+            "minimum": 0.0,
+            "title": "Inventory Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "binding_hash",
+          "inventory_revision",
+          "evaluation_revision",
+          "authority_hash",
+          "capacity",
+          "blockers"
+        ],
+        "title": "ExceptionAuthorityContext",
+        "type": "object"
+      },
+      "ExceptionBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "activation_revision": {
+            "minimum": 1.0,
+            "title": "Activation Revision",
+            "type": "integer"
+          },
+          "base_quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Base Quantity",
+            "type": "integer"
+          },
+          "consumed_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Consumed Hash",
+            "type": "string"
+          },
+          "content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "evidence_cutoff": {
+            "format": "date-time",
+            "title": "Evidence Cutoff",
+            "type": "string"
+          },
+          "evidence_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "execution_date": {
+            "format": "date",
+            "title": "Execution Date",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "grid_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Grid Hash",
+            "type": "string"
+          },
+          "increment": {
+            "exclusiveMinimum": 0.0,
+            "title": "Increment",
+            "type": "integer"
+          },
+          "lineage": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Lineage",
+            "type": "string"
+          },
+          "minimum": {
+            "exclusiveMinimum": 0.0,
+            "title": "Minimum",
+            "type": "integer"
+          },
+          "occurrence_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Occurrence Id",
+            "type": "string"
+          },
+          "plan_version_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Plan Version Id",
+            "type": "string"
+          },
+          "review_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Review Id",
+            "type": "string"
+          },
+          "route": {
+            "enum": [
+              "WEAK_MINIMUM",
+              "BROKEN_STRONG"
+            ],
+            "title": "Route",
+            "type": "string"
+          },
+          "rule_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^\\d{6}\\.(SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "occurrence_id",
+          "symbol",
+          "lineage",
+          "rule_id",
+          "plan_version_id",
+          "review_id",
+          "activation_revision",
+          "content_hash",
+          "route",
+          "decision_session",
+          "evidence_cutoff",
+          "execution_date",
+          "expires_at",
+          "evidence_hash",
+          "consumed_hash",
+          "grid_hash",
+          "base_quantity",
+          "minimum",
+          "increment"
+        ],
+        "title": "ExceptionBinding",
+        "type": "object"
+      },
+      "ExceptionCalculation": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorized_quantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Authorized Quantity",
+            "type": "integer"
+          },
+          "base_quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Base Quantity",
+            "type": "integer"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "calculation_hash": {
+            "title": "Calculation Hash",
+            "type": "string"
+          },
+          "candidate_quantity": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Quantity"
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "ceiling": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ceiling"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "1",
+                  "0.5"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "formula_version": {
+            "const": "market-linkage-calculation-v2",
+            "default": "market-linkage-calculation-v2",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "increment": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Increment"
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "enum": [
+                  "WEAK_MINIMUM",
+                  "BROKEN_STRONG"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          }
+        },
+        "required": [
+          "base_quantity",
+          "factor",
+          "ceiling",
+          "minimum",
+          "increment",
+          "candidate_quantity",
+          "capacity",
+          "authorized_quantity",
+          "blockers",
+          "calculation_hash",
+          "route",
+          "approval"
+        ],
+        "title": "ExceptionCalculation",
+        "type": "object"
+      },
+      "ExceptionCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/ExceptionBinding"
+          },
+          "binding_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Binding Hash",
+            "type": "string"
+          },
+          "candidate_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "frozen_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Quantity"
+          },
+          "last_event_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event Id"
+          },
+          "projection_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Projection Hash",
+            "type": "string"
+          },
+          "signal_seed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionSignalSeed"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "REVOKED",
+              "EXPIRED",
+              "INVALIDATED",
+              "CONSUMED"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "version": {
+            "const": "market-linkage-exception-candidate-v1",
+            "default": "market-linkage-exception-candidate-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "binding",
+          "binding_hash",
+          "created_at",
+          "state",
+          "approval_id",
+          "frozen_quantity",
+          "last_event_id",
+          "projection_hash"
+        ],
+        "title": "ExceptionCandidate",
+        "type": "object"
+      },
+      "ExceptionCandidateResource": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/ExceptionCandidate"
+          },
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "candidate",
+          "revision"
+        ],
+        "title": "ExceptionCandidateResource",
+        "type": "object"
+      },
+      "ExceptionDecisionApiCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidateid",
+            "type": "string"
+          },
+          "commandId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Commandid",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "previewHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previewhash"
+          },
+          "previewId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previewid"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commandId",
+          "candidateId",
+          "expectedRevision",
+          "decision",
+          "reason"
+        ],
+        "title": "ExceptionDecisionApiCommand",
+        "type": "object"
+      },
+      "ExceptionEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "binding_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Binding Hash",
+            "type": "string"
+          },
+          "candidate_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "command_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Command Id",
+            "type": "string"
+          },
+          "event_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Event Hash",
+            "type": "string"
+          },
+          "event_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "expected_revision": {
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "from_state": {
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "REVOKED",
+              "EXPIRED",
+              "INVALIDATED",
+              "CONSUMED"
+            ],
+            "title": "From State",
+            "type": "string"
+          },
+          "preview_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Hash"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "request_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Request Hash",
+            "type": "string"
+          },
+          "to_state": {
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "REVOKED",
+              "EXPIRED",
+              "INVALIDATED",
+              "CONSUMED"
+            ],
+            "title": "To State",
+            "type": "string"
+          },
+          "version": {
+            "const": "market-linkage-exception-authorization-v1",
+            "default": "market-linkage-exception-authorization-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "candidate_id",
+          "binding_hash",
+          "command_id",
+          "request_hash",
+          "from_state",
+          "to_state",
+          "expected_revision",
+          "received_at",
+          "reason",
+          "quantity",
+          "approval_id",
+          "preview_hash",
+          "event_hash"
+        ],
+        "title": "ExceptionEvent",
+        "type": "object"
+      },
+      "ExceptionPreviewApiCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidateid",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "proposedQuantity": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposedquantity"
+          }
+        },
+        "required": [
+          "candidateId",
+          "expectedRevision"
+        ],
+        "title": "ExceptionPreviewApiCommand",
+        "type": "object"
+      },
+      "ExceptionPreviewApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "bindingHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Bindinghash",
+            "type": "string"
+          },
+          "candidateId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidateid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "current": {
+            "$ref": "#/components/schemas/ExceptionAuthorityContext"
+          },
+          "expectedRevision": {
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "previewHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Previewhash",
+            "type": "string"
+          },
+          "previewId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Previewid",
+            "type": "string"
+          },
+          "proposedQuantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposedquantity"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "version": {
+            "const": "market-linkage-exception-preview-v1",
+            "default": "market-linkage-exception-preview-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "previewId",
+          "candidateId",
+          "expectedRevision",
+          "bindingHash",
+          "current",
+          "proposedQuantity",
+          "quantity",
+          "createdAt",
+          "previewHash"
+        ],
+        "title": "ExceptionPreviewApiView",
+        "type": "object"
+      },
+      "ExceptionReceiptApiView": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "$ref": "#/components/schemas/ExceptionCandidate"
+          },
+          "event": {
+            "$ref": "#/components/schemas/ExceptionEvent"
+          },
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "candidate",
+          "revision",
+          "event"
+        ],
+        "title": "ExceptionReceiptApiView",
+        "type": "object"
+      },
+      "ExceptionRevocationApiCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalId": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Approvalid",
+            "type": "string"
+          },
+          "commandId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Commandid",
+            "type": "string"
+          },
+          "expectedRevision": {
+            "minimum": 1.0,
+            "title": "Expectedrevision",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commandId",
+          "approvalId",
+          "expectedRevision",
+          "reason"
+        ],
+        "title": "ExceptionRevocationApiCommand",
+        "type": "object"
+      },
+      "ExceptionSignalSeed": {
+        "additionalProperties": false,
+        "properties": {
+          "basis_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Basis Id",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidence"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "title": "Evidence",
+            "type": "array"
+          },
+          "evidence_fingerprint": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Fingerprint",
+            "type": "string"
+          },
+          "occurrence_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ONCE_PER_RULE",
+                  "AFTER_RULE_COMPLETED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Mode"
+          },
+          "signal_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Signal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal_id",
+          "basis_id",
+          "evidence_fingerprint",
+          "evidence"
+        ],
+        "title": "ExceptionSignalSeed",
+        "type": "object"
+      },
       "ExecutionStatus": {
         "enum": [
           "FILLED",
@@ -14656,6 +15719,12 @@
         "additionalProperties": false,
         "description": "Backend-owned capability for the single current plan workflow.",
         "properties": {
+          "exceptionExecutionVersion": {
+            "const": "condition-plan-v3",
+            "default": "condition-plan-v3",
+            "title": "Exceptionexecutionversion",
+            "type": "string"
+          },
           "executionMode": {
             "const": "CONDITION_PLAN",
             "default": "CONDITION_PLAN",
@@ -14720,7 +15789,8 @@
           "supportedSchemaVersions": {
             "default": [
               5,
-              6
+              6,
+              7
             ],
             "items": {
               "type": "integer"
@@ -18653,6 +19723,1010 @@
         "title": "ManualEventRiskViewStatus",
         "type": "string"
       },
+      "MarketExceptionDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_binding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/ExceptionCalculation"
+          },
+          "confirmation": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidence"
+            },
+            "title": "Confirmation",
+            "type": "array"
+          },
+          "consumed_hash": {
+            "title": "Consumed Hash",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "evidence_cutoff": {
+            "format": "date-time",
+            "title": "Evidence Cutoff",
+            "type": "string"
+          },
+          "evidence_hash": {
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "market": {
+            "$ref": "#/components/schemas/MarketRegimeEvidence"
+          },
+          "quantity_rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketQuantityRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ConfirmationSelection"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativeStrengthEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "const": "market-linkage-evidence-v2",
+            "default": "market-linkage-evidence-v2",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "content_hash",
+          "decision_session",
+          "evidence_cutoff",
+          "market",
+          "strength",
+          "selection",
+          "calculation",
+          "quantity_rules",
+          "confirmation",
+          "consumed_hash",
+          "evidence_hash",
+          "approval_binding"
+        ],
+        "title": "MarketExceptionDecision",
+        "type": "object"
+      },
+      "MarketExceptionDraftRule": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "anyOf": [
+              {
+                "const": "TACTICAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "ALL": "#/components/schemas/UnifiedAll",
+                    "ANY": "#/components/schemas/UnifiedAny",
+                    "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                    "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                    "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
+                    "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
+                    "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                    "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                    "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                    "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGte",
+                    "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/UnifiedPriceCompare"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriceInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyVolumeRatio"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCandleRatio"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyIndicatorCompare"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCloseSequence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseBelow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteVolumeToMeanGte"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAll"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAny"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "COMPLETED_BAR_CLOSE": "#/components/schemas/CompletedMinuteConfirmation",
+                    "OFFICIAL_DAILY_CLOSE": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CompletedMinuteConfirmation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "execution_window": {
+            "anyOf": [
+              {
+                "const": "NEXT_EXCHANGE_SESSION_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Window"
+          },
+          "independent_signal": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
+                    "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicy",
+                    "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
+                    "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedResetPolicy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OncePerRule"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AfterRuleCompleted"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Independent Signal"
+          },
+          "invalidation": {
+            "anyOf": [
+              {
+                "const": "RISK_OR_REVIEWED_INVALIDATION",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalidation"
+          },
+          "market_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftExceptionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftQuantityPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "const": "BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "const": "ENABLED",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanActiveValidity"
+              },
+              {
+                "$ref": "#/components/schemas/DailyValidity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validity"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "const": "LOW_BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone"
+          }
+        },
+        "required": [
+          "status",
+          "side",
+          "rule_id",
+          "bucket",
+          "condition",
+          "confirmation",
+          "execution_window",
+          "zone",
+          "validity",
+          "invalidation",
+          "independent_signal",
+          "market_policy",
+          "quantity_policy"
+        ],
+        "title": "MarketExceptionDraftRule",
+        "type": "object"
+      },
+      "MarketExceptionDraftRuleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "anyOf": [
+              {
+                "const": "TACTICAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "ALL": "#/components/schemas/UnifiedAllInput",
+                    "ANY": "#/components/schemas/UnifiedAnyInput",
+                    "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
+                    "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
+                    "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
+                    "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
+                    "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
+                    "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                    "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                    "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGteInput",
+                    "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/UnifiedPriceCompareInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriceInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyVolumeRatioInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCandleRatioInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyIndicatorCompareInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCloseSequenceInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseBelow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteVolumeToMeanGteInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAllInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAnyInput"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "COMPLETED_BAR_CLOSE": "#/components/schemas/CompletedMinuteConfirmation",
+                    "OFFICIAL_DAILY_CLOSE": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CompletedMinuteConfirmation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "execution_window": {
+            "anyOf": [
+              {
+                "const": "NEXT_EXCHANGE_SESSION_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Window"
+          },
+          "independent_signal": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
+                    "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicyInput",
+                    "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
+                    "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedResetPolicyInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OncePerRule"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AfterRuleCompleted"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Independent Signal"
+          },
+          "invalidation": {
+            "anyOf": [
+              {
+                "const": "RISK_OR_REVIEWED_INVALIDATION",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalidation"
+          },
+          "market_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftExceptionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftQuantityPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "const": "BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "const": "ENABLED",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanActiveValidity"
+              },
+              {
+                "$ref": "#/components/schemas/DailyValidity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validity"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "const": "LOW_BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone"
+          }
+        },
+        "required": [
+          "status",
+          "side",
+          "rule_id",
+          "bucket",
+          "condition",
+          "confirmation",
+          "execution_window",
+          "zone",
+          "validity",
+          "invalidation",
+          "independent_signal",
+          "market_policy",
+          "quantity_policy"
+        ],
+        "title": "MarketExceptionDraftRule",
+        "type": "object"
+      },
+      "MarketExceptionPlanDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                    "MANUAL": "#/components/schemas/DailyManualActivation",
+                    "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyManualActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyDayActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyRangeActivation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedDraftAlertRule"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_version": {
+            "const": "condition-plan-v3",
+            "default": "condition-plan-v3",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MarketExceptionDraftRule"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedDraftRule"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/UnifiedDraftPosition"
+          },
+          "reference_market": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceMarketBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDraftRisk"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 7,
+            "default": 7,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "MarketExceptionPlanDraft",
+        "type": "object"
+      },
+      "MarketExceptionPlanDraftInput": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                    "MANUAL": "#/components/schemas/DailyManualActivation",
+                    "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyManualActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyDayActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyRangeActivation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedDraftAlertRuleInput"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_version": {
+            "const": "condition-plan-v3",
+            "default": "condition-plan-v3",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MarketExceptionDraftRuleInput"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedDraftRuleInput"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/UnifiedDraftPosition"
+          },
+          "reference_market": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceMarketBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDraftRiskInput"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 7,
+            "default": 7,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "MarketExceptionPlanDraft",
+        "type": "object"
+      },
       "MarketIndexBar": {
         "additionalProperties": false,
         "description": "One validated, index-specific completed OHLC observation.",
@@ -22461,11 +24535,15 @@
             "discriminator": {
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraft",
-                "6": "#/components/schemas/MarketLinkedPlanDraft"
+                "6": "#/components/schemas/MarketLinkedPlanDraft",
+                "7": "#/components/schemas/MarketExceptionPlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/MarketExceptionPlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/MarketLinkedPlanDraft"
               },
@@ -23375,11 +25453,15 @@
             "discriminator": {
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraft",
-                "6": "#/components/schemas/MarketLinkedPlanDraft"
+                "6": "#/components/schemas/MarketLinkedPlanDraft",
+                "7": "#/components/schemas/MarketExceptionPlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/MarketExceptionPlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/MarketLinkedPlanDraft"
               },
@@ -23508,11 +25590,15 @@
             "discriminator": {
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraftInput",
-                "6": "#/components/schemas/MarketLinkedPlanDraftInput"
+                "6": "#/components/schemas/MarketLinkedPlanDraftInput",
+                "7": "#/components/schemas/MarketExceptionPlanDraftInput"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/MarketExceptionPlanDraftInput"
+              },
               {
                 "$ref": "#/components/schemas/MarketLinkedPlanDraftInput"
               },
@@ -24622,11 +26708,15 @@
             "discriminator": {
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraft",
-                "6": "#/components/schemas/MarketLinkedPlanDraft"
+                "6": "#/components/schemas/MarketLinkedPlanDraft",
+                "7": "#/components/schemas/MarketExceptionPlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/MarketExceptionPlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/MarketLinkedPlanDraft"
               },
@@ -24958,11 +27048,15 @@
                 "discriminator": {
                   "mapping": {
                     "5": "#/components/schemas/UnifiedPlanDraftInput",
-                    "6": "#/components/schemas/MarketLinkedPlanDraftInput"
+                    "6": "#/components/schemas/MarketLinkedPlanDraftInput",
+                    "7": "#/components/schemas/MarketExceptionPlanDraftInput"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/MarketExceptionPlanDraftInput"
+                  },
                   {
                     "$ref": "#/components/schemas/MarketLinkedPlanDraftInput"
                   },
@@ -45179,6 +47273,471 @@
           }
         },
         "summary": "Editor Schema",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-exception-decisions": {
+      "post": {
+        "operationId": "decisions_api_v1_plan_exception_decisions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExceptionDecisionApiCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExceptionReceiptApiView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Decisions",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-exception-previews": {
+      "post": {
+        "operationId": "previews_api_v1_plan_exception_previews_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExceptionPreviewApiCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExceptionPreviewApiView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Previews",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-exception-revocations": {
+      "post": {
+        "operationId": "revocations_api_v1_plan_exception_revocations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExceptionRevocationApiCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExceptionReceiptApiView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Revocations",
         "tags": [
           "plans"
         ]

@@ -44,8 +44,9 @@ def exception_chain(tmp_path, request):
         chain.activate()
         from trade_plan_monitor.state.models import TradingCalendar
         with chain.plans._unit_of_work() as work:
-            for previous, day in ((FRIDAY-timedelta(days=1), FRIDAY),
-                                  (FRIDAY, TUESDAY), (TUESDAY, WEDNESDAY)):
+            history = tuple(FRIDAY-timedelta(days=i) for i in reversed(range(60)))
+            for previous, day in zip((history[0]-timedelta(days=1), *history, TUESDAY),
+                                     (*history, TUESDAY, WEDNESDAY), strict=True):
                 work.daily.session.add(TradingCalendar(
                     exchange="SSE", cal_date=day, is_open=True, previous_trade_date=previous))
             work.commit()

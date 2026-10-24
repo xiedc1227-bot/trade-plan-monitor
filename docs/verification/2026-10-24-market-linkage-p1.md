@@ -92,3 +92,22 @@ A broader API run reported 3 expected contract-projection failures: old assertio
 RED: both route tests exposed missing approval consumption and execution after revocation; independent-connection execution/revocation races then exposed the simulation entry's read-to-write lock upgrade. Simulation now acquires the authority fence before reads, validates the current grant and consumes candidate, signal and inventory in one transaction. Re-evaluation also retains the captured linked index source.
 
 GREEN: **39 tests passed in 19.10s**, including 12 exception simulation cases, authorization contention and old daily/linked chains. Ruff passed after import formatting. Covered full quantity, capacity loss/recovery without resize, fault injection after inventory write with complete rollback, identical-key receipt replay, different-key duplicate rejection, revoke versus execution ordering and irreversible consumed history. No real account or broker execution is involved.
+
+## MLV1-12 — Public API and generated contracts (MLP1-T11–MLP1-T12 / MLP1-C04)
+
+RED: six public command tests initially returned 404; complete HTTP reevaluation then exposed an incomplete test calendar and an invalid error-detail location. Corrected both against the production contracts. The service now exposes preview, decision and revocation with same-origin, strict input, immutable receipt and idempotency protections. The first combined API/runtime/simulation run passed 32 tests in 20.19s. Exact legacy projections passed 8 tests in 7.73s, closing the three API assertions recorded in MLV1-10 without weakening legacy comparisons.
+
+Generated both API profiles. Type-check found three shared display components still restricted to old variants; a separate three-file adapter slice explicitly adds the new union members. Type-check and generated `--check` pass. Final full V06–V08 passed **68 tests in 31.66s**, with one existing Starlette httpx deprecation warning. Full Ruff and `git diff --check` passed. This accepts MLP1-C04, not UI or replay.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `openapi.json` | `bcf1c2591cb94b704d15d36ccfa681e540851c938e002bc5bddff9fb0dc3212f` |
+| `openapi.runtime-status.json` | `e4115049f8ea95a90cfbe54383ab5a924cd5cc0cc274d7d151750657aef286a2` |
+| `web/src/api/generated.ts` | `8d471ec572961e771f7d88cc859833c854bee25ce2def932b1783340fbc6826a` |
+| `web/src/api/generated-runtime-status.ts` | `d7e2d8844e64be6347db5a2c248120e94ff8c351578233c2cf7b5140fc9b0107` |
+
+## MLV1-13 — UI slice inventory (MLP1-T13–MLP1-T15; pending)
+
+Component map: `usePlanWorkspace` owns editor state and server-defined schemas; `PlanExceptionPermissions` only presents plan-level route rules; `PlanExceptionApproval` owns a single candidate interaction through an exception composable; `PlanSimulationPanel` owns refresh and the existing separate simulation action. Props carry server evidence; events request refresh. No Vue calculation grants quantity or permission.
+
+Sequential slices: T13a tests, `conditionPlans.ts`, `usePlanWorkspace.ts`, `planSchema.ts`; T13b permission component, existing review workspace integration and tests. T14a typed exception transport/response guards, composable and unit tests; T14b candidate component, simulation-panel integration and tests. T15 adds the isolated server fixture and real-browser tests. Each slice contains at most five implementation/test files; this inventory precedes edits.
