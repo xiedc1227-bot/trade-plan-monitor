@@ -1,0 +1,119 @@
+............................................................FF...FFFF.FF [ 66%]
+....................FF.FF....F.......                                    [100%]
+================================== FAILURES ===================================
+_______ test_sqlite_migration_upgrades_empty_database_and_is_idempotent _______
+tests\integration\test_sqlite_repositories.py:2272: in test_sqlite_migration_upgrades_empty_database_and_is_idempotent
+    assert first_revision == second_revision == "0025_index_close_display"
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+_ test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor _
+tests\integration\test_sqlite_repositories.py:2298: in test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+__ test_plan_web_state_migration_refuses_lossy_downgrade_atomically[review] ___
+tests\integration\test_sqlite_repositories.py:2573: in test_plan_web_state_migration_refuses_lossy_downgrade_atomically
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+_ test_plan_web_state_migration_refuses_lossy_downgrade_atomically[deactivation] _
+tests\integration\test_sqlite_repositories.py:2573: in test_plan_web_state_migration_refuses_lossy_downgrade_atomically
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+_________ test_alert_sequence_migration_backfills_existing_high_water _________
+tests\integration\test_sqlite_repositories.py:2610: in test_alert_sequence_migration_backfills_existing_high_water
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+____ test_monitor_event_migration_renames_high_water_and_backfills_alerts _____
+tests\integration\test_sqlite_repositories.py:2665: in test_monitor_event_migration_renames_high_water_and_backfills_alerts
+    assert revision == "0025_index_close_display"
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+_ test_market_index_event_constraint_migration_preserves_the_existing_ledger __
+tests\integration\test_sqlite_repositories.py:2757: in test_market_index_event_constraint_migration_preserves_the_existing_ledger
+    assert revision == "0025_index_close_display"
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+____ test_market_index_event_constraint_migration_refuses_lossy_downgrade _____
+tests\integration\test_sqlite_repositories.py:2798: in test_market_index_event_constraint_migration_refuses_lossy_downgrade
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+_______ test_monitor_event_migration_refuses_lossy_non_alert_downgrade ________
+tests\integration\test_sqlite_repositories.py:3134: in test_monitor_event_migration_refuses_lossy_non_alert_downgrade
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+____ test_evaluation_kind_migration_preserves_populated_0004_intraday_rows ____
+tests\integration\test_sqlite_repositories.py:3188: in test_evaluation_kind_migration_preserves_populated_0004_intraday_rows
+    assert revision == "0025_index_close_display"
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+____ test_evaluation_kind_migration_refuses_lossy_official_close_downgrade ____
+tests\integration\test_sqlite_repositories.py:3259: in test_evaluation_kind_migration_refuses_lossy_official_close_downgrade
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+_ test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_nulls _
+tests\integration\test_sqlite_repositories.py:3313: in test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_nulls
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+___ test_explicit_review_migration_refuses_to_discard_bound_review_evidence ___
+tests\integration\test_sqlite_repositories.py:3464: in test_explicit_review_migration_refuses_to_discard_bound_review_evidence
+    assert (
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+============================== warnings summary ===============================
+tests/integration/test_sqlite_repositories.py::test_sqlite_migration_has_no_metadata_drift
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_sqlite_repositories.py:3482: SAWarning: Skipped unsupported reflection of expression-based index ux_exception_command
+    assert compare_metadata(migration_context, Base.metadata) == []
+
+tests/integration/test_sqlite_repositories.py::test_sqlite_migration_has_no_metadata_drift
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\alembic\ddl\impl.py:850: UserWarning: autogenerate skipping metadata-specified expression-based index 'ux_exception_command'; dialect 'sqlite' under SQLAlchemy 2.0.52 can't reflect these indexes so they can't be compared
+    util.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_sqlite_repositories.py::test_sqlite_migration_upgrades_empty_database_and_is_idempotent
+FAILED tests/integration/test_sqlite_repositories.py::test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
+FAILED tests/integration/test_sqlite_repositories.py::test_plan_web_state_migration_refuses_lossy_downgrade_atomically[review]
+FAILED tests/integration/test_sqlite_repositories.py::test_plan_web_state_migration_refuses_lossy_downgrade_atomically[deactivation]
+FAILED tests/integration/test_sqlite_repositories.py::test_alert_sequence_migration_backfills_existing_high_water
+FAILED tests/integration/test_sqlite_repositories.py::test_monitor_event_migration_renames_high_water_and_backfills_alerts
+FAILED tests/integration/test_sqlite_repositories.py::test_market_index_event_constraint_migration_preserves_the_existing_ledger
+FAILED tests/integration/test_sqlite_repositories.py::test_market_index_event_constraint_migration_refuses_lossy_downgrade
+FAILED tests/integration/test_sqlite_repositories.py::test_monitor_event_migration_refuses_lossy_non_alert_downgrade
+FAILED tests/integration/test_sqlite_repositories.py::test_evaluation_kind_migration_preserves_populated_0004_intraday_rows
+FAILED tests/integration/test_sqlite_repositories.py::test_evaluation_kind_migration_refuses_lossy_official_close_downgrade
+FAILED tests/integration/test_sqlite_repositories.py::test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_nulls
+FAILED tests/integration/test_sqlite_repositories.py::test_explicit_review_migration_refuses_to_discard_bound_review_evidence
+13 failed, 96 passed, 2 warnings in 11.04s

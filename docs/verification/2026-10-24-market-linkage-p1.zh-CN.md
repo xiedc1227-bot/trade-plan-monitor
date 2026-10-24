@@ -1,5 +1,7 @@
 # 验证：market-linkage-p1
 
+状态：PASS — MLP1-T01–MLP1-T21、MLP1-C01–MLP1-C07、MLP1-A01–MLP1-A14 已完成。MLV1-23 为最终结果；此前条目保留按时间记录的失败和阶段检查点，不代表尚未完成的工作。
+
 ## MLV1-01 — 范围与授权
 
 用户在 2026-10-24 批准 MLP1-D01–MLP1-D06 并指示分阶段实施。基线 `dbeff32`。本报告只记录已经执行的检查，不记录设想结果。[规格](../specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) · [任务](../../tasks/market-linkage-p1.zh-CN.md) · [规范英文版](2026-10-24-market-linkage-p1.md)。
@@ -148,3 +150,75 @@ T16–T18 按输入与排程准入、共享私有命令转换、单次研究执�
 最初扩展 V11 运行有 **68 项通过／2 项失败**，失败位于旧 API 投影比较。仅排除获准新增的输入／报告／引用联合类型及生成的联合类型标题；未变路径和旧组件仍与 `c7378a4` 精确比较。两套契约现在均通过。两套生成检查、完整 Ruff、前端类型检查通过。针对性前端：**4 个文件／188 项通过，1.41 秒**，覆盖明确程序原样提交、Schema 6/7 准备／结果分派和两种来源标签。最初指定的两个前端测试路径不存在；验收命令实际使用 `UnifiedReplay.spec.ts`、`marketExceptionReplay.spec.ts`、`PlanPreparation.spec.ts`、`backtestsApi.spec.ts`。
 
 对抗审查曾临时关闭冻结封装哈希比较。两条损坏测试均按预期失败（**2 项失败，3.04 秒**）；`finally` 已恢复原始文件字节，没有遗留放宽的校验。已核对中英文契约、规格、任务和报告的章节 ID、代码标识、数量、路径与验收含义。C06 验收通过；T19–T21 尚待完成。未调用真实数据商、发送外部通知、迁移用户数据库、推送或部署。
+
+
+## MLV1-19 — 全项目回归（MLP1-T19 / MLP1-T20，进行中）
+
+默认 V12 收集遇到既有同名文件 `tests/unit/test_backtest_service_contract.py` / `tests/integration/test_backtest_service_contract.py`，未进入测试执行。因此将所有非联网目录分进程执行，除 `-m "not live"` 外不作排除：`tests/unit`、`tests/integration`、`tests/contract tests/replay`。完整集成进程仍在运行，包括固定的10证券／252交易日容量与跟踪内存预算；目前不宣称完整后端通过。
+
+单元回归首次为 **3653 项通过／6 项失败**，修正夹具断言过程中第二次为 **3657 项通过／2 项失败**。四个文件的修复将默认／当前请求的准确版本期望更新为获批的 `plan-extract-v10`，仍检查旧配置标签分派到当前版本，并逐条核对紧凑来源的准确 ID／起止位置／摘录及空输出占位语义。不改变应用行为、限制或授权负向断言。最终单元运行：**3659 项通过、2 条警告，46.26 秒**。契约／重放目录：**13 项通过、4 项联网测试未选中，8.44 秒**。完整集成运行还加载了两条旧提取版本期望；已更新与生产序列化完全匹配的夹具和适配器断言，两个完整相关模块共 **52 项通过，2.63 秒**。
+
+首次完整前端测试与生产构建重叠，已安装分发目录不可变测试检测到并发写入（**1258 项通过／1 项失败**）。这是执行编排错误，没有因此更改断言。独立重跑：**89 个文件／1259 项通过，9.13 秒**；生产构建与类型检查通过。V10 重跑：**9 条真实浏览器场景通过，1.6m**；已检查并保留最终批准状态截图（[WEAK_MINIMUM](assets/2026-10-24-market-linkage-p1-weak.png)、[BROKEN_STRONG](assets/2026-10-24-market-linkage-p1-broken.png)）。数量、证据、原到期时间及独立模拟／撤销操作清晰，四种视口检查通过。本地 Windows 服务在连接清理时记录了一条 `ConnectionResetError`；浏览器控制台／请求断言及全部场景通过，未放宽生产异常处理来隐藏它。
+
+原始证据：[初次收集](assets/2026-10-24-market-linkage-p1-full.log)、[单元验收](assets/2026-10-24-market-linkage-p1-unit-accepted.log)、[集成进度](assets/2026-10-24-market-linkage-p1-integration.log)、[契约／重放](assets/2026-10-24-market-linkage-p1-other.log)、[前端](assets/2026-10-24-market-linkage-p1-web-final.log)、[构建](assets/2026-10-24-market-linkage-p1-build.log)、[浏览器](assets/2026-10-24-market-linkage-p1-browser-final.log)。等待完整后端验收期间已准备 T21a/b 文档切片；T19–T21 及 C07 尚未验收。
+
+## MLV1-20 — 最终回归修复
+
+完整现行计划／来源审核 API 模块发现另六条过时的当前请求版本断言。保留明确的历史配置夹具；当前响应／分派预期改为 `plan-extract-v10`。两个完整模块 **13 项通过，5.82 秒**（[红灯](assets/2026-10-24-market-linkage-p1-api-fixtures-red.log)、[绿灯](assets/2026-10-24-market-linkage-p1-api-fixtures-final.log)）。已启动的集成进程此前载入旧夹具，因此最终失败列表仍须与这些完整模块复跑结果逐一核对。
+
+增加两条阻断原因文案检查后，前端 **1261 项**、类型检查及构建通过。随后浏览器出现 **8 项通过／1 项超时**（[日志](assets/2026-10-24-market-linkage-p1-browser-accepted.log)）：初始异步仓位刷新替换了内容相同的绑定对象，清空加载期间已填写的数量。修复前的确定性表单测试复现已填 `100` 丢失。`PlanOperationForm` 现仅在结构定义身份与全部绑定字段均未变化时保留输入；权限绑定变化仍清空并阻止提交。未放宽超时或验收断言。该两文件修复后的完整前端：**89 个文件／1262 项通过，9.22 秒**（[日志](assets/2026-10-24-market-linkage-p1-web-final-accepted.log)）；类型检查及随后生产构建通过（[构建](assets/2026-10-24-market-linkage-p1-build-final-accepted.log)）。最终浏览器复跑：**9 项通过，1.5m**（[日志](assets/2026-10-24-market-linkage-p1-browser-final-accepted.log)）。两套 API 生成检查及完整 Ruff 通过。本检查点仍等待完整后端验收。
+
+最终输入复查发现，重新封装候选后可以更改 `minimum` 或 `increment`，却不改变另行保留的原始数量规则证据。运行时映射已拒绝这种不一致，但导入入口未立即拒绝。补充两字段绑定检查前，四条独立反例失败。完整七模块 C06 复跑涵盖真实冻结工作进程、两条路径及旧版本兼容，现 **92 项通过，1 条既有警告，186.58 秒**（[日志](assets/2026-10-24-market-linkage-p1-replay-final-accepted.log)）。相比之前全量收集新增四项，最终覆盖统计须单独计入。未改变公开结构、数量规则或运行时授权策略。
+
+## MLV1-21 — 显式操作者审计及最终契约复验
+
+规格对照发现，既有转换路径区分了明确决定和系统效果，但没有持久保存要求的操作者类别。六条用例因缺少 `actor_kind` 失败；禁止客户端声明操作者的测试原已通过。事件模型现在要求服务端产生且纳入哈希的类别，拒绝缺失／未知／重新封装后不一致的类别，保留既有严格命令输入。不据此推断账户身份认证或自动批准。MLC1-07 记录准确事件编码及独立研究来源边界，两套生成配置同步更新。
+
+完整存储／授权／并发／模拟／运行／API／回放／工作进程兼容测试：**152 项通过，1 条既有警告，216.13 秒**（[日志](assets/2026-10-24-market-linkage-p1-authority-final-accepted.log)）。包含此前集成收集没有的七条审计测试及四条数量规则测试。最终后端单元复跑：**3659 项通过，2 条警告，49.64 秒**（[日志](assets/2026-10-24-market-linkage-p1-unit-release.log)）。最终前端：**89 个文件／1262 项通过，9.66 秒**（[日志](assets/2026-10-24-market-linkage-p1-web-release.log)）；类型检查及顺序构建通过（[构建](assets/2026-10-24-market-linkage-p1-build-release.log)）；**9 条浏览器场景通过，1.4m**（[日志](assets/2026-10-24-market-linkage-p1-browser-release.log)）。两套生成检查、完整 Ruff 及空白检查通过。
+
+长时集成进程在生成文件变化前已载入修复前模型，因此其两项生成服务对比使用了不一致的内存／磁盘版本。重新启动并完整运行数据商序列化、数据商分派、现行计划 API、显式审核 API、生成服务契约模块，**71 项通过，1 条警告，16.29 秒**（[日志](assets/2026-10-24-market-linkage-p1-fixtures-release.log)）。该结果也覆盖前述过时 v10 断言，不代表仍在运行的原集成进程已正常通过；C07 前仍须核对其最终失败／跳过清单。
+
+## MLV1-22 — 能力及迁移回归修复
+
+完整集成运行发现旧 `[5,6]` 能力断言及旧迁移头版本断言。独立复现为 **3 项失败／5 项通过**（[红灯](assets/2026-10-24-market-linkage-p1-restart-red.log)）；两个完整模块现 **8 项通过，13.21 秒**（[绿灯](assets/2026-10-24-market-linkage-p1-restart-release.log)）。仓库模块随后复现 **13 项失败／96 项通过**，均为仍期待 `0025_index_close_display` 的精确头版本比较（[红灯](assets/2026-10-24-market-linkage-p1-migration-red.log)）。现要求 `0026_market_exceptions`；未删除数据行保留、回退、权限或完整性断言。
+
+独立运行历史批次索引模块还复现了导入顺序缺陷：如果其他测试没有先导入 `DailyRecord`，Alembic 元数据就未注册该表。迁移环境现显式加载该映射模型并使用其共享元数据。此前完整收集掩盖了该问题，保留独立测试。仓库／批次索引／例外存储／进程重启联合回归：**127 项通过，5 条警告，22.28 秒**（[日志](assets/2026-10-24-market-linkage-p1-migration-release.log)）。独立批次索引模块：**4 项通过，2 条警告，0.95 秒**（[日志](assets/2026-10-24-market-linkage-p1-lot-release.log)）。SQLite 无法为自动元数据对比反射表达式唯一命令索引，既有显式重复命令及并发测试继续验证其约束有效；未抑制警告。完整 Ruff 通过。
+
+原集成进程的批准重启测试还遇到旧操作者结构父进程与当前结构子进程混用。MLV1-21 的最终 152 项授权运行已用两端一致的当前事件契约通过整个并发模块。最终核对仍等待原集成进程结束。
+
+## MLV1-23 — 最终验收（MLP1-T19–MLP1-T21 / MLP1-C07）
+
+完整集成运行已结束：**4606 项通过、35 项失败、1 项跳过、5 条警告，4508.52 秒**。全部 35 项失败均已在[机器可读核对清单](assets/2026-10-24-market-linkage-p1-reconciliation.json)中对应到完整模块复验通过记录。原始运行没有以全绿结束。最终覆盖合并其未受影响的通过项、修复后的完整模块及新增十一条数量规则／操作者测试，不将其表述为一次从头到尾全绿的运行。
+
+最后检查：OpenAPI 模块复现 **2 项失败／12 项通过**，原因为遗漏 P1 批准／哈希记录及测试白名单中的三个已批准路径。补充准确的已批准端点及双语 U-MLP1 批准记录，保留集合精确匹配和错误结构断言后，**14 项通过，17.79 秒**（[日志](assets/2026-10-24-market-linkage-p1-openapi-release.log)）。完整连续监测契约模块 **13 项通过，8.88 秒**（[日志](assets/2026-10-24-market-linkage-p1-loop-contract-release.log)）。最后的诊断失败使用了已导入的旧 v9 夹具；当前夹具下整个模块 **4 项通过，3.13 秒**（[日志](assets/2026-10-24-market-linkage-p1-diagnostic-release.log)），该诊断问题无需再修改应用。
+
+| 最终检查 | 已验收证据 |
+| --- | --- |
+| 后端单元 | **3659 项通过**，2 条警告，44.16 秒；[最终日志](assets/2026-10-24-market-linkage-p1-backend-unit-final.log) |
+| 后端集成 | 完整运行／复验核对后，**4652 个独立用例通过**，保留 1 项 Windows 跳过；包含最终 152 项授权运行中通过的 11 条新增用例 |
+| 契约与重放目录 | **13 项通过**，4 项 live 测试未选择，7.87 秒；[最终日志](assets/2026-10-24-market-linkage-p1-backend-other-final.log) |
+| 非 live 后端总计 | **8324 个独立用例通过**，1 项平台跳过；4 条 live 用例不在此次本地范围 |
+| 前端 | **89 个文件／1262 项通过**，9.66 秒；类型检查与生产构建通过，见 MLV1-21 最终日志 |
+| 浏览器 | **9 项通过**，1.4m；覆盖两条路径、旧联动／独立提醒流程及四种宽度，已检查最终截图 |
+| 契约与质量 | 两套生成产物一致；完整 Ruff 及空白检查通过；最终哈希记录于 U-MLP1 及核对清单 |
+
+平台跳过为 `test_cursor_key_rejects_foreign_posix_owner_before_use`，既有条件为 Windows，原因为 `requires POSIX ownership semantics`。没有新增跳过、xfail、弱化断言或放宽超时／容量／载荷预算。十证券／252 交易日容量、追踪内存和十万条导出预算通过。SQLite 表达式索引反射及既有 Starlette 诊断保留可见；显式唯一性／并发测试验证无法反射的索引确实生效。
+
+| 标准 | 实际证据／检查点 | 结果 |
+| --- | --- | --- |
+| MLP1-A01 | [契约用例](../../tests/unit/test_market_exception_contract.py)、[旧 API 精确投影](../../tests/integration/test_market_linkage_api.py)；MLV1-03/12/18 | PASS |
+| MLP1-A02 | [策略矩阵](../../tests/unit/test_market_exception_policy.py)；MLV1-04 | PASS |
+| MLP1-A03 | [数量独立预期](../../tests/unit/test_market_exception_quantity.py)、MLP1-Q01–MLP1-Q12；MLV1-04/08/11 | PASS |
+| MLP1-A04 | [来源审核](../../tests/integration/test_market_exception_review.py)、[更新](../../tests/integration/test_market_exception_updates.py)；MLV1-05/06/14 | PASS |
+| MLP1-A05 | [明确权限](../../tests/integration/test_market_exception_authorization.py)、[API](../../tests/integration/test_market_exception_api.py)；MLV1-08/12/21 | PASS |
+| MLP1-A06 | [生命周期／运行](../../tests/integration/test_market_exception_runtime.py)；MLV1-09/10/18/21 | PASS |
+| MLP1-A07 | [并发／重启](../../tests/integration/test_market_exception_concurrency.py)、[存储](../../tests/integration/test_market_exception_storage.py)；MLV1-07/09/11/21/22 | PASS |
+| MLP1-A08 | [实际使用证据／读取／发送保护](../../tests/integration/test_market_exception_runtime.py)；MLV1-10/18/21 | PASS |
+| MLP1-A09 | [整笔模拟](../../tests/integration/test_market_exception_simulation.py)、[冻结工作进程](../../tests/integration/test_market_exception_frozen_workers.py)；MLV1-11/18/21 | PASS |
+| MLP1-A10 | [API 快照／错误契约](../../tests/integration/test_openapi_snapshot.py)、[旧投影](../../tests/integration/test_market_linkage_api.py)；MLV1-12/21/23 | PASS |
+| MLP1-A11 | [浏览器例外流程](../../web/tests/e2e/market-exceptions.spec.ts)、[旧联动流程](../../web/tests/e2e/market-linkage.spec.ts)、[重试／阻断 UI](../../web/tests/unit/marketExceptionRuntime.spec.ts)；MLV1-16/20/21 | PASS |
+| MLP1-A12 | [回放变异](../../tests/integration/test_market_exception_replay_mutations.py)、[实际冻结工作进程](../../tests/integration/test_market_exception_frozen_workers.py)；MLV1-18/20/21 | PASS |
+| MLP1-A13 | [完整运行／复验核对](assets/2026-10-24-market-linkage-p1-reconciliation.json)及上述最终检查表 | PASS |
+| MLP1-A14 | [操作指南](../operations/market-linkage-p1.zh-CN.md)、[规格](../specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md)、双语任务／README／能力图／索引及本报告；V16 | PASS |
+
+最终差异复查覆盖权限／正确性、可维护性、性能、恢复／错误行为及安全边界。双语章节 ID、全部 28 个任务／检查点勾选、十四项标准、数字规则、枚举／API／JSON 标识、生成哈希及本地链接已核对。仅有代码跨度内的公式文字翻译，表达同一整数集合交集。没有改变依赖或策略决策。T21a–T21d 及 C07 通过。两条例外均要求独立明确人工批准和整笔模拟；冻结回放保留来源及明确操作。未迁移用户数据库，未调用真实数据商／发送真实通知或订单，未推送或部署。真实服务可用性仍不在本地验收范围内。

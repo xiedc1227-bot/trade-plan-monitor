@@ -1,0 +1,142 @@
+F......FFFF.F                                                            [100%]
+================================== FAILURES ===================================
+_______ test_formal_extraction_edit_review_activate_and_restart_binding _______
+tests\integration\test_current_plan_api.py:166: in test_formal_extraction_edit_review_activate_and_restart_binding
+    assert result["status"] == "SUCCEEDED"
+E   AssertionError: assert 'PROVIDER_ERROR' == 'SUCCEEDED'
+E     
+E     - SUCCEEDED
+E     + PROVIDER_ERROR
+_ test_successful_extraction_provenance_survives_lifecycle_restart_before_save _
+tests\integration\test_current_plan_api.py:353: in test_successful_extraction_provenance_survives_lifecycle_restart_before_save
+    assert result["status"] == "SUCCEEDED"
+E   AssertionError: assert 'PROVIDER_ERROR' == 'SUCCEEDED'
+E     
+E     - SUCCEEDED
+E     + PROVIDER_ERROR
+_ test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v4] _
+tests\integration\test_explicit_plan_review_api.py:94: in test_mapping_extraction_save_review_and_public_activation_are_server_bound
+    result = record_current(app.state.plan_web_lifecycle, draft, config_label=config_label)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:46: in extract_plan
+    assert request.config.prompt_version == "plan-extract-v9"
+E   AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E     
+E     - plan-extract-v9
+E     ?               ^
+E     + plan-extract-v10
+E     ?               ^^
+_ test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v5] _
+tests\integration\test_explicit_plan_review_api.py:94: in test_mapping_extraction_save_review_and_public_activation_are_server_bound
+    result = record_current(app.state.plan_web_lifecycle, draft, config_label=config_label)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:46: in extract_plan
+    assert request.config.prompt_version == "plan-extract-v9"
+E   AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E     
+E     - plan-extract-v9
+E     ?               ^
+E     + plan-extract-v10
+E     ?               ^^
+_ test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v6] _
+tests\integration\test_explicit_plan_review_api.py:94: in test_mapping_extraction_save_review_and_public_activation_are_server_bound
+    result = record_current(app.state.plan_web_lifecycle, draft, config_label=config_label)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:46: in extract_plan
+    assert request.config.prompt_version == "plan-extract-v9"
+E   AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E     
+E     - plan-extract-v9
+E     ?               ^
+E     + plan-extract-v10
+E     ?               ^^
+_ test_original_source_partial_save_current_edit_and_semantic_review_stay_bound _
+tests\integration\test_explicit_plan_review_api.py:194: in test_original_source_partial_save_current_edit_and_semantic_review_stay_bound
+    result = record_current(app.state.plan_web_lifecycle, partial, source=_ORIGINAL_SOURCE)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_explicit_plan_review_api.py:46: in extract_plan
+    assert request.config.prompt_version == "plan-extract-v9"
+E   AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E     
+E     - plan-extract-v9
+E     ?               ^
+E     + plan-extract-v10
+E     ?               ^^
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_current_plan_api.py::test_formal_extraction_edit_review_activate_and_restart_binding
+FAILED tests/integration/test_current_plan_api.py::test_successful_extraction_provenance_survives_lifecycle_restart_before_save
+FAILED tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v4]
+FAILED tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v5]
+FAILED tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v6]
+FAILED tests/integration/test_explicit_plan_review_api.py::test_original_source_partial_save_current_edit_and_semantic_review_stay_bound
+6 failed, 7 passed, 1 warning in 4.77s

@@ -1,0 +1,189 @@
+{
+  "status": "PASS_AFTER_REPAIRS_AND_COMPLETE_MODULE_RERUNS",
+  "original_integration": {
+    "log": "docs/verification/assets/2026-10-24-market-linkage-p1-integration.log",
+    "collected": 4642,
+    "passed": 4606,
+    "failed": 35,
+    "skipped": 1,
+    "warnings": 5,
+    "seconds": 4508.52
+  },
+  "failure_reconciliation": [
+    {
+      "node_id": "tests/integration/test_ai_browser_contract.py::test_browser_partial_extraction_fixture_matches_production_serialization",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_ai_provider_contract.py::test_extraction_service_uses_real_adapter_but_returns_only_an_unactivated_draft",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[compatibility-v1]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[canonical-v2]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_current_plan_api.py::test_formal_extraction_edit_review_activate_and_restart_binding",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_current_plan_api.py::test_successful_extraction_provenance_survives_lifecycle_restart_before_save",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v4]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v5]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v6]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_explicit_plan_review_api.py::test_original_source_partial_save_current_edit_and_semantic_review_stay_bound",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-fixtures-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-restart-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_index_permission_process_restart.py::test_migrated_index_permissions_recheck_independently_across_processes[idx_mins]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_index_permission_process_restart.py::test_migrated_index_permissions_recheck_independently_across_processes[rt_idx_min_daily]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_lot_history_indexes.py::test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_market_exception_concurrency.py::test_fresh_process_preserves_approved_evidence",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-authority-final-accepted.log"
+    },
+    {
+      "node_id": "tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-loop-contract-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[canonical-v2]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-loop-contract-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_openapi_snapshot.py::test_openapi_snapshot_is_deterministic_canonical_and_current",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-openapi-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-openapi-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-openapi-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_openapi_snapshot.py::test_typescript_contract_is_generated_from_the_snapshot",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-openapi-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_plan_extraction_diagnostics.py::test_simulated_diagnostic_io_failure_preserves_active_plan_and_extraction_outcomes",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-diagnostic-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_sqlite_migration_upgrades_empty_database_and_is_idempotent",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_plan_web_state_migration_refuses_lossy_downgrade_atomically[review]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_plan_web_state_migration_refuses_lossy_downgrade_atomically[deactivation]",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_alert_sequence_migration_backfills_existing_high_water",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_monitor_event_migration_renames_high_water_and_backfills_alerts",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_market_index_event_constraint_migration_preserves_the_existing_ledger",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_market_index_event_constraint_migration_refuses_lossy_downgrade",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_monitor_event_migration_refuses_lossy_non_alert_downgrade",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_evaluation_kind_migration_preserves_populated_0004_intraday_rows",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_evaluation_kind_migration_refuses_lossy_official_close_downgrade",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_nulls",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    },
+    {
+      "node_id": "tests/integration/test_sqlite_repositories.py::test_explicit_review_migration_refuses_to_discard_bound_review_evidence",
+      "complete_module_rerun_log": "docs/verification/assets/2026-10-24-market-linkage-p1-migration-release.log"
+    }
+  ],
+  "added_cases": {
+    "node_ids": [
+      "tests/integration/test_market_exception_replay_mutations.py::test_resealed_frozen_binding_rejects_grid_field_mismatch[WEAK_MINIMUM-minimum]",
+      "tests/integration/test_market_exception_replay_mutations.py::test_resealed_frozen_binding_rejects_grid_field_mismatch[WEAK_MINIMUM-increment]",
+      "tests/integration/test_market_exception_replay_mutations.py::test_resealed_frozen_binding_rejects_grid_field_mismatch[BROKEN_STRONG-minimum]",
+      "tests/integration/test_market_exception_replay_mutations.py::test_resealed_frozen_binding_rejects_grid_field_mismatch[BROKEN_STRONG-increment]",
+      "tests/integration/test_market_exception_storage.py::test_event_actor_is_explicit_hashed_and_transition_bound[APPROVED-LOCAL_USER]",
+      "tests/integration/test_market_exception_storage.py::test_event_actor_is_explicit_hashed_and_transition_bound[REJECTED-LOCAL_USER]",
+      "tests/integration/test_market_exception_storage.py::test_event_actor_is_explicit_hashed_and_transition_bound[REVOKED-LOCAL_USER]",
+      "tests/integration/test_market_exception_storage.py::test_event_actor_is_explicit_hashed_and_transition_bound[EXPIRED-SYSTEM]",
+      "tests/integration/test_market_exception_storage.py::test_event_actor_is_explicit_hashed_and_transition_bound[INVALIDATED-SYSTEM]",
+      "tests/integration/test_market_exception_storage.py::test_event_actor_is_explicit_hashed_and_transition_bound[CONSUMED-SYSTEM]",
+      "tests/integration/test_market_exception_storage.py::test_client_commands_cannot_claim_actor_identity"
+    ],
+    "passing_log": "docs/verification/assets/2026-10-24-market-linkage-p1-authority-final-accepted.log"
+  },
+  "final_unique_non_live_coverage": {
+    "unit_passed": 3659,
+    "integration_passed": 4652,
+    "integration_skipped": 1,
+    "contract_and_replay_passed": 13,
+    "total_passed": 8324,
+    "live_deselected": 4
+  },
+  "platform_skip": {
+    "node_id": "tests/integration/test_backtest_production_composition.py::test_cursor_key_rejects_foreign_posix_owner_before_use",
+    "reason": "requires POSIX ownership semantics; original Windows skip retained"
+  },
+  "generated_sha256": {
+    "openapi.json": "8d0a3bf2cad7272b41cb6d0e644b12593f4a422b738f0b7492c521e8742a6d82",
+    "openapi.runtime-status.json": "5ee3f6311aa13d37e615438d25d741a8568811eb609eca3caa830659236ba9b0",
+    "web/src/api/generated.ts": "0db9c542dc72d30f0fccb29902c8a7670a3c9cee3bf0da47b23cc41df3f3f468",
+    "web/src/api/generated-runtime-status.ts": "5a95e2d2311fa6fc505f962c8f5c0ddbf1dc4c807a7d1895293261ced343fc5a"
+  },
+  "interpretation": "Counts combine the completed original run, complete affected-module reruns and 11 new passing cases; the original invocation did not exit green. No test or budget was removed."
+}

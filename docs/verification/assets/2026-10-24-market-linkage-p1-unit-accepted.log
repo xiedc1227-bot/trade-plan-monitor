@@ -1,0 +1,78 @@
+........................................................................ [  1%]
+........................................................................ [  3%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 98%]
+...........................................................              [100%]
+============================== warnings summary ===============================
+tests/unit/test_native_artifact_audit.py::test_reject_invalid_wheel[duplicate]
+  C:\Program Files\Python314\Lib\zipfile\__init__.py:1730: UserWarning: Duplicate name: 'pkg/core.pyd'
+    return self._open_to_write(zinfo, force_zip64=force_zip64)
+
+tests/unit/test_persistent_rule_validity.py::test_later_day_after_old_deadline_needs_independent_signal_and_keeps_expiry
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================ slowest 15 durations =============================
+3.62s call     tests/unit/test_single_canonical_verification.py::test_larger_payload_keeps_full_hash_and_literal_bytes[near-16-MiB]
+2.26s call     tests/unit/test_request_recovery_admission.py::test_permission_reservation_survives_independent_controlled_process_restart
+1.74s call     tests/unit/test_bounded_live_acceptance.py::test_isolated_app_constructs_without_database_or_network
+1.11s call     tests/unit/test_monitor_runtime.py::test_recovery_timeout_keeps_late_physical_call_serial_before_next_symbol
+1.01s call     tests/unit/test_ai_timeout_diagnostics.py::test_local_deadline_is_distinct_from_httpx_timeout_subtypes
+0.59s call     tests/unit/test_unified_update_wire.py::test_actual_update_merges_repeated_evidence_for_the_same_operation
+0.50s call     tests/unit/test_preparation_source_resolution.py::test_explicitly_inactive_low_buy_zones_do_not_request_numeric_boundaries[4]
+0.48s call     tests/unit/test_unified_update_wire.py::test_restatements_cannot_silently_preserve_an_unmentioned_changed_maximum
+0.48s call     tests/unit/test_preparation_source_resolution.py::test_plain_section_headings_are_retained_without_becoming_confirmation_requests[4]
+0.47s call     tests/unit/test_preparation_source_resolution.py::test_source_interpretation_does_not_self_confirm_unresolved_market_conditions[4]
+0.47s call     tests/unit/test_unified_update_wire.py::test_actual_successor_restatements_and_new_tranche_do_not_need_internal_rule_names
+0.46s call     tests/unit/test_preparation_source_resolution.py::test_explicit_repair_threshold_is_not_represented_as_a_new_position_stop
+0.45s call     tests/unit/test_source_condition_clarity.py::test_explicit_best_preference_does_not_become_hard_buy_prerequisite
+0.38s call     tests/unit/test_config.py::test_cli_import_does_not_start_runtime_work
+0.38s call     tests/unit/test_config.py::test_module_help_lists_every_declared_command
+3659 passed, 2 warnings in 46.26s

@@ -1,0 +1,48 @@
+F.....FF                                                                 [100%]
+================================== FAILURES ===================================
+__________ test_plan_capability_reports_current_condition_activation __________
+tests\integration\test_explicit_transport.py:176: in test_plan_capability_reports_current_condition_activation
+    assert capability.json() == {
+E   AssertionError: assert {'schemaVersi...5, 6, 7], ...} == {'supportedSc...ON_PLAN', ...}
+E     
+E     Omitting 8 identical items, use -vv to show
+E     Differing items:
+E     {'supportedSchemaVersions': [5, 6, 7]} != {'supportedSchemaVersions': [5, 6]}
+E     Left contains 1 more item:
+E     {'exceptionExecutionVersion': 'condition-plan-v3'}
+E     Use -v to get more diff
+_ test_migrated_index_permissions_recheck_independently_across_processes[idx_mins] _
+tests\integration\test_index_permission_process_restart.py:244: in test_migrated_index_permissions_recheck_independently_across_processes
+    assert version.scalar_one() == "0025_index_close_display"
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+---------------------------- Captured stderr call -----------------------------
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+
+  from starlette.testclient import TestClient as TestClient  # noqa
+
+_ test_migrated_index_permissions_recheck_independently_across_processes[rt_idx_min_daily] _
+tests\integration\test_index_permission_process_restart.py:244: in test_migrated_index_permissions_recheck_independently_across_processes
+    assert version.scalar_one() == "0025_index_close_display"
+E   AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E     
+E     - 0025_index_close_display
+E     + 0026_market_exceptions
+---------------------------- Captured stderr call -----------------------------
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+
+  from starlette.testclient import TestClient as TestClient  # noqa
+
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation
+FAILED tests/integration/test_index_permission_process_restart.py::test_migrated_index_permissions_recheck_independently_across_processes[idx_mins]
+FAILED tests/integration/test_index_permission_process_restart.py::test_migrated_index_permissions_recheck_independently_across_processes[rt_idx_min_daily]
+3 failed, 5 passed, 1 warning in 8.47s

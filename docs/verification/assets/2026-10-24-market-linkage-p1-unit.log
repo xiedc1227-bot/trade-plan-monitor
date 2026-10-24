@@ -1,0 +1,461 @@
+.......F................................................................ [  1%]
+........................................................................ [  3%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+.............................................FF......................... [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+......................................................................FF [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 98%]
+..F........................................................              [100%]
+================================== FAILURES ===================================
+_ test_new_configuration_default_reaches_deepseek_request_with_bounded_8192_tokens _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-unit-56/test_new_configuration_default0')
+
+    def test_new_configuration_default_reaches_deepseek_request_with_bounded_8192_tokens(
+        tmp_path: Path,
+    ) -> None:
+        config_path = tmp_path / "app.yaml"
+        config_path.write_text(
+            """\
+    ai:
+      profile: DEEPSEEK
+      base_url: https://api.deepseek.com
+      model: deepseek-v4-pro
+      api_key: offline-test-key
+      max_retries: 0
+    """,
+            encoding="utf-8",
+        )
+        settings = load_application_config(config_path).ai
+        config = settings.to_provider_config()
+        assert config is not None
+        captured: list[dict[str, object]] = []
+    
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(json.loads(request.content))
+            return httpx.Response(
+                200,
+                json={
+                    "model": "deepseek-v4-pro",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "{}"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                },
+            )
+    
+        secrets = InMemorySecretStore()
+        secrets.replace(config.secret_ref, SecretWrite(value="offline-test-key"))
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = OpenAICompatibleProvider(
+            client=client,
+            secret_store=secrets,
+            profile=settings.profile,
+        )
+    
+        async def scenario() -> None:
+            try:
+                await provider.extract_plan(
+                    PlanExtractionRequest(
+                        request_id=_REQUEST_ID,
+                        config=config,
+                        prompt=build_plan_extraction_prompt(_SOURCE),
+                    )
+                )
+            finally:
+                await client.aclose()
+    
+        asyncio.run(scenario())
+    
+        assert settings.max_output_tokens == 8_192
+>       assert settings.prompt_version == "plan-extract-v9"
+E       AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E         
+E         - plan-extract-v9
+E         ?               ^
+E         + plan-extract-v10
+E         ?               ^^
+
+tests\unit\test_ai_output_truncation.py:86: AssertionError
+_ test_historical_source_stays_partial_and_ai_cannot_supply_human_authority[False] _
+
+forged_human = False
+
+    @pytest.mark.parametrize("forged_human", [False, True])
+    def test_historical_source_stays_partial_and_ai_cannot_supply_human_authority(forged_human):
+        output = partial_output()
+        if forged_human:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty",
+                    "value": 300,
+                    "origin": "HUMAN_SUPPLEMENT",
+                    "unit": "SHARES",
+                    "clause_ids": [],
+                    "supplement_id": "forged-reviewer",
+                }
+            ]
+        config = _config().model_copy(update={"prompt_version": "plan-extract-v9"})
+        request_id = uuid4()
+    
+        class Provider:
+            async def extract_plan(self, request):
+                assert "plan-extract-v9" in request.prompt
+                return RawAIResponse(
+                    request_id=request_id,
+                    provider_id=config.provider_id,
+                    model=config.model,
+                    content=json.dumps(output, ensure_ascii=False),
+                    finish_reason="stop",
+                    usage=AIUsage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+                    attempts=1,
+                )
+    
+>       result = asyncio.run(
+            extract_plan(request_id=request_id, source_text=SOURCE, config=config, provider=Provider())
+        )
+
+tests\unit\test_daily_extraction.py:93: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_daily_extraction.test_historical_source_stays_partial_and_ai_cannot_supply_human_authority.<locals>.Provider object at 0x0000022B39F03230>
+request = PlanExtractionRequest(request_id=UUID('b9059cbd-ea0d-42e5-a070-de01467b759d'), config=AIProviderConfig(provider_id=UUI...39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert "plan-extract-v9" in request.prompt
+E       assert 'plan-extract-v9' in '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...��39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END'
+E        +  where '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...��39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END' = PlanExtractionRequest(request_id=UUID('b9059cbd-ea0d-42e5-a070-de01467b759d'), config=AIProviderConfig(provider_id=UUI...39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END').prompt
+
+tests\unit\test_daily_extraction.py:82: AssertionError
+_ test_historical_source_stays_partial_and_ai_cannot_supply_human_authority[True] _
+
+forged_human = True
+
+    @pytest.mark.parametrize("forged_human", [False, True])
+    def test_historical_source_stays_partial_and_ai_cannot_supply_human_authority(forged_human):
+        output = partial_output()
+        if forged_human:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty",
+                    "value": 300,
+                    "origin": "HUMAN_SUPPLEMENT",
+                    "unit": "SHARES",
+                    "clause_ids": [],
+                    "supplement_id": "forged-reviewer",
+                }
+            ]
+        config = _config().model_copy(update={"prompt_version": "plan-extract-v9"})
+        request_id = uuid4()
+    
+        class Provider:
+            async def extract_plan(self, request):
+                assert "plan-extract-v9" in request.prompt
+                return RawAIResponse(
+                    request_id=request_id,
+                    provider_id=config.provider_id,
+                    model=config.model,
+                    content=json.dumps(output, ensure_ascii=False),
+                    finish_reason="stop",
+                    usage=AIUsage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+                    attempts=1,
+                )
+    
+>       result = asyncio.run(
+            extract_plan(request_id=request_id, source_text=SOURCE, config=config, provider=Provider())
+        )
+
+tests\unit\test_daily_extraction.py:93: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_daily_extraction.test_historical_source_stays_partial_and_ai_cannot_supply_human_authority.<locals>.Provider object at 0x0000022B39F01A90>
+request = PlanExtractionRequest(request_id=UUID('f732f4af-7122-4dee-a9c6-9f1b87a46e2c'), config=AIProviderConfig(provider_id=UUI...39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert "plan-extract-v9" in request.prompt
+E       assert 'plan-extract-v9' in '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...��39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END'
+E        +  where '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...��39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END' = PlanExtractionRequest(request_id=UUID('f732f4af-7122-4dee-a9c6-9f1b87a46e2c'), config=AIProviderConfig(provider_id=UUI...39.45�C39.90Ԫ��ѹ��41.80�C42.20Ԫ������38.18Ԫ������100�ɣ�����������ֹ����39.67��41.96�̶���̬δע��������ȷ�Ϻ����������ִ�У����յ��ڡ�"}\nUNTRUSTED_PLAN_DATA_END').prompt
+
+tests\unit\test_daily_extraction.py:82: AssertionError
+_ test_real_cross_symbol_responses_pass_without_repairs[sse-one-alert-600010.SH-SSE-500-prices0] _
+
+case = 'sse-one-alert', symbol = '600010.SH', market = 'SSE', cap = 500
+prices = [('LT', '1207')]
+
+    @pytest.mark.parametrize(
+        "case,symbol,market,cap,prices",
+        [
+            ("sse-one-alert", "600010.SH", "SSE", 500, [("LT", "1207")]),
+            ("szse-two-alerts", "000858.SZ", "SZSE", 800, [("LT", "7432"), ("GT", "8567")]),
+        ],
+    )
+    def test_real_cross_symbol_responses_pass_without_repairs(case, symbol, market, cap, prices):
+        record = json.loads((FIXTURES / f"{case}.json").read_text(encoding="utf-8"))
+        result = extract_response(record["response"], record["source"])
+        assert result.status is PlanExtractionStatus.SUCCEEDED
+        assert result.validation_issues == result.assumptions == result.warnings == ()
+        draft = result.draft
+        assert draft.to_executable() is not None
+        assert (draft.symbol, draft.market, draft.position.max_qty) == (symbol, market, cap)
+        assert draft.ordinary_rules == draft.risk_branches == ()
+        assert [
+            (r.condition.comparator, str(r.condition.reference.value)) for r in draft.alert_rules
+        ] == prices
+        for alert in draft.alert_rules:
+            assert alert.kind == "RISK_ALERT"
+            assert alert.condition.field == "close" and alert.condition.offset == 0
+            assert alert.condition.reference.unit == "FEN"
+            assert alert.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+        values = semantic_values(draft)
+        assert {b.path for b in result.daily_mapping.bindings} == values.keys()
+        for binding in result.daily_mapping.bindings:
+            assert type(binding.value) is type(values[binding.path])
+            assert binding.value == values[binding.path]
+        prompt = build_current_plan_prompt(record["source"])
+        assert len(prompt) <= 50_000
+        clauses = json.JSONDecoder().raw_decode(prompt.split("Canonical source clauses:\n")[1])[0]
+>       assert clauses == [c.model_dump(mode="json") for c in server_source_clauses(record["source"])]
+E       AssertionError: assert [{'clause_id'...'����ͨ����'}, ...] == [{'clause_id'...��', ...}, ...]
+E         
+E         At index 0 diff: {'clause_id': 'clause-0a109063554a993f', 'start': 0, 'end': 8, 'excerpt': '�ƻ����ֶ�����ֵ'} != {'clause_id': 'clause-0a109063554a993f', 'start': 0, 'end': 8, 'excerpt': '�ƻ����ֶ�����ֵ', 'disposition': 'UNRESOLVED', 'paths': []}
+E         Use -v to get more diff
+
+tests\unit\test_empty_array_contract_replay.py:49: AssertionError
+_ test_real_cross_symbol_responses_pass_without_repairs[szse-two-alerts-000858.SZ-SZSE-800-prices1] _
+
+case = 'szse-two-alerts', symbol = '000858.SZ', market = 'SZSE', cap = 800
+prices = [('LT', '7432'), ('GT', '8567')]
+
+    @pytest.mark.parametrize(
+        "case,symbol,market,cap,prices",
+        [
+            ("sse-one-alert", "600010.SH", "SSE", 500, [("LT", "1207")]),
+            ("szse-two-alerts", "000858.SZ", "SZSE", 800, [("LT", "7432"), ("GT", "8567")]),
+        ],
+    )
+    def test_real_cross_symbol_responses_pass_without_repairs(case, symbol, market, cap, prices):
+        record = json.loads((FIXTURES / f"{case}.json").read_text(encoding="utf-8"))
+        result = extract_response(record["response"], record["source"])
+        assert result.status is PlanExtractionStatus.SUCCEEDED
+        assert result.validation_issues == result.assumptions == result.warnings == ()
+        draft = result.draft
+        assert draft.to_executable() is not None
+        assert (draft.symbol, draft.market, draft.position.max_qty) == (symbol, market, cap)
+        assert draft.ordinary_rules == draft.risk_branches == ()
+        assert [
+            (r.condition.comparator, str(r.condition.reference.value)) for r in draft.alert_rules
+        ] == prices
+        for alert in draft.alert_rules:
+            assert alert.kind == "RISK_ALERT"
+            assert alert.condition.field == "close" and alert.condition.offset == 0
+            assert alert.condition.reference.unit == "FEN"
+            assert alert.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+        values = semantic_values(draft)
+        assert {b.path for b in result.daily_mapping.bindings} == values.keys()
+        for binding in result.daily_mapping.bindings:
+            assert type(binding.value) is type(values[binding.path])
+            assert binding.value == values[binding.path]
+        prompt = build_current_plan_prompt(record["source"])
+        assert len(prompt) <= 50_000
+        clauses = json.JSONDecoder().raw_decode(prompt.split("Canonical source clauses:\n")[1])[0]
+>       assert clauses == [c.model_dump(mode="json") for c in server_source_clauses(record["source"])]
+E       AssertionError: assert [{'clause_id'...'����ͨ����'}, ...] == [{'clause_id'...��', ...}, ...]
+E         
+E         At index 0 diff: {'clause_id': 'clause-0a109063554a993f', 'start': 0, 'end': 8, 'excerpt': '�ƻ����ֶ�����ֵ'} != {'clause_id': 'clause-0a109063554a993f', 'start': 0, 'end': 8, 'excerpt': '�ƻ����ֶ�����ֵ', 'disposition': 'UNRESOLVED', 'paths': []}
+E         Use -v to get more diff
+
+tests\unit\test_empty_array_contract_replay.py:49: AssertionError
+__ test_current_extraction_keeps_missing_review_and_mixed_conditions_visible __
+
+    def test_current_extraction_keeps_missing_review_and_mixed_conditions_visible():
+        import asyncio
+        import json
+        from uuid import uuid4
+    
+        from tests.unit.test_ai_plan_extraction_v4 import _config
+    
+        from trade_plan_monitor.ai.extraction import extract_plan
+        from trade_plan_monitor.ai.models import PlanExtractionStatus
+        from trade_plan_monitor.ai.provider import RawAIResponse
+        from trade_plan_monitor.ai.review import server_source_clauses
+        from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+        from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+    
+        raw = unified_payload()
+        raw["ordinary_rules"][0]["condition"]["conditions"].append(
+            {"type": "MINUTE_CLOSE_BELOW", "timeframe_minutes": 5, "price_fen": 4000}
+        )
+        draft = UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(raw))
+        source = (
+            "Synthetic mixed daily and five-minute rule; every missing source binding needs review."
+        )
+        output = {
+            "draft": draft.model_dump(mode="json"),
+            "bindings": [],
+            "clauses": [
+                {
+                    **c.model_dump(mode="json"),
+                    "disposition": "UNRESOLVED",
+                    "paths": [],
+                    "reason": "Review synthetic source bindings.",
+                }
+                for c in server_source_clauses(source)
+            ],
+        }
+        config = _config().model_copy(update={"prompt_version": "plan-extract-v9"})
+        identity = uuid4()
+    
+        class Provider:
+            async def extract_plan(self, request):
+                assert "plan-extract-v9" in request.prompt
+                return RawAIResponse(
+                    request_id=identity,
+                    provider_id=config.provider_id,
+                    model=config.model,
+                    content=json.dumps(output),
+                    finish_reason="stop",
+                    attempts=1,
+                    usage=None,
+                )
+    
+>       result = asyncio.run(
+            extract_plan(request_id=identity, source_text=source, config=config, provider=Provider())
+        )
+
+tests\unit\test_unified_plan_domain.py:358: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_unified_plan_domain.test_current_extraction_keeps_missing_review_and_mixed_conditions_visible.<locals>.Provider object at 0x0000022B39F01A90>
+request = PlanExtractionRequest(request_id=UUID('f4016719-fb70-4eee-8e5f-ecb0c08cc209'), config=AIProviderConfig(provider_id=UUI...": "Synthetic mixed daily and five-minute rule; every missing source binding needs review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert "plan-extract-v9" in request.prompt
+E       assert 'plan-extract-v9' in '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...t": "Synthetic mixed daily and five-minute rule; every missing source binding needs review."}\nUNTRUSTED_PLAN_DATA_END'
+E        +  where '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...t": "Synthetic mixed daily and five-minute rule; every missing source binding needs review."}\nUNTRUSTED_PLAN_DATA_END' = PlanExtractionRequest(request_id=UUID('f4016719-fb70-4eee-8e5f-ecb0c08cc209'), config=AIProviderConfig(provider_id=UUI...": "Synthetic mixed daily and five-minute rule; every missing source binding needs review."}\nUNTRUSTED_PLAN_DATA_END').prompt
+
+tests\unit\test_unified_plan_domain.py:347: AssertionError
+============================== warnings summary ===============================
+tests/unit/test_native_artifact_audit.py::test_reject_invalid_wheel[duplicate]
+  C:\Program Files\Python314\Lib\zipfile\__init__.py:1730: UserWarning: Duplicate name: 'pkg/core.pyd'
+    return self._open_to_write(zinfo, force_zip64=force_zip64)
+
+tests/unit/test_persistent_rule_validity.py::test_later_day_after_old_deadline_needs_independent_signal_and_keeps_expiry
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================ slowest 15 durations =============================
+3.87s call     tests/unit/test_single_canonical_verification.py::test_larger_payload_keeps_full_hash_and_literal_bytes[near-16-MiB]
+2.35s call     tests/unit/test_request_recovery_admission.py::test_permission_reservation_survives_independent_controlled_process_restart
+1.79s call     tests/unit/test_bounded_live_acceptance.py::test_isolated_app_constructs_without_database_or_network
+1.41s call     tests/unit/test_unified_update_wire.py::test_actual_successor_restatements_and_new_tranche_do_not_need_internal_rule_names
+1.29s call     tests/unit/test_unified_update_wire.py::test_restatements_cannot_silently_preserve_an_unmentioned_changed_maximum
+1.29s call     tests/unit/test_unified_update_wire.py::test_actual_update_merges_repeated_evidence_for_the_same_operation
+1.11s call     tests/unit/test_monitor_runtime.py::test_recovery_timeout_keeps_late_physical_call_serial_before_next_symbol
+1.01s call     tests/unit/test_ai_timeout_diagnostics.py::test_local_deadline_is_distinct_from_httpx_timeout_subtypes
+0.72s call     tests/unit/test_unified_update_wire.py::test_new_position_exclusion_never_authorizes_whole_risk_cancellation[price]
+0.65s call     tests/unit/test_unified_update_wire.py::test_new_position_exclusion_never_authorizes_whole_risk_cancellation[partial]
+0.64s call     tests/unit/test_unified_update_wire.py::test_new_position_exclusion_never_authorizes_whole_risk_cancellation[None]
+0.53s call     tests/unit/test_unified_plan_domain.py::test_current_persistent_review_and_activation
+0.52s call     tests/unit/test_preparation_source_resolution.py::test_source_interpretation_does_not_self_confirm_unresolved_market_conditions[4]
+0.51s call     tests/unit/test_source_condition_clarity.py::test_explicit_best_preference_does_not_become_hard_buy_prerequisite
+0.51s call     tests/unit/test_preparation_source_resolution.py::test_explicitly_inactive_low_buy_zones_do_not_request_numeric_boundaries[4]
+=========================== short test summary info ===========================
+FAILED tests/unit/test_ai_output_truncation.py::test_new_configuration_default_reaches_deepseek_request_with_bounded_8192_tokens
+FAILED tests/unit/test_daily_extraction.py::test_historical_source_stays_partial_and_ai_cannot_supply_human_authority[False]
+FAILED tests/unit/test_daily_extraction.py::test_historical_source_stays_partial_and_ai_cannot_supply_human_authority[True]
+FAILED tests/unit/test_empty_array_contract_replay.py::test_real_cross_symbol_responses_pass_without_repairs[sse-one-alert-600010.SH-SSE-500-prices0]
+FAILED tests/unit/test_empty_array_contract_replay.py::test_real_cross_symbol_responses_pass_without_repairs[szse-two-alerts-000858.SZ-SZSE-800-prices1]
+FAILED tests/unit/test_unified_plan_domain.py::test_current_extraction_keeps_missing_review_and_mixed_conditions_visible
+6 failed, 3653 passed, 2 warnings in 52.85s

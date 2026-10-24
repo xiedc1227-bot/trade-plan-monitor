@@ -1,0 +1,13 @@
+
+> trade-plan-monitor-web@0.1.0 test
+> vitest --run tests/unit/marketExceptionRuntime.spec.ts tests/unit/aiExtractionApi.spec.ts
+
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  16:20:13
+   Duration  940ms (transform 228ms, setup 0ms, import 291ms, tests 48ms, environment 488ms)
+

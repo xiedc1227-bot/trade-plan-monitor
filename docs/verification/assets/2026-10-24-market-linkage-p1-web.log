@@ -1,0 +1,34 @@
+
+> trade-plan-monitor-web@0.1.0 test
+> vitest --run
+
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+ ❯ tests/unit/runtimeStatusBuild.spec.ts (3 tests | 1 failed) 6577ms
+   × builds explicit v1 fixture assets without changing the installed v2 distribution 3736ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/runtimeStatusBuild.spec.ts > builds explicit v1 fixture assets without changing the installed v2 distribution
+AssertionError: expected '937820be07dc4ca559722a0e4f3ab9ab14c8e…' to be '2e28e475a311cbab54c0e3412b1401b9309b4…' // Object.is equality
+
+Expected: "2e28e475a311cbab54c0e3412b1401b9309b48aad716fa85d3a2631d1d537bd6"
+Received: "937820be07dc4ca559722a0e4f3ab9ab14c8ebb1f98f8976b15f4cb0b9461ae1"
+
+ ❯ tests/unit/runtimeStatusBuild.spec.ts:50:46
+     48|     expect(html).toMatch(/\/assets\/[^" ]+-[\w-]+\.js/);
+     49|     expect(html).not.toContain("离线预览");
+     50|     expect(await directoryDigest(installed)).toBe(before);
+       |                                              ^
+     51|   } finally {
+     52|     await rm(destination, { recursive: true, force: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 88 passed (89)
+      Tests  1 failed | 1258 passed (1259)
+   Start at  16:06:07
+   Duration  10.28s (transform 27.43s, setup 0ms, import 53.79s, tests 31.62s, environment 106.89s)
+

@@ -1,0 +1,13 @@
+.............                                                            [100%]
+============================ slowest 10 durations =============================
+1.80s call     tests/contract/test_current_plan_surface.py::test_current_operations_expose_simulation_without_real_fill_management[2]
+1.60s call     tests/contract/test_current_plan_surface.py::test_ai_configuration_is_read_only_in_the_formal_api
+1.54s call     tests/contract/test_current_plan_surface.py::test_current_operations_expose_simulation_without_real_fill_management[1]
+1.44s call     tests/replay/test_multi_symbol_replay.py::test_three_symbol_full_system_replay_is_exactly_once_across_restart
+0.07s call     tests/replay/test_decision_replay.py::test_exit_reentry_creates_one_independent_tactical_episode_after_core_entry
+0.04s call     tests/replay/test_decision_replay.py::test_continuous_decline_replay_resets_once_per_bucket_across_json_restart
+0.03s call     tests/replay/test_decision_replay.py::test_duplicate_valid_entry_and_restart_are_byte_stable_and_do_not_realert
+0.02s call     tests/replay/test_decision_replay.py::test_stale_then_recovered_context_fails_closed_before_one_restart_safe_entry
+
+(2 durations < 0.005s hidden.  Use -vv to show these durations.)
+13 passed, 4 deselected in 8.44s

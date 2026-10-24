@@ -1,0 +1,78 @@
+
+> trade-plan-monitor-web@0.1.0 build
+> vite build
+
+vite v8.2.1 building client environment for production...
+[2K
+transforming...✓ 958 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/monitor-contract.json                                0.02 kB │ gzip:   0.04 kB
+dist/index.html                                           0.61 kB │ gzip:   0.36 kB
+dist/assets/PlanRow-DdUbRmpl.css                          0.21 kB │ gzip:   0.16 kB
+dist/assets/IndexConditionProgress-DNS0qpFD.css           0.27 kB │ gzip:   0.17 kB
+dist/assets/MarketLinkageEvidence-D4KTSS40.css            0.36 kB │ gzip:   0.21 kB
+dist/assets/backtestNavigation-CnyLkgmA.css               0.37 kB │ gzip:   0.22 kB
+dist/assets/PageIntro-NDivFvT2.css                        0.54 kB │ gzip:   0.29 kB
+dist/assets/PriceChart-B7yMZZS_.css                       0.56 kB │ gzip:   0.28 kB
+dist/assets/useMarketIndexSeries-DXUsvwQb.css             0.80 kB │ gzip:   0.32 kB
+dist/assets/BacktestEquityChart-Dd6T8GKj.css              0.80 kB │ gzip:   0.34 kB
+dist/assets/BacktestServiceState-BPiP925o.css             1.05 kB │ gzip:   0.39 kB
+dist/assets/PlanRuleChanges-BSboLW_f.css                  1.45 kB │ gzip:   0.50 kB
+dist/assets/useChartSeries-Ab_E4NX4.css                   2.11 kB │ gzip:   0.64 kB
+dist/assets/LegacyPlanInvalidationPanel-D24JhW9s.css      2.42 kB │ gzip:   0.66 kB
+dist/assets/AlertsRouteView-ByTkefID.css                  2.83 kB │ gzip:   0.80 kB
+dist/assets/SymbolDetailRouteView-T462FJ9W.css            3.94 kB │ gzip:   0.93 kB
+dist/assets/useBacktestJob-CSkWXL9D.css                   4.48 kB │ gzip:   1.06 kB
+dist/assets/DashboardView-DZAC132a.css                    5.25 kB │ gzip:   1.08 kB
+dist/assets/DashboardRouteView-DKc4jUOm.css               5.31 kB │ gzip:   1.28 kB
+dist/assets/BacktestDataView-BTo-tiIm.css                 5.94 kB │ gzip:   1.21 kB
+dist/assets/SystemRouteView-BNYjhHWQ.css                  8.83 kB │ gzip:   1.65 kB
+dist/assets/BacktestRunsView-BaTi4_IQ.css                 9.21 kB │ gzip:   1.71 kB
+dist/assets/useDashboardMarketIndexTrends-BuAHH6e-.css   10.54 kB │ gzip:   1.79 kB
+dist/assets/PlanDraftingView-DzU809OZ.css                12.31 kB │ gzip:   1.99 kB
+dist/assets/index-BYS4ZscG.css                           14.63 kB │ gzip:   3.20 kB
+dist/assets/BacktestNewView-CVkDZDYZ.css                 23.42 kB │ gzip:   3.74 kB
+dist/assets/BacktestRunDetailView-BjWj3HGn.css           25.18 kB │ gzip:   3.79 kB
+dist/assets/dateTime-BU_G8We_.js                          0.23 kB │ gzip:   0.19 kB
+dist/assets/PageIntro-DGqXEJ6h.js                         0.57 kB │ gzip:   0.36 kB
+dist/assets/presentation-Kyh8swZ-.js                      0.64 kB │ gzip:   0.55 kB
+dist/assets/IndexConditionProgress-Dd4eMiUN.js            0.95 kB │ gzip:   0.53 kB
+dist/assets/backtestValues-B6RZE-3g.js                    1.70 kB │ gzip:   0.75 kB
+dist/assets/SystemView-h-ZJ-muY.js                        2.20 kB │ gzip:   1.16 kB
+dist/assets/marketIndexes-CiCAPX1A.js                     2.39 kB │ gzip:   1.18 kB
+dist/assets/backtestNavigation-NKdMgZm_.js                2.68 kB │ gzip:   1.52 kB
+dist/assets/useRuntimeRead-Bn23vPSf.js                    3.06 kB │ gzip:   1.57 kB
+dist/assets/BacktestEquityChart-MddIxjnm.js               3.33 kB │ gzip:   1.70 kB
+dist/assets/conditionPlans-COpq0dKl.js                    4.34 kB │ gzip:   1.60 kB
+dist/assets/useMarketIndexSeries-By0tY-Eq.js              4.95 kB │ gzip:   2.04 kB
+dist/assets/planSchema-BgBnuabc.js                        5.72 kB │ gzip:   3.01 kB
+dist/assets/SymbolView-CV3_PiJ5.js                        5.78 kB │ gzip:   2.70 kB
+dist/assets/LegacyPlanInvalidationPanel-ChzDZ4WI.js       6.21 kB │ gzip:   2.83 kB
+dist/assets/MarketLinkageEvidence-DhZ2Oizc.js             6.41 kB │ gzip:   3.01 kB
+dist/assets/PlanRow-CyXbVLSc.js                           6.58 kB │ gzip:   2.56 kB
+dist/assets/useChartSeries-D10cV0kZ.js                    8.75 kB │ gzip:   3.48 kB
+dist/assets/PlanRuleChanges-C2fF6lc7.js                   9.27 kB │ gzip:   4.66 kB
+dist/assets/DashboardView-CwLq_5H7.js                     9.70 kB │ gzip:   4.69 kB
+dist/assets/BacktestServiceState-CIklGji2.js             11.67 kB │ gzip:   4.75 kB
+dist/assets/useBacktestJob-BiWzL5E-.js                   12.30 kB │ gzip:   4.83 kB
+dist/assets/SymbolDetailRouteView-i1j2LFj4.js            14.46 kB │ gzip:   5.10 kB
+dist/assets/DashboardRouteView-DFTCY68Q.js               14.93 kB │ gzip:   5.39 kB
+dist/assets/SystemRouteView-D8zCekis.js                  15.21 kB │ gzip:   5.44 kB
+dist/assets/BacktestDataView-DHiLhstB.js                 17.81 kB │ gzip:   6.78 kB
+dist/assets/PriceChart-44pq6Qw_.js                       20.21 kB │ gzip:   7.67 kB
+dist/assets/install-CW2rIGL-.js                          20.77 kB │ gzip:   8.37 kB
+dist/assets/install-DxDBfl4p.js                          21.46 kB │ gzip:   7.77 kB
+dist/assets/AlertsRouteView-DdBZrv3w.js                  21.81 kB │ gzip:   7.85 kB
+dist/assets/useDashboardMarketIndexTrends-B3l9EkgR.js    24.98 kB │ gzip:   9.48 kB
+dist/assets/BacktestRunsView-BOCMUULh.js                 26.42 kB │ gzip:   9.35 kB
+dist/assets/install-BUkhqUv2.js                          54.35 kB │ gzip:  17.95 kB
+dist/assets/_plugin-vue_export-helper-C1wLsI1I.js        61.06 kB │ gzip:  23.95 kB
+dist/assets/PlanDraftingView-B3yAHlN5.js                 74.38 kB │ gzip:  25.11 kB
+dist/assets/backtests-BbW-u_PV.js                        96.01 kB │ gzip:  25.44 kB
+dist/assets/BacktestRunDetailView-_a6mG_F9.js           103.42 kB │ gzip:  31.85 kB
+dist/assets/index-Dx1QNZ6H.js                           145.73 kB │ gzip:  47.55 kB
+dist/assets/BacktestNewView-D1oOShKL.js                 152.36 kB │ gzip:  48.60 kB
+dist/assets/installCanvasRenderer-CndFMilY.js           475.21 kB │ gzip: 160.90 kB
+
+✓ built in 781ms

@@ -1,0 +1,64 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/market-exceptions.spec.ts tests/e2e/market-linkage.spec.ts
+
+
+Running 9 tests using 1 worker
+
+
+
+(node:70956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM consume › source review, explicit occurrence approval and separate whole execution
+[2/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM revoke › source review, explicit occurrence approval and separate whole execution
+[3/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM reject › source review, explicit occurrence approval and separate whole execution
+  1) [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM reject › source review, explicit occurrence approval and separate whole execution 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for locator('.daily-operations').getByRole('button', { name: '确认登记期初模拟仓位' })
+        - locator resolved to <button disabled type="submit" data-v-27e3770e="">确认登记期初模拟仓位</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+          - waiting 100ms
+        224 × waiting for element to be visible, enabled and stable
+            - element is not enabled
+          - retrying click action
+            - waiting 500ms
+
+
+      73 |   await operations.getByLabel("期初模拟CORE（股）", { exact: true }).fill("100");
+      74 |   await operations.getByLabel("期初模拟TACTICAL（股）", { exact: true }).fill("0");
+    > 75 |   await operations.getByRole("button", { name: "确认登记期初模拟仓位" }).click();
+         |                                                                ^
+      76 |   await expect(operations.getByRole("status").filter({ hasText: "已记录并更新当前状态" })).toBeVisible();
+      77 |   const closed = await request.post(`${base}/_test/confirm-close`);
+      78 |   expect(closed.status(), await closed.text()).toBe(200);
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\market-exceptions.spec.ts:75:64
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\market-exceptions-WEAK-MIN-12b13-nd-separate-whole-execution-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\market-exceptions-WEAK-MIN-12b13-nd-separate-whole-execution-chrome\error-context.md
+
+
+
+(node:90916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM correction › source review, explicit occurrence approval and separate whole execution
+[5/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG consume › source review, explicit occurrence approval and separate whole execution
+[6/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG revoke › source review, explicit occurrence approval and separate whole execution
+[7/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG reject › source review, explicit occurrence approval and separate whole execution
+[8/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG correction › source review, explicit occurrence approval and separate whole execution
+[9/9] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+  1 failed
+    [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM reject › source review, explicit occurrence approval and separate whole execution 
+  8 passed (3.3m)

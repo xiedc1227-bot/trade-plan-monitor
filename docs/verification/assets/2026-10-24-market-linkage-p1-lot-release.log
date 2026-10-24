@@ -1,0 +1,12 @@
+....                                                                     [100%]
+============================== warnings summary ===============================
+tests/integration/test_lot_history_indexes.py::test_history_migration_matches_orm_metadata
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_lot_history_indexes.py:180: SAWarning: Skipped unsupported reflection of expression-based index ux_exception_command
+    assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+
+tests/integration/test_lot_history_indexes.py::test_history_migration_matches_orm_metadata
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\alembic\ddl\impl.py:850: UserWarning: autogenerate skipping metadata-specified expression-based index 'ux_exception_command'; dialect 'sqlite' under SQLAlchemy 2.0.52 can't reflect these indexes so they can't be compared
+    util.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+4 passed, 2 warnings in 0.95s

@@ -1,0 +1,1628 @@
+.....F..........................................F....................... [  1%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+....................................................s................... [  7%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+...................................FF................................... [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+........................................................................ [ 17%]
+...F......F............................................................. [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+....................................................FFF.F............... [ 23%]
+.........F.............................................................. [ 24%]
+........................................................................ [ 26%]
+.....................................................................FF. [ 27%]
+........................................................................ [ 29%]
+...............................................................F........ [ 31%]
+.................................F...................................... [ 32%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 40%]
+..................................F.....F............................... [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 46%]
+.................................FFF.F.................................. [ 48%]
+............................................F........................... [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+..........................FF...FFFF.FF....................FF.FF....F.... [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+..................................                                       [100%]
+================================== FAILURES ===================================
+__ test_browser_partial_extraction_fixture_matches_production_serialization ___
+
+    def test_browser_partial_extraction_fixture_matches_production_serialization():
+>       assert production_partial_view() == json.loads(FIXTURE.read_text(encoding="utf-8"))
+E       AssertionError: assert {'id': '51e37...0+08:00', ...} == {'id': '51e37...0+08:00', ...}
+E         
+E         Omitting 18 identical items, use -vv to show
+E         Differing items:
+E         {'promptVersion': 'plan-extract-v10'} != {'promptVersion': 'plan-extract-v9'}
+E         Use -v to get more diff
+
+tests\integration\test_ai_browser_contract.py:38: AssertionError
+_ test_extraction_service_uses_real_adapter_but_returns_only_an_unactivated_draft _
+
+    def test_extraction_service_uses_real_adapter_but_returns_only_an_unactivated_draft() -> None:
+        from tests.unit.test_unified_plan_domain import unified_payload
+    
+        from trade_plan_monitor.ai.daily_review import daily_source_clauses
+        from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+        from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+    
+        source_text = "�������ܽ��׼ƻ��������� 63.00�C64.50�������а�����������ء�"
+        config = _config(max_input_chars=50_000, max_output_tokens=4_096)
+        captured: list[httpx.Request] = []
+    
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            raw = unified_payload()
+            raw.update(symbol="003043.SZ", market="SZSE")
+            draft = UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(raw))
+            return _completion_response(content=json.dumps({
+                "draft": draft.model_dump(mode="json"),
+                "clauses": [c.model_dump(mode="json") for c in daily_source_clauses(source_text)],
+                "bindings": [],
+            }))
+    
+        async def scenario() -> object:
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                provider = OpenAICompatibleProvider(
+                    client=client,
+                    secret_store=_secret_store(config),
+                )
+                return await extract_plan(
+                    request_id=REQUEST_ID,
+                    source_text=source_text,
+                    config=config,
+                    provider=provider,
+                )
+    
+        result = asyncio.run(scenario())
+    
+        assert result.status is PlanExtractionStatus.SUCCEEDED
+        assert result.draft is not None
+        assert result.draft.symbol == "003043.SZ"
+        assert result.draft.schema_version == 5
+        assert result.draft.to_executable() is not None
+        assert any(i.code == "DAILY_SOURCE_BINDING_REQUIRED" for i in result.validation_issues)
+        assert all(i.activation_blocking for i in result.validation_issues)
+        assert result.daily_mapping.supplements == ()
+        assert len(captured) == 1
+        request_payload = json.loads(captured[0].content)
+        assert "tools" not in request_payload
+        assert "UNTRUSTED_PLAN_DATA_START" in request_payload["messages"][0]["content"]
+>       assert "plan-extract-v9" in request_payload["messages"][0]["content"]
+E       assert 'plan-extract-v9' in '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...tokens."}\nUNTRUSTED_PLAN_DATA_START\n{"source_text": "�������ܽ��׼ƻ��������� 63.00�C64.50�������а�����������ء�"}\nUNTRUSTED_PLAN_DATA_END'
+
+tests\integration\test_ai_provider_contract.py:1011: AssertionError
+_ test_generated_documents_and_types_match_mounted_service_routes[compatibility-v1] _
+
+contract = (1, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_generated_documents_and_types_match_mounted_service_routes(contract):
+        version, document = contract
+        snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
+        types = "generated.ts" if version == 1 else "generated-runtime-status.ts"
+>       assert json.loads((ROOT / snapshot).read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_backtest_service_contract.py:24: AssertionError
+_ test_generated_documents_and_types_match_mounted_service_routes[canonical-v2] _
+
+contract = (2, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_generated_documents_and_types_match_mounted_service_routes(contract):
+        version, document = contract
+        snapshot = "openapi.json" if version == 1 else "openapi.runtime-status.json"
+        types = "generated.ts" if version == 1 else "generated-runtime-status.ts"
+>       assert json.loads((ROOT / snapshot).read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_backtest_service_contract.py:24: AssertionError
+_______ test_formal_extraction_edit_review_activate_and_restart_binding _______
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_formal_extraction_edit_re0')
+
+    def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
+        app = make_app(tmp_path, ai=True)
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            provider = client.get("/api/v1/ai-runtime").json()["providerId"]
+            receipt = post(
+                client,
+                "plan-extractions",
+                {
+                    "providerId": provider,
+                    "sourceText": SOURCE,
+                    "expectedRevision": 0,
+                },
+                expected=202,
+            )
+            for _ in range(100):
+                result = client.get("/api/v1/plan-extractions/" + receipt["operationId"]).json()
+                if result["status"] not in {"QUEUED", "RUNNING"}:
+                    break
+>           assert result["status"] == "SUCCEEDED"
+E           AssertionError: assert 'PROVIDER_ERROR' == 'SUCCEEDED'
+E             
+E             - SUCCEEDED
+E             + PROVIDER_ERROR
+
+tests\integration\test_current_plan_api.py:166: AssertionError
+_ test_successful_extraction_provenance_survives_lifecycle_restart_before_save _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_successful_extraction_pro0')
+
+    def test_successful_extraction_provenance_survives_lifecycle_restart_before_save(tmp_path):
+        with TestClient(make_app(tmp_path, ai=True), base_url="http://127.0.0.1:8765") as client:
+            provider = client.get("/api/v1/ai-runtime").json()["providerId"]
+            receipt = post(
+                client,
+                "plan-extractions",
+                {
+                    "providerId": provider,
+                    "sourceText": SOURCE,
+                    "expectedRevision": 0,
+                },
+                expected=202,
+            )
+            for _ in range(100):
+                result = client.get("/api/v1/plan-extractions/" + receipt["operationId"]).json()
+                if result["status"] not in {"QUEUED", "RUNNING"}:
+                    break
+>           assert result["status"] == "SUCCEEDED"
+E           AssertionError: assert 'PROVIDER_ERROR' == 'SUCCEEDED'
+E             
+E             - SUCCEEDED
+E             + PROVIDER_ERROR
+
+tests\integration\test_current_plan_api.py:353: AssertionError
+_ test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v4] _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_mapping_extraction_save_r0')
+config_label = 'plan-extract-v4'
+
+    @pytest.mark.parametrize("config_label", ["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"])
+    def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
+        tmp_path, config_label
+    ):
+        app = make_app(tmp_path)
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            draft = literal_draft(complete=True)
+>           result = record_current(app.state.plan_web_lifecycle, draft, config_label=config_label)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_explicit_plan_review_api.py:94: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_explicit_plan_review_api.record_current.<locals>.Provider object at 0x0000014417FA63C0>
+request = PlanExtractionRequest(request_id=UUID('bfe69bc4-0b06-4686-b92c-7d354fee18b7'), config=AIProviderConfig(provider_id=UUI...��11.00Ԫ֮�䣬\\n�������˱߽�ʱ����������100�ɡ�\\n�������5����K�����̼۵���9.50Ԫʱ�������������ѡ�\\n���Ѽ�ȷ���յ����Ѳ������ɽ���δ�Ǽǳɽ�ʱ�ֲֲ��䡣"}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v10"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E         
+E         - plan-extract-v9
+E         ?               ^
+E         + plan-extract-v10
+E         ?               ^^
+
+tests\integration\test_explicit_plan_review_api.py:46: AssertionError
+_ test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v5] _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_mapping_extraction_save_r1')
+config_label = 'plan-extract-v5'
+
+    @pytest.mark.parametrize("config_label", ["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"])
+    def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
+        tmp_path, config_label
+    ):
+        app = make_app(tmp_path)
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            draft = literal_draft(complete=True)
+>           result = record_current(app.state.plan_web_lifecycle, draft, config_label=config_label)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_explicit_plan_review_api.py:94: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_explicit_plan_review_api.record_current.<locals>.Provider object at 0x0000014417FD3770>
+request = PlanExtractionRequest(request_id=UUID('eca5b49c-92b0-4165-9ad1-734cef8365bb'), config=AIProviderConfig(provider_id=UUI...��11.00Ԫ֮�䣬\\n�������˱߽�ʱ����������100�ɡ�\\n�������5����K�����̼۵���9.50Ԫʱ�������������ѡ�\\n���Ѽ�ȷ���յ����Ѳ������ɽ���δ�Ǽǳɽ�ʱ�ֲֲ��䡣"}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v10"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E         
+E         - plan-extract-v9
+E         ?               ^
+E         + plan-extract-v10
+E         ?               ^^
+
+tests\integration\test_explicit_plan_review_api.py:46: AssertionError
+_ test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v6] _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_mapping_extraction_save_r2')
+config_label = 'plan-extract-v6'
+
+    @pytest.mark.parametrize("config_label", ["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"])
+    def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
+        tmp_path, config_label
+    ):
+        app = make_app(tmp_path)
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            draft = literal_draft(complete=True)
+>           result = record_current(app.state.plan_web_lifecycle, draft, config_label=config_label)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_explicit_plan_review_api.py:94: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_explicit_plan_review_api.record_current.<locals>.Provider object at 0x0000014417FD2CF0>
+request = PlanExtractionRequest(request_id=UUID('d4554111-d0e6-4acf-b695-c77f39df86d5'), config=AIProviderConfig(provider_id=UUI...��11.00Ԫ֮�䣬\\n�������˱߽�ʱ����������100�ɡ�\\n�������5����K�����̼۵���9.50Ԫʱ�������������ѡ�\\n���Ѽ�ȷ���յ����Ѳ������ɽ���δ�Ǽǳɽ�ʱ�ֲֲ��䡣"}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v10"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E         
+E         - plan-extract-v9
+E         ?               ^
+E         + plan-extract-v10
+E         ?               ^^
+
+tests\integration\test_explicit_plan_review_api.py:46: AssertionError
+_ test_original_source_partial_save_current_edit_and_semantic_review_stay_bound _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_original_source_partial_s0')
+
+    def test_original_source_partial_save_current_edit_and_semantic_review_stay_bound(tmp_path):
+        app = make_app(tmp_path)
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+            partial = literal_draft(complete=False)
+>           result = record_current(app.state.plan_web_lifecycle, partial, source=_ORIGINAL_SOURCE)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_explicit_plan_review_api.py:194: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_explicit_plan_review_api.record_current.<locals>.Provider object at 0x000001441BEC5FD0>
+request = PlanExtractionRequest(request_id=UUID('3c4c117d-e0ce-4a51-b2e4-3874dc4231fa'), config=AIProviderConfig(provider_id=UUI...��������K�߳ɽ�������ƽ��ֵ��1.5��ʱ����100�ɣ���������̼���10.80��11.00Ԫ�����˵㣩ʱ����100�ɣ���������̼۵���9.50Ԫʱ�������ѡ����Ѻ�ȷ�ϲ������ɽ���"}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v10"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E         
+E         - plan-extract-v9
+E         ?               ^
+E         + plan-extract-v10
+E         ?               ^^
+
+tests\integration\test_explicit_plan_review_api.py:46: AssertionError
+__________ test_plan_capability_reports_current_condition_activation __________
+
+    def test_plan_capability_reports_current_condition_activation() -> None:
+        plan_json = dump_plan_json(current_three_rule_plan())
+        with TestClient(_app(plan_service=_RejectPlanService()), base_url=BASE_URL) as client:
+            capability = client.get("/api/v1/plan-capabilities")
+            blocked = client.post(
+                "/api/v1/plan-drafts",
+                headers={"Idempotency-Key": "r09-v3-blocked"},
+                json={
+                    "basePlanVersionId": None,
+                    "extractionId": None,
+                    "planJson": plan_json,
+                    "sourceText": "isolated trusted review only",
+                    "reviewIssues": [],
+                    "expectedRevision": 0,
+                },
+            )
+            partial = json.loads(plan_json)
+            partial["ordinary_rules"][0]["confirmation"] = None
+            invalid = client.post(
+                "/api/v1/plan-drafts",
+                headers={"Idempotency-Key": "r09-v3-partial"},
+                json={
+                    "planJson": json.dumps(partial),
+                    "sourceText": "incomplete source-only draft",
+                    "reviewIssues": [],
+                    "expectedRevision": 0,
+                },
+            )
+    
+        assert capability.status_code == 200
+>       assert capability.json() == {
+            "supportedSchemaVersions": [5, 6],
+            "linkedExecutionVersion": "condition-plan-v2",
+            "schemaVersion": 5,
+            "executionMode": "CONDITION_PLAN",
+            "executionVersion": "condition-plan-v1",
+            "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
+            "publicActivationAvailable": True,
+            "isolatedTrustedReviewOnly": False,
+            "pendingRequirements": [],
+        }
+E       AssertionError: assert {'schemaVersi...5, 6, 7], ...} == {'supportedSc...ON_PLAN', ...}
+E         
+E         Omitting 8 identical items, use -vv to show
+E         Differing items:
+E         {'supportedSchemaVersions': [5, 6, 7]} != {'supportedSchemaVersions': [5, 6]}
+E         Left contains 1 more item:
+E         {'exceptionExecutionVersion': 'condition-plan-v3'}
+E         Use -v to get more diff
+
+tests\integration\test_explicit_transport.py:176: AssertionError
+_ test_migrated_index_permissions_recheck_independently_across_processes[idx_mins] _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_migrated_index_permission0')
+first_scope = <TushareOperation.INDEX_HISTORICAL_MINUTES: 'idx_mins'>
+
+    @pytest.mark.parametrize("first_scope", (HISTORICAL, REALTIME))
+    def test_migrated_index_permissions_recheck_independently_across_processes(
+        tmp_path, first_scope,
+    ):
+        database = tmp_path / "monitor.sqlite3"
+        clock = ControlledClock(NOW.replace(hour=9, minute=0))
+        _activate_plans(database, clock, ())
+        engine = create_sqlite_engine(database)
+        try:
+            with create_session_factory(engine).begin() as session:
+                session.add(RuntimeLiveness(
+                    id=1, schema_version=1, revision=0,
+                    last_alive_at=clock.now().isoformat(),
+                ))
+                session.add_all((
+                    TradingCalendar(
+                        exchange="SSE", cal_date=ANCHOR, is_open=True,
+                        previous_trade_date=date(2026, 9, 4),
+                    ),
+                    TradingCalendar(
+                        exchange="SSE", cal_date=NOW.date(), is_open=True,
+                        previous_trade_date=ANCHOR,
+                    ),
+                ))
+            _migrate(engine, "0022_runtime_liveness", downgrade=True)
+            with engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO provider_recovery_checkpoint "
+                    "(provider_identity, kind, scope_key, schema_version, retry_at, "
+                    "failures, reason_code) VALUES "
+                    "(:identity, 'permission', 'index_minutes', 1, :retry, 0, "
+                    "'BLOCKED_PERMISSION')"
+                ), {
+                    "identity": _provider_recovery_identity("https://example.test"),
+                    "retry": (NOW - timedelta(seconds=1)).isoformat(),
+                })
+        finally:
+            engine.dispose()
+        _write_configuration_and_evidence(tmp_path, observed_at=NOW, include_index=True)
+        (tmp_path / "data/live-certification/tushare-stock-live.json").unlink()
+    
+        first = _spawn(tmp_path, NOW, first_scope, 1)
+        assert first == (
+            1, (NOW + timedelta(seconds=300)).isoformat(),
+            (ENDPOINTS[HISTORICAL], ENDPOINTS[REALTIME]),
+        )
+        engine = create_sqlite_engine(database)
+        try:
+            with engine.connect() as connection:
+                version = connection.execute(text("SELECT version_num FROM alembic_version"))
+>               assert version.scalar_one() == "0025_index_close_display"
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_index_permission_process_restart.py:244: AssertionError
+---------------------------- Captured stderr call -----------------------------
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+
+  from starlette.testclient import TestClient as TestClient  # noqa
+
+_ test_migrated_index_permissions_recheck_independently_across_processes[rt_idx_min_daily] _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_migrated_index_permission1')
+first_scope = <TushareOperation.INDEX_REALTIME_MINUTES: 'rt_idx_min_daily'>
+
+    @pytest.mark.parametrize("first_scope", (HISTORICAL, REALTIME))
+    def test_migrated_index_permissions_recheck_independently_across_processes(
+        tmp_path, first_scope,
+    ):
+        database = tmp_path / "monitor.sqlite3"
+        clock = ControlledClock(NOW.replace(hour=9, minute=0))
+        _activate_plans(database, clock, ())
+        engine = create_sqlite_engine(database)
+        try:
+            with create_session_factory(engine).begin() as session:
+                session.add(RuntimeLiveness(
+                    id=1, schema_version=1, revision=0,
+                    last_alive_at=clock.now().isoformat(),
+                ))
+                session.add_all((
+                    TradingCalendar(
+                        exchange="SSE", cal_date=ANCHOR, is_open=True,
+                        previous_trade_date=date(2026, 9, 4),
+                    ),
+                    TradingCalendar(
+                        exchange="SSE", cal_date=NOW.date(), is_open=True,
+                        previous_trade_date=ANCHOR,
+                    ),
+                ))
+            _migrate(engine, "0022_runtime_liveness", downgrade=True)
+            with engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO provider_recovery_checkpoint "
+                    "(provider_identity, kind, scope_key, schema_version, retry_at, "
+                    "failures, reason_code) VALUES "
+                    "(:identity, 'permission', 'index_minutes', 1, :retry, 0, "
+                    "'BLOCKED_PERMISSION')"
+                ), {
+                    "identity": _provider_recovery_identity("https://example.test"),
+                    "retry": (NOW - timedelta(seconds=1)).isoformat(),
+                })
+        finally:
+            engine.dispose()
+        _write_configuration_and_evidence(tmp_path, observed_at=NOW, include_index=True)
+        (tmp_path / "data/live-certification/tushare-stock-live.json").unlink()
+    
+        first = _spawn(tmp_path, NOW, first_scope, 1)
+        assert first == (
+            1, (NOW + timedelta(seconds=300)).isoformat(),
+            (ENDPOINTS[HISTORICAL], ENDPOINTS[REALTIME]),
+        )
+        engine = create_sqlite_engine(database)
+        try:
+            with engine.connect() as connection:
+                version = connection.execute(text("SELECT version_num FROM alembic_version"))
+>               assert version.scalar_one() == "0025_index_close_display"
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_index_permission_process_restart.py:244: AssertionError
+---------------------------- Captured stderr call -----------------------------
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+
+  from starlette.testclient import TestClient as TestClient  # noqa
+
+____ test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row ____
+
+populated_database = Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.test-tmp\p1-full-integration-56\test_upgrade_repeat_downgrade_0\lot-history.db)
+
+    def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(populated_database):
+        engine = populated_database
+        before = _stored_rows(engine)
+        assert "daily_plan_record" not in before
+        after_upgrade = before | {
+            "daily_plan_record": [],
+            "market_index_acquisition_state": [],
+        }
+        indexes_before = {table: inspect(engine).get_indexes(table) for table in EXPECTED_INDEXES}
+    
+        for _ in range(2):
+            upgrade_database(engine)
+            _assert_history_indexes(engine)
+            assert _stored_rows(engine) == after_upgrade
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == LATEST_REVISION
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_lot_history_indexes.py:110: AssertionError
+_______________ test_fresh_process_preserves_approved_evidence ________________
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\concurrent\futures\process.py", line 254, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_market_exception_concurrency.py", line 129, in _reopen_process
+    result = ExceptionRepository(daily).get(identity)
+  File "D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\src\trade_plan_monitor\state\market_exception_repository.py", line 22, in get
+    event_row = self.daily.get(candidate.last_event_id)
+  File "D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\src\trade_plan_monitor\state\daily_repository.py", line 39, in get
+    return None if row is None else self._value(row)
+                                    ~~~~~~~~~~~^^^^^
+  File "D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\src\trade_plan_monitor\state\daily_repository.py", line 141, in _value
+    validate_daily_payload(row.kind, payload)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\src\trade_plan_monitor\state\daily_state_models.py", line 348, in validate_daily_payload
+    (ExceptionCandidate if kind == "EXCEPTION_CANDIDATE" else ExceptionEvent).model_validate(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        value)
+        ^^^^^^
+  File "D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\pydantic\main.py", line 732, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        obj,
+        ^^^^
+    ...<5 lines>...
+        by_name=by_name,
+        ^^^^^^^^^^^^^^^^
+    )
+    ^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for ExceptionEvent
+actor_kind
+  Field required [type=missing, input_value={'approval_id': 'f53b0cb4...ption-authorization-v1'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing
+"""
+
+The above exception was the direct cause of the following exception:
+
+ledger = <trade_plan_monitor.state.daily_repository.DailyRepository object at 0x0000014417748650>
+
+    def test_fresh_process_preserves_approved_evidence(ledger):
+        candidate, context = setup(ledger)
+        shown = preview(ledger, candidate, context)
+        approved = approve(ledger, candidate, context, shown)
+        ledger.session.commit()
+        with ProcessPoolExecutor(max_workers=1) as pool:
+            row = pool.submit(_reopen_process, (
+>               ledger.session.bind.url.database, candidate.candidate_id)).result(timeout=30)
+                                                                           ^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_market_exception_concurrency.py:141: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\concurrent\futures\_base.py:454: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = None
+
+    def __get_result(self):
+        if self._exception is not None:
+            try:
+>               raise self._exception
+E               pydantic_core._pydantic_core.ValidationError: 1 validation error for ExceptionEvent
+E               actor_kind
+E                 Field required [type=missing, input_value={'approval_id': 'f53b0cb4...ption-authorization-v1'}, input_type=dict]
+E                   For further information visit https://errors.pydantic.dev/2.13/v/missing
+
+C:\Program Files\Python314\Lib\concurrent\futures\_base.py:396: ValidationError
+_ test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1] _
+
+contract = (1, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_committed_run_and_result_contracts_match_actual_routes(contract):
+        version, document = contract
+        snapshot = ROOT / ("openapi.json" if version == 1 else "openapi.runtime-status.json")
+        types = (
+            ROOT / "web/src/api" / ("generated.ts" if version == 1 else "generated-runtime-status.ts")
+        )
+>       assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_monitor_loop_contract.py:35: AssertionError
+__ test_committed_run_and_result_contracts_match_actual_routes[canonical-v2] __
+
+contract = (2, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_committed_run_and_result_contracts_match_actual_routes(contract):
+        version, document = contract
+        snapshot = ROOT / ("openapi.json" if version == 1 else "openapi.runtime-status.json")
+        types = (
+            ROOT / "web/src/api" / ("generated.ts" if version == 1 else "generated-runtime-status.ts")
+        )
+>       assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_monitor_loop_contract.py:35: AssertionError
+________ test_openapi_snapshot_is_deterministic_canonical_and_current _________
+
+    def test_openapi_snapshot_is_deterministic_canonical_and_current() -> None:
+        generator, snapshot, _typescript = _generated_documents()
+    
+        assert snapshot == generator.render_openapi_snapshot(generator.build_openapi_document())
+        assert snapshot.endswith("\n")
+        assert (
+            snapshot
+            == json.dumps(
+                json.loads(snapshot),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+>       assert OPENAPI_PATH.read_text(encoding="utf-8") == snapshot
+E       assert '{\n  "compon...  }\n  }\n}\n' == '{\n  "compon...  }\n  }\n}\n'
+E         
+E         Skipping 404596 identical leading characters in diff, use -v to show
+E         -         "approval_id": {
+E         ?           ^^ ----
+E         +         "actor_kind": {
+E         ?           ^^^  + +
+E         +             "enum": [...
+E         
+E         ...Full output truncated (35322 lines hidden), use '-vv' to show
+
+tests\integration\test_openapi_snapshot.py:155: AssertionError
+____________ test_openapi_change_requires_bilingual_spec_approval _____________
+
+    def test_openapi_change_requires_bilingual_spec_approval() -> None:
+        _generator, snapshot, _typescript = _generated_documents()
+        digest = sha256(snapshot.encode("utf-8")).hexdigest()
+    
+>       assert f"OpenAPI snapshot SHA-256: `{digest}`" in LOCAL_WEB_SPEC_PATH.read_text(
+            encoding="utf-8"
+        )
+E       AssertionError: assert 'OpenAPI snapshot SHA-256: `a2e653fcf2535f1346c4f04c636ede16a120cc769251af5500560a12304b565f`' in '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.\n'
+E        +  where '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.\n' = read_text(encoding='utf-8')
+E        +    where read_text = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/docs/specifications/monitoring/SPEC-unified-plan.md').read_text
+
+tests\integration\test_openapi_snapshot.py:162: AssertionError
+_____ test_openapi_contains_only_approved_paths_and_public_error_schemas ______
+
+    def test_openapi_contains_only_approved_paths_and_public_error_schemas() -> None:
+        generator = _load_generator()
+        document = generator.build_openapi_document()
+    
+>       assert set(document["paths"]) == APPROVED_PATHS
+E       AssertionError: assert {'/api/v1/ai-...cations', ...} == {'/api/v1/ai-...cations', ...}
+E         
+E         Extra items in the left set:
+E         '/api/v1/plan-exception-revocations'
+E         '/api/v1/plan-exception-decisions'
+E         '/api/v1/plan-exception-previews'
+E         Use -v to get more diff
+
+tests\integration\test_openapi_snapshot.py:172: AssertionError
+___________ test_typescript_contract_is_generated_from_the_snapshot ___________
+
+    def test_typescript_contract_is_generated_from_the_snapshot() -> None:
+        _generator, _snapshot, typescript = _generated_documents()
+    
+>       assert TYPESCRIPT_PATH.read_text(encoding="utf-8") == typescript
+E       assert '// This file...};\n  };\n}\n' == '// This file...};\n  };\n}\n'
+E         
+E         Skipping 70928 identical leading characters in diff, use -v to show
+E           nt = {
+E         +   actor_kind: "LOCAL_USER" | "SYSTEM";
+E             approval_id: (string) | (null);
+E             binding_hash: string;
+E             candidate_id: string;...
+E         
+E         ...Full output truncated (9463 lines hidden), use '-vv' to show
+
+tests\integration\test_openapi_snapshot.py:240: AssertionError
+_ test_simulated_diagnostic_io_failure_preserves_active_plan_and_extraction_outcomes _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_simulated_diagnostic_io_f0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001442AA09D30>
+
+    def test_simulated_diagnostic_io_failure_preserves_active_plan_and_extraction_outcomes(
+        tmp_path: Path, monkeypatch
+    ) -> None:
+        config = tmp_path / "config.yaml"
+        config.write_text(
+            "ai:\n"
+            "  profile: DEEPSEEK\n"
+            "  base_url: https://api.deepseek.com\n"
+            "  model: simulated-v4-pro\n"
+            "  api_key: offline-only-key\n"
+            "  max_retries: 0\n",
+            encoding="utf-8",
+        )
+        database = tmp_path / "active-isolated/monitor.sqlite3"
+        database.parent.mkdir()
+        plans = PersistentPlanWebLifecycle(database_path=database, clock=lambda: _NOW)
+        responses = iter([_response("{"), _response(json.dumps(_valid_output(), ensure_ascii=False))])
+    
+        def fail_diagnostic_write(*_args: object, **_kwargs: object) -> None:
+            raise OSError("SIMULATED sidecar write failure")
+    
+        monkeypatch.setattr(
+            "trade_plan_monitor.web.ai_service.append_extraction_diagnostic",
+            fail_diagnostic_write,
+        )
+        app = create_app(
+            runtime_factory=_Runtime,
+            plan_lifecycle_factory=lambda: plans,
+            ai_lifecycle_factory=lambda: ConfiguredAIWebLifecycle(
+                config_path=config,
+                client_factory=lambda: httpx.AsyncClient(
+                    transport=httpx.MockTransport(lambda _request: next(responses)),
+                    trust_env=False,
+                ),
+                review_store=plans,
+                diagnostic_path=database.with_suffix(".ai-extraction-diagnostics.jsonl"),
+            ),
+        )
+        draft = literal_draft(complete=True)
+        with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+>           record_current(plans, draft)
+
+tests\integration\test_plan_extraction_diagnostics.py:312: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_explicit_plan_review_api.py:65: in record_current
+    result = asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.integration.test_explicit_plan_review_api.record_current.<locals>.Provider object at 0x000001441E8A3230>
+request = PlanExtractionRequest(request_id=UUID('58498b1b-c368-4345-96af-65f8148a4181'), config=AIProviderConfig(provider_id=UUI...��11.00Ԫ֮�䣬\\n�������˱߽�ʱ����������100�ɡ�\\n�������5����K�����̼۵���9.50Ԫʱ�������������ѡ�\\n���Ѽ�ȷ���յ����Ѳ������ɽ���δ�Ǽǳɽ�ʱ�ֲֲ��䡣"}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v10"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'plan-extract-v10' == 'plan-extract-v9'
+E         
+E         - plan-extract-v9
+E         ?               ^
+E         + plan-extract-v10
+E         ?               ^^
+
+tests\integration\test_explicit_plan_review_api.py:46: AssertionError
+_______ test_sqlite_migration_upgrades_empty_database_and_is_idempotent _______
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_sqlite_migration_upgrades0')
+
+    def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+    
+        try:
+            upgrade_database(engine)
+            first_tables = frozenset(inspect(engine).get_table_names())
+            with engine.connect() as connection:
+                first_revision = connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                ).scalar_one()
+    
+            upgrade_database(engine)
+            second_tables = frozenset(inspect(engine).get_table_names())
+            with engine.connect() as connection:
+                second_revision = connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                ).scalar_one()
+    
+            assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
+            assert second_tables == first_tables
+>           assert first_revision == second_revision == "0026_market_exceptions"
+E           AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E             
+E             - 0025_index_close_display
+E             + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2272: AssertionError
+_ test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_sqlite_migration_upgrades1')
+
+    def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+    
+        try:
+            _upgrade_to(engine, "0002_ai_provider_configuration")
+            assert "last_processed_bucket_end" not in {
+                column["name"] for column in inspect(engine).get_columns("zone_episode")
+            }
+    
+            upgrade_database(engine)
+    
+            cursor_column = next(
+                column
+                for column in inspect(engine).get_columns("zone_episode")
+                if column["name"] == "last_processed_bucket_end"
+            )
+            assert cursor_column["nullable"] is False
+            assert cursor_column["type"].length == 40
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2298: AssertionError
+__ test_plan_web_state_migration_refuses_lossy_downgrade_atomically[review] ___
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_plan_web_state_migration_3')
+loss_kind = 'review'
+
+    @pytest.mark.parametrize("loss_kind", ("review", "deactivation"))
+    def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
+        tmp_path: Path,
+        loss_kind: str,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / f"monitor-{loss_kind}.db")
+        plan, source_text = _sample_plan()
+    
+        try:
+            upgrade_database(engine)
+            with _unit_of_work(engine) as work:
+                saved = work.plans.save_draft(plan, source_text=source_text)
+                work.commit()
+            if loss_kind == "review":
+                issue = DraftReviewIssue(
+                    kind="WARNING",
+                    path="levels.pressure",
+                    material=True,
+                    resolved=False,
+                )
+                with engine.begin() as connection:
+                    connection.exec_driver_sql(
+                        "UPDATE plan_version_review SET review_issues_json = :review "
+                        "WHERE plan_version_id = :plan_version_id",
+                        {
+                            "plan_version_id": saved.id,
+                            "review": json.dumps(
+                                [issue.model_dump(mode="json")],
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                                sort_keys=True,
+                            ),
+                        },
+                    )
+            else:
+                validation = validate_trade_plan(
+                    plan,
+                    available_market_evidence=ALL_MARKET_EVIDENCE,
+                )
+                with _unit_of_work(engine) as work:
+                    work.plans.activate(plan, expected_revision=0, validation=validation)
+                    work.commit()
+                with _unit_of_work(engine) as work:
+                    work.plans.deactivate(plan.symbol, expected_revision=1)
+                    work.commit()
+    
+            with engine.connect() as connection:
+                reviews_before = connection.exec_driver_sql(
+                    "SELECT plan_version_id, review_issues_json FROM plan_version_review "
+                    "ORDER BY plan_version_id"
+                ).all()
+                states_before = connection.exec_driver_sql(
+                    "SELECT symbol, plan_version_id, revision, changed_at "
+                    "FROM plan_activation_state ORDER BY symbol"
+                ).all()
+    
+            with pytest.raises(RuntimeError, match="refuses to discard plan Web state"):
+                _downgrade_to(engine, "0006_monitor_event")
+    
+            assert {"plan_version_review", "plan_activation_state"} <= frozenset(
+                inspect(engine).get_table_names()
+            )
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2573: AssertionError
+_ test_plan_web_state_migration_refuses_lossy_downgrade_atomically[deactivation] _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_plan_web_state_migration_4')
+loss_kind = 'deactivation'
+
+    @pytest.mark.parametrize("loss_kind", ("review", "deactivation"))
+    def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
+        tmp_path: Path,
+        loss_kind: str,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / f"monitor-{loss_kind}.db")
+        plan, source_text = _sample_plan()
+    
+        try:
+            upgrade_database(engine)
+            with _unit_of_work(engine) as work:
+                saved = work.plans.save_draft(plan, source_text=source_text)
+                work.commit()
+            if loss_kind == "review":
+                issue = DraftReviewIssue(
+                    kind="WARNING",
+                    path="levels.pressure",
+                    material=True,
+                    resolved=False,
+                )
+                with engine.begin() as connection:
+                    connection.exec_driver_sql(
+                        "UPDATE plan_version_review SET review_issues_json = :review "
+                        "WHERE plan_version_id = :plan_version_id",
+                        {
+                            "plan_version_id": saved.id,
+                            "review": json.dumps(
+                                [issue.model_dump(mode="json")],
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                                sort_keys=True,
+                            ),
+                        },
+                    )
+            else:
+                validation = validate_trade_plan(
+                    plan,
+                    available_market_evidence=ALL_MARKET_EVIDENCE,
+                )
+                with _unit_of_work(engine) as work:
+                    work.plans.activate(plan, expected_revision=0, validation=validation)
+                    work.commit()
+                with _unit_of_work(engine) as work:
+                    work.plans.deactivate(plan.symbol, expected_revision=1)
+                    work.commit()
+    
+            with engine.connect() as connection:
+                reviews_before = connection.exec_driver_sql(
+                    "SELECT plan_version_id, review_issues_json FROM plan_version_review "
+                    "ORDER BY plan_version_id"
+                ).all()
+                states_before = connection.exec_driver_sql(
+                    "SELECT symbol, plan_version_id, revision, changed_at "
+                    "FROM plan_activation_state ORDER BY symbol"
+                ).all()
+    
+            with pytest.raises(RuntimeError, match="refuses to discard plan Web state"):
+                _downgrade_to(engine, "0006_monitor_event")
+    
+            assert {"plan_version_review", "plan_activation_state"} <= frozenset(
+                inspect(engine).get_table_names()
+            )
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2573: AssertionError
+_________ test_alert_sequence_migration_backfills_existing_high_water _________
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_alert_sequence_migration_0')
+
+    def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+    
+        try:
+            _upgrade_to(engine, "0003_episode_cursor")
+            with create_session_factory(engine).begin() as session:
+                session.add(AlertEvent(**_historical_alert_values(41, 41)))
+    
+            upgrade_database(engine)
+    
+            with create_session_factory(engine)() as session:
+                sequence = session.get(MonitorSequence, 1)
+                assert sequence is not None
+                assert sequence.last_sequence == 41
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2610: AssertionError
+____ test_monitor_event_migration_renames_high_water_and_backfills_alerts _____
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_monitor_event_migration_r0')
+
+    def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+    
+        try:
+            _upgrade_to(engine, "0005_evaluation_kind")
+            alert_values = _historical_alert_values(42, 42)
+            alert_id = str(alert_values["id"])
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO alert_event "
+                    "(id, sequence, dedup_key, payload_json, message_text, created_at, "
+                    "acknowledged_at) VALUES (:id, :sequence, :dedup_key, :payload_json, "
+                    ":message_text, :created_at, :acknowledged_at)",
+                    alert_values,
+                )
+                connection.exec_driver_sql(
+                    "UPDATE alert_sequence SET last_sequence = 42 WHERE singleton_id = 1"
+                )
+    
+            upgrade_database(engine)
+    
+            tables = frozenset(inspect(engine).get_table_names())
+            assert "monitor_event" in tables
+            assert "monitor_sequence" in tables
+            assert "alert_sequence" not in tables
+            with engine.connect() as connection:
+                row = connection.exec_driver_sql(
+                    "SELECT id, sequence, event_type, aggregate_id, payload_json, occurred_at "
+                    "FROM monitor_event"
+                ).one()
+                high_water = connection.exec_driver_sql(
+                    "SELECT last_sequence FROM monitor_sequence WHERE singleton_id = 1"
+                ).scalar_one()
+                revision = connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                ).scalar_one()
+    
+            assert row[:4] == (alert_id, 42, "alert.created", alert_id)
+            assert json.loads(row.payload_json) == {
+                "entityId": alert_id,
+                "revision": 0,
+                "symbol": "003043.SZ",
+            }
+            assert row.occurred_at == _FIXED_NOW.isoformat()
+            assert high_water == 42
+>           assert revision == "0026_market_exceptions"
+E           AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E             
+E             - 0025_index_close_display
+E             + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2665: AssertionError
+_ test_market_index_event_constraint_migration_preserves_the_existing_ledger __
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_market_index_event_constr0')
+
+    def test_market_index_event_constraint_migration_preserves_the_existing_ledger(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+        existing_id = "00000000-0000-0000-0000-000000000801"
+        existing_payload = '{"entityId":"TUSHARE_RT_MIN","status":"READY"}'
+    
+        try:
+            _upgrade_to(engine, "0007_plan_web_state")
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO monitor_event "
+                    "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                    "occurred_at) VALUES (:id, 7, 'system.health.updated', 1, "
+                    "'TUSHARE_RT_MIN', :payload, :occurred_at)",
+                    {
+                        "id": existing_id,
+                        "payload": existing_payload,
+                        "occurred_at": _FIXED_NOW.isoformat(),
+                    },
+                )
+                connection.exec_driver_sql(
+                    "UPDATE monitor_sequence SET last_sequence = 7 WHERE singleton_id = 1"
+                )
+    
+            inspector = inspect(engine)
+            foreign_keys_before = inspector.get_foreign_keys("monitor_event")
+            indexes_before = inspector.get_indexes("monitor_event")
+            unique_constraints_before = inspector.get_unique_constraints("monitor_event")
+    
+            upgrade_database(engine)
+    
+            with engine.begin() as connection:
+                existing_after = connection.exec_driver_sql(
+                    "SELECT id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                    "occurred_at FROM monitor_event"
+                ).one()
+                high_water_after = connection.exec_driver_sql(
+                    "SELECT last_sequence FROM monitor_sequence WHERE singleton_id = 1"
+                ).scalar_one()
+                revision = connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                ).scalar_one()
+                connection.exec_driver_sql(
+                    "INSERT INTO monitor_event "
+                    "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                    "occurred_at) VALUES "
+                    "('00000000-0000-0000-0000-000000000802', 8, "
+                    "'market.index.updated', 1, '000688.SH', "
+                    '\'{"entityId":"000688.SH","revision":1,"status":"LIVE"}\', '
+                    ":occurred_at)",
+                    {"occurred_at": _FIXED_NOW.isoformat()},
+                )
+    
+            inspector = inspect(engine)
+            assert existing_after == (
+                existing_id,
+                7,
+                "system.health.updated",
+                1,
+                "TUSHARE_RT_MIN",
+                existing_payload,
+                _FIXED_NOW.isoformat(),
+            )
+            assert high_water_after == 7
+>           assert revision == "0026_market_exceptions"
+E           AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E             
+E             - 0025_index_close_display
+E             + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2757: AssertionError
+____ test_market_index_event_constraint_migration_refuses_lossy_downgrade _____
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_market_index_event_constr1')
+
+    def test_market_index_event_constraint_migration_refuses_lossy_downgrade(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+        event_id = "00000000-0000-0000-0000-000000000803"
+    
+        try:
+            upgrade_database(engine)
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO monitor_event "
+                    "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                    "occurred_at) VALUES (:id, 1, 'market.index.updated', 1, '000688.SH', "
+                    '\'{"entityId":"000688.SH","revision":1,"status":"LIVE"}\', '
+                    ":occurred_at)",
+                    {"id": event_id, "occurred_at": _FIXED_NOW.isoformat()},
+                )
+                connection.exec_driver_sql(
+                    "UPDATE monitor_sequence SET last_sequence = 1 WHERE singleton_id = 1"
+                )
+    
+            with pytest.raises(RuntimeError, match="refuses to discard market-index events"):
+                _downgrade_to(engine, "0007_plan_web_state")
+    
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:2798: AssertionError
+_______ test_monitor_event_migration_refuses_lossy_non_alert_downgrade ________
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_monitor_event_migration_r18')
+
+    def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+    
+        try:
+            upgrade_database(engine)
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO monitor_event "
+                    "(id, sequence, event_type, schema_version, aggregate_id, payload_json, "
+                    "occurred_at) VALUES (:id, 1, 'system.health.updated', 1, "
+                    "'TUSHARE_RT_MIN', :payload, :occurred_at)",
+                    {
+                        "id": "00000000-0000-0000-0000-000000000043",
+                        "payload": '{"entityId":"TUSHARE_RT_MIN","status":"READY"}',
+                        "occurred_at": _FIXED_NOW.isoformat(),
+                    },
+                )
+                connection.exec_driver_sql(
+                    "UPDATE monitor_sequence SET last_sequence = 1 WHERE singleton_id = 1"
+                )
+    
+            with pytest.raises(RuntimeError, match="refuses to discard monitor event"):
+                _downgrade_to(engine, "0005_evaluation_kind")
+    
+            assert "monitor_event" in inspect(engine).get_table_names()
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:3134: AssertionError
+____ test_evaluation_kind_migration_preserves_populated_0004_intraday_rows ____
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_evaluation_kind_migration0')
+
+    def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+        bucket_end = "2026-08-21T15:00:00+08:00"
+        evaluated_at = "2026-08-21T15:01:00+08:00"
+    
+        try:
+            _upgrade_to(engine, "0004_alert_sequence")
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO evaluation_ledger "
+                    "(plan_hash, symbol, bucket_end, formula_version, result_hash, evaluated_at) "
+                    "VALUES (:plan_hash, '003043.SZ', :bucket_end, 'ta-v1', :result_hash, "
+                    ":evaluated_at)",
+                    {
+                        "plan_hash": "b" * 64,
+                        "bucket_end": bucket_end,
+                        "result_hash": "c" * 64,
+                        "evaluated_at": evaluated_at,
+                    },
+                )
+    
+            upgrade_database(engine)
+    
+            columns = {column["name"] for column in inspect(engine).get_columns("evaluation_ledger")}
+            assert "bucket_end" not in columns
+            assert {"evaluation_kind", "target_value"} <= columns
+            with engine.connect() as connection:
+                row = connection.exec_driver_sql(
+                    "SELECT plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                    "result_hash, evaluated_at FROM evaluation_ledger"
+                ).one()
+                revision = connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                ).scalar_one()
+    
+            assert row == (
+                "b" * 64,
+                "003043.SZ",
+                "INTRADAY",
+                bucket_end,
+                "ta-v1",
+                "c" * 64,
+                evaluated_at,
+            )
+>           assert revision == "0026_market_exceptions"
+E           AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E             
+E             - 0025_index_close_display
+E             + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:3188: AssertionError
+____ test_evaluation_kind_migration_refuses_lossy_official_close_downgrade ____
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_evaluation_kind_migration2')
+
+    def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "monitor.db")
+    
+        try:
+            upgrade_database(engine)
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO evaluation_ledger "
+                    "(plan_hash, symbol, evaluation_kind, target_value, formula_version, "
+                    "result_hash, evaluated_at) VALUES (:plan_hash, '003043.SZ', "
+                    "'OFFICIAL_CLOSE', '2026-08-21', 'ta-v1', :result_hash, :evaluated_at)",
+                    {
+                        "plan_hash": "b" * 64,
+                        "result_hash": "c" * 64,
+                        "evaluated_at": "2026-08-21T15:20:00+08:00",
+                    },
+                )
+    
+            with pytest.raises(RuntimeError, match="refuses to discard official-close"):
+                _downgrade_to(engine, "0004_alert_sequence")
+    
+            columns = {column["name"] for column in inspect(engine).get_columns("evaluation_ledger")}
+            assert {"evaluation_kind", "target_value"} <= columns
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:3259: AssertionError
+_ test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_nulls _
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_optional_explicit_invento0')
+
+    def test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_nulls(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "explicit-inventory-revision.db")
+        values = {
+            "plan_hash": "b" * 64,
+            "result_hash": "c" * 64,
+            "target_value": "2026-09-14T10:00:00+08:00",
+            "evaluated_at": "2026-09-14T10:00:01+08:00",
+        }
+        try:
+            _upgrade_to(engine, "0014_explicit_rule_state")
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO explicit_evaluation_ledger "
+                    "(plan_hash, symbol, target_value, execution_version, activation_revision, "
+                    "result_hash, result_json, inventory_revision, manual_event_risk_revision, "
+                    "evaluated_at) VALUES (:plan_hash, '003043.SZ', :target_value, "
+                    "'explicit-rules-v1', 1, :result_hash, '{}', 7, NULL, :evaluated_at)",
+                    values,
+                )
+    
+            upgrade_database(engine)
+            with engine.begin() as connection:
+                assert (
+                    connection.exec_driver_sql(
+                        "SELECT inventory_revision FROM explicit_evaluation_ledger"
+                    ).scalar_one()
+                    == 7
+                )
+                connection.exec_driver_sql(
+                    "INSERT INTO explicit_evaluation_ledger "
+                    "(plan_hash, symbol, target_value, execution_version, activation_revision, "
+                    "result_hash, result_json, inventory_revision, manual_event_risk_revision, "
+                    "evaluated_at) VALUES (:plan_hash, '003043.SZ', "
+                    "'2026-09-14T10:05:00+08:00', 'explicit-rules-v1', 1, :result_hash, "
+                    "'{}', NULL, NULL, :evaluated_at)",
+                    values,
+                )
+    
+            with pytest.raises(RuntimeError, match="omit an unconsumed inventory revision"):
+                _downgrade_to(engine, "0014_explicit_rule_state")
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:3313: AssertionError
+___ test_explicit_review_migration_refuses_to_discard_bound_review_evidence ___
+
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.test-tmp/p1-full-integration-56/test_explicit_review_migration1')
+
+    def test_explicit_review_migration_refuses_to_discard_bound_review_evidence(
+        tmp_path: Path,
+    ) -> None:
+        engine = create_sqlite_engine(tmp_path / "explicit-review-bound.db")
+        plan, source_text = _sample_plan()
+    
+        try:
+            upgrade_database(engine)
+            with _unit_of_work(engine) as work:
+                saved = work.plans.save_draft(plan, source_text=source_text)
+                work.commit()
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "UPDATE plan_review_provenance SET content_hash = :digest "
+                    "WHERE plan_version_id = :plan_version_id",
+                    {"digest": "d" * 64, "plan_version_id": saved.id},
+                )
+    
+            with pytest.raises(RuntimeError, match="refuses to discard explicit review evidence"):
+                _downgrade_to(engine, "0015_optional_inventory_rev")
+            with engine.connect() as connection:
+>               assert (
+                    connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+                    == "0026_market_exceptions"
+                )
+E               AssertionError: assert '0026_market_exceptions' == '0025_index_close_display'
+E                 
+E                 - 0025_index_close_display
+E                 + 0026_market_exceptions
+
+tests\integration\test_sqlite_repositories.py:3464: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/integration/test_lot_history_indexes.py::test_history_migration_matches_orm_metadata
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_lot_history_indexes.py:180: SAWarning: Skipped unsupported reflection of expression-based index ux_exception_command
+    assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+
+tests/integration/test_lot_history_indexes.py::test_history_migration_matches_orm_metadata
+tests/integration/test_sqlite_repositories.py::test_sqlite_migration_has_no_metadata_drift
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\alembic\ddl\impl.py:850: UserWarning: autogenerate skipping metadata-specified expression-based index 'ux_exception_command'; dialect 'sqlite' under SQLAlchemy 2.0.52 can't reflect these indexes so they can't be compared
+    util.warn(
+
+tests/integration/test_sqlite_repositories.py::test_sqlite_migration_has_no_metadata_drift
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_sqlite_repositories.py:3482: SAWarning: Skipped unsupported reflection of expression-based index ux_exception_command
+    assert compare_metadata(migration_context, Base.metadata) == []
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================ slowest 15 durations =============================
+1275.57s call     tests/integration/test_backtest_acceptance.py::test_ten_symbol_252_day_replays_meet_capacity_budgets
+588.78s call     tests/integration/test_backtest_acceptance.py::test_252_day_replay_from_ten_symbol_dataset_meets_traced_heap_budget
+174.47s call     tests/integration/test_backtest_acceptance.py::test_large_queries_and_100k_export_meet_fixed_budgets
+94.09s setup    tests/integration/test_backtest_workspace_reads.py::test_diagnostic_read_does_not_rebuild_publication_rows
+91.54s call     tests/integration/test_monitor_loop_publication.py::test_scheduled_frozen_input_replays_to_one_published_report
+91.50s setup    tests/integration/test_monitor_loop_result_api.py::test_scheduled_result_has_exact_bounded_provenance_and_native_report_header
+89.29s setup    tests/integration/test_backtest_review.py::test_fill_context_and_signed_cross_page_causes
+49.77s call     tests/integration/test_market_linkage_replay.py::test_frozen_dataset_replays_linked_decision_and_publishes_zero_trade_cause
+22.12s call     tests/integration/test_backtest_acceptance.py::test_twenty_day_replay_meets_traced_heap_budget
+15.35s call     tests/integration/test_market_exception_frozen_workers.py::test_frozen_workers_preserve_both_exception_routes_and_isolate_authority[BROKEN_STRONG]
+15.05s call     tests/integration/test_backtest_acceptance.py::test_twenty_day_replay_meets_latency_working_set_and_wal_budgets
+14.84s call     tests/integration/test_market_exception_frozen_workers.py::test_future_authorization_does_not_change_prior_research_events[BROKEN_STRONG]
+14.04s call     tests/integration/test_s3_notification_kill_restart.py::test_composition_kill_windows_preserve_intent_and_uncertain_claim[business-committed]
+14.00s call     tests/integration/test_market_exception_frozen_workers.py::test_frozen_workers_preserve_both_exception_routes_and_isolate_authority[WEAK_MINIMUM]
+13.25s call     tests/integration/test_backtest_runner.py::test_daily_indicator_prefix_preserves_context_and_report_bytes
+=========================== short test summary info ===========================
+FAILED tests/integration/test_ai_browser_contract.py::test_browser_partial_extraction_fixture_matches_production_serialization
+FAILED tests/integration/test_ai_provider_contract.py::test_extraction_service_uses_real_adapter_but_returns_only_an_unactivated_draft
+FAILED tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[compatibility-v1]
+FAILED tests/integration/test_backtest_service_contract.py::test_generated_documents_and_types_match_mounted_service_routes[canonical-v2]
+FAILED tests/integration/test_current_plan_api.py::test_formal_extraction_edit_review_activate_and_restart_binding
+FAILED tests/integration/test_current_plan_api.py::test_successful_extraction_provenance_survives_lifecycle_restart_before_save
+FAILED tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v4]
+FAILED tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v5]
+FAILED tests/integration/test_explicit_plan_review_api.py::test_mapping_extraction_save_review_and_public_activation_are_server_bound[plan-extract-v6]
+FAILED tests/integration/test_explicit_plan_review_api.py::test_original_source_partial_save_current_edit_and_semantic_review_stay_bound
+FAILED tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation
+FAILED tests/integration/test_index_permission_process_restart.py::test_migrated_index_permissions_recheck_independently_across_processes[idx_mins]
+FAILED tests/integration/test_index_permission_process_restart.py::test_migrated_index_permissions_recheck_independently_across_processes[rt_idx_min_daily]
+FAILED tests/integration/test_lot_history_indexes.py::test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row
+FAILED tests/integration/test_market_exception_concurrency.py::test_fresh_process_preserves_approved_evidence
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1]
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[canonical-v2]
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_snapshot_is_deterministic_canonical_and_current
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas
+FAILED tests/integration/test_openapi_snapshot.py::test_typescript_contract_is_generated_from_the_snapshot
+FAILED tests/integration/test_plan_extraction_diagnostics.py::test_simulated_diagnostic_io_failure_preserves_active_plan_and_extraction_outcomes
+FAILED tests/integration/test_sqlite_repositories.py::test_sqlite_migration_upgrades_empty_database_and_is_idempotent
+FAILED tests/integration/test_sqlite_repositories.py::test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
+FAILED tests/integration/test_sqlite_repositories.py::test_plan_web_state_migration_refuses_lossy_downgrade_atomically[review]
+FAILED tests/integration/test_sqlite_repositories.py::test_plan_web_state_migration_refuses_lossy_downgrade_atomically[deactivation]
+FAILED tests/integration/test_sqlite_repositories.py::test_alert_sequence_migration_backfills_existing_high_water
+FAILED tests/integration/test_sqlite_repositories.py::test_monitor_event_migration_renames_high_water_and_backfills_alerts
+FAILED tests/integration/test_sqlite_repositories.py::test_market_index_event_constraint_migration_preserves_the_existing_ledger
+FAILED tests/integration/test_sqlite_repositories.py::test_market_index_event_constraint_migration_refuses_lossy_downgrade
+FAILED tests/integration/test_sqlite_repositories.py::test_monitor_event_migration_refuses_lossy_non_alert_downgrade
+FAILED tests/integration/test_sqlite_repositories.py::test_evaluation_kind_migration_preserves_populated_0004_intraday_rows
+FAILED tests/integration/test_sqlite_repositories.py::test_evaluation_kind_migration_refuses_lossy_official_close_downgrade
+FAILED tests/integration/test_sqlite_repositories.py::test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_nulls
+FAILED tests/integration/test_sqlite_repositories.py::test_explicit_review_migration_refuses_to_discard_bound_review_evidence
+35 failed, 4606 passed, 1 skipped, 5 warnings in 4508.52s (1:15:08)

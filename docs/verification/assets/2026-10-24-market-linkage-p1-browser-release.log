@@ -1,0 +1,21 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/market-exceptions.spec.ts tests/e2e/market-linkage.spec.ts
+
+
+Running 9 tests using 1 worker
+
+
+
+(node:112312) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM consume › source review, explicit occurrence approval and separate whole execution
+[2/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM revoke › source review, explicit occurrence approval and separate whole execution
+[3/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM reject › source review, explicit occurrence approval and separate whole execution
+[4/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM correction › source review, explicit occurrence approval and separate whole execution
+[5/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG consume › source review, explicit occurrence approval and separate whole execution
+[6/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG revoke › source review, explicit occurrence approval and separate whole execution
+[7/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG reject › source review, explicit occurrence approval and separate whole execution
+[8/9] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG correction › source review, explicit occurrence approval and separate whole execution
+[9/9] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+  9 passed (1.4m)

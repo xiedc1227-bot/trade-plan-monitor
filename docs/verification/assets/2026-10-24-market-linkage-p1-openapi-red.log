@@ -1,0 +1,22 @@
+.FF...........                                                           [100%]
+================================== FAILURES ===================================
+____________ test_openapi_change_requires_bilingual_spec_approval _____________
+tests\integration\test_openapi_snapshot.py:162: in test_openapi_change_requires_bilingual_spec_approval
+    assert f"OpenAPI snapshot SHA-256: `{digest}`" in LOCAL_WEB_SPEC_PATH.read_text(
+E   AssertionError: assert 'OpenAPI snapshot SHA-256: `8d0a3bf2cad7272b41cb6d0e644b12593f4a422b738f0b7492c521e8742a6d82`' in '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.\n'
+E    +  where '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...614c996c818f1e14c65a965c64518170e36c`; canonical `9c3b26bfbdf4e07cf15f9181d6abe78264fb64681d81ccff94b392722b87a7e0`.\n' = read_text(encoding='utf-8')
+E    +    where read_text = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/docs/specifications/monitoring/SPEC-unified-plan.md').read_text
+_____ test_openapi_contains_only_approved_paths_and_public_error_schemas ______
+tests\integration\test_openapi_snapshot.py:172: in test_openapi_contains_only_approved_paths_and_public_error_schemas
+    assert set(document["paths"]) == APPROVED_PATHS
+E   AssertionError: assert {'/api/v1/ai-...cations', ...} == {'/api/v1/ai-...cations', ...}
+E     
+E     Extra items in the left set:
+E     '/api/v1/plan-exception-decisions'
+E     '/api/v1/plan-exception-previews'
+E     '/api/v1/plan-exception-revocations'
+E     Use -v to get more diff
+=========================== short test summary info ===========================
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas
+2 failed, 12 passed in 18.42s
