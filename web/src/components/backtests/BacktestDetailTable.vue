@@ -79,6 +79,11 @@ function optional(value: string | number | null): string | number {
             <td colspan="8">
               <p>评估时信号 {{ item.researchDecision.signals.length }}；提醒 {{ item.researchDecision.alerts.length }}；操作后库存 {{ item.researchDecision.inventory_after.total_qty ?? '未知' }}</p>
               <p>数据阻断：{{ item.researchDecision.blockers.join('、') || '无' }}</p>
+              <p v-for="outcome in item.researchDecision.exception_outcomes ?? []" :key="outcome.envelope_hash">
+                例外授权来源：{{ outcome.provenance === 'RESEARCH_SCENARIO' ? '研究假设' : '已记录的本地授权事件' }}；
+                {{ outcome.status === 'BLOCKED' ? '已阻断' : '已验证' }}。批准本身不产生模拟成交；须有独立执行操作。
+                {{ outcome.blockers.join('、') }}
+              </p>
               <ul>
                 <li v-for="signal in item.researchDecision.signals" :key="signal.signal_id">
                   规则 {{ signal.rule_id }} · {{ signal.state }}；计划 {{ signal.planned_qty }} 股 / 可执行 {{ signal.executable_qty }} 股；窗口 {{ signal.execution_window }} / {{ signal.execution_date }}；阻断 {{ signal.blockers.join('、') || '无' }}

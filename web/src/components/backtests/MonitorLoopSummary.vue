@@ -40,6 +40,23 @@ const financialMetrics = computed(() => [
   <section class="loop-summary" data-testid="monitor-loop-summary" :aria-label="scheduled ? '连续监控闭环汇总' : '单计划监控闭环汇总'">
     <h3>{{ run.symbol }} · {{ scheduled ? '多版本连续监控闭环' : '一份冻结计划的监控闭环' }}</h3>
     <p>预置计划未声明历史可用时间时，按生效交易日开盘起执行；该执行假设不代表计划在历史上已发布。</p>
+    <section v-if="run.report.exception_provenance != null" aria-label="例外授权来源">
+      <h4>例外授权来源</h4>
+      <p v-if="run.report.exception_provenance.length === 0">未提供例外授权，本次回放不能执行例外买入。</p>
+      <p v-if="run.report.exception_provenance.includes('RESEARCH_SCENARIO')">包含研究假设：假设的批准不代表历史上实际发生过批准。</p>
+      <p v-if="run.report.exception_provenance.includes('RECORDED_LOCAL')">包含已记录的本地授权事件，仅按冻结的接收时间回放。</p>
+      <p>批准本身不产生模拟成交；例外买入还需要独立执行请求、原有效期及当时全部执行条件。</p>
+      <details v-if="run.report.exception_outcomes?.length || run.report.exception_requests?.length">
+        <summary>核对授权与执行请求结果</summary>
+        <ul><li v-for="outcome in run.report.exception_outcomes ?? []" :key="outcome.envelope_hash">
+          {{ formatDisplayDateTime(outcome.at) }} · {{ outcome.status === 'BLOCKED' ? '授权事件未应用' : outcome.status === 'VERIFIED' ? '已核对终态' : '授权事件已应用' }}
+          <span v-if="outcome.blockers.length"> · {{ outcome.blockers.join('、') }}</span>
+        </li><li v-for="request in run.report.exception_requests ?? []" :key="request.operation_id">
+          {{ formatDisplayDateTime(request.at) }} · {{ request.status === 'REQUESTED' ? '已登记独立执行请求' : '执行请求受阻' }}
+          <span v-if="request.blockers.length"> · {{ request.blockers.join('、') }}</span>
+        </li></ul>
+      </details>
+    </section>
     <p v-if="run.openingAccount.cash.kind === 'POSITION_LIMIT_ONLY'">本次回测不限制现金，买入仍受规则授权及最大持仓限制。记录成交盈亏和费用，不计算本金收益率或净值回撤。</p>
     <BacktestVersionTimeline v-if="scheduled" :run="scheduled" />
     <details><summary>账户与运行设置</summary>

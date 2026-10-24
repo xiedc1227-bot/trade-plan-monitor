@@ -6,6 +6,7 @@ import type {
   SingleSourcePreparationInput,
 } from "./generated-runtime-status";
 import { resolveApiFetch } from "./context";
+import { currentPlanVersion } from "./preparationReview";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
 import { account, validReviewCandidate, validPreparationReviewInput, validPreparationFrozenView, validCollectionFrozen, validCollectionCandidate, validCollectionReviewInput } from "./preparationReview";
@@ -90,7 +91,7 @@ function validCandidate(value: unknown): boolean {
       !Array.isArray(value.issues) || value.issues.length > 128 ||
       !value.issues.every(issue => typeof issue === "string" && Array.from(issue).length <= 512)) return false;
   if (value.kind === "EXTRACTION") return value.frozen == null && record(value.draft) &&
-    value.draft.schema_version === 5 && value.draft.execution_mode === "CONDITION_PLAN" &&
+    currentPlanVersion(value.draft) &&
     record(value.mapping) && value.mapping.mapping_version === "daily-mapping-v1" &&
     record(value.openingAccount) && Array.isArray(value.openingAccount.lots);
   if (value.kind === "FROZEN") return value.draft == null && value.mapping == null && value.openingAccount == null &&

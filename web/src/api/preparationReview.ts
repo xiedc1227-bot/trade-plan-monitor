@@ -34,8 +34,14 @@ function opening(value: unknown, source: readonly string[]): boolean {
       fact(lot.unit_cost_yuan, source, value => typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value)) &&
       fact(lot.acquired_trade_date, source, isCalendarDate) && fact(lot.sellable_quantity, source, integer));
 }
+export function currentPlanVersion(value: unknown): boolean {
+  return record(value) && value.execution_mode === "CONDITION_PLAN" && (
+    value.schema_version === 5 && (value.execution_version === undefined || value.execution_version === "condition-plan-v1") ||
+    value.schema_version === 6 && value.execution_version === "condition-plan-v2" && record(value.reference_market) ||
+    value.schema_version === 7 && value.execution_version === "condition-plan-v3" && record(value.reference_market));
+}
 function draft(value: unknown): boolean {
-  return record(value) && value.schema_version === 5 && value.execution_mode === "CONDITION_PLAN" &&
+  return record(value) && currentPlanVersion(value) &&
     text(value.symbol, 128) && text(value.name) && text(value.plan_id, 128) && integer(value.version, 1) &&
     ["SSE", "SZSE", "BSE"].includes(String(value.market)) && record(value.metadata) && record(value.position) &&
     [value.activation, value.levels, value.monitoring, value.execution_policy].every(item => item === null || record(item)) &&

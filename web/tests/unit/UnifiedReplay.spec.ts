@@ -32,5 +32,24 @@ describe("current research results", () => {
     expect(isResearchInput(input)).toBe(true);
     expect(isResearchInput({...input, inventory_known: undefined})).toBe(false);
     expect(isResearchInput({...input, review: {...input.review, confirmed: 1}})).toBe(false);
+    const exceptions = {...input, schema_version: "unified-research-input-v2", exception_authorization_events: []};
+    expect(isResearchInput(exceptions)).toBe(true);
+    expect(isResearchInput({...exceptions, schema_version: "unified-research-input-v1"})).toBe(false);
+    expect(isResearchInput({...exceptions, exception_authorization_events: [{provenance: "INFERRED"}]})).toBe(false);
+  });
+
+  it.each(["RESEARCH_SCENARIO", "RECORDED_LOCAL"])("shows %s in persisted decision evidence", provenance => {
+    const outcome = {schema_version: "exception-replay-outcome-v1",
+      envelope_hash: "a".repeat(64), source_event_id: "b".repeat(64), candidate_id: "c".repeat(64),
+      private_event_id: "d".repeat(64), at: decision.researchDecision.at, provenance, status: "APPLIED", blockers: []};
+    const value = {...structuredClone(decision), researchDecision: {
+      ...structuredClone(decision.researchDecision), exception_outcomes: [outcome]}};
+    expect(isResearchDetail(value)).toBe(true);
+    if (!isResearchDetail(value)) throw new Error("invalid replay fixture");
+    const wrapper = mount(BacktestDetailTable, {props: {items: [value], kind: "DECISION"}});
+    expect(wrapper.text()).toContain(provenance === "RESEARCH_SCENARIO" ? "研究假设" : "已记录的本地授权事件");
+    expect(wrapper.text()).toContain("批准本身不产生模拟成交");
+    outcome.provenance = "INFERRED";
+    expect(isResearchDetail(value)).toBe(false);
   });
 });

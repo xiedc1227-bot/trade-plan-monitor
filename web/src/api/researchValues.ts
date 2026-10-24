@@ -1,4 +1,5 @@
-import type { ResearchDecisionView, ResearchOperationView, UnifiedResearchInput } from "./generated";
+import type { ExceptionResearchInput, ResearchDecisionView, ResearchOperationView, UnifiedResearchInput } from "./generated";
+import { exceptionOutcomes, frozenExceptionEvents } from "./exceptionReplayValues";
 import { normalizeShanghaiDateTime } from "./shanghaiTime";
 
 function sameTime(first: unknown, second: unknown): boolean {
@@ -42,11 +43,13 @@ function safeTree(value: unknown, depth = 0): boolean {
   return record(value) && Object.values(value).every((item) => safeTree(item, depth + 1));
 }
 
-export function isResearchInput(value: unknown): value is UnifiedResearchInput {
+export function isResearchInput(value: unknown): value is UnifiedResearchInput | ExceptionResearchInput {
   if (!record(value) || !safeTree(value)) return false;
   const allowed = ["schema_version", "started_at", "inventory_known", "review", "operations", "adjustment_proofs", "calendar_extension"];
+  const exceptions = value.schema_version === "unified-research-input-v2";
+  if (exceptions) allowed.push("exception_authorization_events");
   return Object.keys(value).every((key) => allowed.includes(key)) &&
-    (value.schema_version === undefined || value.schema_version === "unified-research-input-v1") &&
+    (exceptions ? frozenExceptionEvents(value.exception_authorization_events) : value.schema_version === undefined || value.schema_version === "unified-research-input-v1") &&
     typeof value.started_at === "string" && value.started_at.endsWith("+08:00") &&
     typeof value.inventory_known === "boolean" && record(value.review) &&
     value.review.confirmed === true && typeof value.review.content_hash === "string" &&
@@ -64,6 +67,7 @@ export function isResearchDetail(value: unknown): value is ResearchDecisionView 
   if (value.kind === "DECISION" && record(decision)) {
     return Object.keys(value).sort().join() === ["detailId", "eventAt", "kind", "researchDecision", "runId"].sort().join() &&
       decision.schema_version === "unified-research-decision-v1" && typeof decision.event_id === "string" &&
+      (decision.exception_outcomes === undefined || exceptionOutcomes(decision.exception_outcomes)) &&
       Array.isArray(decision.signals) && decision.signals.length <= 500 && decision.signals.every(signal) &&
       Array.isArray(decision.risks) && decision.risks.length <= 2 && decision.risks.every(risk) &&
       Array.isArray(decision.resulting_signals) && decision.resulting_signals.length <= 500 && decision.resulting_signals.every(signal) &&

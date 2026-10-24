@@ -1,5 +1,6 @@
 import type { WorkbenchBacktestRunCommand, WorkbenchBacktestDataView, WorkbenchBacktestRunView } from "./generated";
 import { isResearchDetail, isResearchInput } from "./researchValues";
+import { exceptionProgram } from "./exceptionReplayValues";
 import { validLoopRun, validLoopRunSummary, validLoopEvent, validLoopFill, validScheduledRun, validScheduledEvent } from "./monitorLoopValues";
 import type { ResearchMetricsView, ResearchEquityView } from "./generated";
 import type {
@@ -3054,10 +3055,12 @@ function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBa
   const keys = workbench ? ["schemaVersion", "selectionId", "selectionHash", "response", "costs"] : ["preparationId", "manifestHash", "response", "costs"];
   if (value.schemaVersion === "prepared-loop-plan-v2") keys.push("schemaVersion");
   if (value.endDate !== undefined) keys.push("endDate");
+  if (value.exceptionProgram !== undefined) keys.push("exceptionProgram");
   const response = value.response;
   const costs = value.costs;
   const responseDelaySeconds = isRecord(response) ? response.responseDelaySeconds ?? 0 : null;
   if (!hasExactKeys(value, keys) || !(workbench ? isJobId(value.selectionId) && isSha256(value.selectionHash) : isJobId(value.preparationId) && isSha256(value.manifestHash)) ||
+      value.exceptionProgram !== undefined && !exceptionProgram(value.exceptionProgram) ||
       value.endDate !== undefined && !isCalendarDate(value.endDate) ||
       !isRecord(response) || !hasExactKeys(response, response.responseDelaySeconds === undefined
         ? ["mode"] : ["mode", "responseDelaySeconds"]) ||
@@ -3082,6 +3085,7 @@ function normalizePreparedRunCommand(value: Record<string, unknown>): PreparedBa
       stampDutyRate: costs.stampDutyRate, transferFeeRate: costs.transferFeeRate,
       buySlippageFen: costs.buySlippageFen, sellSlippageFen: costs.sellSlippageFen },
     ...(value.endDate === undefined ? {} : { endDate: value.endDate }),
+    ...(value.exceptionProgram === undefined ? {} : { exceptionProgram: value.exceptionProgram }),
   };
 }
 

@@ -2,6 +2,8 @@ import type { WorkbenchBacktestRunView } from "./generated";
 import type { BacktestLoopRunView, BacktestLoopRunSummaryView, BacktestLoopEventView, BacktestLoopFillView, BacktestScheduledRunView, BacktestScheduledRunSummaryView, BacktestScheduledEventView } from "./generated";
 import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shanghaiTime";
 import { validPlanDiagnostics } from "./planDiagnostics";
+import { currentPlanVersion } from "./preparationReview";
+import { exceptionOutcomes } from "./exceptionReplayValues";
 
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const integer = (v: unknown, min = 0): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= min;
@@ -17,6 +19,20 @@ const keys = (v: Record<string, unknown>, required: readonly string[], optional:
   required.every(k => Object.hasOwn(v, k)) && Object.keys(v).every(k => required.includes(k) || optional.includes(k));
 const bytes = (v: unknown, max: number) => new TextEncoder().encode(JSON.stringify(v)).byteLength <= max;
 const sameTime = (a: unknown, b: unknown) => isShanghaiDateTime(a) && isShanghaiDateTime(b) && shanghaiDateTimeKey(a) === shanghaiDateTimeKey(b);
+const exceptionFields = ["exception_outcomes", "exception_requests", "exception_provenance"];
+function exceptionReport(v: Record<string, unknown>): boolean {
+  if (exceptionFields.every(key => v[key] === undefined)) return true;
+  return Array.isArray(v.exception_provenance) && v.exception_provenance.length <= 2 &&
+    v.exception_provenance.every(item => ["RECORDED_LOCAL", "RESEARCH_SCENARIO"].includes(item)) &&
+    exceptionOutcomes(v.exception_outcomes) &&
+    Array.isArray(v.exception_requests) && v.exception_requests.length <= 10000 && v.exception_requests.every(item => record(item) &&
+      identifier(item.operation_id) && isShanghaiDateTime(item.at) && ["REQUESTED", "BLOCKED"].includes(String(item.status)) &&
+      strings(item.blockers) && nullable(item.intent_id, hash));
+}
+function explicitOperation(v: unknown): boolean {
+  return record(v) && v.kind === "SIMULATE" && identifier(v.operation_id) && isShanghaiDateTime(v.at) && integer(v.order) &&
+    identifier(v.rule_id) && integer(v.occurrence, 1) && v.risk_kind == null && integer(v.quantity, 100) && Number(v.quantity) % 100 === 0;
+}
 
 /** Transport shape/bounds and identity checks. Semantic trading and hash verification remain server-owned. */
 function bounded(v: unknown, depth = 0, budget = { left: 100_000 }): boolean {
@@ -133,13 +149,13 @@ export function validLoopRun(v: unknown): v is BacktestLoopRunView | WorkbenchBa
       plan.plan_hash !== v.planHash || !hash(plan.evidence_hash) || !identifier(plan.version_id) ||
       !isShanghaiDateTime(plan.available_at) || !isShanghaiDateTime(plan.information_cutoff) || !Array.isArray(plan.source_hashes) || !plan.source_hashes.every(hash) ||
       !record(plan.review) || plan.review.confirmed !== true || !isShanghaiDateTime(plan.review.reviewed_at) || !text(plan.review.evidence) ||
-      !record(plan.snapshot) || plan.snapshot.schema_version !== 5 || plan.snapshot.symbol !== v.symbol ||
+      !record(plan.snapshot) || !currentPlanVersion(plan.snapshot) || plan.snapshot.symbol !== v.symbol ||
       !record(plan.snapshot.position) || !Array.isArray(plan.snapshot.ordinary_rules) || !Array.isArray(plan.snapshot.risk_branches) ||
       !keys(response, ["mode"], ["response_delay_seconds", "fill_model"]) || !["FOLLOW_REMINDERS", "OBSERVE_ONLY", "RECORDED_ACTIONS"].includes(String(response.mode)) ||
       !(response.response_delay_seconds === undefined || integer(response.response_delay_seconds)) ||
       !(response.fill_model === undefined || response.fill_model === "NEXT_ELIGIBLE_MINUTE_CLOSE")) return false;
   if (!keys(report, ["authority_id", "boundary", "cycle", "dataset_hash", "event_count", "event_set_hash", "final_account", "final_inventory",
-      "final_valuation", "input_hash", "last_evidence_at", "last_valuation_at", "metrics", "opening_valuation", "plan_hash", "report_hash", "run_id", "symbol"], ["schema_version"]) ||
+      "final_valuation", "input_hash", "last_evidence_at", "last_valuation_at", "metrics", "opening_valuation", "plan_hash", "report_hash", "run_id", "symbol"], ["schema_version", ...exceptionFields]) || !exceptionReport(report) ||
       !(report.schema_version === undefined || report.schema_version === "backtest-report-v4") ||
       report.run_id !== v.runId || report.dataset_hash !== v.datasetHash || report.plan_hash !== v.planHash || report.report_hash !== v.reportHash ||
       report.input_hash !== provenance.inputHash || report.symbol !== v.symbol || !hash(report.authority_id) || !hash(report.event_set_hash) ||
@@ -189,7 +205,7 @@ export function validScheduledRun(v: unknown): v is BacktestScheduledRunView {
   if (!validPlanDiagnostics(v.planDiagnostics, versions.map(version => String(version.versionId)), Number(v.fillCount))) return false;
   if (v.planDiagnostics?.plans.some((p, i) => p.source_id !== versions[i].sourceId || p.effective_trade_date !== versions[i].effectiveTradeDate)) return false;
   if (!keys(report, ["report_schema_version", "boundary", "cycle", "dataset_hash", "event_count", "event_set_hash", "final_account", "final_inventory",
-      "final_valuation", "input_hash", "last_evidence_at", "last_valuation_at", "metrics", "opening_valuation", "report_hash", "run_id", "symbol"]) ||
+      "final_valuation", "input_hash", "last_evidence_at", "last_valuation_at", "metrics", "opening_valuation", "report_hash", "run_id", "symbol"], exceptionFields) || !exceptionReport(report) ||
       report.report_schema_version !== "backtest-report-v5" || report.run_id !== v.runId || report.dataset_hash !== v.datasetHash || report.report_hash !== v.reportHash ||
       report.input_hash !== provenance.inputHash || report.symbol !== v.symbol || !hash(report.event_set_hash) || !integer(report.event_count, 1) ||
       !account(report.final_account) || !inventory(report.final_inventory) || !valuation(report.final_valuation) || !valuation(report.opening_valuation) ||
@@ -207,7 +223,8 @@ function payload(v: unknown): boolean {
   if (!record(v)) return false;
   if (v.kind === "STATE") return keys(v, ["kind", "account", "inventory"]) && account(v.account) && inventory(v.inventory);
   if (v.kind === "VALUATION") return keys(v, ["kind", "valuation"]) && valuation(v.valuation);
-  if (v.kind === "REQUESTED") return keys(v, ["kind", "cause_id", "intent_id", "ready_at"]) && identifier(v.cause_id) && hash(v.intent_id) && isShanghaiDateTime(v.ready_at);
+  if (v.kind === "REQUESTED") return keys(v, ["kind", "cause_id", "intent_id", "ready_at"], ["source_operation"]) &&
+    (v.source_operation === undefined || explicitOperation(v.source_operation)) && identifier(v.cause_id) && hash(v.intent_id) && isShanghaiDateTime(v.ready_at);
   if (v.kind === "REMINDED") return keys(v, ["kind", "reminder"]) && record(v.reminder) &&
     keys(v.reminder, ["captured_at", "cause_revision", "event", "inventory_revision", "sequence", "status"]) &&
     isShanghaiDateTime(v.reminder.captured_at) && nullable(v.reminder.cause_revision, integer) && integer(v.reminder.inventory_revision) && integer(v.reminder.sequence, 1) &&
@@ -221,7 +238,9 @@ function payload(v: unknown): boolean {
       ["FILLED", "BLOCKED", "CLOSED"].includes(String(attempt.status)) &&
       (attempt.status === "FILLED" ? receipt(attempt.receipt) : attempt.receipt == null);
   }
-  return v.kind === "EVALUATED" && keys(v, ["kind", "alerts", "blockers", "conditions", "duplicate", "evaluation_id", "inventory", "minute_target", "official_trade_date", "risk_action", "risks", "signals"]) &&
+  return v.kind === "EVALUATED" && keys(v, ["kind", "alerts", "blockers", "conditions", "duplicate", "evaluation_id", "inventory", "minute_target", "official_trade_date", "risk_action", "risks", "signals"], ["market_linkage"]) &&
+    (v.market_linkage === undefined || v.market_linkage === null || Array.isArray(v.market_linkage) && v.market_linkage.length <= 2 && v.market_linkage.every(item => record(item) &&
+      ["market-linkage-evidence-v1", "market-linkage-evidence-v2"].includes(String(item.version)) && record(item.calculation) && hash(item.evidence_hash))) &&
     strings(v.blockers) && typeof v.duplicate === "boolean" && nullable(v.evaluation_id, hash) && inventory(v.inventory) &&
     nullable(v.minute_target, isShanghaiDateTime) && nullable(v.official_trade_date, isCalendarDate) && record(v.risk_action) &&
     Array.isArray(v.conditions) && v.conditions.every(item => record(item) && text(item.rule_id) && record(item.evidence) &&
