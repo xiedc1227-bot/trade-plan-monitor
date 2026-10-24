@@ -3,9 +3,9 @@
 from alembic import context
 from sqlalchemy.engine import Connection
 
-from trade_plan_monitor.state.models import Base
+from trade_plan_monitor.state.daily_models import DailyRecord
 
-target_metadata = Base.metadata
+target_metadata = DailyRecord.metadata
 
 
 def run_migrations_online() -> None:

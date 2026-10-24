@@ -14,7 +14,7 @@ from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_data
 from trade_plan_monitor.state.models import AuditLog, Base, MonitorEvent
 
 PREVIOUS_REVISION = "0019_alert_delivery_eligibility"
-LATEST_REVISION = "0025_index_close_display"
+LATEST_REVISION = "0026_market_exceptions"
 EXPECTED_INDEXES = {
     "audit_log": ("ix_audit_log_entity", ["entity_type", "entity_id"]),
     "monitor_event": ("ix_monitor_event_aggregate_sequence", ["aggregate_id", "sequence"]),
