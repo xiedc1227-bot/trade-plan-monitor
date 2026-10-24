@@ -25,6 +25,7 @@ from trade_plan_monitor.ai.models import (
 )
 from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
 from trade_plan_monitor.ai.prompts import (
+    PLAN_EXTRACTION_PROMPT_VERSION,
     build_plan_extraction_prompt,
 )
 from trade_plan_monitor.ai.provider import (
@@ -61,7 +62,7 @@ async def extract_plan(
 ) -> PlanExtractionResult:
     """Extract one review-only draft without persistence or activation side effects."""
 
-    config = config.model_copy(update={"prompt_version": "plan-extract-v9"})
+    config = config.model_copy(update={"prompt_version": PLAN_EXTRACTION_PROMPT_VERSION})
     prompt = build_plan_extraction_prompt(
         source_text,
         prompt_version=config.prompt_version,

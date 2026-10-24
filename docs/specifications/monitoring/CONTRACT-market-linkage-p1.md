@@ -44,4 +44,6 @@ Candidate binds the full identities in MLP1-08, the eligible D evidence, compute
 
 T02 sequential slices: T02a models plus codec and contract tests; T02b draft model/dispatch and tests; T02c review hashing and issue dispatch plus tests. Each slice contains at most five source/test files. Public activation, extraction and execution support remain unavailable until their owning tasks complete; a domain codec alone is not shipped support.
 
+T04 sequential slices: T04a expanded bilingual definitions, semantic review and integration tests (four files); T04b current prompt/version dispatch and tests (up to five files); T04c provider/config defaults and loop prompt compatibility (up to five files). T05 owns compact preparation and predecessor patch propagation. Permission fields and expanded definitions require validated source meaning even when the binding claims literal SOURCE, not only SOURCE_SEMANTIC.
+
 T01 is accepted only with V01 and paired-document checks. Later tasks require executed evidence in the [P1 verification report](../../verification/2026-10-24-market-linkage-p1.md); no unchecked task is a completed feature.

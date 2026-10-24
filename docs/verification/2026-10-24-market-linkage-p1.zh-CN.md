@@ -42,3 +42,15 @@ RED：初始契约测试因缺少 Schema 7 模型／分发产生 9 失败／1 �
 ```
 
 MLP1-C01 仅验收契约与算术。后续权限、运行、UI 和回放任务仍未完成。
+
+## MLV1-05 — 来源绑定提取（MLP1-T04）
+
+Schema 7 提取使用 `plan-extract-v10`，要求完整例外定义及逐路径来源许可，不能生成批准。字面绑定和解释绑定都检查否定许可。中英文定义保持等价边界。已有 v8/v9 记录继续可读。
+
+RED：扩展格式暴露了实际的 50,000 字符输入上限回归，两项提示词预算测试失败。共享相同格式定义修复了回归，没有提高上限或删除校验约束。最终提取、审核、安全及提示词预算测试 **73 项通过，耗时 2.55s**；默认版本回归 **63 项通过，耗时 0.97s**。完整 `ruff check src tests` 通过。
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_current_plan_extraction_security.py tests/integration/test_market_exception_review.py tests/integration/test_market_linkage_review.py tests/unit/test_current_review_contract.py tests/unit/test_preparation_prompt_budget.py -q --basetemp .test-tmp/p1-t04-verified
+```
+
+MLP1-T04 验收通过。更新／准备、持久化授权及后续检查点仍待完成。

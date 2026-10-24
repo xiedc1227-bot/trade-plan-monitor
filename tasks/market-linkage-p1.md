@@ -64,7 +64,7 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T04 — Bind extraction and review to source permission
 
-- [ ] Extend extraction/review with complete per-route semantics, source bindings and deliberate disabled states; reject fabricated approval, negated permission and missing definitions; no broken-route quantity inference.
+- [x] Extend extraction/review with complete per-route semantics, source bindings and deliberate disabled states; reject fabricated approval, negated permission and missing definitions; no broken-route quantity inference.
 - Depends on: MLP1-C01. Acceptance: MLP1-A04–MLP1-A05; Chinese and English sources produce equivalent authority boundaries.
 - Files/scope: `ai/plan_extraction.py`, `ai/daily_review.py`, `ai/semantic_validation.py`, policy definition seam, `tests/integration/test_market_exception_review.py`; M.
 - Verify: relevant V04 tests, malformed/negative source cases and existing review regression.

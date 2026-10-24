@@ -17,21 +17,40 @@ def semantic_interpretation_matches(path, value, excerpt, draft):
     text = plain(excerpt)
     if not text.strip():
         return False
+    if ".market_policy.exception_routes." in path:
+        if value == "PER_OCCURRENCE" and re.search(
+            r"(?:不|未|暂不)(?:允许|启用|采用|授权)|禁止|取消|"
+            r"\b(?:do\s+not|don't|never)\s+(?:allow|enable|authorize)\b",
+            text, re.I,
+        ):
+            return False
+        if re.search(r"(?<!\w)" + re.escape(str(value)) + r"(?!\w)", excerpt):
+            return True
+        name = "最低量例外" if path.endswith("weak_minimum") else "明显破坏强势例外"
+        return (value == "PER_OCCURRENCE" and f"允许逐次人工复评{name}" in text
+                or value == "DISABLED" and f"关闭{name}" in text)
     if ".market_policy.expanded." in path:
         # Unlike general enum translations, a version label cannot stand in
         # for all the conditions hidden behind a built-in strategy expansion.
-        from trade_plan_monitor.domain.market_linkage_definitions import EXPANDED_LINKAGE_POLICY_ZH
+        from trade_plan_monitor.domain.market_linkage_definitions import (
+            EXPANDED_EXCEPTION_POLICY_ZH,
+            EXPANDED_LINKAGE_POLICY_ZH,
+        )
+        # The approved definition itself says approval does not execute a trade;
+        # that is a required restriction, not a negation of the policy definition.
+        negative_text = text.replace("批准不执行交易", "") if draft.schema_version == 7 else text
         if re.search(
             r"(?:不|未|暂不)(?:采用|使用|执行|启用)|取消(?:以下|该|此)?(?:定义|规则|政策)|"
             r"\b(?:do\s+not|don't|never)\s+(?:apply|use|adopt|enable)\b",
-            text, re.I,
+            negative_text, re.I,
         ):
             return False
         def normalized(text):
             return re.sub(r"[\s;；\"'。，,：:]", "", text).casefold()
         translations = (
             str(value),
-            EXPANDED_LINKAGE_POLICY_ZH.get(path.rsplit(".", 1)[-1], str(value)),
+            (EXPANDED_EXCEPTION_POLICY_ZH if draft.schema_version == 7
+             else EXPANDED_LINKAGE_POLICY_ZH).get(path.rsplit(".", 1)[-1], str(value)),
         )
         return any(normalized(text) in normalized(excerpt) for text in translations)
     if path in {"symbol", "market"}:

@@ -647,9 +647,10 @@ class PlanExtractionView(ApiValue):
             plan_json = cast(str, self.draft_plan_json)
             plan = _load_reviewable_plan(plan_json)
             if (
-                self.prompt_version not in {"plan-extract-v8", "plan-extract-v9"}
+                self.prompt_version
+                not in {"plan-extract-v8", "plan-extract-v9", "plan-extract-v10"}
                 or not isinstance(plan, DailyPlanDraft)
-                or plan.schema_version not in {5, 6}
+                or plan.schema_version not in {5, 6, 7}
                 or self.daily_mapping is None
                 or self.daily_mapping.supplements
                 or self.mapping is not None

@@ -73,3 +73,47 @@ EXPANDED_LINKAGE_POLICY_ZH = {
         '必要输入缺失时暂停买入；正常或过渡以及偏弱普通路径不依赖相对强势'
     ),
 }
+
+
+EXPANDED_EXCEPTION_POLICY = {
+    **EXPANDED_LINKAGE_POLICY,
+    "routes": (
+        "NORMAL_TRANSITION S0 Q0; WEAK S1 floor(0.5*Q0); "
+        "enabled exceptions require STRONG and explicit per-occurrence human approval"
+    ),
+    "weak_exception": (
+        "WEAK_MINIMUM: WEAK AND STRONG AND S1 AND 0.5*Q0 < minimum <= Q0; "
+        "exact official minimum compatible with 100-share simulation; no automatic rounding"
+    ),
+    "broken_exception": (
+        "BROKEN_STRONG: BROKEN AND STRONG AND S2; human enters legal Qe with 0 < Qe <= Q0; "
+        "no default Q0 or half quantity"
+    ),
+    "authorization": (
+        "Plan permission is not occurrence approval; each independent occurrence needs "
+        "explicit human approval; freeze exact quantity; full capacity and all risk gates; "
+        "one approval and one whole consumption; next exchange session only; "
+        "rejected or revoked occurrences cannot reopen; approval does not execute a trade"
+    ),
+}
+
+EXPANDED_EXCEPTION_POLICY_ZH = {
+    **EXPANDED_LINKAGE_POLICY_ZH,
+    "routes": (
+        "正常或过渡使用 S0 和 Q0；偏弱使用 S1 和合法向下取整的 0.5*Q0；"
+        "启用的例外须相对强势且逐次明确人工批准"
+    ),
+    "weak_exception": (
+        "WEAK_MINIMUM：偏弱且相对强势且 S1，且 0.5*Q0 < 最低量 <= Q0；"
+        "只取兼容 100 股模拟的官方最低量；不自动凑整"
+    ),
+    "broken_exception": (
+        "BROKEN_STRONG：明显破坏且相对强势且 S2；人工输入合法 Qe，0 < Qe <= Q0；"
+        "不默认取 Q0 或减半数量"
+    ),
+    "authorization": (
+        "计划许可不等于单次批准；每个独立机会须明确人工批准；冻结确切数量；"
+        "须满足整笔额度和全部风控；一次批准和一次整笔消费；仅限下一交易日；"
+        "拒绝或撤销的机会不得重开；批准不执行交易"
+    ),
+}

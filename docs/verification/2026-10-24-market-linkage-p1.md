@@ -42,3 +42,15 @@ Exact minimum substitution, no automatic broken-route quantity, legal choices on
 ```
 
 MLP1-C01 accepts contracts and arithmetic only. Subsequent authority, runtime, UI and replay tasks remain incomplete.
+
+## MLV1-05 — Source-bound extraction (MLP1-T04)
+
+Schema 7 extraction now uses `plan-extract-v10`, requires complete exception definitions and per-route source permission, and cannot manufacture an approval. Negated permissions are checked for literal as well as interpreted bindings. Chinese and English definitions retain the same boundaries. Existing v8/v9 records remain readable.
+
+RED: the expanded schema exposed a real 50,000-character input-limit regression; two prompt-budget tests failed. Shared identical schema definitions fixed the regression without increasing the limit or removing validation constraints. The final focused extraction, review, security and prompt-budget run passed **73 tests in 2.55s**; default-version regression tests passed **63 tests in 0.97s**. Full `ruff check src tests` passed.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_current_plan_extraction_security.py tests/integration/test_market_exception_review.py tests/integration/test_market_linkage_review.py tests/unit/test_current_review_contract.py tests/unit/test_preparation_prompt_budget.py -q --basetemp .test-tmp/p1-t04-verified
+```
+
+MLP1-T04 is accepted. Update/preparation, durable authority and all later checkpoints remain pending.

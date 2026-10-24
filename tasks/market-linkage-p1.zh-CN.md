@@ -64,7 +64,7 @@
 
 ### MLP1-T04 — 将提取和审核绑定到来源许可
 
-- [ ] 扩展提取／审核以包含完整路径语义、来源绑定和明确关闭状态；拒绝伪造批准、否定许可及缺失定义；不能推断明显破坏路径数量。
+- [x] 扩展提取／审核以包含完整路径语义、来源绑定和明确关闭状态；拒绝伪造批准、否定许可及缺失定义；不能推断明显破坏路径数量。
 - 依赖：MLP1-C01。验收：MLP1-A04–MLP1-A05；中英文来源得到等价权限边界。
 - 文件／范围：`ai/plan_extraction.py`、`ai/daily_review.py`、`ai/semantic_validation.py`、策略定义接点、`tests/integration/test_market_exception_review.py`；M。
 - 验证：相关 V04 测试、错误／否定原文及既有审核回归。

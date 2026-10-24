@@ -86,7 +86,9 @@ def compact_schema(schema: dict) -> str:
 
     def count(original, result):
         key = key_for(original)
-        if len(key) > 250 and any(k in original for k in ("anyOf", "oneOf")):
+        # Repeated property constraints also grow with each explicit plan variant.
+        # Share complete schemas, retaining defaults, bounds and every keyword.
+        if len(key) > 80:
             counts[key] = counts.get(key, 0) + 1
         return result
 
@@ -95,7 +97,7 @@ def compact_schema(schema: dict) -> str:
         if counts.get(key, 0) <= 1:
             return result
         if key not in references:
-            name = "SharedCondition" + str(len(references))
+            name = "Shared" + str(len(references))
             while name in compact.get("$defs", {}) or name in shared:
                 name += "_"
             references[key] = name

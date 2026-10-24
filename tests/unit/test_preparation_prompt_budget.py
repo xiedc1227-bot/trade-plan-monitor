@@ -72,3 +72,29 @@ def test_compact_schema_omits_redundant_discriminator_but_keeps_union_constraint
     assert result["oneOf"] == schema["oneOf"]
     assert result["$defs"] == schema["$defs"]
     assert result["default"] == schema["default"]
+
+
+def test_current_three_version_prompt_stays_within_existing_input_budget():
+    from tests.unit.test_current_review_contract import SOURCE
+
+    from trade_plan_monitor.ai.plan_extraction import build_current_plan_prompt
+
+    request = PlanExtractionRequest(request_id=uuid4(), config=_config(),
+                                    prompt=build_current_plan_prompt(SOURCE))
+    assert len(request.prompt) <= 50_000
+
+
+def test_factored_repeated_property_constraints_expand_without_semantic_changes():
+    from trade_plan_monitor.ai.prompt_encoding import compact_schema
+
+    quantity = {"type": "integer", "minimum": 100, "maximum": 9007199254740991,
+                "multipleOf": 100, "description": "A bounded whole simulation quantity"}
+    schema = {"type": "object", "properties": {"first": quantity, "second": quantity},
+              "required": ["first", "second"], "additionalProperties": False}
+    result = json.loads(compact_schema(schema))
+    assert "$ref" in result["properties"]["first"]
+    for field in ("first", "second"):
+        reference = result["properties"][field]["$ref"].rsplit("/", 1)[-1]
+        assert result["$defs"][reference] == quantity
+    assert result["required"] == schema["required"]
+    assert result["additionalProperties"] is False
