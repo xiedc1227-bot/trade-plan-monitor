@@ -1,6 +1,6 @@
 # Implementation plan and tasks: market-linkage-p1
 
-Status: APPROVED — on 2026-10-24 the user approved the [specification](../docs/specifications/monitoring/SPEC-market-linkage-p1.md), all six decisions and ordered implementation with staged testing and acceptance. Progress is tied to executed verification. [Chinese review copy](market-linkage-p1.zh-CN.md).
+Status: COMPLETE — all 21 tasks, 7 checkpoints and 14 acceptance criteria passed on 2026-10-24 under the approved [specification](../docs/specifications/monitoring/SPEC-market-linkage-p1.md). The paired verification report records failures, repairs, complete-module reruns and certification limits. [Chinese review copy](market-linkage-p1.zh-CN.md).
 
 ## MLP1-P01 — Authority, sequencing and scope
 
@@ -8,11 +8,11 @@ The user has approved MLP1-D01–MLP1-D06 and explicitly instructed P1 implement
 
 Retain the existing module boundaries. Deliver the two exception routes through one production authority chain, with shared eligibility/quantity policies. Do not build a second plan workspace or delegate parallel agents under this plan. The ordered tasks below can proceed without repeated user confirmation once their decisions and implementation are authorized. A failed checkpoint blocks its dependent work until repaired; a changed strategy decision needs a bilingual amendment and user review.
 
-Before each behavior change, write a failing test with independent expected outcomes, then implement and run the focused tests. Use temporary SQLite and deterministic providers. Each implementation slice targets 3–5 files; if its exact inventory exceeds 5, record sequential subtasks before editing. File lists identify ownership seams, not permission to rewrite entire subsystems. New paths below are proposed deliverables and are not present/passing tests today. Keep the application usable after each slice; new routes remain unavailable until their authority chain is complete.
+Before each behavior change, write a failing test with independent expected outcomes, then implement and run the focused tests. Use temporary SQLite and deterministic providers. Each implementation slice targets 3–5 files; if its exact inventory exceeds 5, record sequential subtasks before editing. File lists identify ownership seams, not permission to rewrite entire subsystems. The paths below identify implementation ownership; the verification report records delivered tests and their executed results. Keep the application usable after each slice; new routes remain unavailable until their authority chain is complete.
 
 ## MLP1-P02 — Verification command catalog
 
-Run from `trade-plan-monitor/` with the installed environment. New exception test files will be created by their owning tasks. Commands are future verification requirements, not results from this documentation turn.
+Run from `trade-plan-monitor/` with the installed environment. The owning tasks provide the exception test files. These commands remain reproducible verification requirements; actual results are recorded separately in the verification report.
 
 | ID | Command / check |
 | --- | --- |
@@ -189,28 +189,28 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T19 — Complete backend regression and failure repair
 
-- [ ] Run all non-live backend tests and quality checks; repair failures without reducing coverage/assertions and rerun affected scopes; retain commands, counts, durations, skips and limitations in paired verification reports.
+- [x] Run all non-live backend tests and quality checks; repair failures without reducing coverage/assertions and rerun affected scopes; retain commands, counts, durations, skips and limitations in paired verification reports.
 - Depends on: MLP1-C05, MLP1-C06. Acceptance: MLP1-A13 and all backend acceptance IDs; no unresolved failure may be described as complete.
 - Files/scope: paired dated `docs/verification/*-market-linkage-p1.md` reports and scoped evidence; fixes become separately recorded 3–5-file slices.
 - Verify: V12 and V15; distinguish pre-existing/environmental failures and any truly unexecuted checks.
 
 ### MLP1-T20 — Complete frontend and generated-contract acceptance
 
-- [ ] Run the full frontend suite, type-check, production build, browser journeys and generated checks; inspect final screens, original routes and error handling; append exact results to both verification reports.
+- [x] Run the full frontend suite, type-check, production build, browser journeys and generated checks; inspect final screens, original routes and error handling; append exact results to both verification reports.
 - Depends on: MLP1-T19. Acceptance: MLP1-A10–MLP1-A11, MLP1-A13; no stale generated output or browser-only success claim.
 - Files/scope: paired verification reports and scoped browser evidence; necessary repairs use small sequential slices.
 - Verify: V10, V13–V15; repeat affected tests after any repair, not merely after documentation edits.
 
 ### MLP1-T21 — Reconcile documentation and final acceptance
 
-- [ ] Complete the following documentation substeps in order: T21a, paired P1 operations guide and README capability/prompt text; T21b, paired capability map and documentation index; T21c, paired P1 specification and task status; T21d, paired final verification report and scoped diff review. Each substep changes at most 4 documentation files.
+- [x] Complete the following documentation substeps in order: T21a, paired P1 operations guide and README capability/prompt text; T21b, paired capability map and documentation index; T21c, paired P1 specification and task status; T21d, paired final verification report and scoped diff review. Each substep changes at most 4 documentation files.
 - Depends on: MLP1-T20. Acceptance: MLP1-A14; every MLP1-A01–MLP1-A14 links to actual evidence; no proposed capability is presented as shipped before acceptance.
 - Files/scope: the named bilingual pairs; four sequential S–M documentation slices. Preserve P0 history and unrelated work.
 - Verify: V16 and `git diff --check`; confirm no dependency/threshold weakening, accidental user data or secrets. Do not infer authorization to push, deploy or migrate a user database.
 
 ### MLP1-C07 — P1 completion checkpoint
 
-- [ ] MLP1-T01–MLP1-T21 and all fourteen acceptance criteria have passing, bilingual, traceable evidence; both routes, quantity examples, approval lifecycle, full simulation and frozen replay are accepted. Record remaining live-certification limits separately. Only now may the implementation be reported as complete.
+- [x] MLP1-T01–MLP1-T21 and all fourteen acceptance criteria have passing, bilingual, traceable evidence; both routes, quantity examples, approval lifecycle, full simulation and frozen replay are accepted. Record remaining live-certification limits separately. Only now may the implementation be reported as complete.
 
 ## MLP1-P04 — Acceptance traceability
 
@@ -236,4 +236,4 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 | Historical evaluation assumes human consent | Frozen events, missing-event zero fills, explicit research provenance and future-mutation tests |
 | Broad contract change damages old plans | New explicit versions, exact legacy fixtures, unsupported reader rejection and rollback preservation |
 
-MLP1-D01–MLP1-D06 are approved. Completed checks are recorded in the paired [verification report](../docs/verification/2026-10-24-market-linkage-p1.md); unchecked tasks remain incomplete.
+MLP1-D01–MLP1-D06 remain unchanged. All tasks and checkpoints are complete, with actual evidence in the paired [verification report](../docs/verification/2026-10-24-market-linkage-p1.md). Local acceptance does not certify live providers or authorize deployment.

@@ -1,6 +1,6 @@
 # 规格：market-linkage-p1
 
-状态：APPROVED — 用户在 2026-10-24 批准 MLP1-D01–MLP1-D06，并明确授权全部 P1 任务及分阶段测试验收。实施进度记录在任务及验收报告中；批准不代表完成。
+状态：IMPLEMENTED AND ACCEPTED — 用户在 2026-10-24 批准 MLP1-D01–MLP1-D06 并授权实施。MLP1-T01–MLP1-T21 及 MLP1-C01–MLP1-C07 已完成；已执行测试、修复及本地认证边界记录在双语验收报告中。
 
 [规范英文版](SPEC-market-linkage-p1.md) · 中文审核副本 · [实施计划与任务](../../../tasks/market-linkage-p1.zh-CN.md)。
 
@@ -107,21 +107,21 @@ Q0 为既有来源审核确认的正 100 股整数倍，界限为 `9007199254740
 
 预览携带当前持仓及权限修订号。批准前修订号变化返回冲突，须重新预览。批准后持仓变化重新校验整笔额度，不改数量、不创建新信号；权限未变且原窗口内额度足够时仍可执行。批准／撤销／执行竞争使用事务内修订校验。若消费先完成，撤销返回冲突，不能撤回交易；若撤销先完成，执行不得成交。
 
-## MLP1-08 — 拟议契约与兼容
+## MLP1-08 — 契约与兼容
 
 Schema 7 使用 `execution_mode=CONDITION_PLAN`、`execution_version=condition-plan-v3`；联动使用 `market_policy.policy_version=market-linkage-v2`、`base_confirmation=S0`、`exception_policy=REVIEW_PER_OCCURRENCE`。在每条联动规则的 `market_policy` 内新增必填 `exception_routes.weak_minimum` 和 `exception_routes.broken_strong`，值均为 `DISABLED` 或 `PER_OCCURRENCE`。两条均可明确关闭，包括通过审核更新撤回许可的情况；这不会静默降级格式。字段缺失绝不代表许可。既有普通 `quantity_policy`、BUY/TACTICAL 限制、最多两条规则、深度 4 和展开后 50 叶子边界继续有效。
 
 新计划许可绑定完整例外含义，不能只绑定枚举标签。启用原本阻断的路径须重新审核 Schema 7 版本。Schema 6 继续 `BLOCK_P1`，其例外仍为 `P1_EXCEPTION_REQUIRED`。Schema 5 固定计划和 Schema 1–4 冻结读取保持不变。不自动升级、不向旧格式补默认字段、不静默丢字段、不增加面向用户的格式选择器。
 
-拟议版本边界：提取 `plan-extract-v10`；审核内容 `plan-review-content-v4`；决策 `market-linkage-evidence-v2`；计算 `market-linkage-calculation-v2`；候选 `market-linkage-exception-candidate-v1`；授权 `market-linkage-exception-authorization-v1`；研究输入 `backtest-run-v8`。既有个股／指数数据及公式版本不变。MLP1-T01 必须在编码前核对名称冲突并冻结读写端清单；技术命名调整须同步双语记录，不得改变策略含义。
+已实现版本边界：提取 `plan-extract-v10`；审核内容 `plan-review-content-v4`；决策 `market-linkage-evidence-v2`；计算 `market-linkage-calculation-v2`；候选 `market-linkage-exception-candidate-v1`；授权 `market-linkage-exception-authorization-v1`；研究输入 `backtest-run-v8`。既有个股／指数数据及公式版本不变。MLP1-T01 已核对名称冲突，并在双语契约附录冻结读写端清单；技术编码细节保留已批准策略含义。
 
-候选证据绑定 `candidate_id`、稳定 `occurrence_id`、证券、精确的计划／审核／启用／规则身份、路径、D、决策截止时点、原执行窗口、实际使用证据／哈希版本、Q0、官方规则版本／来源哈希、资格及数量约束。完整采集元数据可审计，连续性哈希保留 P0 规范化。授权另绑定 `approval_id`、确切候选摘要、`approved_quantity`、服务端 `approved_at`、`actor_kind=LOCAL_USER`、非空理由及命令身份。来源／导入边界拒绝未知字段、格式错误或伪造的批准载荷。
+候选证据绑定 `candidate_id`、稳定 `occurrence_id`、证券、精确的计划／审核／启用／规则身份、路径、D、决策截止时点、原执行窗口、实际使用证据／哈希版本、Q0、官方规则版本／来源哈希、资格及数量约束。完整采集元数据可审计，连续性哈希保留 P0 规范化。授权另绑定 `approval_id`、确切候选摘要、`quantity`、服务端 `received_at`、`actor_kind=LOCAL_USER`、非空理由及命令身份。来源／导入边界拒绝未知字段、格式错误或伪造的批准载荷。
 
 保存只追加的授权／终态事件及事务更新的投影。使用持久唯一的机会／批准／消费约束和命令回执，不能仅依赖进程锁。任何增量存储迁移均在临时数据库测试，绝不重写旧 JSON／哈希。回退保留新记录并明确阻断不支持的操作，不能将其解释为普通／固定数量交易。哈希沿用规范 JSON 及 domain/NUL/SHA-256，加载时验证。
 
-## MLP1-09 — 拟议 API 与诊断
+## MLP1-09 — API 与诊断
 
-保留 `/plans` 及既有计划／审核／启用／运行／模拟操作族。增加下列本地命令族，全部输入为严格类型模型，所有变更沿用现有来源／上下文保护及持久幂等。下列名称为拟议契约，由 MLP1-T01 最终核定。
+保留 `/plans` 及既有计划／审核／启用／运行／模拟操作族。增加下列本地命令族，全部输入为严格类型模型，所有变更沿用现有来源／上下文保护及持久幂等。下列名称为已实现契约；准确生成字段及事件审计编码记录在契约附录。
 
 | 方法和路径 | 必要输入／行为 | 输出 |
 | --- | --- | --- |
@@ -176,7 +176,7 @@ Schema 7 使用 `execution_mode=CONDITION_PLAN`、`execution_version=condition-p
 
 保留 Python 3.14、严格不可变 Pydantic 模型、Decimal／整数算术、FastAPI/SQLite、Vue 3/TypeScript、pytest/Vitest/Playwright 和现有依赖锁定。领域规则置于 `src/trade_plan_monitor/domain` 和 `decision`；权限和原子存储置于 `state`；运行／适配置于 `runtime`、`web` 和 `backtest`；UI 置于 `web/src`；确定性测试置于 `tests/unit`、`tests/integration` 和 `web/tests`。不建议新增依赖。
 
-使用 snake_case 及小型纯策略，例如 `validate_exception_quantity(route, base_quantity, proposed_quantity, market_grid)`，显式传入有类型的输入，不隐式读取时钟、数据库或数据商。网络 I/O 放在事务外。先扩展服务端模型再生成前端类型，不在 Vue 重复实现权限。测试命令及拟新增测试路径见 [MLP1-P02](../../../tasks/market-linkage-p1.zh-CN.md#mlp1-p02--验证命令目录)；新路径是后续交付物，不代表已有通过的测试。
+使用 snake_case 及小型纯策略，例如 `validate_exception_quantity(route, base_quantity, proposed_quantity, market_grid)`，显式传入有类型的输入，不隐式读取时钟、数据库或数据商。网络 I/O 放在事务外。先扩展服务端模型再生成前端类型，不在 Vue 重复实现权限。测试命令及已实现测试职责见 [MLP1-P02](../../../tasks/market-linkage-p1.zh-CN.md#mlp1-p02--验证命令目录)；执行结果及最终修复证据记录在验收报告。
 
 始终：保留来源含义、独立信号限制、精确冻结数量及双语等价；验证后才能标记任务完成。数量／到期规则变化、自动批准、扩大执行／数据商范围、新依赖或破坏性存储变更须修订规格。禁止：伪造批准、弱化测试、重写旧权限或使用用户数据库验收。实施已获授权；真实数据商调用、推送和部署未获授权。
 
@@ -184,4 +184,4 @@ Schema 7 使用 `execution_mode=CONDITION_PLAN`、`execution_version=condition-p
 
 MLP1-D01–MLP1-D06 均已批准，包括走弱路径仅取最低量、明显破坏路径人工选择不超过 Q0 的数量、终态限制及显式事件回放。调整时须先同步两种语言再实施依赖工作。
 
-依据用户批准及实施指示，执行 MLP1-T01–MLP1-T21 及 MLP1-C01–MLP1-C07 验收检查点。各阶段不重复索取相同决策批准。只有真正需要用户决定或前置验证失败时才停止相关后续工作，记录失败，不能将局部测试报为全部完成。实施进行中。参见[契约清单](CONTRACT-market-linkage-p1.zh-CN.md)及[已执行验证](../../verification/2026-10-24-market-linkage-p1.zh-CN.md)；未勾选任务仍待完成。
+依据用户批准及实施指示，MLP1-T01–MLP1-T21 及 MLP1-C01–MLP1-C07 已完成，六项已批准决策保持不变。参见[契约清单](CONTRACT-market-linkage-p1.zh-CN.md)及[已执行验证](../../verification/2026-10-24-market-linkage-p1.zh-CN.md)，其中包含全量回归失败逐项核对、十四项验收标准，以及本地验收和真实服务认证的区别。

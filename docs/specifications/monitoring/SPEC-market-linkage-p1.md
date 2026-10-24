@@ -1,6 +1,6 @@
 # Specification: market-linkage-p1
 
-Status: APPROVED — on 2026-10-24 the user approved MLP1-D01–MLP1-D06 and explicitly authorized all P1 tasks with staged testing and acceptance. Implementation progress is recorded in the task list and verification report; approval is not evidence of completion.
+Status: IMPLEMENTED AND ACCEPTED — on 2026-10-24 the user approved MLP1-D01–MLP1-D06 and authorized implementation. MLP1-T01–MLP1-T21 and MLP1-C01–MLP1-C07 are complete; executed tests, repairs and local-certification limits are recorded in the paired verification report.
 
 Canonical English · [Chinese review copy](SPEC-market-linkage-p1.zh-CN.md) · [Implementation plan and tasks](../../../tasks/market-linkage-p1.md).
 
@@ -107,21 +107,21 @@ Changes to consumed prices, basis, scoped facts, plan/review content, activation
 
 Preview includes the current inventory and authority revisions. A changed revision before approval returns a conflict and requires a new preview. After approval, an inventory change rechecks full capacity without resizing or inventing another signal; unchanged authority may execute if capacity is sufficient within the original window. Approval/revocation/execution races use transactionally checked revisions. If consumption wins, revocation returns conflict and cannot undo the trade; if revocation wins, execution cannot fill.
 
-## MLP1-08 — Proposed contracts and compatibility
+## MLP1-08 — Contracts and compatibility
 
 Schema 7 uses `execution_mode=CONDITION_PLAN`, `execution_version=condition-plan-v3`; linkage uses `market_policy.policy_version=market-linkage-v2`, `base_confirmation=S0`, `exception_policy=REVIEW_PER_OCCURRENCE`. Inside each linked rule's `market_policy`, add required `exception_routes.weak_minimum` and `exception_routes.broken_strong`, each `DISABLED` or `PER_OCCURRENCE`. Both may explicitly be disabled, including when a reviewed update withdraws permission; this does not silently downgrade the format. No absent field implies permission. Existing ordinary `quantity_policy`, BUY/TACTICAL restrictions, two-rule bound, depth 4 and 50 expanded leaves remain.
 
 New plan permission binds the expanded exception meaning, not only these enum labels. A newly reviewed Schema 7 version is necessary to enable a formerly blocked route. Schema 6 remains `BLOCK_P1`; its exceptions keep `P1_EXCEPTION_REQUIRED`. Schema 5 fixed plans and Schema 1–4 frozen readers remain unchanged. No automatic upgrade, added legacy default, silent field drop or new UI schema selector.
 
-Proposed version boundaries: extraction `plan-extract-v10`; review content `plan-review-content-v4`; decision `market-linkage-evidence-v2`; calculation `market-linkage-calculation-v2`; candidate `market-linkage-exception-candidate-v1`; authorization `market-linkage-exception-authorization-v1`; research input `backtest-run-v8`. Existing stock/index data and formula versions remain unchanged. MLP1-T01 must verify collisions and freeze exact reader/writer inventories before code; a technical naming adjustment must be documented in both languages without changing strategy meaning.
+Implemented version boundaries: extraction `plan-extract-v10`; review content `plan-review-content-v4`; decision `market-linkage-evidence-v2`; calculation `market-linkage-calculation-v2`; candidate `market-linkage-exception-candidate-v1`; authorization `market-linkage-exception-authorization-v1`; research input `backtest-run-v8`. Existing stock/index data and formula versions remain unchanged. MLP1-T01 verified collisions and froze the reader/writer inventory in the paired contract appendix; technical encoding details preserve the approved strategy meaning.
 
-Candidate evidence binds `candidate_id`, stable `occurrence_id`, symbol, exact plan/review/activation/rule identity, route, D, decision cutoff, original execution window, consumed evidence/hash versions, Q0, official grid version/source hash, eligibility and quantity constraints. Full acquisition metadata remains auditable; continuity hashing retains P0 normalization. Authorization additionally binds `approval_id`, exact candidate digest, `approved_quantity`, server `approved_at`, `actor_kind=LOCAL_USER`, nonblank reason and command identity. Reject unrecognized fields and malformed or forged approval payloads at source/import boundaries.
+Candidate evidence binds `candidate_id`, stable `occurrence_id`, symbol, exact plan/review/activation/rule identity, route, D, decision cutoff, original execution window, consumed evidence/hash versions, Q0, official grid version/source hash, eligibility and quantity constraints. Full acquisition metadata remains auditable; continuity hashing retains P0 normalization. Authorization additionally binds `approval_id`, exact candidate digest, `quantity`, server `received_at`, `actor_kind=LOCAL_USER`, nonblank reason and command identity. Reject unrecognized fields and malformed or forged approval payloads at source/import boundaries.
 
 Store append-only authorization/terminal events and a transactionally updated projection. Use durable unique occurrence/approval/consumption constraints and command receipts, not only process locks. Any additive storage migration is tested on temporary databases; old JSON/hashes are never rewritten. Rollback preserves new records and explicitly blocks unsupported operations; it must never reinterpret them as ordinary/fixed orders. Hashes use the existing canonical JSON and domain/NUL/SHA-256 convention; verify them on loading.
 
-## MLP1-09 — Proposed API and diagnostics
+## MLP1-09 — API and diagnostics
 
-Keep `/plans` and existing plan/review/activation/runtime/simulation families. Add the following local command families; all inputs are strict typed models, all mutations use the existing origin/context guards and durable idempotency. The names below are proposed contracts to be finalized by MLP1-T01.
+Keep `/plans` and existing plan/review/activation/runtime/simulation families. Add the following local command families; all inputs are strict typed models, all mutations use the existing origin/context guards and durable idempotency. The names below are the implemented contracts; exact generated fields and event audit encoding are recorded in the contract appendix.
 
 | Method and path | Required input / behavior | Output |
 | --- | --- | --- |
@@ -176,7 +176,7 @@ Only events and evidence available by the replay cutoff may affect a decision. A
 
 Retain Python 3.14, strict immutable Pydantic models, Decimal/integer arithmetic, FastAPI/SQLite, Vue 3/TypeScript, pytest/Vitest/Playwright and current dependency pins. Domain policy stays under `src/trade_plan_monitor/domain` and `decision`; authority and atomic persistence under `state`; runtime/adapters under `runtime`, `web` and `backtest`; UI under `web/src`; deterministic tests under `tests/unit`, `tests/integration` and `web/tests`. No new dependency is proposed.
 
-Use snake_case and narrow pure policies, for example `validate_exception_quantity(route, base_quantity, proposed_quantity, market_grid)` with explicitly supplied typed inputs and no clock, database or provider reads. Keep network I/O outside transactions. Extend server models first and generate frontend types rather than duplicating authority in Vue. Testing commands and planned new test paths are specified in [MLP1-P02](../../../tasks/market-linkage-p1.md#mlp1-p02--verification-command-catalog); new paths are future deliverables, not existing passing tests.
+Use snake_case and narrow pure policies, for example `validate_exception_quantity(route, base_quantity, proposed_quantity, market_grid)` with explicitly supplied typed inputs and no clock, database or provider reads. Keep network I/O outside transactions. Extend server models first and generate frontend types rather than duplicating authority in Vue. Testing commands and implemented test ownership are specified in [MLP1-P02](../../../tasks/market-linkage-p1.md#mlp1-p02--verification-command-catalog); executed results and final repair evidence are recorded in the verification report.
 
 Always: preserve source meaning, independent-signal limits, exact frozen quantities and bilingual parity; verify before marking tasks complete. Seek a specification amendment for changed quantities/expiry, automatic approval, broader execution/provider scope, dependencies or destructive storage changes. Never: fabricate approval, weaken tests, rewrite old authority or use user databases for acceptance. Implementation is authorized. Live-provider calls, push and deployment are not authorized.
 
@@ -184,4 +184,4 @@ Always: preserve source meaning, independent-signal limits, exact frozen quantit
 
 MLP1-D01–MLP1-D06 are approved, including exact-minimum weak sizing, manually chosen broken sizing up to Q0, the terminal lifecycle and explicit-event replay. Amendments must update both languages before dependent implementation.
 
-Under the user approval and implementation instruction, execute MLP1-T01–MLP1-T21 with MLP1-C01–MLP1-C07 acceptance checkpoints. Do not request the same approved decisions again at each checkpoint. Stop dependent work only for a genuine unresolved user decision or failing prerequisite; record failures rather than reporting partial tests as completion. Implementation is in progress. See the [contract inventory](CONTRACT-market-linkage-p1.md) and [executed verification](../../verification/2026-10-24-market-linkage-p1.md); unchecked tasks remain outstanding.
+Under the user approval and implementation instruction, MLP1-T01–MLP1-T21 and MLP1-C01–MLP1-C07 are complete. The six approved decisions are unchanged. See the [contract inventory](CONTRACT-market-linkage-p1.md) and [executed verification](../../verification/2026-10-24-market-linkage-p1.md), including full-regression failure reconciliation, all fourteen acceptance criteria and the distinction between local acceptance and live certification.
