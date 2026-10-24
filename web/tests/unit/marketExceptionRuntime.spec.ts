@@ -14,6 +14,16 @@ function preview(): ExceptionPreviewApiView {
 }
 function button(wrapper: ReturnType<typeof mount>, text: string) { return wrapper.findAll("button").find(b => b.text() === text)!; }
 describe("explicit occurrence command interaction", () => {
+  it.each([
+    ["EXCEPTION_CALENDAR_CHANGED_OR_UNKNOWN", "原执行窗口不可用"],
+    ["EXCEPTION_CURRENT_EVIDENCE_REQUIRED", "必要行情或复权依据暂缺"],
+  ])("explains %s without exposing a technical code or offering approval", (code, explanation) => {
+    const value = resource(); value.blockers = [code!];
+    const wrapper = mount(PlanExceptionApproval, {props: {resource: value, request: vi.fn(), current: true, authorityRevision: 1}});
+    expect(wrapper.text()).toContain(explanation);
+    expect(wrapper.text()).not.toContain(code);
+    expect(button(wrapper, "生成本次精确预览").attributes("disabled")).toBeDefined();
+  });
   it("rejects malformed or blocked preview responses", () => {
     expect(validExceptionResponse("/plan-exception-previews", preview())).toBe(true);
     for (const value of [{ ...preview(), quantity: 250 }, { ...preview(), current: null },
