@@ -102,7 +102,7 @@ class ExceptionReceipt(DailyValue):
     event: ExceptionEvent
 
 
-def _lock(daily, identity):
+def lock_authority(daily, identity):
     """Acquire the write fence before reading a snapshot that might become stale."""
     try:
         daily.session.execute(update(DailyRecord).where(DailyRecord.id == identity).values(
@@ -115,7 +115,7 @@ def _lock(daily, identity):
 
 
 def _candidate(daily, candidate_id, expected_revision, now, allowed=("PENDING",)):
-    _lock(daily, candidate_id)
+    lock_authority(daily, candidate_id)
     repo = ExceptionRepository(daily)
     row = repo.get(candidate_id)
     if row is None:
@@ -192,7 +192,7 @@ def _replay(daily, command):
 
 
 def decide_exception(daily, command, *, current, now):
-    _lock(daily, command.candidate_id)
+    lock_authority(daily, command.candidate_id)
     replay, request_hash = _replay(daily, command)
     if replay is not None:
         return replay
@@ -226,7 +226,7 @@ def decide_exception(daily, command, *, current, now):
 
 
 def revoke_exception(daily, command, *, now):
-    _lock(daily, command.approval_id)
+    lock_authority(daily, command.approval_id)
     replay, request_hash = _replay(daily, command)
     if replay is not None:
         return replay
@@ -253,7 +253,7 @@ def terminate_exception(daily, candidate_id, *, state, reason, now):
     """Owned runtime expiry/invalidation; cannot create or undo a grant."""
     if state not in {"EXPIRED", "INVALIDATED"}:
         raise ValueError("invalid system termination")
-    _lock(daily, candidate_id)
+    lock_authority(daily, candidate_id)
     repo = ExceptionRepository(daily)
     row = repo.get(candidate_id)
     if row is None:

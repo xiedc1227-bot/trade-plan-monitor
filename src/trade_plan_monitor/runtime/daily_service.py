@@ -378,6 +378,7 @@ class DailyRuntimeEvaluationService:
             ),
             trading_calendar=trading_calendar,
             runtime_generation=data.get("runtime_generation"),
+            linked_index=data.get("linked_index_source"),
         )
         result = self.run_inputs(
             plan=plan, inputs=inputs, expected_activation_revision=active.revision

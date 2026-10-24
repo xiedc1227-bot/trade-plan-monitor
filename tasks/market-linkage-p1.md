@@ -114,7 +114,7 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T10 — Consume approval with whole simulated execution
 
-- [ ] Integrate approved frozen quantity with existing simulation; revalidate all current gates and atomically consume approval, signal and inventory; enforce rejection/revocation versus execution ordering.
+- [x] Integrate approved frozen quantity with existing simulation; revalidate all current gates and atomically consume approval, signal and inventory; enforce rejection/revocation versus execution ordering.
 - Depends on: MLP1-C03. Acceptance: MLP1-A07–MLP1-A09; capacity recovery never resizes, repeated commands do not fill twice, no window extension.
 - Files/scope: `state/simulation.py`, lifecycle/authority seam, exception repository, `tests/integration/test_market_exception_simulation.py`, V06 concurrency tests; M.
 - Verify: full V06–V07; test races from separate connections, crash before/after commit, same/different command keys and inventory isolation.

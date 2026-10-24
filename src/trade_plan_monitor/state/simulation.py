@@ -74,8 +74,16 @@ def simulate_inventory(
     from trade_plan_monitor.domain.plan_codec import load_plan_json
     from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
     from trade_plan_monitor.state.daily_accounting import SIMULATION_VERSION
+    from trade_plan_monitor.state.market_exception_service import (
+        ExceptionAuthorityError,
+        lock_authority,
+    )
     from trade_plan_monitor.state.models import TradingCalendar
 
+    try:
+        lock_authority(work.daily, command.cause_id)
+    except ExceptionAuthorityError as error:
+        _reject(error.reason)
     details = work.plans.get_version_details(str(command.plan_version_id))
     if details is None:
         raise PlanVersionNotFoundError("daily version was not found")
@@ -150,6 +158,26 @@ def simulate_inventory(
     lots = accounting.lots(symbol, now.date())
     if cause["kind"] == "SIGNAL":
         signal = cause["payload"]
+        from trade_plan_monitor.runtime.market_exceptions import (
+            current_exception_authority,
+            exception_signal_current,
+        )
+        from trade_plan_monitor.state.market_exception_models import ExceptionCandidate
+        from trade_plan_monitor.state.market_exception_repository import ExceptionRepository
+
+        approval = (signal.get("market_linkage") or {}).get("calculation", {}).get("approval")
+        exception_candidate = None
+        if not exception_signal_current(work.daily, signal, now):
+            _reject("EXCEPTION_AUTHORITY_ENDED")
+        if approval is not None:
+            exception_row = ExceptionRepository(work.daily).get(approval["candidate_id"])
+            exception_candidate = ExceptionCandidate.model_validate(exception_row["payload"])
+            try:
+                context = current_exception_authority(work, exception_candidate, now)
+            except ExceptionAuthorityError as error:
+                _reject(error.reason)
+            if context.blockers:
+                _reject(context.blockers[0])
         from trade_plan_monitor.state.market_linkage_authority import linked_index_current
         if signal.get("market_linkage") and not linked_index_current(
             work.daily.session, state, now
@@ -208,6 +236,14 @@ def simulate_inventory(
         plan_version_id=details.id,
     )
     if signal_id is not None:
+        if exception_candidate is not None:
+            from trade_plan_monitor.state.market_exception_models import transition_candidate
+            consumed, event = transition_candidate(
+                exception_candidate, to_state="CONSUMED", command_id="simulation-" + identity,
+                expected_revision=exception_row["revision"], now=now,
+                reason="Whole simulated trade " + identity)
+            ExceptionRepository(work.daily).transition(
+                consumed, event, expected_revision=exception_row["revision"])
         work.daily.save(
             cause["id"],
             kind="SIGNAL",

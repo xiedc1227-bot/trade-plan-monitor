@@ -86,3 +86,9 @@ Added v2 decision/calculation evidence without weakening v1 validators, shared i
 GREEN: 45 combined decision/authorization/concurrency/old-and-new-runtime tests passed in 13.23s. The final 10 actual-runtime cases passed in 6.94s; Ruff passed. Verified both routes, no simulation on approval, same-clock refresh, unchanged refetch, correction invalidation, clone/rejection continuity, revoked read/send masking and completion-proof invalidation. Fixture corrections used the actual index fact-request field and alert repository; unchanged provider snapshots retain their receipt timestamp.
 
 A broader API run reported 3 expected contract-projection failures: old assertions only allow two draft variants and versions [5,6]. These remain explicitly pending MLP1-T11/T12, where exact additive changes and old projections will be verified; they are not counted as passing. MLP1-C03 accepts per-occurrence runtime authority only. Simulation consumption, public commands, UI and replay are unfinished.
+
+## MLV1-11 — Whole simulation consumption (MLP1-T10)
+
+RED: both route tests exposed missing approval consumption and execution after revocation; independent-connection execution/revocation races then exposed the simulation entry's read-to-write lock upgrade. Simulation now acquires the authority fence before reads, validates the current grant and consumes candidate, signal and inventory in one transaction. Re-evaluation also retains the captured linked index source.
+
+GREEN: **39 tests passed in 19.10s**, including 12 exception simulation cases, authorization contention and old daily/linked chains. Ruff passed after import formatting. Covered full quantity, capacity loss/recovery without resize, fault injection after inventory write with complete rollback, identical-key receipt replay, different-key duplicate rejection, revoke versus execution ordering and irreversible consumed history. No real account or broker execution is involved.
