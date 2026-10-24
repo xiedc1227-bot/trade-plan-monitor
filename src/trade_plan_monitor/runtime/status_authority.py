@@ -670,7 +670,7 @@ def _condition_state(session, symbol):
             select(DailyRecord)
             .where(
                 DailyRecord.symbol == symbol,
-                DailyRecord.kind.in_(("POSITION", "FACT", "SIGNAL", "RISK")),
+                DailyRecord.kind.in_(("POSITION", "FACT", "SIGNAL", "RISK", "EXCEPTION_CANDIDATE")),
             )
             .order_by(DailyRecord.id)
         )

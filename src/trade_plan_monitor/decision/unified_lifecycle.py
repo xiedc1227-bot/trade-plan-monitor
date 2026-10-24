@@ -30,12 +30,24 @@ def confirm_signal(
     target=None,
     trading_calendar=(),
     linkage=None,
+    candidate_only=False,
 ):
     from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule
 
+    eligible_exception = False
+    if candidate_only:
+        from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
+        eligible_exception = (
+            isinstance(linkage, MarketExceptionDecision)
+            and linkage.calculation.route is not None
+            and linkage.selection.blocker is None
+            and linkage.calculation.approval is None
+        )
+        if not eligible_exception:
+            return None
     if isinstance(rule, MarketLinkedRule) and (
         linkage is None or linkage.rule_id != rule.rule_id
-        or linkage.calculation.authorized_quantity <= 0
+        or linkage.calculation.authorized_quantity <= 0 and not eligible_exception
     ):
         return None
     daily = rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
@@ -53,10 +65,10 @@ def confirm_signal(
         return None
     day = series.bars[-1].trade_date if daily else target.date()
     if isinstance(rule, MarketLinkedRule):
-        from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
+        from trade_plan_monitor.decision.market_exception_decision import parse_linkage_decision
         from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
 
-        linkage = MarketLinkageDecision.model_validate_json(linkage.model_dump_json())
+        linkage = parse_linkage_decision(linkage.model_dump(mode="json"))
         if (linkage.content_hash != daily_plan_content_sha256(plan)
                 or linkage.decision_session != day
                 or linkage.calculation.base_quantity != rule.quantity_policy.base_quantity):
@@ -158,7 +170,7 @@ def confirm_signal(
         "bucket": rule.bucket,
         "lineage": plan.plan_id,
         "state": "CONFIRMED",
-        "planned_qty": (linkage.calculation.candidate_quantity
+        "planned_qty": (0 if candidate_only else linkage.calculation.candidate_quantity
                         if isinstance(rule, MarketLinkedRule) else rule.quantity),
         **({"market_linkage": linkage.model_dump(mode="json")}
            if isinstance(rule, MarketLinkedRule) else {}),

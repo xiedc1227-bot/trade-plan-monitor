@@ -7,6 +7,7 @@ from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import DailySupplement
 from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
+from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.daily_plan_models import (
@@ -24,6 +25,7 @@ from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
 from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime
 from trade_plan_monitor.market_index.models import MarketIndexSnapshot
+from trade_plan_monitor.state.market_exception_models import ExceptionCandidateResource
 
 Digest = str
 
@@ -90,7 +92,7 @@ class DailyFactState(DailyValue):
 
 
 class DailySignalState(DailyValue):
-    market_linkage: MarketLinkageDecision | None = Field(
+    market_linkage: MarketExceptionDecision | MarketLinkageDecision | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
     occurrence_mode: Literal["ONCE_PER_RULE", "AFTER_RULE_COMPLETED"] | None = None
@@ -438,6 +440,8 @@ class DailyRuleReminderState(DailyValue):
 
 
 class DailyEvaluationState(DailyValue):
+    exception_candidates: tuple[ExceptionCandidateResource, ...] | None = Field(
+        default=None, exclude_if=lambda v: v is None)
     linked_index_source: MarketIndexSnapshot | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
@@ -452,7 +456,7 @@ class DailyEvaluationState(DailyValue):
                     else MarketIndexSnapshot.model_validate(value))
         return value
 
-    market_linkage: tuple[MarketLinkageDecision, ...] | None = Field(
+    market_linkage: tuple[MarketExceptionDecision | MarketLinkageDecision, ...] | None = Field(
         default=None, max_length=2, exclude_if=lambda v: v is None)
     symbol: str
     plan_version_id: str

@@ -29,7 +29,7 @@ class DailyAlertPayload(DailyValue):
     evaluated_at: ShanghaiDatetime
     cause_id: str
     rule_id: str | None = None
-    alert_kind: Literal["RISK_ALERT"] | None = None
+    alert_kind: Literal["RISK_ALERT", "EXCEPTION_REVIEW"] | None = None
     confirmed_trade_date: date | None
     execution_date: date | None
     quantity: WholeQty | None
@@ -59,7 +59,7 @@ class DailyAlertPayload(DailyValue):
             self.quantity is not None or self.simulated_qty != 0
             or self.risk_scope is not None or self.execution_date is not None
             or self.confirmed_trade_date is None or self.next_step != "REVIEW_ALERT"
-            or self.rule_id is None or self.alert_kind != "RISK_ALERT"
+            or self.rule_id is None or self.alert_kind not in {"RISK_ALERT", "EXCEPTION_REVIEW"}
         ):
             raise ValueError("reminder cannot carry simulation authority")
         return self
@@ -103,6 +103,11 @@ def daily_alert_key(
 
 
 def render_daily_alert(payload):
+    if payload.signal_type == "REMINDER" and payload.alert_kind == "EXCEPTION_REVIEW":
+        return (
+            f"{payload.name} {payload.symbol} 例外买入待审核："
+            f"原收盘 {payload.confirmed_trade_date} 的技术条件已满足。"
+            "请查看路径、证据与数量后明确批准或拒绝。批准不执行模拟交易。")
     if payload.signal_type == "REMINDER":
         return (
             f"{payload.name} {payload.symbol} 风险提醒：规则 {payload.rule_id} "

@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
 
+from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, PositiveWholeQty
 from trade_plan_monitor.domain.market_exception_models import ExceptionRoute
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
@@ -56,6 +57,14 @@ class ExceptionBinding(DailyValue):
         return self
 
 
+class ExceptionSignalSeed(DailyValue):
+    signal_id: Digest
+    basis_id: Identifier
+    evidence_fingerprint: Digest
+    evidence: tuple[UnifiedConditionEvidence, ...] = Field(min_length=1, max_length=1)
+    occurrence_mode: Literal["ONCE_PER_RULE", "AFTER_RULE_COMPLETED"] | None = None
+
+
 class ExceptionCandidate(DailyValue):
     version: Literal["market-linkage-exception-candidate-v1"] = (
         "market-linkage-exception-candidate-v1")
@@ -67,6 +76,8 @@ class ExceptionCandidate(DailyValue):
     approval_id: Digest | None
     frozen_quantity: PositiveWholeQty | None
     last_event_id: Digest | None
+    signal_seed: ExceptionSignalSeed | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     projection_hash: Digest
 
     @model_validator(mode="after")
@@ -97,6 +108,9 @@ class ExceptionCandidate(DailyValue):
             if b.route == "WEAK_MINIMUM" and (
                     q != b.minimum or b.base_quantity >= 2*b.minimum):
                 raise ValueError("weak exception must be the exact minimum")
+        if (self.signal_seed is not None
+                and self.signal_seed.signal_id != self.binding.occurrence_id):
+            raise ValueError("candidate seed must retain its independent occurrence")
         return self
 
 
@@ -150,7 +164,13 @@ def seal_candidate(payload):
     return ExceptionCandidate.model_validate(payload)
 
 
-def new_candidate(binding, now):
+class ExceptionCandidateResource(DailyValue):
+    candidate: ExceptionCandidate
+    revision: Revision
+    blockers: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
+
+
+def new_candidate(binding, now, *, signal_seed=None):
     payload = dict(
         version="market-linkage-exception-candidate-v1",
         candidate_id=daily_hash("exception-candidate-id-v1", {
@@ -160,6 +180,8 @@ def new_candidate(binding, now):
         created_at=now.isoformat(), state="PENDING", approval_id=None,
         frozen_quantity=None, last_event_id=None,
     )
+    if signal_seed is not None:
+        payload["signal_seed"] = signal_seed.model_dump(mode="json")
     return seal_candidate(payload)
 
 

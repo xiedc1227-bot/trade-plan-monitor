@@ -82,7 +82,7 @@ class DailyReviewPreview(ApiValue):
 
 class DailyEditorSchemaView(ApiValue):
     schema_version: Literal[5] = 5
-    supported_schema_versions: tuple[int, ...] = (5, 6)
+    supported_schema_versions: tuple[int, ...] = (5, 6, 7)
     linked_candidate_schema: dict
     linked_policy_definitions: dict[str, str]
     candidate_schema: dict

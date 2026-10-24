@@ -78,3 +78,11 @@ GREEN: **21 authorization/storage tests passed in 3.49s** and full Ruff passed. 
 Implemented explicit revocation, server expiry/invalidation and immutable retry receipts. Initial concurrent two-connection testing exposed SQLite read-to-write snapshot contention. The service now obtains its write fence before reading command authority and maps busy contention to an explicit conflict without treating other database failures as success. Terminal command construction preceded the first new lifecycle run; the concurrency fix followed its failing test.
 
 GREEN: **31 tests passed in 5.94s**, including approval versus approval/rejection from separate connections, fresh-process reopening, revoke/retry, rejection/expiry/invalidation retention, backdating and early-expiry rejection. Ruff passed. Execution races remain assigned to MLP1-T10. Production correction and independent-reset continuity are completed with MLP1-T09.
+
+## MLV1-10 — Owned runtime authority (MLP1-T09 / MLP1-C03)
+
+Added v2 decision/calculation evidence without weakening v1 validators, shared independent-occurrence admission, persistent candidates and explicit approval-to-signal creation in one caller transaction. Schema 7 now passes reviewed activation and the production index adapter. Runtime cache identity includes candidate revisions. Pending reminders carry no quantity; send/read/completion checks fence current candidate state and consumed evidence.
+
+GREEN: 45 combined decision/authorization/concurrency/old-and-new-runtime tests passed in 13.23s. The final 10 actual-runtime cases passed in 6.94s; Ruff passed. Verified both routes, no simulation on approval, same-clock refresh, unchanged refetch, correction invalidation, clone/rejection continuity, revoked read/send masking and completion-proof invalidation. Fixture corrections used the actual index fact-request field and alert repository; unchanged provider snapshots retain their receipt timestamp.
+
+A broader API run reported 3 expected contract-projection failures: old assertions only allow two draft variants and versions [5,6]. These remain explicitly pending MLP1-T11/T12, where exact additive changes and old projections will be verified; they are not counted as passing. MLP1-C03 accepts per-occurrence runtime authority only. Simulation consumption, public commands, UI and replay are unfinished.

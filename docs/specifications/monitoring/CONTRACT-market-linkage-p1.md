@@ -49,3 +49,5 @@ T04 sequential slices: T04a expanded bilingual definitions, semantic review and 
 T01 is accepted only with V01 and paired-document checks. Later tasks require executed evidence in the [P1 verification report](../../verification/2026-10-24-market-linkage-p1.md); no unchecked task is a completed feature.
 
 T06 inspection found `ck_daily_record_kind` excludes new evidence kinds. Additive migration `0026_market_exceptions` widens this constraint, preserves existing payload bytes, and adds a unique event command index. Downgrade refuses when new records exist. No user database is migrated during implementation. T06a models/repository/tests; T06b kind validation, immutable repository guard and migration; each slice is independently checked.
+
+T09 verified slices: (a) v2 calculation/evidence, zero-authority occurrence seed and persistent unions; (b) existing activation/review dispatch; (c) owned candidate/approval bridge and runtime composition; (d) read/send/completion authority and focused race regressions. Generated artifacts and explicit old-contract projection changes belong to T11/T12.

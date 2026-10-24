@@ -535,6 +535,10 @@ class DailyRuntimeEvaluationService:
                     target["linked_source_current"] = linked_source_current
             if ordinary_authority_ended:
                 target["ordinary_authority_ended"] = True
+            if plan.schema_version == 7:
+                target["exception_revisions"] = [
+                    (row["id"], row["revision"]) for row in work.daily.list(
+                        symbol=plan.symbol, kind="EXCEPTION_CANDIDATE")]
             identity = daily_hash("daily-decision-result-v1", target)
             existing = work.daily.get(identity)
             if existing is not None:
@@ -726,12 +730,26 @@ class DailyRuntimeEvaluationService:
                 else work.daily.current_signals(symbol=plan.symbol))
             previous = tuple(r["payload"] for r in signal_rows)
             linkage_by_rule = {}
+            from trade_plan_monitor.decision.market_exception_decision import (
+                evaluate_market_exception,
+            )
+            from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
+            from trade_plan_monitor.runtime.market_exceptions import (
+                candidate_shadow,
+                exception_signal_current,
+                record_candidate,
+                synchronize_candidates,
+            )
+            from trade_plan_monitor.state.market_exception_models import ExceptionCandidate
+            from trade_plan_monitor.state.market_exception_repository import ExceptionRepository
             linked_day = next((day for day in reversed(inputs.session_dates)
                 if datetime.combine(day, time(15), now.tzinfo) <= now), None)
             if isinstance(plan, MarketLinkedTradePlan) and linked_day is not None:
                 for rule in plan.ordinary_rules:
                     if isinstance(rule, MarketLinkedRule):
-                        linkage_by_rule[rule.rule_id] = evaluate_market_linkage(
+                        linkage_by_rule[rule.rule_id] = (
+                            evaluate_market_exception if isinstance(plan, MarketExceptionTradePlan)
+                            else evaluate_market_linkage)(
                             plan,
                             rule,
                             series=series,
@@ -751,6 +769,8 @@ class DailyRuntimeEvaluationService:
                             if risk_known
                             else "MISSING_INPUT",
                         )
+            previous = synchronize_candidates(work, plan, active, binding, linkage_by_rule,
+                now=now, previous=previous, completed_series=completed_series, facts=facts)
             if not risk_blocked and ordinary_eligible:
                 for rule in plan.ordinary_rules:
                     if isinstance(plan, UnifiedTradePlan):
@@ -784,6 +804,12 @@ class DailyRuntimeEvaluationService:
                                 "trading_calendar": inputs.trading_calendar,
                             }
                         )
+                        candidate_only = (
+                            isinstance(plan, MarketExceptionTradePlan)
+                            and rule.rule_id in linkage_by_rule
+                            and linkage_by_rule[rule.rule_id].calculation.route is not None)
+                        if candidate_only:
+                            extra["candidate_only"] = True
                         signal = (
                             confirm_signal
                             if isinstance(plan, UnifiedTradePlan)
@@ -801,6 +827,14 @@ class DailyRuntimeEvaluationService:
                                if isinstance(rule, MarketLinkedRule) else {}),
                             **extra,
                         )
+                        if signal is not None and candidate_only:
+                            row = record_candidate(work, plan, active, binding,
+                                linkage_by_rule[rule.rule_id], signal,
+                                sessions=inputs.session_dates, now=now)
+                            if row is not None:
+                                previous = (*previous, candidate_shadow(
+                                    ExceptionCandidate.model_validate(row["payload"])))
+                            continue
                         if signal is not None and work.daily.get(signal["signal_id"]) is None:
                             work.daily.save(
                                 signal["signal_id"],
@@ -827,6 +861,10 @@ class DailyRuntimeEvaluationService:
             signals = []
             for row in signal_rows:
                 signal = row["payload"]
+                if signal["state"] != "SIMULATED" and not exception_signal_current(
+                        work.daily, signal, now):
+                    signal = {**signal, "state": "INVALIDATED", "executable_qty": 0,
+                              "blockers": ["EXCEPTION_AUTHORITY_ENDED"]}
                 if signal.get("market_linkage") and signal["state"] not in {
                     "SIMULATED",
                     "INVALIDATED",
@@ -952,6 +990,10 @@ class DailyRuntimeEvaluationService:
                         "evidence": [] if evidence is None else [evidence.model_dump(mode="json")],
                     })
             snapshot = {
+                **({"exception_candidates": [
+                    {"candidate": row["payload"], "revision": row["revision"]}
+                    for row in ExceptionRepository(work.daily).list(plan.symbol)]}
+                   if isinstance(plan, MarketExceptionTradePlan) else {}),
                 **({"market_linkage": [v.model_dump(mode="json") for v in linkage_by_rule.values()],
                     "linked_index_source": None if inputs.linked_index is None
                         else inputs.linked_index.model_dump(mode="json")}
@@ -987,6 +1029,14 @@ class DailyRuntimeEvaluationService:
                 else "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION",
             }
             events = []
+            for resource in snapshot.get("exception_candidates", ()):
+                candidate = resource["candidate"]
+                if candidate["state"] == "PENDING":
+                    events.append(self._enqueue(work, plan, active, binding, now,
+                        cause_id=candidate["candidate_id"], side="REMINDER", quantity=None,
+                        simulated=0, confirmed=candidate["binding"]["decision_session"],
+                        execution=None, scope=None, evidence=[candidate["binding"]],
+                        rule_id=candidate["binding"]["rule_id"], alert_kind="EXCEPTION_REVIEW"))
             for alert in alerts:
                 if alert["outcome"] == "SATISFIED" and alert["cause_id"] is not None:
                     events.append(self._enqueue(work, plan, active, binding, now,
@@ -1153,6 +1203,9 @@ def daily_delivery_allowed(session, event, now):
     ):
         return False
     if event.signal_type == "REMINDER":
+        if event.alert_kind == "EXCEPTION_REVIEW":
+            from trade_plan_monitor.runtime.market_exceptions import exception_reminder_current
+            return exception_reminder_current(repo, event, now)
         head = repo.get("evaluation-head-" + event.symbol)
         if head is None or head["payload"].get("plan_version_id") != event.plan_version_id:
             return False
@@ -1270,6 +1323,9 @@ def daily_delivery_allowed(session, event, now):
     if signal is None or signal["payload"]["state"] not in {"READY"}:
         return False
     s = signal["payload"]
+    from trade_plan_monitor.runtime.market_exceptions import exception_signal_current
+    if not exception_signal_current(repo, s, now):
+        return False
     if s["simulated_qty"] != event.simulated_qty or s.get("executable_qty") != event.quantity:
         return False
     if str(now.date()) != s["execution_date"] or not time(9, 30) <= now.time().replace(

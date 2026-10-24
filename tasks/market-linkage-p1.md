@@ -103,14 +103,14 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T09 — Connect owned runtime and reminder authority
 
-- [ ] Production composition persists eligible candidates and exposes only current authority; reuse existing data collection and cutoff; bind read/completion/send checks and stable reminders to candidate/approval state.
+- [x] Production composition persists eligible candidates and exposes only current authority; reuse existing data collection and cutoff; bind read/completion/send checks and stable reminders to candidate/approval state.
 - Depends on: MLP1-T08. Acceptance: MLP1-A06, MLP1-A08; corrected consumed facts invalidate, harmless refetches do not; ordinary/five-minute paths remain independent.
 - Files/scope: `runtime/daily_service.py`, `state/market_linkage_authority.py`, completion/read seam, outbox/send seam, `tests/integration/test_market_exception_runtime.py`; M, split adapter seams if needed.
 - Verify: relevant V07 tests with actual production composition, provider fakes, stale notification races and restart.
 
 ### MLP1-C03 — Per-occurrence authorization checkpoint
 
-- [ ] V05–V07 applicable files and V16 pass; trace MLP1-A05–MLP1-A08. Both routes have durable approval and all terminal states; no inventory mutation or automatic approval results from runtime/reminders.
+- [x] V05–V07 applicable files and V16 pass; trace MLP1-A05–MLP1-A08. Both routes have durable approval and all terminal states; no inventory mutation or automatic approval results from runtime/reminders.
 
 ### MLP1-T10 — Consume approval with whole simulated execution
 

@@ -132,7 +132,7 @@ class ExplicitPlanCapabilityView(ApiValue):
     schema_version: Literal[5] = 5
     execution_mode: Literal["CONDITION_PLAN"] = "CONDITION_PLAN"
     execution_version: Literal["condition-plan-v1"] = "condition-plan-v1"
-    supported_schema_versions: tuple[int, ...] = (5, 6)
+    supported_schema_versions: tuple[int, ...] = (5, 6, 7)
     linked_execution_version: Literal["condition-plan-v2"] = "condition-plan-v2"
     supported_actions: tuple[Literal["BUY", "SELL", "RISK_ALERT"], ...] = (
         "BUY",
@@ -264,7 +264,7 @@ class PlanVersionView(PlanVersionSummary):
             ):
                 raise ValueError("historical plan must remain canonical and explicitly blocked")
             return self
-        if plan.schema_version not in {5, 6}:
+        if plan.schema_version not in {5, 6, 7}:
             raise ValueError("historical plan requires an explicit read-only reason")
         if isinstance(plan, DailyPlanDraft):
             if self.daily_mapping is None:

@@ -316,6 +316,33 @@ def read_daily(lifecycle, *, symbol, trade_date):
             and head["payload"].get("plan_version_id") == active.plan_version_id
         )
         snapshot = None if head is None else head["payload"]
+        if snapshot is not None and "exception_candidates" in snapshot:
+            from trade_plan_monitor.runtime.market_exceptions import (
+                current_exception_authority,
+                exception_signal_current,
+            )
+            from trade_plan_monitor.state.market_exception_models import ExceptionCandidate
+            from trade_plan_monitor.state.market_exception_repository import ExceptionRepository
+            from trade_plan_monitor.state.market_exception_service import ExceptionAuthorityError
+
+            resources = []
+            for row in ExceptionRepository(work.daily).list(symbol):
+                candidate = ExceptionCandidate.model_validate(row["payload"])
+                blockers = ()
+                if candidate.state in {"PENDING", "APPROVED"}:
+                    try:
+                        blockers = current_exception_authority(
+                            work, candidate, lifecycle._clock()).blockers
+                    except ExceptionAuthorityError as error:
+                        blockers = (error.reason,)
+                resources.append({"candidate": row["payload"], "revision": row["revision"],
+                                  "blockers": blockers})
+            snapshot = {**snapshot, "exception_candidates": resources,
+                "signals": [signal if exception_signal_current(
+                    work.daily, signal, lifecycle._clock()) or signal["state"] == "SIMULATED"
+                    else {**signal, "executable_qty": 0,
+                          "blockers": [*signal["blockers"], "EXCEPTION_AUTHORITY_ENDED"]}
+                    for signal in snapshot["signals"]]}
         from trade_plan_monitor.state.market_linkage_authority import linked_index_current
         linked_stale = snapshot is not None and not linked_index_current(
             work.daily.session, snapshot, lifecycle._clock())
