@@ -78,14 +78,14 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T06 — Persist immutable candidates and authorization events
 
-- [ ] Add versioned candidate/event models, unique occurrence/command constraints, verified hashes and durable projections; test additive storage and rollback with temporary databases; no changes to user databases.
+- [x] Add versioned candidate/event models, unique occurrence/command constraints, verified hashes and durable projections; test additive storage and rollback with temporary databases; no changes to user databases.
 - Depends on: MLP1-T02, MLP1-T03. Acceptance: MLP1-A01, MLP1-A06–MLP1-A07; restart preserves PENDING and terminal history without new opportunities.
 - Files/scope: new state model/repository modules, existing repository transaction/migration seams, `tests/integration/test_market_exception_storage.py`; M, split migration if needed.
 - Verify: V05, corruption/unsupported-version tests and byte-identical old state fixtures.
 
 ### MLP1-C02 — Source and durable-state checkpoint
 
-- [ ] V04–V05 and V16 pass; trace MLP1-A04–MLP1-A06 and storage part of MLP1-A07. Every grant still requires an explicit local command; no approved event comes from source, plan copies or startup.
+- [x] V04–V05 and V16 pass; trace MLP1-A04–MLP1-A06 and storage part of MLP1-A07. Every grant still requires an explicit local command; no approved event comes from source, plan copies or startup.
 
 ### MLP1-T07 — Implement preview and exact approval commands
 

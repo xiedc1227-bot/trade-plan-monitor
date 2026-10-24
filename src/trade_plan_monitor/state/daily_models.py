@@ -1,6 +1,6 @@
 """Daily evidence and isolated simulation records."""
 
-from sqlalchemy import CheckConstraint, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trade_plan_monitor.state.models import Base
@@ -13,11 +13,13 @@ class DailyRecord(Base):
         CheckConstraint(
             "kind IN "
             "('SIGNAL','RISK','FACT','SIMULATION','REPORT','POSITION','EVALUATION','REVIEW','DRAFT','EXT"
-            "RACTION','REASSESSMENT')",
+            "RACTION','REASSESSMENT','EXCEPTION_CANDIDATE','EXCEPTION_EVENT','EXCEPTION_PREVIEW')",
             name="ck_daily_record_kind",
         ),
         Index("ix_daily_record_symbol_kind", "symbol", "kind"),
         Index("ix_daily_record_lineage_kind", "lineage", "kind"),
+        Index("ux_exception_command", text("json_extract(payload_json, '$.command_id')"),
+              unique=True, sqlite_where=text("kind = 'EXCEPTION_EVENT'")),
     )
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     kind: Mapped[str] = mapped_column(String(20))

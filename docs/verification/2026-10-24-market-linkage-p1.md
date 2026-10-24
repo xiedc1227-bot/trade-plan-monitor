@@ -60,3 +60,9 @@ MLP1-T04 is accepted. Update/preparation, durable authority and all later checkp
 RED: four new tests failed for missing Schema 7 compact preparation and predecessor snapshot serialization; one authority-injection test already passed. Added explicit typed Schema 7 dispatch for compact preparation, delta prompts and predecessor contexts. Permission edits change review identity and unrelated source clauses cannot authorize them; plan copies reject occurrence authority. Missing permissions remain non-executable. One test initially expected an exception rather than the existing `to_executable()` return-None contract; its assertion was corrected to test that contract.
 
 GREEN: **95 tests passed in 2.20s**, covering exception/linked review, exception updates, delta materialization, retained evidence, prompt budgets and existing preparation updates. Full Ruff passed. MLP1-T05 accepted; MLP1-C02 still requires durable storage acceptance.
+
+## MLV1-07 — Durable state (MLP1-T06 / MLP1-C02)
+
+RED: storage tests failed collection before the new models existed. Added closed candidate/event models, domain hashes, terminal-transition validation, immutable event writes and revision-fenced projections. SQLite's existing kind constraint required additive migration `0026_market_exceptions`; it preserves payload bytes, adds command uniqueness and refuses a downgrade with exception evidence. Tests use disposable databases only.
+
+GREEN: 33 source/update/new-and-old-storage tests passed in 4.41s; after adding the durable command index, 9 storage regression tests passed in 3.72s. The final 5 new storage tests also passed. Verified rollback before commit, reopen, terminal reuse, unknown versions, modified hashes, immutable events, exact legacy bytes and cross-occurrence command uniqueness. Full Ruff passed. MLP1-C02 accepts source contracts and storage only; no production approval or execution capability is claimed.

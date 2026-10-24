@@ -332,12 +332,19 @@ def validate_daily_payload(kind, value):
 
         model = (
             CurrentPlanExtractionResult
-            if value.get("draft", {}).get("schema_version") in {5, 6}
+            if value.get("draft", {}).get("schema_version") in {5, 6, 7}
             else HistoricalExtractionEvidence
         )
         model.model_validate(value)
     elif kind == "EVALUATION":
         validate_daily_evaluation(value)
+    elif kind in {"EXCEPTION_CANDIDATE", "EXCEPTION_EVENT"}:
+        from trade_plan_monitor.state.market_exception_models import (
+            ExceptionCandidate,
+            ExceptionEvent,
+        )
+        (ExceptionCandidate if kind == "EXCEPTION_CANDIDATE" else ExceptionEvent).model_validate(
+            value)
     elif kind == "REASSESSMENT":
         if not isinstance(value, dict) or set(value) != {
             "prior_risk",

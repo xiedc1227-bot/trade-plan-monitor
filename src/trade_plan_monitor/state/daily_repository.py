@@ -90,6 +90,8 @@ class DailyRepository:
         validate_daily_payload(kind, payload)
         row = self.session.get(DailyRecord, identity)
         actual = 0 if row is None else row.revision
+        if row is not None and kind in {"EXCEPTION_EVENT", "EXCEPTION_PREVIEW"}:
+            raise ValueError("exception evidence is append-only")
         if actual != expected_revision:
             raise RevisionConflictError(actual)
         now = self.clock().isoformat()
