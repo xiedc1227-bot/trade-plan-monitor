@@ -178,7 +178,7 @@ def _validate_plan_data(raw_plan: object) -> ExecutableTradePlan:
         )
     _validate_data_tree(raw_plan)
     schema_version = raw_plan.get("schema_version", 1)
-    if schema_version not in {1, 2, 3, 4, 5}:
+    if type(schema_version) is not int or schema_version not in {1, 2, 3, 4, 5, 6}:
         raise PlanDocumentError(
             "UNSUPPORTED_PLAN_VERSION",
             "Plan document uses an unsupported schema version.",
@@ -189,6 +189,9 @@ def _validate_plan_data(raw_plan: object) -> ExecutableTradePlan:
             "Plan document uses an unsupported execution version.",
         )
     try:
+        if schema_version == 6:
+            from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
+            return MarketLinkedTradePlan.model_validate(raw_plan)
         if schema_version == 5:
             from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
             return UnifiedTradePlan.model_validate(raw_plan)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -13,6 +13,7 @@ from trade_plan_monitor.market_index.identity import (
     MAPPING_VERSION,
     Board,
     MarketIndexCode,
+    ReferenceMarketBinding,
 )
 
 PositivePoints = Annotated[Decimal, Field(strict=True, gt=0, allow_inf_nan=False)]
@@ -203,6 +204,22 @@ class MarketIndexIndicatorFact(_IndexValue):
         if self.unit is not expected_unit:
             raise ValueError("market-index fact unit does not match its formula")
         return self
+
+
+class LinkedIndexFacts(_IndexValue):
+    """Dated linkage facts; the historical market-index-facts-v1 stays byte stable."""
+
+    formula_version: Literal["market-linkage-index-v1"] = "market-linkage-index-v1"
+    reference_market: ReferenceMarketBinding
+    decision_session: date
+    evidence_cutoff: AwareDatetime
+    close: PositivePoints | None = None
+    ma20: PositivePoints | None = None
+    ma60: PositivePoints | None = None
+    ma20_5: PositivePoints | None = None
+    low20: PositivePoints | None = None
+    source_hashes: tuple[tuple[str, Sha256Hex], ...] = ()
+    reasons: tuple[str, ...] = ()
 
 
 class MarketIndexSnapshotCacheKey(_IndexValue):

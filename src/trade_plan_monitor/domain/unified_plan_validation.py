@@ -99,12 +99,19 @@ class UnifiedPlanDraft(DailyPlanDraft):
 
     @classmethod
     def from_executable(cls, plan):
+        if cls is UnifiedPlanDraft and plan.schema_version == 6:
+            from trade_plan_monitor.domain.market_linkage_validation import MarketLinkedPlanDraft
+            return MarketLinkedPlanDraft.from_executable(plan)
         return cls.model_validate(plan.model_dump(mode="json"))
 
 
 def unified_plan_issues(draft):
     try:
-        UnifiedTradePlan.model_validate(draft.executable_payload())
+        if draft.schema_version == 6:
+            from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
+            MarketLinkedTradePlan.model_validate(draft.executable_payload())
+        else:
+            UnifiedTradePlan.model_validate(draft.executable_payload())
         return ()
     except ValidationError as error:
         errors = []

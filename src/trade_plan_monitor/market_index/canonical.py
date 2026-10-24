@@ -100,12 +100,35 @@ FORMULA_DEFINITION_HASH = _digest(
     _FORMULA_DEFINITIONS,
 )
 
+LINKED_INDEX_FORMULA_HASH = _digest(b"market-linkage-index-v1\0", {
+    "close": "official D close", "ma20": "mean closes D-19 through D",
+    "ma60": "mean closes D-59 through D", "ma20_5": "mean closes D-24 through D-5",
+    "low20": "minimum low D-20 through D-1",
+    "calendar": "complete scheduled exchange sessions; exact D; availability <= cutoff",
+    "decimalDivision": "precision-50-half-even",
+})
+
 
 def market_index_bar_set_hash(bars: tuple[MarketIndexBar, ...]) -> str:
     if type(bars) is not tuple or any(type(bar) is not MarketIndexBar for bar in bars):
         raise TypeError("bars must be an exact tuple of MarketIndexBar values")
     ordered = sorted(bars, key=lambda bar: (bar.interval.value, bar.bar_at))
     return _digest(b"market-index-bars-v1\0", ordered)
+
+
+def linked_index_bar_content(bar: MarketIndexBar) -> dict:
+    """Daily content identity excludes polling time and batch-wide revision IDs.
+
+    The provider's revision hashes daily and intraday rows together. Full raw
+    bars remain in audit evidence; these fields cannot identify a daily change.
+    """
+    return bar.model_dump(mode="python", exclude={"observed_at", "provider_revision"})
+
+
+def linked_index_content_hash(bars: tuple[MarketIndexBar, ...]) -> str:
+    return _digest(b"market-linkage-index-content-v1\0", [
+        linked_index_bar_content(bar) for bar in sorted(bars, key=lambda value: value.bar_at)
+    ])
 
 
 def market_index_request_set_hash(requests: tuple[MarketIndexFactRequest, ...]) -> str:

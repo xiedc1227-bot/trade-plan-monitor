@@ -127,3 +127,48 @@ def calculate_requested_facts(
 
 
 __all__ = ["calculate_requested_facts"]
+
+
+def calculate_linked_index_facts(*, reference_market, bars, session_dates,
+                               decision_session, evidence_cutoff):
+    """Compute each dated operand only from its complete, cutoff-admitted window.
+
+    The caller supplies the certified exchange calendar, including D. Future
+    observations are never consumed; a late correction makes its window unknown.
+    """
+    from trade_plan_monitor.market_index.canonical import LINKED_INDEX_FORMULA_HASH
+    from trade_plan_monitor.market_index.models import LinkedIndexFacts
+
+    days = tuple(d for d in session_dates if d <= decision_session)
+    if days != tuple(sorted(set(days))) or not days or days[-1] != decision_session:
+        raise ValueError("LINKED_CALENDAR_UNVERIFIED")
+    if evidence_cutoff.date() < decision_session:
+        raise ValueError("LINKED_FUTURE_SESSION")
+    relevant = tuple(b for b in bars if b.bar_at.date() in days[-60:])
+    relevant = tuple(MarketIndexBar.model_validate(b.model_dump()) for b in relevant)
+    if any(b.index_code != reference_market.index_code
+           or b.interval != MarketIndexInterval.OFFICIAL_DAILY for b in relevant):
+        raise ValueError("INDEX_IDENTITY_MISMATCH")
+    by_day = {b.bar_at.date(): b for b in relevant}
+    if len(by_day) != len(relevant):
+        raise ValueError("DUPLICATE_IDENTITY")
+    values, hashes, reasons = {}, [("formula", LINKED_INDEX_FORMULA_HASH)], []
+    for name, count, offset in (("close", 1, 0), ("ma20", 20, 0), ("ma60", 60, 0),
+                                ("ma20_5", 20, 5), ("low20", 20, 1)):
+        wanted = days[len(days)-count-offset:len(days)-offset] if len(days) >= count+offset else ()
+        used = tuple(by_day[d] for d in wanted if d in by_day
+                     and by_day[d].observed_at <= evidence_cutoff)
+        if len(used) != count:
+            values[name] = None
+            reasons.append(f"{name.upper()}_HISTORY_UNAVAILABLE")
+            continue
+        hashes.append((name, market_index_bar_set_hash(used)))
+        values[name] = min(b.low_points for b in used) if name == "low20" else _mean(used)
+    return LinkedIndexFacts(
+        reference_market=reference_market,
+        decision_session=decision_session,
+        evidence_cutoff=evidence_cutoff,
+        source_hashes=tuple(hashes),
+        reasons=tuple(reasons),
+        **values,
+    )
