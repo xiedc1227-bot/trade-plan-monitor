@@ -309,6 +309,7 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
     expected_fills,
 ):
     from functools import partial
+    from threading import Event
 
     from fastapi.testclient import TestClient
     from tests.integration.test_backtest_market_store import PROFILE
@@ -319,6 +320,7 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
     from tests.unit.test_monitor_loop_schedule import at, calendar
 
     from trade_plan_monitor.backtest import composition as module
+    from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
     from trade_plan_monitor.backtest.jobs.repository import BacktestJobRepository
     from trade_plan_monitor.backtest.loop_input import PositionLimitFunding
     from trade_plan_monitor.backtest.market_store import BacktestMarketStore
@@ -359,6 +361,17 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
     )
     monkeypatch.setattr(module, "PreparationStore", partial(PreparationStore, clock=lambda: now))
     monkeypatch.setattr("trade_plan_monitor.backtest.automatic_data.now", lambda: now)
+    maintenance_finished = Event()
+    original_prune = BacktestJobMaintenance.prune
+
+    def prune_at_fixture_time(self, *, as_of, batch_size=1_000):
+        # Admission, jobs and retention must share the same historical fixture clock.
+        assert as_of.tzinfo is not None
+        result = original_prune(self, as_of=now, batch_size=batch_size)
+        maintenance_finished.set()
+        return result
+
+    monkeypatch.setattr(BacktestJobMaintenance, "prune", prune_at_fixture_time)
     reader = Reader()
     factory = module.create_backtest_composition_factory(
         config_path=tmp_path / "absent.yaml",
@@ -438,7 +451,9 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
         job = wait(
             client,
             "/api/v1/backtest-jobs/" + receipt["jobId"],
-            lambda value: value["status"] in {"COMPLETED", "FAILED"},
+            lambda value: value["status"] == "FAILED" or (
+                value["status"] == "COMPLETED" and maintenance_finished.is_set()
+            ),
         )
         assert job["status"] == "COMPLETED", job
 

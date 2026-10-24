@@ -1356,7 +1356,7 @@ def migrate_result_database(
         if not bt019_schema:
             _add_result_query_metadata(connection)
         create_backtest_job_schema(connection)
-        after = _inspect_results(connection, _RESULT_TABLES)
+        after = _inspect_results(connection, table_names | _RESULT_TABLES)
         if (
             after["database_state"] is not DatabaseState.CURRENT
             or after["terminal_run_count"]
@@ -1484,15 +1484,7 @@ def _is_supported_bt019_result_schema(
     connection: sqlite3.Connection,
     table_names: frozenset[str],
 ) -> bool:
-    return _has_required_schema(
-        connection,
-        table_names,
-        column_contracts=_BT019_RESULT_COLUMN_CONTRACTS,
-        foreign_key_contracts=_BT019_RESULT_FOREIGN_KEY_CONTRACTS,
-        table_sql_contracts=_BT019_RESULT_TABLE_SQL_CONTRACTS,
-        index_contracts=_BT019_RESULT_INDEX_CONTRACTS,
-        trigger_sql_contracts=_BT019_RESULT_TRIGGER_SQL_CONTRACTS,
-    )
+    return _has_current_result_schema(connection, table_names, include_jobs=False)
 
 
 def _add_result_stage_revision_fence(connection: sqlite3.Connection) -> None:
@@ -1943,14 +1935,8 @@ def _is_supported_pre_index_market_schema(
     )
 
 
-def _inspect_results(
-    connection: sqlite3.Connection,
-    table_names: frozenset[str],
-) -> dict[str, object]:
-    present = table_names & _RESULT_TABLES
-    run_columns = (
-        _table_columns(connection, "backtest_run") if "backtest_run" in table_names else ()
-    )
+def _has_current_result_schema(connection, table_names, *, include_jobs):
+    """Verify exact current result/review contracts, with optional job tables."""
     from trade_plan_monitor.backtest.review_index import REVIEW_INDEXES, REVIEW_TABLE_SQL
 
     columns = dict(_RESULT_COLUMN_CONTRACTS)
@@ -1973,15 +1959,35 @@ def _inspect_results(
         indexes.update({name: ("backtest_review_event", tuple(
             (column, False, "BINARY") for column in names
         )) for name, names in REVIEW_INDEXES.items()})
-    current = _has_required_schema(
-        connection,
-        table_names,
+    if not include_jobs:
+        optional_jobs = set(_RESULT_COLUMN_CONTRACTS) - set(_BT019_RESULT_COLUMN_CONTRACTS)
+        columns = {key: value for key, value in columns.items() if key not in optional_jobs}
+        foreign_keys = {
+            key: value for key, value in foreign_keys.items() if key not in optional_jobs
+        }
+        tables = {key: value for key, value in tables.items() if key not in optional_jobs}
+        indexes = {key: value for key, value in indexes.items() if value[0] not in optional_jobs}
+    return _has_required_schema(
+        connection, table_names,
         column_contracts=columns,
         foreign_key_contracts=foreign_keys,
         table_sql_contracts=tables,
         index_contracts=indexes,
-        trigger_sql_contracts=_RESULT_TRIGGER_SQL_CONTRACTS,
+        trigger_sql_contracts=(
+            _RESULT_TRIGGER_SQL_CONTRACTS if include_jobs else _BT019_RESULT_TRIGGER_SQL_CONTRACTS
+        ),
     )
+
+
+def _inspect_results(
+    connection: sqlite3.Connection,
+    table_names: frozenset[str],
+) -> dict[str, object]:
+    present = table_names & _RESULT_TABLES
+    run_columns = (
+        _table_columns(connection, "backtest_run") if "backtest_run" in table_names else ()
+    )
+    current = _has_current_result_schema(connection, table_names, include_jobs=True)
     bt019_current = _is_supported_bt019_result_schema(connection, table_names)
     state = (
         DatabaseState.CURRENT

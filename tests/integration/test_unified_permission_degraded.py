@@ -394,6 +394,14 @@ def test_real_degraded_permission_fatal_response_uses_existing_cleanup(tmp_path,
             raise TushareProviderError(TushareErrorCode.ERROR, "offline fatal response")
 
         monkeypatch.setattr(sdk, "_calendar", fatal)
+        restart_entered, allow_restart = asyncio.Event(), asyncio.Event()
+
+        async def controlled_restart(delay):
+            assert delay == 1.0
+            restart_entered.set()
+            await allow_restart.wait()
+
+        composition._restart_sleep = controlled_restart
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
             runtime, runner = composition._runtime, composition._runner_task
@@ -414,13 +422,17 @@ def test_real_degraded_permission_fatal_response_uses_existing_cleanup(tmp_path,
             before = _business_rows(tmp_path / "monitor.sqlite3")
             await wait.release(composition)
             async with asyncio.timeout(5):
-                await asyncio.shield(runner)
+                await restart_entered.wait()
             assert len(captured) == 1 and captured[0].code is RequestControlErrorCode.ERROR
             assert captured[0].operation is TushareOperation.TRADING_CALENDAR
             assert captured[0].attempts == 1
             assert runtime.status is RuntimeServiceStatus.STOPPED and runtime._cleanup_complete
             assert _business_rows(tmp_path / "monitor.sqlite3") == before
             assert composition._runtime is runtime
+            assert runtime.unexpected_run_exit and not runner.done()
+            # SPEC-monitor-runtime admits DEGRADED owners into supervised recovery.
+            # Cleanup is complete before a fresh owner may repeat startup checks.
+            assert composition._restart_pending and composition._restart_attempts == 1
         finally:
             await composition.stop()
 

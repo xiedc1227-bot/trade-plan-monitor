@@ -529,6 +529,7 @@ def test_result_store_is_wal_isolated_canonical_and_conflict_closed(tmp_path: Pa
         "backtest_detail",
         "backtest_fill",
         "backtest_plan_snapshot",
+        "backtest_review_event",
         "backtest_run",
         "backtest_run_input",
     }
