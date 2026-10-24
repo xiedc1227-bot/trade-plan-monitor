@@ -79,7 +79,8 @@ def test_historical_source_stays_partial_and_ai_cannot_supply_human_authority(fo
 
     class Provider:
         async def extract_plan(self, request):
-            assert "plan-extract-v9" in request.prompt
+            assert "plan-extract-v10" in request.prompt
+            assert request.config.prompt_version == "plan-extract-v10"
             return RawAIResponse(
                 request_id=request_id,
                 provider_id=config.provider_id,

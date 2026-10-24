@@ -46,7 +46,12 @@ def test_real_cross_symbol_responses_pass_without_repairs(case, symbol, market, 
     prompt = build_current_plan_prompt(record["source"])
     assert len(prompt) <= 50_000
     clauses = json.JSONDecoder().raw_decode(prompt.split("Canonical source clauses:\n")[1])[0]
-    assert clauses == [c.model_dump(mode="json") for c in server_source_clauses(record["source"])]
+    expected = server_source_clauses(record["source"])
+    # Compact prompts omit only empty output placeholders, never source evidence.
+    assert all(c.disposition.value == "UNRESOLVED" and c.paths == () for c in expected)
+    assert clauses == [c.model_dump(mode="json", exclude={"disposition", "paths"})
+                       for c in expected]
+    assert all(set(c) == {"clause_id", "start", "end", "excerpt"} for c in clauses)
 
 
 @pytest.mark.parametrize("case", ["sse-one-alert", "szse-two-alerts"])

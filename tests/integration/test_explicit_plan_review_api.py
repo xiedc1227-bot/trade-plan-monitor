@@ -43,7 +43,7 @@ def record_current(
 
     class Provider:
         async def extract_plan(self, request):
-            assert request.config.prompt_version == "plan-extract-v9"
+            assert request.config.prompt_version == "plan-extract-v10"
             return RawAIResponse(
                 request_id=identity,
                 provider_id=config.provider_id,
@@ -92,7 +92,7 @@ def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         draft = literal_draft(complete=True)
         result = record_current(app.state.plan_web_lifecycle, draft, config_label=config_label)
-        assert result.prompt_version == "plan-extract-v9"
+        assert result.prompt_version == "plan-extract-v10"
         first = save_extracted(client, result)
         assert first["contentHash"] and first["sourceHash"] and first["reviewEvidenceHash"]
         assert first["reviewRevision"] == 0 and first["reviewId"] is None

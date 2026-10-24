@@ -1008,7 +1008,7 @@ def test_extraction_service_uses_real_adapter_but_returns_only_an_unactivated_dr
     request_payload = json.loads(captured[0].content)
     assert "tools" not in request_payload
     assert "UNTRUSTED_PLAN_DATA_START" in request_payload["messages"][0]["content"]
-    assert "plan-extract-v9" in request_payload["messages"][0]["content"]
+    assert "plan-extract-v10" in request_payload["messages"][0]["content"]
 
 
 def test_extraction_service_maps_adapter_failure_without_leaking_secret() -> None:
