@@ -76,6 +76,8 @@ class FrozenExceptionEvent(ResearchValue):
             or d.selection.blocker is not None
             or d.quantity_rules is None
             or d.quantity_rules.content_hash != b.grid_hash
+            or d.quantity_rules.minimum != b.minimum
+            or d.quantity_rules.increment != b.increment
             or d.calculation.base_quantity != b.base_quantity
             or c.signal_seed is None
         ):

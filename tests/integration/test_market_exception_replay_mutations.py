@@ -24,7 +24,7 @@ from trade_plan_monitor.backtest.loop_session import LoopSession
 from trade_plan_monitor.backtest.research_input import ResearchSimulation
 from trade_plan_monitor.backtest.research_session import ResearchSession
 from trade_plan_monitor.market_data.models import DailyLimit, MinuteBar, TradingDay
-from trade_plan_monitor.state.market_exception_models import transition_candidate
+from trade_plan_monitor.state.market_exception_models import new_candidate, transition_candidate
 
 
 def changed_event(source, *, state, at, candidate=None, quantity=None):
@@ -251,6 +251,20 @@ def test_schema7_preserves_explicit_risk_operations(exception_chain):
     assert research_run_input(
         exception_chain, operations=(operation,)
     ).research_input.operations == (operation,)
+
+
+@pytest.mark.parametrize("field", ["minimum", "increment"])
+def test_resealed_frozen_binding_rejects_grid_field_mismatch(exception_chain, field):
+    source = frozen_approval(exception_chain)
+    original = source.candidate
+    binding = original.binding.model_copy(
+        update={field: getattr(original.binding, field) + 100}
+    )
+    candidate = new_candidate(binding, original.created_at, signal_seed=original.signal_seed)
+    with pytest.raises(ValueError, match="source binding mismatch"):
+        changed_event(
+            source, state="REJECTED", at=source.event.received_at, candidate=candidate
+        )
 
 
 def test_future_approval_cannot_change_earlier_loop_decisions(exception_chain, tmp_path):
