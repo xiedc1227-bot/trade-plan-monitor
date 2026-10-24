@@ -21,6 +21,7 @@ TRANSITIONS = {
     "PENDING": frozenset({"APPROVED", "REJECTED", "EXPIRED", "INVALIDATED"}),
     "APPROVED": frozenset({"CONSUMED", "REVOKED", "EXPIRED", "INVALIDATED"}),
 }
+LOCAL_DECISIONS = frozenset({"APPROVED", "REJECTED", "REVOKED"})
 
 
 class ExceptionBinding(DailyValue):
@@ -126,6 +127,7 @@ class ExceptionEvent(DailyValue):
     to_state: State
     expected_revision: Revision
     received_at: ShanghaiDatetime
+    actor_kind: Literal["LOCAL_USER", "SYSTEM"]
     reason: str = Field(min_length=1, max_length=2000)
     quantity: PositiveWholeQty | None
     approval_id: Digest | None
@@ -136,6 +138,9 @@ class ExceptionEvent(DailyValue):
     def coherent(self):
         if self.to_state not in TRANSITIONS.get(self.from_state, ()):
             raise ValueError("illegal exception lifecycle transition")
+        expected_actor = "LOCAL_USER" if self.to_state in LOCAL_DECISIONS else "SYSTEM"
+        if self.actor_kind != expected_actor:
+            raise ValueError("exception actor does not match its transition")
         if self.event_id != daily_hash("exception-event-id-v1", {
                 "candidate_id": self.candidate_id, "to_state": self.to_state}):
             raise ValueError("exception event identity hash mismatch")
@@ -197,6 +202,7 @@ def transition_candidate(candidate, *, to_state, command_id, expected_revision, 
         candidate_id=candidate.candidate_id, binding_hash=candidate.binding_hash,
         command_id=command_id, from_state=candidate.state, to_state=to_state,
         expected_revision=expected_revision, received_at=now.isoformat(), reason=reason,
+        actor_kind="LOCAL_USER" if to_state in LOCAL_DECISIONS else "SYSTEM",
         quantity=frozen, approval_id=approval_id, preview_hash=preview_hash,
     )
     payload["request_hash"] = request_hash or daily_hash("exception-system-transition-v1", payload)

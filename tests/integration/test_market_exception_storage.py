@@ -40,6 +40,48 @@ def test_candidate_is_non_executable_and_digest_checked():
         type(candidate).model_validate(raw)
 
 
+@pytest.mark.parametrize("state,actor", [
+    ("APPROVED", "LOCAL_USER"), ("REJECTED", "LOCAL_USER"),
+    ("REVOKED", "LOCAL_USER"), ("EXPIRED", "SYSTEM"),
+    ("INVALIDATED", "SYSTEM"), ("CONSUMED", "SYSTEM"),
+])
+def test_event_actor_is_explicit_hashed_and_transition_bound(state, actor):
+    from trade_plan_monitor.domain.daily_hash import daily_hash
+    from trade_plan_monitor.state.market_exception_models import transition_candidate
+
+    candidate = new_candidate(binding(), NOW)
+    approved, _ = transition_candidate(
+        candidate, to_state="APPROVED", command_id="approve", expected_revision=1,
+        now=NOW, reason="Explicit local approval", quantity=100, preview_hash="f" * 64)
+    before = approved if state in {"REVOKED", "CONSUMED"} else candidate
+    _, event = transition_candidate(
+        before, to_state=state, command_id="test-actor", expected_revision=1,
+        now=NOW, reason="Explicit audit test",
+        quantity=100 if state == "APPROVED" else None,
+        preview_hash="f" * 64 if state == "APPROVED" else None)
+    raw = event.model_dump(mode="json")
+    assert raw["actor_kind"] == actor
+    for replacement in (None, "AI", "SYSTEM" if actor == "LOCAL_USER" else "LOCAL_USER"):
+        changed = dict(raw)
+        if replacement is None:
+            changed.pop("actor_kind")
+        else:
+            changed["actor_kind"] = replacement
+        changed["event_hash"] = daily_hash(event.version, {
+            key: value for key, value in changed.items() if key != "event_hash"})
+        with pytest.raises(ValueError):
+            type(event).model_validate(changed)
+
+
+def test_client_commands_cannot_claim_actor_identity():
+    from trade_plan_monitor.state.market_exception_service import ExceptionDecisionCommand
+
+    with pytest.raises(ValueError):
+        ExceptionDecisionCommand.model_validate(dict(
+            command_id="forged", candidate_id="a" * 64, expected_revision=1,
+            decision="REJECT", reason="No client actor", actor_kind="LOCAL_USER"))
+
+
 def test_migration_preserves_bytes_and_refuses_lossy_downgrade(tmp_path):
     engine = create_sqlite_engine(tmp_path / "migration.sqlite")
     _migrate(engine, "0025_index_close_display")

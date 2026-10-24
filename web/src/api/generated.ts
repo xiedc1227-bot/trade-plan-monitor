@@ -2226,6 +2226,7 @@ export type ExceptionDecisionApiCommand = {
 };
 
 export type ExceptionEvent = {
+  actor_kind: "LOCAL_USER" | "SYSTEM";
   approval_id: (string) | (null);
   binding_hash: string;
   candidate_id: string;

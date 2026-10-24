@@ -64,3 +64,9 @@ T09 已验证切片：(a) v2 数量／证据、零权限机会种子及持久化
 ## MLC1-06 — 持久化回放证据
 
 单次研究通过既有决策记录保存 `exception_outcomes`。Schema 7 信号可以使用 `ResearchSignalReference.market_linkage_ref`：完整且经过哈希校验的证据，在同一决策的 `market_linkage` 或 `signal_linkage` 池中仅保存一次。操作前后状态均解析并验证原始冻结数量计算；引用缺失或替换会被拒绝。这种无损表示保留现有 32 KiB 单条限制；Schema 1–6 的序列化不变。发布校验将结果的来源、身份和时间绑定到冻结输入；连续监测还将每条执行请求及报告中的请求结果绑定到实际审计流水。
+
+## MLC1-07 — 最终事件审计编码
+
+规格中的批准数量／时间，在 `APPROVED` 事件中序列化为 `ExceptionEvent.quantity` 与服务端拥有的 `received_at`。必填 `actor_kind` 对 `APPROVED`、`REJECTED`、`REVOKED` 为 `LOCAL_USER`；对 `EXPIRED`、`INVALIDATED`、`CONSUMED` 为 `SYSTEM`，后者记录服务端落实先前获准操作的终态效果。服务端根据明确命令／转换路径产生类别，请求模型不允许指定。类别纳入不可变事件哈希，并按转换核验；缺失、未知或不一致类别拒绝，绝不默认补成人工批准。冻结研究仍以 `RECORDED_LOCAL` 或 `RESEARCH_SCENARIO` 单独标识输入来源；操作者类别本身不能证明假设来源事件真实发生过。
+
+最终修复清单：(a) 事件模型及存储／命令测试；(b) 重新生成两套 API／类型；(c) 完整复跑授权、模拟、运行、API 及冻结工作进程测试，再验证前端契约／构建／浏览器。不会改变旧 Schema 1–6 事件，也不迁移用户数据库。

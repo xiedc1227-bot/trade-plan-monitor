@@ -15081,6 +15081,14 @@
       "ExceptionEvent": {
         "additionalProperties": false,
         "properties": {
+          "actor_kind": {
+            "enum": [
+              "LOCAL_USER",
+              "SYSTEM"
+            ],
+            "title": "Actor Kind",
+            "type": "string"
+          },
           "approval_id": {
             "anyOf": [
               {
@@ -15209,6 +15217,7 @@
           "to_state",
           "expected_revision",
           "received_at",
+          "actor_kind",
           "reason",
           "quantity",
           "approval_id",
