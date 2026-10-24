@@ -30,3 +30,15 @@ RED：初始契约测试因缺少 Schema 7 模型／分发产生 9 失败／1 �
 ```
 
 本项仅验收严格领域／草稿／编解码／哈希切片。来源审核、启用、运行、批准及执行集成仍为未勾选任务。
+
+## MLV1-04 — 纯资格与数量（MLP1-T03 / MLP1-C01）
+
+实现前加入独立路径／数量样本，缺少模块时按预期收集失败。数量切片通过 24 项测试。另两项测试发现 Q0 内不存在合法数量时仍产生 BROKEN 候选；补充数量可行性准入后，V01–V03 联合套件 **144 项在 1.33s 通过**，针对性 Ruff 通过。覆盖 P0 状态／强势／确认的相等边界和新例外边界。
+
+已验证精确最低量替代、明显破坏数量不自动填写、合法数量可在半数 Q0 两侧、额度／未知／非法输入阻断，以及普通路径独立性。即使符合资格，纯策略始终返回零授权数量。MLP1-Q12 的持久过时／他次批准场景仍由授权集成负责，不将纯函数测试当作持久化验收。
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_market_exception_policy.py tests/unit/test_market_exception_quantity.py tests/unit/test_market_exception_contract.py tests/unit/test_market_linkage_contract.py tests/unit/test_market_regime.py tests/unit/test_relative_strength.py tests/unit/test_confirmation_selection.py tests/unit/test_quantity_policy.py -q
+```
+
+MLP1-C01 仅验收契约与算术。后续权限、运行、UI 和回放任务仍未完成。

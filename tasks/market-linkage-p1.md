@@ -53,14 +53,14 @@ Use the relevant file subset while a task is creating the remaining tests in a c
 
 ### MLP1-T03 — Implement eligibility and quantity policies
 
-- [ ] Extend shared selection with both exception routes and pure quantity validation; make candidate eligibility distinct from approval; preserve every ordinary route and calculate without hidden clocks/providers.
+- [x] Extend shared selection with both exception routes and pure quantity validation; make candidate eligibility distinct from approval; preserve every ordinary route and calculate without hidden clocks/providers.
 - Depends on: MLP1-T02. Acceptance: MLP1-A02–MLP1-A03, every MLP1-Q01–MLP1-Q12 row, exact/unknown/incompatible-grid edges.
 - Files/scope: `decision/confirmation_selection.py`, `decision/market_exception_policy.py` (new), shared quantity seam, two new V03 unit test files; M.
 - Verify: V03 and V01; independent arithmetic fixtures include legal broken-route values above and below half Q0.
 
 ### MLP1-C01 — Contract and arithmetic checkpoint
 
-- [ ] V01–V03 and V16 pass; trace MLP1-A01–MLP1-A03. Both routes are representable but no test or production adapter may infer approval. Old plans retain exact bytes and behavior.
+- [x] V01–V03 and V16 pass; trace MLP1-A01–MLP1-A03. Both routes are representable but no test or production adapter may infer approval. Old plans retain exact bytes and behavior.
 
 ### MLP1-T04 — Bind extraction and review to source permission
 

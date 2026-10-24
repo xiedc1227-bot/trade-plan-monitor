@@ -30,3 +30,15 @@ Accepted commands (temporary paths are invocation-specific):
 ```
 
 This accepts the strict domain/draft/codec/hash slice only. Source review, activation, runtime, approval and execution integration remain unchecked tasks.
+
+## MLV1-04 — Pure eligibility and quantity (MLP1-T03 / MLP1-C01)
+
+Added independent route/quantity fixtures before implementation; the missing module failed collection as expected. The quantity slice passed 24 tests. Two additional tests exposed a BROKEN candidate with no legal quantity under Q0; after adding grid feasibility admission, the combined V01–V03 suite passed **144 tests in 1.33s**, with targeted Ruff passing. Both P0 state/strength/confirmation equalities and the new exception boundaries are included.
+
+Exact minimum substitution, no automatic broken-route quantity, legal choices on either side of half Q0, capacity/unknown/invalid-input blocks and ordinary-route independence are verified. Pure policies always return zero authorized quantity, even when eligible. MLP1-Q12's persisted stale/foreign approval scenarios remain assigned to authorization integration; no pure test is claimed as persistence acceptance.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_market_exception_policy.py tests/unit/test_market_exception_quantity.py tests/unit/test_market_exception_contract.py tests/unit/test_market_linkage_contract.py tests/unit/test_market_regime.py tests/unit/test_relative_strength.py tests/unit/test_confirmation_selection.py tests/unit/test_quantity_policy.py -q
+```
+
+MLP1-C01 accepts contracts and arithmetic only. Subsequent authority, runtime, UI and replay tasks remain incomplete.
