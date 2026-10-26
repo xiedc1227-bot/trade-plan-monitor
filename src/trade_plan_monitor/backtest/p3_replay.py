@@ -5,10 +5,9 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from trade_plan_monitor.backtest.models import Sha256Hex
-from trade_plan_monitor.backtest.p3_replay_input import FrozenCapitalOpening
+from trade_plan_monitor.backtest.p3_replay_input import CapitalReplayProgram, FrozenCapitalOpening
 from trade_plan_monitor.backtest.research_input import ResearchTimestamp, ResearchValue
 from trade_plan_monitor.domain.daily_hash import daily_hash
-from trade_plan_monitor.domain.plan_hash import plan_sha256
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
 from trade_plan_monitor.state.p3_capital_service import (
@@ -56,8 +55,17 @@ def apply_frozen_capital(session, frozen):
     try:
         if frozen.available_at > session.now:
             raise CapitalOpeningError("CAPITAL_REPLAY_NOT_AVAILABLE")
-        if frozen.plan_hash != plan_sha256(session.plan):
+        # Cost facts belong to the symbol inventory. A reviewed policy replacement
+        # cannot erase a declared source that becomes available later. Its original
+        # source/review remains validated against the immutable scheduled snapshot.
+        plans = (tuple(row.version.snapshot for row in session.run_input.schedule.entries)
+                 if hasattr(session.run_input, "schedule") else (session.plan,))
+        if session.plan.schema_version != 9 or frozen.symbol != session.plan.symbol:
             raise CapitalOpeningError("CAPITAL_REPLAY_PLAN_MISMATCH")
+        try:
+            CapitalReplayProgram(opening_events=(frozen,)).validate_scope(plans)
+        except ValueError as error:
+            raise CapitalOpeningError("CAPITAL_REPLAY_PLAN_MISMATCH") from error
         opening = (session.run_input.initial_account.lots
                    if hasattr(session.run_input, "initial_account")
                    else session.run_input.initial_lots)

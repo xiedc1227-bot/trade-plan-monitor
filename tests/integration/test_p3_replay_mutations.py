@@ -106,6 +106,50 @@ def test_future_changes_preserve_earlier_loop_decisions(p3_chain, tmp_path, muta
 
 
 @pytest.mark.parametrize("p3_chain", [("OPEN_COST_CAP", False, "ORDINARY")], indirect=True)
+def test_delayed_source_budget_survives_reviewed_policy_replacement(p3_chain, tmp_path):
+    from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
+    from trade_plan_monitor.backtest.p3_replay_input import CapitalReplayProgram
+    from trade_plan_monitor.backtest.plan_schedule import (
+        ScheduledLoopSchedule, ScheduledPlanVersion, ScheduledScheduleEntry,
+    )
+    from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+
+    chain = p3_chain
+    start = chain.now
+    late = datetime.combine(TUESDAY, time(9, 35), SH)
+    opening = frozen_opening(chain, available_at=late)
+    initial = capital_loop_input(chain, mode="OBSERVE_ONLY")
+    original = ScheduledPlanVersion.model_validate(
+        initial.schedule.entries[0].version.model_dump(mode="python"))
+    raw = chain.plan.model_dump(mode="json")
+    raw["position"]["limit"]["capital_policy"]["cap_fen"] += 1
+    successor = type(chain.plan).model_validate(raw)
+    available = late.replace(hour=9, minute=30)
+    version = ScheduledPlanVersion.model_validate(original.model_dump(mode="python") | dict(
+        version_id="replacement", snapshot=successor, plan_hash=plan_sha256(successor),
+        available_at=available, information_cutoff=available,
+        review=original.review.model_copy(update=dict(
+            content_hash=daily_plan_content_sha256(successor), reviewed_at=available))))
+    schedule = ScheduledLoopSchedule(entries=(
+        ScheduledScheduleEntry(effective_trade_date=start.date(), version=original),
+        ScheduledScheduleEntry(effective_trade_date=TUESDAY, version=version)))
+    run = ScheduledLoopInput.model_validate(initial.model_dump(mode="python") | dict(
+        schema_version="monitor-loop-input-v2", schedule=schedule,
+        capital_program=CapitalReplayProgram(opening_events=(opening,))))
+    calendar = calendar_for(chain)
+    frames = loop_frames(chain, calendar)
+    with LoopSession(tmp_path / "delayed-source", run, calendar) as session:
+        runner = LoopRunner(session)
+        runner.run(frames)
+        assert session.plan == successor
+        assert session.capital.outcomes[0].status == "APPLIED", session.capital.outcomes
+        from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
+        with session.work() as work:
+            assert CapitalRepository(work.daily.session).get(
+                chain.plan.symbol).retained_basis_fen == 20000
+
+
+@pytest.mark.parametrize("p3_chain", [("OPEN_COST_CAP", False, "ORDINARY")], indirect=True)
 def test_frozen_buy_reference_reconciles_exact_private_lot_and_releases_residual_cost(
     p3_chain, tmp_path,
 ):

@@ -56,6 +56,6 @@ capital-replay-program-v1 按 available_at/order 冻结唯一有序事件。最�
 
 ## MLP3-K10 — 已实现的私有回放与报告引用
 
-CapitalReplayState 仅对已可用的冻结声明，在私有事务内调用 confirm_capital_opening，解析准确的 OPENING/BUY_SIGNAL 批次，并保留 CapitalReplayOutcome 的来源、封装、来源分类与私有记录哈希。必须匹配完整当前批次，声明不改变库存。backtest-run-v10 仅在显式预算程序存在时接纳 Schema9。当前金额防护和准确实际分配记账继续共用；LoopAccount/ResearchValuation 的现金与盈亏保持独立。
+CapitalReplayState 仅对已可用的冻结声明，在私有事务内调用 confirm_capital_opening，解析准确的 OPENING/BUY_SIGNAL 批次，并保留 CapitalReplayOutcome 的来源、封装、来源分类与私有记录哈希。必须匹配完整当前批次，声明不改变库存。政策替换后，延迟声明仍绑定冻结调度中的原审核快照；私有应用仍检查当前已审核 Schema9 计划与准确当前库存。这仅延续成本事实，不延续旧 BUY 授权。backtest-run-v10 仅在显式预算程序存在时接纳 Schema9。当前金额防护和准确实际分配记账继续共用；LoopAccount/ResearchValuation 的现金与盈亏保持独立。
 
 研究 CapitalSignalReference 保留 market_linkage_ref/pretrade_ref/capital_execution_ref；signal_linkage/signal_pretrade/signal_capital 各自仅保存一份不可变证据。CapitalLinkageReference 仅复用 base_evidence_hash 对应的逐字节等价市场事实，同时保留独立 calculation/approval_binding/evidence_hash。读取器重建并校验完整 CapitalMarketDecision 与 DailySignalState；缺失或篡改引用会失败。无需截断即可保留原32KiB结果项与总量限制。可选 capital_outcomes 在旧报告中省略；发布与重读将其绑定到准确可用的冻结来源序列。准备、调度和工作台命令携带 capitalProgram 与 capital-exception-program-v1；旧输入不能借用这些字段或版本。
