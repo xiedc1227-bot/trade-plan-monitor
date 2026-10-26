@@ -8,13 +8,15 @@ Trade Plan Monitor 是一款本地优先、AI 辅助、面向确定性 A 股交�
 
 [English](README.md)
 
+Schema9 新增明确的单证券模拟 OPEN_COST_CAP/MARKET_VALUE_CAP 上限，支持纯金额与股数金额并用。数量保持冻结，在批准前和整笔执行前分别检查当前完整金额条件。开仓成本须另行明确确认。参见 [P3 操作说明](docs/operations/market-linkage-p3.zh-CN.md)、[规格](docs/specifications/monitoring/SPEC-market-linkage-p3.zh-CN.md)及[当前验收状态](docs/verification/2026-10-26-market-linkage-p3.zh-CN.md)。
+
 Schema 8 新增审核过的 ATR14／收盘档位（先于大盘折减）、明确费用估算和可选 REQUIRED 买入门槛。确认时冻结 Q0，当前报价只重算费用、不改量；P1 批准与整笔模拟仍分开。参见 [P2 操作说明](docs/operations/market-linkage-p2.zh-CN.md)、[规格](docs/specifications/monitoring/SPEC-market-linkage-p2.zh-CN.md)及[验收证据](docs/verification/2026-10-26-market-linkage-p2.zh-CN.md)。
 
 ## 交易计划
 
 当前 Schema 5 计划也可通过既有隔离回测入口使用明确的冻结研究输入。无需真实激活，服务器审核仍是权威。空操作脚本只产生证据，不改变库存。参见[回放指南与合成分钟/日线示例](docs/operations/unified-replay.zh-CN.md)及[回放验证](docs/verification/2026-10-03-unified-replay.zh-CN.md)。
 
-在本地 Web 界面打开 `/plans`，提取单一 `plan-extract-v11` 候选，修改原文定义的条件和参数，登记明确的人工补充，保存、审核并启用。缺失的策略定义保持可见并阻止启用。修改原文或参数后，必须重新审核并绑定准确的保存版本。没有计划类型选择器或独立日线计划工作台。
+在本地 Web 界面打开 `/plans`，提取单一 `plan-extract-v12` 候选，修改原文定义的条件和参数，登记明确的人工补充，保存、审核并启用。缺失的策略定义保持可见并阻止启用。修改原文或参数后，必须重新审核并绑定准确的保存版本。没有计划类型选择器或独立日线计划工作台。
 
 Schema 7 新增原文许可、逐机会人工审核的两条日线联动 BUY 例外。`WEAK_MINIMUM` 仅在 `0.5*Q0 < minimum <= Q0`、STRONG 和 S1 成立时，批准恰好为兼容官方最小量的数量。`BROKEN_STRONG` 要求 STRONG、S2，以及人工明确填写不超过 Q0 和整笔容量的合法 Qe，输入框初始为空。批准冻结数量但不改变库存；另一次整笔模拟在原下一交易日窗口内消耗它一次。冻结研究使用明确事件及操作脚本，区分记录来源和研究假设。参见 [P1 操作说明](docs/operations/market-linkage-p1.zh-CN.md)、[任务](tasks/market-linkage-p1.zh-CN.md)及[当前验收状态](docs/verification/2026-10-24-market-linkage-p1.zh-CN.md)。
 
@@ -674,13 +676,15 @@ Schema 6支持原文明确定义的日线BUY联动：按上市板块推导参考
 
 必要条件不支持时阻断整条规则，不删除依赖、改数量或底仓归属、伪装人工事实来通过，也不擅自改成提醒。
 
-原文要求 P2 数量或费用政策时，在 A 使用 schema_version=8 / condition-plan-v4，保留完整 P1 大盘政策并增加 pretrade_policy.policy_version=pretrade-policy-v1。ATR_RATIO_TIERS 要求 metric=ATR14_OVER_CLOSE、明确 base_qty 及 1–10 个从零连续覆盖无穷的 [lower,upper) 档位，系数位于 [0,1] 且非递增；使用不含 base_quantity 的 DERIVED_MARKET_FACTOR。FIXED_Q0 保留 MARKET_FACTOR/base_quantity。费用模式须明确为 NONE、PREVIEW_ONLY 或 REQUIRED。PREVIEW_ONLY/REQUIRED 须提供完整、有版本、适用证券和有效期的 ESTIMATE 费用表，佣金／最低值、项目包含关系和滑点，以及目标／风险价及其独立价位依据。REQUIRED 还须原文定义数字门槛，不补默认值。确认时冻结 Q0，当前报价按同一数量重算费用，保留两条 P1 授权路径，风险退出绕过 BUY 成本门槛。B 不能补执行政策或批准。金额上限、真实／部分成交、自动基本面判断及日线联动五分钟确认仍不支持。
+原文要求 P2 数量或费用政策时，在 A 使用 schema_version=8 / condition-plan-v4，保留完整 P1 大盘政策并增加 pretrade_policy.policy_version=pretrade-policy-v1。ATR_RATIO_TIERS 要求 metric=ATR14_OVER_CLOSE、明确 base_qty 及 1–10 个从零连续覆盖无穷的 [lower,upper) 档位，系数位于 [0,1] 且非递增；使用不含 base_quantity 的 DERIVED_MARKET_FACTOR。FIXED_Q0 保留 MARKET_FACTOR/base_quantity。费用模式须明确为 NONE、PREVIEW_ONLY 或 REQUIRED。PREVIEW_ONLY/REQUIRED 须提供完整、有版本、适用证券和有效期的 ESTIMATE 费用表，佣金／最低值、项目包含关系和滑点，以及目标／风险价及其独立价位依据。REQUIRED 还须原文定义数字门槛，不补默认值。确认时冻结 Q0，当前报价按同一数量重算费用，保留两条 P1 授权路径，风险退出绕过 BUY 成本门槛。B 不能补执行政策或批准。Schema8 本身不表示金额上限。真实／部分成交、自动基本面判断及日线联动五分钟确认仍不支持。
+
+原文明示金额上限时，使用 schema_version=9 / condition-plan-v5，保留完整日线 P0/P1/P2 政策并定义 position.limit。CAPITAL_ONLY 仅有 capital_policy，不含 max_qty；QUANTITY_AND_CAPITAL 在 position.limit 内增加 max_qty，绝不使用 position.max_qty。要求 capital-policy-v1、CNY、SYMBOL_CORE_AND_TACTICAL、SIMULATION 与正整数 cap_fen。选择 OPEN_COST_CAP，并提供完整明确 buy_cost_schedule，即使费用模式为 NONE；或选择 MARKET_VALUE_CAP、valuation=CURRENT_ADMITTED_QUOTE，且不带成本费用表。P2 同时带费用时，两份费用表必须完全一致。“总预算”含义不明时保持未决。先推导并冻结 Q0 和 P0/P1 整笔数量，再同时检查股数／金额门槛，不缩量、不从金额反推 Q0、不新增例外。成本上限检查保留历史成本加明确估算的整笔买入借记；卖出释放实际所选批次成本，不计入卖出利润。市值上限按同一当前已准入报价计算全部 CORE+TACTICAL 加拟买数量；等于上限通过。非零模拟开仓成本须另行明确审核批次声明，不从 B、研究或账户余额初始化，不索要可用现金。预览、逐机会批准与整笔模拟分开，分别复核当前证据；BUY 金额失败不阻挡技术风险 SELL。真实账户限制、组合／分桶上限、累计买入／净投入及券商／部分成交仍不支持。
 
 # 三、A：精简提取正文
 
 A只含本次可完整承载的政策；原因与研究放B。规则无法完整承载、身份未核验或缺必填参数时，A必须精确等于“暂不提供可导入正文。”，不附加任何原因、字段或示例。
 
-根字段必须按下述紧凑格式分组：标题后，三个schema／execution字段合为一行，五个标识／标的字段合为一行，两个metadata字段合为一行，activation.mode、levels和position.max_qty合为一行。字段之间用空格，不用换行，不逐个根字段单独成行。仅提醒时这部分恰为四行。必要的其他政策字段及规则完整父路径仍须保留，不能为缩短正文删除信息；下述每行512字符上限仍适用。
+根字段必须按下述紧凑格式分组：标题后，三个schema／execution字段合为一行，五个标识／标的字段合为一行，两个metadata字段合为一行，activation.mode、levels和position.max_qty（Schema9 改为 position.limit.mode）合为一行。Schema9 的完整 position.limit 政策及费用字段另用带明确父路径的行展开，每行仍在512字符内。字段之间用空格，不用换行，不逐个根字段单独成行。仅提醒时这部分恰为四行。必要的其他政策字段及规则完整父路径仍须保留，不能为缩短正文删除信息；下述每行512字符上限仍适用。
 
 - 根路径不加draft.。symbol保留6位代码及.SH／.SZ／.BJ（含前导零），market对应SSE／SZSE／BSE。
 - 新计划标识由生成过程拟定，版本遵守已核验新建契约。仅用户明确要求更新已有计划时核对原标识／版本，不向新计划索取旧版本信息。
@@ -709,12 +713,12 @@ alert_rules[<i>].condition.reference: mode=<REFERENCE_MODE> value="<EXACT_VALUE>
 
 # 四、B：按需人工研究附件
 
-B必须独立成句、逐字写明“计划持续有效，直至人工停用。”，包括句号；即使B的其余内容为英文，也保留这句双语共用原文，不翻译、不改写。保留持仓成本原值及已明确提供、适用的原报告退出与重评条件。未提供此类原报告条件时省略该话题，不要求补充，也不新增等待动作。成本留在B，必填position.max_qty仍留在A，不笼统称所有账户资料都不进入A。其余仅解释当前方案，不写等待审核、启用等操作流程，不规定章节数。
+B必须独立成句、逐字写明“计划持续有效，直至人工停用。”，包括句号；即使B的其余内容为英文，也保留这句双语共用原文，不翻译、不改写。保留持仓成本原值及已明确提供、适用的原报告退出与重评条件。未提供此类原报告条件时省略该话题，不要求补充，也不新增等待动作。成本留在B，原文定义的position.max_qty或Schema9 position.limit仍留在A，不笼统称所有账户资料都不进入A。其余仅解释当前方案，不写等待审核、启用等操作流程，不规定章节数。
 
 按A的结果选择附件内容：
 - A可提供：简述本次结论、实际条件与来源，用“如果……那么……”分别解释触发条件；只列表达当前政策所必需的输入，无则写“无”或“None”。提醒不依赖的额外日K、量能、财报或指数资料不得列为缺项或补件要求；给定事实要求提到这些缺失资料时，只能标明属于未使用的研究背景，不要求任何动作。大盘影响仅在有低吸研究或用户要求时说明。仅提醒不计算加仓额度，不展开交易研究，也不额外判断多条提醒能否同时触发。
 - A被阻断：只保留已知事实、前述有效期／成本／已明确提供的原报告约束、直接阻断原因和当前等待动作。必要能力不支持时，当前等待动作仅为等待必要能力具备后重评，不给任何替代途径；不输出缺失交易参数清单（即使清单后加“不编造”也不允许）、不建议静态分支、不要求补充原报告条件、不要求新的用户选择。仅缺上限时，只需确认上限。
 
-只输出A和B，常规文本用两个标题；调用端要求JSON时仅返回A、B两个字符串，A不加围栏。非阻断A的首行必须精确为“计划根字段语义值”，下一行才是适用的schema_version（5/6/7/8）；这是正文中的提取格式标记，不是外层标题，不能省略，也不能直接从schema_version开始。阻断A仍精确为“暂不提供可导入正文。”。只有A用于后续提取。
+只输出A和B，常规文本用两个标题；调用端要求JSON时仅返回A、B两个字符串，A不加围栏。非阻断A的首行必须精确为“计划根字段语义值”，下一行才是适用的schema_version（5/6/7/8/9）；这是正文中的提取格式标记，不是外层标题，不能省略，也不能直接从schema_version开始。阻断A仍精确为“暂不提供可导入正文。”。只有A用于后续提取。
 ````
 <!-- generic-trade-plan-prompt:end -->

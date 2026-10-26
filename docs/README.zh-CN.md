@@ -6,13 +6,13 @@ P1 人工复评买入例外：[操作与两条数量规则](operations/market-li
 
 P2 原文定义的波动数量与买入前成本收益约束：[已批准规格](specifications/monitoring/SPEC-market-linkage-p2.zh-CN.md) · [操作说明](operations/market-linkage-p2.zh-CN.md) · [18项任务及六个检查点](../tasks/market-linkage-p2.zh-CN.md) · [实际验收状态](verification/2026-10-26-market-linkage-p2.zh-CN.md)。Schema 8 冻结 Q0，并按当前报价复核明确 BUY 门槛；批准与模拟仍相互独立。
 
-P3 审核草案：[原提示词剩余能力及六项建议决策](specifications/monitoring/SPEC-market-linkage-p3.zh-CN.md) · [24项建议任务及八个检查点](../tasks/market-linkage-p3.zh-CN.md)。建议补齐明确的持仓成本／市值上限及隔离模拟预算连续性。P3 尚未批准或实现，当前可执行能力仍为 P0/P1/P2。
+P3 已批准金额政策：[规格及六项决策](specifications/monitoring/SPEC-market-linkage-p3.zh-CN.md) · [操作及原提示词剩余边界](operations/market-linkage-p3.zh-CN.md) · [24项任务及八个检查点](../tasks/market-linkage-p3.zh-CN.md) · [实际验收状态](verification/2026-10-26-market-linkage-p3.zh-CN.md)。Schema9 支持明确成本／市值上限、纯金额／并用限制及连续隔离模拟预算成本。当前、运行与回放阶段已验收，全项目验收以报告为准。
 
 ## 从这里开始
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
 
-单一 `/plans` 工作台使用 Schema 5 固定计划、Schema 6 日线联动计划、Schema 7 逐机会例外、Schema 8 交易前政策及 `plan-extract-v11`：原文 → 草稿 → 修改/审核 → 明确启用 → 日线/五分钟混合监测 → 提醒及明确整单模拟。单独批准例外不产生交易。基本面仅在生成计划时审核。提醒/已读绝不改变库存。冻结 Schema 1–4 读取与独立研究保留原有字节/哈希，不能授权新实时操作。
+单一 `/plans` 工作台使用 Schema 5 固定计划、Schema 6 日线联动计划、Schema 7 逐机会例外、Schema 8 交易前政策、Schema9 金额上限及 `plan-extract-v12`：原文 → 草稿 → 修改/审核 → 明确启用 → 日线/五分钟混合监测 → 提醒及明确整单模拟。单独批准例外不产生交易。基本面仅在生成计划时审核。提醒/已读绝不改变库存。冻结 Schema 1–4 读取与独立研究保留原有字节/哈希，不能授权新实时操作。
 
 机器 API 权威位于 [`openapi.json`](../openapi.json) 和 [`openapi.runtime-status.json`](../openapi.runtime-status.json)。安装入口使用监控协议 `2`。本地验收不认证真实供应商可用性、用户数据库迁移、人工 NVDA 审阅或部署；这些仍是单独验证工作。
 
