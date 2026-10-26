@@ -241,7 +241,7 @@ def test_migrated_index_permissions_recheck_independently_across_processes(
     try:
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version"))
-            assert version.scalar_one() == "0026_market_exceptions"
+            assert version.scalar_one() == "0027_simulation_capital"
             assert connection.execute(text(
                 "SELECT scope_key, retry_at FROM provider_recovery_checkpoint "
                 "WHERE kind='permission'"

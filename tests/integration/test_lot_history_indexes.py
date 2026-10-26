@@ -14,7 +14,7 @@ from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_data
 from trade_plan_monitor.state.models import AuditLog, Base, MonitorEvent
 
 PREVIOUS_REVISION = "0019_alert_delivery_eligibility"
-LATEST_REVISION = "0026_market_exceptions"
+LATEST_REVISION = "0027_simulation_capital"
 EXPECTED_INDEXES = {
     "audit_log": ("ix_audit_log_entity", ["entity_type", "entity_id"]),
     "monitor_event": ("ix_monitor_event_aggregate_sequence", ["aggregate_id", "sequence"]),
@@ -99,6 +99,8 @@ def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(popula
     after_upgrade = before | {
         "daily_plan_record": [],
         "market_index_acquisition_state": [],
+        "simulation_capital_book": [],
+        "simulation_capital_event": [],
     }
     indexes_before = {table: inspect(engine).get_indexes(table) for table in EXPECTED_INDEXES}
 
