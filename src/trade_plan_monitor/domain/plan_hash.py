@@ -20,12 +20,13 @@ def daily_plan_content_sha256(plan: DailyTradePlan) -> str:
         4: b"daily-plan-review-content-v1\x00", 5: b"plan-review-content-v2\x00",
         6: b"plan-review-content-v3\x00", 7: b"plan-review-content-v4\x00",
         8: b"plan-review-content-v5\x00",
+        9: b"plan-review-content-v6\x00",
     }[plan.schema_version]
     return sha256(domain + canonical.encode("utf-8")).hexdigest()
 
 
 def unified_plan_content_sha256(plan) -> str:
-    if plan.schema_version not in {5, 6, 7, 8}:
+    if plan.schema_version not in {5, 6, 7, 8, 9}:
         raise TypeError("plan must use the current condition contract")
     return daily_plan_content_sha256(plan)
 

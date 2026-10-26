@@ -6,6 +6,8 @@ P1 人工复评买入例外：[操作与两条数量规则](operations/market-li
 
 P2 原文定义的波动数量与买入前成本收益约束：[已批准规格](specifications/monitoring/SPEC-market-linkage-p2.zh-CN.md) · [操作说明](operations/market-linkage-p2.zh-CN.md) · [18项任务及六个检查点](../tasks/market-linkage-p2.zh-CN.md) · [实际验收状态](verification/2026-10-26-market-linkage-p2.zh-CN.md)。Schema 8 冻结 Q0，并按当前报价复核明确 BUY 门槛；批准与模拟仍相互独立。
 
+P3 审核草案：[原提示词剩余能力及六项建议决策](specifications/monitoring/SPEC-market-linkage-p3.zh-CN.md) · [24项建议任务及八个检查点](../tasks/market-linkage-p3.zh-CN.md)。建议补齐明确的持仓成本／市值上限及隔离模拟预算连续性。P3 尚未批准或实现，当前可执行能力仍为 P0/P1/P2。
+
 ## 从这里开始
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
