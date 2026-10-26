@@ -463,6 +463,10 @@ class DailyRuntimeEvaluationService:
                 )
             inventory = (_alert_inventory(plan.symbol) if _alert_only(plan)
                 else accounting.snapshot(plan.symbol, now.date()))
+            capital_inputs = None
+            if plan.schema_version == 9:
+                from trade_plan_monitor.state.p3_current import current_capital_inputs
+                capital_inputs = current_capital_inputs(accounting, plan.symbol, now)
             lots = accounting.lots(plan.symbol, now.date())
             fact_rows = work.daily.list(symbol=plan.symbol, kind="FACT")
             facts = tuple(
@@ -477,6 +481,7 @@ class DailyRuntimeEvaluationService:
             risk_rows = (() if _alert_only(plan)
                 else work.daily.list(symbol=plan.symbol, kind="RISK"))
             target = {
+                **({"capital_inputs": capital_inputs} if capital_inputs is not None else {}),
                 "plan_hash": plan_sha256(plan),
                 "activation_revision": active.revision,
                 "review_id": binding["review_id"],
@@ -748,7 +753,12 @@ class DailyRuntimeEvaluationService:
                 if hasattr(rule, "pretrade_policy"):
                     from trade_plan_monitor.decision.p2_composition import evaluate_p2_market
                     from trade_plan_monitor.domain.p2_evidence import freeze_pretrade
-                    result = evaluate_p2_market(plan, rule, **values)
+                    if plan.schema_version == 9:
+                        from trade_plan_monitor.decision.p3_composition import evaluate_p3_market
+                        result = evaluate_p3_market(plan, rule, **values,
+                            **capital_inputs)
+                    else:
+                        result = evaluate_p2_market(plan, rule, **values)
                     pretrade_by_rule[rule.rule_id] = freeze_pretrade(plan, rule,
                         sizing=result.sizing, economics=result.economics,
                         decision_session=values["decision_session"], cutoff=values["cutoff"])
@@ -941,6 +951,7 @@ class DailyRuntimeEvaluationService:
                     tradable=tradable,
                     risk_blocked=risk_blocked,
                     risk_known=risk_known,
+                    **({"capital_inputs": capital_inputs} if plan.schema_version == 9 else {}),
                 )
                 if (exception_unknown and checked["state"] not in {
                         "SIMULATED", "INVALIDATED", "EXPIRED"}):
@@ -1226,6 +1237,11 @@ def daily_delivery_allowed(session, event, now):
     if not isinstance(plan, UnifiedTradePlan):
         return False
     repo = DailyRepository(session, clock=lambda: now, id_factory=lambda: str(uuid4()))
+    capital_arguments = {}
+    if plan.schema_version == 9:
+        from trade_plan_monitor.state.p3_current import current_capital_inputs
+        capital_arguments = {"capital_inputs": current_capital_inputs(
+            DailyAccounting(repo), plan.symbol, now)}
     if event.signal_type != "REMINDER" and DailyAccounting(repo).legacy_reason(event.symbol):
         return False
     review = repo.get("review-" + event.plan_version_id)
@@ -1411,6 +1427,7 @@ def daily_delivery_allowed(session, event, now):
         risk_blocked=False,
         risk_known=head["payload"].get("risk_input_known",
             head["payload"].get("daily_evidence") is not None or not plan.risk_branches),
+        **capital_arguments,
     )
     return checked[
         "executable_qty"

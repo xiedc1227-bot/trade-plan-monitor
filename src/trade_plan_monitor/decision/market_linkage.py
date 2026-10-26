@@ -84,7 +84,7 @@ def _operand_content(value):
     return canonical_decimal(number) if number.is_finite() else value
 
 
-def evaluate_market_linkage(
+def linked_market_facts(
     plan,
     rule,
     *,
@@ -138,17 +138,6 @@ def evaluate_market_linkage(
         decision_session=decision_session,
         risk=risk,
     )
-    capacity = plan.position.max_qty - inventory["total_qty"] if inventory["known"] else None
-    calculation = calculate_quantity(
-        base_quantity=rule.quantity_policy.base_quantity,
-        regime=market.regime,
-        minimum=minimum,
-        increment=increment,
-        capacity=capacity,
-        condition=outcome,
-        risk=risk,
-        route_blocker=selection.blocker,
-    )
     content_hash = daily_plan_content_sha256(plan)
     # Exclude observation wall clock and inventory eligibility: neither changes
     # an unchanged independent event or permits resizing an existing signal.
@@ -166,6 +155,30 @@ def evaluate_market_linkage(
         strength=None if strength is None else canonical_value(strength.model_dump(
             mode="python", exclude={"cutoff", "source_hashes"})),
         selection=selection.model_dump(mode="json"),
+    )
+    return dict(market=market, grid=grid, selection=selection, strength=strength,
+                outcome=outcome, proofs=proofs, content_hash=content_hash, consumed=consumed)
+
+
+def evaluate_market_linkage(plan, rule, **inputs):
+    facts = linked_market_facts(plan, rule, **inputs)
+    market, grid = facts["market"], facts["grid"]
+    selection, strength = facts["selection"], facts["strength"]
+    outcome, proofs = facts["outcome"], facts["proofs"]
+    content_hash, consumed = facts["content_hash"], facts["consumed"]
+    inventory, risk = inputs["inventory"], inputs["risk"]
+    decision_session, cutoff = inputs["decision_session"], inputs["cutoff"]
+    minimum, increment = (None, None) if grid is None else (grid.minimum, grid.increment)
+    capacity = plan.position.max_qty - inventory["total_qty"] if inventory["known"] else None
+    calculation = calculate_quantity(
+        base_quantity=rule.quantity_policy.base_quantity,
+        regime=market.regime,
+        minimum=minimum,
+        increment=increment,
+        capacity=capacity,
+        condition=outcome,
+        risk=risk,
+        route_blocker=selection.blocker,
     )
     payload = dict(
         version="market-linkage-evidence-v1",

@@ -113,21 +113,21 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T11 — Compose daily runtime quantity and capital evidence
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T10.
 - Files/scope: versioned Schema 9 quantity/decision adapter, runtime projection, frozen evidence and `tests/integration/test_p3_runtime.py` (new); split model/runtime adapters if over5 files.
 - Acceptance: MLP3-A03,MLP3-A04,MLP3-A08. Verify: focused V03 plus P0/P1/P2 policy regression. Amount-only has no fabricated share capacity, confirmation freezes q, and current budget changes cannot rearm or resize it.
 
 ### MLP3-T12 — Guard ordinary whole execution and risk bypass
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T11.
 - Files/scope: lifecycle/transaction guard, current-book binding and `tests/integration/test_p3_simulation.py` (new).
 - Acceptance: MLP3-A07,MLP3-A08. Verify: focused V03. Current quote/book revalidation, exact post-state limit, stale preview rejection, no automatic forced SELL, actual technical-risk simulation without cost evidence.
 
 ### MLP3-C04 — Ordinary workflow acceptance
 
-- [ ] Available V01–V03,V08 pass; MLP3-A01–MLP3-A08 ordinary path covered. Risk bypass must be an executed simulation, not only a pure predicate.
+- [x] Available V01–V03,V08 pass; MLP3-A01–MLP3-A08 ordinary path covered. Risk bypass must be an executed simulation, not only a pure predicate.
 
 ### MLP3-T13 — Preserve both P1 exception authorization paths
 

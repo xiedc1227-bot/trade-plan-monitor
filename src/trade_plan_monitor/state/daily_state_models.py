@@ -10,6 +10,8 @@ from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
 from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.p2_economics import EconomicsResult
+from trade_plan_monitor.decision.p3_capital import CapitalAssessment
+from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
@@ -94,12 +96,14 @@ class DailyFactState(DailyValue):
 
 
 class DailySignalState(DailyValue):
+    capital_execution: CapitalAssessment | None = Field(
+        default=None, exclude_if=lambda v: v is None)
     pretrade: FrozenPretrade | None = Field(default=None, exclude_if=lambda v: v is None)
     pretrade_execution: EconomicsResult | None = Field(
         default=None, exclude_if=lambda v: v is None)
-    market_linkage: MarketExceptionDecision | MarketLinkageDecision | None = Field(
-        default=None, exclude_if=lambda v: v is None
-    )
+    market_linkage: (
+        CapitalMarketDecision | MarketExceptionDecision | MarketLinkageDecision | None
+    ) = Field(default=None, exclude_if=lambda v: v is None)
     occurrence_mode: Literal["ONCE_PER_RULE", "AFTER_RULE_COMPLETED"] | None = None
     signal_id: str
     rule_id: str
@@ -475,7 +479,9 @@ class DailyEvaluationState(DailyValue):
                     else MarketIndexSnapshot.model_validate(value))
         return value
 
-    market_linkage: tuple[MarketExceptionDecision | MarketLinkageDecision, ...] | None = Field(
+    market_linkage: tuple[
+        CapitalMarketDecision | MarketExceptionDecision | MarketLinkageDecision, ...
+    ] | None = Field(
         default=None, max_length=2, exclude_if=lambda v: v is None)
     symbol: str
     plan_version_id: str

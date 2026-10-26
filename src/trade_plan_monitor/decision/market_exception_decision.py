@@ -157,6 +157,9 @@ def grant_exception(decision, candidate, event, *, capacity):
 
 
 def parse_linkage_decision(value):
+    if value.get("version") == "capital-market-evidence-v1":
+        from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
+        return CapitalMarketDecision.model_validate(value)
     model = (MarketExceptionDecision if value.get("version") == "market-linkage-evidence-v2"
              else MarketLinkageDecision)
     return model.model_validate(value)

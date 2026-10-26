@@ -187,6 +187,10 @@ def simulate_inventory(
             _reject("DAILY_SIMULATION_CURRENT_EVALUATION_REQUIRED")
         if signal["plan_version_id"] != details.id or signal["state"] == "SIMULATED":
             _reject("DAILY_SIMULATION_SIGNAL_CONSUMED_OR_REPLACED")
+        capital_arguments = {}
+        if plan.schema_version == 9:
+            from trade_plan_monitor.state.p3_current import current_capital_inputs
+            capital_arguments = {"capital_inputs": current_capital_inputs(accounting, symbol, now)}
         checked = (
             check_execution if isinstance(plan, UnifiedTradePlan) else check_daily_execution
         )(
@@ -201,6 +205,7 @@ def simulate_inventory(
                 "risk_input_known",
                 state.get("daily_evidence") is not None or not plan.risk_branches,
             ),
+            **capital_arguments,
         )
         if checked["executable_qty"] == 0 or any(
             "ORDINARY_CONFLICT_BLOCK_BOTH" in s["blockers"] for s in state["signals"]
@@ -225,6 +230,14 @@ def simulate_inventory(
     if quantity != command.quantity:
         raise ValueError("simulation must consume the complete offered quantity")
     identity = str(uuid4()) if identity_factory is None else identity_factory()
+    capital_debit, capital_details = None, None
+    if plan.schema_version == 9 and side == "BUY":
+        capital = checked["capital_execution"]
+        if capital["outcome"] != "PASS" or capital["quantity"] != quantity:
+            _reject("CAPITAL_EXECUTION_REQUIRED")
+        capital_details = capital
+        if capital["mode"] == "OPEN_COST_CAP":
+            capital_debit = capital["buy_debit"]["debit_fen"]
     position = accounting.simulate(
         symbol=symbol,
         identity=identity,
@@ -234,6 +247,8 @@ def simulate_inventory(
         now=now,
         lot_allocations=lot_allocations,
         plan_version_id=details.id,
+        capital_debit_fen=capital_debit,
+        capital_details=capital_details,
     )
     if signal_id is not None:
         if exception_candidate is not None:

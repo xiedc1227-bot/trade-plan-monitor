@@ -216,7 +216,8 @@ def confirm_signal(
 
 
 def check_execution(
-    plan, signal, *, inventory, quote_fen, evaluated_at, tradable, risk_blocked, risk_known
+    plan, signal, *, inventory, quote_fen, evaluated_at, tradable, risk_blocked, risk_known,
+    capital_inputs=None,
 ):
     remaining = signal["planned_qty"] - signal["simulated_qty"]
     if remaining not in {0, signal["planned_qty"]}:
@@ -253,12 +254,37 @@ def check_execution(
     if not inventory["known"]:
         blockers.append("POSITION_UNKNOWN")
     elif signal["side"] == "BUY":
-        if plan.position.max_qty - inventory["total_qty"] < remaining:
+        if plan.schema_version != 9 and plan.position.max_qty - inventory["total_qty"] < remaining:
             blockers.append("MAX_QUANTITY_CAPACITY")
     elif inventory.get("sellable_tactical") is None:
         blockers.append("SELLABLE_QUANTITY_UNKNOWN")
     elif min(inventory["tactical_qty"], inventory["sellable_tactical"]) < remaining:
         blockers.append("TACTICAL_SELLABLE_INSUFFICIENT")
+    capital = None
+    if plan.schema_version == 9 and signal["side"] == "BUY":
+        from trade_plan_monitor.decision.p3_capital import assess_capital
+        from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
+        from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
+
+        capital = assess_capital(plan.position, quantity=signal["planned_qty"],
+            price_fen=quote_fen,
+            total_qty=inventory["total_qty"] if inventory["known"] else None,
+            symbol=plan.symbol, session=evaluated_at.date(),
+            inventory_revision=inventory.get("revision"), phase="EXECUTION",
+            **(capital_inputs or {"retained_basis_fen": None, "book_revision": None}))
+        try:
+            frozen_capital = CapitalMarketDecision.model_validate(signal.get("market_linkage"))
+            matches_capital = (
+                frozen_capital.content_hash == daily_plan_content_sha256(plan)
+                and frozen_capital.calculation.capital.policy_hash == capital.policy_hash
+                and frozen_capital.calculation.authorized_quantity == signal["planned_qty"])
+        except ValueError:
+            matches_capital = False
+        if not matches_capital:
+            blockers.append("P3_FROZEN_POLICY_CHANGED")
+            if state != "SIMULATED":
+                state = "INVALIDATED"
+        blockers.extend(capital.blockers)
     economics = None
     if rule is not None and hasattr(rule, "pretrade_policy"):
         from trade_plan_monitor.decision.p2_economics import calculate_economics
@@ -289,6 +315,8 @@ def check_execution(
         **signal,
         **({"pretrade_execution": economics.model_dump(mode="json")}
            if economics is not None else {}),
+        **({"capital_execution": capital.model_dump(mode="json")}
+           if capital is not None else {}),
         "state": state,
         "executable_qty": remaining if not blockers else 0,
         "blockers": blockers,

@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T10 and C01–C03 complete; T11–T24/C04–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T12 and C01–C04 complete; T13–T24/C05–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -25,3 +25,9 @@ T07 temporary-storage migration/reopen/hash/backup/downgrade group:5 passed,2.24
 ## MLP3-V05 — Source extraction and review
 
 T10 draft/source compatibility:46 passed,1 warning,2.68s. Current extraction, P3/P2 source review and untrusted-source isolation:58 passed,1 warning,3.31s. Explicit cap meanings and exact fee percentages are required; ambiguous total investment, negated modes and mismatched source rates are rejected. The existing 50,000-character input budget remains unchanged: redundant instructions were shortened after the original budget test caught an overrun. Both original prompt sizes and current extraction security pass. Ruff and diff whitespace checks passed. Public executable9 remains closed pending the complete current authority chain.
+
+## MLP3-V06 — Ordinary runtime and atomic execution
+
+T11 composition/historical policies:82 passed,1 warning,3.11s; current signal lifecycle/P2 evidence:8 passed,1 warning,3.06s. T12 execution/lifecycle:12 passed,1 warning,3.14s. C04 production transaction/P2/risk group:26 passed,1 warning,7.32s. Expanded complete P3 integration selection including late-failure rollback:45 passed,4738 deselected,3 warnings,6.94s. Quantity remains200 after market/P2 derivation; capital changes never resize or rearm it. Execution binds the frozen policy and current book/quote. Actual OPEN_COST_CAP buy debits32700fen; reconciliation to530000fen rejects stale execution; injected receipt failure preserves exact database dump. Actual technical-risk SELL of400shares succeeds without opening cost.
+
+These pre-admission tests use strict private Schema9 fixtures with real runtime/UOW/SQLite/transaction/accounting and no public plan-reader or notification claim. Public9 remains closed until T15. Initial test command referenced a nonexistent historical test filename and ran zero tests; the exact corrected selection passed82 tests. Temporary-directory environment failure was rerun with an explicit disposable directory. Positive fixture fee dates were corrected to cover the synthetic September session; expired-schedule rejection remains unchanged. Ruff passed.
