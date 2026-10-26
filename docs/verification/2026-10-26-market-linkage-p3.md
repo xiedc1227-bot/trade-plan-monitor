@@ -92,6 +92,8 @@ All8 capacity cases ran alone, without competing heavy tests/builds/browsers. Re
 
 Exact ten-symbol annual measurement: `88.72–92.02s/symbol; working-set delta 100102144 bytes; market/WAL 519073792 bytes; result/WAL 184938496 bytes`.
 
+Evidence packaging: browsable logs normalize line endings/trailing whitespace only to satisfy the unchanged Git whitespace check. Every original byte remains in [raw-logs.zip](assets/market-linkage-p3/raw-logs.zip), verified against [the log hash manifest](assets/market-linkage-p3/log-manifest.json). The initial evidence whitespace failure is retained; no test output or outcome was removed.
+
 ## MLP3-V15 — Final criterion trace and delivery review
 
 Unit files live in tests/unit, integration files in tests/integration, browser files in web/tests/e2e, and form unit files in web/tests/unit. Each criterion passed its stage and final regression; overlapping counts are not additive.

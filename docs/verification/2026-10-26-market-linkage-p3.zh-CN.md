@@ -92,6 +92,8 @@ T21 并发与未来前缀组：14项通过，1条既有警告，11.71秒。最�
 
 十证券全年准确测量：`88.72–92.02s/symbol; working-set delta 100102144 bytes; market/WAL 519073792 bytes; result/WAL 184938496 bytes`。
 
+证据封装：可浏览日志仅规范换行／行尾空白，以满足未修改的 Git 空白检查。每个原始字节均保留在 [raw-logs.zip](assets/market-linkage-p3/raw-logs.zip)，并按[日志哈希清单](assets/market-linkage-p3/log-manifest.json)核验。首次证据空白检查失败记录保留，未删除测试内容或结果。
+
 ## MLP3-V15 — 最终逐项追踪与交付审核
 
 单元测试文件位于 tests/unit，集成文件位于 tests/integration，浏览器文件位于 web/tests/e2e，表单单元文件位于 web/tests/unit。以下各项均已通过相应阶段及最终回归，计数不可相加。
