@@ -82,9 +82,10 @@ class DailyReviewPreview(ApiValue):
 
 class DailyEditorSchemaView(ApiValue):
     schema_version: Literal[5] = 5
-    supported_schema_versions: tuple[int, ...] = (5, 6, 7)
+    supported_schema_versions: tuple[int, ...] = (5, 6, 7, 8)
     linked_candidate_schema: dict
     linked_policy_definitions: dict[str, str]
+    pretrade_candidate_schema: dict
     exception_candidate_schema: dict
     exception_policy_definitions: dict[str, str]
     candidate_schema: dict
@@ -101,7 +102,9 @@ async def editor_schema():
         MarketExceptionPlanDraft,
         MarketLinkedPlanDraft,
     )
+    from trade_plan_monitor.domain.p2_validation import P2PlanDraft
     return DailyEditorSchemaView(
+        pretrade_candidate_schema=P2PlanDraft.model_json_schema(),
         candidate_schema=UnifiedPlanDraft.model_json_schema(),
         linked_candidate_schema=MarketLinkedPlanDraft.model_json_schema(),
         linked_policy_definitions=EXPANDED_LINKAGE_POLICY,

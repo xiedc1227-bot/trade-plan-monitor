@@ -110,7 +110,7 @@ def test_current_prompt_describes_explicit_exception_permission_without_grant():
     from trade_plan_monitor.ai.plan_extraction import build_current_plan_prompt
 
     prompt = build_current_plan_prompt("Review an explicitly source-defined exception plan.")
-    assert "plan-extract-v10:" in prompt
+    assert "plan-extract-v11:" in prompt
     assert "schema_version=7/condition-plan-v3" in prompt
     assert "P1 exceptions always remain blocked" not in prompt
     assert "exception_routes" in prompt
@@ -134,7 +134,7 @@ def test_real_extraction_service_returns_only_a_v10_reviewable_candidate():
 
     class Provider:
         async def extract_plan(self, request):
-            assert request.config.prompt_version == "plan-extract-v10"
+            assert request.config.prompt_version == "plan-extract-v11"
             return RawAIResponse(request_id=request.request_id,
                 provider_id=request.config.provider_id, model=request.config.model,
                 content=output.model_dump_json(), finish_reason="stop", attempts=1, usage=None)
@@ -144,6 +144,6 @@ def test_real_extraction_service_returns_only_a_v10_reviewable_candidate():
     result = asyncio.run(extract_plan(request_id=uuid4(), source_text=source,
         config=_config().model_copy(update={"max_input_chars": 200_000}), provider=Provider()))
     assert result.status == "SUCCEEDED"
-    assert result.prompt_version == "plan-extract-v10"
+    assert result.prompt_version == "plan-extract-v11"
     assert result.draft.schema_version == 7
     assert result.validation_issues == ()

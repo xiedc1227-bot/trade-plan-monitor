@@ -4601,7 +4601,7 @@ class ProductionMonitorPipeline:
             trading_calendar=days, minute_target=minute_target,
             runtime_generation=str(self._runtime_generation),
             linked_index=(self.index_service.latest_snapshots().get(plan.reference_market.index_code)
-                          if plan.schema_version in {6, 7} else None),
+                          if plan.schema_version in {6, 7, 8} else None),
         )
 
     @staticmethod

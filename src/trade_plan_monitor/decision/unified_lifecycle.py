@@ -33,6 +33,30 @@ def confirm_signal(
     candidate_only=False,
 ):
     from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule
+    from trade_plan_monitor.domain.p2_policy_models import P2Rule
+
+    pretrade = None
+    if isinstance(rule, P2Rule):
+        from trade_plan_monitor.decision.p2_composition import prepare_p2_rule
+        from trade_plan_monitor.decision.p2_economics import calculate_economics
+        from trade_plan_monitor.domain.p2_evidence import freeze_pretrade
+
+        if linkage is None:
+            return None
+        effective, sizing = prepare_p2_rule(plan, rule, series=series,
+            decision_session=linkage.decision_session, cutoff=linkage.evidence_cutoff)
+        if effective is None:
+            return None
+        close = sizing.close_fen
+        economics = calculate_economics(rule.pretrade_policy.economics,
+            quantity=linkage.calculation.candidate_quantity,
+            entry_fen=int(close) if close is not None and close == int(close) else None,
+            symbol=plan.symbol, session=linkage.decision_session)
+        if not candidate_only and economics.blockers:
+            return None
+        pretrade = freeze_pretrade(plan, rule, sizing=sizing, economics=economics,
+            decision_session=linkage.decision_session, cutoff=linkage.evidence_cutoff)
+        rule = effective
 
     eligible_exception = False
     if candidate_only:
@@ -163,6 +187,7 @@ def confirm_signal(
         },
     )
     return {
+        **({"pretrade": pretrade.model_dump(mode="json")} if pretrade is not None else {}),
         **({"occurrence_mode": rule.independent_signal.mode} if staged else {}),
         "signal_id": identity,
         "rule_id": rule.rule_id,
@@ -234,12 +259,36 @@ def check_execution(
         blockers.append("SELLABLE_QUANTITY_UNKNOWN")
     elif min(inventory["tactical_qty"], inventory["sellable_tactical"]) < remaining:
         blockers.append("TACTICAL_SELLABLE_INSUFFICIENT")
+    economics = None
+    if rule is not None and hasattr(rule, "pretrade_policy"):
+        from trade_plan_monitor.decision.p2_economics import calculate_economics
+        from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
+        from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
+
+        frozen = signal.get("pretrade")
+        try:
+            frozen = FrozenPretrade.model_validate(frozen)
+            matches = (frozen.rule_id == rule.rule_id
+                       and frozen.content_hash == daily_plan_content_sha256(plan)
+                       and frozen.policy == rule.pretrade_policy)
+        except ValueError:
+            matches = False
+        if not matches:
+            blockers.append("P2_FROZEN_POLICY_CHANGED")
+            if state != "SIMULATED":
+                state = "INVALIDATED"
+        economics = calculate_economics(rule.pretrade_policy.economics,
+            quantity=signal["planned_qty"], entry_fen=quote_fen, symbol=plan.symbol,
+            session=evaluated_at.date())
+        blockers.extend(economics.blockers)
     if not blockers:
         state = "READY"
     elif state == "READY":
         state = "CONFIRMED"
     return {
         **signal,
+        **({"pretrade_execution": economics.model_dump(mode="json")}
+           if economics is not None else {}),
         "state": state,
         "executable_qty": remaining if not blockers else 0,
         "blockers": blockers,

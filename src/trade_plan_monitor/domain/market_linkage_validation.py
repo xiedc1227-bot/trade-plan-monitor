@@ -14,6 +14,11 @@ from trade_plan_monitor.domain.market_linkage_models import (
     MarketPolicy,
     QuantityPolicy,
 )
+from trade_plan_monitor.domain.p2_policy_drafts import (
+    DraftDerivedQuantityPolicy,
+    DraftPretradePolicy,
+)
+from trade_plan_monitor.domain.p2_policy_models import P2TradePlan
 from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedCondition,
     UnifiedConfirmation,
@@ -115,8 +120,25 @@ class MarketExceptionPlanDraft(MarketLinkedPlanDraft):
             return None
 
 
+class P2DraftRule(MarketExceptionDraftRule):
+    quantity_policy: DraftQuantityPolicy | DraftDerivedQuantityPolicy | None
+    pretrade_policy: DraftPretradePolicy | None
+
+
+class P2PlanDraft(MarketExceptionPlanDraft):
+    schema_version: Literal[8] = 8
+    execution_version: Literal["condition-plan-v4"] = "condition-plan-v4"
+    ordinary_rules: tuple[P2DraftRule | UnifiedDraftRule, ...] = Field(max_length=2)
+
+    def to_executable(self) -> P2TradePlan | None:
+        try:
+            return P2TradePlan.model_validate(self.executable_payload())
+        except ValidationError:
+            return None
+
+
 CurrentPlanDraft = Annotated[
-    MarketExceptionPlanDraft | MarketLinkedPlanDraft | UnifiedPlanDraft,
+    P2PlanDraft | MarketExceptionPlanDraft | MarketLinkedPlanDraft | UnifiedPlanDraft,
     Field(discriminator="schema_version"),
 ]
 

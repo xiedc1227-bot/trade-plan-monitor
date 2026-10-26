@@ -125,6 +125,7 @@ def record_candidate(work, plan, active, review, decision, seed, *, sessions, no
     candidate = new_candidate(binding, now, signal_seed=ExceptionSignalSeed(
         signal_id=seed["signal_id"], basis_id=seed["basis_id"],
         evidence_fingerprint=seed["evidence_fingerprint"], evidence=seed["evidence"],
+        **({"pretrade": seed["pretrade"]} if "pretrade" in seed else {}),
         occurrence_mode=seed.get("occurrence_mode")))
     return ExceptionRepository(work.daily).create(candidate)
 
@@ -175,7 +176,25 @@ def current_exception_authority(work, candidate, now):
         blockers.append("HIGHER_PRIORITY_RISK")
     if now >= b.expires_at:
         blockers.append("EXCEPTION_WINDOW_EXPIRED")
+    pretrade = None
+    if plan.schema_version == 8:
+        from trade_plan_monitor.state.p2_authority import P2EconomicsContext
+
+        frozen = candidate.signal_seed.pretrade
+        rule = next((r for r in plan.ordinary_rules if r.rule_id == b.rule_id), None)
+        if (frozen is None or rule is None or frozen.content_hash != b.content_hash
+                or frozen.policy != rule.pretrade_policy or frozen.sizing.q0 != b.base_quantity):
+            raise ExceptionAuthorityError("P2_FROZEN_POLICY_CHANGED")
+        if now.date() == b.decision_session:
+            close = frozen.sizing.close_fen
+            price = int(close) if close is not None and close == int(close) else None
+        else:
+            quote = state.get("quote")
+            price = quote["price_fen"] if quote is not None else None
+        pretrade = P2EconomicsContext(policy=frozen.policy.economics,
+            entry_fen=price, symbol=plan.symbol, session=now.date())
     context = ExceptionAuthorityContext(
+        **({"pretrade": pretrade} if pretrade is not None else {}),
         binding_hash=candidate.binding_hash, inventory_revision=inventory["revision"],
         evaluation_revision=head["revision"], authority_hash=daily_hash(
             "exception-current-authority-v1", {"consumed_hash": decision.consumed_hash,
@@ -203,6 +222,8 @@ def apply_exception_decision(work, command, *, now):
     granted = grant_exception(decision, candidate, result.event, capacity=context.capacity)
     seed, b = candidate.signal_seed, candidate.binding
     signal = dict(
+        **({"pretrade": seed.pretrade.model_dump(mode="json")}
+           if seed.pretrade is not None else {}),
         signal_id=b.occurrence_id, rule_id=b.rule_id, side="BUY", bucket="TACTICAL",
         lineage=b.lineage, state="CONFIRMED", planned_qty=candidate.frozen_quantity,
         simulated_qty=0, executable_qty=0, blockers=[],

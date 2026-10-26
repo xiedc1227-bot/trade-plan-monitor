@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, PositiveWholeQty
 from trade_plan_monitor.domain.market_exception_models import ExceptionRoute
+from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.daily_repository import daily_hash
 
@@ -59,6 +60,7 @@ class ExceptionBinding(DailyValue):
 
 
 class ExceptionSignalSeed(DailyValue):
+    pretrade: FrozenPretrade | None = Field(default=None, exclude_if=lambda v: v is None)
     signal_id: Digest
     basis_id: Identifier
     evidence_fingerprint: Digest

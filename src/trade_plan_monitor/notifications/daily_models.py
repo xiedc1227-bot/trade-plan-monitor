@@ -30,6 +30,8 @@ class DailyAlertPayload(DailyValue):
     cause_id: str
     rule_id: str | None = None
     alert_kind: Literal["RISK_ALERT", "EXCEPTION_REVIEW"] | None = None
+    pretrade_mode: Literal["NONE", "PREVIEW_ONLY", "REQUIRED"] | None = Field(
+        default=None, exclude_if=lambda v: v is None)
     confirmed_trade_date: date | None
     execution_date: date | None
     quantity: WholeQty | None
@@ -103,6 +105,15 @@ def daily_alert_key(
 
 
 def render_daily_alert(payload):
+    text = _render_daily_alert(payload)
+    if payload.pretrade_mode is not None:
+        label = {"NONE": "不计算费用", "PREVIEW_ONLY": "仅研究估算",
+                 "REQUIRED": "明确数值买入门槛"}[payload.pretrade_mode]
+        text += f" 费用模式：{label}；估算不是实际盈亏或批准，执行前按当前报价重新核验。"
+    return text
+
+
+def _render_daily_alert(payload):
     if payload.signal_type == "REMINDER" and payload.alert_kind == "EXCEPTION_REVIEW":
         return (
             f"{payload.name} {payload.symbol} 例外买入待审核："

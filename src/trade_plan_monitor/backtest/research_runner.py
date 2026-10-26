@@ -49,7 +49,7 @@ def replay_current(
 ):
     run_input = BacktestRunInput.create(
         plan=plan,
-        manifest=(reader.manifest if plan.schema_version in {6, 7} else
+        manifest=(reader.manifest if plan.schema_version in {6, 7, 8} else
                   DatasetManifest(dataset_hash=reader.dataset_hash, scope=reader.scope, items=())),
         initial_cash_fen=initial_cash_fen,
         initial_lots=initial_lots,
@@ -61,7 +61,7 @@ def replay_current(
     if plan.symbol not in reader.scope.symbols:
         raise ValueError("PLAN_SYMBOL_NOT_IN_DATASET")
     linked_source = None
-    if plan.schema_version in {6, 7}:
+    if plan.schema_version in {6, 7, 8}:
         from trade_plan_monitor.market_index.models import MarketIndexInterval
         linked_source = LinkedIndexReplaySource(
             reference_market=plan.reference_market,
@@ -287,7 +287,7 @@ class _Replay:
             )
         )
         limitations.extend(self.valuation.blockers)
-        if self.plan.schema_version == 7:
+        if self.plan.schema_version in {7, 8}:
             from trade_plan_monitor.backtest.research_signal_projection import (
                 compact_signal_evidence,
             )
@@ -305,7 +305,7 @@ class _Replay:
                 limitations.append("EXCEPTION_AUTHORIZATION_NOT_SUPPLIED")
         return UnifiedReplayReport.build(
             **({"exception_outcomes": tuple(self.exception_outcomes)}
-               if self.plan.schema_version == 7 else {}),
+               if self.plan.schema_version in {7, 8} else {}),
             run_id=self.session.run_input.run_id,
             plan_hash=self.session.run_input.plan_sha256,
             dataset_hash=self.session.run_input.dataset_hash,

@@ -9,10 +9,17 @@ from trade_plan_monitor.state.market_exception_service import (
     ExceptionReceipt,
     ExceptionRevocationCommand,
 )
+from trade_plan_monitor.web.p2_service import P2PreviewCommand, P2PreviewView
 from trade_plan_monitor.web.routers.plans import PlanServiceDependency
 from trade_plan_monitor.web.schemas import ApiValue, MutationContextDependency
 
 router = APIRouter(prefix="/api/v1", tags=["plans"])
+
+
+@router.post("/plan-economics-previews", response_model=P2PreviewView)
+async def economics_preview(command: P2PreviewCommand, service: PlanServiceDependency,
+                            context: MutationContextDependency):
+    return await service.preview_economics(command=command)
 
 
 class ExceptionPreviewApiCommand(ExceptionPreviewCommand, ApiValue):

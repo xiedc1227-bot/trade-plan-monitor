@@ -536,7 +536,7 @@ class DailyRuntimeEvaluationService:
                     target["linked_source_current"] = linked_source_current
             if ordinary_authority_ended:
                 target["ordinary_authority_ended"] = True
-            if plan.schema_version == 7:
+            if plan.schema_version in {7, 8}:
                 target["exception_revisions"] = [
                     (row["id"], row["revision"]) for row in work.daily.list(
                         symbol=plan.symbol, kind="EXCEPTION_CANDIDATE")]
@@ -731,6 +731,7 @@ class DailyRuntimeEvaluationService:
                 else work.daily.current_signals(symbol=plan.symbol))
             previous = tuple(r["payload"] for r in signal_rows)
             linkage_by_rule = {}
+            pretrade_by_rule = {}
             from trade_plan_monitor.decision.market_exception_decision import (
                 evaluate_market_exception,
             )
@@ -743,14 +744,26 @@ class DailyRuntimeEvaluationService:
             )
             from trade_plan_monitor.state.market_exception_models import ExceptionCandidate
             from trade_plan_monitor.state.market_exception_repository import ExceptionRepository
+            def evaluate_linked(plan, rule, **values):
+                if hasattr(rule, "pretrade_policy"):
+                    from trade_plan_monitor.decision.p2_composition import evaluate_p2_market
+                    from trade_plan_monitor.domain.p2_evidence import freeze_pretrade
+                    result = evaluate_p2_market(plan, rule, **values)
+                    pretrade_by_rule[rule.rule_id] = freeze_pretrade(plan, rule,
+                        sizing=result.sizing, economics=result.economics,
+                        decision_session=values["decision_session"], cutoff=values["cutoff"])
+                    return result.decision
+                evaluator = (evaluate_market_exception
+                             if isinstance(plan, MarketExceptionTradePlan)
+                             else evaluate_market_linkage)
+                return evaluator(plan, rule, **values)
+
             linked_day = next((day for day in reversed(inputs.session_dates)
                 if datetime.combine(day, time(15), now.tzinfo) <= now), None)
             if isinstance(plan, MarketLinkedTradePlan) and linked_day is not None:
                 for rule in plan.ordinary_rules:
                     if isinstance(rule, MarketLinkedRule):
-                        linkage_by_rule[rule.rule_id] = (
-                            evaluate_market_exception if isinstance(plan, MarketExceptionTradePlan)
-                            else evaluate_market_linkage)(
+                        decision = evaluate_linked(
                             plan,
                             rule,
                             series=series,
@@ -770,6 +783,8 @@ class DailyRuntimeEvaluationService:
                             if risk_known
                             else "MISSING_INPUT",
                         )
+                        if decision is not None:
+                            linkage_by_rule[rule.rule_id] = decision
             previous = synchronize_candidates(work, plan, active, binding, linkage_by_rule,
                 now=now, previous=previous, completed_series=completed_series,
                 facts=facts, risks=risks,
@@ -1001,6 +1016,8 @@ class DailyRuntimeEvaluationService:
                         "evidence": [] if evidence is None else [evidence.model_dump(mode="json")],
                     })
             snapshot = {
+                **({"pretrade": [v.model_dump(mode="json") for v in pretrade_by_rule.values()]}
+                   if plan.schema_version == 8 else {}),
                 **({"exception_candidates": [
                     {"candidate": row["payload"], "revision": row["revision"]}
                     for row in ExceptionRepository(work.daily).list(plan.symbol)]}
@@ -1072,6 +1089,7 @@ class DailyRuntimeEvaluationService:
                             execution=signal["execution_date"],
                             scope=None,
                             evidence=signal["evidence"],
+                            rule_id=signal["rule_id"] if plan.schema_version == 8 else None,
                         )
                     )
             if risk_action["status"] == "RISK_EXIT":
@@ -1174,6 +1192,10 @@ class DailyRuntimeEvaluationService:
                 cause_id=cause_id,
                 rule_id=rule_id,
                 alert_kind=alert_kind,
+                pretrade_mode=next((r.pretrade_policy.economics.mode
+                    for r in plan.ordinary_rules if hasattr(r, "pretrade_policy")
+                    and (r.rule_id == rule_id or rule_id is None and side == "BUY")), None)
+                    if side == "BUY" or alert_kind == "EXCEPTION_REVIEW" else None,
                 confirmed_trade_date=confirmed,
                 execution_date=execution,
                 quantity=quantity,

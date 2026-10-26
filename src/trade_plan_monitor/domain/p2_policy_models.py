@@ -1,10 +1,10 @@
 """Source-defined pretrade policies; models confer no execution authority."""
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Annotated, Literal
 
-from pydantic import BeforeValidator, Field, model_validator
+from pydantic import BeforeValidator, Field, PlainSerializer, model_validator
 
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, PositiveWholeQty
 from trade_plan_monitor.domain.market_exception_models import (
@@ -13,6 +13,7 @@ from trade_plan_monitor.domain.market_exception_models import (
 )
 from trade_plan_monitor.domain.market_linkage_models import QuantityPolicy
 from trade_plan_monitor.domain.unified_plan_models import UnifiedRule
+from trade_plan_monitor.market_index.canonical import canonical_decimal
 
 MAX_SAFE = 9_007_199_254_740_991
 SafeFen = Annotated[int, Field(strict=True, ge=0, le=MAX_SAFE)]
@@ -22,11 +23,17 @@ PositiveFen = Annotated[int, Field(strict=True, gt=0, le=MAX_SAFE)]
 def decimal_string(value):
     if not isinstance(value, str | Decimal):
         raise ValueError("decimal input must be a string")
-    return value
+    try:
+        result = Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError("decimal input must be numeric") from exc
+    canonical_decimal(result)  # Bound expansion before exact-rational arithmetic.
+    return result
 
 
 ExactDecimal = Annotated[Decimal, BeforeValidator(decimal_string),
-                         Field(ge=0, allow_inf_nan=False)]
+                         Field(ge=0, allow_inf_nan=False),
+                         PlainSerializer(canonical_decimal, return_type=str, when_used="json")]
 Rate = Annotated[ExactDecimal, Field(le=1)]
 Label = Annotated[str, Field(min_length=1, max_length=2000)]
 

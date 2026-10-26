@@ -38,7 +38,8 @@ def semantic_interpretation_matches(path, value, excerpt, draft):
         )
         # The approved definition itself says approval does not execute a trade;
         # that is a required restriction, not a negation of the policy definition.
-        negative_text = text.replace("批准不执行交易", "") if draft.schema_version == 7 else text
+        negative_text = (text.replace("批准不执行交易", "")
+                         if draft.schema_version in {7, 8} else text)
         if re.search(
             r"(?:不|未|暂不)(?:采用|使用|执行|启用)|取消(?:以下|该|此)?(?:定义|规则|政策)|"
             r"\b(?:do\s+not|don't|never)\s+(?:apply|use|adopt|enable)\b",
@@ -49,10 +50,14 @@ def semantic_interpretation_matches(path, value, excerpt, draft):
             return re.sub(r"[\s;；\"'。，,：:]", "", text).casefold()
         translations = (
             str(value),
-            (EXPANDED_EXCEPTION_POLICY_ZH if draft.schema_version == 7
+            (EXPANDED_EXCEPTION_POLICY_ZH if draft.schema_version in {7, 8}
              else EXPANDED_LINKAGE_POLICY_ZH).get(path.rsplit(".", 1)[-1], str(value)),
         )
         return any(normalized(text) in normalized(excerpt) for text in translations)
+    if ".pretrade_policy." in path and isinstance(value, str) and re.fullmatch(
+            r"[+-]?\d+(?:\.\d+)?", value):
+        return any(Decimal(n) == Decimal(value) for n in re.findall(
+            r"(?<![\w.])[+-]?\d+(?:\.\d+)?(?![\w.])", text))
     if path in {"symbol", "market"}:
         return interpretation_matches(path, value, excerpt, draft)
     if path.endswith((".ratio", ".minimum_ratio")):

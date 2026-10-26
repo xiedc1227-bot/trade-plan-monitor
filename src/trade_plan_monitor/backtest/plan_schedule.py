@@ -17,6 +17,7 @@ from trade_plan_monitor.backtest.time import SHANGHAI
 from trade_plan_monitor.domain.daily_plan_models import Identifier, Text, WholeQty
 from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
 from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
+from trade_plan_monitor.domain.p2_policy_models import P2TradePlan
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_data.models import TradingDay
@@ -102,7 +103,7 @@ class LoopPlanVersion(ResearchValue):
 
     version_id: StableIdentifier
     plan_hash: Sha256Hex
-    snapshot: MarketExceptionTradePlan | MarketLinkedTradePlan | UnifiedTradePlan
+    snapshot: P2TradePlan | MarketExceptionTradePlan | MarketLinkedTradePlan | UnifiedTradePlan
     source_hashes: tuple[Sha256Hex, ...] = Field(min_length=1, max_length=MAX_PLAN_SOURCE_HASHES)
     evidence_hash: Sha256Hex
     authored_at: LoopTimestamp | None = None
@@ -254,7 +255,7 @@ class ScheduledPlanVersion(ResearchValue):
     # Distinct models prevent v1 serializers from silently dropping v2 account context.
     version_id: StableIdentifier
     plan_hash: Sha256Hex
-    snapshot: MarketExceptionTradePlan | MarketLinkedTradePlan | UnifiedTradePlan
+    snapshot: P2TradePlan | MarketExceptionTradePlan | MarketLinkedTradePlan | UnifiedTradePlan
     source_hashes: tuple[Sha256Hex, ...] = Field(min_length=1, max_length=MAX_PLAN_SOURCE_HASHES)
     evidence_hash: Sha256Hex
     authored_at: LoopTimestamp | None = None

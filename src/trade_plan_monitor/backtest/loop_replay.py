@@ -71,7 +71,7 @@ def run_frozen_loop(store, reference, *, cancellation_token: CancellationToken, 
             run = stored.run_input
             linked_source = stored.dataset.linked_index_source
             for row in run.schedule.entries:
-                if row.version.snapshot.schema_version in {6, 7} and (
+                if row.version.snapshot.schema_version in {6, 7, 8} and (
                     linked_source is None
                     or linked_source.reference_market != row.version.snapshot.reference_market
                 ):
@@ -317,7 +317,7 @@ class _Frames:
                 self.linked_source.snapshot_at(
                     now, tuple(day.cal_date for day in calendar if day.is_open)
                 )
-                if self.plan.schema_version in {6, 7} and self.linked_source is not None
+                if self.plan.schema_version in {6, 7, 8} and self.linked_source is not None
                 else None
             ),
         )

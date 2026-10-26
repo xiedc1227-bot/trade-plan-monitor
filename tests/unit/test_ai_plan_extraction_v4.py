@@ -53,7 +53,7 @@ def test_provider_default_selects_v5_without_changing_the_configured_model() -> 
 
     config = AIProviderConfig.model_validate(values)
 
-    assert config.prompt_version == "plan-extract-v10"
+    assert config.prompt_version == "plan-extract-v11"
     assert config.model == "offline-v4"
 
 

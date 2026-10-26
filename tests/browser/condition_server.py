@@ -49,7 +49,7 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
 
     async def start(self):
         config = _config().model_copy(update={"prompt_version": (
-            "plan-extract-v10" if self.plan.schema_version == 7 else "plan-extract-v9")})
+            "plan-extract-v11")})
         owner = self
 
         class Provider:
@@ -111,6 +111,8 @@ def main():
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--linked", action="store_true")
     parser.add_argument("--exception", choices=("WEAK_MINIMUM", "BROKEN_STRONG"))
+    parser.add_argument("--p2", action="store_true")
+    parser.add_argument("--p2-economics", choices=("REQUIRED", "PREVIEW_ONLY"), default="REQUIRED")
     args = parser.parse_args()
     with TemporaryDirectory(prefix="tpm-daily-browser-") as directory:
         root = Path(directory)
@@ -191,6 +193,11 @@ def main():
             raw["ordinary_rules"][0]["quantity_policy"]["base_quantity"] = (
                 100 if chain.route == "WEAK_MINIMUM" else 500)
             chain.plan = MarketExceptionTradePlan.model_validate(raw)
+        if args.p2:
+            from tests.unit.test_p2_composition import fixture
+            chain.plan, _ = fixture(200 if chain.route == "WEAK_MINIMUM" else 1000, chain.route)
+            from tests.integration.test_p2_chain import with_economics
+            chain.plan = with_economics(chain.plan, args.p2_economics)
         ai.plan = chain.plan
         ai.source = (
             "合成离线条件计划：日线收盘低于40元且完整5分钟收盘低于40元时，确认模拟买入100股。"
@@ -324,6 +331,17 @@ def main():
             return chain.runtime.run_inputs(
                 plan=chain.plan, inputs=minute_inputs(chain, series=chain.series())
             ).model_dump(mode="json")
+
+        @app.post("/_test/p2-quote/{price}")
+        def p2_quote(price: int):
+            from tests.integration.test_market_exception_runtime import exception_inputs
+            if not args.p2:
+                raise ValueError("P2 fixture required")
+            chain.now += timedelta(seconds=1)
+            inputs = exception_inputs(chain)
+            inputs = inputs.model_copy(update={"quote": inputs.quote.model_copy(
+                update={"price_fen": price})})
+            return chain.runtime.run_inputs(plan=chain.plan, inputs=inputs).model_dump(mode="json")
 
         @app.post("/_test/exception-correction")
         def exception_correction():

@@ -6954,11 +6954,15 @@
                   "mapping": {
                     "5": "#/components/schemas/UnifiedPlanDraft",
                     "6": "#/components/schemas/MarketLinkedPlanDraft",
-                    "7": "#/components/schemas/MarketExceptionPlanDraft"
+                    "7": "#/components/schemas/MarketExceptionPlanDraft",
+                    "8": "#/components/schemas/P2PlanDraft"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/P2PlanDraft"
+                  },
                   {
                     "$ref": "#/components/schemas/MarketExceptionPlanDraft"
                   },
@@ -7128,11 +7132,15 @@
                   "mapping": {
                     "5": "#/components/schemas/UnifiedPlanDraftInput",
                     "6": "#/components/schemas/MarketLinkedPlanDraftInput",
-                    "7": "#/components/schemas/MarketExceptionPlanDraftInput"
+                    "7": "#/components/schemas/MarketExceptionPlanDraftInput",
+                    "8": "#/components/schemas/P2PlanDraftInput"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/P2PlanDraftInput"
+                  },
                   {
                     "$ref": "#/components/schemas/MarketExceptionPlanDraftInput"
                   },
@@ -8509,6 +8517,22 @@
             "title": "Planversionid",
             "type": "string"
           },
+          "pretradeMode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "NONE",
+                  "PREVIEW_ONLY",
+                  "REQUIRED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretrademode"
+          },
           "quantity": {
             "anyOf": [
               {
@@ -8761,6 +8785,22 @@
           "plan_version_id": {
             "title": "Plan Version Id",
             "type": "string"
+          },
+          "pretrade_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "NONE",
+                  "PREVIEW_ONLY",
+                  "REQUIRED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretrade Mode"
           },
           "quantity": {
             "anyOf": [
@@ -9628,6 +9668,11 @@
             "title": "Operationschemas",
             "type": "object"
           },
+          "pretradeCandidateSchema": {
+            "additionalProperties": true,
+            "title": "Pretradecandidateschema",
+            "type": "object"
+          },
           "schemaVersion": {
             "const": 5,
             "default": 5,
@@ -9638,7 +9683,8 @@
             "default": [
               5,
               6,
-              7
+              7,
+              8
             ],
             "items": {
               "type": "integer"
@@ -9650,6 +9696,7 @@
         "required": [
           "linkedCandidateSchema",
           "linkedPolicyDefinitions",
+          "pretradeCandidateSchema",
           "exceptionCandidateSchema",
           "exceptionPolicyDefinitions",
           "candidateSchema",
@@ -9817,6 +9864,21 @@
           "planVersionId": {
             "title": "Planversionid",
             "type": "string"
+          },
+          "pretrade": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FrozenPretrade"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretrade"
           },
           "quote": {
             "anyOf": [
@@ -12496,6 +12558,26 @@
             "title": "Plannedqty",
             "type": "integer"
           },
+          "pretrade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FrozenPretrade"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pretradeExecution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resetTradeDate": {
             "anyOf": [
               {
@@ -12721,6 +12803,26 @@
             "multipleOf": 100.0,
             "title": "Planned Qty",
             "type": "integer"
+          },
+          "pretrade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FrozenPretrade"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pretrade_execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reset_trade_date": {
             "anyOf": [
@@ -13784,6 +13886,51 @@
         "title": "DeliveryHealthView",
         "type": "object"
       },
+      "DerivedQuantityPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "capacity_policy": {
+            "const": "BLOCK_FULL",
+            "title": "Capacity Policy",
+            "type": "string"
+          },
+          "mode": {
+            "const": "DERIVED_MARKET_FACTOR",
+            "title": "Mode",
+            "type": "string"
+          },
+          "normal_factor": {
+            "const": "1",
+            "title": "Normal Factor",
+            "type": "string"
+          },
+          "rounding": {
+            "const": "LEGAL_FLOOR",
+            "title": "Rounding",
+            "type": "string"
+          },
+          "signal_quantity_policy": {
+            "const": "FREEZE",
+            "title": "Signal Quantity Policy",
+            "type": "string"
+          },
+          "weak_factor": {
+            "const": "0.5",
+            "title": "Weak Factor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "normal_factor",
+          "weak_factor",
+          "rounding",
+          "capacity_policy",
+          "signal_quantity_policy"
+        ],
+        "title": "DerivedQuantityPolicy",
+        "type": "object"
+      },
       "DiagnosticEvaluationCommand": {
         "additionalProperties": false,
         "properties": {
@@ -13896,6 +14043,322 @@
         "title": "DiagnosticEvaluationView",
         "type": "object"
       },
+      "DraftDerivedQuantityPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "capacity_policy": {
+            "anyOf": [
+              {
+                "const": "BLOCK_FULL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Policy"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "DERIVED_MARKET_FACTOR",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "normal_factor": {
+            "anyOf": [
+              {
+                "const": "1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normal Factor"
+          },
+          "rounding": {
+            "anyOf": [
+              {
+                "const": "LEGAL_FLOOR",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rounding"
+          },
+          "signal_quantity_policy": {
+            "anyOf": [
+              {
+                "const": "FREEZE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signal Quantity Policy"
+          },
+          "weak_factor": {
+            "anyOf": [
+              {
+                "const": "0.5",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weak Factor"
+          }
+        },
+        "required": [
+          "mode",
+          "normal_factor",
+          "weak_factor",
+          "rounding",
+          "capacity_policy",
+          "signal_quantity_policy"
+        ],
+        "title": "DraftDerivedQuantityPolicy",
+        "type": "object"
+      },
+      "DraftEconomicsGates": {
+        "additionalProperties": false,
+        "properties": {
+          "min_net_reward_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Net Reward Fen"
+          },
+          "min_reward_risk_ratio": {
+            "anyOf": [
+              {
+                "gt": 0,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Reward Risk Ratio"
+          }
+        },
+        "required": [
+          "min_net_reward_fen",
+          "min_reward_risk_ratio"
+        ],
+        "title": "DraftEconomicsGates",
+        "type": "object"
+      },
+      "DraftEconomicsGatesInput": {
+        "additionalProperties": false,
+        "properties": {
+          "min_net_reward_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Net Reward Fen"
+          },
+          "min_reward_risk_ratio": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0,
+                "gt": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Reward Risk Ratio"
+          }
+        },
+        "required": [
+          "min_net_reward_fen",
+          "min_reward_risk_ratio"
+        ],
+        "title": "DraftEconomicsGates",
+        "type": "object"
+      },
+      "DraftEconomicsPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "anyOf": [
+              {
+                "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Price Mode"
+          },
+          "fee_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftFeeSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "PREVIEW_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "risk_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Price Fen"
+          },
+          "target_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price Fen"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule"
+        ],
+        "title": "DraftEconomicsPreview",
+        "type": "object"
+      },
+      "DraftEconomicsPreviewInput": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "anyOf": [
+              {
+                "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Price Mode"
+          },
+          "fee_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftFeeScheduleInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "PREVIEW_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "risk_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Price Fen"
+          },
+          "target_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price Fen"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule"
+        ],
+        "title": "DraftEconomicsPreview",
+        "type": "object"
+      },
       "DraftExceptionPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -13996,6 +14459,636 @@
         "title": "DraftExceptionRoutes",
         "type": "object"
       },
+      "DraftFeeComponent": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Z_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "included_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Included In"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "TAX",
+                  "TRANSFER",
+                  "HANDLING"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "le": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "enum": [
+                  "BUY",
+                  "SELL",
+                  "BOTH"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          }
+        },
+        "required": [
+          "id",
+          "side",
+          "kind",
+          "rate",
+          "included_in"
+        ],
+        "title": "DraftFeeComponent",
+        "type": "object"
+      },
+      "DraftFeeComponentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Z_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "included_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Included In"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "TAX",
+                  "TRANSFER",
+                  "HANDLING"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0,
+                "le": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "enum": [
+                  "BUY",
+                  "SELL",
+                  "BOTH"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          }
+        },
+        "required": [
+          "id",
+          "side",
+          "kind",
+          "rate",
+          "included_in"
+        ],
+        "title": "DraftFeeComponent",
+        "type": "object"
+      },
+      "DraftFeeSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "buy_slippage_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buy Slippage Fen"
+          },
+          "commission_rate": {
+            "anyOf": [
+              {
+                "le": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commission Rate"
+          },
+          "components": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DraftFeeComponent"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Components"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "const": "CNY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Through"
+          },
+          "minimum_commission_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Commission Fen"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule_id": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Id"
+          },
+          "sell_slippage_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Slippage Fen"
+          },
+          "symbols": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbols"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "version",
+          "currency",
+          "symbols",
+          "effective_from",
+          "effective_through",
+          "provenance",
+          "commission_rate",
+          "minimum_commission_fen",
+          "components",
+          "buy_slippage_fen",
+          "sell_slippage_fen"
+        ],
+        "title": "DraftFeeSchedule",
+        "type": "object"
+      },
+      "DraftFeeScheduleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "buy_slippage_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buy Slippage Fen"
+          },
+          "commission_rate": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0,
+                "le": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commission Rate"
+          },
+          "components": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DraftFeeComponentInput"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Components"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "const": "CNY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Through"
+          },
+          "minimum_commission_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Commission Fen"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule_id": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Id"
+          },
+          "sell_slippage_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Slippage Fen"
+          },
+          "symbols": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbols"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "version",
+          "currency",
+          "symbols",
+          "effective_from",
+          "effective_through",
+          "provenance",
+          "commission_rate",
+          "minimum_commission_fen",
+          "components",
+          "buy_slippage_fen",
+          "sell_slippage_fen"
+        ],
+        "title": "DraftFeeSchedule",
+        "type": "object"
+      },
+      "DraftLevelEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "dimension": {
+            "anyOf": [
+              {
+                "enum": [
+                  "PRICE_STRUCTURE",
+                  "TREND",
+                  "VOLUME_OR_CANDLE",
+                  "VOLATILITY"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimension"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "indicator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indicator"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "PRESSURE",
+                  "RISK"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "level",
+          "dimension",
+          "source",
+          "excerpt",
+          "as_of",
+          "indicator"
+        ],
+        "title": "DraftLevelEvidence",
+        "type": "object"
+      },
       "DraftMarketPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -14042,6 +15135,211 @@
           "exception_policy"
         ],
         "title": "DraftMarketPolicy",
+        "type": "object"
+      },
+      "DraftPretradePolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "economics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoEconomics"
+              },
+              {
+                "$ref": "#/components/schemas/DraftEconomicsPreview"
+              },
+              {
+                "$ref": "#/components/schemas/DraftRequiredEconomics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Economics"
+          },
+          "level_evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DraftLevelEvidence"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Evidence"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "const": "pretrade-policy-v1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "sizing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FixedSizing"
+              },
+              {
+                "$ref": "#/components/schemas/DraftTierSizing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sizing"
+          }
+        },
+        "required": [
+          "policy_version",
+          "sizing",
+          "economics",
+          "level_evidence"
+        ],
+        "title": "DraftPretradePolicy",
+        "type": "object"
+      },
+      "DraftPretradePolicyInput": {
+        "additionalProperties": false,
+        "properties": {
+          "economics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoEconomics"
+              },
+              {
+                "$ref": "#/components/schemas/DraftEconomicsPreviewInput"
+              },
+              {
+                "$ref": "#/components/schemas/DraftRequiredEconomicsInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Economics"
+          },
+          "level_evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DraftLevelEvidence"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Evidence"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "const": "pretrade-policy-v1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "sizing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FixedSizing"
+              },
+              {
+                "$ref": "#/components/schemas/DraftTierSizingInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sizing"
+          }
+        },
+        "required": [
+          "policy_version",
+          "sizing",
+          "economics",
+          "level_evidence"
+        ],
+        "title": "DraftPretradePolicy",
+        "type": "object"
+      },
+      "DraftProvenance": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "const": "ESTIMATE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "source",
+          "excerpt",
+          "as_of",
+          "classification"
+        ],
+        "title": "DraftProvenance",
         "type": "object"
       },
       "DraftQuantityPolicy": {
@@ -14146,6 +15444,176 @@
         "title": "DraftQuantityPolicy",
         "type": "object"
       },
+      "DraftRequiredEconomics": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "anyOf": [
+              {
+                "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Price Mode"
+          },
+          "fee_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftFeeSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftEconomicsGates"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "REQUIRED",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "risk_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Price Fen"
+          },
+          "target_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price Fen"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule",
+          "gates"
+        ],
+        "title": "DraftRequiredEconomics",
+        "type": "object"
+      },
+      "DraftRequiredEconomicsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "anyOf": [
+              {
+                "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Price Mode"
+          },
+          "fee_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftFeeScheduleInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftEconomicsGatesInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "REQUIRED",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "risk_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Price Fen"
+          },
+          "target_price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price Fen"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule",
+          "gates"
+        ],
+        "title": "DraftRequiredEconomics",
+        "type": "object"
+      },
       "DraftReviewIssue": {
         "additionalProperties": false,
         "description": "Sanitized review state without arbitrary AI-generated display text.",
@@ -14176,6 +15644,259 @@
           "material"
         ],
         "title": "DraftReviewIssue",
+        "type": "object"
+      },
+      "DraftTierSizing": {
+        "additionalProperties": false,
+        "properties": {
+          "base_qty": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Qty"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "const": "ATR14_OVER_CLOSE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "ATR_RATIO_TIERS",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "tiers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DraftVolatilityTier"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiers"
+          }
+        },
+        "required": [
+          "mode",
+          "metric",
+          "base_qty",
+          "tiers"
+        ],
+        "title": "DraftTierSizing",
+        "type": "object"
+      },
+      "DraftTierSizingInput": {
+        "additionalProperties": false,
+        "properties": {
+          "base_qty": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Qty"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "const": "ATR14_OVER_CLOSE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "ATR_RATIO_TIERS",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "tiers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DraftVolatilityTierInput"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiers"
+          }
+        },
+        "required": [
+          "mode",
+          "metric",
+          "base_qty",
+          "tiers"
+        ],
+        "title": "DraftTierSizing",
+        "type": "object"
+      },
+      "DraftVolatilityTier": {
+        "additionalProperties": false,
+        "properties": {
+          "lower": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "le": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiplier"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "lower",
+          "upper",
+          "multiplier"
+        ],
+        "title": "DraftVolatilityTier",
+        "type": "object"
+      },
+      "DraftVolatilityTierInput": {
+        "additionalProperties": false,
+        "properties": {
+          "lower": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0,
+                "le": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiplier"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "lower",
+          "upper",
+          "multiplier"
+        ],
+        "title": "DraftVolatilityTier",
         "type": "object"
       },
       "DynamicDailyReference": {
@@ -14230,6 +15951,351 @@
           "offset"
         ],
         "title": "DynamicDailyReference",
+        "type": "object"
+      },
+      "EconomicsGates": {
+        "additionalProperties": false,
+        "properties": {
+          "min_net_reward_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Net Reward Fen"
+          },
+          "min_reward_risk_ratio": {
+            "anyOf": [
+              {
+                "gt": 0,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Reward Risk Ratio"
+          }
+        },
+        "required": [
+          "min_net_reward_fen",
+          "min_reward_risk_ratio"
+        ],
+        "title": "EconomicsGates",
+        "type": "object"
+      },
+      "EconomicsGatesInput": {
+        "additionalProperties": false,
+        "properties": {
+          "min_net_reward_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Net Reward Fen"
+          },
+          "min_reward_risk_ratio": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0,
+                "gt": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Reward Risk Ratio"
+          }
+        },
+        "required": [
+          "min_net_reward_fen",
+          "min_reward_risk_ratio"
+        ],
+        "title": "EconomicsGates",
+        "type": "object"
+      },
+      "EconomicsPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+            "title": "Entry Price Mode",
+            "type": "string"
+          },
+          "fee_schedule": {
+            "$ref": "#/components/schemas/FeeSchedule"
+          },
+          "mode": {
+            "const": "PREVIEW_ONLY",
+            "title": "Mode",
+            "type": "string"
+          },
+          "risk_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Risk Price Fen",
+            "type": "integer"
+          },
+          "target_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Target Price Fen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule"
+        ],
+        "title": "EconomicsPreview",
+        "type": "object"
+      },
+      "EconomicsPreviewInput": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+            "title": "Entry Price Mode",
+            "type": "string"
+          },
+          "fee_schedule": {
+            "$ref": "#/components/schemas/FeeScheduleInput"
+          },
+          "mode": {
+            "const": "PREVIEW_ONLY",
+            "title": "Mode",
+            "type": "string"
+          },
+          "risk_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Risk Price Fen",
+            "type": "integer"
+          },
+          "target_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Target Price Fen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule"
+        ],
+        "title": "EconomicsPreview",
+        "type": "object"
+      },
+      "EconomicsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "entry_debit_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Debit Fen"
+          },
+          "entry_fees": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Fees"
+          },
+          "net_reward_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Reward Fen"
+          },
+          "outcome": {
+            "enum": [
+              "NONE",
+              "PASS",
+              "FAIL",
+              "UNKNOWN"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "planned_loss_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Loss Fen"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "risk_fees": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Fees"
+          },
+          "risk_proceeds_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Proceeds Fen"
+          },
+          "spread_denominator": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Denominator"
+          },
+          "spread_numerator": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Numerator"
+          },
+          "target_fees": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Fees"
+          },
+          "target_proceeds_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Proceeds Fen"
+          },
+          "total_cost_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Fen"
+          },
+          "version": {
+            "const": "p2-economics-v1",
+            "default": "p2-economics-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "EconomicsResult",
         "type": "object"
       },
       "EpisodeStatus": {
@@ -14466,6 +16532,16 @@
             "minimum": 0.0,
             "title": "Inventory Revision",
             "type": "integer"
+          },
+          "pretrade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/P2EconomicsContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -15332,6 +17408,16 @@
           "current": {
             "$ref": "#/components/schemas/ExceptionAuthorityContext"
           },
+          "economics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "expectedRevision": {
             "minimum": 1.0,
             "title": "Expectedrevision",
@@ -15711,6 +17797,16 @@
             ],
             "title": "Occurrence Mode"
           },
+          "pretrade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FrozenPretrade"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "signal_id": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Signal Id",
@@ -15763,6 +17859,16 @@
               }
             ],
             "title": "Occurrence Mode"
+          },
+          "pretrade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FrozenPretradeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "signal_id": {
             "pattern": "^[0-9a-f]{64}$",
@@ -16134,6 +18240,12 @@
             "title": "Pendingrequirements",
             "type": "array"
           },
+          "pretradeExecutionVersion": {
+            "const": "condition-plan-v4",
+            "default": "condition-plan-v4",
+            "title": "Pretradeexecutionversion",
+            "type": "string"
+          },
           "publicActivationAvailable": {
             "const": true,
             "default": true,
@@ -16167,7 +18279,8 @@
             "default": [
               5,
               6,
-              7
+              7,
+              8
             ],
             "items": {
               "type": "integer"
@@ -16207,6 +18320,316 @@
           "material"
         ],
         "title": "ExtractionIssue",
+        "type": "object"
+      },
+      "FeeComponent": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z_]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "included_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Included In"
+          },
+          "kind": {
+            "enum": [
+              "TAX",
+              "TRANSFER",
+              "HANDLING"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "rate": {
+            "le": 1,
+            "title": "Rate",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "BUY",
+              "SELL",
+              "BOTH"
+            ],
+            "title": "Side",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "side",
+          "kind",
+          "rate",
+          "included_in"
+        ],
+        "title": "FeeComponent",
+        "type": "object"
+      },
+      "FeeComponentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z_]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "included_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Included In"
+          },
+          "kind": {
+            "enum": [
+              "TAX",
+              "TRANSFER",
+              "HANDLING"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "ge": 0,
+            "le": 1,
+            "title": "Rate"
+          },
+          "side": {
+            "enum": [
+              "BUY",
+              "SELL",
+              "BOTH"
+            ],
+            "title": "Side",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "side",
+          "kind",
+          "rate",
+          "included_in"
+        ],
+        "title": "FeeComponent",
+        "type": "object"
+      },
+      "FeeSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "buy_slippage_fen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Buy Slippage Fen",
+            "type": "integer"
+          },
+          "commission_rate": {
+            "le": 1,
+            "title": "Commission Rate",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/FeeComponent"
+            },
+            "maxItems": 20,
+            "title": "Components",
+            "type": "array"
+          },
+          "currency": {
+            "const": "CNY",
+            "title": "Currency",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_through": {
+            "format": "date",
+            "title": "Effective Through",
+            "type": "string"
+          },
+          "minimum_commission_fen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Minimum Commission Fen",
+            "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
+          "schedule_id": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Schedule Id",
+            "type": "string"
+          },
+          "sell_slippage_fen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sell Slippage Fen",
+            "type": "integer"
+          },
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Symbols",
+            "type": "array"
+          },
+          "version": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "version",
+          "currency",
+          "symbols",
+          "effective_from",
+          "effective_through",
+          "provenance",
+          "commission_rate",
+          "minimum_commission_fen",
+          "components",
+          "buy_slippage_fen",
+          "sell_slippage_fen"
+        ],
+        "title": "FeeSchedule",
+        "type": "object"
+      },
+      "FeeScheduleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "buy_slippage_fen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Buy Slippage Fen",
+            "type": "integer"
+          },
+          "commission_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "ge": 0,
+            "le": 1,
+            "title": "Commission Rate"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/FeeComponentInput"
+            },
+            "maxItems": 20,
+            "title": "Components",
+            "type": "array"
+          },
+          "currency": {
+            "const": "CNY",
+            "title": "Currency",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_through": {
+            "format": "date",
+            "title": "Effective Through",
+            "type": "string"
+          },
+          "minimum_commission_fen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Minimum Commission Fen",
+            "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
+          "schedule_id": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Schedule Id",
+            "type": "string"
+          },
+          "sell_slippage_fen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Sell Slippage Fen",
+            "type": "integer"
+          },
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Symbols",
+            "type": "array"
+          },
+          "version": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "version",
+          "currency",
+          "symbols",
+          "effective_from",
+          "effective_through",
+          "provenance",
+          "commission_rate",
+          "minimum_commission_fen",
+          "components",
+          "buy_slippage_fen",
+          "sell_slippage_fen"
+        ],
+        "title": "FeeSchedule",
         "type": "object"
       },
       "FieldBindingView": {
@@ -16490,6 +18913,21 @@
         "title": "FixedDailyReference",
         "type": "object"
       },
+      "FixedSizing": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "FIXED_Q0",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "FixedSizing",
+        "type": "object"
+      },
       "FrozenExceptionEvent": {
         "additionalProperties": false,
         "properties": {
@@ -16543,6 +18981,128 @@
           "envelope_hash"
         ],
         "title": "FrozenExceptionEvent",
+        "type": "object"
+      },
+      "FrozenPretrade": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "cutoff": {
+            "format": "date-time",
+            "title": "Cutoff",
+            "type": "string"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "economics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_hash": {
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/PretradePolicy"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "sizing": {
+            "$ref": "#/components/schemas/SizingResult"
+          },
+          "version": {
+            "const": "p2-pretrade-evidence-v1",
+            "default": "p2-pretrade-evidence-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "content_hash",
+          "decision_session",
+          "cutoff",
+          "policy",
+          "sizing",
+          "economics",
+          "evidence_hash"
+        ],
+        "title": "FrozenPretrade",
+        "type": "object"
+      },
+      "FrozenPretradeInput": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "cutoff": {
+            "format": "date-time",
+            "title": "Cutoff",
+            "type": "string"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "economics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_hash": {
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/PretradePolicyInput"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "sizing": {
+            "$ref": "#/components/schemas/SizingResultInput"
+          },
+          "version": {
+            "const": "p2-pretrade-evidence-v1",
+            "default": "p2-pretrade-evidence-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "content_hash",
+          "decision_session",
+          "cutoff",
+          "policy",
+          "sizing",
+          "economics",
+          "evidence_hash"
+        ],
+        "title": "FrozenPretrade",
         "type": "object"
       },
       "IndexConditionEvidenceView": {
@@ -16980,6 +19540,74 @@
           "available"
         ],
         "title": "LegacyPlanPreviewResponse",
+        "type": "object"
+      },
+      "LevelEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "dimension": {
+            "enum": [
+              "PRICE_STRUCTURE",
+              "TREND",
+              "VOLUME_OR_CANDLE",
+              "VOLATILITY"
+            ],
+            "title": "Dimension",
+            "type": "string"
+          },
+          "excerpt": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "indicator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indicator"
+          },
+          "level": {
+            "enum": [
+              "PRESSURE",
+              "RISK"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "dimension",
+          "source",
+          "excerpt",
+          "as_of",
+          "indicator"
+        ],
+        "title": "LevelEvidence",
         "type": "object"
       },
       "LinkedDraftRisk": {
@@ -19304,6 +21932,9 @@
           },
           "snapshot": {
             "anyOf": [
+              {
+                "$ref": "#/components/schemas/P2TradePlan"
+              },
               {
                 "$ref": "#/components/schemas/MarketExceptionTradePlan"
               },
@@ -24392,6 +27023,21 @@
         "title": "NextStepView",
         "type": "object"
       },
+      "NoEconomics": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "NONE",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "NoEconomics",
+        "type": "object"
+      },
       "ObsoleteDailyAlertView": {
         "additionalProperties": false,
         "properties": {
@@ -25000,6 +27646,1444 @@
         "title": "OperationReceipt",
         "type": "object"
       },
+      "P2DraftRule": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "anyOf": [
+              {
+                "const": "TACTICAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "ALL": "#/components/schemas/UnifiedAll",
+                    "ANY": "#/components/schemas/UnifiedAny",
+                    "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                    "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                    "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
+                    "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
+                    "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                    "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                    "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                    "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGte",
+                    "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/UnifiedPriceCompare"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriceInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyVolumeRatio"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCandleRatio"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyIndicatorCompare"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCloseSequence"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseBelow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteVolumeToMeanGte"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAll"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAny"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "COMPLETED_BAR_CLOSE": "#/components/schemas/CompletedMinuteConfirmation",
+                    "OFFICIAL_DAILY_CLOSE": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CompletedMinuteConfirmation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "execution_window": {
+            "anyOf": [
+              {
+                "const": "NEXT_EXCHANGE_SESSION_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Window"
+          },
+          "independent_signal": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
+                    "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicy",
+                    "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
+                    "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedResetPolicy"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OncePerRule"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AfterRuleCompleted"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Independent Signal"
+          },
+          "invalidation": {
+            "anyOf": [
+              {
+                "const": "RISK_OR_REVIEWED_INVALIDATION",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalidation"
+          },
+          "market_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftExceptionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pretrade_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftPretradePolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftQuantityPolicy"
+              },
+              {
+                "$ref": "#/components/schemas/DraftDerivedQuantityPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity Policy"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "const": "BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "const": "ENABLED",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanActiveValidity"
+              },
+              {
+                "$ref": "#/components/schemas/DailyValidity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validity"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "const": "LOW_BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone"
+          }
+        },
+        "required": [
+          "status",
+          "side",
+          "rule_id",
+          "bucket",
+          "condition",
+          "confirmation",
+          "execution_window",
+          "zone",
+          "validity",
+          "invalidation",
+          "independent_signal",
+          "market_policy",
+          "quantity_policy",
+          "pretrade_policy"
+        ],
+        "title": "P2DraftRule",
+        "type": "object"
+      },
+      "P2DraftRuleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "anyOf": [
+              {
+                "const": "TACTICAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "ALL": "#/components/schemas/UnifiedAllInput",
+                    "ANY": "#/components/schemas/UnifiedAnyInput",
+                    "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatioInput",
+                    "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequenceInput",
+                    "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompareInput",
+                    "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompareInput",
+                    "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                    "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
+                    "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatioInput",
+                    "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                    "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                    "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGteInput",
+                    "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/UnifiedPriceCompareInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriceInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyVolumeRatioInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCandleRatioInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyIndicatorCompareInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyCloseSequenceInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyPriorClose"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReviewedDailyFact"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseInRange"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteCloseBelow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MinuteVolumeToMeanGteInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAllInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedAnyInput"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "COMPLETED_BAR_CLOSE": "#/components/schemas/CompletedMinuteConfirmation",
+                    "OFFICIAL_DAILY_CLOSE": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/OfficialDailyConfirmation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CompletedMinuteConfirmation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "execution_window": {
+            "anyOf": [
+              {
+                "const": "NEXT_EXCHANGE_SESSION_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Window"
+          },
+          "independent_signal": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
+                    "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicyInput",
+                    "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
+                    "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyIndependentEvent"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnifiedResetPolicyInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OncePerRule"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AfterRuleCompleted"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Independent Signal"
+          },
+          "invalidation": {
+            "anyOf": [
+              {
+                "const": "RISK_OR_REVIEWED_INVALIDATION",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalidation"
+          },
+          "market_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftExceptionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pretrade_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftPretradePolicyInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftQuantityPolicy"
+              },
+              {
+                "$ref": "#/components/schemas/DraftDerivedQuantityPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity Policy"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "const": "BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "const": "ENABLED",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanActiveValidity"
+              },
+              {
+                "$ref": "#/components/schemas/DailyValidity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validity"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "const": "LOW_BUY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone"
+          }
+        },
+        "required": [
+          "status",
+          "side",
+          "rule_id",
+          "bucket",
+          "condition",
+          "confirmation",
+          "execution_window",
+          "zone",
+          "validity",
+          "invalidation",
+          "independent_signal",
+          "market_policy",
+          "quantity_policy",
+          "pretrade_policy"
+        ],
+        "title": "P2DraftRule",
+        "type": "object"
+      },
+      "P2EconomicsContext": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Fen"
+          },
+          "policy": {
+            "discriminator": {
+              "mapping": {
+                "NONE": "#/components/schemas/NoEconomics",
+                "PREVIEW_ONLY": "#/components/schemas/EconomicsPreview",
+                "REQUIRED": "#/components/schemas/RequiredEconomics"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NoEconomics"
+              },
+              {
+                "$ref": "#/components/schemas/EconomicsPreview"
+              },
+              {
+                "$ref": "#/components/schemas/RequiredEconomics"
+              }
+            ],
+            "title": "Policy"
+          },
+          "session": {
+            "format": "date",
+            "title": "Session",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy",
+          "entry_fen",
+          "symbol",
+          "session"
+        ],
+        "title": "P2EconomicsContext",
+        "type": "object"
+      },
+      "P2PlanDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                    "MANUAL": "#/components/schemas/DailyManualActivation",
+                    "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyManualActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyDayActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyRangeActivation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedDraftAlertRule"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_version": {
+            "const": "condition-plan-v4",
+            "default": "condition-plan-v4",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/P2DraftRule"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedDraftRule"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/UnifiedDraftPosition"
+          },
+          "reference_market": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceMarketBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDraftRisk"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 8,
+            "default": 8,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "P2PlanDraft",
+        "type": "object"
+      },
+      "P2PlanDraftInput": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                    "MANUAL": "#/components/schemas/DailyManualActivation",
+                    "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyManualActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyDayActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyRangeActivation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedDraftAlertRuleInput"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_version": {
+            "const": "condition-plan-v4",
+            "default": "condition-plan-v4",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/P2DraftRuleInput"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedDraftRuleInput"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/UnifiedDraftPosition"
+          },
+          "reference_market": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceMarketBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDraftRiskInput"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 8,
+            "default": 8,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "P2PlanDraft",
+        "type": "object"
+      },
+      "P2PreviewCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "occurrenceId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrenceid"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "proposedQuantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposedquantity"
+          },
+          "ruleId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Ruleid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "ruleId"
+        ],
+        "title": "P2PreviewCommand",
+        "type": "object"
+      },
+      "P2PreviewView": {
+        "additionalProperties": false,
+        "properties": {
+          "authorityGranted": {
+            "const": false,
+            "default": false,
+            "title": "Authoritygranted",
+            "type": "boolean"
+          },
+          "computedAt": {
+            "format": "date-time",
+            "title": "Computedat",
+            "type": "string"
+          },
+          "economics": {
+            "$ref": "#/components/schemas/EconomicsResult"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/FrozenPretrade"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "ruleId": {
+            "title": "Ruleid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "computedAt",
+          "planVersionId",
+          "ruleId",
+          "quantity",
+          "evidence",
+          "economics"
+        ],
+        "title": "P2PreviewView",
+        "type": "object"
+      },
+      "P2Rule": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "const": "TACTICAL",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "condition": {
+            "discriminator": {
+              "mapping": {
+                "ALL": "#/components/schemas/UnifiedAll",
+                "ANY": "#/components/schemas/UnifiedAny",
+                "DAILY_CANDLE_RATIO": "#/components/schemas/DailyCandleRatio",
+                "DAILY_CLOSE_SEQUENCE": "#/components/schemas/DailyCloseSequence",
+                "DAILY_INDICATOR_COMPARE": "#/components/schemas/DailyIndicatorCompare",
+                "DAILY_PRICE_COMPARE": "#/components/schemas/UnifiedPriceCompare",
+                "DAILY_PRICE_IN_RANGE": "#/components/schemas/DailyPriceInRange",
+                "DAILY_PRIOR_CLOSE": "#/components/schemas/DailyPriorClose",
+                "DAILY_VOLUME_RATIO": "#/components/schemas/DailyVolumeRatio",
+                "MINUTE_CLOSE_BELOW": "#/components/schemas/MinuteCloseBelow",
+                "MINUTE_CLOSE_IN_RANGE": "#/components/schemas/MinuteCloseInRange",
+                "MINUTE_VOLUME_TO_MEAN_GTE": "#/components/schemas/MinuteVolumeToMeanGte",
+                "REVIEWED_FACT": "#/components/schemas/ReviewedDailyFact"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedPriceCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriceInRange"
+              },
+              {
+                "$ref": "#/components/schemas/DailyVolumeRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCandleRatio"
+              },
+              {
+                "$ref": "#/components/schemas/DailyIndicatorCompare"
+              },
+              {
+                "$ref": "#/components/schemas/DailyCloseSequence"
+              },
+              {
+                "$ref": "#/components/schemas/DailyPriorClose"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewedDailyFact"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseInRange"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteCloseBelow"
+              },
+              {
+                "$ref": "#/components/schemas/MinuteVolumeToMeanGte"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAll"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedAny"
+              }
+            ],
+            "title": "Condition"
+          },
+          "confirmation": {
+            "$ref": "#/components/schemas/OfficialDailyConfirmation"
+          },
+          "execution_window": {
+            "const": "NEXT_EXCHANGE_SESSION_ONLY",
+            "title": "Execution Window",
+            "type": "string"
+          },
+          "independent_signal": {
+            "discriminator": {
+              "mapping": {
+                "AFTER_RULE_COMPLETED": "#/components/schemas/AfterRuleCompleted",
+                "LATER_CLOSE_RESET_THEN_CONFIRM": "#/components/schemas/UnifiedResetPolicy",
+                "ONCE_PER_RULE": "#/components/schemas/OncePerRule",
+                "REVIEWED_INDEPENDENT_EVENT": "#/components/schemas/DailyIndependentEvent"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DailyIndependentEvent"
+              },
+              {
+                "$ref": "#/components/schemas/UnifiedResetPolicy"
+              },
+              {
+                "$ref": "#/components/schemas/OncePerRule"
+              },
+              {
+                "$ref": "#/components/schemas/AfterRuleCompleted"
+              }
+            ],
+            "title": "Independent Signal"
+          },
+          "invalidation": {
+            "const": "RISK_OR_REVIEWED_INVALIDATION",
+            "title": "Invalidation",
+            "type": "string"
+          },
+          "market_policy": {
+            "$ref": "#/components/schemas/MarketExceptionPolicy"
+          },
+          "pretrade_policy": {
+            "$ref": "#/components/schemas/PretradePolicy"
+          },
+          "quantity_policy": {
+            "discriminator": {
+              "mapping": {
+                "DERIVED_MARKET_FACTOR": "#/components/schemas/DerivedQuantityPolicy",
+                "MARKET_FACTOR": "#/components/schemas/QuantityPolicy"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/QuantityPolicy"
+              },
+              {
+                "$ref": "#/components/schemas/DerivedQuantityPolicy"
+              }
+            ],
+            "title": "Quantity Policy"
+          },
+          "rule_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "side": {
+            "const": "BUY",
+            "title": "Side",
+            "type": "string"
+          },
+          "status": {
+            "const": "ENABLED",
+            "title": "Status",
+            "type": "string"
+          },
+          "validity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanActiveValidity"
+              },
+              {
+                "$ref": "#/components/schemas/DailyValidity"
+              }
+            ],
+            "title": "Validity"
+          },
+          "zone": {
+            "const": "LOW_BUY",
+            "title": "Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "side",
+          "rule_id",
+          "bucket",
+          "condition",
+          "confirmation",
+          "execution_window",
+          "zone",
+          "validity",
+          "invalidation",
+          "independent_signal",
+          "market_policy",
+          "quantity_policy",
+          "pretrade_policy"
+        ],
+        "title": "P2Rule",
+        "type": "object"
+      },
+      "P2TradePlan": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "discriminator": {
+              "mapping": {
+                "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                "MANUAL": "#/components/schemas/DailyManualActivation",
+                "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DailyManualActivation"
+              },
+              {
+                "$ref": "#/components/schemas/DailyDayActivation"
+              },
+              {
+                "$ref": "#/components/schemas/DailyRangeActivation"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedAlertRule"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+          },
+          "execution_version": {
+            "const": "condition-plan-v4",
+            "default": "condition-plan-v4",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/P2Rule"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedRule"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/UnifiedPositionPolicy"
+          },
+          "reference_market": {
+            "$ref": "#/components/schemas/ReferenceMarketBinding"
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedRiskBranch"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 8,
+            "default": 8,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "trading_rules",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "P2TradePlan",
+        "type": "object"
+      },
       "PlanActivationCommand": {
         "additionalProperties": false,
         "properties": {
@@ -25153,11 +29237,15 @@
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraft",
                 "6": "#/components/schemas/MarketLinkedPlanDraft",
-                "7": "#/components/schemas/MarketExceptionPlanDraft"
+                "7": "#/components/schemas/MarketExceptionPlanDraft",
+                "8": "#/components/schemas/P2PlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P2PlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/MarketExceptionPlanDraft"
               },
@@ -25897,11 +29985,15 @@
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraft",
                 "6": "#/components/schemas/MarketLinkedPlanDraft",
-                "7": "#/components/schemas/MarketExceptionPlanDraft"
+                "7": "#/components/schemas/MarketExceptionPlanDraft",
+                "8": "#/components/schemas/P2PlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P2PlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/MarketExceptionPlanDraft"
               },
@@ -26034,11 +30126,15 @@
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraftInput",
                 "6": "#/components/schemas/MarketLinkedPlanDraftInput",
-                "7": "#/components/schemas/MarketExceptionPlanDraftInput"
+                "7": "#/components/schemas/MarketExceptionPlanDraftInput",
+                "8": "#/components/schemas/P2PlanDraftInput"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P2PlanDraftInput"
+              },
               {
                 "$ref": "#/components/schemas/MarketExceptionPlanDraftInput"
               },
@@ -27152,11 +31248,15 @@
               "mapping": {
                 "5": "#/components/schemas/UnifiedPlanDraft",
                 "6": "#/components/schemas/MarketLinkedPlanDraft",
-                "7": "#/components/schemas/MarketExceptionPlanDraft"
+                "7": "#/components/schemas/MarketExceptionPlanDraft",
+                "8": "#/components/schemas/P2PlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P2PlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/MarketExceptionPlanDraft"
               },
@@ -27492,11 +31592,15 @@
                   "mapping": {
                     "5": "#/components/schemas/UnifiedPlanDraftInput",
                     "6": "#/components/schemas/MarketLinkedPlanDraftInput",
-                    "7": "#/components/schemas/MarketExceptionPlanDraftInput"
+                    "7": "#/components/schemas/MarketExceptionPlanDraftInput",
+                    "8": "#/components/schemas/P2PlanDraftInput"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/P2PlanDraftInput"
+                  },
                   {
                     "$ref": "#/components/schemas/MarketExceptionPlanDraftInput"
                   },
@@ -28022,6 +32126,138 @@
         "title": "PreparedPlanCompositionInput",
         "type": "object"
       },
+      "PretradePolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "economics": {
+            "discriminator": {
+              "mapping": {
+                "NONE": "#/components/schemas/NoEconomics",
+                "PREVIEW_ONLY": "#/components/schemas/EconomicsPreview",
+                "REQUIRED": "#/components/schemas/RequiredEconomics"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NoEconomics"
+              },
+              {
+                "$ref": "#/components/schemas/EconomicsPreview"
+              },
+              {
+                "$ref": "#/components/schemas/RequiredEconomics"
+              }
+            ],
+            "title": "Economics"
+          },
+          "level_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/LevelEvidence"
+            },
+            "maxItems": 20,
+            "title": "Level Evidence",
+            "type": "array"
+          },
+          "policy_version": {
+            "const": "pretrade-policy-v1",
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "sizing": {
+            "discriminator": {
+              "mapping": {
+                "ATR_RATIO_TIERS": "#/components/schemas/TierSizing",
+                "FIXED_Q0": "#/components/schemas/FixedSizing"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FixedSizing"
+              },
+              {
+                "$ref": "#/components/schemas/TierSizing"
+              }
+            ],
+            "title": "Sizing"
+          }
+        },
+        "required": [
+          "policy_version",
+          "sizing",
+          "economics",
+          "level_evidence"
+        ],
+        "title": "PretradePolicy",
+        "type": "object"
+      },
+      "PretradePolicyInput": {
+        "additionalProperties": false,
+        "properties": {
+          "economics": {
+            "discriminator": {
+              "mapping": {
+                "NONE": "#/components/schemas/NoEconomics",
+                "PREVIEW_ONLY": "#/components/schemas/EconomicsPreviewInput",
+                "REQUIRED": "#/components/schemas/RequiredEconomicsInput"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NoEconomics"
+              },
+              {
+                "$ref": "#/components/schemas/EconomicsPreviewInput"
+              },
+              {
+                "$ref": "#/components/schemas/RequiredEconomicsInput"
+              }
+            ],
+            "title": "Economics"
+          },
+          "level_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/LevelEvidence"
+            },
+            "maxItems": 20,
+            "title": "Level Evidence",
+            "type": "array"
+          },
+          "policy_version": {
+            "const": "pretrade-policy-v1",
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "sizing": {
+            "discriminator": {
+              "mapping": {
+                "ATR_RATIO_TIERS": "#/components/schemas/TierSizingInput",
+                "FIXED_Q0": "#/components/schemas/FixedSizing"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FixedSizing"
+              },
+              {
+                "$ref": "#/components/schemas/TierSizingInput"
+              }
+            ],
+            "title": "Sizing"
+          }
+        },
+        "required": [
+          "policy_version",
+          "sizing",
+          "economics",
+          "level_evidence"
+        ],
+        "title": "PretradePolicy",
+        "type": "object"
+      },
       "ProductSourceTreatmentView": {
         "additionalProperties": false,
         "properties": {
@@ -28062,6 +32298,48 @@
           "guarantee"
         ],
         "title": "ProductSourceTreatmentView",
+        "type": "object"
+      },
+      "Provenance": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "classification": {
+            "const": "ESTIMATE",
+            "title": "Classification",
+            "type": "string"
+          },
+          "excerpt": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "excerpt",
+          "as_of",
+          "classification"
+        ],
+        "title": "Provenance",
         "type": "object"
       },
       "ProviderCapabilityStatus": {
@@ -28869,6 +33147,92 @@
         "title": "RelativeStrengthEvidence",
         "type": "object"
       },
+      "RequiredEconomics": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+            "title": "Entry Price Mode",
+            "type": "string"
+          },
+          "fee_schedule": {
+            "$ref": "#/components/schemas/FeeSchedule"
+          },
+          "gates": {
+            "$ref": "#/components/schemas/EconomicsGates"
+          },
+          "mode": {
+            "const": "REQUIRED",
+            "title": "Mode",
+            "type": "string"
+          },
+          "risk_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Risk Price Fen",
+            "type": "integer"
+          },
+          "target_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Target Price Fen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule",
+          "gates"
+        ],
+        "title": "RequiredEconomics",
+        "type": "object"
+      },
+      "RequiredEconomicsInput": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_price_mode": {
+            "const": "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE",
+            "title": "Entry Price Mode",
+            "type": "string"
+          },
+          "fee_schedule": {
+            "$ref": "#/components/schemas/FeeScheduleInput"
+          },
+          "gates": {
+            "$ref": "#/components/schemas/EconomicsGatesInput"
+          },
+          "mode": {
+            "const": "REQUIRED",
+            "title": "Mode",
+            "type": "string"
+          },
+          "risk_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Risk Price Fen",
+            "type": "integer"
+          },
+          "target_price_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Target Price Fen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "entry_price_mode",
+          "target_price_fen",
+          "risk_price_fen",
+          "fee_schedule",
+          "gates"
+        ],
+        "title": "RequiredEconomics",
+        "type": "object"
+      },
       "RequiredReviewIssueView": {
         "additionalProperties": false,
         "properties": {
@@ -29363,6 +33727,21 @@
               }
             ],
             "title": "Signal Linkage"
+          },
+          "signal_pretrade": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FrozenPretrade"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signal Pretrade"
           },
           "signals": {
             "items": {
@@ -30419,6 +34798,28 @@
             "multipleOf": 100.0,
             "title": "Planned Qty",
             "type": "integer"
+          },
+          "pretrade_execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pretrade_ref": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretrade Ref"
           },
           "reset_trade_date": {
             "anyOf": [
@@ -31658,6 +36059,168 @@
         "title": "SingleSourcePreparationInput",
         "type": "object"
       },
+      "SizingResult": {
+        "additionalProperties": false,
+        "properties": {
+          "atr_fen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atr Fen"
+          },
+          "blocker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker"
+          },
+          "close_fen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Fen"
+          },
+          "q0": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q0"
+          },
+          "tier_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Index"
+          }
+        },
+        "required": [
+          "q0",
+          "tier_index",
+          "atr_fen",
+          "close_fen",
+          "blocker"
+        ],
+        "title": "SizingResult",
+        "type": "object"
+      },
+      "SizingResultInput": {
+        "additionalProperties": false,
+        "properties": {
+          "atr_fen": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atr Fen"
+          },
+          "blocker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker"
+          },
+          "close_fen": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Fen"
+          },
+          "q0": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q0"
+          },
+          "tier_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Index"
+          }
+        },
+        "required": [
+          "q0",
+          "tier_index",
+          "atr_fen",
+          "close_fen",
+          "blocker"
+        ],
+        "title": "SizingResult",
+        "type": "object"
+      },
       "SmaFactRequest": {
         "additionalProperties": false,
         "properties": {
@@ -32579,6 +37142,84 @@
           "decision"
         ],
         "title": "SymbolSummaryView",
+        "type": "object"
+      },
+      "TierSizing": {
+        "additionalProperties": false,
+        "properties": {
+          "base_qty": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Base Qty",
+            "type": "integer"
+          },
+          "metric": {
+            "const": "ATR14_OVER_CLOSE",
+            "title": "Metric",
+            "type": "string"
+          },
+          "mode": {
+            "const": "ATR_RATIO_TIERS",
+            "title": "Mode",
+            "type": "string"
+          },
+          "tiers": {
+            "items": {
+              "$ref": "#/components/schemas/VolatilityTier"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode",
+          "metric",
+          "base_qty",
+          "tiers"
+        ],
+        "title": "TierSizing",
+        "type": "object"
+      },
+      "TierSizingInput": {
+        "additionalProperties": false,
+        "properties": {
+          "base_qty": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Base Qty",
+            "type": "integer"
+          },
+          "metric": {
+            "const": "ATR14_OVER_CLOSE",
+            "title": "Metric",
+            "type": "string"
+          },
+          "mode": {
+            "const": "ATR_RATIO_TIERS",
+            "title": "Mode",
+            "type": "string"
+          },
+          "tiers": {
+            "items": {
+              "$ref": "#/components/schemas/VolatilityTierInput"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode",
+          "metric",
+          "base_qty",
+          "tiers"
+        ],
+        "title": "TierSizing",
         "type": "object"
       },
       "TradingDay": {
@@ -36560,6 +41201,97 @@
         ],
         "title": "ValidationSeverity",
         "type": "string"
+      },
+      "VolatilityTier": {
+        "additionalProperties": false,
+        "properties": {
+          "lower": {
+            "title": "Lower",
+            "type": "string"
+          },
+          "multiplier": {
+            "le": 1,
+            "title": "Multiplier",
+            "type": "string"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "lower",
+          "upper",
+          "multiplier"
+        ],
+        "title": "VolatilityTier",
+        "type": "object"
+      },
+      "VolatilityTierInput": {
+        "additionalProperties": false,
+        "properties": {
+          "lower": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "ge": 0,
+            "title": "Lower"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "ge": 0,
+            "le": 1,
+            "title": "Multiplier"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "lower",
+          "upper",
+          "multiplier"
+        ],
+        "title": "VolatilityTier",
+        "type": "object"
       },
       "WorkbenchBacktestDataView": {
         "additionalProperties": false,
@@ -46469,6 +51201,161 @@
           }
         },
         "summary": "Save Plan Draft",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-economics-previews": {
+      "post": {
+        "operationId": "economics_preview_api_v1_plan_economics_previews_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/P2PreviewCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/P2PreviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Economics Preview",
         "tags": [
           "plans"
         ]

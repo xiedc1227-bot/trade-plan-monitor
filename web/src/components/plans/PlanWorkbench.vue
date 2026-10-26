@@ -5,14 +5,15 @@ import PlanSourceExtraction from "./PlanSourceExtraction.vue";
 import PlanFieldEditor from "./PlanFieldEditor.vue";
 import PlanSourceReview from "./PlanSourceReview.vue";
 import PlanSimulationPanel from "./PlanSimulationPanel.vue";
+import P2PolicyReview from "./P2PolicyReview.vue";
 import PlanExceptionPermissions from "./PlanExceptionPermissions.vue";
 const props = defineProps<{ planVersionId?: string | undefined }>();
 const work = usePlanWorkspace();
 const { source, provider, providers, extraction, versions, historyOnly, candidate, schema, definitions, preview, saved, activated, mapping, values, busy, error, notice } = work;
 const linkedCandidate = computed(() => candidate.value !== null && typeof candidate.value === "object"
-  && !Array.isArray(candidate.value) && [6, 7].includes(Number(candidate.value.schema_version)));
+  && !Array.isArray(candidate.value) && [6, 7, 8].includes(Number(candidate.value.schema_version)));
 const exceptionCandidate = computed(() => candidate.value !== null && typeof candidate.value === "object"
-  && !Array.isArray(candidate.value) && candidate.value.schema_version === 7);
+  && !Array.isArray(candidate.value) && [7, 8].includes(Number(candidate.value.schema_version)));
 watch(() => props.planVersionId, id => work.load(id), { immediate: true });
 </script>
 
@@ -35,6 +36,7 @@ watch(() => props.planVersionId, id => work.load(id), { immediate: true });
         <p>S1 在完整 S0 上增加：相邻两日收盘均在低吸区、收盘不下降、成交量不高于此前20日均量、RSI14上升，且无更高优先级风险。S2 再要求两日收盘分别不低于各自当日 MA20。</p>
         <p>相对强势要求个股5日和20日收益率均严格高于对应指数，且收盘不低于 MA20。<span v-if="!exceptionCandidate">破位或数量不足涉及的例外路径仍然阻断。</span>确认后冻结整笔数量，容量不足不缩量。</p>
       </aside>
+      <P2PolicyReview :candidate="candidate" />
       <PlanExceptionPermissions :candidate="candidate" />
       <p>普通规则默认持续有效直到人工停用或审核启用新版本替换；单次信号仍按其执行窗口到期。原文或历史日期限制保留为DATE_RANGE，不会自动转换。保存草稿不替换已启用版本。</p>
       <p>原文有期限而改为持续有效时，在该规则有效期模式的人工补充理由中引用完整原句并写明“改为持续有效”，重新审核后明确启用。</p>

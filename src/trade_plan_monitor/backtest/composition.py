@@ -755,7 +755,7 @@ class _ProductionBacktestService:
             ):
                 raise ApiError(ApiErrorCode.CONFLICT)
             plan = load_plan_json(snapshot.plan_json)
-            current = plan.schema_version in {5, 6, 7}
+            current = plan.schema_version in {5, 6, 7, 8}
             if current and (snapshot.review_id is None or snapshot.content_hash is None
                 or command.research_input is None
                 or command.research_input.review.content_hash != snapshot.content_hash):
@@ -979,12 +979,15 @@ class _ProductionBacktestService:
         input_type = (WorkbenchLoopInput if workbench else
                       ScheduledLoopInput if scheduled else MonitorLoopInput)
         from trade_plan_monitor.backtest.exception_replay_input import ExceptionReplayProgram
-        exception = any(row.version.snapshot.schema_version == 7
+        exception = any(row.version.snapshot.schema_version in {7, 8}
                         for row in prepared.schedule.entries)
         if command.exception_program is not None and not exception:
             raise ApiError(ApiErrorCode.CONFLICT)
+        p2 = any(row.version.snapshot.schema_version == 8
+                 for row in prepared.schedule.entries)
         run_input = input_type(
-            **({"run_formula_version": "backtest-run-v8", "exception_program":
+            **({"run_formula_version": "backtest-run-v9" if p2 else "backtest-run-v8",
+                "exception_program":
                 command.exception_program or ExceptionReplayProgram()} if exception else {}),
             **({"selection_hash": prepared.manifest_hash} if workbench else {}),
             schedule=prepared.schedule,

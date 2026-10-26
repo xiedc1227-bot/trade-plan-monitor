@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError
 
 from trade_plan_monitor.decision.market_exception_policy import validate_exception_quantity
+from trade_plan_monitor.decision.p2_economics import EconomicsResult, calculate_economics
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, PositiveWholeQty, Qty
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.daily_models import DailyRecord
@@ -21,6 +22,7 @@ from trade_plan_monitor.state.market_exception_models import (
     transition_candidate,
 )
 from trade_plan_monitor.state.market_exception_repository import ExceptionRepository
+from trade_plan_monitor.state.p2_authority import P2EconomicsContext
 
 
 class ExceptionAuthorityError(ValueError):
@@ -38,6 +40,7 @@ class ExceptionAuthorityContext(DailyValue):
     authority_hash: Digest
     capacity: int | None = Field(strict=True)
     blockers: tuple[str, ...]
+    pretrade: P2EconomicsContext | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class ExceptionPreviewCommand(DailyValue):
@@ -83,6 +86,7 @@ class ExceptionPreview(DailyValue):
     quantity: PositiveWholeQty
     created_at: ShanghaiDatetime
     preview_hash: Digest
+    economics: EconomicsResult | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def coherent(self):
@@ -147,6 +151,14 @@ def _quantity(candidate, context, proposed):
     if result.blockers:
         raise ExceptionAuthorityError(result.blockers[0], status=(
             422 if result.blockers[0].startswith("EXCEPTION_QUANTITY") else 409))
+    if context.pretrade is not None:
+        from trade_plan_monitor.decision.p2_economics import calculate_economics
+
+        economic = calculate_economics(context.pretrade.policy,
+            quantity=result.candidate_quantity, entry_fen=context.pretrade.entry_fen,
+            symbol=context.pretrade.symbol, session=context.pretrade.session)
+        if economic.blockers:
+            raise ExceptionAuthorityError(economic.blockers[0])
     return result.candidate_quantity
 
 
@@ -159,6 +171,11 @@ def preview_exception(daily, command, *, current, now):
         expected_revision=command.expected_revision, binding_hash=candidate.binding_hash,
         current=context.model_dump(mode="json"), proposed_quantity=command.proposed_quantity,
         quantity=quantity, created_at=now.isoformat())
+    if context.pretrade is not None:
+        payload["economics"] = calculate_economics(context.pretrade.policy,
+            quantity=quantity, entry_fen=context.pretrade.entry_fen,
+            symbol=context.pretrade.symbol,
+            session=context.pretrade.session).model_dump(mode="json")
     payload["preview_hash"] = daily_hash(payload["version"], payload)
     payload["preview_id"] = daily_hash("exception-preview-id-v1", payload["preview_hash"])
     preview = ExceptionPreview.model_validate(payload)

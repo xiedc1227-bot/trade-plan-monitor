@@ -1,0 +1,52 @@
+{
+  "version": "p2-pretrade-evidence-v1",
+  "rule_id": "low-buy",
+  "content_hash": "01a02a4a4577e1923693ea7979bf0b7162f57487b4834f2e46c757ae8a6917ef",
+  "decision_session": "2026-09-18",
+  "cutoff": "2026-09-18T16:00:00+08:00",
+  "policy": {
+    "policy_version": "pretrade-policy-v1",
+    "sizing": {
+      "mode": "ATR_RATIO_TIERS",
+      "metric": "ATR14_OVER_CLOSE",
+      "base_qty": 1000,
+      "tiers": [
+        {
+          "lower": "0",
+          "upper": null,
+          "multiplier": "0.5"
+        }
+      ]
+    },
+    "economics": {
+      "mode": "NONE"
+    },
+    "level_evidence": []
+  },
+  "sizing": {
+    "q0": 500,
+    "tier_index": 0,
+    "atr_fen": "3.035812023745826700",
+    "close_fen": "161",
+    "blocker": null
+  },
+  "economics": {
+    "version": "p2-economics-v1",
+    "outcome": "NONE",
+    "reason": null,
+    "blockers": [],
+    "quantity": null,
+    "entry_debit_fen": null,
+    "target_proceeds_fen": null,
+    "risk_proceeds_fen": null,
+    "net_reward_fen": null,
+    "planned_loss_fen": null,
+    "total_cost_fen": null,
+    "spread_numerator": null,
+    "spread_denominator": null,
+    "entry_fees": null,
+    "target_fees": null,
+    "risk_fees": null
+  },
+  "evidence_hash": "8c2797d2dfe9dc818799aaffecb3eae22eb257f7c101ad18a88f07fccc187aea"
+}

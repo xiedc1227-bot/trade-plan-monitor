@@ -318,3 +318,15 @@ OpenAPI snapshot SHA-256: `8d0a3bf2cad7272b41cb6d0e644b12593f4a422b738f0b7492c52
 Canonical monitor v2 OpenAPI snapshot SHA-256: `5ee3f6311aa13d37e615438d25d741a8568811eb609eca3caa830659236ba9b0`
 
 Generated TypeScript SHA-256: compatibility `0db9c542dc72d30f0fccb29902c8a7670a3c9cee3bf0da47b23cc41df3f3f468`; canonical `5a95e2d2311fa6fc505f962c8f5c0ddbf1dc4c807a7d1895293261ced343fc5a`.
+
+## U-MLP2 — Approved pretrade policies (2026-10-26)
+
+The user approved MLP2-D01–MLP2-D06 and implementation. Add only `POST /api/v1/plan-economics-previews` as specified in [MLP2-S06](SPEC-market-linkage-p2.md). It reads server-owned current evidence, validates exact ordinary/exception quantity and returns estimates with literal `authorityGranted=false`; it creates no candidate, approval, simulation or inventory mutation. Existing same-origin admission and public error contracts apply.
+
+Schema 8 / condition-plan-v4 / plan-extract-v11 adds strict policies, nullable review candidates, optional frozen sizing/economics and editor capabilities. Backtest-run-v9 and reference-checked reports retain frozen policies and separate exception event/operation authority. New optional fields are omitted from historical records. Both profiles preserve the prior route/model projection after removing only enumerated approved additions; no route is removed. [MLP2-K01–MLP2-K05](CONTRACT-market-linkage-p2.md) define the wire details. This records the approved scope and generated artifacts, not live-data or deployment approval.
+
+OpenAPI snapshot SHA-256: `e1f840fbf03fcc868753b98e78185a6060e31ff9c46270a7d1e66b13c969c749`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `4149e96e4ce54f76bab84d0f36d6e9465040e3c9801732a413023015e3e87f80`
+
+Generated TypeScript SHA-256: compatibility `931d2db0738738e47254afa858f26115fb531ba80f8cd3bf10bc9043e2d2f97a`; canonical `6f485c92d4470f4521b68d51a85f9be8af670ac4153ebf9a6ee9087abf7a7b0c`.

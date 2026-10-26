@@ -25,7 +25,7 @@ def daily_plan_content_sha256(plan: DailyTradePlan) -> str:
 
 
 def unified_plan_content_sha256(plan) -> str:
-    if plan.schema_version not in {5, 6, 7}:
+    if plan.schema_version not in {5, 6, 7, 8}:
         raise TypeError("plan must use the current condition contract")
     return daily_plan_content_sha256(plan)
 

@@ -309,7 +309,7 @@ def build_compact_prompt(source, *, context=None, feedback=(), repair_context=No
         "keep computable alternatives in typed nodes and optional suggestions outside hard "
         "prerequisites. "
         "A reminder has no liquidation authority. Product constants: "
-        "schema_version5/6/7 as selected above, "
+        "schema_version5/6/7/8 as selected above, "
         "CONDITION_PLAN, "
         "condition-plan-v1/condition-plan-v2 as selected above; "
         "trading_rules NEXT_EXCHANGE_SESSION/tick_size_fen1/BLOCK_UNVERIFIED; "

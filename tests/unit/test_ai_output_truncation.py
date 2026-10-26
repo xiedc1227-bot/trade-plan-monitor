@@ -83,9 +83,9 @@ ai:
     asyncio.run(scenario())
 
     assert settings.max_output_tokens == 8_192
-    assert settings.prompt_version == "plan-extract-v10"
+    assert settings.prompt_version == "plan-extract-v11"
     assert config.max_output_tokens == 8_192
-    assert config.prompt_version == "plan-extract-v10"
+    assert config.prompt_version == "plan-extract-v11"
     assert captured == [
         {
             "model": "deepseek-v4-pro",

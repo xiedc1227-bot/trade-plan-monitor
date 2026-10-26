@@ -271,6 +271,11 @@ class PersistentPlanWebLifecycle:
             operation="EXCEPTION_" + operation, operation_name=operation,
             command=command, context=context)
 
+    async def preview_economics(self, *, command):
+        from trade_plan_monitor.web.p2_service import preview_economics
+
+        return await self._run(partial(preview_economics, self), command=command)
+
     async def read_daily_supplements(self, *, candidate_json):
         from trade_plan_monitor.web.daily_service import read_daily_supplements
 
@@ -283,7 +288,7 @@ class PersistentPlanWebLifecycle:
         context: MutationContext,
     ) -> PlanVersionView:
         plan = _load_reviewable_plan(command.plan_json)
-        if plan.schema_version not in {5, 6, 7}:
+        if plan.schema_version not in {5, 6, 7, 8}:
             raise PlanSaveBlockedError(
                 "Historical plan formats are read-only; "
                 "extract the preserved source into a current draft"
@@ -584,7 +589,7 @@ class PersistentPlanWebLifecycle:
             details = work.plans.get_version_details(str(command.plan_version_id))
             if (
                 details is not None
-                and _load_reviewable_plan(details.payload_json).schema_version not in {5, 6, 7}
+                and _load_reviewable_plan(details.payload_json).schema_version not in {5, 6, 7, 8}
             ):
                 raise PlanSaveBlockedError("Historical review bindings are read-only")
             if details is not None and details.daily_mapping is not None:
@@ -633,7 +638,7 @@ class PersistentPlanWebLifecycle:
                     "DAILY_DRAFT_OBSOLETE: re-extract preserved source and review a new draft"
                 )
             stored_plan = _load_reviewable_plan(details.payload_json)
-            if stored_plan.schema_version not in {5, 6, 7}:
+            if stored_plan.schema_version not in {5, 6, 7, 8}:
                 raise PlanActivationBlockedError(
                     "Historical plan formats require a new current draft and explicit review"
                 )
@@ -733,7 +738,7 @@ def _plan_version_summary(record: object) -> PlanVersionSummary:
         obsolete_reason="DAILY_DRAFT_OBSOLETE"
         if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
         else "LEGACY_PLANS_REQUIRE_REVIEW"
-        if not can_activate and _plan is not None and _plan.schema_version not in {5, 6, 7}
+        if not can_activate and _plan is not None and _plan.schema_version not in {5, 6, 7, 8}
         else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
@@ -762,7 +767,7 @@ def _plan_version_view(record: object) -> PlanVersionView:
         obsolete_reason="DAILY_DRAFT_OBSOLETE"
         if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
         else "LEGACY_PLANS_REQUIRE_REVIEW"
-        if plan is not None and plan.schema_version not in {5, 6, 7}
+        if plan is not None and plan.schema_version not in {5, 6, 7, 8}
         else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
@@ -800,7 +805,7 @@ def _validated_plan_state(
                     code=i.code,
                     path=i.path,
                     severity=ValidationSeverity.WARNING,
-                    message=i.reason,
+                    message=i.reason[:512],  # Full evidence remains in daily_issues.
                     activation_blocking=True,
                 )
                 for i in details.daily_issues
@@ -808,7 +813,7 @@ def _validated_plan_state(
         )
         return None, validation, False
     plan = _validated_persisted_plan(details)
-    if plan.schema_version not in {5, 6, 7}:
+    if plan.schema_version not in {5, 6, 7, 8}:
         return (
             plan,
             PlanValidationResult(
@@ -834,7 +839,7 @@ def _validated_plan_state(
                     code=i.code,
                     path=i.path,
                     severity=ValidationSeverity.WARNING,
-                    message=i.reason,
+                    message=i.reason[:512],  # Full evidence remains in daily_issues.
                     activation_blocking=True,
                 )
                 for i in details.daily_issues

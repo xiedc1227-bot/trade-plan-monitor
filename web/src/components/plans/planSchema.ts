@@ -35,6 +35,14 @@ export function initialValue(schema: Schema): Json {
   return null;
 }
 export const fieldLabels: Record<string, string> = {
+  pretrade_policy: "买入前数量与费用政策", sizing: "波动数量", economics: "费用与买入门槛", level_evidence: "价格依据维度",
+  base_qty: "波动调整前数量（股）", tiers: "波动分档", lower: "包含下界", upper: "不包含上界（空为无上限）", multiplier: "数量系数",
+  metric: "波动指标", fee_schedule: "费用估算表", gates: "明确买入门槛", target_price_fen: "目标压力价格（分）", risk_price_fen: "风险价格（分）",
+  min_net_reward_fen: "最低净回报（分）", min_reward_risk_ratio: "最低回报风险比", entry_price_mode: "买入参考价格方式",
+  schedule_id: "费用表标识", symbols: "适用证券", effective_from: "生效日期", effective_through: "最后有效日期", provenance: "来源说明",
+  commission_rate: "佣金费率", minimum_commission_fen: "每次最低佣金（分）", components: "其他费用项目", included_in: "已包含在费用项目中",
+  buy_slippage_fen: "每股买入滑点（分）", sell_slippage_fen: "每股卖出滑点（分）", dimension: "依据维度", excerpt: "来源原句", classification: "估算性质",
+  currency: "币种", rate: "费率", level: "对应价格位", indicator: "指标名称",
   market_policy: "大盘联动策略", quantity_policy: "动态数量策略", base_quantity: "研究确定的基础数量 Q0（股）",
   normal_factor: "正常或过渡时数量系数", weak_factor: "偏弱时数量系数", rounding: "按合法单位向下取整",
   capacity_policy: "容量不足时整笔阻断", signal_quantity_policy: "确认后冻结数量", base_confirmation: "原始确认条件组",
@@ -68,6 +76,9 @@ export const fieldLabels: Record<string, string> = {
   involvesCore: "重评是否涉及CORE", scopeEvidence: "重评范围具体依据",
 };
 export const choiceLabels: Record<string, string> = {
+  ATR_RATIO_TIERS: "按 ATR14 / 收盘价分档", FIXED_Q0: "固定基础量", DERIVED_MARKET_FACTOR: "波动分档后再按大盘减量",
+  PREVIEW_ONLY: "仅研究估算", REQUIRED: "明确数值门槛", ESTIMATE: "估算，非实际盈亏", TREND: "趋势", VOLATILITY: "波动率",
+  PRESSURE: "压力位", RISK: "风险位", TAX: "税费", TRANSFER: "过户费", HANDLING: "经手费", BOTH: "买入与卖出",
   PER_OCCURRENCE: "允许逐次申请（仍需每次人工批准）", DISABLED: "不允许申请",
   REVIEW_PER_OCCURRENCE: "每个独立信号单独人工批准", BLOCK_P1: "例外路径保持阻断",
   PlanActiveValidity: "持续有效直到人工停用或审核启用新版本替换",

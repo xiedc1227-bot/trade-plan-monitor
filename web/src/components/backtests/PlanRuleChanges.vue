@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, type DeepReadonly } from "vue";
-import type { PlanChange, MarketExceptionPlanDraft, MarketLinkedPlanDraft, UnifiedPlanDraft } from "../../api/generated-runtime-status";
+import type { PlanChange, P2PlanDraft, MarketExceptionPlanDraft, MarketLinkedPlanDraft, UnifiedPlanDraft } from "../../api/generated-runtime-status";
 import { fieldLabels, choiceLabels } from "../plans/planSchema";
 import { resultFieldLabel, resultValue } from "./ruleChangeFormatting";
 
 type ReviewChange = Readonly<Omit<PlanChange, "clause_ids">> & { readonly clause_ids: readonly string[] };
 const props = withDefaults(defineProps<{
   changes?: readonly ReviewChange[];
-  initialDraft?: DeepReadonly<UnifiedPlanDraft | MarketLinkedPlanDraft | MarketExceptionPlanDraft> | null;
+  initialDraft?: DeepReadonly<P2PlanDraft | UnifiedPlanDraft | MarketLinkedPlanDraft | MarketExceptionPlanDraft> | null;
   clauses?: readonly { clause_id: string; excerpt: string }[];
   unresolved?: boolean;
   resultMode?: boolean;
   businessMode?: boolean;
-  referenceDraft?: DeepReadonly<UnifiedPlanDraft | MarketLinkedPlanDraft | MarketExceptionPlanDraft> | null;
+  referenceDraft?: DeepReadonly<P2PlanDraft | UnifiedPlanDraft | MarketLinkedPlanDraft | MarketExceptionPlanDraft> | null;
 }>(), { changes: () => [], initialDraft: null, clauses: () => [], unresolved: false, resultMode: false, businessMode: false, referenceDraft: null });
 const titles = { RETAIN: "保留", MODIFY: "修改", ADD: "新增", REVOKE: "取消" } as const;
 const sections = ["position", "levels", "activation", "ordinary_rules", "risk_branches", "alert_rules", "monitoring", "execution_policy", "trading_rules"];

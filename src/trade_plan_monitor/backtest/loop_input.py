@@ -204,7 +204,9 @@ class LoopLimits(ResearchValue):
 
 class MonitorLoopInput(ResearchValue):
     schema_version: Literal["monitor-loop-input-v1"] = LOOP_INPUT_SCHEMA_VERSION
-    run_formula_version: Literal["backtest-run-v5", "backtest-run-v8"] = LOOP_RUN_FORMULA_VERSION
+    run_formula_version: Literal[
+        "backtest-run-v5", "backtest-run-v8", "backtest-run-v9"
+    ] = LOOP_RUN_FORMULA_VERSION
     exception_program: ExceptionReplayProgram | None = Field(
         default=None, exclude_if=lambda value: value is None)
     schedule: LoopSchedule
@@ -217,8 +219,14 @@ class MonitorLoopInput(ResearchValue):
 
     @model_validator(mode="after")
     def coherent(self) -> Self:
-        exception = any(row.version.snapshot.schema_version == 7 for row in self.schedule.entries)
-        if exception != (self.run_formula_version == "backtest-run-v8") or exception != (
+        exception = any(row.version.snapshot.schema_version in {7, 8}
+                        for row in self.schedule.entries)
+        p2 = any(row.version.snapshot.schema_version == 8 for row in self.schedule.entries)
+        formula = "backtest-run-v9" if p2 else "backtest-run-v8" if exception else "backtest-run-v5"
+        if (exception and self.run_formula_version != formula
+                or not exception and self.run_formula_version in {
+                    "backtest-run-v8", "backtest-run-v9"}
+        ) or exception != (
             self.exception_program is not None
         ):
             raise ValueError("EXCEPTION_LOOP_REQUIRES_EXPLICIT_PROGRAM_V8")
@@ -259,7 +267,9 @@ class ScheduledLoopInput(ResearchValue):
     """One account/run over reviewed daily versions, separately encoded from v1."""
 
     schema_version: Literal["monitor-loop-input-v2"] = "monitor-loop-input-v2"
-    run_formula_version: Literal["backtest-run-v6", "backtest-run-v8"] = "backtest-run-v6"
+    run_formula_version: Literal[
+        "backtest-run-v6", "backtest-run-v8", "backtest-run-v9"
+    ] = "backtest-run-v6"
     exception_program: ExceptionReplayProgram | None = Field(
         default=None, exclude_if=lambda value: value is None)
     schedule: ScheduledLoopSchedule

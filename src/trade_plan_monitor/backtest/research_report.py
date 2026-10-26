@@ -18,6 +18,7 @@ from trade_plan_monitor.backtest.research_signal_projection import (
 from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
+from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.state.daily_state_models import (
     DailyInventoryView,
     DailyRiskAction,
@@ -101,6 +102,8 @@ class ResearchMetrics(ResearchValue):
 
 
 class ResearchDecisionEvent(ResearchValue):
+    signal_pretrade: tuple[FrozenPretrade, ...] | None = Field(
+        default=None, max_length=500, exclude_if=lambda value: value is None)
     signal_linkage: tuple[MarketExceptionDecision, ...] | None = Field(
         default=None, max_length=500, exclude_if=lambda value: value is None)
     exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(

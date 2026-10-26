@@ -38,7 +38,8 @@ export function currentPlanVersion(value: unknown): boolean {
   return record(value) && value.execution_mode === "CONDITION_PLAN" && (
     value.schema_version === 5 && (value.execution_version === undefined || value.execution_version === "condition-plan-v1") ||
     value.schema_version === 6 && value.execution_version === "condition-plan-v2" && record(value.reference_market) ||
-    value.schema_version === 7 && value.execution_version === "condition-plan-v3" && record(value.reference_market));
+    value.schema_version === 7 && value.execution_version === "condition-plan-v3" && record(value.reference_market) ||
+    value.schema_version === 8 && value.execution_version === "condition-plan-v4" && record(value.reference_market));
 }
 function draft(value: unknown): boolean {
   return record(value) && currentPlanVersion(value) &&

@@ -110,7 +110,7 @@ def make_app(tmp_path, *, ai=False):
 
         def provider(request):
             messages = json.loads(request.content)["messages"]
-            assert "plan-extract-v10" in messages[0]["content"]
+            assert "plan-extract-v11" in messages[0]["content"]
             draft = UnifiedPlanDraft.from_executable(simple_plan())
             output = {
                 "draft": draft.model_dump(mode="json"),
@@ -164,7 +164,7 @@ def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
             if result["status"] not in {"QUEUED", "RUNNING"}:
                 break
         assert result["status"] == "SUCCEEDED"
-        assert result["promptVersion"] == "plan-extract-v10"
+        assert result["promptVersion"] == "plan-extract-v11"
         extracted = json.loads(result["draftPlanJson"])
         assert extracted["activation"] == {"mode": "MANUAL"}
         assert extracted["ordinary_rules"][0]["validity"] == {"mode": "PLAN_ACTIVE"}

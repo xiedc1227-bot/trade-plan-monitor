@@ -19,7 +19,6 @@ from trade_plan_monitor.backtest.preparation_models import (
 )
 from trade_plan_monitor.backtest.preparation_review import frozen_preparation
 from trade_plan_monitor.backtest.preparation_store import PreparationStore
-from trade_plan_monitor.domain.market_linkage_validation import MarketExceptionPlanDraft
 from trade_plan_monitor.market_data.historical_provider import (
     HistoricalMinuteBatch,
     HistoricalOpeningSpecial,
@@ -157,7 +156,9 @@ def market_fixture(directory, plan, route):
 
 
 def prepared_fixture(directory, plan, start, account):
-    draft = MarketExceptionPlanDraft.from_executable(plan)
+    from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
+    draft = UnifiedPlanDraft.from_executable(plan)
     text, mapping = source_mapping(draft)
     source = PreparationSource(
         source_id="source-1",
@@ -211,7 +212,8 @@ def prepared_fixture(directory, plan, start, account):
     )
 
 
-def frozen_market_approval(directory, chain, calendar, daily, indices, factors):
+def frozen_market_approval(directory, chain, calendar, daily, indices, factors,
+                           *, run_input_factory=None):
     from tests.integration.test_market_exception_replay import research_run_input
 
     from trade_plan_monitor.backtest.exception_replay_input import FrozenExceptionEvent
@@ -244,7 +246,7 @@ def frozen_market_approval(directory, chain, calendar, daily, indices, factors):
     )
     frames.daily = {d.trade_date: d for d in daily if d.received_at <= chain.now}
     inputs = frames._inputs(chain.now, FRIDAY)
-    session = ResearchSession(directory, research_run_input(chain), calendar)
+    session = ResearchSession(directory, (run_input_factory or research_run_input)(chain), calendar)
     try:
         evaluated = session.runtime.run_inputs(plan=chain.plan, inputs=inputs)
         assert evaluated.snapshot["exception_candidates"], evaluated.snapshot["market_linkage"]

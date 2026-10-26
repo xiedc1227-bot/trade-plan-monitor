@@ -8,6 +8,7 @@ from trade_plan_monitor.decision.market_exception_decision import (
 )
 from trade_plan_monitor.decision.p2_economics import EconomicsResult, calculate_economics
 from trade_plan_monitor.decision.p2_sizing import SizingResult, calculate_sizing
+from trade_plan_monitor.domain.daily_hash import daily_hash
 from trade_plan_monitor.domain.daily_plan_models import DailyValue
 from trade_plan_monitor.domain.market_exception_models import MarketExceptionRule
 from trade_plan_monitor.domain.market_quantity_rules import official_buy_grid
@@ -25,8 +26,10 @@ def prepare_p2_rule(plan, rule, *, series, decision_session, cutoff):
     """Use only completed, available, admitted data for the exact decision day."""
     grid = official_buy_grid(plan.symbol, decision_session)
     current = (series is not None and series.symbol == plan.symbol
+               and series.cutoff <= cutoff and series.adjustment_as_of <= cutoff.date()
                and series.bars[-1].trade_date == decision_session
-               and all(bar.available_at <= cutoff for bar in series.bars))
+               and all(bar.available_at <= cutoff and bar.received_at <= cutoff
+                       for bar in series.bars))
     atr = calculate_daily_ta_v2(series)[-1]["ATR14"] if current else None
     sizing = calculate_sizing(rule.pretrade_policy.sizing,
         atr_fen=None if atr is None else atr*100,
@@ -49,6 +52,12 @@ def evaluate_p2_market(plan, rule, **inputs):
     if effective is None:
         return P2Decision(sizing=sizing, economics=None, decision=None)
     decision = evaluate_market_exception(plan, effective, **inputs)
+    decision = _seal_decision(decision.model_dump(mode="json") | {
+        "consumed_hash": daily_hash("p2-consumed-v1", {
+            "market": decision.consumed_hash,
+            "policy": rule.pretrade_policy.model_dump(mode="json"),
+            "sizing": sizing.model_dump(mode="json"),
+        })})
     close = sizing.close_fen
     economics = calculate_economics(rule.pretrade_policy.economics,
         quantity=decision.calculation.candidate_quantity,

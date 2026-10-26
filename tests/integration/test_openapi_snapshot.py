@@ -66,6 +66,7 @@ APPROVED_PATHS = {
     "/api/v1/dashboard",
     "/api/v1/simulated-trades",
     "/api/v1/plan-editor-schema",
+    "/api/v1/plan-economics-previews",
     "/api/v1/plan-exception-previews",
     "/api/v1/plan-exception-decisions",
     "/api/v1/plan-exception-revocations",

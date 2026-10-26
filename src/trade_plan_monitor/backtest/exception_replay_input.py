@@ -157,7 +157,7 @@ class ExceptionReplayProgram(ResearchValue):
         return tuple(sorted({row.provenance for row in self.exception_authorization_events}))
 
     def validate_scope(self, *, plans, started_at):
-        by_hash = {plan_sha256(plan): plan for plan in plans if plan.schema_version == 7}
+        by_hash = {plan_sha256(plan): plan for plan in plans if plan.schema_version in {7, 8}}
         for row in self.exception_authorization_events:
             plan = by_hash.get(row.plan_hash)
             if (

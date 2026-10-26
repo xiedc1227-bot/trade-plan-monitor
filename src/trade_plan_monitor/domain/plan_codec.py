@@ -178,7 +178,7 @@ def _validate_plan_data(raw_plan: object) -> ExecutableTradePlan:
         )
     _validate_data_tree(raw_plan)
     schema_version = raw_plan.get("schema_version", 1)
-    if type(schema_version) is not int or schema_version not in {1, 2, 3, 4, 5, 6, 7}:
+    if type(schema_version) is not int or schema_version not in {1, 2, 3, 4, 5, 6, 7, 8}:
         raise PlanDocumentError(
             "UNSUPPORTED_PLAN_VERSION",
             "Plan document uses an unsupported schema version.",
@@ -189,6 +189,9 @@ def _validate_plan_data(raw_plan: object) -> ExecutableTradePlan:
             "Plan document uses an unsupported execution version.",
         )
     try:
+        if schema_version == 8:
+            from trade_plan_monitor.domain.p2_policy_models import P2TradePlan
+            return P2TradePlan.model_validate(raw_plan)
         if schema_version == 7:
             from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
             return MarketExceptionTradePlan.model_validate(raw_plan)

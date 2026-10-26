@@ -60,7 +60,7 @@ def _digest(domain: str, payload: bytes) -> str:
 def _validate_linked_source(schedule, dataset):
     linked = [
         row.version.snapshot for row in schedule.entries
-        if row.version.snapshot.schema_version in {6, 7}
+        if row.version.snapshot.schema_version in {6, 7, 8}
     ]
     source = dataset.linked_index_source
     if linked and source is None:

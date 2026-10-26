@@ -318,3 +318,15 @@ OpenAPI 快照 SHA-256：`8d0a3bf2cad7272b41cb6d0e644b12593f4a422b738f0b7492c521
 规范监控v2 OpenAPI快照SHA-256：`5ee3f6311aa13d37e615438d25d741a8568811eb609eca3caa830659236ba9b0`
 
 生成TypeScript SHA-256：兼容版`0db9c542dc72d30f0fccb29902c8a7670a3c9cee3bf0da47b23cc41df3f3f468`；规范版`5a95e2d2311fa6fc505f962c8f5c0ddbf1dc4c807a7d1895293261ced343fc5a`。
+
+## U-MLP2 — 已批准的交易前政策（2026-10-26）
+
+用户已批准 MLP2-D01–MLP2-D06 及实施。仅新增 [MLP2-S06](SPEC-market-linkage-p2.zh-CN.md) 规定的 `POST /api/v1/plan-economics-previews`：读取服务端当前依据，校验准确普通／例外数量，以字面值 `authorityGranted=false` 返回估算，不创建候选、批准、模拟或库存写入。沿用原同源准入及公开错误契约。
+
+Schema 8 / condition-plan-v4 / plan-extract-v11 增加严格政策、可空审核候选、可选冻结数量／费用及编辑器能力。Backtest-run-v9 和引用校验报告保留冻结政策及分离的例外事件／操作权限。新可选字段不写入历史记录。两种配置仅剥离枚举列出的已批准新增项后，保留原路由／模型投影，不删除路由。[MLP2-K01–MLP2-K05](CONTRACT-market-linkage-p2.zh-CN.md) 定义传输细节。本记录对齐已批准范围和生成产物，不代表 live 数据或部署批准。
+
+OpenAPI 快照 SHA-256：`e1f840fbf03fcc868753b98e78185a6060e31ff9c46270a7d1e66b13c969c749`
+
+规范监控v2 OpenAPI快照SHA-256：`4149e96e4ce54f76bab84d0f36d6e9465040e3c9801732a413023015e3e87f80`
+
+生成TypeScript SHA-256：兼容版`931d2db0738738e47254afa858f26115fb531ba80f8cd3bf10bc9043e2d2f97a`；规范版`6f485c92d4470f4521b68d51a85f9be8af670ac4153ebf9a6ee9087abf7a7b0c`。

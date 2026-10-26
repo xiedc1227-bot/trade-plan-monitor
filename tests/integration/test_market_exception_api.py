@@ -89,6 +89,6 @@ def test_public_schema_advertises_complete_exception_policy(exception_chain):
     response = exception_chain.client.get("/api/v1/plan-editor-schema")
     assert response.status_code == 200
     data = response.json()
-    assert data["supportedSchemaVersions"] == [5, 6, 7]
+    assert data["supportedSchemaVersions"] == [5, 6, 7, 8]
     assert len(data["exceptionPolicyDefinitions"]) == 11
     assert data["exceptionCandidateSchema"]["properties"]["schema_version"]["const"] == 7

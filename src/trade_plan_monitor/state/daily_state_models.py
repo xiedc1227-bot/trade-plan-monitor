@@ -9,6 +9,7 @@ from trade_plan_monitor.ai.daily_review import DailySupplement
 from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
 from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
+from trade_plan_monitor.decision.p2_economics import EconomicsResult
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
@@ -20,6 +21,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
     WholeQty,
 )
 from trade_plan_monitor.domain.daily_scope import require_technical_text
+from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
@@ -92,6 +94,9 @@ class DailyFactState(DailyValue):
 
 
 class DailySignalState(DailyValue):
+    pretrade: FrozenPretrade | None = Field(default=None, exclude_if=lambda v: v is None)
+    pretrade_execution: EconomicsResult | None = Field(
+        default=None, exclude_if=lambda v: v is None)
     market_linkage: MarketExceptionDecision | MarketLinkageDecision | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
@@ -130,8 +135,20 @@ class DailySignalState(DailyValue):
     confirmed_at: ShanghaiDatetime | None = None
     revision: Qty | None = None
 
+    def validate_pretrade_linkage(self):
+        """Bind pretrade sizing to its full proof; report references validate after resolution."""
+        if self.pretrade is not None and (
+            self.market_linkage is None
+            or self.pretrade.rule_id != self.rule_id
+            or self.pretrade.decision_session != self.confirmed_trade_date
+            or self.pretrade.content_hash != self.market_linkage.content_hash
+            or self.pretrade.sizing.q0 != self.market_linkage.calculation.base_quantity
+        ):
+            raise ValueError("pretrade evidence differs from frozen signal authority")
+
     @model_validator(mode="after")
     def consumption(self):
+        self.validate_pretrade_linkage()
         if self.market_linkage is not None and (
             self.market_linkage.calculation.authorized_quantity != self.planned_qty
             or self.market_linkage.rule_id != self.rule_id
@@ -334,7 +351,7 @@ def validate_daily_payload(kind, value):
 
         model = (
             CurrentPlanExtractionResult
-            if value.get("draft", {}).get("schema_version") in {5, 6, 7}
+            if value.get("draft", {}).get("schema_version") in {5, 6, 7, 8}
             else HistoricalExtractionEvidence
         )
         model.model_validate(value)
@@ -440,6 +457,8 @@ class DailyRuleReminderState(DailyValue):
 
 
 class DailyEvaluationState(DailyValue):
+    pretrade: tuple[FrozenPretrade, ...] | None = Field(
+        default=None, max_length=2, exclude_if=lambda v: v is None)
     exception_candidates: tuple[ExceptionCandidateResource, ...] | None = Field(
         default=None, exclude_if=lambda v: v is None)
     linked_index_source: MarketIndexSnapshot | None = Field(

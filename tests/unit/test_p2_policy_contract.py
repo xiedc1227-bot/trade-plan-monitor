@@ -108,3 +108,37 @@ def test_p2_draft_and_plan_bind_new_review_domain():
         content, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
     ).encode()).hexdigest()
     assert daily_plan_content_sha256(plan) == daily_draft_content_sha256(draft) == expected
+
+
+def test_equivalent_decimal_spellings_have_identical_p2_review_hashes():
+    from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
+
+    raw = p2_payload()
+    original = P2TradePlan.model_validate(raw)
+    raw["ordinary_rules"][0]["pretrade_policy"]["sizing"]["tiers"][0]["upper"] = "0.0500"
+    assert daily_plan_content_sha256(P2TradePlan.model_validate(raw)) == (
+        daily_plan_content_sha256(original))
+
+
+def test_extreme_decimal_expansion_is_rejected_before_arithmetic():
+    raw = policy()
+    raw["sizing"]["tiers"][0]["upper"] = "1e-1000000000"
+    raw["sizing"]["tiers"][1]["lower"] = "1e-1000000000"
+    with pytest.raises(ValidationError):
+        PretradePolicy.model_validate(raw)
+
+
+def test_invalid_decimal_is_a_validation_error():
+    raw = policy()
+    raw["sizing"]["tiers"][0]["upper"] = "not-a-number"
+    with pytest.raises(ValidationError):
+        PretradePolicy.model_validate(raw)
+
+
+def test_nullable_draft_retains_collection_bounds():
+    from trade_plan_monitor.domain.p2_policy_drafts import DraftPretradePolicy
+
+    raw = policy()
+    raw["sizing"]["tiers"] *= 6
+    with pytest.raises(ValidationError):
+        DraftPretradePolicy.model_validate(raw)

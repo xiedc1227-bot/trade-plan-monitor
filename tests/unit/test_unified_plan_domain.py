@@ -344,8 +344,8 @@ def test_current_extraction_keeps_missing_review_and_mixed_conditions_visible():
 
     class Provider:
         async def extract_plan(self, request):
-            assert "plan-extract-v10" in request.prompt
-            assert request.config.prompt_version == "plan-extract-v10"
+            assert "plan-extract-v11" in request.prompt
+            assert request.config.prompt_version == "plan-extract-v11"
             return RawAIResponse(
                 request_id=identity,
                 provider_id=config.provider_id,

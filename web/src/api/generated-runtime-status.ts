@@ -1084,7 +1084,7 @@ export type CollectionAttemptView = {
 export type CollectionCandidateView = {
   candidateHash: string;
   confirmationSummary?: (components["schemas"]["PreparationConfirmationSummary"]) | (null);
-  draft?: ((components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 })) | (null);
+  draft?: ((components["schemas"]["P2PlanDraft"] & { schema_version: 8 }) | (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 })) | (null);
   evidenceHash: string;
   issues: Array<string>;
   kind: "INITIAL" | "UPDATE" | "MATERIALIZED" | "CORRECTED" | "UNAVAILABLE";
@@ -1106,7 +1106,7 @@ export type CollectionChainReviewDeclaration = {
 export type CollectionCorrectionDeclaration = {
   binding: components["schemas"]["CollectionItemReviewDeclaration"];
   confirmed: true;
-  draft?: ((components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
+  draft?: ((components["schemas"]["P2PlanDraftInput"] & { schema_version: 8 }) | (components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
   evidence: string;
   expected_revision: number;
   mapping?: (components["schemas"]["DailyMapping"]) | (null);
@@ -1326,6 +1326,7 @@ export type DailyAlertCenterView = {
   planId: string;
   planVersion: number;
   planVersionId: string;
+  pretradeMode?: ("NONE" | "PREVIEW_ONLY" | "REQUIRED") | (null);
   quantity: (number) | (null);
   reviewId: string;
   revision: number;
@@ -1363,6 +1364,7 @@ export type DailyAlertEvent = {
   plan_id: string;
   plan_version: number;
   plan_version_id: string;
+  pretrade_mode?: ("NONE" | "PREVIEW_ONLY" | "REQUIRED") | (null);
   quantity: (number) | (null);
   review_id: string;
   risk_scope: ({
@@ -1477,6 +1479,9 @@ export type DailyEditorSchemaView = {
   operationSchemas: {
     [key: string]: unknown;
   };
+  pretradeCandidateSchema: {
+    [key: string]: unknown;
+  };
   schemaVersion?: 5;
   supportedSchemaVersions?: Array<number>;
 };
@@ -1500,6 +1505,7 @@ export type DailyEvaluationApiView = {
   officialTradeDate: (string) | (null);
   planHash: string;
   planVersionId: string;
+  pretrade?: (Array<components["schemas"]["FrozenPretrade"]>) | (null);
   quote: (components["schemas"]["DailyExecutionQuote"]) | (null);
   reviewId: string;
   riskAction: components["schemas"]["DailyRiskActionApiView"];
@@ -1866,6 +1872,8 @@ export type DailySignalApiView = {
   occurrenceMode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   planVersionId: string;
   plannedQty: number;
+  pretrade?: (components["schemas"]["FrozenPretrade"]) | (null);
+  pretradeExecution?: (components["schemas"]["EconomicsResult"]) | (null);
   resetTradeDate?: (string) | (null);
   reviewId: string;
   revision?: (number) | (null);
@@ -1894,6 +1902,8 @@ export type DailySignalState = {
   occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   plan_version_id: string;
   planned_qty: number;
+  pretrade?: (components["schemas"]["FrozenPretrade"]) | (null);
+  pretrade_execution?: (components["schemas"]["EconomicsResult"]) | (null);
   reset_trade_date?: (string) | (null);
   review_id: string;
   revision?: (number) | (null);
@@ -2050,6 +2060,15 @@ export type DeliveryHealthView = {
   status: components["schemas"]["RuntimeResourceStatus"];
 };
 
+export type DerivedQuantityPolicy = {
+  capacity_policy: "BLOCK_FULL";
+  mode: "DERIVED_MARKET_FACTOR";
+  normal_factor: "1";
+  rounding: "LEGAL_FLOOR";
+  signal_quantity_policy: "FREEZE";
+  weak_factor: "0.5";
+};
+
 export type DiagnosticEvaluationCommand = {
   bucketEnd?: (string) | (null);
   evaluationKind: components["schemas"]["EvaluationKind"];
@@ -2068,6 +2087,41 @@ export type DiagnosticEvaluationView = {
   stateMutationApplied: false;
 };
 
+export type DraftDerivedQuantityPolicy = {
+  capacity_policy: ("BLOCK_FULL") | (null);
+  mode: ("DERIVED_MARKET_FACTOR") | (null);
+  normal_factor: ("1") | (null);
+  rounding: ("LEGAL_FLOOR") | (null);
+  signal_quantity_policy: ("FREEZE") | (null);
+  weak_factor: ("0.5") | (null);
+};
+
+export type DraftEconomicsGates = {
+  min_net_reward_fen: (number) | (null);
+  min_reward_risk_ratio: (string) | (null);
+};
+
+export type DraftEconomicsGatesInput = {
+  min_net_reward_fen: (number) | (null);
+  min_reward_risk_ratio: ((number) | (string)) | (null);
+};
+
+export type DraftEconomicsPreview = {
+  entry_price_mode: ("CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE") | (null);
+  fee_schedule: (components["schemas"]["DraftFeeSchedule"]) | (null);
+  mode: ("PREVIEW_ONLY") | (null);
+  risk_price_fen: (number) | (null);
+  target_price_fen: (number) | (null);
+};
+
+export type DraftEconomicsPreviewInput = {
+  entry_price_mode: ("CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE") | (null);
+  fee_schedule: (components["schemas"]["DraftFeeScheduleInput"]) | (null);
+  mode: ("PREVIEW_ONLY") | (null);
+  risk_price_fen: (number) | (null);
+  target_price_fen: (number) | (null);
+};
+
 export type DraftExceptionPolicy = {
   base_confirmation: ("S0") | (null);
   exception_policy: ("REVIEW_PER_OCCURRENCE") | (null);
@@ -2080,10 +2134,86 @@ export type DraftExceptionRoutes = {
   weak_minimum: ("DISABLED" | "PER_OCCURRENCE") | (null);
 };
 
+export type DraftFeeComponent = {
+  id: (string) | (null);
+  included_in: (string) | (null);
+  kind: ("TAX" | "TRANSFER" | "HANDLING") | (null);
+  rate: (string) | (null);
+  side: ("BUY" | "SELL" | "BOTH") | (null);
+};
+
+export type DraftFeeComponentInput = {
+  id: (string) | (null);
+  included_in: (string) | (null);
+  kind: ("TAX" | "TRANSFER" | "HANDLING") | (null);
+  rate: ((number) | (string)) | (null);
+  side: ("BUY" | "SELL" | "BOTH") | (null);
+};
+
+export type DraftFeeSchedule = {
+  buy_slippage_fen: (number) | (null);
+  commission_rate: (string) | (null);
+  components: (Array<components["schemas"]["DraftFeeComponent"]>) | (null);
+  currency: ("CNY") | (null);
+  effective_from: (string) | (null);
+  effective_through: (string) | (null);
+  minimum_commission_fen: (number) | (null);
+  provenance: (components["schemas"]["DraftProvenance"]) | (null);
+  schedule_id: (string) | (null);
+  sell_slippage_fen: (number) | (null);
+  symbols: (Array<string>) | (null);
+  version: (string) | (null);
+};
+
+export type DraftFeeScheduleInput = {
+  buy_slippage_fen: (number) | (null);
+  commission_rate: ((number) | (string)) | (null);
+  components: (Array<components["schemas"]["DraftFeeComponentInput"]>) | (null);
+  currency: ("CNY") | (null);
+  effective_from: (string) | (null);
+  effective_through: (string) | (null);
+  minimum_commission_fen: (number) | (null);
+  provenance: (components["schemas"]["DraftProvenance"]) | (null);
+  schedule_id: (string) | (null);
+  sell_slippage_fen: (number) | (null);
+  symbols: (Array<string>) | (null);
+  version: (string) | (null);
+};
+
+export type DraftLevelEvidence = {
+  as_of: (string) | (null);
+  dimension: ("PRICE_STRUCTURE" | "TREND" | "VOLUME_OR_CANDLE" | "VOLATILITY") | (null);
+  excerpt: (string) | (null);
+  indicator: (string) | (null);
+  level: ("PRESSURE" | "RISK") | (null);
+  source: (string) | (null);
+};
+
 export type DraftMarketPolicy = {
   base_confirmation: ("S0") | (null);
   exception_policy: ("BLOCK_P1") | (null);
   policy_version: ("market-linkage-v1") | (null);
+};
+
+export type DraftPretradePolicy = {
+  economics: (components["schemas"]["NoEconomics"]) | (components["schemas"]["DraftEconomicsPreview"]) | (components["schemas"]["DraftRequiredEconomics"]) | (null);
+  level_evidence: (Array<components["schemas"]["DraftLevelEvidence"]>) | (null);
+  policy_version: ("pretrade-policy-v1") | (null);
+  sizing: (components["schemas"]["FixedSizing"]) | (components["schemas"]["DraftTierSizing"]) | (null);
+};
+
+export type DraftPretradePolicyInput = {
+  economics: (components["schemas"]["NoEconomics"]) | (components["schemas"]["DraftEconomicsPreviewInput"]) | (components["schemas"]["DraftRequiredEconomicsInput"]) | (null);
+  level_evidence: (Array<components["schemas"]["DraftLevelEvidence"]>) | (null);
+  policy_version: ("pretrade-policy-v1") | (null);
+  sizing: (components["schemas"]["FixedSizing"]) | (components["schemas"]["DraftTierSizingInput"]) | (null);
+};
+
+export type DraftProvenance = {
+  as_of: (string) | (null);
+  classification: ("ESTIMATE") | (null);
+  excerpt: (string) | (null);
+  source: (string) | (null);
 };
 
 export type DraftQuantityPolicy = {
@@ -2096,11 +2226,55 @@ export type DraftQuantityPolicy = {
   weak_factor: ("0.5") | (null);
 };
 
+export type DraftRequiredEconomics = {
+  entry_price_mode: ("CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE") | (null);
+  fee_schedule: (components["schemas"]["DraftFeeSchedule"]) | (null);
+  gates: (components["schemas"]["DraftEconomicsGates"]) | (null);
+  mode: ("REQUIRED") | (null);
+  risk_price_fen: (number) | (null);
+  target_price_fen: (number) | (null);
+};
+
+export type DraftRequiredEconomicsInput = {
+  entry_price_mode: ("CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE") | (null);
+  fee_schedule: (components["schemas"]["DraftFeeScheduleInput"]) | (null);
+  gates: (components["schemas"]["DraftEconomicsGatesInput"]) | (null);
+  mode: ("REQUIRED") | (null);
+  risk_price_fen: (number) | (null);
+  target_price_fen: (number) | (null);
+};
+
 export type DraftReviewIssue = {
   kind: components["schemas"]["ReviewIssueKind"];
   material: boolean;
   path: string;
   resolved?: boolean;
+};
+
+export type DraftTierSizing = {
+  base_qty: (number) | (null);
+  metric: ("ATR14_OVER_CLOSE") | (null);
+  mode: ("ATR_RATIO_TIERS") | (null);
+  tiers: (Array<components["schemas"]["DraftVolatilityTier"]>) | (null);
+};
+
+export type DraftTierSizingInput = {
+  base_qty: (number) | (null);
+  metric: ("ATR14_OVER_CLOSE") | (null);
+  mode: ("ATR_RATIO_TIERS") | (null);
+  tiers: (Array<components["schemas"]["DraftVolatilityTierInput"]>) | (null);
+};
+
+export type DraftVolatilityTier = {
+  lower: (string) | (null);
+  multiplier: (string) | (null);
+  upper: (string) | (null);
+};
+
+export type DraftVolatilityTierInput = {
+  lower: ((number) | (string)) | (null);
+  multiplier: ((number) | (string)) | (null);
+  upper: ((number) | (string)) | (null);
 };
 
 export type DynamicDailyReference = {
@@ -2111,6 +2285,57 @@ export type DynamicDailyReference = {
   parameters: {
     [key: string]: number;
   };
+};
+
+export type EconomicsGates = {
+  min_net_reward_fen: (number) | (null);
+  min_reward_risk_ratio: (string) | (null);
+};
+
+export type EconomicsGatesInput = {
+  min_net_reward_fen: (number) | (null);
+  min_reward_risk_ratio: ((number) | (string)) | (null);
+};
+
+export type EconomicsPreview = {
+  entry_price_mode: "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE";
+  fee_schedule: components["schemas"]["FeeSchedule"];
+  mode: "PREVIEW_ONLY";
+  risk_price_fen: number;
+  target_price_fen: number;
+};
+
+export type EconomicsPreviewInput = {
+  entry_price_mode: "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE";
+  fee_schedule: components["schemas"]["FeeScheduleInput"];
+  mode: "PREVIEW_ONLY";
+  risk_price_fen: number;
+  target_price_fen: number;
+};
+
+export type EconomicsResult = {
+  blockers?: Array<string>;
+  entry_debit_fen?: (number) | (null);
+  entry_fees?: ({
+    [key: string]: number;
+  }) | (null);
+  net_reward_fen?: (number) | (null);
+  outcome: "NONE" | "PASS" | "FAIL" | "UNKNOWN";
+  planned_loss_fen?: (number) | (null);
+  quantity?: (number) | (null);
+  reason?: (string) | (null);
+  risk_fees?: ({
+    [key: string]: number;
+  }) | (null);
+  risk_proceeds_fen?: (number) | (null);
+  spread_denominator?: (number) | (null);
+  spread_numerator?: (number) | (null);
+  target_fees?: ({
+    [key: string]: number;
+  }) | (null);
+  target_proceeds_fen?: (number) | (null);
+  total_cost_fen?: (number) | (null);
+  version?: "p2-economics-v1";
 };
 
 export type EpisodeStatus = "ACTIVE" | "ALERTED" | "CLOSED";
@@ -2151,6 +2376,7 @@ export type ExceptionAuthorityContext = {
   capacity: (number) | (null);
   evaluation_revision: number;
   inventory_revision: number;
+  pretrade?: (components["schemas"]["P2EconomicsContext"]) | (null);
 };
 
 export type ExceptionBinding = {
@@ -2273,6 +2499,7 @@ export type ExceptionPreviewApiView = {
   candidateId: string;
   createdAt: string;
   current: components["schemas"]["ExceptionAuthorityContext"];
+  economics?: (components["schemas"]["EconomicsResult"]) | (null);
   expectedRevision: number;
   previewHash: string;
   previewId: string;
@@ -2333,6 +2560,7 @@ export type ExceptionSignalSeed = {
   evidence: Array<components["schemas"]["UnifiedConditionEvidence"]>;
   evidence_fingerprint: string;
   occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
+  pretrade?: (components["schemas"]["FrozenPretrade"]) | (null);
   signal_id: string;
 };
 
@@ -2341,6 +2569,7 @@ export type ExceptionSignalSeedInput = {
   evidence: Array<components["schemas"]["UnifiedConditionEvidenceInput"]>;
   evidence_fingerprint: string;
   occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
+  pretrade?: (components["schemas"]["FrozenPretradeInput"]) | (null);
   signal_id: string;
 };
 
@@ -2398,6 +2627,7 @@ export type ExplicitPlanCapabilityView = {
   isolatedTrustedReviewOnly?: false;
   linkedExecutionVersion?: "condition-plan-v2";
   pendingRequirements?: Array<string>;
+  pretradeExecutionVersion?: "condition-plan-v4";
   publicActivationAvailable?: true;
   schemaVersion?: 5;
   supportedActions?: Array<"BUY" | "SELL" | "RISK_ALERT">;
@@ -2449,6 +2679,52 @@ export type ExtractionIssue = {
   path: string;
 };
 
+export type FeeComponent = {
+  id: string;
+  included_in: (string) | (null);
+  kind: "TAX" | "TRANSFER" | "HANDLING";
+  rate: string;
+  side: "BUY" | "SELL" | "BOTH";
+};
+
+export type FeeComponentInput = {
+  id: string;
+  included_in: (string) | (null);
+  kind: "TAX" | "TRANSFER" | "HANDLING";
+  rate: (number) | (string);
+  side: "BUY" | "SELL" | "BOTH";
+};
+
+export type FeeSchedule = {
+  buy_slippage_fen: number;
+  commission_rate: string;
+  components: Array<components["schemas"]["FeeComponent"]>;
+  currency: "CNY";
+  effective_from: string;
+  effective_through: string;
+  minimum_commission_fen: number;
+  provenance: components["schemas"]["Provenance"];
+  schedule_id: string;
+  sell_slippage_fen: number;
+  symbols: Array<string>;
+  version: string;
+};
+
+export type FeeScheduleInput = {
+  buy_slippage_fen: number;
+  commission_rate: (number) | (string);
+  components: Array<components["schemas"]["FeeComponentInput"]>;
+  currency: "CNY";
+  effective_from: string;
+  effective_through: string;
+  minimum_commission_fen: number;
+  provenance: components["schemas"]["Provenance"];
+  schedule_id: string;
+  sell_slippage_fen: number;
+  symbols: Array<string>;
+  version: string;
+};
+
 export type FieldBindingView = {
   bindingKind?: components["schemas"]["BindingKind"];
   clauseIds?: Array<string>;
@@ -2495,6 +2771,10 @@ export type FixedDailyReferenceInput = {
   value: (number) | (string);
 };
 
+export type FixedSizing = {
+  mode: "FIXED_Q0";
+};
+
 export type FrozenExceptionEvent = {
   candidate: components["schemas"]["ExceptionCandidateInput"];
   decision: components["schemas"]["MarketExceptionDecisionInput"];
@@ -2504,6 +2784,30 @@ export type FrozenExceptionEvent = {
   plan_hash: string;
   provenance: "RECORDED_LOCAL" | "RESEARCH_SCENARIO";
   schema_version?: "frozen-exception-event-v1";
+};
+
+export type FrozenPretrade = {
+  content_hash: string;
+  cutoff: string;
+  decision_session: string;
+  economics: (components["schemas"]["EconomicsResult"]) | (null);
+  evidence_hash: string;
+  policy: components["schemas"]["PretradePolicy"];
+  rule_id: string;
+  sizing: components["schemas"]["SizingResult"];
+  version?: "p2-pretrade-evidence-v1";
+};
+
+export type FrozenPretradeInput = {
+  content_hash: string;
+  cutoff: string;
+  decision_session: string;
+  economics: (components["schemas"]["EconomicsResult"]) | (null);
+  evidence_hash: string;
+  policy: components["schemas"]["PretradePolicyInput"];
+  rule_id: string;
+  sizing: components["schemas"]["SizingResultInput"];
+  version?: "p2-pretrade-evidence-v1";
 };
 
 export type IndexConditionEvidenceView = {
@@ -2616,6 +2920,15 @@ export type LegacyPlanPreviewResponse = {
   available: boolean;
   fingerprint?: (string) | (null);
   plans?: Array<components["schemas"]["LegacyPlanItemView"]>;
+};
+
+export type LevelEvidence = {
+  as_of: (string) | (null);
+  dimension: "PRICE_STRUCTURE" | "TREND" | "VOLUME_OR_CANDLE" | "VOLATILITY";
+  excerpt: string;
+  indicator: (string) | (null);
+  level: "PRESSURE" | "RISK";
+  source: string;
 };
 
 export type LinkedDraftRisk = {
@@ -2903,7 +3216,7 @@ export type LoopPlanVersion = {
   information_cutoff: string;
   plan_hash: string;
   review: components["schemas"]["LoopPlanReview"];
-  snapshot: (components["schemas"]["MarketExceptionTradePlan"]) | (components["schemas"]["MarketLinkedTradePlan"]) | (components["schemas"]["UnifiedTradePlan"]);
+  snapshot: (components["schemas"]["P2TradePlan"]) | (components["schemas"]["MarketExceptionTradePlan"]) | (components["schemas"]["MarketLinkedTradePlan"]) | (components["schemas"]["UnifiedTradePlan"]);
   source_hashes: Array<string>;
   version_id: string;
 };
@@ -3537,6 +3850,10 @@ export type NextStepView = {
   requiredInputs?: Array<components["schemas"]["MissingInputCode"]>;
 };
 
+export type NoEconomics = {
+  mode: "NONE";
+};
+
 export type ObsoleteDailyAlertView = {
   acknowledgedAt: (string) | (null);
   createdAt: string;
@@ -3654,6 +3971,147 @@ export type OperationReceipt = {
   submittedAt: string;
 };
 
+export type P2DraftRule = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" })) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  market_policy: (components["schemas"]["DraftExceptionPolicy"]) | (null);
+  pretrade_policy: (components["schemas"]["DraftPretradePolicy"]) | (null);
+  quantity_policy: (components["schemas"]["DraftQuantityPolicy"]) | (components["schemas"]["DraftDerivedQuantityPolicy"]) | (null);
+  rule_id: (string) | (null);
+  side: ("BUY") | (null);
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY") | (null);
+};
+
+export type P2DraftRuleInput = {
+  bucket: ("TACTICAL") | (null);
+  condition: ((components["schemas"]["UnifiedPriceCompareInput"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatioInput"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatioInput"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompareInput"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequenceInput"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGteInput"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAllInput"] & { type: "ALL" }) | (components["schemas"]["UnifiedAnyInput"] & { type: "ANY" })) | (null);
+  confirmation: ((components["schemas"]["OfficialDailyConfirmation"] & { kind: "OFFICIAL_DAILY_CLOSE" }) | (components["schemas"]["CompletedMinuteConfirmation"] & { kind: "COMPLETED_BAR_CLOSE" })) | (null);
+  execution_window: ("NEXT_EXCHANGE_SESSION_ONLY") | (null);
+  independent_signal: ((components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicyInput"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" })) | (null);
+  invalidation: ("RISK_OR_REVIEWED_INVALIDATION") | (null);
+  market_policy: (components["schemas"]["DraftExceptionPolicy"]) | (null);
+  pretrade_policy: (components["schemas"]["DraftPretradePolicyInput"]) | (null);
+  quantity_policy: (components["schemas"]["DraftQuantityPolicy"]) | (components["schemas"]["DraftDerivedQuantityPolicy"]) | (null);
+  rule_id: (string) | (null);
+  side: ("BUY") | (null);
+  status: ("ENABLED") | (null);
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]) | (null);
+  zone: ("LOW_BUY") | (null);
+};
+
+export type P2EconomicsContext = {
+  entry_fen: (number) | (null);
+  policy: (components["schemas"]["NoEconomics"] & { mode: "NONE" }) | (components["schemas"]["EconomicsPreview"] & { mode: "PREVIEW_ONLY" }) | (components["schemas"]["RequiredEconomics"] & { mode: "REQUIRED" });
+  session: string;
+  symbol: string;
+};
+
+export type P2PlanDraft = {
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v4";
+  levels: (components["schemas"]["UnifiedDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["P2DraftRule"]) | (components["schemas"]["UnifiedDraftRule"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  reference_market: (components["schemas"]["ReferenceMarketBinding"]) | (null);
+  risk_branches: Array<components["schemas"]["LinkedDraftRisk"]>;
+  schema_version?: 8;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type P2PlanDraftInput = {
+  activation: ((components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" })) | (null);
+  alert_rules?: Array<components["schemas"]["UnifiedDraftAlertRuleInput"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: (components["schemas"]["UnifiedExecutionPolicy"]) | (null);
+  execution_version?: "condition-plan-v4";
+  levels: (components["schemas"]["UnifiedDraftLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["P2DraftRuleInput"]) | (components["schemas"]["UnifiedDraftRuleInput"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedDraftPosition"];
+  reference_market: (components["schemas"]["ReferenceMarketBinding"]) | (null);
+  risk_branches: Array<components["schemas"]["LinkedDraftRiskInput"]>;
+  schema_version?: 8;
+  symbol: string;
+  trading_rules?: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
+export type P2PreviewCommand = {
+  occurrenceId?: (string) | (null);
+  planVersionId: string;
+  proposedQuantity?: (number) | (null);
+  ruleId: string;
+};
+
+export type P2PreviewView = {
+  authorityGranted?: false;
+  computedAt: string;
+  economics: components["schemas"]["EconomicsResult"];
+  evidence: components["schemas"]["FrozenPretrade"];
+  planVersionId: string;
+  quantity: (number) | (null);
+  ruleId: string;
+};
+
+export type P2Rule = {
+  bucket: "TACTICAL";
+  condition: (components["schemas"]["UnifiedPriceCompare"] & { type: "DAILY_PRICE_COMPARE" }) | (components["schemas"]["DailyPriceInRange"] & { type: "DAILY_PRICE_IN_RANGE" }) | (components["schemas"]["DailyVolumeRatio"] & { type: "DAILY_VOLUME_RATIO" }) | (components["schemas"]["DailyCandleRatio"] & { type: "DAILY_CANDLE_RATIO" }) | (components["schemas"]["DailyIndicatorCompare"] & { type: "DAILY_INDICATOR_COMPARE" }) | (components["schemas"]["DailyCloseSequence"] & { type: "DAILY_CLOSE_SEQUENCE" }) | (components["schemas"]["DailyPriorClose"] & { type: "DAILY_PRIOR_CLOSE" }) | (components["schemas"]["ReviewedDailyFact"] & { type: "REVIEWED_FACT" }) | (components["schemas"]["MinuteCloseInRange"] & { type: "MINUTE_CLOSE_IN_RANGE" }) | (components["schemas"]["MinuteCloseBelow"] & { type: "MINUTE_CLOSE_BELOW" }) | (components["schemas"]["MinuteVolumeToMeanGte"] & { type: "MINUTE_VOLUME_TO_MEAN_GTE" }) | (components["schemas"]["UnifiedAll"] & { type: "ALL" }) | (components["schemas"]["UnifiedAny"] & { type: "ANY" });
+  confirmation: components["schemas"]["OfficialDailyConfirmation"];
+  execution_window: "NEXT_EXCHANGE_SESSION_ONLY";
+  independent_signal: (components["schemas"]["DailyIndependentEvent"] & { mode: "REVIEWED_INDEPENDENT_EVENT" }) | (components["schemas"]["UnifiedResetPolicy"] & { mode: "LATER_CLOSE_RESET_THEN_CONFIRM" }) | (components["schemas"]["OncePerRule"] & { mode: "ONCE_PER_RULE" }) | (components["schemas"]["AfterRuleCompleted"] & { mode: "AFTER_RULE_COMPLETED" });
+  invalidation: "RISK_OR_REVIEWED_INVALIDATION";
+  market_policy: components["schemas"]["MarketExceptionPolicy"];
+  pretrade_policy: components["schemas"]["PretradePolicy"];
+  quantity_policy: (components["schemas"]["QuantityPolicy"] & { mode: "MARKET_FACTOR" }) | (components["schemas"]["DerivedQuantityPolicy"] & { mode: "DERIVED_MARKET_FACTOR" });
+  rule_id: string;
+  side: "BUY";
+  status: "ENABLED";
+  validity: (components["schemas"]["PlanActiveValidity"]) | (components["schemas"]["DailyValidity"]);
+  zone: "LOW_BUY";
+};
+
+export type P2TradePlan = {
+  activation: (components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" });
+  alert_rules?: Array<components["schemas"]["UnifiedAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: components["schemas"]["UnifiedExecutionPolicy"];
+  execution_version?: "condition-plan-v4";
+  levels: (components["schemas"]["UnifiedLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["P2Rule"]) | (components["schemas"]["UnifiedRule"])>;
+  plan_id: string;
+  position: components["schemas"]["UnifiedPositionPolicy"];
+  reference_market: components["schemas"]["ReferenceMarketBinding"];
+  risk_branches: Array<components["schemas"]["UnifiedRiskBranch"]>;
+  schema_version?: 8;
+  symbol: string;
+  trading_rules: components["schemas"]["DailyTradingRules"];
+  version: number;
+};
+
 export type PlanActivationCommand = {
   contentHash?: (string) | (null);
   expectedRevision: number;
@@ -3673,7 +4131,7 @@ export type PlanCandidateReview = {
   available_at: (string) | (null);
   bindings: Array<components["schemas"]["SourceBoundField"]>;
   changes?: Array<components["schemas"]["PlanChange"]>;
-  draft: (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
+  draft: (components["schemas"]["P2PlanDraft"] & { schema_version: 8 }) | (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   issues: Array<string>;
   schema_version?: "monitor-loop-candidate-evidence-v1";
   source_hash: string;
@@ -3793,7 +4251,7 @@ export type PlanUpdateExtractionOutput = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   clauses: Array<components["schemas"]["DailyClause"]>;
-  draft: (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
+  draft: (components["schemas"]["P2PlanDraft"] & { schema_version: 8 }) | (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   inheritance_mode?: "LEGACY" | "PREDECESSOR_PATCH";
   operations: Array<components["schemas"]["PlanUpdateOperation"]>;
   retain_unmentioned: (boolean) | (null);
@@ -3808,7 +4266,7 @@ export type PlanUpdateExtractionOutputInput = {
   assumptions?: Array<components["schemas"]["ExtractionIssue"]>;
   bindings: Array<components["schemas"]["DailyFieldBinding"]>;
   clauses: Array<components["schemas"]["DailyClause"]>;
-  draft: (components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 });
+  draft: (components["schemas"]["P2PlanDraftInput"] & { schema_version: 8 }) | (components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 });
   inheritance_mode?: "LEGACY" | "PREDECESSOR_PATCH";
   operations: Array<components["schemas"]["PlanUpdateOperation"]>;
   retain_unmentioned: (boolean) | (null);
@@ -3962,7 +4420,7 @@ export type PreparationCreateCommand = {
 export type PreparationExtractionCandidate = {
   candidateHash: string;
   confirmationSummary?: (components["schemas"]["PreparationConfirmationSummary"]) | (null);
-  draft: (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
+  draft: (components["schemas"]["P2PlanDraft"] & { schema_version: 8 }) | (components["schemas"]["MarketExceptionPlanDraft"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraft"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraft"] & { schema_version: 5 });
   evidenceHash: string;
   frozen?: null;
   issues: Array<string>;
@@ -4023,7 +4481,7 @@ export type PreparationReviewDeclaration = {
   account?: (components["schemas"]["LoopAccountInput"]) | (null);
   candidate_hash: string;
   confirmed: true;
-  draft?: ((components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
+  draft?: ((components["schemas"]["P2PlanDraftInput"] & { schema_version: 8 }) | (components["schemas"]["MarketExceptionPlanDraftInput"] & { schema_version: 7 }) | (components["schemas"]["MarketLinkedPlanDraftInput"] & { schema_version: 6 }) | (components["schemas"]["UnifiedPlanDraftInput"] & { schema_version: 5 })) | (null);
   evidence: string;
   evidence_hash: string;
   expected_candidate_revision: number;
@@ -4104,12 +4562,33 @@ export type PreparedPlanCompositionInput = {
   preparation_id: string;
 };
 
+export type PretradePolicy = {
+  economics: (components["schemas"]["NoEconomics"] & { mode: "NONE" }) | (components["schemas"]["EconomicsPreview"] & { mode: "PREVIEW_ONLY" }) | (components["schemas"]["RequiredEconomics"] & { mode: "REQUIRED" });
+  level_evidence: Array<components["schemas"]["LevelEvidence"]>;
+  policy_version: "pretrade-policy-v1";
+  sizing: (components["schemas"]["FixedSizing"] & { mode: "FIXED_Q0" }) | (components["schemas"]["TierSizing"] & { mode: "ATR_RATIO_TIERS" });
+};
+
+export type PretradePolicyInput = {
+  economics: (components["schemas"]["NoEconomics"] & { mode: "NONE" }) | (components["schemas"]["EconomicsPreviewInput"] & { mode: "PREVIEW_ONLY" }) | (components["schemas"]["RequiredEconomicsInput"] & { mode: "REQUIRED" });
+  level_evidence: Array<components["schemas"]["LevelEvidence"]>;
+  policy_version: "pretrade-policy-v1";
+  sizing: (components["schemas"]["FixedSizing"] & { mode: "FIXED_Q0" }) | (components["schemas"]["TierSizingInput"] & { mode: "ATR_RATIO_TIERS" });
+};
+
 export type ProductSourceTreatmentView = {
   contractId: "alert-position-isolation-v1";
   guarantee: "ALERTS_AND_ACKNOWLEDGEMENTS_DO_NOT_CHANGE_POSITIONS";
   kind: "PRODUCT_GUARANTEE";
   spans: Array<components["schemas"]["SourceSpanView"]>;
   treatmentId: string;
+};
+
+export type Provenance = {
+  as_of: (string) | (null);
+  classification: "ESTIMATE";
+  excerpt: string;
+  source: string;
 };
 
 export type ProviderCapabilityStatus = "UNVERIFIED" | "READY" | "BLOCKED_PERMISSION" | "RATE_LIMITED" | "ERROR";
@@ -4214,6 +4693,24 @@ export type RelativeStrengthEvidenceInput = {
   strength: "STRONG" | "NOT_STRONG" | "UNKNOWN";
 };
 
+export type RequiredEconomics = {
+  entry_price_mode: "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE";
+  fee_schedule: components["schemas"]["FeeSchedule"];
+  gates: components["schemas"]["EconomicsGates"];
+  mode: "REQUIRED";
+  risk_price_fen: number;
+  target_price_fen: number;
+};
+
+export type RequiredEconomicsInput = {
+  entry_price_mode: "CONFIRMED_CLOSE_THEN_EXECUTION_QUOTE";
+  fee_schedule: components["schemas"]["FeeScheduleInput"];
+  gates: components["schemas"]["EconomicsGatesInput"];
+  mode: "REQUIRED";
+  risk_price_fen: number;
+  target_price_fen: number;
+};
+
 export type RequiredReviewIssueView = {
   allowedResolutions: Array<components["schemas"]["ReviewResolutionKind"]>;
   bindingPath?: (string) | (null);
@@ -4275,6 +4772,7 @@ export type ResearchDecisionEvent = {
   risks: Array<components["schemas"]["DailyRiskState"]>;
   schema_version?: "unified-research-decision-v1";
   signal_linkage?: (Array<components["schemas"]["MarketExceptionDecision"]>) | (null);
+  signal_pretrade?: (Array<components["schemas"]["FrozenPretrade"]>) | (null);
   signals: Array<(components["schemas"]["ResearchSignalReference"]) | (components["schemas"]["DailySignalState"])>;
 };
 
@@ -4428,6 +4926,8 @@ export type ResearchSignalReference = {
   occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
   plan_version_id: string;
   planned_qty: number;
+  pretrade_execution?: (components["schemas"]["EconomicsResult"]) | (null);
+  pretrade_ref?: (string) | (null);
   reset_trade_date?: (string) | (null);
   review_id: string;
   revision?: (number) | (null);
@@ -4718,6 +5218,22 @@ export type SingleSourcePreparationInput = {
   source: components["schemas"]["PreparationSource"];
 };
 
+export type SizingResult = {
+  atr_fen: (string) | (null);
+  blocker: (string) | (null);
+  close_fen: (string) | (null);
+  q0: (number) | (null);
+  tier_index: (number) | (null);
+};
+
+export type SizingResultInput = {
+  atr_fen: ((number) | (string)) | (null);
+  blocker: (string) | (null);
+  close_fen: ((number) | (string)) | (null);
+  q0: (number) | (null);
+  tier_index: (number) | (null);
+};
+
 export type SmaFactRequest = {
   formula_id?: "SMA";
   period: number;
@@ -4820,6 +5336,20 @@ export type SymbolReferenceMarketView = {
   issues: Array<components["schemas"]["MarketIndexIssueCode"]>;
   mappingVersion: "board-index-map-v1";
   snapshotHash: (string) | (null);
+};
+
+export type TierSizing = {
+  base_qty: number;
+  metric: "ATR14_OVER_CLOSE";
+  mode: "ATR_RATIO_TIERS";
+  tiers: Array<components["schemas"]["VolatilityTier"]>;
+};
+
+export type TierSizingInput = {
+  base_qty: number;
+  metric: "ATR14_OVER_CLOSE";
+  mode: "ATR_RATIO_TIERS";
+  tiers: Array<components["schemas"]["VolatilityTierInput"]>;
 };
 
 export type TradingDay = {
@@ -5202,6 +5732,18 @@ export type ValidationIssue = {
 
 export type ValidationSeverity = "ERROR" | "WARNING";
 
+export type VolatilityTier = {
+  lower: string;
+  multiplier: string;
+  upper: (string) | (null);
+};
+
+export type VolatilityTierInput = {
+  lower: (number) | (string);
+  multiplier: (number) | (string);
+  upper: ((number) | (string)) | (null);
+};
+
 export type WorkbenchBacktestDataView = {
   blockers: Array<string>;
   endDate: string;
@@ -5536,14 +6078,39 @@ export interface components {
     DecisionEvidenceView: DecisionEvidenceView;
     DecisionZone: DecisionZone;
     DeliveryHealthView: DeliveryHealthView;
+    DerivedQuantityPolicy: DerivedQuantityPolicy;
     DiagnosticEvaluationCommand: DiagnosticEvaluationCommand;
     DiagnosticEvaluationView: DiagnosticEvaluationView;
+    DraftDerivedQuantityPolicy: DraftDerivedQuantityPolicy;
+    DraftEconomicsGates: DraftEconomicsGates;
+    DraftEconomicsGatesInput: DraftEconomicsGatesInput;
+    DraftEconomicsPreview: DraftEconomicsPreview;
+    DraftEconomicsPreviewInput: DraftEconomicsPreviewInput;
     DraftExceptionPolicy: DraftExceptionPolicy;
     DraftExceptionRoutes: DraftExceptionRoutes;
+    DraftFeeComponent: DraftFeeComponent;
+    DraftFeeComponentInput: DraftFeeComponentInput;
+    DraftFeeSchedule: DraftFeeSchedule;
+    DraftFeeScheduleInput: DraftFeeScheduleInput;
+    DraftLevelEvidence: DraftLevelEvidence;
     DraftMarketPolicy: DraftMarketPolicy;
+    DraftPretradePolicy: DraftPretradePolicy;
+    DraftPretradePolicyInput: DraftPretradePolicyInput;
+    DraftProvenance: DraftProvenance;
     DraftQuantityPolicy: DraftQuantityPolicy;
+    DraftRequiredEconomics: DraftRequiredEconomics;
+    DraftRequiredEconomicsInput: DraftRequiredEconomicsInput;
     DraftReviewIssue: DraftReviewIssue;
+    DraftTierSizing: DraftTierSizing;
+    DraftTierSizingInput: DraftTierSizingInput;
+    DraftVolatilityTier: DraftVolatilityTier;
+    DraftVolatilityTierInput: DraftVolatilityTierInput;
     DynamicDailyReference: DynamicDailyReference;
+    EconomicsGates: EconomicsGates;
+    EconomicsGatesInput: EconomicsGatesInput;
+    EconomicsPreview: EconomicsPreview;
+    EconomicsPreviewInput: EconomicsPreviewInput;
+    EconomicsResult: EconomicsResult;
     EpisodeStatus: EpisodeStatus;
     ErrorDetail: ErrorDetail;
     ErrorPayload: ErrorPayload;
@@ -5580,12 +6147,19 @@ export interface components {
     ExplicitPlanRuntimeView: ExplicitPlanRuntimeView;
     ExplicitRuleOutcomeView: ExplicitRuleOutcomeView;
     ExtractionIssue: ExtractionIssue;
+    FeeComponent: FeeComponent;
+    FeeComponentInput: FeeComponentInput;
+    FeeSchedule: FeeSchedule;
+    FeeScheduleInput: FeeScheduleInput;
     FieldBindingView: FieldBindingView;
     FieldEvidence: FieldEvidence;
     FiveMinuteBar: FiveMinuteBar;
     FixedDailyReference: FixedDailyReference;
     FixedDailyReferenceInput: FixedDailyReferenceInput;
+    FixedSizing: FixedSizing;
     FrozenExceptionEvent: FrozenExceptionEvent;
+    FrozenPretrade: FrozenPretrade;
+    FrozenPretradeInput: FrozenPretradeInput;
     IndexConditionEvidenceView: IndexConditionEvidenceView;
     IndexConditionProgressView: IndexConditionProgressView;
     IndexScopeView: IndexScopeView;
@@ -5599,6 +6173,7 @@ export interface components {
     LegacyPlanInvalidateResult: LegacyPlanInvalidateResult;
     LegacyPlanItemView: LegacyPlanItemView;
     LegacyPlanPreviewResponse: LegacyPlanPreviewResponse;
+    LevelEvidence: LevelEvidence;
     LinkedDraftRisk: LinkedDraftRisk;
     LinkedDraftRiskInput: LinkedDraftRiskInput;
     LinkedIndexFacts: LinkedIndexFacts;
@@ -5683,6 +6258,7 @@ export interface components {
     MonitorLoopReport: MonitorLoopReport;
     NextStepCode: NextStepCode;
     NextStepView: NextStepView;
+    NoEconomics: NoEconomics;
     ObsoleteDailyAlertView: ObsoleteDailyAlertView;
     OfficialCloseDiagnosticIdentityView: OfficialCloseDiagnosticIdentityView;
     OfficialCloseTargetView: OfficialCloseTargetView;
@@ -5699,6 +6275,15 @@ export interface components {
     OpeningLotFacts: OpeningLotFacts;
     OperationKind: OperationKind;
     OperationReceipt: OperationReceipt;
+    P2DraftRule: P2DraftRule;
+    P2DraftRuleInput: P2DraftRuleInput;
+    P2EconomicsContext: P2EconomicsContext;
+    P2PlanDraft: P2PlanDraft;
+    P2PlanDraftInput: P2PlanDraftInput;
+    P2PreviewCommand: P2PreviewCommand;
+    P2PreviewView: P2PreviewView;
+    P2Rule: P2Rule;
+    P2TradePlan: P2TradePlan;
     PlanActivationCommand: PlanActivationCommand;
     PlanActiveValidity: PlanActiveValidity;
     PlanCandidateReview: PlanCandidateReview;
@@ -5746,7 +6331,10 @@ export interface components {
     PreparedBacktestDataView: PreparedBacktestDataView;
     PreparedBacktestRunCommand: PreparedBacktestRunCommand;
     PreparedPlanCompositionInput: PreparedPlanCompositionInput;
+    PretradePolicy: PretradePolicy;
+    PretradePolicyInput: PretradePolicyInput;
     ProductSourceTreatmentView: ProductSourceTreatmentView;
+    Provenance: Provenance;
     ProviderCapabilityStatus: ProviderCapabilityStatus;
     ProviderHealthView: ProviderHealthView;
     ProviderScopeView: ProviderScopeView;
@@ -5755,6 +6343,8 @@ export interface components {
     ReferenceMarketBinding: ReferenceMarketBinding;
     RelativeStrengthEvidence: RelativeStrengthEvidence;
     RelativeStrengthEvidenceInput: RelativeStrengthEvidenceInput;
+    RequiredEconomics: RequiredEconomics;
+    RequiredEconomicsInput: RequiredEconomicsInput;
     RequiredReviewIssueView: RequiredReviewIssueView;
     ResearchAdjustmentProof: ResearchAdjustmentProof;
     ResearchConditionEvidence: ResearchConditionEvidence;
@@ -5812,6 +6402,8 @@ export interface components {
     SimulationReceipt: SimulationReceipt;
     SinglePlanPreparationInput: SinglePlanPreparationInput;
     SingleSourcePreparationInput: SingleSourcePreparationInput;
+    SizingResult: SizingResult;
+    SizingResultInput: SizingResultInput;
     SmaFactRequest: SmaFactRequest;
     SmaIndicatorFactView: SmaIndicatorFactView;
     SmaLookbackFactRequest: SmaLookbackFactRequest;
@@ -5825,6 +6417,8 @@ export interface components {
     SymbolEventType: SymbolEventType;
     SymbolEventView: SymbolEventView;
     SymbolReferenceMarketView: SymbolReferenceMarketView;
+    TierSizing: TierSizing;
+    TierSizingInput: TierSizingInput;
     TradingDay: TradingDay;
     UnavailablePlanEntryView: UnavailablePlanEntryView;
     UnfilledReason: UnfilledReason;
@@ -5865,6 +6459,8 @@ export interface components {
     UserSupplementView: UserSupplementView;
     ValidationIssue: ValidationIssue;
     ValidationSeverity: ValidationSeverity;
+    VolatilityTier: VolatilityTier;
+    VolatilityTierInput: VolatilityTierInput;
     WorkbenchBacktestDataView: WorkbenchBacktestDataView;
     WorkbenchBacktestRunCommand: WorkbenchBacktestRunCommand;
     WorkbenchBacktestRunView: WorkbenchBacktestRunView;
@@ -9888,6 +10484,85 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PlanVersionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-economics-previews": {
+    post: {
+      parameters: {
+        query?: never;
+        header: {
+          "Idempotency-Key": string;
+        };
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["P2PreviewCommand"];
+        };
+      };
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["P2PreviewView"];
           };
         };
         "400": {

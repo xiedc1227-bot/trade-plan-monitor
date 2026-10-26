@@ -2,6 +2,7 @@
 import { computed, onMounted, shallowRef } from "vue";
 import type { DailyStateView, DailyInventoryResource, PlanVersionView, DailySimulationReceipt, DailyRuleReminderState } from "../../api/generated";
 import PlanOperationForm from "./PlanOperationForm.vue";
+import P2RuntimeEvidence from "./P2RuntimeEvidence.vue";
 import MarketLinkageEvidence from "./MarketLinkageEvidence.vue";
 import PlanExceptionApproval from "./PlanExceptionApproval.vue";
 import { type Json, type Schema } from "./planSchema";
@@ -109,6 +110,10 @@ onMounted(async () => {
       <p v-if="reminderOnly && inventory?.status === 'UNSUPPORTED'" role="status">模拟库存受历史记录或存储结构兼容性限制。仅提醒规则不依赖模拟库存；是否监测仍取决于本版本的人工审核和启用状态。</p>
       <template v-if="runtime.snapshot">
         <MarketLinkageEvidence v-for="decision in runtime.snapshot.marketLinkage ?? []" :key="decision.rule_id" :decision="decision" :stale="!currentVersion || runtime.reason === 'MARKET_LINKAGE_SOURCE_CHANGED'" />
+        <P2RuntimeEvidence v-for="entry in runtime.snapshot.pretrade ?? []" :key="entry.rule_id" :evidence="entry"
+          :plan-version-id="version.id" :current="currentVersion" :request="request"
+          :occurrence-id="runtime.snapshot.exceptionCandidates?.find(c => c.candidate.binding.rule_id === entry.rule_id)?.candidate.candidate_id"
+          :manual-quantity="runtime.snapshot.exceptionCandidates?.some(c => c.candidate.binding.rule_id === entry.rule_id && c.candidate.binding.route === 'BROKEN_STRONG') ?? false" />
         <PlanExceptionApproval v-for="resource in runtime.snapshot.exceptionCandidates ?? []" :key="resource.candidate.candidate_id"
           :resource="resource" :current="currentVersion && !busy" :authority-revision="authorityRevision" :request="request" @refresh="refreshCurrent" />
         <ul v-if="runtime.snapshot.dataBlockers.length"><li v-for="blocker in runtime.snapshot.dataBlockers" :key="blocker">{{ blocker }}</li></ul>
@@ -118,6 +123,7 @@ onMounted(async () => {
             <dt>执行交易日</dt><dd>{{ signal.executionDate ?? '日历待核验' }}（当天收盘过期）</dd>
             <dt>计划数量 / 已模拟</dt><dd>{{ signal.plannedQty }} / {{ signal.simulatedQty }}股</dd>
             <dt>当前可完整模拟</dt><dd>{{ signal.executableQty }}股</dd></dl>
+          <P2RuntimeEvidence v-if="signal.pretrade" :evidence="signal.pretrade" :execution="signal.pretradeExecution" />
           <p v-if="signal.state === 'SIMULATED'">本笔模拟已完成，同一信号不会因刷新或重启再次增加仓位。</p>
           <p v-else-if="signal.blockers.length">模拟限制：{{ signal.blockers.join('；') }}</p>
           <button v-if="signal.state !== 'SIMULATED'" type="button"

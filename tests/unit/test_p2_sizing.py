@@ -31,6 +31,8 @@ def test_legal_grid_floor_never_invents_minimum_exception(base, minimum, expecte
 
 @pytest.mark.parametrize(("atr", "close", "minimum"), [
     (None, Decimal(1000), 100), (Decimal(50), None, 100),
+    (Decimal(-1), Decimal(1000), 100), (Decimal("NaN"), Decimal(1000), 100),
+    (Decimal(50), Decimal("Infinity"), 100),
     (Decimal(50), Decimal(0), 100), (Decimal(50), Decimal(1000), None)])
 def test_missing_inputs_are_unknown(atr, close, minimum):
     result = calculate_sizing(TierSizing.model_validate(sizing()), atr_fen=atr,
