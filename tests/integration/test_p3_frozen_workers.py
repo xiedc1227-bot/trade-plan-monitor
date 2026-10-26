@@ -70,6 +70,15 @@ def test_real_frozen_workers_publish_reopen_capital_and_preserve_both_exception_
         encoded = decision.model_dump(mode="json")
         assert len(json.dumps(encoded).encode()) < 32000, {
             k: len(json.dumps(v).encode()) for k, v in encoded.items()}
+    if opening is not None:
+        from trade_plan_monitor.backtest.research_signal_projection import CapitalLinkageReference
+        referenced = next(e for e in report.current_events if any(
+            isinstance(p, CapitalLinkageReference) for p in e.signal_linkage or ()))
+        corrupt = referenced.model_dump(mode="json")
+        proof = next(p for p in corrupt["signal_linkage"] if "base_evidence_hash" in p)
+        proof["base_evidence_hash"] = "0"*64
+        with pytest.raises(ValueError, match="frozen capital base"):
+            type(referenced).model_validate_json(json.dumps(corrupt))
     results = BacktestResultStore(tmp_path / "research-results.sqlite")
     persist_report(results, report, run_input=frozen_input)
     details = BacktestResultStore(results.database_path).list_details(

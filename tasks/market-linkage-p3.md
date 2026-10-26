@@ -195,14 +195,14 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T21 — Prove causal replay, races and restart
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T18,T20.
 - Files/scope: `tests/integration/test_p3_replay_mutations.py`, `test_p3_concurrency.py`, `test_p3_frozen_workers.py` (new), support fixture as needed (at most 5 files).
 - Acceptance: MLP3-A05,MLP3-A07,MLP3-A08,MLP3-A10. Verify: V03. Future book/quote/policy changes leave earlier prefix unchanged; real workers publish/reopen; two independent signals cannot overspend; retries, revoke/execute races and post-write fault injection have one atomic outcome.
 
 ### MLP3-C07 — Runtime/replay acceptance
 
-- [ ] V01–V05,V07 pass; MLP3-A01–MLP3-A11 covered. Reconcile every failed case and prove current/frozen parity with explicit approval/operation events.
+- [x] V01–V05,V07 pass; MLP3-A01–MLP3-A11 covered. Reconcile every failed case and prove current/frozen parity with explicit approval/operation events.
 
 ### MLP3-T22 — Run complete regressions without weakening gates
 

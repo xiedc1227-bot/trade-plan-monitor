@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T18 and C01–C06 complete; T19–T24/C07–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T21 and C01–C07 complete; T22–T24/C08 remain pending. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -65,3 +65,11 @@ T20 current/private P3 and old P2 replay:20 passed,1 existing warning,16.41s. Fo
 New strict input/API unit group:144 passed,2.20s. Frontend transport/history group:126 passed,3files,1.25s; type-check passed. Historical route/schema projection group ultimately passed27 cases, with the remaining owner-hash snapshot check closed by its exact14-case rerun (24.71s). Both generated profiles and Ruff passed. Counts overlap; they are not additive coverage counts.
 
 Original failures remain documented: missing private fixture directory; a v9 helper correctly rejected a new9 plan and was replaced by a valid v10 fixture; two preparation readers assumed root max_qty and now preserve explicit9 over-cap/amount-only holdings without fake ceilings. A cost-mode report exceeded the unchanged32000-byte test oracle (32547, then32133bytes); CapitalSignalReference and CapitalLinkageReference now retain every proof once and reconstruct/self-validate full evidence. Real publication/read-back passed without increasing32KiB or total budgets. Historical PositionLimitFunding wire description was preserved after projection checks caught a documentation-only difference; new semantics are explained separately. Generated owner hashes were synchronized after final regeneration. No historical golden, live provider, user database or external publication was changed.
+
+## MLP3-V12 — Causal mutations, races and restart
+
+T21 focused concurrency/future-prefix group:14 passed,1 existing warning,11.71s. Final added exact BUY_SIGNAL reference, partial/full selected-lot residual release, reopened engine and tampered shared-proof rejection plus real workers:17 passed,1 warning,46.98s. Full P3 integration selection C07:89 passed,4738 deselected,3 existing warnings,69.59s. Earlier browser19-case acceptance and V01/V02/contract checks remain applicable; C07 is complete. Whole-project/capacity acceptance remains pending T22.
+
+Two independent already-issued strict offers were deliberately seeded to stress the last transaction fence; this does not claim the normal scheduler issues overlapping buys. Two actual connections race: exactly one200-share fill, retained basis52700fen<=60000, one receipt, and the next whole32700fen debit would exceed C. Both actual exception routes retain one winner in revoke/execute races, idempotent retries and complete rollback after an injected post-inventory failure. A missing/future/wrong-lot/wrong-quantity opening never supplies costs. Future book, quote or scheduled policy input leaves earlier loop decisions unchanged. A future-policy fixture initially used the wrong class and changed the historical information cutoff; correcting only the fixture to preserve the exact original prefix closed both failures. Accurate current contract/time/order validation was retained.
+
+A private actual200-share buy is reconciled through its stable source signal into the exact receipt batch at32701fen; two selected100-share sales release16350 then16351fen, leaving originalCORE20000fen. Closing and reopening the engine preserves the exact final book. Tampering with CapitalLinkageReference.base_evidence_hash is rejected before report admission.
