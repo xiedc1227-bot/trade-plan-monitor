@@ -27,14 +27,17 @@ def schema5_projection(document):
             "exceptionCandidateSchema",
             "exceptionPolicyDefinitions",
             "pretradeCandidateSchema",
+            "capitalCandidateSchema",
         ),
         "DailyEvaluationApiView": (
             "marketLinkage", "linkedIndexSource", "exceptionCandidates", "pretrade"),
-        "DailySignalApiView": ("marketLinkage", "pretrade", "pretradeExecution"),
-        "DailySignalState": ("market_linkage", "pretrade", "pretrade_execution"),
+        "DailySignalApiView": (
+            "marketLinkage", "pretrade", "pretradeExecution", "capitalExecution"),
+        "DailySignalState": (
+            "market_linkage", "pretrade", "pretrade_execution", "capital_execution"),
         "ExplicitPlanCapabilityView": (
             "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion",
-            "pretradeExecutionVersion"),
+            "pretradeExecutionVersion", "capitalExecutionVersion"),
         "LoopEvaluation": ("market_linkage",),
         "ResearchDecisionEvent": (
             "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade"),
@@ -68,10 +71,12 @@ def schema5_projection(document):
         nullable = {"type": "null"} in node.get("anyOf", [])
         union = node["anyOf"][0] if nullable else node
         variants = union.get("oneOf", union.get("anyOf"))
-        expected_count = 4
+        expected_count = 4 if name == "LoopPlanVersion" else 5
         assert len(variants) == expected_count
-        assert variants[0]["$ref"].startswith("#/components/schemas/P2")
-        assert variants[1]["$ref"].startswith("#/components/schemas/MarketException")
+        if name != "LoopPlanVersion":
+            assert variants[0]["$ref"].startswith("#/components/schemas/P3")
+        assert variants[-4]["$ref"].startswith("#/components/schemas/P2")
+        assert variants[-3]["$ref"].startswith("#/components/schemas/MarketException")
         assert variants[-2]["$ref"].startswith("#/components/schemas/MarketLinked")
         assert variants[-1]["$ref"].startswith("#/components/schemas/Unified")
         schemas[name]["properties"][field] = (
@@ -80,6 +85,9 @@ def schema5_projection(document):
     for path in ("previews", "decisions", "revocations"):
         del result["paths"]["/api/v1/plan-exception-" + path]
     del result["paths"]["/api/v1/plan-economics-previews"]
+    for path in ("/api/v1/plan-capital-previews", "/api/v1/simulation-capital-openings",
+                 "/api/v1/simulation-capital-books/{symbol}"):
+        del result["paths"][path]
     for name in ("DailyAlertPayload", "DailyAlertEvent"):
         if name in schemas:
             del schemas[name]["properties"]["pretrade_mode"]
@@ -198,7 +206,7 @@ def test_public_schema_and_read_projection_preserve_linked_authority(linked_chai
     chain = linked_chain
     command = ready(chain)
     contract = chain.client.get("/api/v1/plan-editor-schema").json()
-    assert contract["supportedSchemaVersions"] == [5, 6, 7, 8]
+    assert contract["supportedSchemaVersions"] == [5, 6, 7, 8, 9]
     assert len(contract["linkedPolicyDefinitions"]) == 8
     first = chain.client.get("/api/v1/plan-runtime/" + chain.plan.symbol).json()
     assert first["snapshot"]["marketLinkage"][0]["calculation"]["authorized_quantity"] == 300

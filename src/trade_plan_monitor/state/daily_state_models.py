@@ -355,7 +355,7 @@ def validate_daily_payload(kind, value):
 
         model = (
             CurrentPlanExtractionResult
-            if value.get("draft", {}).get("schema_version") in {5, 6, 7, 8}
+            if value.get("draft", {}).get("schema_version") in {5, 6, 7, 8, 9}
             else HistoricalExtractionEvidence
         )
         model.model_validate(value)

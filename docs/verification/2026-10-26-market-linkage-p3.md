@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T12 and C01–C04 complete; T13–T24/C05–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T15 and C01–C05 complete; T16–T24/C06–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -31,3 +31,9 @@ T10 draft/source compatibility:46 passed,1 warning,2.68s. Current extraction, P3
 T11 composition/historical policies:82 passed,1 warning,3.11s; current signal lifecycle/P2 evidence:8 passed,1 warning,3.06s. T12 execution/lifecycle:12 passed,1 warning,3.14s. C04 production transaction/P2/risk group:26 passed,1 warning,7.32s. Expanded complete P3 integration selection including late-failure rollback:45 passed,4738 deselected,3 warnings,6.94s. Quantity remains200 after market/P2 derivation; capital changes never resize or rearm it. Execution binds the frozen policy and current book/quote. Actual OPEN_COST_CAP buy debits32700fen; reconciliation to530000fen rejects stale execution; injected receipt failure preserves exact database dump. Actual technical-risk SELL of400shares succeeds without opening cost.
 
 These pre-admission tests use strict private Schema9 fixtures with real runtime/UOW/SQLite/transaction/accounting and no public plan-reader or notification claim. Public9 remains closed until T15. Initial test command referenced a nonexistent historical test filename and ran zero tests; the exact corrected selection passed82 tests. Temporary-directory environment failure was rerun with an explicit disposable directory. Positive fixture fee dates were corrected to cover the synthetic September session; expired-schedule rejection remains unchanged. Ruff passed.
+
+## MLP3-V07 — Exceptions, HTTP and current admission
+
+T13 grid/historical checks:30 passed,0.41s; composition group:38 passed,1 warning,2.75s. Both actual private exception paths/current P1 regression:28 passed,1 warning,12.93s. Expanded exception and P2 chain:7 passed,1 warning,5.40s. T14/P2 HTTP group:23 passed,1 warning,9.96s. JSON time/list conversion was added only at the API edge after the first opening HTTP test rejected their raw JSON forms. Exact domain values remain strict. Both money-failure tests reject the whole proposed exception without creating preview, approval or simulation.
+
+T15 public complete chain plus API:11 passed,1 warning,7.53s. Both modes and policy forms use actual review/activation/opening/exception preview/decision and separate simulation HTTP requests. A combined positive fixture initially requested300shares against only200shares remaining; production correctly rejected it, and the positive source ceiling was explicitly set1000 with separate insufficiency tests retained. Current Schema9 is now admitted; historical frozen unions still reject9. C05 API/legacy shape/route group:49 passed,1 warning,41.17s. All current P3 integration tests:60 passed,4738 deselected,3 warnings,12.49s. Counts overlap with prior groups. Both generated profiles pass their check; Ruff passes. Reviewed changes against policy scope, exact quantity authority, source isolation, transactional boundaries and bounded reads. Browser/frozen/final acceptance remain unexecuted.

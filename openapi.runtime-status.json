@@ -6652,6 +6652,105 @@
         "title": "Board",
         "type": "string"
       },
+      "BoundedCapacity": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "BOUNDED",
+            "default": "BOUNDED",
+            "title": "Mode",
+            "type": "string"
+          },
+          "remaining_qty": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Remaining Qty",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "remaining_qty"
+        ],
+        "title": "BoundedCapacity",
+        "type": "object"
+      },
+      "BuyDebitResult": {
+        "additionalProperties": false,
+        "properties": {
+          "debit_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debit Fen"
+          },
+          "fees": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fees"
+          },
+          "notional_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notional Fen"
+          },
+          "outcome": {
+            "enum": [
+              "PASS",
+              "UNKNOWN"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "total_fees_fen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Fees Fen"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "BuyDebitResult",
+        "type": "object"
+      },
       "CalendarScopeView": {
         "additionalProperties": false,
         "properties": {
@@ -6782,6 +6881,1180 @@
           "kind"
         ],
         "title": "CalendarScopeView",
+        "type": "object"
+      },
+      "CapitalAssessment": {
+        "additionalProperties": false,
+        "properties": {
+          "after_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Fen"
+          },
+          "before_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Fen"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "book_revision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Revision"
+          },
+          "buy_debit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuyDebitResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cap_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Cap Fen",
+            "type": "integer"
+          },
+          "evidence_hash": {
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "inventory_revision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inventory Revision"
+          },
+          "mode": {
+            "enum": [
+              "OPEN_COST_CAP",
+              "MARKET_VALUE_CAP"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNKNOWN"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "CONFIRMATION",
+              "CURRENT",
+              "EXECUTION"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "policy_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Policy Hash",
+            "type": "string"
+          },
+          "price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Fen"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "remaining_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": -9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Fen"
+          },
+          "share_capacity": {
+            "discriminator": {
+              "mapping": {
+                "BOUNDED": "#/components/schemas/BoundedCapacity",
+                "UNBOUNDED": "#/components/schemas/UnboundedCapacity",
+                "UNKNOWN": "#/components/schemas/UnknownCapacity"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BoundedCapacity"
+              },
+              {
+                "$ref": "#/components/schemas/UnboundedCapacity"
+              },
+              {
+                "$ref": "#/components/schemas/UnknownCapacity"
+              }
+            ],
+            "title": "Share Capacity"
+          },
+          "total_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Qty"
+          },
+          "version": {
+            "const": "capital-limit-evidence-v1",
+            "default": "capital-limit-evidence-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "phase",
+          "policy_hash",
+          "outcome",
+          "quantity",
+          "price_fen",
+          "total_qty",
+          "inventory_revision",
+          "book_revision",
+          "cap_fen",
+          "before_fen",
+          "after_fen",
+          "remaining_fen",
+          "share_capacity",
+          "buy_debit",
+          "blockers",
+          "evidence_hash"
+        ],
+        "title": "CapitalAssessment",
+        "type": "object"
+      },
+      "CapitalAuthorityContext": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Authority Hash",
+            "type": "string"
+          },
+          "binding_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Binding Hash",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "book_revision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Revision"
+          },
+          "evaluation_revision": {
+            "minimum": 0.0,
+            "title": "Evaluation Revision",
+            "type": "integer"
+          },
+          "inventory_revision": {
+            "minimum": 0.0,
+            "title": "Inventory Revision",
+            "type": "integer"
+          },
+          "position": {
+            "$ref": "#/components/schemas/P3Position"
+          },
+          "pretrade": {
+            "$ref": "#/components/schemas/P2EconomicsContext"
+          },
+          "price_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Fen"
+          },
+          "retained_basis_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retained Basis Fen"
+          },
+          "session": {
+            "format": "date",
+            "title": "Session",
+            "type": "string"
+          },
+          "share_capacity": {
+            "discriminator": {
+              "mapping": {
+                "BOUNDED": "#/components/schemas/BoundedCapacity",
+                "UNBOUNDED": "#/components/schemas/UnboundedCapacity",
+                "UNKNOWN": "#/components/schemas/UnknownCapacity"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BoundedCapacity"
+              },
+              {
+                "$ref": "#/components/schemas/UnboundedCapacity"
+              },
+              {
+                "$ref": "#/components/schemas/UnknownCapacity"
+              }
+            ],
+            "title": "Share Capacity"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "total_qty": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Qty"
+          }
+        },
+        "required": [
+          "binding_hash",
+          "inventory_revision",
+          "evaluation_revision",
+          "authority_hash",
+          "share_capacity",
+          "blockers",
+          "pretrade",
+          "position",
+          "total_qty",
+          "retained_basis_fen",
+          "book_revision",
+          "price_fen",
+          "symbol",
+          "session"
+        ],
+        "title": "CapitalAuthorityContext",
+        "type": "object"
+      },
+      "CapitalBook": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "inventory_revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Inventory Revision",
+            "type": "integer"
+          },
+          "lots": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalLot"
+            },
+            "maxItems": 500,
+            "title": "Lots",
+            "type": "array"
+          },
+          "revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "const": "capital-book-v1",
+            "default": "capital-book-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "revision",
+          "inventory_revision",
+          "lots",
+          "updated_at",
+          "evidence_hash"
+        ],
+        "title": "CapitalBook",
+        "type": "object"
+      },
+      "CapitalBookEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "before_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Hash"
+          },
+          "before_revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Before Revision",
+            "type": "integer"
+          },
+          "book": {
+            "$ref": "#/components/schemas/CapitalBook"
+          },
+          "command_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Command Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "maxProperties": 50,
+            "title": "Details",
+            "type": "object"
+          },
+          "event_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Event Hash",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "OPENING",
+              "RECONCILIATION",
+              "BUY",
+              "SELL",
+              "UNKNOWN_CHANGE"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "request_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Request Hash",
+            "type": "string"
+          },
+          "version": {
+            "const": "capital-book-event-v1",
+            "default": "capital-book-event-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command_id",
+          "request_hash",
+          "kind",
+          "before_revision",
+          "before_hash",
+          "book",
+          "received_at",
+          "details",
+          "event_hash"
+        ],
+        "title": "CapitalBookEvent",
+        "type": "object"
+      },
+      "CapitalBookView": {
+        "additionalProperties": false,
+        "properties": {
+          "authorityGranted": {
+            "const": false,
+            "default": false,
+            "title": "Authoritygranted",
+            "type": "boolean"
+          },
+          "book": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalBook"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bookRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bookrevision"
+          },
+          "computedAt": {
+            "format": "date-time",
+            "title": "Computedat",
+            "type": "string"
+          },
+          "inventoryKnown": {
+            "title": "Inventoryknown",
+            "type": "boolean"
+          },
+          "inventoryRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Inventoryrevision",
+            "type": "integer"
+          },
+          "retainedBasisFen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retainedbasisfen"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "computedAt",
+          "symbol",
+          "inventoryKnown",
+          "inventoryRevision",
+          "retainedBasisFen",
+          "bookRevision",
+          "book"
+        ],
+        "title": "CapitalBookView",
+        "type": "object"
+      },
+      "CapitalCalculation": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorized_quantity": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "multipleOf": 100.0,
+            "title": "Authorized Quantity",
+            "type": "integer"
+          },
+          "base_quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Base Quantity",
+            "type": "integer"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "calculation_hash": {
+            "title": "Calculation Hash",
+            "type": "string"
+          },
+          "candidate_quantity": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Quantity"
+          },
+          "capital": {
+            "$ref": "#/components/schemas/CapitalAssessment"
+          },
+          "ceiling": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ceiling"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "1",
+                  "0.5"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "formula_version": {
+            "const": "capital-market-calculation-v1",
+            "default": "capital-market-calculation-v1",
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "increment": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Increment"
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "enum": [
+                  "WEAK_MINIMUM",
+                  "BROKEN_STRONG"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "share_capacity": {
+            "discriminator": {
+              "mapping": {
+                "BOUNDED": "#/components/schemas/BoundedCapacity",
+                "UNBOUNDED": "#/components/schemas/UnboundedCapacity",
+                "UNKNOWN": "#/components/schemas/UnknownCapacity"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BoundedCapacity"
+              },
+              {
+                "$ref": "#/components/schemas/UnboundedCapacity"
+              },
+              {
+                "$ref": "#/components/schemas/UnknownCapacity"
+              }
+            ],
+            "title": "Share Capacity"
+          }
+        },
+        "required": [
+          "base_quantity",
+          "factor",
+          "ceiling",
+          "minimum",
+          "increment",
+          "candidate_quantity",
+          "share_capacity",
+          "capital",
+          "authorized_quantity",
+          "route",
+          "approval",
+          "blockers",
+          "calculation_hash"
+        ],
+        "title": "CapitalCalculation",
+        "type": "object"
+      },
+      "CapitalLot": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "enum": [
+              "CORE",
+              "TACTICAL"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "lot_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Lot Id",
+            "type": "string"
+          },
+          "provenance_ref": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance Ref"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "retained_basis_fen": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retained Basis Fen"
+          }
+        },
+        "required": [
+          "lot_id",
+          "bucket",
+          "quantity",
+          "retained_basis_fen"
+        ],
+        "title": "CapitalLot",
+        "type": "object"
+      },
+      "CapitalMarketDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_binding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExceptionBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/CapitalCalculation"
+          },
+          "confirmation": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedConditionEvidence"
+            },
+            "title": "Confirmation",
+            "type": "array"
+          },
+          "consumed_hash": {
+            "title": "Consumed Hash",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "decision_session": {
+            "format": "date",
+            "title": "Decision Session",
+            "type": "string"
+          },
+          "evidence_cutoff": {
+            "format": "date-time",
+            "title": "Evidence Cutoff",
+            "type": "string"
+          },
+          "evidence_hash": {
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "market": {
+            "$ref": "#/components/schemas/MarketRegimeEvidence"
+          },
+          "quantity_rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketQuantityRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ConfirmationSelection"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativeStrengthEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "const": "capital-market-evidence-v1",
+            "default": "capital-market-evidence-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "content_hash",
+          "decision_session",
+          "evidence_cutoff",
+          "market",
+          "strength",
+          "selection",
+          "calculation",
+          "quantity_rules",
+          "confirmation",
+          "consumed_hash",
+          "evidence_hash",
+          "approval_binding"
+        ],
+        "title": "CapitalMarketDecision",
+        "type": "object"
+      },
+      "CapitalOnlyLimit": {
+        "additionalProperties": false,
+        "properties": {
+          "capital_policy": {
+            "discriminator": {
+              "mapping": {
+                "MARKET_VALUE_CAP": "#/components/schemas/MarketValueCap",
+                "OPEN_COST_CAP": "#/components/schemas/OpenCostCap"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenCostCap"
+              },
+              {
+                "$ref": "#/components/schemas/MarketValueCap"
+              }
+            ],
+            "title": "Capital Policy"
+          },
+          "mode": {
+            "const": "CAPITAL_ONLY",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "capital_policy"
+        ],
+        "title": "CapitalOnlyLimit",
+        "type": "object"
+      },
+      "CapitalOpeningApiCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "excerpt": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "expectedBookRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Expectedbookrevision",
+            "type": "integer"
+          },
+          "expectedInventoryRevision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Expectedinventoryrevision",
+            "type": "integer"
+          },
+          "lots": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalOpeningLot"
+            },
+            "maxItems": 500,
+            "title": "Lots",
+            "type": "array"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "expectedInventoryRevision",
+          "expectedBookRevision",
+          "observedAt",
+          "source",
+          "excerpt",
+          "reason",
+          "confirmed",
+          "lots"
+        ],
+        "title": "CapitalOpeningApiCommand",
+        "type": "object"
+      },
+      "CapitalOpeningLot": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "enum": [
+              "CORE",
+              "TACTICAL"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "lot_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Lot Id",
+            "type": "string"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "retained_basis_fen": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Retained Basis Fen",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lot_id",
+          "bucket",
+          "quantity",
+          "retained_basis_fen"
+        ],
+        "title": "CapitalOpeningLot",
+        "type": "object"
+      },
+      "CapitalOpeningReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "authorityGranted": {
+            "const": false,
+            "default": false,
+            "title": "Authoritygranted",
+            "type": "boolean"
+          },
+          "event": {
+            "$ref": "#/components/schemas/CapitalBookEvent"
+          },
+          "inventoryChanged": {
+            "const": false,
+            "default": false,
+            "title": "Inventorychanged",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "title": "CapitalOpeningReceipt",
+        "type": "object"
+      },
+      "CapitalPreviewCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "occurrenceId": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrenceid"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "proposedQuantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposedquantity"
+          },
+          "ruleId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Ruleid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "ruleId"
+        ],
+        "title": "CapitalPreviewCommand",
+        "type": "object"
+      },
+      "CapitalPreviewView": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment": {
+            "$ref": "#/components/schemas/CapitalAssessment"
+          },
+          "authorityGranted": {
+            "const": false,
+            "default": false,
+            "title": "Authoritygranted",
+            "type": "boolean"
+          },
+          "computedAt": {
+            "format": "date-time",
+            "title": "Computedat",
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/FrozenPretrade"
+          },
+          "planVersionId": {
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "ruleId": {
+            "title": "Ruleid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "computedAt",
+          "planVersionId",
+          "ruleId",
+          "quantity",
+          "evidence",
+          "assessment"
+        ],
+        "title": "CapitalPreviewView",
         "type": "object"
       },
       "CapturedReminder": {
@@ -7087,11 +8360,15 @@
                     "5": "#/components/schemas/UnifiedPlanDraft",
                     "6": "#/components/schemas/MarketLinkedPlanDraft",
                     "7": "#/components/schemas/MarketExceptionPlanDraft",
-                    "8": "#/components/schemas/P2PlanDraft"
+                    "8": "#/components/schemas/P2PlanDraft",
+                    "9": "#/components/schemas/P3PlanDraft"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/P3PlanDraft"
+                  },
                   {
                     "$ref": "#/components/schemas/P2PlanDraft"
                   },
@@ -7265,11 +8542,15 @@
                     "5": "#/components/schemas/UnifiedPlanDraftInput",
                     "6": "#/components/schemas/MarketLinkedPlanDraftInput",
                     "7": "#/components/schemas/MarketExceptionPlanDraftInput",
-                    "8": "#/components/schemas/P2PlanDraftInput"
+                    "8": "#/components/schemas/P2PlanDraftInput",
+                    "9": "#/components/schemas/P3PlanDraftInput"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/P3PlanDraftInput"
+                  },
                   {
                     "$ref": "#/components/schemas/P2PlanDraftInput"
                   },
@@ -8274,6 +9555,48 @@
           "accountContext"
         ],
         "title": "CollectionVersionView",
+        "type": "object"
+      },
+      "CombinedCapitalLimit": {
+        "additionalProperties": false,
+        "properties": {
+          "capital_policy": {
+            "discriminator": {
+              "mapping": {
+                "MARKET_VALUE_CAP": "#/components/schemas/MarketValueCap",
+                "OPEN_COST_CAP": "#/components/schemas/OpenCostCap"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenCostCap"
+              },
+              {
+                "$ref": "#/components/schemas/MarketValueCap"
+              }
+            ],
+            "title": "Capital Policy"
+          },
+          "max_qty": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Max Qty",
+            "type": "integer"
+          },
+          "mode": {
+            "const": "QUANTITY_AND_CAPITAL",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "max_qty",
+          "capital_policy"
+        ],
+        "title": "CombinedCapitalLimit",
         "type": "object"
       },
       "CompletedMinuteConfirmation": {
@@ -9873,6 +11196,11 @@
             "title": "Candidateschema",
             "type": "object"
           },
+          "capitalCandidateSchema": {
+            "additionalProperties": true,
+            "title": "Capitalcandidateschema",
+            "type": "object"
+          },
           "exceptionCandidateSchema": {
             "additionalProperties": true,
             "title": "Exceptioncandidateschema",
@@ -9918,7 +11246,8 @@
               5,
               6,
               7,
-              8
+              8,
+              9
             ],
             "items": {
               "type": "integer"
@@ -9930,6 +11259,7 @@
         "required": [
           "linkedCandidateSchema",
           "linkedPolicyDefinitions",
+          "capitalCandidateSchema",
           "pretradeCandidateSchema",
           "exceptionCandidateSchema",
           "exceptionPolicyDefinitions",
@@ -10031,6 +11361,9 @@
               {
                 "items": {
                   "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CapitalMarketDecision"
+                    },
                     {
                       "$ref": "#/components/schemas/MarketExceptionDecision"
                     },
@@ -12675,6 +14008,16 @@
             "title": "Bucket",
             "type": "string"
           },
+          "capitalExecution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "confirmationKind": {
             "default": "OFFICIAL_DAILY_CLOSE",
             "enum": [
@@ -12754,6 +14097,9 @@
           },
           "marketLinkage": {
             "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalMarketDecision"
+              },
               {
                 "$ref": "#/components/schemas/MarketExceptionDecision"
               },
@@ -12921,6 +14267,16 @@
             "title": "Bucket",
             "type": "string"
           },
+          "capital_execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "confirmation_kind": {
             "default": "OFFICIAL_DAILY_CLOSE",
             "enum": [
@@ -13000,6 +14356,9 @@
           },
           "market_linkage": {
             "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalMarketDecision"
+              },
               {
                 "$ref": "#/components/schemas/MarketExceptionDecision"
               },
@@ -14168,6 +15527,184 @@
         "title": "DiagnosticEvaluationView",
         "type": "object"
       },
+      "DraftCapitalOnlyLimit": {
+        "additionalProperties": false,
+        "properties": {
+          "capital_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftOpenCostCap"
+              },
+              {
+                "$ref": "#/components/schemas/DraftMarketValueCap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Policy"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "CAPITAL_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          }
+        },
+        "required": [
+          "mode",
+          "capital_policy"
+        ],
+        "title": "DraftCapitalOnlyLimit",
+        "type": "object"
+      },
+      "DraftCapitalOnlyLimitInput": {
+        "additionalProperties": false,
+        "properties": {
+          "capital_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftOpenCostCapInput"
+              },
+              {
+                "$ref": "#/components/schemas/DraftMarketValueCap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Policy"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "CAPITAL_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          }
+        },
+        "required": [
+          "mode",
+          "capital_policy"
+        ],
+        "title": "DraftCapitalOnlyLimit",
+        "type": "object"
+      },
+      "DraftCombinedCapitalLimit": {
+        "additionalProperties": false,
+        "properties": {
+          "capital_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftOpenCostCap"
+              },
+              {
+                "$ref": "#/components/schemas/DraftMarketValueCap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Policy"
+          },
+          "max_qty": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Qty"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "QUANTITY_AND_CAPITAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          }
+        },
+        "required": [
+          "mode",
+          "max_qty",
+          "capital_policy"
+        ],
+        "title": "DraftCombinedCapitalLimit",
+        "type": "object"
+      },
+      "DraftCombinedCapitalLimitInput": {
+        "additionalProperties": false,
+        "properties": {
+          "capital_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftOpenCostCapInput"
+              },
+              {
+                "$ref": "#/components/schemas/DraftMarketValueCap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Policy"
+          },
+          "max_qty": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Qty"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "QUANTITY_AND_CAPITAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          }
+        },
+        "required": [
+          "mode",
+          "max_qty",
+          "capital_policy"
+        ],
+        "title": "DraftCombinedCapitalLimit",
+        "type": "object"
+      },
       "DraftDerivedQuantityPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -15260,6 +16797,473 @@
           "exception_policy"
         ],
         "title": "DraftMarketPolicy",
+        "type": "object"
+      },
+      "DraftMarketValueCap": {
+        "additionalProperties": false,
+        "properties": {
+          "account_scope": {
+            "anyOf": [
+              {
+                "const": "SIMULATION",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Scope"
+          },
+          "cap_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cap Fen"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "const": "CNY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "MARKET_VALUE_CAP",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "const": "capital-policy-v1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "const": "SYMBOL_CORE_AND_TACTICAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "valuation": {
+            "anyOf": [
+              {
+                "const": "CURRENT_ADMITTED_QUOTE",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valuation"
+          }
+        },
+        "required": [
+          "policy_version",
+          "currency",
+          "scope",
+          "account_scope",
+          "cap_fen",
+          "mode",
+          "valuation"
+        ],
+        "title": "DraftMarketValueCap",
+        "type": "object"
+      },
+      "DraftOpenCostCap": {
+        "additionalProperties": false,
+        "properties": {
+          "account_scope": {
+            "anyOf": [
+              {
+                "const": "SIMULATION",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Scope"
+          },
+          "buy_cost_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftFeeSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cap_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cap Fen"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "const": "CNY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "OPEN_COST_CAP",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "const": "capital-policy-v1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "const": "SYMBOL_CORE_AND_TACTICAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "required": [
+          "policy_version",
+          "currency",
+          "scope",
+          "account_scope",
+          "cap_fen",
+          "mode",
+          "buy_cost_schedule"
+        ],
+        "title": "DraftOpenCostCap",
+        "type": "object"
+      },
+      "DraftOpenCostCapInput": {
+        "additionalProperties": false,
+        "properties": {
+          "account_scope": {
+            "anyOf": [
+              {
+                "const": "SIMULATION",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Scope"
+          },
+          "buy_cost_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftFeeScheduleInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cap_fen": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cap Fen"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "const": "CNY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "OPEN_COST_CAP",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "const": "capital-policy-v1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "const": "SYMBOL_CORE_AND_TACTICAL",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "required": [
+          "policy_version",
+          "currency",
+          "scope",
+          "account_scope",
+          "cap_fen",
+          "mode",
+          "buy_cost_schedule"
+        ],
+        "title": "DraftOpenCostCap",
+        "type": "object"
+      },
+      "DraftP3Position": {
+        "additionalProperties": false,
+        "properties": {
+          "allocation_evidence": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Evidence"
+          },
+          "allocation_provenance": {
+            "anyOf": [
+              {
+                "enum": [
+                  "EXISTING_CONFIRMED",
+                  "PROPOSED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Provenance"
+          },
+          "core_target_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Core Target Qty"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftCapitalOnlyLimit"
+              },
+              {
+                "$ref": "#/components/schemas/DraftCombinedCapitalLimit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "tactical_target_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tactical Target Qty"
+          }
+        },
+        "required": [
+          "limit",
+          "core_target_qty",
+          "tactical_target_qty",
+          "allocation_provenance",
+          "allocation_evidence"
+        ],
+        "title": "DraftP3Position",
+        "type": "object"
+      },
+      "DraftP3PositionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "allocation_evidence": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Evidence"
+          },
+          "allocation_provenance": {
+            "anyOf": [
+              {
+                "enum": [
+                  "EXISTING_CONFIRMED",
+                  "PROPOSED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Provenance"
+          },
+          "core_target_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Core Target Qty"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftCapitalOnlyLimitInput"
+              },
+              {
+                "$ref": "#/components/schemas/DraftCombinedCapitalLimitInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "tactical_target_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tactical Target Qty"
+          }
+        },
+        "required": [
+          "limit",
+          "core_target_qty",
+          "tactical_target_qty",
+          "allocation_provenance",
+          "allocation_evidence"
+        ],
+        "title": "DraftP3Position",
         "type": "object"
       },
       "DraftPretradePolicy": {
@@ -17525,13 +19529,31 @@
             "title": "Candidateid",
             "type": "string"
           },
+          "capital": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "format": "date-time",
             "title": "Createdat",
             "type": "string"
           },
           "current": {
-            "$ref": "#/components/schemas/ExceptionAuthorityContext"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalAuthorityContext"
+              },
+              {
+                "$ref": "#/components/schemas/ExceptionAuthorityContext"
+              }
+            ],
+            "title": "Current"
           },
           "economics": {
             "anyOf": [
@@ -18327,6 +20349,12 @@
         "additionalProperties": false,
         "description": "Backend-owned capability for the single current plan workflow.",
         "properties": {
+          "capitalExecutionVersion": {
+            "const": "condition-plan-v5",
+            "default": "condition-plan-v5",
+            "title": "Capitalexecutionversion",
+            "type": "string"
+          },
           "exceptionExecutionVersion": {
             "const": "condition-plan-v3",
             "default": "condition-plan-v3",
@@ -18405,7 +20433,8 @@
               5,
               6,
               7,
-              8
+              8,
+              9
             ],
             "items": {
               "type": "integer"
@@ -27230,6 +29259,58 @@
         "title": "MarketTurnoverSummaryView",
         "type": "object"
       },
+      "MarketValueCap": {
+        "additionalProperties": false,
+        "properties": {
+          "account_scope": {
+            "const": "SIMULATION",
+            "title": "Account Scope",
+            "type": "string"
+          },
+          "cap_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Cap Fen",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "CNY",
+            "title": "Currency",
+            "type": "string"
+          },
+          "mode": {
+            "const": "MARKET_VALUE_CAP",
+            "title": "Mode",
+            "type": "string"
+          },
+          "policy_version": {
+            "const": "capital-policy-v1",
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "scope": {
+            "const": "SYMBOL_CORE_AND_TACTICAL",
+            "title": "Scope",
+            "type": "string"
+          },
+          "valuation": {
+            "const": "CURRENT_ADMITTED_QUOTE",
+            "title": "Valuation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_version",
+          "currency",
+          "scope",
+          "account_scope",
+          "cap_fen",
+          "mode",
+          "valuation"
+        ],
+        "title": "MarketValueCap",
+        "type": "object"
+      },
       "MinuteBar": {
         "additionalProperties": false,
         "description": "One normalized completed minute in integer fen, shares, and yuan.",
@@ -27938,6 +30019,56 @@
           "mode"
         ],
         "title": "OncePerRule",
+        "type": "object"
+      },
+      "OpenCostCap": {
+        "additionalProperties": false,
+        "properties": {
+          "account_scope": {
+            "const": "SIMULATION",
+            "title": "Account Scope",
+            "type": "string"
+          },
+          "buy_cost_schedule": {
+            "$ref": "#/components/schemas/FeeSchedule"
+          },
+          "cap_fen": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Cap Fen",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "CNY",
+            "title": "Currency",
+            "type": "string"
+          },
+          "mode": {
+            "const": "OPEN_COST_CAP",
+            "title": "Mode",
+            "type": "string"
+          },
+          "policy_version": {
+            "const": "capital-policy-v1",
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "scope": {
+            "const": "SYMBOL_CORE_AND_TACTICAL",
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_version",
+          "currency",
+          "scope",
+          "account_scope",
+          "cap_fen",
+          "mode",
+          "buy_cost_schedule"
+        ],
+        "title": "OpenCostCap",
         "type": "object"
       },
       "OpeningAccountFacts": {
@@ -29783,6 +31914,456 @@
         "title": "P2TradePlan",
         "type": "object"
       },
+      "P3PlanDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                    "MANUAL": "#/components/schemas/DailyManualActivation",
+                    "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyManualActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyDayActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyRangeActivation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedDraftAlertRule"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_version": {
+            "const": "condition-plan-v5",
+            "default": "condition-plan-v5",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/P2DraftRule"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedDraftRule"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/DraftP3Position"
+          },
+          "reference_market": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceMarketBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDraftRisk"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 9,
+            "default": 9,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "P3PlanDraft",
+        "type": "object"
+      },
+      "P3PlanDraftInput": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "DATE_RANGE": "#/components/schemas/DailyRangeActivation",
+                    "MANUAL": "#/components/schemas/DailyManualActivation",
+                    "TRADING_DAY": "#/components/schemas/DailyDayActivation"
+                  },
+                  "propertyName": "mode"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DailyManualActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyDayActivation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DailyRangeActivation"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation"
+          },
+          "alert_rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnifiedDraftAlertRuleInput"
+            },
+            "maxItems": 10,
+            "title": "Alert Rules",
+            "type": "array"
+          },
+          "execution_mode": {
+            "const": "CONDITION_PLAN",
+            "default": "CONDITION_PLAN",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "execution_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedExecutionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_version": {
+            "const": "condition-plan-v5",
+            "default": "condition-plan-v5",
+            "title": "Execution Version",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedDraftLevels"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "market": {
+            "enum": [
+              "SSE",
+              "SZSE",
+              "BSE"
+            ],
+            "title": "Market",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/DailyMetadata"
+          },
+          "monitoring": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedMonitoring"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ordinary_rules": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/P2DraftRuleInput"
+                },
+                {
+                  "$ref": "#/components/schemas/UnifiedDraftRuleInput"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "title": "Ordinary Rules",
+            "type": "array"
+          },
+          "plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/DraftP3PositionInput"
+          },
+          "reference_market": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReferenceMarketBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_branches": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDraftRiskInput"
+            },
+            "maxItems": 64,
+            "title": "Risk Branches",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 9,
+            "default": 9,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trading_rules": {
+            "$ref": "#/components/schemas/DailyTradingRules"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "version",
+          "symbol",
+          "name",
+          "market",
+          "metadata",
+          "activation",
+          "levels",
+          "position",
+          "monitoring",
+          "ordinary_rules",
+          "risk_branches",
+          "execution_policy",
+          "reference_market"
+        ],
+        "title": "P3PlanDraft",
+        "type": "object"
+      },
+      "P3Position": {
+        "additionalProperties": false,
+        "properties": {
+          "allocation_evidence": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Evidence"
+          },
+          "allocation_provenance": {
+            "anyOf": [
+              {
+                "enum": [
+                  "EXISTING_CONFIRMED",
+                  "PROPOSED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Provenance"
+          },
+          "core_target_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Core Target Qty"
+          },
+          "limit": {
+            "discriminator": {
+              "mapping": {
+                "CAPITAL_ONLY": "#/components/schemas/CapitalOnlyLimit",
+                "QUANTITY_AND_CAPITAL": "#/components/schemas/CombinedCapitalLimit"
+              },
+              "propertyName": "mode"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CapitalOnlyLimit"
+              },
+              {
+                "$ref": "#/components/schemas/CombinedCapitalLimit"
+              }
+            ],
+            "title": "Limit"
+          },
+          "tactical_target_qty": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "multipleOf": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tactical Target Qty"
+          }
+        },
+        "required": [
+          "limit"
+        ],
+        "title": "P3Position",
+        "type": "object"
+      },
       "PlanActivationCommand": {
         "additionalProperties": false,
         "properties": {
@@ -29937,11 +32518,15 @@
                 "5": "#/components/schemas/UnifiedPlanDraft",
                 "6": "#/components/schemas/MarketLinkedPlanDraft",
                 "7": "#/components/schemas/MarketExceptionPlanDraft",
-                "8": "#/components/schemas/P2PlanDraft"
+                "8": "#/components/schemas/P2PlanDraft",
+                "9": "#/components/schemas/P3PlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P3PlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/P2PlanDraft"
               },
@@ -30859,11 +33444,15 @@
                 "5": "#/components/schemas/UnifiedPlanDraft",
                 "6": "#/components/schemas/MarketLinkedPlanDraft",
                 "7": "#/components/schemas/MarketExceptionPlanDraft",
-                "8": "#/components/schemas/P2PlanDraft"
+                "8": "#/components/schemas/P2PlanDraft",
+                "9": "#/components/schemas/P3PlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P3PlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/P2PlanDraft"
               },
@@ -31000,11 +33589,15 @@
                 "5": "#/components/schemas/UnifiedPlanDraftInput",
                 "6": "#/components/schemas/MarketLinkedPlanDraftInput",
                 "7": "#/components/schemas/MarketExceptionPlanDraftInput",
-                "8": "#/components/schemas/P2PlanDraftInput"
+                "8": "#/components/schemas/P2PlanDraftInput",
+                "9": "#/components/schemas/P3PlanDraftInput"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P3PlanDraftInput"
+              },
               {
                 "$ref": "#/components/schemas/P2PlanDraftInput"
               },
@@ -32122,11 +34715,15 @@
                 "5": "#/components/schemas/UnifiedPlanDraft",
                 "6": "#/components/schemas/MarketLinkedPlanDraft",
                 "7": "#/components/schemas/MarketExceptionPlanDraft",
-                "8": "#/components/schemas/P2PlanDraft"
+                "8": "#/components/schemas/P2PlanDraft",
+                "9": "#/components/schemas/P3PlanDraft"
               },
               "propertyName": "schema_version"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/P3PlanDraft"
+              },
               {
                 "$ref": "#/components/schemas/P2PlanDraft"
               },
@@ -32466,11 +35063,15 @@
                     "5": "#/components/schemas/UnifiedPlanDraftInput",
                     "6": "#/components/schemas/MarketLinkedPlanDraftInput",
                     "7": "#/components/schemas/MarketExceptionPlanDraftInput",
-                    "8": "#/components/schemas/P2PlanDraftInput"
+                    "8": "#/components/schemas/P2PlanDraftInput",
+                    "9": "#/components/schemas/P3PlanDraftInput"
                   },
                   "propertyName": "schema_version"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/P3PlanDraftInput"
+                  },
                   {
                     "$ref": "#/components/schemas/P2PlanDraftInput"
                   },
@@ -35667,6 +38268,16 @@
             "title": "Bucket",
             "type": "string"
           },
+          "capital_execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "confirmation_kind": {
             "default": "OFFICIAL_DAILY_CLOSE",
             "enum": [
@@ -38718,6 +41329,19 @@
           "reasonCode"
         ],
         "title": "UnavailablePlanEntryView",
+        "type": "object"
+      },
+      "UnboundedCapacity": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "UNBOUNDED",
+            "default": "UNBOUNDED",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "UnboundedCapacity",
         "type": "object"
       },
       "UnfilledReason": {
@@ -42428,6 +45052,19 @@
           "execution_policy"
         ],
         "title": "UnifiedTradePlan",
+        "type": "object"
+      },
+      "UnknownCapacity": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "UNKNOWN",
+            "default": "UNKNOWN",
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "UnknownCapacity",
         "type": "object"
       },
       "UnknownLoopCash": {
@@ -53415,6 +56052,161 @@
         ]
       }
     },
+    "/api/v1/plan-capital-previews": {
+      "post": {
+        "operationId": "preview_api_v1_plan_capital_previews_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapitalPreviewCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalPreviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
     "/api/v1/plan-deactivations": {
       "post": {
         "operationId": "deactivate_plan_api_v1_plan_deactivations_post",
@@ -56704,6 +59496,304 @@
           }
         },
         "summary": "Simulations",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/simulation-capital-books/{symbol}": {
+      "get": {
+        "operationId": "book_api_v1_simulation_capital_books__symbol__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalBookView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Book",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/simulation-capital-openings": {
+      "post": {
+        "operationId": "opening_api_v1_simulation_capital_openings_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapitalOpeningApiCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalOpeningReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Opening",
         "tags": [
           "plans"
         ]

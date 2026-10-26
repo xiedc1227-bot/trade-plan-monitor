@@ -52,7 +52,7 @@ def preview_economics(lifecycle, *, command):
         active = work.plans.get_active(plan.symbol)
         head = work.daily.get("evaluation-head-" + plan.symbol)
         review = work.daily.get("review-" + str(command.plan_version_id))
-        if (plan.schema_version != 8 or active is None or head is None or review is None
+        if (plan.schema_version not in {8, 9} or active is None or head is None or review is None
                 or not review["payload"].get("confirmed")
                 or active.plan_version_id != str(command.plan_version_id)):
             reject("P2_CURRENT_EVALUATION_REQUIRED")
@@ -83,8 +83,20 @@ def preview_economics(lifecycle, *, command):
                 if context.blockers:
                     reject(context.blockers[0])
                 # Estimate failed gates too; quantity validation grants no authority.
-                quantity = _quantity(candidate, context.model_copy(update={"pretrade": None}),
-                                     command.proposed_quantity)
+                if plan.schema_version == 9:
+                    from trade_plan_monitor.decision.market_exception_policy import (
+                        exception_quantity_grid,
+                    )
+                    b = candidate.binding
+                    grid = exception_quantity_grid(route=b.route, base_quantity=b.base_quantity,
+                        minimum=b.minimum, increment=b.increment,
+                        proposed_quantity=command.proposed_quantity)
+                    if grid.blockers:
+                        reject(grid.blockers[0])
+                    quantity = grid.candidate_quantity
+                else:
+                    quantity = _quantity(candidate, context.model_copy(update={"pretrade": None}),
+                                         command.proposed_quantity)
             except ExceptionAuthorityError as error:
                 reject(error.reason)
         else:
@@ -100,6 +112,13 @@ def preview_economics(lifecycle, *, command):
         price = (int(close) if close is not None and close == int(close) else None)
         if now.date() != frozen.decision_session:
             price = None if quote is None else quote["price_fen"]
+            if plan.schema_version == 9:
+                from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
+                try:
+                    price = DailyExecutionQuote.model_validate({
+                        **(quote or {}), "evaluated_at": now}).price_fen
+                except ValueError:
+                    reject("P2_CURRENT_QUOTE_REQUIRED")
         result = calculate_economics(frozen.policy.economics, quantity=quantity, entry_fen=price,
                                      symbol=plan.symbol, session=now.date())
         return P2PreviewView(computed_at=now, plan_version_id=str(command.plan_version_id),

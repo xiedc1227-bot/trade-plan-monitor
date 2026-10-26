@@ -1,9 +1,10 @@
-"""Private Schema9 preparation must not accidentally enable public execution."""
+"""Schema9 current admission is distinct from the historical frozen readers."""
 
 import json
 from hashlib import sha256
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 from tests.unit.test_p3_policy_contract import p3_payload
 
 from trade_plan_monitor.domain.daily_plan_validation import (
@@ -12,7 +13,7 @@ from trade_plan_monitor.domain.daily_plan_validation import (
 )
 from trade_plan_monitor.domain.p3_policy_models import P3TradePlan
 from trade_plan_monitor.domain.p3_validation import P3PlanDraft
-from trade_plan_monitor.domain.plan_codec import PlanDocumentError, dump_plan_json, load_plan_json
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
 
 
@@ -36,8 +37,10 @@ def test_missing_monetary_amount_stays_reviewable_and_cannot_execute():
     assert any("cap_fen" in issue["path"] for issue in daily_draft_issues(draft))
 
 
-def test_public_codec_is_closed_until_execution_guards_are_ready():
+def test_current_codec_admits_exact_schema9_after_execution_guards():
     plan = P3TradePlan.model_validate(p3_payload())
-    with pytest.raises(PlanDocumentError) as error:
-        load_plan_json(dump_plan_json(plan))
-    assert error.value.code == "UNSUPPORTED_PLAN_VERSION"
+    assert load_plan_json(dump_plan_json(plan)) == plan
+    from trade_plan_monitor.backtest.run_input import BacktestRunInput
+    with pytest.raises(ValidationError):
+        TypeAdapter(BacktestRunInput.model_fields["plan_snapshot"].annotation).validate_json(
+            plan.model_dump_json())

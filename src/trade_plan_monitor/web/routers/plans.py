@@ -132,8 +132,9 @@ class ExplicitPlanCapabilityView(ApiValue):
     schema_version: Literal[5] = 5
     execution_mode: Literal["CONDITION_PLAN"] = "CONDITION_PLAN"
     execution_version: Literal["condition-plan-v1"] = "condition-plan-v1"
-    supported_schema_versions: tuple[int, ...] = (5, 6, 7, 8)
+    supported_schema_versions: tuple[int, ...] = (5, 6, 7, 8, 9)
     linked_execution_version: Literal["condition-plan-v2"] = "condition-plan-v2"
+    capital_execution_version: Literal["condition-plan-v5"] = "condition-plan-v5"
     pretrade_execution_version: Literal["condition-plan-v4"] = "condition-plan-v4"
     exception_execution_version: Literal["condition-plan-v3"] = "condition-plan-v3"
     supported_actions: tuple[Literal["BUY", "SELL", "RISK_ALERT"], ...] = (
@@ -266,7 +267,7 @@ class PlanVersionView(PlanVersionSummary):
             ):
                 raise ValueError("historical plan must remain canonical and explicitly blocked")
             return self
-        if plan.schema_version not in {5, 6, 7, 8}:
+        if plan.schema_version not in {5, 6, 7, 8, 9}:
             raise ValueError("historical plan requires an explicit read-only reason")
         if isinstance(plan, DailyPlanDraft):
             if self.daily_mapping is None:
@@ -653,7 +654,7 @@ class PlanExtractionView(ApiValue):
                 not in {"plan-extract-v8", "plan-extract-v9",
                         "plan-extract-v10", "plan-extract-v11"}
                 or not isinstance(plan, DailyPlanDraft)
-                or plan.schema_version not in {5, 6, 7, 8}
+                or plan.schema_version not in {5, 6, 7, 8, 9}
                 or self.daily_mapping is None
                 or self.daily_mapping.supplements
                 or self.mapping is not None

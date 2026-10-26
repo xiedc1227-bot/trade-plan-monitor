@@ -330,3 +330,13 @@ OpenAPI snapshot SHA-256: `e1f840fbf03fcc868753b98e78185a6060e31ff9c46270a7d1e66
 Canonical monitor v2 OpenAPI snapshot SHA-256: `4149e96e4ce54f76bab84d0f36d6e9465040e3c9801732a413023015e3e87f80`
 
 Generated TypeScript SHA-256: compatibility `931d2db0738738e47254afa858f26115fb531ba80f8cd3bf10bc9043e2d2f97a`; canonical `6f485c92d4470f4521b68d51a85f9be8af670ac4153ebf9a6ee9087abf7a7b0c`.
+
+## U-MLP3 — Approved current monetary policies (2026-10-26)
+
+The user approved MLP3-D01–MLP3-D06 and implementation. Add only the three capital routes in [MLP3-K05/K08](CONTRACT-market-linkage-p3.md): bounded current simulation book reading, explicit reviewed opening/reconciliation, and read-only capital previews. Preview and opening receipts carry literal authorityGranted=false; opening also carries inventoryChanged=false. Existing same-origin/idempotency/admission controls and public errors remain. Schema9 current review/runtime/exception unions add explicit capital policy/capacity evidence; no fake max_qty, clipping or implicit approval. Frozen9 admission remains closed pending T19/T20. Both profiles retain the historical projection after only enumerated P3 additions.
+
+OpenAPI snapshot SHA-256: `01c2f0af7bf6dbe25fb45d6d701e24845f2a78af2fa6b4e397bd529db7e0ce19`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `2a614df930688e3b9e91478ad97f74d1f194c468dd05b727ce09a1db1ce589f3`
+
+Generated TypeScript SHA-256: compatibility `03ab5e8d14d4e76671f31e694430c668fbf3f50580bab0a63e6ab5d43b075366`; canonical `8031605b14df6760a2df773f808d48bff13fab3707b7058a48e6a69b8d8ae878`.

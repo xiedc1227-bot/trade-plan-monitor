@@ -41,3 +41,7 @@ Retain 32KiB result items and existing overall source/input/report limits. Size-
 ## MLP3-K07 — Execution seams and stage evidence
 
 T01 baseline V01:98 passed,1 existing Starlette warning,3.00s. Freeze source hash/excerpts in tests/fixtures/p3_original_prompt.json and verify independently. Follow sequential model/hash → pure fee/capital/basis → storage/opening/atomic accounting → extraction/runtime/exception guards → guarded HTTP/generation → UI/browser → frozen readers/workers → full regression/documentation. Do not enable9 by changing every schema set before its guard chain exists. Preserve tasks/plan.md and tasks/todo.md.
+
+## MLP3-K08 — Implemented current API ownership
+
+The current API owns CapitalBookView, CapitalOpeningApiCommand, CapitalOpeningReceipt, CapitalPreviewCommand and CapitalPreviewView in web/p3_schemas.py; the domain continues to own immutable capital books, events, assessments and strict opening commands. Only the three K05 routes are added. Both OpenAPI profiles and generated TypeScript files expose the same P3 operations. Capability supportedSchemaVersions adds9 and capitalExecutionVersion=condition-plan-v5; the editor adds capitalCandidateSchema. Existing fields/routes remain. Public current9 admission follows complete ordinary, exception and HTTP guards; old frozen-input unions still reject9 until T19/T20. JSON times/lists are converted at the API edge, with strict domain numbers and complete500-lot bounds retained. Economics previews also accept current9 and continue to grant no authority.

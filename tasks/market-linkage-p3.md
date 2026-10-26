@@ -131,28 +131,28 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T13 — Preserve both P1 exception authorization paths
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T12.
 - Files/scope: current exception authority, preview/approval service, exact-quantity adapter and `tests/integration/test_p3_exceptions.py` (new).
 - Acceptance: MLP3-A04,MLP3-A07,MLP3-A08. Verify: focused V03 and existing P1 authorization tests. WEAK_MINIMUM exact minimum; BROKEN_STRONG empty/manual; no money-based clipping, new route or reserved allowance; approval and execution recheck independently.
 
 ### MLP3-T14 — Add capital read/opening/preview APIs
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T13.
 - Files/scope: capital router/service, DTOs and `tests/integration/test_p3_api.py` (new), at most 5 files per child.
 - Acceptance: MLP3-A05,MLP3-A09. Verify: focused V03. Real HTTP same-origin/admission/idempotency, literal false authority, read-only zero writes, explicit opening receipt,409/422 and rejected caller prices/cost totals.
 
 ### MLP3-T15 — Enable complete current admission and generate contracts
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T14.
 - Files/scope: sequential children: T15a remaining current typed readers/source-storage adapters; T15b capability/editor/runtime DTO unions and new-route whitelist; T15c both generated OpenAPI/TypeScript profiles plus paired API-owner appendix. Each child at most 5 files with focused compatibility checks.
 - Acceptance: MLP3-A02,MLP3-A09. Verify: V03,V07. Enable public current Schema 9 only after T12/T13/T14 pass; unsupported 9 frozen inputs remain rejected until T19/T20. Explicitly preserve prior routes/schemas after enumerating only new additions.
 
 ### MLP3-C05 — Exception/API acceptance
 
-- [ ] V01–V03,V07 pass; MLP3-A02,MLP3-A04,MLP3-A07,MLP3-A09 covered. Generated contracts reflect actual endpoints, not an unimplemented promise.
+- [x] V01–V03,V07 pass; MLP3-A02,MLP3-A04,MLP3-A07,MLP3-A09 covered. Generated contracts reflect actual endpoints, not an unimplemented promise.
 
 ### MLP3-T16 — Add source-policy and opening-basis review UI
 

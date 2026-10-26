@@ -41,3 +41,7 @@ backtest-run-v10 携带 Schema9、冻结期初事实、明确预算校正事件�
 ## MLP3-K07 — 实施接缝与阶段证据
 
 T01 基线 V01：98项通过、1条既有 Starlette 警告、3.00秒。原文哈希／摘录冻结到 tests/fixtures/p3_original_prompt.json 并独立核验。按模型／哈希→纯费用／金额／成本→存储／期初／原子记账→提取／运行／例外防护→受保护 HTTP／生成契约→界面／浏览器→冻结读取器／工作器→全量回归／文档顺序推进。不能在防护链未就绪时批量改 schema 集合开放9。保留 tasks/plan.md、tasks/todo.md。
+
+## MLP3-K08 — 已实现的当前 API 归属
+
+当前 API 在 web/p3_schemas.py 中拥有 CapitalBookView、CapitalOpeningApiCommand、CapitalOpeningReceipt、CapitalPreviewCommand 与 CapitalPreviewView；不可变预算账本、事件、金额评估与严格开仓命令继续由领域层拥有。仅新增 K05 的三条路由。两套 OpenAPI 与生成 TypeScript 文件提供相同 P3 操作。能力 supportedSchemaVersions 增加9及 capitalExecutionVersion=condition-plan-v5；编辑器增加 capitalCandidateSchema。已有字段和路由保留。完整普通、例外与 HTTP 防护完成后开放当前公开9；旧冻结输入联合类型到 T19/T20 前仍拒绝9。JSON 时间与列表在 API 边界转换，领域数字严格校验与完整500批次上限保留。收益预览同时接受当前9，仍不授予授权。

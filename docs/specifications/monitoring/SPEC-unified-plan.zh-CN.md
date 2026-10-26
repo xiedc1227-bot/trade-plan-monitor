@@ -330,3 +330,13 @@ OpenAPI 快照 SHA-256：`e1f840fbf03fcc868753b98e78185a6060e31ff9c46270a7d1e66b
 规范监控v2 OpenAPI快照SHA-256：`4149e96e4ce54f76bab84d0f36d6e9465040e3c9801732a413023015e3e87f80`
 
 生成TypeScript SHA-256：兼容版`931d2db0738738e47254afa858f26115fb531ba80f8cd3bf10bc9043e2d2f97a`；规范版`6f485c92d4470f4521b68d51a85f9be8af670ac4153ebf9a6ee9087abf7a7b0c`。
+
+## U-MLP3 — 已批准的当前金额政策（2026-10-26）
+
+用户已批准 MLP3-D01–MLP3-D06 及实施。仅新增 [MLP3-K05/K08](CONTRACT-market-linkage-p3.zh-CN.md) 的三条金额路由：有界当前模拟预算读取、明确审核的开仓／校正、只读金额预览。预览与开仓回执携带字面值 authorityGranted=false；开仓同时携带 inventoryChanged=false。原同源、幂等、准入与公开错误控制保留。Schema9 当前审核、运行与例外联合类型增加明确金额政策与容量证据；不虚构 max_qty、不缩量、不隐式批准。冻结9到 T19/T20 前仍关闭。两套配置仅剥离枚举的 P3 新增项后保留历史投影。
+
+OpenAPI 快照 SHA-256：`01c2f0af7bf6dbe25fb45d6d701e24845f2a78af2fa6b4e397bd529db7e0ce19`
+
+规范监控v2 OpenAPI快照SHA-256：`2a614df930688e3b9e91478ad97f74d1f194c468dd05b727ce09a1db1ce589f3`
+
+生成TypeScript SHA-256：兼容版`03ab5e8d14d4e76671f31e694430c668fbf3f50580bab0a63e6ab5d43b075366`；规范版`8031605b14df6760a2df773f808d48bff13fab3707b7058a48e6a69b8d8ae878`。
