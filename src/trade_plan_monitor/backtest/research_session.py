@@ -6,6 +6,7 @@ from datetime import datetime
 from hashlib import sha256
 from uuid import UUID
 
+from trade_plan_monitor.backtest.p3_replay import CapitalReplayState
 from trade_plan_monitor.backtest.research_report import ResearchOperationOutcome
 from trade_plan_monitor.domain.daily_hash import daily_hash
 from trade_plan_monitor.domain.plan_codec import dump_plan_json
@@ -56,8 +57,6 @@ class _ResearchRuntime(DailyRuntimeEvaluationService):
 
 class ResearchSession:
     def __init__(self, directory, run_input, calendar):
-        if run_input.plan_snapshot.schema_version == 9:
-            raise ValueError("P3_FROZEN_ADMISSION_PENDING")
         self.run_input = run_input
         self.plan = run_input.plan_snapshot
         self.now = run_input.research_input.started_at
@@ -127,6 +126,9 @@ class ResearchSession:
                 },
             )
             work.commit()
+        self.capital = CapitalReplayState(
+            self, getattr(run_input.research_input, "capital_program", None))
+        self.capital.apply(self.now, before_order=0)
 
     def _id(self):
         self._counter += 1

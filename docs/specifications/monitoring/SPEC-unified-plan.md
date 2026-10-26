@@ -333,10 +333,10 @@ Generated TypeScript SHA-256: compatibility `931d2db0738738e47254afa858f26115fb5
 
 ## U-MLP3 — Approved current monetary policies (2026-10-26)
 
-The user approved MLP3-D01–MLP3-D06 and implementation. Add only the three capital routes in [MLP3-K05/K08](CONTRACT-market-linkage-p3.md): bounded current simulation book reading, explicit reviewed opening/reconciliation, and read-only capital previews. Preview and opening receipts carry literal authorityGranted=false; opening also carries inventoryChanged=false. Existing same-origin/idempotency/admission controls and public errors remain. Schema9 current review/runtime/exception unions add explicit capital policy/capacity evidence; no fake max_qty, clipping or implicit approval. Frozen9 admission remains closed pending T19/T20. Both profiles retain the historical projection after only enumerated P3 additions.
+The user approved MLP3-D01–MLP3-D06 and implementation. Add only the three capital routes in [MLP3-K05/K08](CONTRACT-market-linkage-p3.md): bounded current simulation book reading, explicit reviewed opening/reconciliation, and read-only capital previews. Preview and opening receipts carry literal authorityGranted=false; opening also carries inventoryChanged=false. Existing same-origin/idempotency/admission controls and public errors remain. Schema9 current review/runtime/exception unions add explicit capital policy/capacity evidence; no fake max_qty, clipping or implicit approval. Frozen9 uses backtest-run-v10 and explicit unified-research-input-v3/capital programs. Availability-ordered source events, exact lot references and verified report evidence preserve isolated accounts; no current live-book lookup is allowed. Both profiles retain the historical projection after only enumerated P3 additions.
 
-OpenAPI snapshot SHA-256: `edc0a44c65bb82d0acc02a2c3e9748a5b118cd0d27aeafd6d477dd7845968077`
+OpenAPI snapshot SHA-256: `4bd255a77fe39fb647a0475df4368bf5c32ff04c8da2ad8416f45fafdb32d148`
 
-Canonical monitor v2 OpenAPI snapshot SHA-256: `cb01cb0318ace4d274584605ef56d4c61b9a696d0abd4b0b0fcfccf51d53ee22`
+Canonical monitor v2 OpenAPI snapshot SHA-256: `076ca6e32306c7cbe1fc3b2b2788ded8a36d823fe93d901fdefaa479b9e78c46`
 
-Generated TypeScript SHA-256: compatibility `b7760b6f3775036a8052f4f9c67904982b42e8d4ccb300ef5e07dbd9ffdfb4c1`; canonical `2dcb82bf10a5e4e0e88e0fef3f771de0c571158917eb6379a1980b70a4abaa9f`.
+Generated TypeScript SHA-256: compatibility `d76bca93615eb6c82c479228404916b5f70e26303cb11eef764f511e303c5ad6`; canonical `24d090d32d7ed32b15c98c7b4efc695f017364b724022acccaad0922f0a49829`.

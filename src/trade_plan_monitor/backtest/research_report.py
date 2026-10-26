@@ -10,13 +10,18 @@ from pydantic import Field, field_validator, model_validator
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.exception_replay import ExceptionReplayOutcome
 from trade_plan_monitor.backtest.models import ExecutionConfig, Sha256Hex
+from trade_plan_monitor.backtest.p3_replay import CapitalReplayOutcome
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.backtest.research_signal_projection import (
+    CapitalLinkageReference,
+    CapitalSignalReference,
     ResearchSignalReference,
     validate_signal_references,
 )
 from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
+from trade_plan_monitor.decision.p3_capital import CapitalAssessment
+from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.state.daily_state_models import (
@@ -102,13 +107,21 @@ class ResearchMetrics(ResearchValue):
 
 
 class ResearchDecisionEvent(ResearchValue):
+    signal_capital: tuple[CapitalAssessment, ...] | None = Field(
+        default=None, max_length=500, exclude_if=lambda value: value is None)
+    capital_outcomes: tuple[CapitalReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
     signal_pretrade: tuple[FrozenPretrade, ...] | None = Field(
         default=None, max_length=500, exclude_if=lambda value: value is None)
-    signal_linkage: tuple[MarketExceptionDecision, ...] | None = Field(
+    signal_linkage: tuple[
+        CapitalLinkageReference | CapitalMarketDecision | MarketExceptionDecision, ...
+    ] | None = Field(
         default=None, max_length=500, exclude_if=lambda value: value is None)
     exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
         default=None, max_length=10000, exclude_if=lambda value: value is None)
-    market_linkage: tuple[MarketExceptionDecision | MarketLinkageDecision, ...] | None = Field(
+    market_linkage: tuple[
+        CapitalMarketDecision | MarketExceptionDecision | MarketLinkageDecision, ...
+    ] | None = Field(
         default=None, max_length=2, exclude_if=lambda value: value is None)
     schema_version: Literal["unified-research-decision-v1"] = "unified-research-decision-v1"
     event_id: Sha256Hex
@@ -116,10 +129,15 @@ class ResearchDecisionEvent(ResearchValue):
     evaluation_id: Sha256Hex | None
     official_trade_date: str | None
     minute_target: datetime | None
-    signals: tuple[ResearchSignalReference | DailySignalState, ...] = Field(max_length=500)
+    signals: tuple[
+        CapitalSignalReference | ResearchSignalReference | DailySignalState, ...
+    ] = Field(
+        max_length=500)
     risks: tuple[DailyRiskState, ...] = Field(max_length=2)
     alerts: tuple[ResearchReminder, ...] = Field(max_length=10)
-    resulting_signals: tuple[ResearchSignalReference | DailySignalState, ...] = Field(
+    resulting_signals: tuple[
+        CapitalSignalReference | ResearchSignalReference | DailySignalState, ...
+    ] = Field(
         max_length=500)
     resulting_risks: tuple[DailyRiskState, ...] = Field(max_length=2)
     risk_action: DailyRiskAction
@@ -139,6 +157,8 @@ class ResearchReminder(DailyRuleReminderState):
 
 
 class _UnifiedReplayPayload(ResearchValue):
+    capital_outcomes: tuple[CapitalReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
     exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
         default=None, max_length=10000, exclude_if=lambda value: value is None)
     schema_version: Literal["backtest-report-v3"] = "backtest-report-v3"
@@ -186,6 +206,10 @@ class UnifiedReplayReport(_UnifiedReplayPayload):
 
     @model_validator(mode="after")
     def integrity(self):
+        if self.capital_outcomes is not None and tuple(
+            outcome for event in self.current_events for outcome in event.capital_outcomes or ()
+        ) != self.capital_outcomes:
+            raise ValueError("capital outcomes must retain their persisted decision events")
         if self.exception_outcomes is not None and tuple(
             outcome for event in self.current_events for outcome in event.exception_outcomes or ()
         ) != self.exception_outcomes:

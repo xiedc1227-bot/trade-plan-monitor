@@ -91,6 +91,9 @@ class UnknownLoopCash(ResearchValue):
 class PositionLimitFunding(ResearchValue):
     """No capital budget: shared plan authority still limits every simulated position."""
 
+    # Historical wire description is pinned. Schema9 monetary gates belong to the
+    # shared plan authority, independently of this spendable-cash funding policy.
+
     kind: Literal["POSITION_LIMIT_ONLY"] = "POSITION_LIMIT_ONLY"
 
 

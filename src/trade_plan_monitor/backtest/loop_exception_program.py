@@ -38,12 +38,19 @@ class LoopExceptionProgram:
             if e.event.received_at == now
         ]
         actions.extend((o.order, "OPERATION", o) for o in self.program.operations if o.at == now)
+        if self.session.capital.program is not None:
+            actions.extend((e.order, "CAPITAL", e)
+                for e in self.session.capital.program.opening_events if e.available_at == now)
         for _, kind, value in sorted(actions, key=lambda row: row[0]):
-            key = (kind, value.envelope_hash if kind == "EVENT" else value.operation_id)
+            key = (kind, value.envelope_hash if kind in {"EVENT", "CAPITAL"}
+                   else value.operation_id)
             if key in self.processed:
                 continue
             self.processed.add(key)
-            if kind == "EVENT":
+            if kind == "CAPITAL":
+                self.session.capital.apply(now, before_order=value.order+1)
+                runner._evaluate(frame.runtime)
+            elif kind == "EVENT":
                 self.outcomes.append(apply_frozen_exception(self.session, value))
                 runner._evaluate(frame.runtime)
             else:
@@ -107,4 +114,7 @@ class LoopExceptionProgram:
             ("OPERATION", o.operation_id) for o in self.program.operations if o.at <= cutoff
         )
         if required != self.processed:
-            raise ValueError("EXCEPTION_REPLAY_TIMELINE_MISSING")
+            if required != {key for key in self.processed if key[0] != "CAPITAL"}:
+                raise ValueError("EXCEPTION_REPLAY_TIMELINE_MISSING")
+        self.session.capital.finish(started_at=self.session.run_input.boundary.started_at,
+                                    cutoff=cutoff)

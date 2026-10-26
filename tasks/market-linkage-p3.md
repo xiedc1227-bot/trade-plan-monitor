@@ -188,7 +188,7 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T20 — Carry current policies through real frozen adapters
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T19.
 - Files/scope: T20a private runtime/quantity/book seeding; T20b loop/research execution and exact sidecar continuity; T20c compact report references, integrity and publication. At most5 files per child.
 - Acceptance: MLP3-A06,MLP3-A08,MLP3-A10. Verify: focused V03 plus old P1/P2 worker/accounting tests. Preserve byte budgets, exact selected-lot release and distinct research P&L; only admit Schema 9 frozen execution after the full chain is guarded.

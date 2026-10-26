@@ -47,6 +47,12 @@ from trade_plan_monitor.backtest.loop_report import (
 )
 from trade_plan_monitor.backtest.models import ExecutionStatus, UnfilledReason
 from trade_plan_monitor.backtest.models import StableIdentifier as PreparedIdentifier
+from trade_plan_monitor.backtest.p3_replay import CapitalReplayOutcome
+from trade_plan_monitor.backtest.p3_replay_input import (
+    CapitalExceptionReplayProgram,
+    CapitalReplayProgram,
+    CapitalResearchInput,
+)
 from trade_plan_monitor.backtest.plan_schedule import (
     LoopEndBoundary,
     LoopPlanVersion,
@@ -441,7 +447,9 @@ class BacktestLoopCostsInput(_BacktestApiInput):
 
 
 class _ExceptionReplayCommand(_BacktestApiInput):
-    exception_program: ExceptionReplayProgram | None = Field(
+    capital_program: CapitalReplayProgram | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    exception_program: CapitalExceptionReplayProgram | ExceptionReplayProgram | None = Field(
         default=None, exclude_if=lambda value: value is None)
 
     @field_validator("exception_program", mode="before")
@@ -449,7 +457,16 @@ class _ExceptionReplayCommand(_BacktestApiInput):
     def parse_exception_program(cls, value):
         if value is None or isinstance(value, ExceptionReplayProgram):
             return value
-        return ExceptionReplayProgram.model_validate_json(json.dumps(value))
+        model = (CapitalExceptionReplayProgram if value.get("schema_version") ==
+                 "capital-exception-program-v1" else ExceptionReplayProgram)
+        return model.model_validate_json(json.dumps(value))
+
+    @field_validator("capital_program", mode="before")
+    @classmethod
+    def parse_capital_program(cls, value):
+        if value is None or isinstance(value, CapitalReplayProgram):
+            return value
+        return CapitalReplayProgram.model_validate_json(json.dumps(value))
 
 
 class PreparedBacktestRunCommand(_ExceptionReplayCommand):
@@ -496,15 +513,18 @@ class BacktestRunCommand(_BacktestApiInput):
     ]
     execution_config: BacktestExecutionConfigInput
     event_risk_assumption: Literal["NO_EVENT_RISK", "MANUAL_EVENT_RISK"]
-    research_input: ExceptionResearchInput | UnifiedResearchInput | None = None
+    research_input: (
+        CapitalResearchInput | ExceptionResearchInput | UnifiedResearchInput | None
+    ) = None
 
     @field_validator("research_input", mode="before")
     @classmethod
     def parse_research(cls, value):
         if value is None or isinstance(value, UnifiedResearchInput):
             return value
-        model = (ExceptionResearchInput if value.get("schema_version") ==
-                 "unified-research-input-v2" else UnifiedResearchInput)
+        model = (CapitalResearchInput if value.get("schema_version") ==
+                 "unified-research-input-v3" else ExceptionResearchInput if value.get(
+                     "schema_version") == "unified-research-input-v2" else UnifiedResearchInput)
         return model.model_validate_json(json.dumps(value))
 
     def canonical_payload(self):
@@ -550,7 +570,7 @@ class BacktestRunCommand(_BacktestApiInput):
         dataset_start: date,
         core_target_qty: int | None,
         tactical_target_qty: int | None,
-        max_qty: int,
+        max_qty: int | None,
     ) -> Self:
         """Apply authoritative dataset and reviewed-plan constraints before hashing."""
 
@@ -575,7 +595,7 @@ class BacktestRunCommand(_BacktestApiInput):
             raise ValueError("initial CORE quantity exceeds the reviewed plan cap")
         if tactical_target_qty is not None and tactical_qty > tactical_target_qty:
             raise ValueError("initial TACTICAL quantity exceeds the reviewed plan cap")
-        if core_qty + tactical_qty > max_qty:
+        if max_qty is not None and core_qty + tactical_qty > max_qty:
             raise ValueError("initial total quantity exceeds the reviewed plan maximum")
         return self
 
@@ -2053,6 +2073,8 @@ class BacktestScheduledReportHeader(ResearchValue):
     """Bounded projection of an already verified immutable report, not its private codec."""
 
     report_schema_version: Literal["backtest-report-v5"]
+    capital_outcomes: tuple[CapitalReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
     exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
         default=None, max_length=10000, exclude_if=lambda value: value is None)
     exception_requests: tuple[ExceptionExecutionRequestOutcome, ...] | None = Field(

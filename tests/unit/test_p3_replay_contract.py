@@ -149,14 +149,18 @@ def capital_loop_input(*, program=None, combined=False):
 def test_v10_loop_freezes_unknown_cost_without_fake_max_or_cash(combined, tmp_path):
     from trade_plan_monitor.backtest.loop_input import decode_monitor_loop_input_json
     from trade_plan_monitor.backtest.loop_session import LoopSession
+    from trade_plan_monitor.market_data.models import TradingDay
 
     value = capital_loop_input(combined=combined)
     assert decode_monitor_loop_input_json(value.model_dump_json()) == value
     assert value.initial_account.cash.kind == "POSITION_LIMIT_ONLY"
     assert value.initial_account.accounting_cost_fen is None
     assert "max_qty" not in value.schedule.entries[0].version.snapshot.position.model_dump()
-    with pytest.raises(ValueError, match="P3_FROZEN_ADMISSION_PENDING"):
-        LoopSession(tmp_path, value, ())
+    calendar = (TradingDay(exchange="SSE", cal_date=NOW.date(), is_open=True,
+                           previous_trade_date=NOW.date()-timedelta(days=3)),)
+    with LoopSession(tmp_path, value, calendar) as session:
+        assert session.inventory()["total_qty"] == 400
+        assert session.capital.outcomes == []
     for changes in ({"capital_program": None}, {"run_formula_version": "backtest-run-v9"}):
         with pytest.raises(ValueError):
             value.model_copy(update=changes)

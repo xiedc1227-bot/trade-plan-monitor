@@ -142,6 +142,15 @@ def _summary_for_report(
         if run_input is None:
             raise ValueError("current research persistence requires its frozen run input")
         from trade_plan_monitor.backtest.exception_replay import validate_exception_outcomes
+        from trade_plan_monitor.backtest.p3_replay import validate_capital_outcomes
+
+        capital = getattr(run_input.research_input, "capital_program", None)
+        if capital is not None:
+            validate_capital_outcomes(capital.opening_events, report.capital_outcomes,
+                started_at=run_input.research_input.started_at,
+                cutoff=report.daily_equity[-1].marked_at)
+        elif report.capital_outcomes is not None:
+            raise ValueError("capital report requires a frozen program")
         frozen_events = getattr(run_input.research_input, "exception_authorization_events", ())
         validate_exception_outcomes(frozen_events, report.exception_outcomes,
                                     report.daily_equity[-1].marked_at)

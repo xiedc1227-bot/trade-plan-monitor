@@ -159,10 +159,10 @@ class BacktestRunInput(_RunInputValue):
         execution_config: ExecutionConfig,
         manual_event_risk: bool,
         plan_version_id: UUID | None = None,
-        research_input: ExceptionResearchInput | UnifiedResearchInput | None = None,
+        research_input: (
+            CapitalResearchInput | ExceptionResearchInput | UnifiedResearchInput | None
+        ) = None,
     ) -> Self:
-        if getattr(plan, "schema_version", None) == 9:
-            raise ValueError("P3_FROZEN_ADMISSION_PENDING")
         if not isinstance(plan, TradePlan | UnifiedTradePlan):
             raise TypeError("plan must be a TradePlan or UnifiedTradePlan")
         if not isinstance(manifest, DatasetManifest):
@@ -196,7 +196,8 @@ class BacktestRunInput(_RunInputValue):
                     formula_definition_hash=requirement.formula_definition_hash,
                 )
             return cls(
-                run_formula_version=(RUN_FORMULA_V9 if plan.schema_version == 8 else
+                run_formula_version=(RUN_FORMULA_V10 if plan.schema_version == 9 else
+                                     RUN_FORMULA_V9 if plan.schema_version == 8 else
                                      RUN_FORMULA_V8 if plan.schema_version == 7 else
                                      RUN_FORMULA_V7 if linked else RUN_FORMULA_V4),
                 plan_snapshot=plan,

@@ -154,7 +154,9 @@ class WorkbenchPlanSelection(ResearchValue):
             or self.account.snapshot_at > start
             or self.account.opening_mark is not None
             and self.account.opening_mark.available_at > start
-            or sum(lot.quantity for lot in self.account.lots) > version.snapshot.position.max_qty
+            or (version.snapshot.schema_version != 9
+                and sum(lot.quantity for lot in self.account.lots)
+                > version.snapshot.position.max_qty)
             or self.confirmed_at < original.review.reviewed_at
         ):
             raise ValueError("invalid historical opening context")

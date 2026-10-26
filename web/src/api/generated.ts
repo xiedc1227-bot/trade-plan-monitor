@@ -760,7 +760,7 @@ export type BacktestRunCommand = {
   initialCashFen: number;
   initialLots: Array<components["schemas"]["BacktestInitialLotInput"]>;
   planVersionId: string;
-  researchInput?: (components["schemas"]["ExceptionResearchInput"]) | (components["schemas"]["UnifiedResearchInput"]) | (null);
+  researchInput?: (components["schemas"]["CapitalResearchInput"]) | (components["schemas"]["ExceptionResearchInput"]) | (components["schemas"]["UnifiedResearchInput"]) | (null);
 };
 
 export type BacktestRunCoverageView = {
@@ -868,6 +868,7 @@ export type BacktestScheduledProvenanceView = {
 
 export type BacktestScheduledReportHeader = {
   boundary: components["schemas"]["LoopEndBoundary"];
+  capital_outcomes?: (Array<components["schemas"]["CapitalReplayOutcome"]>) | (null);
   cycle: components["schemas"]["LoopCycleSummary"];
   dataset_hash: string;
   event_count: number;
@@ -1043,6 +1044,11 @@ export type BuyDebitResult = {
   total_fees_fen?: (number) | (null);
 };
 
+export type BuySignalLotReference = {
+  kind?: "BUY_SIGNAL";
+  signal_id: string;
+};
+
 export type CapitalAssessment = {
   after_fen: (number) | (null);
   before_fen: (number) | (null);
@@ -1135,10 +1141,23 @@ export type CapitalCalculation = {
   share_capacity: (components["schemas"]["BoundedCapacity"] & { mode: "BOUNDED" }) | (components["schemas"]["UnboundedCapacity"] & { mode: "UNBOUNDED" }) | (components["schemas"]["UnknownCapacity"] & { mode: "UNKNOWN" });
 };
 
+export type CapitalExceptionReplayProgram = {
+  exception_authorization_events?: Array<(components["schemas"]["FrozenCapitalExceptionEvent"]) | (components["schemas"]["FrozenExceptionEvent"])>;
+  operations?: Array<components["schemas"]["ResearchSimulation"]>;
+  schema_version?: "capital-exception-program-v1";
+};
+
 export type CapitalInventoryLot = {
   bucket: "CORE" | "TACTICAL";
   lot_id: string;
   quantity: number;
+};
+
+export type CapitalLinkageReference = {
+  approval_binding: (components["schemas"]["ExceptionBinding"]) | (null);
+  base_evidence_hash: string;
+  calculation: components["schemas"]["CapitalCalculation"];
+  evidence_hash: string;
 };
 
 export type CapitalLot = {
@@ -1163,6 +1182,23 @@ export type CapitalMarketDecision = {
   rule_id: string;
   selection: components["schemas"]["ConfirmationSelection"];
   strength: (components["schemas"]["RelativeStrengthEvidence"]) | (null);
+  version?: "capital-market-evidence-v1";
+};
+
+export type CapitalMarketDecisionInput = {
+  approval_binding: (components["schemas"]["ExceptionBinding"]) | (null);
+  calculation: components["schemas"]["CapitalCalculation"];
+  confirmation: Array<components["schemas"]["UnifiedConditionEvidenceInput"]>;
+  consumed_hash: string;
+  content_hash: string;
+  decision_session: string;
+  evidence_cutoff: string;
+  evidence_hash: string;
+  market: components["schemas"]["MarketRegimeEvidenceInput"];
+  quantity_rules: (components["schemas"]["MarketQuantityRules"]) | (null);
+  rule_id: string;
+  selection: components["schemas"]["ConfirmationSelection"];
+  strength: (components["schemas"]["RelativeStrengthEvidenceInput"]) | (null);
   version?: "capital-market-evidence-v1";
 };
 
@@ -1211,6 +1247,65 @@ export type CapitalPreviewView = {
   planVersionId: string;
   quantity: (number) | (null);
   ruleId: string;
+};
+
+export type CapitalReplayOutcome = {
+  at: string;
+  blockers: Array<string>;
+  envelope_hash: string;
+  private_event_hash?: (string) | (null);
+  provenance: "RECORDED_LOCAL" | "RESEARCH_SCENARIO";
+  schema_version?: "capital-replay-outcome-v1";
+  source_event_id: string;
+  status: "APPLIED" | "BLOCKED";
+};
+
+export type CapitalReplayProgram = {
+  opening_events?: Array<components["schemas"]["FrozenCapitalOpening"]>;
+  schema_version?: "capital-replay-program-v1";
+};
+
+export type CapitalResearchInput = {
+  adjustment_proofs?: Array<components["schemas"]["ResearchAdjustmentProof"]>;
+  calendar_extension?: Array<components["schemas"]["TradingDay"]>;
+  capital_program: components["schemas"]["CapitalReplayProgram"];
+  exception_authorization_events?: Array<(components["schemas"]["FrozenCapitalExceptionEvent"]) | (components["schemas"]["FrozenExceptionEvent"])>;
+  inventory_known: boolean;
+  operations?: Array<(components["schemas"]["ResearchFact"] & { kind: "FACT" }) | (components["schemas"]["ResearchDeactivate"] & { kind: "DEACTIVATE" }) | (components["schemas"]["ResearchReplace"] & { kind: "REPLACE" }) | (components["schemas"]["ResearchSimulation"] & { kind: "SIMULATE" }) | (components["schemas"]["ResearchReassessment"] & { kind: "REASSESS" })>;
+  review: components["schemas"]["ResearchReview"];
+  schema_version?: "unified-research-input-v3";
+  started_at: string;
+};
+
+export type CapitalSignalReference = {
+  basis_id: string;
+  blockers: Array<string>;
+  bucket: "TACTICAL";
+  capital_execution_ref: (string) | (null);
+  confirmation_kind?: "OFFICIAL_DAILY_CLOSE" | "COMPLETED_BAR_CLOSE";
+  confirmed_at?: (string) | (null);
+  confirmed_trade_date: string;
+  evidence: Array<(components["schemas"]["DailyConditionEvidence"]) | (components["schemas"]["UnifiedConditionEvidence"])>;
+  evidence_fingerprint: string;
+  executable_qty: number;
+  execution_date: (string) | (null);
+  execution_window?: "NEXT_EXCHANGE_SESSION_ONLY" | "CURRENT_SESSION";
+  lineage: string;
+  market_linkage_ref: string;
+  occurrence_mode?: ("ONCE_PER_RULE" | "AFTER_RULE_COMPLETED") | (null);
+  plan_version_id: string;
+  planned_qty: number;
+  pretrade_execution?: (components["schemas"]["EconomicsResult"]) | (null);
+  pretrade_ref?: (string) | (null);
+  reset_trade_date?: (string) | (null);
+  review_id: string;
+  revision?: (number) | (null);
+  risk_invalidated?: boolean;
+  rule_id: string;
+  side: "BUY" | "SELL";
+  signal_id: string;
+  simulated_qty: number;
+  state: "CONFIRMED" | "READY" | "EXPIRED" | "INVALIDATED" | "SIMULATED";
 };
 
 export type CapturedReminder = {
@@ -2995,6 +3090,44 @@ export type FixedSizing = {
   mode: "FIXED_Q0";
 };
 
+export type FrozenCapitalExceptionEvent = {
+  candidate: components["schemas"]["ExceptionCandidateInput"];
+  decision: components["schemas"]["CapitalMarketDecisionInput"];
+  envelope_hash: string;
+  event: components["schemas"]["ExceptionEvent"];
+  order: number;
+  plan_hash: string;
+  provenance: "RECORDED_LOCAL" | "RESEARCH_SCENARIO";
+  schema_version?: "capital-exception-event-v1";
+};
+
+export type FrozenCapitalLot = {
+  bucket: "CORE" | "TACTICAL";
+  quantity: number;
+  reference: (components["schemas"]["OpeningLotReference"] & { kind: "OPENING" }) | (components["schemas"]["BuySignalLotReference"] & { kind: "BUY_SIGNAL" });
+  retained_basis_fen: number;
+  source_lot_id: (string) | (null);
+};
+
+export type FrozenCapitalOpening = {
+  available_at: string;
+  confirmed: true;
+  envelope_hash: string;
+  excerpt: string;
+  lots: Array<components["schemas"]["FrozenCapitalLot"]>;
+  observed_at: string;
+  order: number;
+  plan_hash: string;
+  provenance: "RECORDED_LOCAL" | "RESEARCH_SCENARIO";
+  reason: string;
+  received_at: string;
+  recorded_event: (components["schemas"]["CapitalBookEvent"]) | (null);
+  schema_version?: "capital-opening-event-v1";
+  source: string;
+  source_event_id: string;
+  symbol: string;
+};
+
 export type FrozenExceptionEvent = {
   candidate: components["schemas"]["ExceptionCandidateInput"];
   decision: components["schemas"]["MarketExceptionDecisionInput"];
@@ -3289,7 +3422,7 @@ export type LoopEvaluation = {
   evaluation_id: (string) | (null);
   inventory: components["schemas"]["DailyInventoryView"];
   kind?: "EVALUATED";
-  market_linkage?: (Array<(components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"])>) | (null);
+  market_linkage?: (Array<(components["schemas"]["CapitalMarketDecision"]) | (components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"])>) | (null);
   minute_target: (string) | (null);
   official_trade_date: (string) | (null);
   risk_action: components["schemas"]["DailyRiskAction"];
@@ -3400,7 +3533,7 @@ export type LoopPlanVersion = {
   information_cutoff: string;
   plan_hash: string;
   review: components["schemas"]["LoopPlanReview"];
-  snapshot: (components["schemas"]["P2TradePlan"]) | (components["schemas"]["MarketExceptionTradePlan"]) | (components["schemas"]["MarketLinkedTradePlan"]) | (components["schemas"]["UnifiedTradePlan"]);
+  snapshot: (components["schemas"]["P3TradePlan"]) | (components["schemas"]["P2TradePlan"]) | (components["schemas"]["MarketExceptionTradePlan"]) | (components["schemas"]["MarketLinkedTradePlan"]) | (components["schemas"]["UnifiedTradePlan"]);
   source_hashes: Array<string>;
   version_id: string;
 };
@@ -4014,6 +4147,7 @@ export type MissingInputCode = "COMPLETE_MINUTE_BAR" | "PREVIOUS_MINUTE_BAR" | "
 export type MonitorLoopReport = {
   authority_id: string;
   boundary: components["schemas"]["LoopEndBoundary"];
+  capital_outcomes?: (Array<components["schemas"]["CapitalReplayOutcome"]>) | (null);
   cycle: components["schemas"]["LoopCycleSummary"];
   dataset_hash: string;
   event_count: number;
@@ -4159,6 +4293,11 @@ export type OpeningLotFacts = {
   quantity: components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Gt_gt_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"];
   sellable_quantity: (components["schemas"]["OpeningFact_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991___MultipleOf_multiple_of_100_____"]) | (null);
   unit_cost_yuan: (components["schemas"]["OpeningFact_Annotated_Decimal__BeforeValidator__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0___Le_le_9007199254740991____PydanticGeneralMetadata_allow_inf_nan_False_____"]) | (null);
+};
+
+export type OpeningLotReference = {
+  kind?: "OPENING";
+  lot_key: string;
 };
 
 export type OperationKind = "PLAN_EXTRACTION" | "AI_PROVIDER_TEST";
@@ -4361,6 +4500,28 @@ export type P3Position = {
   core_target_qty?: (number) | (null);
   limit: (components["schemas"]["CapitalOnlyLimit"] & { mode: "CAPITAL_ONLY" }) | (components["schemas"]["CombinedCapitalLimit"] & { mode: "QUANTITY_AND_CAPITAL" });
   tactical_target_qty?: (number) | (null);
+};
+
+export type P3TradePlan = {
+  activation: (components["schemas"]["DailyManualActivation"] & { mode: "MANUAL" }) | (components["schemas"]["DailyDayActivation"] & { mode: "TRADING_DAY" }) | (components["schemas"]["DailyRangeActivation"] & { mode: "DATE_RANGE" });
+  alert_rules?: Array<components["schemas"]["UnifiedAlertRule"]>;
+  execution_mode?: "CONDITION_PLAN";
+  execution_policy: components["schemas"]["UnifiedExecutionPolicy"];
+  execution_version?: "condition-plan-v5";
+  levels: (components["schemas"]["UnifiedLevels"]) | (null);
+  market: "SSE" | "SZSE" | "BSE";
+  metadata: components["schemas"]["DailyMetadata"];
+  monitoring: (components["schemas"]["UnifiedMonitoring"]) | (null);
+  name: string;
+  ordinary_rules: Array<(components["schemas"]["P2Rule"]) | (components["schemas"]["UnifiedRule"])>;
+  plan_id: string;
+  position: components["schemas"]["P3Position"];
+  reference_market: components["schemas"]["ReferenceMarketBinding"];
+  risk_branches: Array<components["schemas"]["UnifiedRiskBranch"]>;
+  schema_version?: 9;
+  symbol: string;
+  trading_rules: components["schemas"]["DailyTradingRules"];
+  version: number;
 };
 
 export type PlanActivationCommand = {
@@ -4783,9 +4944,10 @@ export type PreparedBacktestDataView = {
 };
 
 export type PreparedBacktestRunCommand = {
+  capitalProgram?: (components["schemas"]["CapitalReplayProgram"]) | (null);
   costs: components["schemas"]["BacktestLoopCostsInput"];
   endDate?: (string) | (null);
-  exceptionProgram?: (components["schemas"]["ExceptionReplayProgram"]) | (null);
+  exceptionProgram?: (components["schemas"]["CapitalExceptionReplayProgram"]) | (components["schemas"]["ExceptionReplayProgram"]) | (null);
   manifestHash: string;
   preparationId: string;
   response: components["schemas"]["BacktestLoopResponseInput"];
@@ -4986,23 +5148,25 @@ export type ResearchDecisionEvent = {
   alerts: Array<components["schemas"]["ResearchReminder"]>;
   at: string;
   blockers: Array<string>;
+  capital_outcomes?: (Array<components["schemas"]["CapitalReplayOutcome"]>) | (null);
   conditions: Array<components["schemas"]["ResearchRuleEvidence"]>;
   evaluation_id: (string) | (null);
   event_id: string;
   exception_outcomes?: (Array<components["schemas"]["ExceptionReplayOutcome"]>) | (null);
   inventory_after: components["schemas"]["DailyInventoryView"];
   inventory_before: components["schemas"]["DailyInventoryView"];
-  market_linkage?: (Array<(components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"])>) | (null);
+  market_linkage?: (Array<(components["schemas"]["CapitalMarketDecision"]) | (components["schemas"]["MarketExceptionDecision"]) | (components["schemas"]["MarketLinkageDecision"])>) | (null);
   minute_target: (string) | (null);
   official_trade_date: (string) | (null);
   resulting_risks: Array<components["schemas"]["DailyRiskState"]>;
-  resulting_signals: Array<(components["schemas"]["ResearchSignalReference"]) | (components["schemas"]["DailySignalState"])>;
+  resulting_signals: Array<(components["schemas"]["CapitalSignalReference"]) | (components["schemas"]["ResearchSignalReference"]) | (components["schemas"]["DailySignalState"])>;
   risk_action: components["schemas"]["DailyRiskAction"];
   risks: Array<components["schemas"]["DailyRiskState"]>;
   schema_version?: "unified-research-decision-v1";
-  signal_linkage?: (Array<components["schemas"]["MarketExceptionDecision"]>) | (null);
+  signal_capital?: (Array<components["schemas"]["CapitalAssessment"]>) | (null);
+  signal_linkage?: (Array<(components["schemas"]["CapitalLinkageReference"]) | (components["schemas"]["CapitalMarketDecision"]) | (components["schemas"]["MarketExceptionDecision"])>) | (null);
   signal_pretrade?: (Array<components["schemas"]["FrozenPretrade"]>) | (null);
-  signals: Array<(components["schemas"]["ResearchSignalReference"]) | (components["schemas"]["DailySignalState"])>;
+  signals: Array<(components["schemas"]["CapitalSignalReference"]) | (components["schemas"]["ResearchSignalReference"]) | (components["schemas"]["DailySignalState"])>;
 };
 
 export type ResearchDecisionView = {
@@ -5299,9 +5463,10 @@ export type ScheduledLoopAuditEvent = {
 };
 
 export type ScheduledPreparedBacktestRunCommand = {
+  capitalProgram?: (components["schemas"]["CapitalReplayProgram"]) | (null);
   costs: components["schemas"]["BacktestLoopCostsInput"];
   endDate?: (string) | (null);
-  exceptionProgram?: (components["schemas"]["ExceptionReplayProgram"]) | (null);
+  exceptionProgram?: (components["schemas"]["CapitalExceptionReplayProgram"]) | (components["schemas"]["ExceptionReplayProgram"]) | (null);
   manifestHash: string;
   preparationId: string;
   response: components["schemas"]["BacktestLoopResponseInput"];
@@ -5935,9 +6100,10 @@ export type WorkbenchBacktestDataView = {
 };
 
 export type WorkbenchBacktestRunCommand = {
+  capitalProgram?: (components["schemas"]["CapitalReplayProgram"]) | (null);
   costs: components["schemas"]["BacktestLoopCostsInput"];
   endDate?: (string) | (null);
-  exceptionProgram?: (components["schemas"]["ExceptionReplayProgram"]) | (null);
+  exceptionProgram?: (components["schemas"]["CapitalExceptionReplayProgram"]) | (components["schemas"]["ExceptionReplayProgram"]) | (null);
   response: components["schemas"]["BacktestLoopResponseInput"];
   schemaVersion: "workbench-loop-selection-v1";
   selectionHash: string;
@@ -6164,21 +6330,29 @@ export interface components {
     Board: Board;
     BoundedCapacity: BoundedCapacity;
     BuyDebitResult: BuyDebitResult;
+    BuySignalLotReference: BuySignalLotReference;
     CapitalAssessment: CapitalAssessment;
     CapitalAuthorityContext: CapitalAuthorityContext;
     CapitalBook: CapitalBook;
     CapitalBookEvent: CapitalBookEvent;
     CapitalBookView: CapitalBookView;
     CapitalCalculation: CapitalCalculation;
+    CapitalExceptionReplayProgram: CapitalExceptionReplayProgram;
     CapitalInventoryLot: CapitalInventoryLot;
+    CapitalLinkageReference: CapitalLinkageReference;
     CapitalLot: CapitalLot;
     CapitalMarketDecision: CapitalMarketDecision;
+    CapitalMarketDecisionInput: CapitalMarketDecisionInput;
     CapitalOnlyLimit: CapitalOnlyLimit;
     CapitalOpeningApiCommand: CapitalOpeningApiCommand;
     CapitalOpeningLot: CapitalOpeningLot;
     CapitalOpeningReceipt: CapitalOpeningReceipt;
     CapitalPreviewCommand: CapitalPreviewCommand;
     CapitalPreviewView: CapitalPreviewView;
+    CapitalReplayOutcome: CapitalReplayOutcome;
+    CapitalReplayProgram: CapitalReplayProgram;
+    CapitalResearchInput: CapitalResearchInput;
+    CapitalSignalReference: CapitalSignalReference;
     CapturedReminder: CapturedReminder;
     CertifiedDailyBar: CertifiedDailyBar;
     ClauseDisposition: ClauseDisposition;
@@ -6362,6 +6536,9 @@ export interface components {
     FixedDailyReference: FixedDailyReference;
     FixedDailyReferenceInput: FixedDailyReferenceInput;
     FixedSizing: FixedSizing;
+    FrozenCapitalExceptionEvent: FrozenCapitalExceptionEvent;
+    FrozenCapitalLot: FrozenCapitalLot;
+    FrozenCapitalOpening: FrozenCapitalOpening;
     FrozenExceptionEvent: FrozenExceptionEvent;
     FrozenPretrade: FrozenPretrade;
     FrozenPretradeInput: FrozenPretradeInput;
@@ -6476,6 +6653,7 @@ export interface components {
     OpeningFact_Literal__CORE____TACTICAL___: OpeningFact_Literal__CORE____TACTICAL___;
     OpeningFact_date_: OpeningFact_date_;
     OpeningLotFacts: OpeningLotFacts;
+    OpeningLotReference: OpeningLotReference;
     OperationKind: OperationKind;
     OperationReceipt: OperationReceipt;
     P2DraftRule: P2DraftRule;
@@ -6490,6 +6668,7 @@ export interface components {
     P3PlanDraft: P3PlanDraft;
     P3PlanDraftInput: P3PlanDraftInput;
     P3Position: P3Position;
+    P3TradePlan: P3TradePlan;
     PlanActivationCommand: PlanActivationCommand;
     PlanActiveValidity: PlanActiveValidity;
     PlanCandidateReview: PlanCandidateReview;

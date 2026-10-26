@@ -4,6 +4,7 @@ import { isCalendarDate, isShanghaiDateTime, shanghaiDateTimeKey } from "./shang
 import { validPlanDiagnostics } from "./planDiagnostics";
 import { currentPlanVersion } from "./preparationReview";
 import { exceptionOutcomes } from "./exceptionReplayValues";
+import { capitalOutcomes } from "./capitalReplayValues";
 
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const integer = (v: unknown, min = 0): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= min;
@@ -19,8 +20,9 @@ const keys = (v: Record<string, unknown>, required: readonly string[], optional:
   required.every(k => Object.hasOwn(v, k)) && Object.keys(v).every(k => required.includes(k) || optional.includes(k));
 const bytes = (v: unknown, max: number) => new TextEncoder().encode(JSON.stringify(v)).byteLength <= max;
 const sameTime = (a: unknown, b: unknown) => isShanghaiDateTime(a) && isShanghaiDateTime(b) && shanghaiDateTimeKey(a) === shanghaiDateTimeKey(b);
-const exceptionFields = ["exception_outcomes", "exception_requests", "exception_provenance"];
+const exceptionFields = ["exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"];
 function exceptionReport(v: Record<string, unknown>): boolean {
+  if (v.capital_outcomes !== undefined && !capitalOutcomes(v.capital_outcomes)) return false;
   if (exceptionFields.every(key => v[key] === undefined)) return true;
   return Array.isArray(v.exception_provenance) && v.exception_provenance.length <= 2 &&
     v.exception_provenance.every(item => ["RECORDED_LOCAL", "RESEARCH_SCENARIO"].includes(item)) &&
@@ -240,7 +242,7 @@ function payload(v: unknown): boolean {
   }
   return v.kind === "EVALUATED" && keys(v, ["kind", "alerts", "blockers", "conditions", "duplicate", "evaluation_id", "inventory", "minute_target", "official_trade_date", "risk_action", "risks", "signals"], ["market_linkage"]) &&
     (v.market_linkage === undefined || v.market_linkage === null || Array.isArray(v.market_linkage) && v.market_linkage.length <= 2 && v.market_linkage.every(item => record(item) &&
-      ["market-linkage-evidence-v1", "market-linkage-evidence-v2"].includes(String(item.version)) && record(item.calculation) && hash(item.evidence_hash))) &&
+      ["market-linkage-evidence-v1", "market-linkage-evidence-v2", "capital-market-evidence-v1"].includes(String(item.version)) && record(item.calculation) && hash(item.evidence_hash))) &&
     strings(v.blockers) && typeof v.duplicate === "boolean" && nullable(v.evaluation_id, hash) && inventory(v.inventory) &&
     nullable(v.minute_target, isShanghaiDateTime) && nullable(v.official_trade_date, isCalendarDate) && record(v.risk_action) &&
     Array.isArray(v.conditions) && v.conditions.every(item => record(item) && text(item.rule_id) && record(item.evidence) &&

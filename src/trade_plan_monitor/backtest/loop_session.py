@@ -16,6 +16,7 @@ from trade_plan_monitor.backtest.loop_input import (
     decode_monitor_loop_input_json,
 )
 from trade_plan_monitor.backtest.loop_report import LoopAccountDiscrepancy, LoopPlanTransition
+from trade_plan_monitor.backtest.p3_replay import CapitalReplayState
 from trade_plan_monitor.backtest.plan_schedule import require_loop_timestamp
 from trade_plan_monitor.backtest.reminder_capture import CAPTURE_METADATA, ReminderCapture
 from trade_plan_monitor.domain.daily_hash import daily_hash
@@ -82,8 +83,6 @@ class _LoopActivationPlans(PlanRepository):
 
 class LoopSession:
     def __init__(self, directory: Path, run_input: MonitorLoopInput | ScheduledLoopInput, calendar):
-        if any(row.version.snapshot.schema_version == 9 for row in run_input.schedule.entries):
-            raise ValueError("P3_FROZEN_ADMISSION_PENDING")
         self.run_input = decode_monitor_loop_input_json(run_input.model_dump_json())
         boundary = self.run_input.boundary
         self.run_input.schedule.preflight(
@@ -137,6 +136,8 @@ class LoopSession:
                 event_id_factory=lambda key: self.identity("reminder", key),
             )
             self._seed(calendar)
+            self.capital = CapitalReplayState(self, self.run_input.capital_program)
+            self.capital.apply(self.now, before_order=0)
             if isinstance(self.run_input, ScheduledLoopInput):
                 self._compare_account_context()
         except BaseException:

@@ -136,6 +136,13 @@ def validate_reference_summary(summary: BacktestRunSummary, reference: LoopInput
 def validate_report_input(stored: StoredLoopInput, report: MonitorLoopReport) -> None:
     run = stored.run_input
     from trade_plan_monitor.backtest.exception_replay import validate_exception_outcomes
+    from trade_plan_monitor.backtest.p3_replay import validate_capital_outcomes
+
+    if run.capital_program is not None:
+        validate_capital_outcomes(run.capital_program.opening_events, report.capital_outcomes,
+            started_at=run.boundary.started_at, cutoff=run.boundary.evidence_cutoff)
+    elif report.capital_outcomes is not None:
+        raise ValueError("capital report requires a frozen program")
 
     program = run.exception_program
     if program is None:

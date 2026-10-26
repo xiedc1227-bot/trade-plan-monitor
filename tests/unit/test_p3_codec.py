@@ -40,6 +40,6 @@ def test_current_codec_admits_exact_schema9_after_execution_guards():
     plan = P3TradePlan.model_validate(p3_payload())
     assert load_plan_json(dump_plan_json(plan)) == plan
     from trade_plan_monitor.backtest.run_input import BacktestRunInput
-    with pytest.raises(ValueError, match="P3_FROZEN_ADMISSION_PENDING"):
+    with pytest.raises(TypeError, match="manifest must be a DatasetManifest"):
         BacktestRunInput.create(plan=plan, manifest=None, initial_cash_fen=1, initial_lots=(),
                                execution_config=None, manual_event_risk=False)

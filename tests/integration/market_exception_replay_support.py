@@ -220,7 +220,6 @@ def frozen_market_approval(directory, chain, calendar, daily, indices, factors,
     from trade_plan_monitor.backtest.loop_replay import _Frames
     from trade_plan_monitor.backtest.market_linkage_input import LinkedIndexReplaySource
     from trade_plan_monitor.backtest.research_session import ResearchSession
-    from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
     from trade_plan_monitor.domain.plan_hash import plan_sha256
     from trade_plan_monitor.runtime.market_exceptions import (
         apply_exception_decision,
@@ -248,6 +247,7 @@ def frozen_market_approval(directory, chain, calendar, daily, indices, factors,
     inputs = frames._inputs(chain.now, FRIDAY)
     session = ResearchSession(directory, (run_input_factory or research_run_input)(chain), calendar)
     try:
+        session.capital.apply(chain.now)
         evaluated = session.runtime.run_inputs(plan=chain.plan, inputs=inputs)
         assert evaluated.snapshot["exception_candidates"], evaluated.snapshot["market_linkage"]
         row = evaluated.snapshot["exception_candidates"][0]
@@ -277,15 +277,18 @@ def frozen_market_approval(directory, chain, calendar, daily, indices, factors,
                 now=chain.now,
             )
             work.commit()
-        return FrozenExceptionEvent.build(
+        from trade_plan_monitor.backtest.p3_replay_input import FrozenCapitalExceptionEvent
+        from trade_plan_monitor.decision.market_exception_decision import parse_linkage_decision
+
+        model = (FrozenCapitalExceptionEvent if chain.plan.schema_version == 9
+                 else FrozenExceptionEvent)
+        return model.build(
             plan_hash=plan_sha256(chain.plan),
             candidate=candidate,
-            decision=MarketExceptionDecision.model_validate(
-                evaluated.snapshot["market_linkage"][0]
-            ),
+            decision=parse_linkage_decision(evaluated.snapshot["market_linkage"][0]),
             event=receipt.event,
             provenance="RESEARCH_SCENARIO",
-            order=0,
+            order=1 if chain.plan.schema_version == 9 else 0,
         )
     finally:
         session.close()

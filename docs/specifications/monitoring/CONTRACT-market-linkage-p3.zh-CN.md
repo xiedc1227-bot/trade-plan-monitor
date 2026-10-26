@@ -53,3 +53,9 @@ CapitalBookView.inventoryLots 在尚未建立成本账时也列出完整当前�
 capital-opening-event-v1 拥有 source_event_id、plan_hash、symbol、provenance RECORDED_LOCAL/RESEARCH_SCENARIO、observed_at<=received_at<=available_at、order0..10000、明确 confirmed=true、source/excerpt/reason、完整 lots（最多500）、可选 recorded_event 和封装哈希。每个批次记录 source_lot_id（已记录来源必填）、bucket、quantity、retained_basis_fen 与稳定引用：OPENING(lot_key) 或 BUY_SIGNAL(signal_id)。引用选择准确期初批次或实际整笔买入回执，不选择其他批次、不推断成本、不依赖私有数据库计数器。已记录事件必须是原始 OPENING/RECONCILIATION capital-book-event-v1 回执，其证券、成本、批次数量、来源文字与服务端时间相符。研究假设事件必须明确声明假设，不得冒充已记录回执。
 
 capital-replay-program-v1 按 available_at/order 冻结唯一有序事件。最多10000事件并沿用8MiB输入上限。运行开始前已可用的事件可以为明确匹配的期初库存提供依据；未来事件仅在可用后应用，不能补齐过去未知成本。capital-exception-event-v1 保留新的完整金额计算；frozen-exception-event-v1 继续严格限制旧计算。unified-research-input-v3 与 backtest-run-v10 绑定明确金额输入、分离的授权／执行事件及既有研究账户。缺失成本声明保持 UNKNOWN，明确空金额程序不授予任何权限。完整输入参与哈希，未来来源事件不改变较早私有授权标识。禁止读取当前用户数据或可变当前预算／费用。
+
+## MLP3-K10 — 已实现的私有回放与报告引用
+
+CapitalReplayState 仅对已可用的冻结声明，在私有事务内调用 confirm_capital_opening，解析准确的 OPENING/BUY_SIGNAL 批次，并保留 CapitalReplayOutcome 的来源、封装、来源分类与私有记录哈希。必须匹配完整当前批次，声明不改变库存。backtest-run-v10 仅在显式预算程序存在时接纳 Schema9。当前金额防护和准确实际分配记账继续共用；LoopAccount/ResearchValuation 的现金与盈亏保持独立。
+
+研究 CapitalSignalReference 保留 market_linkage_ref/pretrade_ref/capital_execution_ref；signal_linkage/signal_pretrade/signal_capital 各自仅保存一份不可变证据。CapitalLinkageReference 仅复用 base_evidence_hash 对应的逐字节等价市场事实，同时保留独立 calculation/approval_binding/evidence_hash。读取器重建并校验完整 CapitalMarketDecision 与 DailySignalState；缺失或篡改引用会失败。无需截断即可保留原32KiB结果项与总量限制。可选 capital_outcomes 在旧报告中省略；发布与重读将其绑定到准确可用的冻结来源序列。准备、调度和工作台命令携带 capitalProgram 与 capital-exception-program-v1；旧输入不能借用这些字段或版本。

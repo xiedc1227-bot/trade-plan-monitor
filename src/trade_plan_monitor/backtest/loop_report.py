@@ -22,6 +22,7 @@ from trade_plan_monitor.backtest.loop_input import (
     ScheduledLoopInput,
 )
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
+from trade_plan_monitor.backtest.p3_replay import CapitalReplayOutcome, validate_capital_outcomes
 from trade_plan_monitor.backtest.plan_schedule import (
     LoopEndBoundary,
     LoopTimestamp,
@@ -32,6 +33,7 @@ from trade_plan_monitor.backtest.research_input import ResearchSimulation, Resea
 from trade_plan_monitor.backtest.research_report import ResearchReminder, ResearchRuleEvidence
 from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
+from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
 from trade_plan_monitor.decision.unified_conditions import evaluate_unified_condition
 from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.state.daily_state_models import (
@@ -188,7 +190,9 @@ def project_loop_valuation(
 
 
 class LoopEvaluation(ResearchValue):
-    market_linkage: tuple[MarketExceptionDecision | MarketLinkageDecision, ...] | None = Field(
+    market_linkage: tuple[
+        CapitalMarketDecision | MarketExceptionDecision | MarketLinkageDecision, ...
+    ] | None = Field(
         default=None, max_length=2, exclude_if=lambda value: value is None)
     kind: Literal["EVALUATED"] = "EVALUATED"
     evaluation_id: Sha256Hex | None
@@ -363,6 +367,8 @@ class LoopMetrics(ResearchValue):
 
 
 class _ExceptionReport(ResearchValue):
+    capital_outcomes: tuple[CapitalReplayOutcome, ...] | None = Field(
+        default=None, max_length=10000, exclude_if=lambda value: value is None)
     exception_outcomes: tuple[ExceptionReplayOutcome, ...] | None = Field(
         default=None, max_length=10000, exclude_if=lambda value: value is None)
     exception_requests: tuple[ExceptionExecutionRequestOutcome, ...] | None = Field(
@@ -773,6 +779,11 @@ class LoopReportWriter:
             metrics=metrics,
         )
         report_type = MonitorLoopReport
+        if run.capital_program is not None:
+            validate_capital_outcomes(run.capital_program.opening_events,
+                self.session.capital.outcomes, started_at=run.boundary.started_at,
+                cutoff=run.boundary.evidence_cutoff)
+            values["capital_outcomes"] = tuple(self.session.capital.outcomes)
         if run.exception_program is not None:
             values.update(
                 exception_outcomes=tuple(self.exception_program.outcomes),

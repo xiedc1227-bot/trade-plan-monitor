@@ -755,7 +755,7 @@ class _ProductionBacktestService:
             ):
                 raise ApiError(ApiErrorCode.CONFLICT)
             plan = load_plan_json(snapshot.plan_json)
-            current = plan.schema_version in {5, 6, 7, 8}
+            current = plan.schema_version in {5, 6, 7, 8, 9}
             if current and (snapshot.review_id is None or snapshot.content_hash is None
                 or command.research_input is None
                 or command.research_input.review.content_hash != snapshot.content_hash):
@@ -774,7 +774,7 @@ class _ProductionBacktestService:
                     dataset_start=manifest.scope.start,
                     core_target_qty=None if current else plan.position.core_target_qty,
                     tactical_target_qty=None if current else plan.position.tactical_target_qty,
-                    max_qty=plan.position.max_qty,
+                    max_qty=None if plan.schema_version == 9 else plan.position.max_qty,
                 )
                 run_input = BacktestRunInput.create(
                     plan=plan,
@@ -979,16 +979,29 @@ class _ProductionBacktestService:
         input_type = (WorkbenchLoopInput if workbench else
                       ScheduledLoopInput if scheduled else MonitorLoopInput)
         from trade_plan_monitor.backtest.exception_replay_input import ExceptionReplayProgram
-        exception = any(row.version.snapshot.schema_version in {7, 8}
+        from trade_plan_monitor.backtest.p3_replay_input import CapitalExceptionReplayProgram
+
+        capital = any(row.version.snapshot.schema_version == 9
+                      for row in prepared.schedule.entries)
+        if capital != (command.capital_program is not None):
+            raise ApiError(ApiErrorCode.CONFLICT)
+        if capital and command.exception_program is not None and not isinstance(
+                command.exception_program, CapitalExceptionReplayProgram):
+            raise ApiError(ApiErrorCode.CONFLICT)
+        exception = any(row.version.snapshot.schema_version in {7, 8, 9}
                         for row in prepared.schedule.entries)
         if command.exception_program is not None and not exception:
             raise ApiError(ApiErrorCode.CONFLICT)
         p2 = any(row.version.snapshot.schema_version == 8
                  for row in prepared.schedule.entries)
         run_input = input_type(
-            **({"run_formula_version": "backtest-run-v9" if p2 else "backtest-run-v8",
+            **({"run_formula_version": "backtest-run-v10" if capital else
+                "backtest-run-v9" if p2 else "backtest-run-v8",
                 "exception_program":
-                command.exception_program or ExceptionReplayProgram()} if exception else {}),
+                command.exception_program or (
+                    CapitalExceptionReplayProgram() if capital else ExceptionReplayProgram())}
+                if exception else {}),
+            **({"capital_program": command.capital_program} if capital else {}),
             **({"selection_hash": prepared.manifest_hash} if workbench else {}),
             schedule=prepared.schedule,
             initial_account=prepared.account,

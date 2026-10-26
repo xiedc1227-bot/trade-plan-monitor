@@ -72,7 +72,11 @@ def validate_exception_outcomes(events, outcomes, cutoff):
 
 def apply_frozen_exception(session, frozen):
     """The caller has already evaluated only evidence available at this clock tick."""
-    frozen = FrozenExceptionEvent.model_validate_json(frozen.model_dump_json())
+    from trade_plan_monitor.backtest.p3_replay_input import FrozenCapitalExceptionEvent
+
+    reader = (FrozenCapitalExceptionEvent if frozen.schema_version == "capital-exception-event-v1"
+              else FrozenExceptionEvent)
+    frozen = reader.model_validate_json(frozen.model_dump_json())
     source, event = frozen.candidate, frozen.event
     status, blockers, private_event = "BLOCKED", (), None
     try:

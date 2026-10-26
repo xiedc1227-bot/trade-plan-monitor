@@ -49,7 +49,7 @@ def replay_current(
 ):
     run_input = BacktestRunInput.create(
         plan=plan,
-        manifest=(reader.manifest if plan.schema_version in {6, 7, 8} else
+        manifest=(reader.manifest if plan.schema_version in {6, 7, 8, 9} else
                   DatasetManifest(dataset_hash=reader.dataset_hash, scope=reader.scope, items=())),
         initial_cash_fen=initial_cash_fen,
         initial_lots=initial_lots,
@@ -61,7 +61,7 @@ def replay_current(
     if plan.symbol not in reader.scope.symbols:
         raise ValueError("PLAN_SYMBOL_NOT_IN_DATASET")
     linked_source = None
-    if plan.schema_version in {6, 7, 8}:
+    if plan.schema_version in {6, 7, 8, 9}:
         from trade_plan_monitor.market_index.models import MarketIndexInterval
         linked_source = LinkedIndexReplaySource(
             reference_market=plan.reference_market,
@@ -135,6 +135,11 @@ def replay_current(
             for event in getattr(research_input, "exception_authorization_events", ()):
                 _insert(spool, event.event.received_at, "EXCEPTION",
                         f"{event.order:05d}", event.envelope_hash)
+            capital = getattr(research_input, "capital_program", None)
+            if capital is not None:
+                for event in capital.opening_events:
+                    _insert(spool, max(event.available_at, research_input.started_at), "CAPITAL",
+                            f"{event.order:05d}", event.envelope_hash)
             spool.commit()
             calendar = tuple(calendar[day] for day in sorted(calendar))
             session = ResearchSession(directory, run_input, calendar)
@@ -189,7 +194,7 @@ class _Replay:
             group = tuple(rows)
             targets, official = [], None
             for _, _, kind, payload in group:
-                if kind in {"OPERATION", "EXCEPTION"}:
+                if kind in {"OPERATION", "EXCEPTION", "CAPITAL"}:
                     continue
                 new_target, new_official = self._market(kind, payload)
                 if new_target is not None:
@@ -211,11 +216,22 @@ class _Replay:
                 or official is not None
                 or operations
                 or any(r[2] == "EXCEPTION" for r in group)
+                or any(r[2] == "CAPITAL" for r in group)
                 or any(r[2] in {"PROOF", "INDEX"} for r in group)
             ):
                 self.evaluate(official, max(targets) if targets else self.target, group)
             for _, _, kind, payload in group:
-                if kind == "EXCEPTION":
+                if kind == "CAPITAL":
+                    event = next(e for e in self.session.capital.program.opening_events
+                                 if e.envelope_hash == payload)
+                    previous = len(self.session.capital.outcomes)
+                    self.session.capital.apply(now, before_order=event.order+1)
+                    self.evaluate(official, max(targets) if targets else self.target,
+                                  ((at, "capital-applied", kind, payload),))
+                    applied = tuple(self.session.capital.outcomes[previous:])
+                    self.events[-1] = self.events[-1].model_copy(update={
+                        "capital_outcomes": applied})
+                elif kind == "EXCEPTION":
                     self.exception_outcomes.append(apply_frozen_exception(
                         self.session, self.exception_events[payload]))
                     self.evaluate(official, max(targets) if targets else self.target,
@@ -264,6 +280,17 @@ class _Replay:
                 now, DailyInventoryView.model_validate(self.session.inventory()), price
             )
         self.session.now = self.end
+        self.session.capital.finish(started_at=self.frozen.started_at, cutoff=self.end)
+        # Pre-start declarations were seeded at started_at; retain their receipts once.
+        seeded = tuple(o for o in self.session.capital.outcomes
+                       if o not in tuple(v for e in self.events for v in e.capital_outcomes or ()))
+        if seeded:
+            if not self.events:
+                self.session.now = self.frozen.started_at
+                self.evaluate(None, self.target, ())
+                self.session.now = self.end
+            self.events[0] = self.events[0].model_copy(update={
+                "capital_outcomes": seeded + (self.events[0].capital_outcomes or ())})
         if not self.valuation.marks:
             self.valuation.mark(
                 self.end, DailyInventoryView.model_validate(self.session.inventory()), None
@@ -287,7 +314,7 @@ class _Replay:
             )
         )
         limitations.extend(self.valuation.blockers)
-        if self.plan.schema_version in {7, 8}:
+        if self.plan.schema_version in {7, 8, 9}:
             from trade_plan_monitor.backtest.research_signal_projection import (
                 compact_signal_evidence,
             )
@@ -304,8 +331,10 @@ class _Replay:
             if not self.exception_events:
                 limitations.append("EXCEPTION_AUTHORIZATION_NOT_SUPPLIED")
         return UnifiedReplayReport.build(
+            **({"capital_outcomes": tuple(self.session.capital.outcomes)}
+               if self.plan.schema_version == 9 else {}),
             **({"exception_outcomes": tuple(self.exception_outcomes)}
-               if self.plan.schema_version in {7, 8} else {}),
+               if self.plan.schema_version in {7, 8, 9} else {}),
             run_id=self.session.run_input.run_id,
             plan_hash=self.session.run_input.plan_sha256,
             dataset_hash=self.session.run_input.dataset_hash,

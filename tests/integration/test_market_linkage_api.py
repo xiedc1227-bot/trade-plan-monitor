@@ -40,13 +40,15 @@ def schema5_projection(document):
             "pretradeExecutionVersion", "capitalExecutionVersion"),
         "LoopEvaluation": ("market_linkage",),
         "ResearchDecisionEvent": (
-            "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade"),
-        "PreparedBacktestRunCommand": ("exceptionProgram",),
-        "ScheduledPreparedBacktestRunCommand": ("exceptionProgram",),
-        "WorkbenchBacktestRunCommand": ("exceptionProgram",),
-        "MonitorLoopReport": ("exception_outcomes", "exception_requests", "exception_provenance"),
+            "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade",
+            "capital_outcomes", "signal_capital"),
+        "PreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+        "ScheduledPreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+        "WorkbenchBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+        "MonitorLoopReport": (
+            "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
         "BacktestScheduledReportHeader": (
-            "exception_outcomes", "exception_requests", "exception_provenance"),
+            "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
         "LoopRequest": ("source_operation",),
         "DailyAlertCenterView": ("pretradeMode", "capitalMode"),
     }
@@ -71,10 +73,8 @@ def schema5_projection(document):
         nullable = {"type": "null"} in node.get("anyOf", [])
         union = node["anyOf"][0] if nullable else node
         variants = union.get("oneOf", union.get("anyOf"))
-        expected_count = 4 if name == "LoopPlanVersion" else 5
-        assert len(variants) == expected_count
-        if name != "LoopPlanVersion":
-            assert variants[0]["$ref"].startswith("#/components/schemas/P3")
+        assert len(variants) == 5
+        assert variants[0]["$ref"].startswith("#/components/schemas/P3")
         assert variants[-4]["$ref"].startswith("#/components/schemas/P2")
         assert variants[-3]["$ref"].startswith("#/components/schemas/MarketException")
         assert variants[-2]["$ref"].startswith("#/components/schemas/MarketLinked")
@@ -101,15 +101,17 @@ def schema5_projection(document):
     research = schemas["BacktestRunCommand"]["properties"]["researchInput"]
     assert research.pop("title") == "Researchinput"
     node = research["anyOf"]
-    assert node[0]["$ref"].endswith("/ExceptionResearchInput")
-    assert node[-1] == {"type": "null"} and len(node) == 3
-    del node[0]
+    assert node[0]["$ref"].endswith("/CapitalResearchInput")
+    assert node[1]["$ref"].endswith("/ExceptionResearchInput")
+    assert node[-1] == {"type": "null"} and len(node) == 4
+    del node[:2]
     for field in ("signals", "resulting_signals"):
         node = schemas["ResearchDecisionEvent"]["properties"][field]
         variants = node["items"]["anyOf"]
-        assert variants == [{"$ref": "#/components/schemas/ResearchSignalReference"},
+        assert variants == [{"$ref": "#/components/schemas/CapitalSignalReference"},
+                            {"$ref": "#/components/schemas/ResearchSignalReference"},
                             {"$ref": "#/components/schemas/DailySignalState"}]
-        node["items"] = variants[1]
+        node["items"] = variants[2]
     return result
 
 

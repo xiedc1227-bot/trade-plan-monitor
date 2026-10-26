@@ -177,7 +177,9 @@ class FrozenPreparedPlan(ResearchValue):
             raise ValueError("frozen account/plan chronology does not cover the historical start")
         if self.account.opening_mark is not None and self.account.opening_mark.available_at > start:
             raise ValueError("frozen opening mark was unavailable at the historical start")
-        if sum(lot.quantity for lot in self.account.lots) > self.version.snapshot.position.max_qty:
+        if (self.version.snapshot.schema_version != 9
+                and sum(lot.quantity for lot in self.account.lots)
+                > self.version.snapshot.position.max_qty):
             raise ValueError("reviewed inventory exceeds the plan maximum")
         return self
 
@@ -694,7 +696,9 @@ class FrozenPreparedCollection(ResearchValue):
             )
         ):
             raise ValueError("opening account or plan is unavailable at start")
-        if sum(lot.quantity for lot in self.account.lots) > first.version.snapshot.position.max_qty:
+        if (first.version.snapshot.schema_version != 9
+                and sum(lot.quantity for lot in self.account.lots)
+                > first.version.snapshot.position.max_qty):
             raise ValueError("initial inventory exceeds first plan maximum")
         return self
 
