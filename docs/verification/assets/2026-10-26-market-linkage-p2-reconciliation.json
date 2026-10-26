@@ -1,0 +1,72 @@
+{
+  "integration_initial": "14 failed, 4709 passed, 1 skipped, 5 warnings in 3065.66s",
+  "failed_nodes": [
+    "tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1]",
+    "tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2]",
+    "tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation",
+    "tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[WEAK_MINIMUM]",
+    "tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[BROKEN_STRONG]",
+    "tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[1]",
+    "tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[2]",
+    "tests/integration/test_market_linkage_api.py::test_public_schema_and_read_projection_preserve_linked_authority",
+    "tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1]",
+    "tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[canonical-v2]",
+    "tests/integration/test_openapi_snapshot.py::test_openapi_snapshot_is_deterministic_canonical_and_current",
+    "tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval",
+    "tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas",
+    "tests/integration/test_openapi_snapshot.py::test_typescript_contract_is_generated_from_the_snapshot"
+  ],
+  "current_code_recheck": "14 passed, 1 warning in 25.03s",
+  "recheck_command": [
+    ".venv/Scripts/python.exe",
+    "-m",
+    "pytest",
+    "tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1]",
+    "tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2]",
+    "tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation",
+    "tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[WEAK_MINIMUM]",
+    "tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[BROKEN_STRONG]",
+    "tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[1]",
+    "tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[2]",
+    "tests/integration/test_market_linkage_api.py::test_public_schema_and_read_projection_preserve_linked_authority",
+    "tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1]",
+    "tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[canonical-v2]",
+    "tests/integration/test_openapi_snapshot.py::test_openapi_snapshot_is_deterministic_canonical_and_current",
+    "tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval",
+    "tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas",
+    "tests/integration/test_openapi_snapshot.py::test_typescript_contract_is_generated_from_the_snapshot",
+    "-q",
+    "--basetemp=.pytest-p2-failure-recheck-71"
+  ],
+  "capacity": {
+    "source_log": "2026-10-26-market-linkage-p2-capacity-initial-partial.log",
+    "collection": "2026-10-26-market-linkage-p2-initial-collection.log",
+    "completed_prefix_length": 1008,
+    "capacity_cases": {
+      "tests/integration/test_backtest_acceptance.py::test_fake_production_journey_is_complete_offline_and_live_state_is_unchanged": ".",
+      "tests/integration/test_backtest_acceptance.py::test_twenty_day_replay_meets_latency_working_set_and_wal_budgets": ".",
+      "tests/integration/test_backtest_acceptance.py::test_twenty_day_replay_meets_traced_heap_budget": ".",
+      "tests/integration/test_backtest_acceptance.py::test_ten_symbol_252_day_replays_meet_capacity_budgets": "F",
+      "tests/integration/test_backtest_acceptance.py::test_252_day_replay_from_ten_symbol_dataset_meets_traced_heap_budget": ".",
+      "tests/integration/test_backtest_acceptance.py::test_each_fixture_symbol_has_stable_buy_and_t1_exit_bytes": ".",
+      "tests/integration/test_backtest_acceptance.py::test_large_queries_and_100k_export_meet_fixed_budgets": ".",
+      "tests/integration/test_backtest_acceptance.py::test_prior_evidence_manifest_and_bilingual_reports_fail_closed": "."
+    },
+    "status": "Initial: 7 passed, 1 failed. Final isolated rerun of the failed node: 1 passed, 1 warning in 1377.64s; all 8 capacity cases reconciled.",
+    "final_recheck_command": ".venv/Scripts/python.exe -m pytest tests/integration/test_backtest_acceptance.py::test_ten_symbol_252_day_replays_meet_capacity_budgets -q -s --basetemp=.pytest-p2-capacity-final-71",
+    "final_database_and_wal_bytes": {
+      "capacity-ten-symbol.sqlite3": 519073792,
+      "capacity-ten-symbol-results.sqlite3": 184938496
+    },
+    "unchanged_asserted_limits": {
+      "per_symbol_replay_seconds": 120,
+      "working_set_delta_mib": 768,
+      "market_database_and_wal_mib": 512,
+      "results_database_and_wal_mib": 192,
+      "symbols": 10,
+      "sessions_per_symbol": 252
+    },
+    "diagnosis": "The initial completed test prefix was retained before the redundant long integration process was interrupted. Its deferred traceback is unavailable; the initial failure cause is not claimed as proven. The isolated rerun passed without changing the test, implementation, timeouts or resource limits. Per-symbol timing and working-set measurements were not printed because BT050_REPORT_METRICS was not enabled; their original assertions passed."
+  },
+  "status": "PASS: every observed failure has a passing current-code recheck; existing live exclusions and platform skip retained."
+}

@@ -1,0 +1,18 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/p2-pretrade.spec.ts
+
+
+Running 6 tests using 1 worker
+
+
+
+(node:30828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/6] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › WEAK_MINIMUM consume › source review, explicit occurrence approval and separate whole execution
+[2/6] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › WEAK_MINIMUM correction › source review, explicit occurrence approval and separate whole execution
+[3/6] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › WEAK_MINIMUM preview › source review, explicit occurrence approval and separate whole execution
+[4/6] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › BROKEN_STRONG consume › source review, explicit occurrence approval and separate whole execution
+[5/6] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › BROKEN_STRONG correction › source review, explicit occurrence approval and separate whole execution
+[6/6] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › BROKEN_STRONG preview › source review, explicit occurrence approval and separate whole execution
+  6 passed (1.5m)

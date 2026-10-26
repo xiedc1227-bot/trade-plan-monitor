@@ -1,0 +1,619 @@
+........................................................................ [  1%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+............................................s........................... [  7%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+...............................FF....................................... [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+.F...................................................................... [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+......................................................................FF [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+.......................FF.....F......................................... [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+.....................................F.....F............................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+....................................FFF.F............................... [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+............................................                             [100%]
+================================== FAILURES ===================================
+_ test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1] _
+
+contract = (1, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
+        from tests.integration.test_market_linkage_api import schema5_projection
+
+        version, document = contract
+>       document = schema5_projection(document)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_backtest_service_contract.py:76:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+            ),
+            "DailyEvaluationApiView": ("marketLinkage", "linkedIndexSource", "exceptionCandidates"),
+            "DailySignalApiView": ("marketLinkage",),
+            "DailySignalState": ("market_linkage",),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": ("market_linkage", "exception_outcomes", "signal_linkage"),
+            "PreparedBacktestRunCommand": ("exceptionProgram",),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram",),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram",),
+            "MonitorLoopReport": ("exception_outcomes", "exception_requests", "exception_provenance"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance"),
+            "LoopRequest": ("source_operation",),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+                assert field in schemas[name]["properties"]
+                del schemas[name]["properties"][field]
+            if "required" in schemas[name]:
+                schemas[name]["required"] = [f for f in schemas[name]["required"] if f not in fields]
+        for name in (
+            "CollectionCandidateView",
+            "CollectionCorrectionDeclaration",
+            "PlanCandidateReview",
+            "PlanUpdateExtractionOutput",
+            "PlanUpdateExtractionOutputInput",
+            "PreparationExtractionCandidate",
+            "PreparationReviewDeclaration",
+            "LoopPlanVersion",
+        ):
+            field = "snapshot" if name == "LoopPlanVersion" else "draft"
+            node = schemas[name]["properties"][field]
+            nullable = {"type": "null"} in node.get("anyOf", [])
+            union = node["anyOf"][0] if nullable else node
+            variants = union.get("oneOf", union.get("anyOf"))
+            expected_count = 3
+>           assert len(variants) == expected_count
+E           AssertionError: assert 4 == 3
+E            +  where 4 = len([{'$ref': '#/components/schemas/P2PlanDraft'}, {'$ref': '#/components/schemas/MarketExceptionPlanDraft'}, {'$ref': '#/components/schemas/MarketLinkedPlanDraft'}, {'$ref': '#/components/schemas/UnifiedPlanDraft'}])
+
+tests\integration\test_market_linkage_api.py:67: AssertionError
+_ test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2] _
+
+contract = (2, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
+        from tests.integration.test_market_linkage_api import schema5_projection
+
+        version, document = contract
+>       document = schema5_projection(document)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_backtest_service_contract.py:76:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+            ),
+            "DailyEvaluationApiView": ("marketLinkage", "linkedIndexSource", "exceptionCandidates"),
+            "DailySignalApiView": ("marketLinkage",),
+            "DailySignalState": ("market_linkage",),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": ("market_linkage", "exception_outcomes", "signal_linkage"),
+            "PreparedBacktestRunCommand": ("exceptionProgram",),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram",),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram",),
+            "MonitorLoopReport": ("exception_outcomes", "exception_requests", "exception_provenance"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance"),
+            "LoopRequest": ("source_operation",),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+                assert field in schemas[name]["properties"]
+                del schemas[name]["properties"][field]
+            if "required" in schemas[name]:
+                schemas[name]["required"] = [f for f in schemas[name]["required"] if f not in fields]
+        for name in (
+            "CollectionCandidateView",
+            "CollectionCorrectionDeclaration",
+            "PlanCandidateReview",
+            "PlanUpdateExtractionOutput",
+            "PlanUpdateExtractionOutputInput",
+            "PreparationExtractionCandidate",
+            "PreparationReviewDeclaration",
+            "LoopPlanVersion",
+        ):
+            field = "snapshot" if name == "LoopPlanVersion" else "draft"
+            node = schemas[name]["properties"][field]
+            nullable = {"type": "null"} in node.get("anyOf", [])
+            union = node["anyOf"][0] if nullable else node
+            variants = union.get("oneOf", union.get("anyOf"))
+            expected_count = 3
+>           assert len(variants) == expected_count
+E           AssertionError: assert 4 == 3
+E            +  where 4 = len([{'$ref': '#/components/schemas/P2PlanDraft'}, {'$ref': '#/components/schemas/MarketExceptionPlanDraft'}, {'$ref': '#/components/schemas/MarketLinkedPlanDraft'}, {'$ref': '#/components/schemas/UnifiedPlanDraft'}])
+
+tests\integration\test_market_linkage_api.py:67: AssertionError
+__________ test_plan_capability_reports_current_condition_activation __________
+
+    def test_plan_capability_reports_current_condition_activation() -> None:
+        plan_json = dump_plan_json(current_three_rule_plan())
+        with TestClient(_app(plan_service=_RejectPlanService()), base_url=BASE_URL) as client:
+            capability = client.get("/api/v1/plan-capabilities")
+            blocked = client.post(
+                "/api/v1/plan-drafts",
+                headers={"Idempotency-Key": "r09-v3-blocked"},
+                json={
+                    "basePlanVersionId": None,
+                    "extractionId": None,
+                    "planJson": plan_json,
+                    "sourceText": "isolated trusted review only",
+                    "reviewIssues": [],
+                    "expectedRevision": 0,
+                },
+            )
+            partial = json.loads(plan_json)
+            partial["ordinary_rules"][0]["confirmation"] = None
+            invalid = client.post(
+                "/api/v1/plan-drafts",
+                headers={"Idempotency-Key": "r09-v3-partial"},
+                json={
+                    "planJson": json.dumps(partial),
+                    "sourceText": "incomplete source-only draft",
+                    "reviewIssues": [],
+                    "expectedRevision": 0,
+                },
+            )
+
+        assert capability.status_code == 200
+>       assert capability.json() == {
+            "supportedSchemaVersions": [5, 6, 7],
+            "linkedExecutionVersion": "condition-plan-v2",
+            "exceptionExecutionVersion": "condition-plan-v3",
+            "schemaVersion": 5,
+            "executionMode": "CONDITION_PLAN",
+            "executionVersion": "condition-plan-v1",
+            "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
+            "publicActivationAvailable": True,
+            "isolatedTrustedReviewOnly": False,
+            "pendingRequirements": [],
+        }
+E       AssertionError: assert {'schemaVersi...6, 7, 8], ...} == {'supportedSc...sion': 5, ...}
+E
+E         Omitting 9 identical items, use -vv to show
+E         Differing items:
+E         {'supportedSchemaVersions': [5, 6, 7, 8]} != {'supportedSchemaVersions': [5, 6, 7]}
+E         Left contains 1 more item:
+E         {'pretradeExecutionVersion': 'condition-plan-v4'}
+E         Use -v to get more diff
+
+tests\integration\test_explicit_transport.py:176: AssertionError
+____ test_public_schema_advertises_complete_exception_policy[WEAK_MINIMUM] ____
+
+exception_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000002CCDA25F850>
+
+    def test_public_schema_advertises_complete_exception_policy(exception_chain):
+        response = exception_chain.client.get("/api/v1/plan-editor-schema")
+        assert response.status_code == 200
+        data = response.json()
+>       assert data["supportedSchemaVersions"] == [5, 6, 7]
+E       assert [5, 6, 7, 8] == [5, 6, 7]
+E
+E         Left contains one more item: 8
+E         Use -v to get more diff
+
+tests\integration\test_market_exception_api.py:92: AssertionError
+___ test_public_schema_advertises_complete_exception_policy[BROKEN_STRONG] ____
+
+exception_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000002CCDD53C150>
+
+    def test_public_schema_advertises_complete_exception_policy(exception_chain):
+        response = exception_chain.client.get("/api/v1/plan-editor-schema")
+        assert response.status_code == 200
+        data = response.json()
+>       assert data["supportedSchemaVersions"] == [5, 6, 7]
+E       assert [5, 6, 7, 8] == [5, 6, 7]
+E
+E         Left contains one more item: 8
+E         Use -v to get more diff
+
+tests\integration\test_market_exception_api.py:92: AssertionError
+_______ test_all_pre_linkage_schema_shapes_and_routes_are_preserved[1] ________
+
+profile = 1
+
+            variants = node["items"]["anyOf"]
+            assert variants == [{"$ref": "#/components/schemas/ResearchSignalReference"},
+                                {"$ref": "#/components/schemas/DailySignalState"}]
+            node["items"] = variants[1]
+        return result
+
+
+    @pytest.mark.parametrize("profile", [1, 2])
+    def test_all_pre_linkage_schema_shapes_and_routes_are_preserved(profile):
+        import json
+        import subprocess
+>       from pathlib import Path
+                  ^^^^^^^^^^^^^^^
+
+tests\integration\test_market_linkage_api.py:111:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+                "pretradeCandidateSchema",
+            ),
+            "DailyEvaluationApiView": (
+                "marketLinkage", "linkedIndexSource", "exceptionCandidates", "pretrade"),
+            "DailySignalApiView": ("marketLinkage", "pretrade", "pretradeExecution"),
+            "DailySignalState": ("market_linkage", "pretrade", "pretrade_execution"),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion",
+                "pretradeExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": (
+                "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade"),
+            "PreparedBacktestRunCommand": ("exceptionProgram",),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram",),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram",),
+            "MonitorLoopReport": ("exception_outcomes", "exception_requests", "exception_provenance"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance"),
+            "LoopRequest": ("source_operation",),
+            "DailyAlertCenterView": ("pretradeMode",),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+                assert field in schemas[name]["properties"]
+                del schemas[name]["properties"][field]
+            if "required" in schemas[name]:
+                schemas[name]["required"] = [f for f in schemas[name]["required"] if f not in fields]
+        for name in (
+            "CollectionCandidateView",
+            "CollectionCorrectionDeclaration",
+            "PlanCandidateReview",
+            "PlanUpdateExtractionOutput",
+            "PlanUpdateExtractionOutputInput",
+            "PreparationExtractionCandidate",
+            "PreparationReviewDeclaration",
+            "LoopPlanVersion",
+        ):
+            field = "snapshot" if name == "LoopPlanVersion" else "draft"
+>           node = schemas[name]["properties"][field]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: assert 4 == 3
+E            +  where 4 = len([{'$ref': '#/components/schemas/P2PlanDraft'}, {'$ref': '#/components/schemas/MarketExceptionPlanDraft'}, {'$ref': '#/components/schemas/MarketLinkedPlanDraft'}, {'$ref': '#/components/schemas/UnifiedPlanDraft'}])
+
+tests\integration\test_market_linkage_api.py:67: AssertionError
+_______ test_all_pre_linkage_schema_shapes_and_routes_are_preserved[2] ________
+
+profile = 2
+
+            variants = node["items"]["anyOf"]
+            assert variants == [{"$ref": "#/components/schemas/ResearchSignalReference"},
+                                {"$ref": "#/components/schemas/DailySignalState"}]
+            node["items"] = variants[1]
+        return result
+
+
+    @pytest.mark.parametrize("profile", [1, 2])
+    def test_all_pre_linkage_schema_shapes_and_routes_are_preserved(profile):
+        import json
+        import subprocess
+>       from pathlib import Path
+                  ^^^^^^^^^^^^^^^
+
+tests\integration\test_market_linkage_api.py:111:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+                "pretradeCandidateSchema",
+            ),
+            "DailyEvaluationApiView": (
+                "marketLinkage", "linkedIndexSource", "exceptionCandidates", "pretrade"),
+            "DailySignalApiView": ("marketLinkage", "pretrade", "pretradeExecution"),
+            "DailySignalState": ("market_linkage", "pretrade", "pretrade_execution"),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion",
+                "pretradeExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": (
+                "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade"),
+            "PreparedBacktestRunCommand": ("exceptionProgram",),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram",),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram",),
+            "MonitorLoopReport": ("exception_outcomes", "exception_requests", "exception_provenance"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance"),
+            "LoopRequest": ("source_operation",),
+            "DailyAlertCenterView": ("pretradeMode",),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+                assert field in schemas[name]["properties"]
+                del schemas[name]["properties"][field]
+            if "required" in schemas[name]:
+                schemas[name]["required"] = [f for f in schemas[name]["required"] if f not in fields]
+        for name in (
+            "CollectionCandidateView",
+            "CollectionCorrectionDeclaration",
+            "PlanCandidateReview",
+            "PlanUpdateExtractionOutput",
+            "PlanUpdateExtractionOutputInput",
+            "PreparationExtractionCandidate",
+            "PreparationReviewDeclaration",
+            "LoopPlanVersion",
+        ):
+            field = "snapshot" if name == "LoopPlanVersion" else "draft"
+>           node = schemas[name]["properties"][field]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: assert 4 == 3
+E            +  where 4 = len([{'$ref': '#/components/schemas/P2PlanDraft'}, {'$ref': '#/components/schemas/MarketExceptionPlanDraft'}, {'$ref': '#/components/schemas/MarketLinkedPlanDraft'}, {'$ref': '#/components/schemas/UnifiedPlanDraft'}])
+
+tests\integration\test_market_linkage_api.py:67: AssertionError
+______ test_public_schema_and_read_projection_preserve_linked_authority _______
+
+linked_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000002CCE3052950>
+
+        "/api/v1/simulation-position-inventory",
+        params={"symbol": chain.plan.symbol, "asOfTradeDate": str(TUESDAY)},
+    )
+    assert response.status_code == 200
+>   assert response.json()["snapshot"]["totalQty"] == 100
+E   assert [5, 6, 7, 8] == [5, 6, 7]
+E
+E     Left contains one more item: 8
+E     Use -v to get more diff
+
+tests\integration\test_market_linkage_api.py:194: AssertionError
+_ test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1] _
+
+contract = (1, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_committed_run_and_result_contracts_match_actual_routes(contract):
+        version, document = contract
+        snapshot = ROOT / ("openapi.json" if version == 1 else "openapi.runtime-status.json")
+        types = (
+            ROOT / "web/src/api" / ("generated.ts" if version == 1 else "generated-runtime-status.ts")
+        )
+>       assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_monitor_loop_contract.py:35: AssertionError
+__ test_committed_run_and_result_contracts_match_actual_routes[canonical-v2] __
+
+contract = (2, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_committed_run_and_result_contracts_match_actual_routes(contract):
+        version, document = contract
+        snapshot = ROOT / ("openapi.json" if version == 1 else "openapi.runtime-status.json")
+        types = (
+            ROOT / "web/src/api" / ("generated.ts" if version == 1 else "generated-runtime-status.ts")
+        )
+>       assert json.loads(snapshot.read_text(encoding="utf-8")) == document
+E       AssertionError: assert {'components'..., ...}}, ...}} == {'openapi': '..., ...}, ...}}}
+E
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'components': {'schemas': {'AIProviderConfiguration': {'additionalProperties': False, 'description': 'Complete non-se..., 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], 'title': 'AIProviderView', ...}, ...}}} != {'components': {'schemas': {'AIProviderConfiguration': {'properties': {'providerId': {'type': 'string', 'format': 'uui...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+E         Use -v to get more diff
+
+tests\integration\test_monitor_loop_contract.py:35: AssertionError
+________ test_openapi_snapshot_is_deterministic_canonical_and_current _________
+
+    def test_openapi_snapshot_is_deterministic_canonical_and_current() -> None:
+        generator, snapshot, _typescript = _generated_documents()
+
+        assert snapshot == generator.render_openapi_snapshot(generator.build_openapi_document())
+        assert snapshot.endswith("\n")
+        assert (
+            snapshot
+            == json.dumps(
+                json.loads(snapshot),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+>       assert OPENAPI_PATH.read_text(encoding="utf-8") == snapshot
+E       assert '{\n  "compon...  }\n  }\n}\n' == '{\n  "compon...  }\n  }\n}\n'
+E
+E         Skipping 777749 identical leading characters in diff, use -v to show
+E         -          "default": false,
+E         ?           ^^^^^^
+E         +          "const": false,
+E         ?           ^^^^
+E         +             "default": false,...
+E
+E         ...Full output truncated (26648 lines hidden), use '-vv' to show
+
+tests\integration\test_openapi_snapshot.py:158: AssertionError
+____________ test_openapi_change_requires_bilingual_spec_approval _____________
+
+    def test_openapi_change_requires_bilingual_spec_approval() -> None:
+        _generator, snapshot, _typescript = _generated_documents()
+        digest = sha256(snapshot.encode("utf-8")).hexdigest()
+
+>       assert f"OpenAPI snapshot SHA-256: `{digest}`" in LOCAL_WEB_SPEC_PATH.read_text(
+            encoding="utf-8"
+        )
+E       AssertionError: assert 'OpenAPI snapshot SHA-256: `8bad25a9884bda471020e84226923f61ed13459444bd5c443140630589811954`' in '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...a7670a3c9cee3bf0da47b23cc41df3f3f468`; canonical `5a95e2d2311fa6fc505f962c8f5c0ddbf1dc4c807a7d1895293261ced343fc5a`.\n'
+E        +  where '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...a7670a3c9cee3bf0da47b23cc41df3f3f468`; canonical `5a95e2d2311fa6fc505f962c8f5c0ddbf1dc4c807a7d1895293261ced343fc5a`.\n' = read_text(encoding='utf-8')
+E        +    where read_text = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/docs/specifications/monitoring/SPEC-unified-plan.md').read_text
+
+tests\integration\test_openapi_snapshot.py:165: AssertionError
+_____ test_openapi_contains_only_approved_paths_and_public_error_schemas ______
+
+    def test_openapi_contains_only_approved_paths_and_public_error_schemas() -> None:
+        generator = _load_generator()
+        document = generator.build_openapi_document()
+
+>       assert set(document["paths"]) == APPROVED_PATHS
+E       AssertionError: assert {'/api/v1/ai-...cations', ...} == {'/api/v1/ai-...cations', ...}
+E
+E         Extra items in the left set:
+E         '/api/v1/plan-economics-previews'
+E         Use -v to get more diff
+
+tests\integration\test_openapi_snapshot.py:175: AssertionError
+___________ test_typescript_contract_is_generated_from_the_snapshot ___________
+
+    def test_typescript_contract_is_generated_from_the_snapshot() -> None:
+        _generator, _snapshot, typescript = _generated_documents()
+
+>       assert TYPESCRIPT_PATH.read_text(encoding="utf-8") == typescript
+E       AssertionError: assert '// This file...};\n  };\n}\n' == '// This file...};\n  };\n}\n'
+E
+E         Skipping 148473 identical leading characters in diff, use -v to show
+E         - Granted?: boolean;
+E         ?           ^^^  --
+E         + Granted?: false;
+E         ?           ^^ +
+E             computedAt: string;...
+E
+E         ...Full output truncated (8397 lines hidden), use '-vv' to show
+
+tests\integration\test_openapi_snapshot.py:243: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/integration/test_lot_history_indexes.py::test_history_migration_matches_orm_metadata
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_lot_history_indexes.py:180: SAWarning: Skipped unsupported reflection of expression-based index ux_exception_command
+    assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+
+tests/integration/test_lot_history_indexes.py::test_history_migration_matches_orm_metadata
+tests/integration/test_sqlite_repositories.py::test_sqlite_migration_has_no_metadata_drift
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\alembic\ddl\impl.py:850: UserWarning: autogenerate skipping metadata-specified expression-based index 'ux_exception_command'; dialect 'sqlite' under SQLAlchemy 2.0.52 can't reflect these indexes so they can't be compared
+    util.warn(
+
+tests/integration/test_sqlite_repositories.py::test_sqlite_migration_has_no_metadata_drift
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_sqlite_repositories.py:3482: SAWarning: Skipped unsupported reflection of expression-based index ux_exception_command
+    assert compare_metadata(migration_context, Base.metadata) == []
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1]
+FAILED tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2]
+FAILED tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation
+FAILED tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[WEAK_MINIMUM]
+FAILED tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[BROKEN_STRONG]
+FAILED tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[1]
+FAILED tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[2]
+FAILED tests/integration/test_market_linkage_api.py::test_public_schema_and_read_projection_preserve_linked_authority
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[compatibility-v1]
+FAILED tests/integration/test_monitor_loop_contract.py::test_committed_run_and_result_contracts_match_actual_routes[canonical-v2]
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_snapshot_is_deterministic_canonical_and_current
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas
+FAILED tests/integration/test_openapi_snapshot.py::test_typescript_contract_is_generated_from_the_snapshot
+14 failed, 4709 passed, 1 skipped, 5 warnings in 3065.66s (0:51:05)

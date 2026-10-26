@@ -1,6 +1,6 @@
 # 实施计划与任务：market-linkage-p2
 
-状态：实施中 — 2026-10-26。用户已批准六项决策及实施；任务／检查点标记及验收报告记录实际完成情况。[英文任务](market-linkage-p2.md) · [中文规格](../docs/specifications/monitoring/SPEC-market-linkage-p2.zh-CN.md)。
+状态：已完成 — 2026-10-26。用户已批准六项决策及实施；任务／检查点标记及验收报告记录实际完成情况。[英文任务](market-linkage-p2.md) · [中文规格](../docs/specifications/monitoring/SPEC-market-linkage-p2.zh-CN.md)。
 
 ## MLP2-P01 — 授权与工作方式
 
@@ -19,7 +19,7 @@ MLP2-D01–MLP2-D06 及实施已获授权。基线为8db00c425706945d69a39ae0d3f
 | V03 | `.\.venv\Scripts\python.exe -m pytest tests/integration -k p2 -q` |
 | V04 | `npm --prefix web run test -- --run tests/unit/p2Review.spec.ts tests/unit/p2Runtime.spec.ts`; `npm --prefix web run type-check` |
 | V05 | `npm --prefix web run test:e2e -- tests/e2e/p2-pretrade.spec.ts tests/e2e/market-exceptions.spec.ts tests/e2e/market-linkage.spec.ts` |
-| V06 | `.\.venv\Scripts\python.exe -m pytest -m "not live" -q`; `npm --prefix web run test -- --run`; `npm --prefix web run build` |
+| V06 | `.\.venv\Scripts\python.exe -m pytest tests/unit -m "not live" -q`; `.\.venv\Scripts\python.exe -m pytest tests/integration -m "not live" -q`; `.\.venv\Scripts\python.exe -m pytest tests/contract tests/replay -m "not live" -q`; `npm --prefix web run test -- --run`; `npm --prefix web run build` |
 | V07 | `.\.venv\Scripts\python.exe scripts/generate_frontend_types.py --check` (both API profiles); `.\.venv\Scripts\python.exe -m ruff check src tests`; `git diff --check` |
 | V08 | 双语段落／ID／枚举／公式／单位／边界／链接一致；逐项对应原文、任务、测试及实际结果。 |
 
@@ -34,151 +34,151 @@ MLP2-D01–MLP2-D06 及实施已获授权。基线为8db00c425706945d69a39ae0d3f
 
 ### MLP2-T02 — 增加严格版本政策模型及算术校验
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T01.
 - 文件／范围: domain/p2_policy_models.py（新增）、domain 编解码、tests/unit/test_p2_policy_contract.py（新增）.
 - 验收: MLP2-A02, MLP2-A03. 验证: V02.
 
 ### MLP2-T03 — 接通 Schema 8 分派、旧读取方拒绝及审核哈希
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T02.
 - 文件／范围: 草稿／版本分派、来源绑定模型、现有编解码黄金测试.
 - 验收: MLP2-A02. 验证: V01,V02.
 
 ### MLP2-C01 — 阶段验收
 
-- [ ] V01,V02 通过；覆盖 MLP2-A02.
+- [x] V01,V02 通过；覆盖 MLP2-A02.
 - 检查当阶段所有已有测试、历史兼容及权限边界；尚未创建的后续测试必须明确记录为未执行。记录命令、代码版本、结果、失败修复及限制，不以局部通过声称全量验收。
 
 ### MLP2-T04 — 实现原文 ATR 档位及合法 Q0 向下取量
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T03.
 - 文件／范围: decision/p2_sizing.py（新增）、数量适配器、tests/unit/test_p2_sizing.py（新增）.
 - 验收: MLP2-A03, MLP2-A04. 验证: V02.
 
 ### MLP2-T05 — 实现精确费用预览及显式数字门槛
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T03.
 - 文件／范围: decision/p2_economics.py（新增）、费用值模型、tests/unit/test_p2_economics.py（新增）.
 - 验收: MLP2-A05, MLP2-A06. 验证: V02.
 
 ### MLP2-T06 — 组合数量、大盘路径及例外数量预览
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T04,T05.
 - 文件／范围: decision/market_linkage.py、decision/market_exception_policy.py、tests/unit/test_p2_composition.py（新增）.
 - 验收: MLP2-A04, MLP2-A07. 验证: V01,V02.
 
 ### MLP2-C02 — 阶段验收
 
-- [ ] V01,V02 通过；覆盖 MLP2-A03–A07.
+- [x] V01,V02 通过；覆盖 MLP2-A03–A07.
 - 检查当阶段所有已有测试、历史兼容及权限边界；尚未创建的后续测试必须明确记录为未执行。记录命令、代码版本、结果、失败修复及限制，不以局部通过声称全量验收。
 
 ### MLP2-T07 — 扩展仅 A 提取及可审核来源依据
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T06.
 - 文件／范围: ai/plan_extraction.py、审核接口、tests/integration/test_p2_review.py（新增）.
 - 验收: MLP2-A01, MLP2-A02. 验证: V03.
 
-### MLP2-T08 — 以非破坏迁移保存冻结政策依据
+### MLP2-T08 — 以增量版本化存储保存冻结政策依据
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T07.
-- 文件／范围: state 权限模型／仓库、新迁移、tests/integration/test_p2_storage.py（新增）.
+- 文件／范围: state 权限模型／仓库、增量版本化 JSON 依据（无需 SQL 结构迁移）、tests/integration/test_p2_storage.py（新增）.
 - 验收: MLP2-A02, MLP2-A09. 验证: V03.
 
 ### MLP2-T09 — 应用运行确认、修正及窗口不变约束
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T08.
 - 文件／范围: runtime/daily_service.py、信号生命周期适配器、tests/integration/test_p2_runtime.py（新增）.
 - 验收: MLP2-A03, MLP2-A07, MLP2-A08. 验证: V03.
 
 ### MLP2-C03 — 阶段验收
 
-- [ ] V03,V08 通过；覆盖 MLP2-A01,A02,A07,A08,A09.
+- [x] V03,V08 通过；覆盖 MLP2-A01,A02,A07,A08,A09.
 - 检查当阶段所有已有测试、历史兼容及权限边界；尚未创建的后续测试必须明确记录为未执行。记录命令、代码版本、结果、失败修复及限制，不以局部通过声称全量验收。
 
 ### MLP2-T10 — 以当前费用约束例外批准及原子模拟
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T09.
 - 文件／范围: runtime/market_exceptions.py、模拟事务接口、tests/integration/test_p2_simulation.py（新增）.
 - 验收: MLP2-A07, MLP2-A08, MLP2-A09. 验证: V03.
 
 ### MLP2-T11 — 增加只读预览 API 及运行结果
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T10.
 - 文件／范围: web 预览路由（新增）、响应模型、tests/integration/test_p2_api.py（新增）；生成契约另分子任务.
 - 验收: MLP2-A09. 验证: V03,V07.
 
 ### MLP2-T12 — 增加依据及政策审核界面
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T11.
 - 文件／范围: web/src 计划编辑器、新政策组件、API 客户端、web/tests/unit/p2Review.spec.ts（新增）.
 - 验收: MLP2-A02, MLP2-A11. 验证: V04.
 
 ### MLP2-C04 — 阶段验收
 
-- [ ] V03,V04,V07 通过；覆盖 MLP2-A02,A07,A08,A09,A11.
+- [x] V03,V04,V07 通过；覆盖 MLP2-A02,A07,A08,A09,A11.
 - 检查当阶段所有已有测试、历史兼容及权限边界；尚未创建的后续测试必须明确记录为未执行。记录命令、代码版本、结果、失败修复及限制，不以局部通过声称全量验收。
 
 ### MLP2-T13 — 展示运行档位、费用、门槛及独立例外操作
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T12.
 - 文件／范围: web/src 运行／例外组件、通知投影、web/tests/unit/p2Runtime.spec.ts（新增）.
 - 验收: MLP2-A07, MLP2-A08, MLP2-A11. 验证: V04.
 
 ### MLP2-T14 — 将 P2 冻结依据接入回放输入与运行适配
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T10.
 - 文件／范围: backtest 输入／版本适配、共享政策适配、tests/integration/test_p2_replay.py（新增）.
 - 验收: MLP2-A02, MLP2-A10. 验证: V03.
 
 ### MLP2-T15 — 验证无未来数据、重启／并发及浏览器流程
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T13,T14.
 - 文件／范围: tests/integration/test_p2_replay_mutations.py（新增）、tests/integration/test_p2_concurrency.py（新增）、web/tests/e2e/p2-pretrade.spec.ts（新增）.
 - 验收: MLP2-A09, MLP2-A10, MLP2-A11. 验证: V03,V05.
 
 ### MLP2-C05 — 阶段验收
 
-- [ ] V03,V04,V05 通过；覆盖 MLP2-A07–A11.
+- [x] V03,V04,V05 通过；覆盖 MLP2-A07–A11.
 - 检查当阶段所有已有测试、历史兼容及权限边界；尚未创建的后续测试必须明确记录为未执行。记录命令、代码版本、结果、失败修复及限制，不以局部通过声称全量验收。
 
 ### MLP2-T16 — 运行完整回归并逐项核对失败
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T15.
 - 文件／范围: 仅在有依据时修复测试／实现；新增双语验收报告.
 - 验收: MLP2-A12. 验证: V01–V08.
 
 ### MLP2-T17 — 更新双语提示词、操作文档与能力边界
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T16.
 - 文件／范围: README 双语、operations 双语、能力图双语（按文档对拆分子任务）.
 - 验收: MLP2-A01, MLP2-A12. 验证: V08.
 
 ### MLP2-T18 — 审计验收矩阵并整理交付
 
-- [ ] 完成本片实现及对应独立测试，保留规格全部边界。
+- [x] 完成本片实现及对应独立测试，保留规格全部边界。
 - 依赖: T17.
 - 文件／范围: 双语规格／任务／报告、限定范围 Git 差异.
 - 验收: MLP2-A01–A12. 验证: V07,V08.
 
 ### MLP2-C06 — 阶段验收
 
-- [ ] V01–V08 通过；覆盖 MLP2-A01–A12.
+- [x] V01–V08 通过；覆盖 MLP2-A01–A12.
 - 检查当阶段所有已有测试、历史兼容及权限边界；尚未创建的后续测试必须明确记录为未执行。记录命令、代码版本、结果、失败修复及限制，不以局部通过声称全量验收。
 
 ## MLP2-P04 — 交付证据与停止条件
@@ -187,5 +187,9 @@ MLP2-D01–MLP2-D06 及实施已获授权。基线为8db00c425706945d69a39ae0d3f
 
 只有涉及新策略阈值、费用含义不明、历史权限不兼容或超出本规格范围且无法按已批准边界解决时，才交用户决定。环境或测试失败先定位并修复，不反复询问已有授权。官方费率引用若不能验证，不冒充当前市场事实；可用明确合成样例完成非live验收，并注明未认证市场数据。
 
-完整交付包括双语规格／契约／任务／操作／验收、代码与测试、生成契约，以及按项目中文 Conventional Commit 规范整理的提交。实际用户库迁移、live供应商／通知、部署或推送不在本计划授权内。本次仅交审核文档。
+完整交付包括双语规格／契约／任务／操作／验收、代码与测试、生成契约，以及按项目中文 Conventional Commit 规范整理的提交。实际用户库迁移、live供应商／通知、部署或推送不在本计划授权内。已授权实施；完成检查见验收报告。
 
+
+适配层按顺序拆分：提取提示词与读取器；运行/状态/API 防线；生成契约；审核界面；运行界面与通知；冻结运行输入；回放适配器；专项测试；完整回归。每个切片验证后才进入依赖验收。
+
+最终验收：[MLP2-A01–MLP2-A12 PASS](../docs/verification/2026-10-26-market-linkage-p2.zh-CN.md)。18项任务和六个检查点全部完成。

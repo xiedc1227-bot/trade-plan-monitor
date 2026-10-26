@@ -2,13 +2,13 @@
 
 ## 产品边界
 
-本地单用户应用绑定 `127.0.0.1`，最多监控10个 A 股代码。单一 `/plans` 工作台负责 Schema 5 固定计划、Schema 6 联动计划和 Schema 7 逐机会例外计划的提取、人工审核、明确启用、日线/五分钟混合监测及明确整单模拟。联动使用正式日线证据确认，下一交易所交易日执行；例外批准与执行相互独立。基本面仅在生成计划时审核。提醒和已读绝不改变库存。详见[单一交易计划流程](../specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
+本地单用户应用绑定 `127.0.0.1`，最多监控10个 A 股代码。单一 `/plans` 工作台负责 Schema 5 固定计划、Schema 6 联动计划、Schema 7 逐机会例外计划及 Schema 8 交易前政策的提取、人工审核、明确启用、日线/五分钟混合监测及明确整单模拟。联动使用正式日线证据确认，下一交易所交易日执行；例外批准与执行相互独立。基本面仅在生成计划时审核。提醒和已读绝不改变库存。详见[单一交易计划流程](../specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
 
 ## 维护模块
 
 | Module ID | 职责 | 依赖 |
 |---|---|---|
-| `plan-domain`, `ai-plan-drafting` | 当前类型化计划、原文证据、遗漏与准确人工审核；`plan-extract-v10` 仅负责提取 | `local-web`, `strategy-state` |
+| `plan-domain`, `ai-plan-drafting` | 当前类型化计划、原文证据、遗漏与准确人工审核；`plan-extract-v11` 仅负责提取 | `local-web`, `strategy-state` |
 | `market-data`, `index-identity`, `index-data` | 已认证归一化、日历、正式日线/完整分钟证据及共用参考指数事实 | `provider-contract` |
 | `decision-engine` | 纯函数、精确、原文定义的条件求值；当前与冻结重放契约分离 | `plan-domain`, `market-data` |
 | `market-regime`, `relative-strength` | 四态日线分类及对齐的5/20交易日个股／指数比较 | `index-data`, `market-data` |
@@ -24,8 +24,10 @@
 
 ## 开发边界
 
-[market-linkage-p1](../specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) 在三个既有联动模块中增加原文许可的 `WEAK_MINIMUM`、`BROKEN_STRONG` 人工授权。Schema 6 保留 `BLOCK_P1`，只有明确的 Schema 7 才能申请机会批准。冻结研究要求明确授权事件及独立操作，绝不读取当前本地批准。[有序任务](../../tasks/market-linkage-p1.zh-CN.md)与[验收报告](../verification/2026-10-24-market-linkage-p1.zh-CN.md)记录已执行检查点及全项目验收状态。
+[market-linkage-p1](../specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) 在三个既有联动模块中增加原文许可的 `WEAK_MINIMUM`、`BROKEN_STRONG` 人工授权。Schema 6 保留 `BLOCK_P1`，只有明确的 Schema 7/8 才能申请机会批准。冻结研究要求明确授权事件及独立操作，绝不读取当前本地批准。[有序任务](../../tasks/market-linkage-p1.zh-CN.md)与[验收报告](../verification/2026-10-24-market-linkage-p1.zh-CN.md)记录已执行检查点及全项目验收状态。
 
-领域逻辑放在 `src/trade_plan_monitor`；HTTP 适配与 Vue 展示后端权威结果。行情 I/O 位于短 SQLite 事务之外。当前模拟库存、历史真实持仓记录及回测行情/结果库保持隔离。冻结 Schema 1–4 字节/哈希仅被读取或重放，不静默转换成活动 Schema 5/6/7 计划。既有 Schema 5/6 字节/哈希保持不变。
+领域逻辑放在 `src/trade_plan_monitor`；HTTP 适配与 Vue 展示后端权威结果。行情 I/O 位于短 SQLite 事务之外。当前模拟库存、历史真实持仓记录及回测行情/结果库保持隔离。冻结 Schema 1–4 字节/哈希仅被读取或重放，不静默转换成活动 Schema 5/6/7/8 计划。既有 Schema 5/6/7 字节/哈希保持不变。
 
 按依赖顺序实现：契约与审核 → 归一化证据 → 纯求值 → 原子持久化 → 自有运行时与出站箱 → 投影/API → Vue。遵循相应现行规格与确定性测试。真实供应商调用、用户数据库迁移及部署仍需单独授权；本地验收不能证明实时可用性。
+
+P2 增加 `p2-source-policy`、`p2-volatility-sizing`、`p2-trade-economics` 和 `p2-pretrade-workflow`：来源绑定的档位先于大盘系数得出 Q0，版本化估算和可选明确 BUY 门槛在运行及 backtest-run-v9 中共用。冻结数量、当前报价门槛复核、只读预览、逐机会批准和独立整笔模拟各有职责。参见 [P2 操作说明](../operations/market-linkage-p2.zh-CN.md)和 [G01–G14 边界](../specifications/monitoring/SPEC-market-linkage-p2.zh-CN.md)。金额上限、真实／部分券商成交、自动基本面及日线联动五分钟确认仍在范围外。

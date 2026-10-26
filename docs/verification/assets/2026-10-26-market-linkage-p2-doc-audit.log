@@ -1,0 +1,13 @@
+{
+  "document_count": 18,
+  "completed_tasks": 18,
+  "completed_checkpoints": 6,
+  "checks": [
+    "counterparts",
+    "P2 stable IDs and checkboxes",
+    "local links",
+    "protected tasks"
+  ],
+  "issues": [],
+  "status": "PASS"
+}

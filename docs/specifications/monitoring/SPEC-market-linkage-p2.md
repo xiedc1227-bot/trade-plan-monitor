@@ -1,6 +1,6 @@
 # Specification: market-linkage-p2
 
-Status: APPROVED FOR IMPLEMENTATION — 2026-10-26. The user approved MLP2-D01–MLP2-D06 and ordered all implementation tasks and stage acceptance. Baseline: `8db00c425706945d69a39ae0d3ffe1d85348d626`.
+Status: IMPLEMENTED AND ACCEPTED — 2026-10-26. The user approved MLP2-D01–MLP2-D06 and ordered all implementation tasks and stage acceptance. Baseline: `8db00c425706945d69a39ae0d3ffe1d85348d626`.
 Canonical English · [Chinese review copy](SPEC-market-linkage-p2.zh-CN.md) · [Tasks](../../../tasks/market-linkage-p2.md).
 
 ## MLP2-S01 — Sources, objective and interpretation
@@ -36,15 +36,15 @@ Existing scoped reviewed facts include TRADE_VIABILITY: a human viability judgme
 
 These are different classes: missing executable policy (G02/G03), partially supported research/evidence (G04/G08/G10/G12/G13), intentional human/product boundaries (G06/G07/G09), and separately scoped extensions (G05/G11). P2 completion does not mean every original research request is automated.
 
-## MLP2-S03 — Six proposed review decisions
+## MLP2-S03 — Six approved decisions
 
-| ID | Proposed decision | Reason |
+| ID | Approved decision | Reason |
 | --- | --- | --- |
 | MLP2-D01 | Scope P2 to daily TACTICAL BUY, source-defined ATR-ratio sizing, cost/reward preview and opt-in numeric net-return gates; retain all G05–G12 boundaries | Deliver a finite, testable next step without inventing broker or discretionary authority. |
 | MLP2-D02 | First derive Q0 from a source-reviewed base and volatility tier; then apply the unchanged P0/P1 market policy. No upward sizing or automatic threshold selection | Volatility and market reductions must not be confused, doubled or reversed. |
 | MLP2-D03 | Cost assumptions are explicit, versioned and time-bounded. No default net-profit/risk-reward veto; numeric gates require explicit source authorization | The original forbids universal invented profitability thresholds; estimates are not actual fills. |
 | MLP2-D04 | Freeze sizing evidence/Q0 at confirmation; recheck cost gate at execution against current admissible quote using the same reviewed policy. Risk exits bypass cost gates | Avoid automatic resizing and prevent a stale favorable entry price from authorizing a bad entry. |
-| MLP2-D05 | Opt-in Schema 8 / condition-plan-v4, with pretrade-policy-v1; preserve Schema 1–7 serialization and authority. Carry source bindings and evidence in existing /plans flow | New executable semantics need explicit versioning. Schema 8 is currently an unsupported-version test case, not shipped support. |
+| MLP2-D05 | Opt-in Schema 8 / condition-plan-v4, with pretrade-policy-v1; preserve Schema 1–7 serialization and authority. Carry source bindings and evidence in existing /plans flow | New executable semantics need explicit versioning. Schema 8 is explicitly opt-in; earlier readers must reject it. |
 | MLP2-D06 | Share pure policies across runtime and frozen replay; retain explicit per-occurrence P1 approval and separate whole simulation. Missing mandatory evidence fails closed | Prevent approval shortcuts and hindsight; research attachments cannot authorize trades. |
 
 These six decisions and implementation are approved. No source-defined thresholds can be supplied merely by approving this generic specification.
@@ -58,7 +58,7 @@ These six decisions and implementation are approved. No source-defined threshold
 | p2-trade-economics | Versioned fee assumptions, preview and source-defined numeric gates | p2-source-policy, existing arithmetic semantics |
 | p2-pretrade-workflow | Freeze/revalidate, transaction guards, UI and frozen replay | All three modules, P0/P1 lifecycle |
 
-Proposed Schema 8 extends the Schema 7 daily plan contract, retaining market-linkage-v2 and explicit exception route flags. P2 BUY policies require daily confirmation and existing market_policy. Ordinary SELL, risk and alerts keep existing behavior. Policies without P2 fields continue to use their existing schema; no automatic migration or new default fields in historical hashes.
+Schema 8 extends the Schema 7 daily plan contract, retaining market-linkage-v2 and explicit exception route flags. P2 BUY policies require daily confirmation and existing market_policy. Ordinary SELL, risk and alerts keep existing behavior. Policies without P2 fields continue to use their existing schema; no automatic migration or new default fields in historical hashes.
 
 Each eligible BUY has `pretrade_policy`: `policy_version=pretrade-policy-v1`, `sizing` (FIXED_Q0 or ATR_RATIO_TIERS), and `economics` (NONE, PREVIEW_ONLY or REQUIRED). Fixed sizing references the existing Q0; tier sizing supplies `base_qty` plus `tiers`. Mixed fixed Q0 and tier-derived Q0 input is rejected. A version-specific adapter supplies derived Q0 to the shared market policy, never mutates a persisted old plan. Source bindings cover every tier, threshold, quantity, price assumption, cost component and gate. A preset name alone is insufficient.
 
@@ -87,7 +87,7 @@ For quantity q, quote entry e, target t, risk z and per-share slippage sb/ss:
 - net reward=T-B; planned loss=B-Z; reward/risk=(T-B)/(B-Z), only if planned loss>0.
 - estimated round-trip cost=buy_fees+target_sell_fees+q*(sb+ss); break-even spread=that cost/q. This is a scenario estimate, not an exact solved future sale price.
 
-Reject nonpositive slippage-adjusted prices and overflow; use integer fen totals and exact Decimal/rational comparisons. Each separately charged proportional fee rounds upward to whole fen, then commission takes its declared minimum, consistently with existing engines. Included handling fees are not added again. Do not silently change old backtest accounting. REQUIRE unknown inputs or failed gates block ordinary buying; PREVIEW_ONLY displays UNKNOWN without becoming a hidden gate. No account cash query or actual P&L inference.
+Reject nonpositive slippage-adjusted prices and overflow; use integer fen totals and exact Decimal/rational comparisons. Each separately charged proportional fee rounds upward to whole fen, then commission takes its declared minimum, consistently with existing engines. Included handling fees are not added again. Do not silently change old backtest accounting. REQUIRED unknown inputs or failed gates block ordinary buying; PREVIEW_ONLY displays UNKNOWN without becoming a hidden gate. No account cash query or actual P&L inference.
 
 Freeze session, source bindings, metric/tier/base_qty/Q0, route, grid and authority with the signal. Evidence/policy corrections invalidate affected pending authority under P0/P1 rules; equivalent decimal formatting and refetch timestamps do not. A later volatility tier does not resize an existing signal or create a new one. Next-session expiry and independent-reset rules remain unchanged.
 
@@ -124,7 +124,9 @@ Replay receives frozen fee schedules, source evidence, prices and exception even
 
 ## MLP2-S08 — Delivery and approval boundary
 
-Follow [MLP2-T01–MLP2-T18](../../../tasks/market-linkage-p2.md) and six checkpoints. No implementation, OpenAPI generation, database mutation, provider calls, deployment or push is performed by this drafting change. After approval, use official sources to validate any fee data added; this spec intentionally does not certify current fee rates. Tasks may not weaken existing quality gates.
+Follow [MLP2-T01–MLP2-T18](../../../tasks/market-linkage-p2.md) and six checkpoints. Implementation and local verification are authorized; user-database mutation, live provider calls, deployment and push remain outside scope. Use official sources to validate any production fee data added; this spec intentionally does not certify current fee rates. Tasks may not weaken existing quality gates.
 
 The six decisions above, especially dynamic Q0 before market reduction, opt-in numeric BUY gates and the proposed scope deferrals, are approved. A requirement beyond this bounded policy language remains blocked until a separately reviewed extension.
 
+
+Implementation acceptance: [2026-10-26 report](../../verification/2026-10-26-market-linkage-p2.md), MLP2-A01–MLP2-A12 PASS.
