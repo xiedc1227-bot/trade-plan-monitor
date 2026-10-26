@@ -110,7 +110,9 @@ def test_delayed_source_budget_survives_reviewed_policy_replacement(p3_chain, tm
     from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
     from trade_plan_monitor.backtest.p3_replay_input import CapitalReplayProgram
     from trade_plan_monitor.backtest.plan_schedule import (
-        ScheduledLoopSchedule, ScheduledPlanVersion, ScheduledScheduleEntry,
+        ScheduledLoopSchedule,
+        ScheduledPlanVersion,
+        ScheduledScheduleEntry,
     )
     from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 
@@ -176,7 +178,8 @@ def test_frozen_buy_reference_reconciles_exact_private_lot_and_releases_residual
         ready = session.runtime.run_inputs(plan=chain.plan, inputs=exception_inputs(chain))
         signal = ready.snapshot["signals"][0]
         filled = session.apply_operation(ResearchSimulation(kind="SIMULATE", operation_id="buy",
-            at=chain.now, order=1, rule_id=signal["rule_id"], occurrence=1, quantity=200), ended=False)
+            at=chain.now, order=1, rule_id=signal["rule_id"], occurrence=1, quantity=200),
+            ended=False)
         assert filled.status == "APPLIED"
         raw = opening.model_dump(mode="python", exclude={"envelope_hash"})
         raw.update(source_event_id="explicit-after-buy-correction", provenance="RESEARCH_SCENARIO",

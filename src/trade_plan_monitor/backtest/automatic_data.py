@@ -35,6 +35,12 @@ def prepared_dataset_request(market, prepared, *, submitted_at, end_date, expand
     warmup_start = min(start.date(), source.effective_trade_date)
     needed = max(requirements.daily_observations,
                  (max(requirements.minute_observations - 1, 0) + 47) // 48)
+    # The stock's21-observation strength requirement is not the index's60-session
+    # history requirement. Keep frozen requirement encodings unchanged, but copy
+    # enough calendar/index history for the existing linked-source validator.
+    if any(row.version.snapshot.schema_version in {6, 7, 8, 9}
+           for row in prepared.schedule.entries):
+        needed = max(needed, 60)
     calendar = market.current_trading_day(version.snapshot.market, start.date())
     for _ in range(needed):
         previous = (market.current_trading_day(
