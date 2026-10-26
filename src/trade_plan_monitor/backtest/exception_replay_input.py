@@ -1,6 +1,6 @@
 """Explicit frozen source events; none of these values is live execution authority."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import to_jsonable_python
@@ -34,11 +34,7 @@ class FrozenExceptionEvent(ResearchValue):
     @field_validator("candidate", "decision", "event", mode="before")
     @classmethod
     def revalidate(cls, value, info):
-        model = {
-            "candidate": ExceptionCandidate,
-            "decision": MarketExceptionDecision,
-            "event": ExceptionEvent,
-        }[info.field_name]
+        model = cls.model_fields[info.field_name].annotation
         return (
             model.model_validate_json(value.model_dump_json())
             if isinstance(value, model)
@@ -47,11 +43,12 @@ class FrozenExceptionEvent(ResearchValue):
 
     @classmethod
     def build(cls, **values):
-        values.setdefault("schema_version", "frozen-exception-event-v1")
+        version = cls.model_fields["schema_version"].default
+        values.setdefault("schema_version", version)
         values.pop("envelope_hash", None)
         return cls(
             **values,
-            envelope_hash=daily_hash("frozen-exception-event-v1", to_jsonable_python(values)),
+            envelope_hash=daily_hash(version, to_jsonable_python(values)),
         )
 
     @model_validator(mode="after")
@@ -106,6 +103,7 @@ class FrozenExceptionEvent(ResearchValue):
 
 
 class ExceptionReplayProgram(ResearchValue):
+    supported_plan_versions: ClassVar[tuple[int, ...]] = (7, 8)
     schema_version: Literal["exception-replay-program-v1"] = "exception-replay-program-v1"
     exception_authorization_events: tuple[FrozenExceptionEvent, ...] = Field(
         default=(), max_length=10000
@@ -157,7 +155,8 @@ class ExceptionReplayProgram(ResearchValue):
         return tuple(sorted({row.provenance for row in self.exception_authorization_events}))
 
     def validate_scope(self, *, plans, started_at):
-        by_hash = {plan_sha256(plan): plan for plan in plans if plan.schema_version in {7, 8}}
+        by_hash = {plan_sha256(plan): plan for plan in plans
+                   if plan.schema_version in self.supported_plan_versions}
         for row in self.exception_authorization_events:
             plan = by_hash.get(row.plan_hash)
             if (
@@ -174,6 +173,7 @@ class ExceptionReplayProgram(ResearchValue):
 
 
 class ExceptionResearchInput(UnifiedResearchInput):
+    program_type: ClassVar[type[ExceptionReplayProgram]] = ExceptionReplayProgram
     schema_version: Literal["unified-research-input-v2"] = "unified-research-input-v2"
     exception_authorization_events: tuple[FrozenExceptionEvent, ...] = Field(
         default=(), max_length=10000
@@ -181,7 +181,7 @@ class ExceptionResearchInput(UnifiedResearchInput):
 
     @model_validator(mode="after")
     def event_stream(self):
-        ExceptionReplayProgram(
+        self.program_type(
             exception_authorization_events=self.exception_authorization_events,
         )
         if {(e.event.received_at, e.order) for e in self.exception_authorization_events} & {

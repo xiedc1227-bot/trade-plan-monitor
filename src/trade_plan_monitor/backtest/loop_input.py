@@ -10,6 +10,10 @@ from trade_plan_monitor.ai.prompts import MAX_SOURCE_TEXT_CHARS
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.exception_replay_input import ExceptionReplayProgram
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
+from trade_plan_monitor.backtest.p3_replay_input import (
+    CapitalExceptionReplayProgram,
+    CapitalReplayProgram,
+)
 from trade_plan_monitor.backtest.plan_schedule import (
     MAX_SCHEDULED_ENTRIES,
     LoopEndBoundary,
@@ -205,9 +209,11 @@ class LoopLimits(ResearchValue):
 class MonitorLoopInput(ResearchValue):
     schema_version: Literal["monitor-loop-input-v1"] = LOOP_INPUT_SCHEMA_VERSION
     run_formula_version: Literal[
-        "backtest-run-v5", "backtest-run-v8", "backtest-run-v9"
+        "backtest-run-v5", "backtest-run-v8", "backtest-run-v9", "backtest-run-v10"
     ] = LOOP_RUN_FORMULA_VERSION
-    exception_program: ExceptionReplayProgram | None = Field(
+    exception_program: CapitalExceptionReplayProgram | ExceptionReplayProgram | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    capital_program: CapitalReplayProgram | None = Field(
         default=None, exclude_if=lambda value: value is None)
     schedule: LoopSchedule
     initial_account: LoopAccountInput
@@ -219,13 +225,27 @@ class MonitorLoopInput(ResearchValue):
 
     @model_validator(mode="after")
     def coherent(self) -> Self:
-        exception = any(row.version.snapshot.schema_version in {7, 8}
+        capital = any(row.version.snapshot.schema_version == 9 for row in self.schedule.entries)
+        if capital != (self.capital_program is not None) or capital != isinstance(
+                self.exception_program, CapitalExceptionReplayProgram):
+            raise ValueError("P3_LOOP_REQUIRES_EXPLICIT_CAPITAL_V10")
+        if self.capital_program is not None:
+            self.capital_program.validate_scope(tuple(
+                row.version.snapshot for row in self.schedule.entries))
+            keys = {(row.available_at, row.order) for row in self.capital_program.opening_events}
+            other = {(row.event.received_at, row.order)
+                     for row in self.exception_program.exception_authorization_events}
+            other.update((row.at, row.order) for row in self.exception_program.operations)
+            if keys & other:
+                raise ValueError("capital, authorization and execution require distinct time/order")
+        exception = any(row.version.snapshot.schema_version in {7, 8, 9}
                         for row in self.schedule.entries)
         p2 = any(row.version.snapshot.schema_version == 8 for row in self.schedule.entries)
-        formula = "backtest-run-v9" if p2 else "backtest-run-v8" if exception else "backtest-run-v5"
+        formula = ("backtest-run-v10" if capital else "backtest-run-v9" if p2 else
+                   "backtest-run-v8" if exception else "backtest-run-v5")
         if (exception and self.run_formula_version != formula
                 or not exception and self.run_formula_version in {
-                    "backtest-run-v8", "backtest-run-v9"}
+                    "backtest-run-v8", "backtest-run-v9", "backtest-run-v10"}
         ) or exception != (
             self.exception_program is not None
         ):
@@ -248,7 +268,8 @@ class MonitorLoopInput(ResearchValue):
         ):
             raise ValueError("all plan reviews must exist before submission")
         if (
-            sum(lot.quantity for lot in self.initial_account.lots)
+            selected.version.snapshot.schema_version != 9
+            and sum(lot.quantity for lot in self.initial_account.lots)
             > selected.version.snapshot.position.max_qty
         ):
             raise ValueError("opening inventory exceeds the initial plan maximum")
@@ -268,9 +289,11 @@ class ScheduledLoopInput(ResearchValue):
 
     schema_version: Literal["monitor-loop-input-v2"] = "monitor-loop-input-v2"
     run_formula_version: Literal[
-        "backtest-run-v6", "backtest-run-v8", "backtest-run-v9"
+        "backtest-run-v6", "backtest-run-v8", "backtest-run-v9", "backtest-run-v10"
     ] = "backtest-run-v6"
-    exception_program: ExceptionReplayProgram | None = Field(
+    exception_program: CapitalExceptionReplayProgram | ExceptionReplayProgram | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    capital_program: CapitalReplayProgram | None = Field(
         default=None, exclude_if=lambda value: value is None)
     schedule: ScheduledLoopSchedule
     initial_account: LoopAccountInput

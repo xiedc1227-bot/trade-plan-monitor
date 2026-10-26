@@ -181,7 +181,7 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T19 — Freeze budget inputs and causal opening events
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T15; follows C06 in the selected sequential work order.
 - Files/scope: sequential 3–5-file children for backtest-run-v10, scheduled/loop input readers, copied opening/reconciliation events and tests. New `tests/integration/test_p3_replay.py` owns missing/future/duplicate-event cases.
 - Acceptance: MLP3-A02,MLP3-A05,MLP3-A10. Verify: focused V03 and historical input/hash tests. No live-book lookup, no fake max_qty/cash, source/scenario provenance and no change to old funding/settlement behavior.

@@ -56,6 +56,8 @@ class _ResearchRuntime(DailyRuntimeEvaluationService):
 
 class ResearchSession:
     def __init__(self, directory, run_input, calendar):
+        if run_input.plan_snapshot.schema_version == 9:
+            raise ValueError("P3_FROZEN_ADMISSION_PENDING")
         self.run_input = run_input
         self.plan = run_input.plan_snapshot
         self.now = run_input.research_input.started_at

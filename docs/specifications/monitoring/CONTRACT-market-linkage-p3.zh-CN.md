@@ -47,3 +47,9 @@ T01 基线 V01：98项通过、1条既有 Starlette 警告、3.00秒。原文哈
 当前 API 在 web/p3_schemas.py 中拥有 CapitalBookView、CapitalOpeningApiCommand、CapitalOpeningReceipt、CapitalPreviewCommand 与 CapitalPreviewView；不可变预算账本、事件、金额评估与严格开仓命令继续由领域层拥有。仅新增 K05 的三条路由。两套 OpenAPI 与生成 TypeScript 文件提供相同 P3 操作。能力 supportedSchemaVersions 增加9及 capitalExecutionVersion=condition-plan-v5；编辑器增加 capitalCandidateSchema。已有字段和路由保留。完整普通、例外与 HTTP 防护完成后开放当前公开9；旧冻结输入联合类型到 T19/T20 前仍拒绝9。JSON 时间与列表在 API 边界转换，领域数字严格校验与完整500批次上限保留。收益预览同时接受当前9，仍不授予授权。
 
 CapitalBookView.inventoryLots 在尚未建立成本账时也列出完整当前模拟批次标识与数量（最多500），不推断成本。既有日线提醒可选 capital_mode/capitalMode 标识来源政策，旧提醒省略该字段。
+
+## MLP3-K09 — 冻结金额来源事件与批次引用
+
+capital-opening-event-v1 拥有 source_event_id、plan_hash、symbol、provenance RECORDED_LOCAL/RESEARCH_SCENARIO、observed_at<=received_at<=available_at、order0..10000、明确 confirmed=true、source/excerpt/reason、完整 lots（最多500）、可选 recorded_event 和封装哈希。每个批次记录 source_lot_id（已记录来源必填）、bucket、quantity、retained_basis_fen 与稳定引用：OPENING(lot_key) 或 BUY_SIGNAL(signal_id)。引用选择准确期初批次或实际整笔买入回执，不选择其他批次、不推断成本、不依赖私有数据库计数器。已记录事件必须是原始 OPENING/RECONCILIATION capital-book-event-v1 回执，其证券、成本、批次数量、来源文字与服务端时间相符。研究假设事件必须明确声明假设，不得冒充已记录回执。
+
+capital-replay-program-v1 按 available_at/order 冻结唯一有序事件。最多10000事件并沿用8MiB输入上限。运行开始前已可用的事件可以为明确匹配的期初库存提供依据；未来事件仅在可用后应用，不能补齐过去未知成本。capital-exception-event-v1 保留新的完整金额计算；frozen-exception-event-v1 继续严格限制旧计算。unified-research-input-v3 与 backtest-run-v10 绑定明确金额输入、分离的授权／执行事件及既有研究账户。缺失成本声明保持 UNKNOWN，明确空金额程序不授予任何权限。完整输入参与哈希，未来来源事件不改变较早私有授权标识。禁止读取当前用户数据或可变当前预算／费用。

@@ -27,10 +27,15 @@ from trade_plan_monitor.backtest.exception_replay_input import (
 )
 from trade_plan_monitor.backtest.index_data import build_backtest_index_requirement
 from trade_plan_monitor.backtest.models import ExecutionConfig, PositionLot
+from trade_plan_monitor.backtest.p3_replay_input import (
+    CapitalExceptionReplayProgram,
+    CapitalResearchInput,
+)
 from trade_plan_monitor.backtest.research_input import UnifiedResearchInput
 from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
 from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
 from trade_plan_monitor.domain.p2_policy_models import P2TradePlan
+from trade_plan_monitor.domain.p3_policy_models import P3TradePlan
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.plan_models import PositionBucket, TradePlan
 from trade_plan_monitor.domain.plan_validation import ALL_MARKET_EVIDENCE, validate_trade_plan
@@ -45,6 +50,7 @@ RUN_FORMULA_V4 = "backtest-run-v4"
 RUN_FORMULA_V7 = "backtest-run-v7"
 RUN_FORMULA_V8 = "backtest-run-v8"
 RUN_FORMULA_V9 = "backtest-run-v9"
+RUN_FORMULA_V10 = "backtest-run-v10"
 RUN_INPUT_SCHEMA_VERSION = "backtest-run-input-v1"
 FIVE_MINUTE_CONTEXT_BARS = 512
 DAILY_CONTEXT_BARS = 499
@@ -54,7 +60,7 @@ MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 _RunFormulaVersion = Literal[
     "backtest-run-v1", "backtest-run-v2", "backtest-run-v3", "backtest-run-v4",
-    "backtest-run-v7", "backtest-run-v8", "backtest-run-v9"
+    "backtest-run-v7", "backtest-run-v8", "backtest-run-v9", "backtest-run-v10"
 ]
 _Sha256Hex = Annotated[
     str,
@@ -102,7 +108,7 @@ class BacktestRunInput(_RunInputValue):
     schema_version: Literal["backtest-run-input-v1"] = RUN_INPUT_SCHEMA_VERSION
     run_formula_version: _RunFormulaVersion
     plan_snapshot: (
-        P2TradePlan | MarketExceptionTradePlan | MarketLinkedTradePlan
+        P3TradePlan | P2TradePlan | MarketExceptionTradePlan | MarketLinkedTradePlan
         | TradePlan | UnifiedTradePlan
     )
     plan_sha256: _Sha256Hex
@@ -119,7 +125,9 @@ class BacktestRunInput(_RunInputValue):
     context_bounds: _BacktestContextBounds = Field(default_factory=_BacktestContextBounds)
     execution_config: ExecutionConfig
     manual_event_risk: bool
-    research_input: ExceptionResearchInput | UnifiedResearchInput | None = Field(
+    research_input: (
+        CapitalResearchInput | ExceptionResearchInput | UnifiedResearchInput | None
+    ) = Field(
         default=None,
         exclude_if=lambda value: value is None,
     )
@@ -153,6 +161,8 @@ class BacktestRunInput(_RunInputValue):
         plan_version_id: UUID | None = None,
         research_input: ExceptionResearchInput | UnifiedResearchInput | None = None,
     ) -> Self:
+        if getattr(plan, "schema_version", None) == 9:
+            raise ValueError("P3_FROZEN_ADMISSION_PENDING")
         if not isinstance(plan, TradePlan | UnifiedTradePlan):
             raise TypeError("plan must be a TradePlan or UnifiedTradePlan")
         if not isinstance(manifest, DatasetManifest):
@@ -275,17 +285,25 @@ class BacktestRunInput(_RunInputValue):
                 raise ValueError("RESEARCH_INPUT_REQUIRED")
             linked = isinstance(self.plan_snapshot, MarketLinkedTradePlan)
             exception = isinstance(self.plan_snapshot, MarketExceptionTradePlan)
+            capital = self.plan_snapshot.schema_version == 9
+            if capital != isinstance(self.research_input, CapitalResearchInput):
+                raise ValueError("P3_PLAN_REQUIRES_EXPLICIT_RESEARCH_V3")
+            if capital:
+                self.research_input.capital_program.validate_scope((self.plan_snapshot,))
             if exception != isinstance(self.research_input, ExceptionResearchInput):
                 raise ValueError("EXCEPTION_PLAN_REQUIRES_EXPLICIT_RESEARCH_V2")
             if exception:
-                ExceptionReplayProgram(exception_authorization_events=
+                program = CapitalExceptionReplayProgram if capital else ExceptionReplayProgram
+                program(exception_authorization_events=
                     self.research_input.exception_authorization_events).validate_scope(
                         plans=(self.plan_snapshot,), started_at=self.research_input.started_at)
-            expected_formula = RUN_FORMULA_V9 if self.plan_snapshot.schema_version == 8 else (
+            expected_formula = RUN_FORMULA_V10 if capital else (
+                RUN_FORMULA_V9 if self.plan_snapshot.schema_version == 8 else
                 RUN_FORMULA_V8 if exception else
                 RUN_FORMULA_V7 if linked else RUN_FORMULA_V4)
             if self.run_formula_version != expected_formula:
                 raise ValueError(
+                    "P3_PLAN_REQUIRES_V10" if capital else
                     "P2_PLAN_REQUIRES_V9" if self.plan_snapshot.schema_version == 8 else
                     "EXCEPTION_PLAN_REQUIRES_V8" if exception else
                     "LINKED_PLAN_REQUIRES_V7" if linked else "CURRENT_PLAN_REQUIRES_V4"
@@ -398,7 +416,10 @@ class BacktestRunInput(_RunInputValue):
             raise ValueError("initial CORE quantity exceeds the reviewed plan cap")
         if (not current and bucket_quantities["TACTICAL"] > position.tactical_target_qty):
             raise ValueError("initial TACTICAL quantity exceeds the reviewed plan cap")
-        if sum(bucket_quantities.values()) > position.max_qty:
+        if sum(bucket_quantities.values()) > MAX_SAFE_INTEGER:
+            raise ValueError("initial quantity exceeds the safe integer range")
+        if (self.plan_snapshot.schema_version != 9
+                and sum(bucket_quantities.values()) > position.max_qty):
             raise ValueError("initial total quantity exceeds the reviewed plan maximum")
         if self.initial_cash_fen + sum(item.cost_basis_fen for item in self.initial_lots) > (
             MAX_SAFE_INTEGER
@@ -436,7 +457,7 @@ class BacktestRunInput(_RunInputValue):
                 }
             )
         if self.run_formula_version in (
-            RUN_FORMULA_V4, RUN_FORMULA_V7, RUN_FORMULA_V8, RUN_FORMULA_V9
+            RUN_FORMULA_V4, RUN_FORMULA_V7, RUN_FORMULA_V8, RUN_FORMULA_V9, RUN_FORMULA_V10
         ):
             preimage["research_input"] = self.research_input
         return sha256(

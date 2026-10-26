@@ -82,6 +82,8 @@ class _LoopActivationPlans(PlanRepository):
 
 class LoopSession:
     def __init__(self, directory: Path, run_input: MonitorLoopInput | ScheduledLoopInput, calendar):
+        if any(row.version.snapshot.schema_version == 9 for row in run_input.schedule.entries):
+            raise ValueError("P3_FROZEN_ADMISSION_PENDING")
         self.run_input = decode_monitor_loop_input_json(run_input.model_dump_json())
         boundary = self.run_input.boundary
         self.run_input.schedule.preflight(

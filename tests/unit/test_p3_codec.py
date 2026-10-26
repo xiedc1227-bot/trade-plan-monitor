@@ -4,7 +4,6 @@ import json
 from hashlib import sha256
 
 import pytest
-from pydantic import TypeAdapter, ValidationError
 from tests.unit.test_p3_policy_contract import p3_payload
 
 from trade_plan_monitor.domain.daily_plan_validation import (
@@ -41,6 +40,6 @@ def test_current_codec_admits_exact_schema9_after_execution_guards():
     plan = P3TradePlan.model_validate(p3_payload())
     assert load_plan_json(dump_plan_json(plan)) == plan
     from trade_plan_monitor.backtest.run_input import BacktestRunInput
-    with pytest.raises(ValidationError):
-        TypeAdapter(BacktestRunInput.model_fields["plan_snapshot"].annotation).validate_json(
-            plan.model_dump_json())
+    with pytest.raises(ValueError, match="P3_FROZEN_ADMISSION_PENDING"):
+        BacktestRunInput.create(plan=plan, manifest=None, initial_cash_fen=1, initial_lots=(),
+                               execution_config=None, manual_event_risk=False)
