@@ -1100,7 +1100,7 @@ class DailyRuntimeEvaluationService:
                             execution=signal["execution_date"],
                             scope=None,
                             evidence=signal["evidence"],
-                            rule_id=signal["rule_id"] if plan.schema_version == 8 else None,
+                            rule_id=signal["rule_id"] if plan.schema_version in {8, 9} else None,
                         )
                     )
             if risk_action["status"] == "RISK_EXIT":
@@ -1207,6 +1207,9 @@ class DailyRuntimeEvaluationService:
                     for r in plan.ordinary_rules if hasattr(r, "pretrade_policy")
                     and (r.rule_id == rule_id or rule_id is None and side == "BUY")), None)
                     if side == "BUY" or alert_kind == "EXCEPTION_REVIEW" else None,
+                capital_mode=plan.position.limit.capital_policy.mode
+                    if plan.schema_version == 9 and (side == "BUY"
+                        or alert_kind == "EXCEPTION_REVIEW") else None,
                 confirmed_trade_date=confirmed,
                 execution_date=execution,
                 quantity=quantity,
@@ -1237,11 +1240,6 @@ def daily_delivery_allowed(session, event, now):
     if not isinstance(plan, UnifiedTradePlan):
         return False
     repo = DailyRepository(session, clock=lambda: now, id_factory=lambda: str(uuid4()))
-    capital_arguments = {}
-    if plan.schema_version == 9:
-        from trade_plan_monitor.state.p3_current import current_capital_inputs
-        capital_arguments = {"capital_inputs": current_capital_inputs(
-            DailyAccounting(repo), plan.symbol, now)}
     if event.signal_type != "REMINDER" and DailyAccounting(repo).legacy_reason(event.symbol):
         return False
     review = repo.get("review-" + event.plan_version_id)
@@ -1417,6 +1415,11 @@ def daily_delivery_allowed(session, event, now):
     from trade_plan_monitor.domain.plan_codec import load_plan_json
 
     plan = load_plan_json(version.payload_json)
+    capital_arguments = {}
+    if plan.schema_version == 9:
+        from trade_plan_monitor.state.p3_current import current_capital_inputs
+        capital_arguments = {"capital_inputs": current_capital_inputs(
+            DailyAccounting(repo), plan.symbol, now)}
     checked = (check_execution if isinstance(plan, UnifiedTradePlan) else check_daily_execution)(
         plan,
         s,

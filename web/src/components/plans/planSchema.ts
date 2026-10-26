@@ -35,6 +35,8 @@ export function initialValue(schema: Schema): Json {
   return null;
 }
 export const fieldLabels: Record<string, string> = {
+  limit: "持仓数量与金额限制", capital_policy: "模拟金额上限政策", cap_fen: "金额上限（分）",
+  buy_cost_schedule: "买入占用成本估算", account_scope: "适用模拟账户", valuation: "市值估算报价方式",
   pretrade_policy: "买入前数量与费用政策", sizing: "波动数量", economics: "费用与买入门槛", level_evidence: "价格依据维度",
   base_qty: "波动调整前数量（股）", tiers: "波动分档", lower: "包含下界", upper: "不包含上界（空为无上限）", multiplier: "数量系数",
   metric: "波动指标", fee_schedule: "费用估算表", gates: "明确买入门槛", target_price_fen: "目标压力价格（分）", risk_price_fen: "风险价格（分）",
@@ -76,6 +78,14 @@ export const fieldLabels: Record<string, string> = {
   involvesCore: "重评是否涉及CORE", scopeEvidence: "重评范围具体依据",
 };
 export const choiceLabels: Record<string, string> = {
+  CAPITAL_ONLY: "仅金额上限", QUANTITY_AND_CAPITAL: "股数与金额同时限制",
+  OPEN_COST_CAP: "持仓成本占用上限", MARKET_VALUE_CAP: "持仓市值上限",
+  CapitalOnlyLimit: "仅金额上限，不设股数上限", CombinedCapitalLimit: "股数与金额同时限制",
+  DraftCapitalOnlyLimit: "仅金额上限，不设股数上限", DraftCombinedCapitalLimit: "股数与金额同时限制",
+  OpenCostCap: "持仓成本占用上限", MarketValueCap: "持仓市值上限",
+  DraftOpenCostCap: "持仓成本占用上限", DraftMarketValueCap: "持仓市值上限",
+  SIMULATION: "模拟持仓", SYMBOL_CORE_AND_TACTICAL: "单只证券全部CORE与TACTICAL",
+  CURRENT_ADMITTED_QUOTE: "当前已核实报价",
   ATR_RATIO_TIERS: "按 ATR14 / 收盘价分档", FIXED_Q0: "固定基础量", DERIVED_MARKET_FACTOR: "波动分档后再按大盘减量",
   PREVIEW_ONLY: "仅研究估算", REQUIRED: "明确数值门槛", ESTIMATE: "估算，非实际盈亏", TREND: "趋势", VOLATILITY: "波动率",
   PRESSURE: "压力位", RISK: "风险位", TAX: "税费", TRANSFER: "过户费", HANDLING: "经手费", BOTH: "买入与卖出",

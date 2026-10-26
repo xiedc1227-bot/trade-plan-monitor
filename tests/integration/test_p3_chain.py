@@ -15,13 +15,15 @@ from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
     ("OPEN_COST_CAP", False, "ORDINARY"), ("MARKET_VALUE_CAP", True, "WEAK_MINIMUM"),
     ("OPEN_COST_CAP", True, "BROKEN_STRONG")])
 def p3_chain(tmp_path, request):
-    mode, combined, route = request.param
+    mode, combined, route, *cap = request.param
     chain = Chain(tmp_path)
     chain.route = "BROKEN_STRONG" if route == "BROKEN_STRONG" else "WEAK_MINIMUM"
     chain.p3_route, chain.capital_mode = route, mode
     plan, _ = inputs_for(200 if route == "WEAK_MINIMUM" else 1000,
         chain.route, mode, combined)
     raw = plan.model_dump(mode="json")
+    if cap:
+        raw["position"]["limit"]["capital_policy"]["cap_fen"] = cap[0]
     if combined:
         raw["position"]["limit"]["max_qty"] = 1000
     if mode == "OPEN_COST_CAP":

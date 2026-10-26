@@ -314,7 +314,10 @@ function collectionReviewFixture() {
   const details: CollectionItemView[] = sources.map((source, index) => {
     const candidateHash = String(index + 1).repeat(64), evidenceHash = String(index + 3).repeat(64);
     const draft = structuredClone(initialCandidate.draft);
-    if (index) { draft.position.max_qty = 1200; draft.version = 2; }
+    if (index) {
+      if (!("max_qty" in draft.position)) throw new Error("Historical fixture must retain share policy");
+      draft.position.max_qty = 1200; draft.version = 2;
+    }
     const itemBindings = structuredClone(bindings);
     if (index) {
       const maximum = itemBindings.find(item => item.path === "position.max_qty")!;

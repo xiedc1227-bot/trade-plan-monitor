@@ -156,14 +156,14 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T16 — Add source-policy and opening-basis review UI
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T15.
 - Files/scope: P3 API client, review/opening components and `web/tests/unit/p3Review.spec.ts` (new); split at5 files.
 - Acceptance: MLP3-A02,MLP3-A05,MLP3-A09,MLP3-A11. Verify: V04 created files. Two cap meanings, amount-only/combined policy, missing source, exact lot/provenance review and independent opening confirmation; no account-cash input.
 
 ### MLP3-T17 — Show current capital limits and separate execution
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T16.
 - Files/scope: runtime/exception capital component, stale-response protection, rule-specific notifications and `web/tests/unit/p3Capital.spec.ts` (new); UI and notification children separately at most 5 files.
 - Acceptance: MLP3-A07,MLP3-A08,MLP3-A09,MLP3-A11. Verify: V03,V04. Frozen q versus current budget, readable reasons, no BROKEN_STRONG default, no cost prerequisite for value cap, send-time stale suppression.

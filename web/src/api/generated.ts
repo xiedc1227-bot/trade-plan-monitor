@@ -1112,6 +1112,7 @@ export type CapitalBookView = {
   bookRevision: (number) | (null);
   computedAt: string;
   inventoryKnown: boolean;
+  inventoryLots: Array<components["schemas"]["CapitalInventoryLot"]>;
   inventoryRevision: number;
   retainedBasisFen: (number) | (null);
   symbol: string;
@@ -1132,6 +1133,12 @@ export type CapitalCalculation = {
   minimum: (number) | (null);
   route: ("WEAK_MINIMUM" | "BROKEN_STRONG") | (null);
   share_capacity: (components["schemas"]["BoundedCapacity"] & { mode: "BOUNDED" }) | (components["schemas"]["UnboundedCapacity"] & { mode: "UNBOUNDED" }) | (components["schemas"]["UnknownCapacity"] & { mode: "UNKNOWN" });
+};
+
+export type CapitalInventoryLot = {
+  bucket: "CORE" | "TACTICAL";
+  lot_id: string;
+  quantity: number;
 };
 
 export type CapitalLot = {
@@ -1464,6 +1471,7 @@ export type DailyAlertCenterView = {
   acknowledgedAt?: (string) | (null);
   activationRevision: number;
   alertKind?: ("RISK_ALERT" | "EXCEPTION_REVIEW") | (null);
+  capitalMode?: ("OPEN_COST_CAP" | "MARKET_VALUE_CAP") | (null);
   causeId: string;
   confirmedTradeDate: (string) | (null);
   createdAt: string;
@@ -1503,6 +1511,7 @@ export type DailyAlertEvent = {
   acknowledged_at?: (string) | (null);
   activation_revision: number;
   alert_kind?: ("RISK_ALERT" | "EXCEPTION_REVIEW") | (null);
+  capital_mode?: ("OPEN_COST_CAP" | "MARKET_VALUE_CAP") | (null);
   cause_id: string;
   confirmed_trade_date: (string) | (null);
   created_at: string;
@@ -6161,6 +6170,7 @@ export interface components {
     CapitalBookEvent: CapitalBookEvent;
     CapitalBookView: CapitalBookView;
     CapitalCalculation: CapitalCalculation;
+    CapitalInventoryLot: CapitalInventoryLot;
     CapitalLot: CapitalLot;
     CapitalMarketDecision: CapitalMarketDecision;
     CapitalOnlyLimit: CapitalOnlyLimit;

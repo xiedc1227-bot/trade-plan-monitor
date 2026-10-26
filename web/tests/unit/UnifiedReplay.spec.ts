@@ -46,7 +46,7 @@ describe("current research results", () => {
       ...structuredClone(decision.researchDecision), exception_outcomes: [outcome]}};
     expect(isResearchDetail(value)).toBe(true);
     if (!isResearchDetail(value)) throw new Error("invalid replay fixture");
-    const wrapper = mount(BacktestDetailTable, {props: {items: [value], kind: "DECISION"}});
+    const wrapper = mount(BacktestDetailTable, {props: {items: readonly([value]), kind: "DECISION"}});
     expect(wrapper.text()).toContain(provenance === "RESEARCH_SCENARIO" ? "研究假设" : "已记录的本地授权事件");
     expect(wrapper.text()).toContain("批准本身不产生模拟成交");
     outcome.provenance = "INFERRED";

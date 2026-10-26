@@ -5,6 +5,9 @@ import PlanOperationForm from "./PlanOperationForm.vue";
 import P2RuntimeEvidence from "./P2RuntimeEvidence.vue";
 import MarketLinkageEvidence from "./MarketLinkageEvidence.vue";
 import PlanExceptionApproval from "./PlanExceptionApproval.vue";
+import P3CapitalOpening from "./P3CapitalOpening.vue";
+import P3CapitalAssessment from "./P3CapitalAssessment.vue";
+import P3CapitalRuntime from "./P3CapitalRuntime.vue";
 import { type Json, type Schema } from "./planSchema";
 const props = defineProps<{ version: PlanVersionView; request: <T>(url: string, body?: object, key?: string) => Promise<T> }>();
 const inventory = shallowRef<DailyInventoryResource | null>(null);
@@ -54,6 +57,12 @@ const riskAction = computed(() => runtime.value?.snapshot?.riskAction);
 const reminders = computed<readonly DailyRuleReminderState[]>(() => runtime.value?.snapshot?.alerts ?? []);
 const riskQuantity = computed(() => (riskAction.value?.coreQty ?? 0) + (riskAction.value?.tacticalQty ?? 0));
 const currentVersion = computed(() => runtime.value?.status === "CURRENT" && runtime.value.snapshot?.planVersionId === props.version.id);
+const capitalPolicy = computed(() => {
+  try {
+    const value = JSON.parse(props.version.planJson);
+    return value.schema_version === 9 ? value.position?.limit?.capital_policy : null;
+  } catch { return null; }
+});
 function wholeQuantity(quantity: number) { return Number.isSafeInteger(quantity) && quantity > 0 && quantity % 100 === 0; }
 async function refresh() {
   const [actual, state] = await Promise.all([
@@ -103,6 +112,9 @@ onMounted(async () => {
     <p>提醒不会改变模拟仓位。只有你确认一次模拟交易，系统才更新仓位；不提交真实订单。</p>
     <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
     <button type="button" :disabled="busy" @click="refreshCurrent">刷新当前状态</button>
+    <P3CapitalOpening v-if="capitalPolicy" :plan-version-id="version.id" :symbol="version.symbol"
+      :cost-required="capitalPolicy.mode === 'OPEN_COST_CAP'" :current="currentVersion && !busy"
+      :authority-revision="authorityRevision" :request="request" @refresh="refreshCurrent" />
     <dl v-if="inventory?.snapshot" class="daily-operations__inventory"><dt>模拟总持仓</dt><dd>{{ inventory.snapshot.totalQty ?? '待初始化' }}股</dd><dt>模拟CORE / TACTICAL</dt>
       <dd>{{ inventory.snapshot.coreQty ?? '待初始化' }} / {{ inventory.snapshot.tacticalQty ?? '待初始化' }}股</dd>
       <dt>可卖CORE / TACTICAL（系统计算T+1）</dt><dd>{{ inventory.snapshot.sellableCore ?? '待初始化' }} / {{ inventory.snapshot.sellableTactical ?? '待初始化' }}股</dd></dl>
@@ -114,6 +126,11 @@ onMounted(async () => {
           :plan-version-id="version.id" :current="currentVersion" :request="request"
           :occurrence-id="runtime.snapshot.exceptionCandidates?.find(c => c.candidate.binding.rule_id === entry.rule_id)?.candidate.candidate_id"
           :manual-quantity="runtime.snapshot.exceptionCandidates?.some(c => c.candidate.binding.rule_id === entry.rule_id && c.candidate.binding.route === 'BROKEN_STRONG') ?? false" />
+        <template v-if="capitalPolicy"><P3CapitalRuntime v-for="entry in runtime.snapshot.pretrade ?? []" :key="entry.rule_id"
+          :evidence="entry" :plan-version-id="version.id" :current="currentVersion && !busy"
+          :authority-revision="authorityRevision" :request="request"
+          :occurrence-id="runtime.snapshot.exceptionCandidates?.find(c => c.candidate.binding.rule_id === entry.rule_id)?.candidate.candidate_id"
+          :manual-quantity="runtime.snapshot.exceptionCandidates?.some(c => c.candidate.binding.rule_id === entry.rule_id && c.candidate.binding.route === 'BROKEN_STRONG') ?? false" /></template>
         <PlanExceptionApproval v-for="resource in runtime.snapshot.exceptionCandidates ?? []" :key="resource.candidate.candidate_id"
           :resource="resource" :current="currentVersion && !busy" :authority-revision="authorityRevision" :request="request" @refresh="refreshCurrent" />
         <ul v-if="runtime.snapshot.dataBlockers.length"><li v-for="blocker in runtime.snapshot.dataBlockers" :key="blocker">{{ blocker }}</li></ul>
@@ -124,6 +141,7 @@ onMounted(async () => {
             <dt>计划数量 / 已模拟</dt><dd>{{ signal.plannedQty }} / {{ signal.simulatedQty }}股</dd>
             <dt>当前可完整模拟</dt><dd>{{ signal.executableQty }}股</dd></dl>
           <P2RuntimeEvidence v-if="signal.pretrade" :evidence="signal.pretrade" :execution="signal.pretradeExecution" />
+          <P3CapitalAssessment v-if="signal.capitalExecution" :assessment="signal.capitalExecution" :historical="!currentVersion || signal.state === 'SIMULATED'" />
           <p v-if="signal.state === 'SIMULATED'">本笔模拟已完成，同一信号不会因刷新或重启再次增加仓位。</p>
           <p v-else-if="signal.blockers.length">模拟限制：{{ signal.blockers.join('；') }}</p>
           <button v-if="signal.state !== 'SIMULATED'" type="button"

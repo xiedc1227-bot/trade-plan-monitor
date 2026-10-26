@@ -1,4 +1,5 @@
 /** Runtime response guards; the server remains the only grant authority. */
+import { validCapitalAssessment } from "./p3Capital";
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -10,7 +11,10 @@ export function validExceptionResponse(path: string, value: unknown): boolean {
     && typeof value.candidateId === "string" && typeof value.bindingHash === "string" && integer(value.expectedRevision)
     && quantity(value.quantity) && typeof value.createdAt === "string" && record(value.current)
     && integer(value.current.inventory_revision) && integer(value.current.evaluation_revision)
-    && integer(value.current.capacity) && Array.isArray(value.current.blockers) && !value.current.blockers.length;
+    && ("share_capacity" in value.current ? record(value.current.share_capacity) &&
+      (value.current.share_capacity.mode === "UNBOUNDED" || value.current.share_capacity.mode === "BOUNDED" && integer(value.current.share_capacity.remaining_qty)) &&
+      validCapitalAssessment(value.capital) && record(value.capital) && value.capital.outcome === "PASS" && value.capital.quantity === value.quantity
+      : integer(value.current.capacity)) && Array.isArray(value.current.blockers) && !value.current.blockers.length;
   if (!path.endsWith("/plan-exception-decisions") && !path.endsWith("/plan-exception-revocations")) return false;
   if (!integer(value.revision) || !record(value.candidate) || !record(value.event)) return false;
   const c = value.candidate, e = value.event;

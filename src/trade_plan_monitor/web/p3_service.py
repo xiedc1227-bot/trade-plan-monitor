@@ -63,9 +63,12 @@ def read_capital_book(lifecycle, *, symbol):
         inventory = accounting.snapshot(symbol, now.date())
         values = current_capital_inputs(accounting, symbol, now)
         book = CapitalRepository(work.daily.session).get(symbol)
+        position = accounting._position(symbol)
         return CapitalBookView(computed_at=now, symbol=symbol,
             inventory_known=inventory["known"], inventory_revision=inventory["revision"],
-            book=book, **values)
+            inventory_lots=() if position is None else tuple(CapitalInventoryLot(
+                lot_id=lot["id"], bucket=lot["bucket"], quantity=lot["quantity"])
+                for lot in position["payload"]["batches"]), book=book, **values)
 
 
 def _opening_context(work, command):

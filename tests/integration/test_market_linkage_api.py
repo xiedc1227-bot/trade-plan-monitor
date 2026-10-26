@@ -48,7 +48,7 @@ def schema5_projection(document):
         "BacktestScheduledReportHeader": (
             "exception_outcomes", "exception_requests", "exception_provenance"),
         "LoopRequest": ("source_operation",),
-        "DailyAlertCenterView": ("pretradeMode",),
+        "DailyAlertCenterView": ("pretradeMode", "capitalMode"),
     }
     for name, fields in additions.items():
         for field in fields:
@@ -91,6 +91,7 @@ def schema5_projection(document):
     for name in ("DailyAlertPayload", "DailyAlertEvent"):
         if name in schemas:
             del schemas[name]["properties"]["pretrade_mode"]
+            del schemas[name]["properties"]["capital_mode"]
             node = schemas[name]["properties"]["alert_kind"]["anyOf"][0]
             assert node.pop("enum") == ["RISK_ALERT", "EXCEPTION_REVIEW"]
             node["const"] = "RISK_ALERT"

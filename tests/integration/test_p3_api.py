@@ -36,6 +36,8 @@ def test_preview_and_book_http_are_read_only_and_never_grant_authority(capital_a
     assert book.status_code == 200
     assert book.json()["book"] is None and book.json()["retainedBasisFen"] is None
     assert book.json()["authorityGranted"] is False
+    assert book.json()["inventoryLots"] == [dict(
+        lot_id="initial-TACTICAL", bucket="TACTICAL", quantity=400)]
     assert ledger_dump(path) == before
 
 

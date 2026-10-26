@@ -9,7 +9,11 @@ from trade_plan_monitor.decision.p3_capital import CapitalAssessment
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.domain.p2_policy_models import SafeFen
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
-from trade_plan_monitor.state.p3_capital_service import CapitalOpeningCommand, CapitalOpeningLot
+from trade_plan_monitor.state.p3_capital_service import (
+    CapitalInventoryLot,
+    CapitalOpeningCommand,
+    CapitalOpeningLot,
+)
 from trade_plan_monitor.state.p3_models import CapitalBook, CapitalBookEvent
 from trade_plan_monitor.web.schemas import ApiValue
 
@@ -22,6 +26,7 @@ class CapitalBookView(ApiValue):
     retained_basis_fen: SafeFen | None
     book_revision: SafeFen | None
     book: CapitalBook | None
+    inventory_lots: tuple[CapitalInventoryLot, ...] = Field(max_length=500)
     authority_granted: Literal[False] = False
 
 

@@ -32,6 +32,8 @@ class DailyAlertPayload(DailyValue):
     alert_kind: Literal["RISK_ALERT", "EXCEPTION_REVIEW"] | None = None
     pretrade_mode: Literal["NONE", "PREVIEW_ONLY", "REQUIRED"] | None = Field(
         default=None, exclude_if=lambda v: v is None)
+    capital_mode: Literal["OPEN_COST_CAP", "MARKET_VALUE_CAP"] | None = Field(
+        default=None, exclude_if=lambda v: v is None)
     confirmed_trade_date: date | None
     execution_date: date | None
     quantity: WholeQty | None
@@ -110,6 +112,9 @@ def render_daily_alert(payload):
         label = {"NONE": "不计算费用", "PREVIEW_ONLY": "仅研究估算",
                  "REQUIRED": "明确数值买入门槛"}[payload.pretrade_mode]
         text += f" 费用模式：{label}；估算不是实际盈亏或批准，执行前按当前报价重新核验。"
+    if payload.capital_mode is not None:
+        label = ("持仓成本占用上限" if payload.capital_mode == "OPEN_COST_CAP" else "持仓市值上限")
+        text += f" 金额口径：{label}；执行前按当前预算及报价整笔复核，超限不缩量。"
     return text
 
 

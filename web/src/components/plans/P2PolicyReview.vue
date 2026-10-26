@@ -7,7 +7,7 @@ function record(value: Json | undefined): Record<string, Json> {
 }
 const rules = computed(() => {
   const plan = record(props.candidate);
-  if (plan.schema_version !== 8 || !Array.isArray(plan.ordinary_rules)) return [];
+  if (![8, 9].includes(Number(plan.schema_version)) || !Array.isArray(plan.ordinary_rules)) return [];
   return plan.ordinary_rules.filter(r => "pretrade_policy" in record(r)).map(r => {
     const rule = record(r), policy = record(rule.pretrade_policy);
     return { id: String(rule.rule_id), sizing: record(policy.sizing), economics: record(policy.economics),

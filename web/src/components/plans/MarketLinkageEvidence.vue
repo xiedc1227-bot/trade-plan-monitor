@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { MarketExceptionDecision, MarketLinkageDecision, UnifiedConditionEvidence } from "../../api/generated";
+import type { CapitalMarketDecision, MarketExceptionDecision, MarketLinkageDecision, UnifiedConditionEvidence } from "../../api/generated";
 import { formatDisplayDateTime } from "../../formatters/dateTime";
 import { choiceLabels } from "./planSchema";
-const props = defineProps<{ decision: MarketLinkageDecision | MarketExceptionDecision; stale?: boolean }>();
+import P3CapitalAssessment from "./P3CapitalAssessment.vue";
+const props = defineProps<{ decision: CapitalMarketDecision | MarketLinkageDecision | MarketExceptionDecision; stale?: boolean }>();
 const labels: Record<string, string> = {
   NORMAL_TRANSITION: "正常或过渡", WEAK: "偏弱", BROKEN: "明显破位", UNKNOWN: "证据不足",
   STRONG: "相对强势", NOT_STRONG: "不满足相对强势", SATISFIED: "满足", UNSATISFIED: "不满足", MISSING_INPUT: "缺少输入",
@@ -21,6 +22,11 @@ const labels: Record<string, string> = {
 };
 const facts = computed(() => props.decision.market.facts);
 const sizing = computed(() => props.decision.calculation);
+const capacityLabel = computed(() => {
+  if (!("share_capacity" in sizing.value)) return shown(sizing.value.capacity);
+  const capacity = sizing.value.share_capacity;
+  return capacity.mode === "UNBOUNDED" ? "不设股数上限" : capacity.mode === "UNKNOWN" ? "库存待核验" : `${capacity.remaining_qty} 股`;
+});
 const exceptionRoute = computed(() => "route" in sizing.value ? sizing.value.route : null);
 const conditionLabels: Record<string, string> = {
   ALL: "全部满足", ANY: "任一满足", REVIEWED_FACT: "人工核验条件",
@@ -47,6 +53,7 @@ function ratio(value: string | null | undefined) { return value == null ? "待�
 
 <template>
   <section class="linkage-evidence" aria-label="大盘联动判断">
+    <P3CapitalAssessment v-if="'capital' in sizing" :assessment="sizing.capital" :historical="stale ?? false" />
     <h4>大盘联动 · {{ labels[decision.market.regime] }} · {{ decision.decision_session }}</h4>
     <p v-if="stale" role="status">历史判断，当前不可据此执行。</p>
     <p>参考指数 {{ facts.reference_market.index_code }}；确认组 {{ decision.selection.group ?? '待定' }}。</p>
@@ -56,7 +63,7 @@ function ratio(value: string | null | undefined) { return value == null ? "待�
       <dt>5 个交易日前 MA20 / 前 20 日最低价（不含当日）</dt><dd>{{ shown(facts.ma20_5) }} / {{ shown(facts.low20) }}</dd>
       <template v-if="exceptionRoute"><dt>基础数量 / 例外申请量</dt><dd>{{ sizing.base_quantity }} / {{ sizing.candidate_quantity ?? '须逐次人工填写' }} 股</dd></template>
       <template v-else><dt>基础数量 × 系数 → 合法候选量</dt><dd>{{ sizing.base_quantity }} × {{ shown(sizing.factor) }} → {{ shown(sizing.candidate_quantity) }} 股</dd></template>
-      <dt>可用容量 / 本次评估授权量</dt><dd>{{ shown(sizing.capacity) }} / {{ sizing.authorized_quantity }} 股</dd>
+      <dt>可用容量 / 本次评估授权量</dt><dd>{{ capacityLabel }} / {{ sizing.authorized_quantity }} 股</dd>
       <dt>市场最小量 / 递增单位</dt><dd>{{ shown(sizing.minimum) }} / {{ shown(sizing.increment) }} 股；模拟交易仍按 100 股整数倍</dd>
     </dl>
     <p>确认后冻结整笔数量；容量不足时不缩量，下一交易日收盘后失效。</p>

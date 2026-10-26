@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T15 and C01–C05 complete; T16–T24/C06–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T17 and C01–C05 complete; T18–T24/C06–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -37,3 +37,7 @@ These pre-admission tests use strict private Schema9 fixtures with real runtime/
 T13 grid/historical checks:30 passed,0.41s; composition group:38 passed,1 warning,2.75s. Both actual private exception paths/current P1 regression:28 passed,1 warning,12.93s. Expanded exception and P2 chain:7 passed,1 warning,5.40s. T14/P2 HTTP group:23 passed,1 warning,9.96s. JSON time/list conversion was added only at the API edge after the first opening HTTP test rejected their raw JSON forms. Exact domain values remain strict. Both money-failure tests reject the whole proposed exception without creating preview, approval or simulation.
 
 T15 public complete chain plus API:11 passed,1 warning,7.53s. Both modes and policy forms use actual review/activation/opening/exception preview/decision and separate simulation HTTP requests. A combined positive fixture initially requested300shares against only200shares remaining; production correctly rejected it, and the positive source ceiling was explicitly set1000 with separate insufficiency tests retained. Current Schema9 is now admitted; historical frozen unions still reject9. C05 API/legacy shape/route group:49 passed,1 warning,41.17s. All current P3 integration tests:60 passed,4738 deselected,3 warnings,12.49s. Counts overlap with prior groups. Both generated profiles pass their check; Ruff passes. Reviewed changes against policy scope, exact quantity authority, source isolation, transactional boundaries and bounded reads. Browser/frozen/final acceptance remain unexecuted.
+
+## MLP3-V08 — Source/opening UI and current capital interaction
+
+T16/T17 frontend group:39 passed in6files,1.87s; vue-tsc passed. HTTP capital resources/send-time notifications/P2 risk:11 passed,1 warning,7.29s. The UI uses actual bounded server inventoryLots before a book exists; all cost amounts start empty, complete source/time/reason and explicit confirmation are separate from inventory, exception approval and simulation. Tests caught Vue number inputs returning numbers and corrected the typed state without loosening numeric checks. Current amount previews preserve manual BROKEN_STRONG input, whole frozen quantity and stale-response disposal. Both current/research read-only draft displays carry9; frozen execution admission remains closed. Notification delivery immediately rejects a cost correction or exact-boundary value quote failure, with no simulation effects. Browser acceptance remains pending.

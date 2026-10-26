@@ -4,12 +4,14 @@ import { requestJson, invalidResponse } from "./transport";
 import type { Schema } from "../components/plans/planSchema";
 import { validP2Preview } from "./p2Pretrade";
 import { validExceptionResponse } from "./planExceptions";
+import { validCapitalResponse } from "./p3Capital";
 
 export interface PlanEditorContract {
   candidateSchema: Schema;
   linkedCandidateSchema?: Schema;
   linkedPolicyDefinitions?: Record<string, string>;
   pretradeCandidateSchema?: Schema;
+  capitalCandidateSchema?: Schema;
   exceptionCandidateSchema?: Schema;
   exceptionPolicyDefinitions?: Record<string, string>;
   operationSchemas: Record<string, Schema>;
@@ -22,7 +24,8 @@ export function isConditionPlanJson(value: string): boolean {
       (document.schema_version === 5 && document.execution_version === "condition-plan-v1" ||
        document.schema_version === 6 && document.execution_version === "condition-plan-v2" ||
        document.schema_version === 7 && document.execution_version === "condition-plan-v3" ||
-       document.schema_version === 8 && document.execution_version === "condition-plan-v4");
+       document.schema_version === 8 && document.execution_version === "condition-plan-v4" ||
+       document.schema_version === 9 && document.execution_version === "condition-plan-v5");
   } catch { return false; }
 }
 
@@ -32,6 +35,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validResponse(url: string, value: unknown): boolean {
   if (!isRecord(value)) return false;
   const path = url.split("?")[0] ?? url;
+  if (path.includes("/simulation-capital-") || path.endsWith("/plan-capital-previews"))
+    return validCapitalResponse(path, value);
   if (path.endsWith("/plan-economics-previews")) return validP2Preview(value);
   if (path.includes("/plan-exception-")) return validExceptionResponse(path, value);
   if (path.endsWith("/plan-editor-schema")) return isRecord(value.candidateSchema) && isRecord(value.operationSchemas);

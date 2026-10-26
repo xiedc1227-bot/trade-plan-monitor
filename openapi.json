@@ -7290,6 +7290,14 @@
             "title": "Inventoryknown",
             "type": "boolean"
           },
+          "inventoryLots": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalInventoryLot"
+            },
+            "maxItems": 500,
+            "title": "Inventorylots",
+            "type": "array"
+          },
           "inventoryRevision": {
             "maximum": 9007199254740991.0,
             "minimum": 0.0,
@@ -7321,7 +7329,8 @@
           "inventoryRevision",
           "retainedBasisFen",
           "bookRevision",
-          "book"
+          "book",
+          "inventoryLots"
         ],
         "title": "CapitalBookView",
         "type": "object"
@@ -7495,6 +7504,40 @@
           "calculation_hash"
         ],
         "title": "CapitalCalculation",
+        "type": "object"
+      },
+      "CapitalInventoryLot": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "enum": [
+              "CORE",
+              "TACTICAL"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "lot_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Lot Id",
+            "type": "string"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "multipleOf": 100.0,
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lot_id",
+          "bucket",
+          "quantity"
+        ],
+        "title": "CapitalInventoryLot",
         "type": "object"
       },
       "CapitalLot": {
@@ -9738,6 +9781,21 @@
             ],
             "title": "Alertkind"
           },
+          "capitalMode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "OPEN_COST_CAP",
+                  "MARKET_VALUE_CAP"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capitalmode"
+          },
           "causeId": {
             "title": "Causeid",
             "type": "string"
@@ -10010,6 +10068,21 @@
               }
             ],
             "title": "Alert Kind"
+          },
+          "capital_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "OPEN_COST_CAP",
+                  "MARKET_VALUE_CAP"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Mode"
           },
           "cause_id": {
             "title": "Cause Id",

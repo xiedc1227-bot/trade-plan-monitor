@@ -1,0 +1,164 @@
+{
+  "ordinary": {
+    "computedAt": "2026-09-18T16:00:00+08:00",
+    "planVersionId": "p3-plan",
+    "ruleId": "low-buy",
+    "quantity": 200,
+    "evidence": {
+      "version": "p2-pretrade-evidence-v1",
+      "rule_id": "low-buy",
+      "content_hash": "af41bc454afbd6d7334e8082efcd0e6741a5f074c506456c4615a9d229b66396",
+      "decision_session": "2026-09-18",
+      "cutoff": "2026-09-18T16:00:00+08:00",
+      "policy": {
+        "policy_version": "pretrade-policy-v1",
+        "sizing": {
+          "mode": "ATR_RATIO_TIERS",
+          "metric": "ATR14_OVER_CLOSE",
+          "base_qty": 1000,
+          "tiers": [
+            {
+              "lower": "0",
+              "upper": null,
+              "multiplier": "0.5"
+            }
+          ]
+        },
+        "economics": {
+          "mode": "NONE"
+        },
+        "level_evidence": []
+      },
+      "sizing": {
+        "q0": 500,
+        "tier_index": 0,
+        "atr_fen": "3.0358120237458267",
+        "close_fen": "161",
+        "blocker": null
+      },
+      "economics": {
+        "version": "p2-economics-v1",
+        "outcome": "NONE",
+        "reason": null,
+        "blockers": [],
+        "quantity": null,
+        "entry_debit_fen": null,
+        "target_proceeds_fen": null,
+        "risk_proceeds_fen": null,
+        "net_reward_fen": null,
+        "planned_loss_fen": null,
+        "total_cost_fen": null,
+        "spread_numerator": null,
+        "spread_denominator": null,
+        "entry_fees": null,
+        "target_fees": null,
+        "risk_fees": null
+      },
+      "evidence_hash": "b6d47ad1bb62d47808789bffcbb4d25382688c1e6ff31a912907b2bff7418660"
+    },
+    "assessment": {
+      "version": "capital-limit-evidence-v1",
+      "mode": "MARKET_VALUE_CAP",
+      "phase": "CURRENT",
+      "policy_hash": "2a6922245c50eab7526506c3552f39de2d486bd2128413498e4c1389a1c2be14",
+      "outcome": "PASS",
+      "quantity": 200,
+      "price_fen": 161,
+      "total_qty": 0,
+      "inventory_revision": 1,
+      "book_revision": null,
+      "cap_fen": 550500,
+      "before_fen": 0,
+      "after_fen": 32200,
+      "remaining_fen": 518300,
+      "share_capacity": {
+        "mode": "UNBOUNDED"
+      },
+      "buy_debit": null,
+      "blockers": [],
+      "evidence_hash": "809c1a1cfb5ffbe6659289c2325553e52787f811916f07faed94c561b36d2a4a"
+    },
+    "authorityGranted": false
+  },
+  "broken": {
+    "computedAt": "2026-09-18T16:00:00+08:00",
+    "planVersionId": "p3-plan",
+    "ruleId": "low-buy",
+    "quantity": 300,
+    "evidence": {
+      "version": "p2-pretrade-evidence-v1",
+      "rule_id": "low-buy",
+      "content_hash": "af41bc454afbd6d7334e8082efcd0e6741a5f074c506456c4615a9d229b66396",
+      "decision_session": "2026-09-18",
+      "cutoff": "2026-09-18T16:00:00+08:00",
+      "policy": {
+        "policy_version": "pretrade-policy-v1",
+        "sizing": {
+          "mode": "ATR_RATIO_TIERS",
+          "metric": "ATR14_OVER_CLOSE",
+          "base_qty": 1000,
+          "tiers": [
+            {
+              "lower": "0",
+              "upper": null,
+              "multiplier": "0.5"
+            }
+          ]
+        },
+        "economics": {
+          "mode": "NONE"
+        },
+        "level_evidence": []
+      },
+      "sizing": {
+        "q0": 500,
+        "tier_index": 0,
+        "atr_fen": "3.0358120237458267",
+        "close_fen": "161",
+        "blocker": null
+      },
+      "economics": {
+        "version": "p2-economics-v1",
+        "outcome": "NONE",
+        "reason": null,
+        "blockers": [],
+        "quantity": null,
+        "entry_debit_fen": null,
+        "target_proceeds_fen": null,
+        "risk_proceeds_fen": null,
+        "net_reward_fen": null,
+        "planned_loss_fen": null,
+        "total_cost_fen": null,
+        "spread_numerator": null,
+        "spread_denominator": null,
+        "entry_fees": null,
+        "target_fees": null,
+        "risk_fees": null
+      },
+      "evidence_hash": "b6d47ad1bb62d47808789bffcbb4d25382688c1e6ff31a912907b2bff7418660"
+    },
+    "assessment": {
+      "version": "capital-limit-evidence-v1",
+      "mode": "MARKET_VALUE_CAP",
+      "phase": "CURRENT",
+      "policy_hash": "2a6922245c50eab7526506c3552f39de2d486bd2128413498e4c1389a1c2be14",
+      "outcome": "PASS",
+      "quantity": 300,
+      "price_fen": 161,
+      "total_qty": 0,
+      "inventory_revision": 1,
+      "book_revision": null,
+      "cap_fen": 550500,
+      "before_fen": 0,
+      "after_fen": 48300,
+      "remaining_fen": 502200,
+      "share_capacity": {
+        "mode": "UNBOUNDED"
+      },
+      "buy_debit": null,
+      "blockers": [],
+      "evidence_hash": "744ef75c7fc204507028ad3b8de9fa7b64fe99d66a6d7ce8de656f69193655e4"
+    },
+    "authorityGranted": false
+  }
+}

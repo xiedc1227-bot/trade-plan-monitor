@@ -335,8 +335,8 @@ Generated TypeScript SHA-256: compatibility `931d2db0738738e47254afa858f26115fb5
 
 The user approved MLP3-D01–MLP3-D06 and implementation. Add only the three capital routes in [MLP3-K05/K08](CONTRACT-market-linkage-p3.md): bounded current simulation book reading, explicit reviewed opening/reconciliation, and read-only capital previews. Preview and opening receipts carry literal authorityGranted=false; opening also carries inventoryChanged=false. Existing same-origin/idempotency/admission controls and public errors remain. Schema9 current review/runtime/exception unions add explicit capital policy/capacity evidence; no fake max_qty, clipping or implicit approval. Frozen9 admission remains closed pending T19/T20. Both profiles retain the historical projection after only enumerated P3 additions.
 
-OpenAPI snapshot SHA-256: `01c2f0af7bf6dbe25fb45d6d701e24845f2a78af2fa6b4e397bd529db7e0ce19`
+OpenAPI snapshot SHA-256: `edc0a44c65bb82d0acc02a2c3e9748a5b118cd0d27aeafd6d477dd7845968077`
 
-Canonical monitor v2 OpenAPI snapshot SHA-256: `2a614df930688e3b9e91478ad97f74d1f194c468dd05b727ce09a1db1ce589f3`
+Canonical monitor v2 OpenAPI snapshot SHA-256: `cb01cb0318ace4d274584605ef56d4c61b9a696d0abd4b0b0fcfccf51d53ee22`
 
-Generated TypeScript SHA-256: compatibility `03ab5e8d14d4e76671f31e694430c668fbf3f50580bab0a63e6ab5d43b075366`; canonical `8031605b14df6760a2df773f808d48bff13fab3707b7058a48e6a69b8d8ae878`.
+Generated TypeScript SHA-256: compatibility `b7760b6f3775036a8052f4f9c67904982b42e8d4ccb300ef5e07dbd9ffdfb4c1`; canonical `2dcb82bf10a5e4e0e88e0fef3f771de0c571158917eb6379a1980b70a4abaa9f`.

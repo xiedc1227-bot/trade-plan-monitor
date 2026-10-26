@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import P2EconomicsResult from "./P2EconomicsResult.vue";
+import P3CapitalAssessment from "./P3CapitalAssessment.vue";
 import { toRef, useId } from "vue";
 import type { ExceptionCandidateResource } from "../../api/generated";
 import { usePlanException, type ExceptionRequest } from "../../composables/usePlanException";
@@ -43,9 +44,10 @@ const blockerLabels: Record<string, string> = {
       </template>
       <button type="button" :disabled="!canPreview" @click="generatePreview">生成本次精确预览</button>
       <div v-if="preview" role="status" class="exception-approval__preview">
+        <P3CapitalAssessment v-if="preview.capital" :assessment="preview.capital" />
         <P2EconomicsResult v-if="preview.economics" :result="preview.economics" />
         <strong>本次精确批准量：{{ preview.quantity }} 股</strong>
-        <p>预览时可用容量：{{ preview.current.capacity }} 股；服务端收到预览请求：{{ formatDisplayDateTime(preview.createdAt) }}。</p>
+        <p>预览时可用容量：{{ 'share_capacity' in preview.current ? preview.current.share_capacity.mode === 'UNBOUNDED' ? '不设股数上限' : preview.current.share_capacity.mode === 'BOUNDED' ? `${preview.current.share_capacity.remaining_qty} 股` : '库存待核验' : `${preview.current.capacity} 股` }}；服务端收到预览请求：{{ formatDisplayDateTime(preview.createdAt) }}。</p>
         <p>只批准本次独立信号，批准不执行模拟交易。数量或依据变化后须重新生成预览。</p>
       </div>
     </template>
