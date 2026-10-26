@@ -115,7 +115,7 @@ def test_p2_real_extraction_service_retains_policy_and_source():
 
     class Provider:
         async def extract_plan(self, request):
-            assert request.config.prompt_version == "plan-extract-v11"
+            assert request.config.prompt_version == "plan-extract-v12"
             return RawAIResponse(request_id=request.request_id,
                 provider_id=request.config.provider_id, model=request.config.model,
                 content=output.model_dump_json(), finish_reason="stop", attempts=1, usage=None)
@@ -125,6 +125,6 @@ def test_p2_real_extraction_service_retains_policy_and_source():
     result = asyncio.run(extract_plan(request_id=uuid4(), source_text=source,
         config=_config().model_copy(update={"max_input_chars": 200_000}), provider=Provider()))
     assert result.status == "SUCCEEDED"
-    assert result.prompt_version == "plan-extract-v11"
+    assert result.prompt_version == "plan-extract-v12"
     assert result.draft.schema_version == 8
     assert result.validation_issues == ()

@@ -41,7 +41,7 @@ def extract(output, *, finish_reason="stop"):
 
     class Provider:
         async def extract_plan(self, request):
-            assert request.config.prompt_version == "plan-extract-v11"
+            assert request.config.prompt_version == "plan-extract-v12"
             return RawAIResponse(
                 request_id=identity,
                 provider_id=config.provider_id,

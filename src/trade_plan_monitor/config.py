@@ -159,9 +159,10 @@ class AIConfiguration(_ConfigurationModel):
     backtest_timeout_seconds: int = Field(default=120, ge=1, le=120)
     temperature: float = Field(default=0, ge=0, le=0.3)
     prompt_version: Literal[
-        "plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11"
+        "plan-extract-v8", "plan-extract-v9", "plan-extract-v10",
+        "plan-extract-v11", "plan-extract-v12"
     ] = (
-        "plan-extract-v11"
+        "plan-extract-v12"
     )
     additional_models: tuple[AIModelConfiguration, ...] = Field(
         default=(),

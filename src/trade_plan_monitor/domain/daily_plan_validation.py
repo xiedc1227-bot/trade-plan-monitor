@@ -150,7 +150,7 @@ def load_daily_draft_json(document):
         object_pairs_hook=_reject_duplicate_json_keys,
         parse_constant=_reject_json_constant,
     )
-    if isinstance(raw, dict) and raw.get("schema_version") in {6, 7, 8}:
+    if isinstance(raw, dict) and raw.get("schema_version") in {6, 7, 8, 9}:
         from trade_plan_monitor.domain.market_linkage_validation import parse_current_draft
 
         _validate_data_tree(raw)

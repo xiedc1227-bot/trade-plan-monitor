@@ -10,6 +10,16 @@ def linkage_prompt_contract():
     )
 
     return (
+        "\nMoney caps: use schema_version=9/condition-plan-v5, capital-policy-v1. "
+        "position.limit CAPITAL_ONLY forbids max_qty; QUANTITY_AND_CAPITAL requires both. "
+        "OPEN_COST_CAP needs explicit retained-cost meaning and dated buy_cost_schedule; "
+        "sales release historical cost, not profit. MARKET_VALUE_CAP uses "
+        "CURRENT_ADMITTED_QUOTE for all CORE+TACTICAL. Ambiguous total budget, cumulative "
+        "spending or net cash stays unresolved. Preserve full P0/P1/P2 quantities; never "
+        "infer max_qty/Q0 from cap/price or clip to fit. Both fee schedules must match; "
+        "economics NONE still needs buy-costs for OPEN_COST_CAP. There is no available-cash "
+        "prerequisite. Never create opening costs/books, B authority or exception approvals. "
+        "Without money caps keep the prior schemas. "
         "\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source "
         "explicitly defines daily BUY market linkage without enabling exception review. "
         "Use schema_version=7/condition-plan-v3 only for source-defined per-occurrence "

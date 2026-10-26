@@ -19,6 +19,8 @@ from trade_plan_monitor.domain.p2_policy_drafts import (
     DraftPretradePolicy,
 )
 from trade_plan_monitor.domain.p2_policy_models import P2TradePlan
+from trade_plan_monitor.domain.p3_policy_drafts import DraftP3Position
+from trade_plan_monitor.domain.p3_policy_models import P3TradePlan
 from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedCondition,
     UnifiedConfirmation,
@@ -137,8 +139,20 @@ class P2PlanDraft(MarketExceptionPlanDraft):
             return None
 
 
+class P3PlanDraft(P2PlanDraft):
+    schema_version: Literal[9] = 9
+    execution_version: Literal["condition-plan-v5"] = "condition-plan-v5"
+    position: DraftP3Position
+
+    def to_executable(self) -> P3TradePlan | None:
+        try:
+            return P3TradePlan.model_validate(self.executable_payload())
+        except ValidationError:
+            return None
+
+
 CurrentPlanDraft = Annotated[
-    P2PlanDraft | MarketExceptionPlanDraft | MarketLinkedPlanDraft | UnifiedPlanDraft,
+    P3PlanDraft | P2PlanDraft | MarketExceptionPlanDraft | MarketLinkedPlanDraft | UnifiedPlanDraft,
     Field(discriminator="schema_version"),
 ]
 

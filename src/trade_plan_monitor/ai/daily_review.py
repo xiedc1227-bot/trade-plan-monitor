@@ -224,17 +224,18 @@ def semantic_values(draft):
             for index, child in enumerate(value):
                 visit(child, f"{path}[{index}]")
         elif value is not None or (
-            draft.schema_version in {5, 6, 7, 8} and path in {"levels.low_buy", "levels.pressure"}
+            draft.schema_version in {5, 6, 7, 8, 9}
+            and path in {"levels.low_buy", "levels.pressure"}
         ):
             values[path] = value
 
     visit(data, "")
-    if draft.schema_version in {6, 7, 8}:
+    if draft.schema_version in {6, 7, 8, 9}:
         from trade_plan_monitor.domain.market_linkage_definitions import (
             EXPANDED_EXCEPTION_POLICY,
             EXPANDED_LINKAGE_POLICY,
         )
-        definitions = (EXPANDED_EXCEPTION_POLICY if draft.schema_version in {7, 8}
+        definitions = (EXPANDED_EXCEPTION_POLICY if draft.schema_version in {7, 8, 9}
                        else EXPANDED_LINKAGE_POLICY)
         for i, rule in enumerate(draft.ordinary_rules):
             if getattr(rule, "market_policy", None) is not None:
@@ -264,7 +265,7 @@ _CONTRACT_VALUES = {
 
 
 def _contract_values(draft):
-    if draft.schema_version not in {5, 6, 7, 8}:
+    if draft.schema_version not in {5, 6, 7, 8, 9}:
         return _CONTRACT_VALUES
     return {
         **{
@@ -279,7 +280,7 @@ def _contract_values(draft):
         },
         **({f"reference_market.{key}": value for key, value in
             draft.reference_market.model_dump(mode="json").items()}
-           if draft.schema_version in {6, 7, 8} and draft.reference_market is not None else {}),
+           if draft.schema_version in {6, 7, 8, 9} and draft.reference_market is not None else {}),
         "schema_version": draft.schema_version,
         "execution_mode": "CONDITION_PLAN",
         "execution_version": draft.execution_version,
@@ -314,7 +315,7 @@ def _persistent_deadline_issues(draft, mapping):
     Exact clause review remains responsible for meaning outside these narrow cues.
     A scoped human conversion must quote each affected clause in its reason.
     """
-    if draft.schema_version not in {5, 6, 7, 8}:
+    if draft.schema_version not in {5, 6, 7, 8, 9}:
         return ()
     paths = {
         f"ordinary_rules[{i}].validity.mode": rule.side
@@ -589,7 +590,7 @@ def build_daily_review(draft, mapping, source_text):
                 else:
                     excerpts.append(clause.excerpt)
             excerpt = " ".join(excerpts)
-            if draft.schema_version in {7, 8} and (
+            if draft.schema_version in {7, 8, 9} and (
                 ".market_policy.expanded." in binding.path
                 or ".market_policy.exception_routes." in binding.path
                 or ".pretrade_policy." in binding.path and isinstance(actual, str)
@@ -601,19 +602,26 @@ def build_daily_review(draft, mapping, source_text):
 
                 if not semantic_interpretation_matches(binding.path, actual, excerpt, draft):
                     raise ValueError("exception permission differs from source evidence")
+            if (draft.schema_version == 9 and binding.path.startswith("position.limit.")
+                    and isinstance(actual, str | int) and not isinstance(actual, bool)
+                    and binding.unit != "FEN_FROM_YUAN"):
+                from trade_plan_monitor.ai.p3_review import capital_source_matches
+
+                if not capital_source_matches(binding.path, actual, excerpt):
+                    raise ValueError("capital policy differs from explicit source meaning")
             if binding.origin == "SOURCE_SEMANTIC":
                 from trade_plan_monitor.ai.semantic_validation import (
                     semantic_interpretation_matches,
                 )
 
-                if draft.schema_version not in {5, 6, 7, 8} or not semantic_interpretation_matches(
-                    binding.path, actual, excerpt, draft,
-                ):
+                if (draft.schema_version not in {5, 6, 7, 8, 9}
+                        or not semantic_interpretation_matches(
+                            binding.path, actual, excerpt, draft)):
                     raise ValueError("semantic source value differs from its exact evidence")
             elif binding.origin == "SOURCE_INTERPRETATION":
                 from trade_plan_monitor.ai.source_resolution import interpretation_matches
 
-                if draft.schema_version not in {5, 6, 7, 8} or not interpretation_matches(
+                if draft.schema_version not in {5, 6, 7, 8, 9} or not interpretation_matches(
                     binding.path,
                     actual,
                     excerpt,
@@ -628,7 +636,7 @@ def build_daily_review(draft, mapping, source_text):
                     raise MappingValidationError(
                         "source price does not match exact yuan amount", diagnostic_path + ".unit"
                     )
-            elif type(actual) is bool and draft.schema_version in {5, 6, 7, 8}:
+            elif type(actual) is bool and draft.schema_version in {5, 6, 7, 8, 9}:
                 literal = excerpt.strip(" \t\r\n。；;.")
                 if not binding.path.endswith((".include_low", ".include_high")) or not re.fullmatch(
                     re.escape(binding.path) + r"\s*=\s*" + str(actual).lower(),
@@ -637,7 +645,7 @@ def build_daily_review(draft, mapping, source_text):
                     raise ValueError(
                         "range boundary requires an explicit scoped source declaration"
                     )
-            elif actual == [] and type(actual) is list and draft.schema_version in {5, 6, 7, 8}:
+            elif actual == [] and type(actual) is list and draft.schema_version in {5, 6, 7, 8, 9}:
                 labels = {
                     "ordinary_rules": "普通规则",
                     "risk_branches": "风险分支",
@@ -645,9 +653,11 @@ def build_daily_review(draft, mapping, source_text):
                 }
                 name = labels.get(binding.path)
                 literal = excerpt.strip(" \t\r\n。；;.")
-                p2_empty = (draft.schema_version == 8 and re.fullmatch(
+                p2_empty = (draft.schema_version in {8, 9} and re.fullmatch(
                     r"ordinary_rules\[\d+\]\.pretrade_policy\.(?:level_evidence|"
-                    r"economics\.fee_schedule\.components)", binding.path))
+                    r"economics\.fee_schedule\.components)|"
+                    r"position\.limit\.capital_policy\.buy_cost_schedule\.components",
+                    binding.path))
                 if (name is None and not p2_empty) or not re.fullmatch(
                     rf"(?:{re.escape(binding.path)}\s*=\s*\[\]|无{name})",
                     literal,
@@ -659,12 +669,12 @@ def build_daily_review(draft, mapping, source_text):
     if used != set(supplements):
         raise ValueError("orphan human supplement")
     issues = list(daily_draft_issues(draft))
-    if draft.schema_version == 8:
+    if draft.schema_version in {8, 9}:
         from trade_plan_monitor.ai.p2_review import p2_review_issues
         issues.extend(p2_review_issues(draft))
     issues.extend(_persistent_deadline_issues(draft, mapping))
     unbound_paths = values.keys() - bound
-    for path in sorted(unbound_paths) if draft.schema_version in {5, 6, 7, 8} else unbound_paths:
+    for path in sorted(unbound_paths) if draft.schema_version in {5, 6, 7, 8, 9} else unbound_paths:
         issues.append(
             {
                 "path": path,

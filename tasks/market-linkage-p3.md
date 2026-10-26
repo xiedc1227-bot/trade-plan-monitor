@@ -106,7 +106,7 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T10 — Extract and review monetary policies without inference
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T09.
 - Files/scope: sequential children: T10a nullable draft/semantic review; T10b extraction/update/prompt preservation; T10c production extraction/review tests. Each child at most 5 files; use `tests/integration/test_p3_review.py` (new).
 - Acceptance: MLP3-A01,MLP3-A02. Verify: V01,V02 and focused V03. A-only source, ambiguous total-budget rejection, inherited policy preservation, source edits and no automatic opening cost; retain current extraction-size budget.

@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T09 and C01–C03 complete; T10–T24/C04–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T10 and C01–C03 complete; T11–T24/C04–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -21,3 +21,7 @@ T04 exact buy-debit helper/P2 fee goldens:23 passed,0.47s. T05 capital predicate
 ## MLP3-V04 — Durable budget and inventory continuity
 
 T07 temporary-storage migration/reopen/hash/backup/downgrade group:5 passed,2.24s. T07/T08 expanded storage and opening service:14 passed,2 metadata-reflection warnings,3.03s. T09/C03 with original whole-simulation/cohort-risk regressions:45 passed,3 existing warnings,14.50s. Opening/reconciliation is explicitly confirmed and server-timed; retry returns the original receipt without inventory/approval effects. Exact actual allocations release historical basis, old-version buys/mismatches retain unknown cost, known empty inventory creates the budget only inside the first explicit buy, and a post-write fault rolls back both stores. Positive test fixtures were corrected to use the actual calendar fields and unique audit IDs; no production constraint was relaxed. Public9 remains closed. All migrations used disposable SQLite, never user data.
+
+## MLP3-V05 — Source extraction and review
+
+T10 draft/source compatibility:46 passed,1 warning,2.68s. Current extraction, P3/P2 source review and untrusted-source isolation:58 passed,1 warning,3.31s. Explicit cap meanings and exact fee percentages are required; ambiguous total investment, negated modes and mismatched source rates are rejected. The existing 50,000-character input budget remains unchanged: redundant instructions were shortened after the original budget test caught an overrun. Both original prompt sizes and current extraction security pass. Ruff and diff whitespace checks passed. Public executable9 remains closed pending the complete current authority chain.

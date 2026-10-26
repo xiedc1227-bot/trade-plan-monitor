@@ -41,6 +41,7 @@ from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
 from trade_plan_monitor.domain.market_linkage_models import MarketLinkedTradePlan
 from trade_plan_monitor.domain.p2_policy_models import P2TradePlan
+from trade_plan_monitor.domain.p3_policy_models import P3TradePlan
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 
 UPDATE_PROMPT_VERSION = "monitor-loop-update-extract-v1"
@@ -68,7 +69,10 @@ class PlanUpdateContext(ResearchValue):
     """Constructed from the validated predecessor, not supplied by the model."""
 
     base_hash: Sha256Hex
-    snapshot: P2TradePlan | MarketExceptionTradePlan | MarketLinkedTradePlan | UnifiedTradePlan
+    snapshot: (
+        P3TradePlan | P2TradePlan | MarketExceptionTradePlan
+        | MarketLinkedTradePlan | UnifiedTradePlan
+    )
     available_at: LoopTimestamp
     evidence: tuple[PriorPlanEvidence, ...] = Field(default=(), max_length=2000)
 
