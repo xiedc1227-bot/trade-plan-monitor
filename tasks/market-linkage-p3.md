@@ -81,28 +81,28 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T07 — Add isolated book/event storage and migration
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T06.
 - Files/scope: state models/repository, additive migration and `tests/integration/test_p3_storage.py` (new), at most 5 files per child.
 - Acceptance: MLP3-A05. Verify: focused V03 storage cases, migration/metadata parity, backup/restore, downgrade and revision-mismatch tests on temporary SQLite. No user database.
 
 ### MLP3-T08 — Implement explicit reviewed opening/reconciliation service
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T07.
 - Files/scope: `state/p3_capital_service.py` (new), command/receipt/source-validation seams, `tests/integration/test_p3_opening.py` (new).
 - Acceptance: MLP3-A05,MLP3-A09. Verify: focused V03. Exact current lot/revision checks, source/provenance, zero/unknown, duplicate command and tamper/restart behavior; no inventory or approval mutation. Public endpoint waits for T14.
 
 ### MLP3-T09 — Bind book mutations to actual simulation allocations
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T08.
 - Files/scope: `state/daily_accounting.py`, budget transaction adapter, `tests/integration/test_p3_accounting.py` (new) and existing accounting regression.
 - Acceptance: MLP3-A05,MLP3-A06,MLP3-A07. Verify: focused V03 plus existing whole-simulation/accounting checks. BUY, ordinary/risk SELL, older-plan unknown-cost buys and plan-switch continuity must share one atomic inventory/book update.
 
 ### MLP3-C03 — Storage/continuity acceptance
 
-- [ ] V01,V02 and available V03 pass; MLP3-A05,MLP3-A06,MLP3-A07 storage boundaries covered. Include genuine reopen, rollback, older-binary mismatch and account isolation.
+- [x] V01,V02 and available V03 pass; MLP3-A05,MLP3-A06,MLP3-A07 storage boundaries covered. Include genuine reopen, rollback, older-binary mismatch and account isolation.
 
 ### MLP3-T10 — Extract and review monetary policies without inference
 

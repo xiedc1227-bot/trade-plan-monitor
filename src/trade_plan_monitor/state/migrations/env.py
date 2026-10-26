@@ -4,8 +4,10 @@ from alembic import context
 from sqlalchemy.engine import Connection
 
 from trade_plan_monitor.state.daily_models import DailyRecord
+from trade_plan_monitor.state.p3_models import CapitalBookRow
 
 target_metadata = DailyRecord.metadata
+assert CapitalBookRow.metadata is target_metadata
 
 
 def run_migrations_online() -> None:

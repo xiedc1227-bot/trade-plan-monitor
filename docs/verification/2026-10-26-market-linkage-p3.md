@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T06 and C01–C02 complete; T07–T24/C03–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T09 and C01–C03 complete; T10–T24/C04–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -17,3 +17,7 @@ MLP3-A01/A02 have stage-specific source/contract evidence; full current authorit
 ## MLP3-V03 — Pure capital and basis policies
 
 T04 exact buy-debit helper/P2 fee goldens:23 passed,0.47s. T05 capital predicates with P2 regression:38 passed,0.58s. A negative-basis test caught an incorrect chained comparison; corrected explicit integer/sign/bound checks reject negative costs. T06/C02 combined core/historical policies:157 passed,1 warning,3.15s. Exact cost/value equality and rejection, whole quantities, unknown versus unbounded share capacity, cost-release lot selection, unknown lots and ten whole sales conserving987654321fen are covered. The deliberate > to >= cap mutation failed the independent equality tests; exact original code was restored. Public9 remains closed; storage/runtime/API/replay still pending.
+
+## MLP3-V04 — Durable budget and inventory continuity
+
+T07 temporary-storage migration/reopen/hash/backup/downgrade group:5 passed,2.24s. T07/T08 expanded storage and opening service:14 passed,2 metadata-reflection warnings,3.03s. T09/C03 with original whole-simulation/cohort-risk regressions:45 passed,3 existing warnings,14.50s. Opening/reconciliation is explicitly confirmed and server-timed; retry returns the original receipt without inventory/approval effects. Exact actual allocations release historical basis, old-version buys/mismatches retain unknown cost, known empty inventory creates the budget only inside the first explicit buy, and a post-write fault rolls back both stores. Positive test fixtures were corrected to use the actual calendar fields and unique audit IDs; no production constraint was relaxed. Public9 remains closed. All migrations used disposable SQLite, never user data.

@@ -213,7 +213,8 @@ class DailyAccounting:
         )
 
     def simulate(self, *, symbol, identity, side, quantities, expected_revision, now,
-                 lot_allocations=None, plan_version_id=None):
+                 lot_allocations=None, plan_version_id=None, capital_debit_fen=None,
+                 capital_details=None):
         """Apply the server-authorized full quantity; only acquisition-day batches persist."""
         row = self._position(symbol)
         if row is None or row["revision"] != expected_revision:
@@ -259,6 +260,17 @@ class DailyAccounting:
                         break
                 if left:
                     raise ValueError("TACTICAL_OR_CORE_SETTLED_QUANTITY_INSUFFICIENT")
-        return self.repo.save(row["id"], kind="POSITION", symbol=symbol, lineage=symbol,
+        from trade_plan_monitor.state.p3_accounting import (
+            persist_capital_transition,
+            prepare_capital_transition,
+        )
+
+        remaining = [b for b in batches if b["quantity"]]
+        transition = prepare_capital_transition(self.repo.session, row, remaining,
+            identity=identity, side=side, now=now, debit_fen=capital_debit_fen,
+            details=capital_details)
+        position = self.repo.save(row["id"], kind="POSITION", symbol=symbol, lineage=symbol,
             expected_revision=expected_revision,
-            payload={**payload, "batches": [b for b in batches if b["quantity"]]})
+            payload={**payload, "batches": remaining})
+        persist_capital_transition(self.repo.session, transition, position, now)
+        return position
