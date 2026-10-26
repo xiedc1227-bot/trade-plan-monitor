@@ -7,6 +7,15 @@ from trade_plan_monitor.domain.daily_plan_models import DailyValue
 from trade_plan_monitor.domain.p2_policy_models import MAX_SAFE, NoEconomics, RequiredEconomics
 
 
+class BuyDebitResult(DailyValue):
+    outcome: Literal["PASS", "UNKNOWN"]
+    reason: str | None = None
+    notional_fen: int | None = None
+    total_fees_fen: int | None = None
+    fees: dict[str, int] | None = None
+    debit_fen: int | None = None
+
+
 class EconomicsResult(DailyValue):
     version: Literal["p2-economics-v1"] = "p2-economics-v1"
     outcome: Literal["NONE", "PASS", "FAIL", "UNKNOWN"]
@@ -35,6 +44,27 @@ def _fees(schedule, side, notional):
     result.update({c.id: fee(c.rate) for c in schedule.components
                    if c.side in {side, "BOTH"} and c.included_in is None})
     return result
+
+
+def calculate_buy_debit(schedule, *, quantity, entry_fen, symbol, session):
+    """Budget occupancy uses the same exact fee engine without inventing sale levels."""
+    def unknown(reason):
+        return BuyDebitResult(outcome="UNKNOWN", reason=reason)
+
+    if symbol not in schedule.symbols or not (
+            schedule.effective_from <= session <= schedule.effective_through):
+        return unknown("FEE_SCHEDULE_NOT_APPLICABLE")
+    if (type(quantity) is not int or not 0 < quantity <= MAX_SAFE or quantity % 100
+            or type(entry_fen) is not int or not 0 < entry_fen <= MAX_SAFE):
+        return unknown("ECONOMICS_INPUT_UNKNOWN")
+    notional = quantity * (entry_fen + schedule.buy_slippage_fen)
+    fees = _fees(schedule, "BUY", notional)
+    total = sum(fees.values())
+    debit = notional + total
+    if max(notional, total, debit) > MAX_SAFE:
+        return unknown("ECONOMICS_OVERFLOW")
+    return BuyDebitResult(outcome="PASS", notional_fen=notional, total_fees_fen=total,
+                          fees=fees, debit_fen=debit)
 
 
 def calculate_economics(policy, *, quantity, entry_fen, symbol, session):

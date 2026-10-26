@@ -56,28 +56,28 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T04 — Expose exact buy-debit arithmetic without changing P2
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T03.
 - Files/scope: P2 fee helper, pure P3 adapter, P2 goldens and capital-gate unit tests (at most 5 files).
 - Acceptance: MLP3-A03,MLP3-A06. Verify: V01 and focused fee tests. OPEN_COST_CAP with economics NONE still requires explicit fees; no target/risk fabrication or duplicated algorithm.
 
 ### MLP3-T05 — Implement cost/value predicates and capacity composition
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T04.
 - Files/scope: `decision/p3_capital.py` (new), versioned capacity/evidence model and `tests/unit/test_p3_capital_gate.py` (new).
 - Acceptance: MLP3-A03,MLP3-A04,MLP3-A08. Verify: V02. Use exact independent oracles for equality, full rejection, both caps, unknown versus unbounded, over-cap holdings and no new SELL.
 
 ### MLP3-T06 — Implement per-lot retained-basis transitions
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T05.
 - Files/scope: pure basis reducer, book value models, `tests/unit/test_p3_capital_basis.py` (new).
 - Acceptance: MLP3-A05,MLP3-A06. Verify: V02. Consume actual selected lot allocations, conserve fen through residual/full sales, preserve explicit unknown and never credit sale profit.
 
 ### MLP3-C02 — Pure-policy acceptance
 
-- [ ] V01,V02 pass; MLP3-A03,MLP3-A04,MLP3-A06 arithmetic covered. Mutating a boundary/rounding oracle must be detected; preserve exact original files after the check.
+- [x] V01,V02 pass; MLP3-A03,MLP3-A04,MLP3-A06 arithmetic covered. Mutating a boundary/rounding oracle must be detected; preserve exact original files after the check.
 
 ### MLP3-T07 — Add isolated book/event storage and migration
 

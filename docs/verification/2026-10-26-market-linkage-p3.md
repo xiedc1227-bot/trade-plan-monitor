@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T03 and C01 complete; T04–T24/C02–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T06 and C01–C02 complete; T07–T24/C03–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -13,3 +13,7 @@ A restricted Windows local-communication regression process stopped progressing 
 ## MLP3-V02 — Remaining acceptance
 
 MLP3-A01/A02 have stage-specific source/contract evidence; full current authority, budget book, exact capital predicates, transaction gates, APIs/UI, frozen replay and complete regression remain pending. Do not infer implementation completion from the approved specification or stage-only tests. No user database, live provider, deployment or push is involved. Preserve tasks/plan.md and tasks/todo.md.
+
+## MLP3-V03 — Pure capital and basis policies
+
+T04 exact buy-debit helper/P2 fee goldens:23 passed,0.47s. T05 capital predicates with P2 regression:38 passed,0.58s. A negative-basis test caught an incorrect chained comparison; corrected explicit integer/sign/bound checks reject negative costs. T06/C02 combined core/historical policies:157 passed,1 warning,3.15s. Exact cost/value equality and rejection, whole quantities, unknown versus unbounded share capacity, cost-release lot selection, unknown lots and ten whole sales conserving987654321fen are covered. The deliberate > to >= cap mutation failed the independent equality tests; exact original code was restored. Public9 remains closed; storage/runtime/API/replay still pending.
