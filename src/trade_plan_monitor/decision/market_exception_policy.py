@@ -15,8 +15,8 @@ class ExceptionQuantityDecision(DailyValue):
     blockers: tuple[str, ...]
 
 
-def validate_exception_quantity(
-    *, route, base_quantity, minimum, increment, capacity, proposed_quantity,
+def exception_quantity_grid(
+    *, route, base_quantity, minimum, increment, proposed_quantity,
 ):
     """Validate exact user intent without rounding, sizing defaults or approval."""
     if route not in {"WEAK_MINIMUM", "BROKEN_STRONG"}:
@@ -27,8 +27,6 @@ def validate_exception_quantity(
         or not 0 <= proposed_quantity <= 9_007_199_254_740_991
     ):
         raise ValueError("exception quantity must be a bounded integer")
-    if capacity is not None and type(capacity) is not int:
-        raise ValueError("capacity must be an integer or unknown")
     candidate = minimum if route == "WEAK_MINIMUM" else proposed_quantity
     blockers = []
     if minimum is None or increment is None:
@@ -46,6 +44,17 @@ def validate_exception_quantity(
         )
     ):
         blockers.append("EXCEPTION_QUANTITY_INVALID")
+    return ExceptionQuantityDecision(candidate_quantity=candidate, blockers=tuple(blockers))
+
+
+def validate_exception_quantity(
+    *, route, base_quantity, minimum, increment, capacity, proposed_quantity,
+):
+    result = exception_quantity_grid(route=route, base_quantity=base_quantity, minimum=minimum,
+        increment=increment, proposed_quantity=proposed_quantity)
+    if capacity is not None and type(capacity) is not int:
+        raise ValueError("capacity must be an integer or unknown")
+    candidate, blockers = result.candidate_quantity, list(result.blockers)
     if capacity is None:
         blockers.append("POSITION_UNKNOWN")
     elif candidate is not None and capacity < candidate:

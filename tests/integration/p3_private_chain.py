@@ -18,9 +18,10 @@ from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 
 
 class PrivateChain:
-    def __init__(self, engine, monkeypatch, *, mode="MARKET_VALUE_CAP", quantity=0, plan=None):
+    def __init__(self, engine, monkeypatch, *, mode="MARKET_VALUE_CAP", quantity=0, plan=None,
+                 route="WEAK_MINIMUM"):
         self.now = datetime.combine(FRIDAY, time(16), SH)
-        self.route = "WEAK_MINIMUM"
+        self.route = route
         self.plan = plan or inputs_for(mode=mode)[0]
         if mode == "OPEN_COST_CAP" and plan is None:
             raw = self.plan.model_dump(mode="json")

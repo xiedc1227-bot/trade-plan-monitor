@@ -8,6 +8,7 @@ from trade_plan_monitor.decision.daily_lifecycle import next_session
 from trade_plan_monitor.decision.market_exception_decision import (
     MarketExceptionDecision,
     grant_exception,
+    parse_linkage_decision,
 )
 from trade_plan_monitor.decision.unified_conditions import evaluate_unified_condition
 from trade_plan_monitor.domain.daily_hash import daily_hash
@@ -154,7 +155,7 @@ def current_exception_authority(work, candidate, now):
             or state["activation_revision"] != b.activation_revision
             or datetime.fromisoformat(state["evaluated_at"]) > now):
         raise ExceptionAuthorityError("EXCEPTION_CURRENT_EVALUATION_REQUIRED")
-    decision = next((MarketExceptionDecision.model_validate(item)
+    decision = next((parse_linkage_decision(item)
         for item in state.get("market_linkage", ()) if item["rule_id"] == b.rule_id), None)
     if (decision is None or decision.consumed_hash != b.consumed_hash
             or decision.calculation.route != b.route or decision.selection.blocker is not None
@@ -177,7 +178,7 @@ def current_exception_authority(work, candidate, now):
     if now >= b.expires_at:
         blockers.append("EXCEPTION_WINDOW_EXPIRED")
     pretrade = None
-    if plan.schema_version == 8:
+    if plan.schema_version in {8, 9}:
         from trade_plan_monitor.state.p2_authority import P2EconomicsContext
 
         frozen = candidate.signal_seed.pretrade
@@ -191,8 +192,31 @@ def current_exception_authority(work, candidate, now):
         else:
             quote = state.get("quote")
             price = quote["price_fen"] if quote is not None else None
+            if plan.schema_version == 9:
+                from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
+                try:
+                    admitted = DailyExecutionQuote.model_validate({
+                        **(quote or {}), "evaluated_at": now})
+                    price = admitted.price_fen
+                except ValueError:
+                    price = None
         pretrade = P2EconomicsContext(policy=frozen.policy.economics,
             entry_fen=price, symbol=plan.symbol, session=now.date())
+    if plan.schema_version == 9:
+        from trade_plan_monitor.decision.p3_capital import share_capacity
+        from trade_plan_monitor.state.p3_authority import CapitalAuthorityContext
+        from trade_plan_monitor.state.p3_current import current_capital_inputs
+        return CapitalAuthorityContext(binding_hash=candidate.binding_hash,
+            inventory_revision=inventory["revision"], evaluation_revision=head["revision"],
+            authority_hash=daily_hash("capital-exception-current-v1", {
+                "consumed_hash": decision.consumed_hash,
+                "fact_revisions": state["fact_revisions"], "risks": risks}),
+            share_capacity=share_capacity(plan.position,
+                inventory["total_qty"] if inventory["known"] else None),
+            blockers=tuple(blockers), pretrade=pretrade, position=plan.position,
+            total_qty=inventory["total_qty"] if inventory["known"] else None,
+            price_fen=price, symbol=plan.symbol, session=now.date(),
+            **current_capital_inputs(accounting, plan.symbol, now))
     context = ExceptionAuthorityContext(
         **({"pretrade": pretrade} if pretrade is not None else {}),
         binding_hash=candidate.binding_hash, inventory_revision=inventory["revision"],
@@ -217,9 +241,16 @@ def apply_exception_decision(work, command, *, now):
         return result
     context = current_exception_authority(work, candidate, now)
     head = work.daily.get("evaluation-head-" + candidate.binding.symbol)["payload"]
-    decision = next(MarketExceptionDecision.model_validate(item)
+    decision = next(parse_linkage_decision(item)
         for item in head["market_linkage"] if item["rule_id"] == candidate.binding.rule_id)
-    granted = grant_exception(decision, candidate, result.event, capacity=context.capacity)
+    from trade_plan_monitor.state.p3_authority import CapitalAuthorityContext
+    if isinstance(context, CapitalAuthorityContext):
+        from trade_plan_monitor.decision.p3_composition import grant_capital_exception
+        from trade_plan_monitor.state.p3_authority import assess_exception_capital
+        granted = grant_capital_exception(decision, candidate, result.event,
+            capital=assess_exception_capital(context, result.event.quantity))
+    else:
+        granted = grant_exception(decision, candidate, result.event, capacity=context.capacity)
     seed, b = candidate.signal_seed, candidate.binding
     signal = dict(
         **({"pretrade": seed.pretrade.model_dump(mode="json")}

@@ -541,7 +541,7 @@ class DailyRuntimeEvaluationService:
                     target["linked_source_current"] = linked_source_current
             if ordinary_authority_ended:
                 target["ordinary_authority_ended"] = True
-            if plan.schema_version in {7, 8}:
+            if plan.schema_version in {7, 8, 9}:
                 target["exception_revisions"] = [
                     (row["id"], row["revision"]) for row in work.daily.list(
                         symbol=plan.symbol, kind="EXCEPTION_CANDIDATE")]
@@ -1028,7 +1028,7 @@ class DailyRuntimeEvaluationService:
                     })
             snapshot = {
                 **({"pretrade": [v.model_dump(mode="json") for v in pretrade_by_rule.values()]}
-                   if plan.schema_version == 8 else {}),
+                   if plan.schema_version in {8, 9} else {}),
                 **({"exception_candidates": [
                     {"candidate": row["payload"], "revision": row["revision"]}
                     for row in ExceptionRepository(work.daily).list(plan.symbol)]}

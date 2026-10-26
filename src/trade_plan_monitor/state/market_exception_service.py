@@ -6,8 +6,12 @@ from pydantic import Field, model_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError
 
-from trade_plan_monitor.decision.market_exception_policy import validate_exception_quantity
+from trade_plan_monitor.decision.market_exception_policy import (
+    exception_quantity_grid,
+    validate_exception_quantity,
+)
 from trade_plan_monitor.decision.p2_economics import EconomicsResult, calculate_economics
+from trade_plan_monitor.decision.p3_capital import CapitalAssessment
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, PositiveWholeQty, Qty
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.daily_models import DailyRecord
@@ -23,6 +27,7 @@ from trade_plan_monitor.state.market_exception_models import (
 )
 from trade_plan_monitor.state.market_exception_repository import ExceptionRepository
 from trade_plan_monitor.state.p2_authority import P2EconomicsContext
+from trade_plan_monitor.state.p3_authority import CapitalAuthorityContext, assess_exception_capital
 
 
 class ExceptionAuthorityError(ValueError):
@@ -81,12 +86,13 @@ class ExceptionPreview(DailyValue):
     candidate_id: Digest
     expected_revision: Revision
     binding_hash: Digest
-    current: ExceptionAuthorityContext
+    current: CapitalAuthorityContext | ExceptionAuthorityContext
     proposed_quantity: int | None = Field(strict=True)
     quantity: PositiveWholeQty
     created_at: ShanghaiDatetime
     preview_hash: Digest
     economics: EconomicsResult | None = Field(default=None, exclude_if=lambda v: v is None)
+    capital: CapitalAssessment | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def coherent(self):
@@ -135,7 +141,10 @@ def _candidate(daily, candidate_id, expected_revision, now, allowed=("PENDING",)
 
 
 def _current(candidate, current):
-    context = ExceptionAuthorityContext.model_validate(current(candidate).model_dump())
+    value = current(candidate)
+    model = CapitalAuthorityContext if isinstance(value, CapitalAuthorityContext) else (
+        ExceptionAuthorityContext)
+    context = model.model_validate(value.model_dump())
     if context.binding_hash != candidate.binding_hash:
         raise ExceptionAuthorityError("EXCEPTION_CURRENT_BINDING_CHANGED")
     if context.blockers:
@@ -145,12 +154,19 @@ def _current(candidate, current):
 
 def _quantity(candidate, context, proposed):
     b = candidate.binding
-    result = validate_exception_quantity(
-        route=b.route, base_quantity=b.base_quantity, minimum=b.minimum, increment=b.increment,
-        capacity=context.capacity, proposed_quantity=proposed)
+    operands = dict(route=b.route, base_quantity=b.base_quantity, minimum=b.minimum,
+                    increment=b.increment, proposed_quantity=proposed)
+    if isinstance(context, CapitalAuthorityContext):
+        result = exception_quantity_grid(**operands)
+    else:
+        result = validate_exception_quantity(**operands, capacity=context.capacity)
     if result.blockers:
         raise ExceptionAuthorityError(result.blockers[0], status=(
             422 if result.blockers[0].startswith("EXCEPTION_QUANTITY") else 409))
+    if isinstance(context, CapitalAuthorityContext):
+        capital = assess_exception_capital(context, result.candidate_quantity)
+        if capital.blockers:
+            raise ExceptionAuthorityError(capital.blockers[0])
     if context.pretrade is not None:
         from trade_plan_monitor.decision.p2_economics import calculate_economics
 
@@ -176,6 +192,8 @@ def preview_exception(daily, command, *, current, now):
             quantity=quantity, entry_fen=context.pretrade.entry_fen,
             symbol=context.pretrade.symbol,
             session=context.pretrade.session).model_dump(mode="json")
+    if isinstance(context, CapitalAuthorityContext):
+        payload["capital"] = assess_exception_capital(context, quantity).model_dump(mode="json")
     payload["preview_hash"] = daily_hash(payload["version"], payload)
     payload["preview_id"] = daily_hash("exception-preview-id-v1", payload["preview_hash"])
     preview = ExceptionPreview.model_validate(payload)

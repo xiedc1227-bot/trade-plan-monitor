@@ -112,6 +112,26 @@ def seal_capital_decision(raw):
         "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
 
 
+def grant_capital_exception(decision, candidate, event, *, capital):
+    """Apply only a repository-verified grant after exact current capital validation."""
+    decision = CapitalMarketDecision.model_validate_json(decision.model_dump_json())
+    if (candidate.state != "APPROVED" or candidate.approval_id != event.event_id
+            or event.candidate_id != candidate.candidate_id
+            or candidate.binding.consumed_hash != decision.consumed_hash
+            or candidate.binding.route != decision.calculation.route
+            or decision.selection.blocker is not None or capital.outcome != "PASS"
+            or capital.quantity != event.quantity):
+        raise ValueError("capital exception does not match current explicit authority")
+    calculation = seal_capital_calculation(decision.calculation.model_dump(mode="json") | dict(
+        candidate_quantity=event.quantity, authorized_quantity=event.quantity,
+        capital=capital.model_dump(mode="json"),
+        share_capacity=capital.share_capacity.model_dump(mode="json"),
+        blockers=[], approval=event.model_dump(mode="json")))
+    return seal_capital_decision(decision.model_dump(mode="json") | dict(
+        calculation=calculation.model_dump(mode="json"),
+        approval_binding=candidate.binding.model_dump(mode="json")))
+
+
 def evaluate_p3_market(plan, rule, *, retained_basis_fen=None, book_revision=None, **inputs):
     effective, sizing = prepare_p2_rule(plan, rule, series=inputs["series"],
         decision_session=inputs["decision_session"], cutoff=inputs["cutoff"])
