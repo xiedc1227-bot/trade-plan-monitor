@@ -4,6 +4,8 @@
 
 P1 人工复评买入例外：[操作与两条数量规则](operations/market-linkage-p1.zh-CN.md) · [规格及六项决策](specifications/monitoring/SPEC-market-linkage-p1.zh-CN.md) · [任务](../tasks/market-linkage-p1.zh-CN.md) · [已执行验收状态](verification/2026-10-24-market-linkage-p1.zh-CN.md)。Schema 7 要求逐机会批准与执行相互独立；既有 Schema 6 例外路径继续阻断。
 
+P2 待审核草案（未实施）：[剩余缺口及六项建议决策](specifications/monitoring/SPEC-market-linkage-p2.zh-CN.md) · [18项任务及六个检查点](../tasks/market-linkage-p2.zh-CN.md)。建议范围：原文定义的波动数量与买入前成本收益约束。
+
 ## 从这里开始
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。

@@ -4,6 +4,8 @@ Daily market linkage: [capability and operations](operations/market-linkage-p0.m
 
 P1 human-reviewed buy exceptions: [operations and both quantity rules](operations/market-linkage-p1.md) · [specification and six decisions](specifications/monitoring/SPEC-market-linkage-p1.md) · [tasks](../tasks/market-linkage-p1.md) · [executed acceptance status](verification/2026-10-24-market-linkage-p1.md). Schema 7 requires separate per-occurrence approval and execution; existing Schema 6 exception routes remain blocked.
 
+P2 review draft (not implemented): [remaining gaps and six proposed decisions](specifications/monitoring/SPEC-market-linkage-p2.md) · [18 tasks and six checkpoints](../tasks/market-linkage-p2.md). Proposed scope: source-defined volatility sizing and pre-buy economics.
+
 ## Start here
 
 English documents are canonical implementation inputs; matching `.zh-CN.md` files are equivalent Chinese review copies. Use the [project README](../README.md) for installation and routine checks, the [capability map](architecture/CAPABILITY-MAP.md) for module boundaries, and [One Trade Plan Workflow](specifications/monitoring/SPEC-unified-plan.md) for current product behavior.
