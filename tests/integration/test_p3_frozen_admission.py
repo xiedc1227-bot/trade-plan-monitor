@@ -25,8 +25,9 @@ from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
 
 
 @pytest.mark.parametrize("p3_chain", [("OPEN_COST_CAP", False, "ORDINARY")], indirect=True)
-def test_real_prepared_http_admission_requires_explicit_capital_and_replays_same_job(
-    p3_chain, tmp_path,
+@pytest.mark.parametrize("declared", [False, True])
+def test_real_prepared_http_admission_freezes_missing_cost_unknown_and_replays_same_job(
+    p3_chain, tmp_path, declared,
 ):
     chain = p3_chain
     market, _, _, _, _, _ = market_fixture(tmp_path, chain.plan, chain.route)
@@ -51,13 +52,10 @@ def test_real_prepared_http_admission_requires_explicit_capital_and_replays_same
         job_cursor_signer=BacktestApiCursorSigner(b"x"*32), prepared_plan_reader=read_prepared)
     client = _client(operation_service=service)
     try:
-        missing = client.post("/api/v1/backtest-runs", json=payload(prepared),
-            headers={"Idempotency-Key": "missing-budget"})
-        assert missing.status_code == 409, missing.text
-        assert coordinator.authorized == []
-        values = payload(prepared,
+        values = payload(prepared, **(dict(
             capitalProgram=CapitalReplayProgram(opening_events=(opening,)).model_dump(mode="json"),
             exceptionProgram=CapitalExceptionReplayProgram().model_dump(mode="json"))
+            if declared else {}))
         first = client.post("/api/v1/backtest-runs", json=values,
             headers={"Idempotency-Key": "explicit-budget"})
         assert first.status_code == 202, first.text
@@ -67,9 +65,22 @@ def test_real_prepared_http_admission_requires_explicit_capital_and_replays_same
         assert coordinator.authorized == [first.json()["jobId"]]
         stored = results.get_loop_input(results.get_loop_input_reference(first.json()["runId"]))
         assert stored.run_input.run_formula_version == "backtest-run-v10"
-        assert stored.run_input.capital_program.opening_events == (opening,)
+        assert stored.run_input.capital_program.opening_events == ((opening,) if declared else ())
         assert stored.run_input.initial_account.cash.kind == "POSITION_LIMIT_ONLY"
         assert stored.run_input.initial_account.accounting_cost_fen is None
+        from tests.integration.test_p3_replay import calendar_for
+
+        from trade_plan_monitor.backtest.loop_session import LoopSession
+        from trade_plan_monitor.state.daily_accounting import DailyAccounting
+        from trade_plan_monitor.state.p3_current import current_capital_inputs
+
+        with LoopSession(tmp_path / "private-budget", stored.run_input,
+                         calendar_for(chain)) as session:
+            session.capital.apply(session.now)
+            with session.work() as work:
+                inputs = current_capital_inputs(DailyAccounting(work.daily),
+                                                chain.plan.symbol, session.now)
+                assert inputs["retained_basis_fen"] == (20000 if declared else None)
         from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
         with chain.plans._unit_of_work() as work:
             assert CapitalRepository(work.daily.session).get(

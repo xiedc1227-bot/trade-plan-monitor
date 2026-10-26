@@ -979,11 +979,14 @@ class _ProductionBacktestService:
         input_type = (WorkbenchLoopInput if workbench else
                       ScheduledLoopInput if scheduled else MonitorLoopInput)
         from trade_plan_monitor.backtest.exception_replay_input import ExceptionReplayProgram
-        from trade_plan_monitor.backtest.p3_replay_input import CapitalExceptionReplayProgram
+        from trade_plan_monitor.backtest.p3_replay_input import (
+            CapitalExceptionReplayProgram,
+            CapitalReplayProgram,
+        )
 
         capital = any(row.version.snapshot.schema_version == 9
                       for row in prepared.schedule.entries)
-        if capital != (command.capital_program is not None):
+        if not capital and command.capital_program is not None:
             raise ApiError(ApiErrorCode.CONFLICT)
         if capital and command.exception_program is not None and not isinstance(
                 command.exception_program, CapitalExceptionReplayProgram):
@@ -1001,7 +1004,10 @@ class _ProductionBacktestService:
                 command.exception_program or (
                     CapitalExceptionReplayProgram() if capital else ExceptionReplayProgram())}
                 if exception else {}),
-            **({"capital_program": command.capital_program} if capital else {}),
+            # Omission records an explicit empty declaration set, never a known
+            # opening cost or a lookup of the current simulation book.
+            **({"capital_program": command.capital_program or CapitalReplayProgram()}
+                if capital else {}),
             **({"selection_hash": prepared.manifest_hash} if workbench else {}),
             schedule=prepared.schedule,
             initial_account=prepared.account,
