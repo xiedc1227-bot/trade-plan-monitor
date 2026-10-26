@@ -1,10 +1,10 @@
 # Specification: market-linkage-p3
 
-Status: APPROVED FOR IMPLEMENTATION — 2026-10-26. The user approved MLP3-D01–MLP3-D06 and ordered all tasks and stage acceptance. Baseline: `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46` (P0/P1/P2 completed). Implementation is now authorized; actual progress is recorded in the task pair and verification report.
+Status: IMPLEMENTED AND ACCEPTED — 2026-10-26. The user approved MLP3-D01–MLP3-D06 and ordered all tasks and stage acceptance. Baseline: `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46` (P0/P1/P2 completed). MLP3-T01–T24 and C01–C08 are complete; actual tests and boundaries are recorded in the task pair and verification report.
 
 Canonical English · [Chinese review copy](SPEC-market-linkage-p3.zh-CN.md) · [Implementation plan and tasks](../../../tasks/market-linkage-p3.md).
 
-## MLP3-S01 — Sources, findings and proposed objective
+## MLP3-S01 — Sources, baseline findings and delivered objective
 
 Compare the original [新提示词.txt](../../../../docs/TradingAgents/reports/新提示词.txt), the maintained [integration prompt](../../../README.zh-CN.md#generic-trade-plan-prompt), accepted [P0](SPEC-market-linkage-p0.md), [P1](SPEC-market-linkage-p1.md), [P2](SPEC-market-linkage-p2.md) and [P2 verification](../../verification/2026-10-26-market-linkage-p2.md). The original is outside this Git repository; normalized UTF-8 SHA-256 is `f17e12b88f4c12d7af7b67caabede2e9d7c2712142a64e67a212c7621865f731`. Do not replace it with the amended README when assessing gaps.
 
@@ -16,9 +16,9 @@ Critical original clauses (line numbers are navigation aids; excerpts and hash a
 - Line 154: “真实成交、委托占额及部分成交仍在本会话/实际交易管理中按原文处理，工具不跟踪。”
 - Line 155: “每次工具模拟须由我显式确认，一次完整应用正数100股整数倍数量，与真实持仓分开”.
 
-Inspected implementation: `domain/unified_plan_models.py::UnifiedPositionPolicy` requires `max_qty`; `decision/quantity_policy.py` and `decision/unified_lifecycle.py` enforce whole-quantity share capacity. `state/daily_accounting.py` persists isolated simulation batches, acquisition dates and quantities, but no purchase cost. `backtest/loop_account.py` has a separate research cost/cash ledger; it is not a current-runtime capital-limit policy. P2 fee estimates are not a persistent holdings-cost book. Paths are relative to `src/trade_plan_monitor/`.
+Inspected P0/P1/P2 baseline: `domain/unified_plan_models.py::UnifiedPositionPolicy` requires `max_qty`; `decision/quantity_policy.py` and `decision/unified_lifecycle.py` enforce whole-quantity share capacity. `state/daily_accounting.py` persists isolated simulation batches, acquisition dates and quantities, but no purchase cost. `backtest/loop_account.py` has a separate research cost/cash ledger; it is not a current-runtime capital-limit policy. P2 fee estimates are not a persistent holdings-cost book. Paths are relative to `src/trade_plan_monitor/`.
 
-Proposed P3 objective: enforce a source-defined **per-symbol monetary position limit** for the existing daily linked TACTICAL BUY workflow, including both P1 exception routes and P2 sizing/economics. Support an amount-only limit as well as simultaneous share/amount limits without inventing a maximum share count. Provide an explicitly reviewed simulation budget basis where needed. Actual account management remains outside the tool.
+Delivered P3 objective: enforce a source-defined **per-symbol monetary position limit** for the existing daily linked TACTICAL BUY workflow, including both P1 exception routes and P2 sizing/economics. Support an amount-only limit as well as simultaneous share/amount limits without inventing a maximum share count. Provide an explicitly reviewed simulation budget basis where needed. Actual account management remains outside the tool.
 
 ## MLP3-S02 — Remaining capabilities after P0/P1/P2
 
@@ -30,7 +30,7 @@ Preserve G01–G14 from P2 as trace IDs; this table supersedes their *remaining-
 | G02 | P2 source-defined ATR14/close tiers derive Q0; arbitrary volatility-driven confirmation changes and formulas remain unsupported | Follow-up candidate: a separately reviewed confirmation policy. Keep unsupported mandatory changes blocked; do not claim P3 adds them. |
 | G03 | P2 exact fee/net-reward/risk estimates and optional explicit BUY gates | Discretionary viability, automatic official-fee updates, broker-tariff discovery and reusable fee-catalog management remain manual/deferred. P3 reuses explicit fee arithmetic, not a fee-data service. |
 | G04 | P2 source/evidence checks for its pressure/risk references; existing scoped human technical facts | Automatic discovery of all three levels, proof of independent evidence and automatic validation of every ordinary structure/volume/indicator combination remain research/review responsibilities. MA20/BOLL_MIDDLE are one dimension. |
-| G05 | Native executable limits still require shares; no live monetary-limit book | **P3 first, tool-simulation scope:** explicit open-cost or market-value cap, amount-only or share-and-amount policy, continuous isolated budget basis, atomic revalidation. Actual-account compliance remains manual under G06. |
+| G05 | P3 delivered amount-only/combined limits and an isolated simulation budget book | **P3 delivered, tool-simulation scope:** explicit open-cost or market-value cap, amount-only or share-and-amount policy, continuous isolated budget basis, atomic revalidation. Actual-account compliance remains manual under G06. |
 | G06 | Actual trades, partial fills, outstanding-order reservations and chat-derived real-account continuity | Intentional original tool exclusion, not a P3 defect. No broker ledger, reservation or automatic actual-position update. |
 | G07 | Official buy grid intersected with whole positive 100-share simulation | Intentional tool boundary. Non-100 execution, odd-lot liquidation and ordinary CORE creation need a separate product decision. Never alter actual trade quantities to make them fit. |
 | G08 | Explicit date validity, reviewed replacement and technical-risk continuity exist | Follow-up candidate: sourced event-relative deadlines and equivalent corporate-action conversions. Event-time discovery, automatic reevaluation and automatic risk-line conversion remain manual/blocked where mandatory. |
@@ -67,7 +67,7 @@ All six decisions and implementation are approved. This approval does not supply
 
 Build in that order, with verifiable slices in the task list. This map, the contracts and tasks are one approved implementation package. Existing production capability-map rows must not describe P3 as delivered before implementation acceptance.
 
-## MLP3-S05 — Proposed version and source contract
+## MLP3-S05 — Version and source contract
 
 Schema 9 adds `position.limit`, a discriminated union:
 
@@ -80,7 +80,7 @@ The fee schedule reuses P2's typed dated/security-scoped ESTIMATE contract and e
 
 All quantities/fen are strict integers within 9007199254740991; execution quantities retain legal positive 100-share multiples. Decimal fee values remain strings with P2 bounds/canonicalization. Reuse the 500-lot bound; frozen opening/reconciliation events and operations each retain the existing 10000-event envelope, with duplicate/order/cutoff validation and existing byte budgets. No new dependency or arbitrary expression evaluator.
 
-Proposed owned domains: `plan-review-content-v6`, `plan-extract-v12`, `capital-book-v1`, `capital-limit-evidence-v1`, `capital-market-calculation-v1`, `capital-consumed-v1`, `capital-exception-event-v1`, `backtest-run-v10`. Freeze exact DTOs in a paired CONTRACT appendix at MLP3-T01. New Schema 9 calculation evidence uses `share_capacity` states BOUNDED (remaining_qty), UNBOUNDED (no share cap, known inventory) or UNKNOWN; do not feed fake numbers/unknown sentinels into the old authorized-quantity models. Reuse P0/P1 route and legal-floor algorithms with a new versioned composition. Earlier schemas retain their existing calculation representation and frozen-exception-event-v1 validation. Schema 9 frozen exception envelopes carry the new calculation proof under their distinct owned version; do not weaken the old envelope to accept invented capacities.
+Delivered owned domains: `plan-review-content-v6`, `plan-extract-v12`, `capital-book-v1`, `capital-limit-evidence-v1`, `capital-market-calculation-v1`, `capital-consumed-v1`, `capital-exception-event-v1`, `backtest-run-v10`. MLP3-T01 froze exact DTOs in the paired CONTRACT appendix. New Schema 9 calculation evidence uses `share_capacity` states BOUNDED (remaining_qty), UNBOUNDED (no share cap, known inventory) or UNKNOWN; do not feed fake numbers/unknown sentinels into the old authorized-quantity models. Reuse P0/P1 route and legal-floor algorithms with a new versioned composition. Earlier schemas retain their existing calculation representation and frozen-exception-event-v1 validation. Schema 9 frozen exception envelopes carry the new calculation proof under their distinct owned version; do not weaken the old envelope to accept invented capacities.
 
 Source A must define the cap meaning/scope, amount, applicable quantity form, any buy-cost assumptions and all P0/P1/P2 strategy parameters. A standalone “总投入预算” with unresolved accounting meaning remains a scoped review blocker. Preserve missing candidate fields as null; never turn them into zero, UNBOUNDED or another schema. Every new executable leaf needs source binding or an existing explicit human supplement. Opening-budget evidence is a separate human action; source extraction, plan review and activation cannot create it.
 
@@ -171,7 +171,7 @@ Schema 1–8 content hashes, serialization, prior approval receipts and historic
 
 Use current Python 3.14/Pydantic/FastAPI/SQLAlchemy/SQLite and Vue/TypeScript patterns. Put pure calculations under `decision/`, strict contracts under `domain/`, book/transaction logic under `state/`, owned orchestration under `runtime/`, HTTP under `web/` and frozen adapters under `backtest/`. Use the existing strict immutable models, integer fen, exact Decimal/Fraction arithmetic and Composition API `<script setup lang="ts">`; no new dependency is proposed. Expected pure predicate shape: `after_fen = before_fen + buy_debit_fen; allowed = after_fen <= cap_fen`, with all input/overflow checks preceding authorization.
 
-The [task list](../../../tasks/market-linkage-p3.md) owns full executable V01–V08 commands, proposed test files, 24 ordered tasks and eight checkpoints. New tests must first exist and fail for independent expected outcomes; an empty selection is not a pass. A paired verification report is created during implementation, not prefilled now. Target 3–5 files per slice; explicitly split broad reader/generator/UI/replay seams before editing. Preserve `tasks/plan.md` and `tasks/todo.md`; no delegated/parallel-agent work is authorized by this draft.
+The [task list](../../../tasks/market-linkage-p3.md) owns full executable V01–V08 commands, proposed test files, 24 ordered tasks and eight checkpoints. New tests must first exist and fail for independent expected outcomes; an empty selection is not a pass. The paired verification report records actual stages and final acceptance; approval never substitutes for test evidence. Target 3–5 files per slice; explicitly split broad reader/generator/UI/replay seams before editing. Preserve `tasks/plan.md` and `tasks/todo.md`; no delegated/parallel-agent work was used in this phase.
 
 Always preserve source constraints, risk priority, historical golden fixtures, exact arithmetic, existing capacity/time/byte gates and bilingual parity. A later implementation instruction may authorize code, additive migration development and disposable-database verification; it does not authorize applying migrations to user databases. New strategy semantics, ambiguous amount meanings beyond these modes, historical-authority incompatibility or a scope extension require review. Never infer cash, weaken tests, migrate historical documents silently, auto-approve an exception or execute a broker order.
 
@@ -180,3 +180,5 @@ Always preserve source constraints, risk priority, historical golden fixtures, e
 Review MLP3-D01–MLP3-D06 together with the module map, money-only contract and acceptance criteria. The main decisions are the OPEN_COST_CAP meaning/release rule and the explicit isolated opening-budget workflow. If another meaning of “总投入预算” is intended, revise D02 and its tests before implementation rather than disguising it as retained cost.
 
 The user has approved this bounded P3 package and authorized implementation and local tests. P0/P1/P2 compatibility and scope boundaries remain binding. User-database mutation, live provider calls, deployment and push are outside this implementation authorization. Task/checkpoint marks and the verification report record actual completion; approval alone is not test acceptance.
+
+Acceptance: [final criterion evidence](../../verification/2026-10-26-market-linkage-p3.md). G05 is delivered only within this per-symbol simulation capital scope; other excluded/manual/follow-up capabilities retain their approved boundaries.

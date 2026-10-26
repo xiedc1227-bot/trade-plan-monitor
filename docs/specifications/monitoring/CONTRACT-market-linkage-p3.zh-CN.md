@@ -4,7 +4,7 @@
 
 ## MLP3-K01 — 版本与仓位归属
 
-Schema9 / condition-plan-v5；审核域 plan-review-content-v6；提取 plan-extract-v12。P3TradePlan 扩展 Schema8，替换仓位模型，不推断 max_qty。`position.limit.mode=CAPITAL_ONLY` 必填 capital_policy，禁止 max_qty；QUANTITY_AND_CAPITAL 同时要求 max_qty 和 capital_policy。原可选分仓字段保持来源语义。所有 BUY 必须使用既有日线联动 TACTICAL P2Rule，普通 SELL 和技术风险分支保留范围。仅股数计划留在原 schema；公开和冻结9准入分别等完整防护链完成后才开放。
+Schema9 / condition-plan-v5；审核域 plan-review-content-v6；提取 plan-extract-v12。P3TradePlan 扩展 Schema8，替换仓位模型，不推断 max_qty。`position.limit.mode=CAPITAL_ONLY` 必填 capital_policy，禁止 max_qty；QUANTITY_AND_CAPITAL 同时要求 max_qty 和 capital_policy。原可选分仓字段保持来源语义。所有 BUY 必须使用既有日线联动 TACTICAL P2Rule，普通 SELL 和技术风险分支保留范围。仅股数计划留在原 schema；公开和冻结9已在各自完整防护链通过后分别开放；历史输入仍保留原版本边界。
 
 ## MLP3-K02 — 政策与精确判定
 
@@ -44,13 +44,13 @@ T01 基线 V01：98项通过、1条既有 Starlette 警告、3.00秒。原文哈
 
 ## MLP3-K08 — 已实现的当前 API 归属
 
-当前 API 在 web/p3_schemas.py 中拥有 CapitalBookView、CapitalOpeningApiCommand、CapitalOpeningReceipt、CapitalPreviewCommand 与 CapitalPreviewView；不可变预算账本、事件、金额评估与严格开仓命令继续由领域层拥有。仅新增 K05 的三条路由。两套 OpenAPI 与生成 TypeScript 文件提供相同 P3 操作。能力 supportedSchemaVersions 增加9及 capitalExecutionVersion=condition-plan-v5；编辑器增加 capitalCandidateSchema。已有字段和路由保留。完整普通、例外与 HTTP 防护完成后开放当前公开9；旧冻结输入联合类型到 T19/T20 前仍拒绝9。JSON 时间与列表在 API 边界转换，领域数字严格校验与完整500批次上限保留。收益预览同时接受当前9，仍不授予授权。
+当前 API 在 web/p3_schemas.py 中拥有 CapitalBookView、CapitalOpeningApiCommand、CapitalOpeningReceipt、CapitalPreviewCommand 与 CapitalPreviewView；不可变预算账本、事件、金额评估与严格开仓命令继续由领域层拥有。仅新增 K05 的三条路由。两套 OpenAPI 与生成 TypeScript 文件提供相同 P3 操作。能力 supportedSchemaVersions 增加9及 capitalExecutionVersion=condition-plan-v5；编辑器增加 capitalCandidateSchema。已有字段和路由保留。完整普通、例外与 HTTP 防护完成后开放当前公开9；历史冻结输入版本仍拒绝9；完成 T19/T20 防护的 v10 接受9。JSON 时间与列表在 API 边界转换，领域数字严格校验与完整500批次上限保留。收益预览同时接受当前9，仍不授予授权。
 
 CapitalBookView.inventoryLots 在尚未建立成本账时也列出完整当前模拟批次标识与数量（最多500），不推断成本。既有日线提醒可选 capital_mode/capitalMode 标识来源政策，旧提醒省略该字段。
 
 ## MLP3-K09 — 冻结金额来源事件与批次引用
 
-capital-opening-event-v1 拥有 source_event_id、plan_hash、symbol、provenance RECORDED_LOCAL/RESEARCH_SCENARIO、observed_at<=received_at<=available_at、order0..10000、明确 confirmed=true、source/excerpt/reason、完整 lots（最多500）、可选 recorded_event 和封装哈希。每个批次记录 source_lot_id（已记录来源必填）、bucket、quantity、retained_basis_fen 与稳定引用：OPENING(lot_key) 或 BUY_SIGNAL(signal_id)。引用选择准确期初批次或实际整笔买入回执，不选择其他批次、不推断成本、不依赖私有数据库计数器。已记录事件必须是原始 OPENING/RECONCILIATION capital-book-event-v1 回执，其证券、成本、批次数量、来源文字与服务端时间相符。研究假设事件必须明确声明假设，不得冒充已记录回执。
+capital-opening-event-v1 拥有 source_event_id、plan_hash、symbol、provenance RECORDED_LOCAL/RESEARCH_SCENARIO、observed_at<=received_at<=available_at、order0..10000、明确 confirmed=true、source/excerpt/reason、完整 lots（最多500）、必须显式出现但可为 null 的 recorded_event 和封装哈希。每个批次记录必须显式出现但可为 null 的 source_lot_id（已记录来源不得为 null）、bucket、quantity、retained_basis_fen 与稳定引用：OPENING(lot_key) 或 BUY_SIGNAL(signal_id)。引用选择准确期初批次或实际整笔买入回执，不选择其他批次、不推断成本、不依赖私有数据库计数器。已记录事件必须是原始 OPENING/RECONCILIATION capital-book-event-v1 回执，其证券、成本、批次数量、来源文字与服务端时间相符。研究假设事件必须明确声明假设，不得冒充已记录回执。
 
 capital-replay-program-v1 按 available_at/order 冻结唯一有序事件。最多10000事件并沿用8MiB输入上限。运行开始前已可用的事件可以为明确匹配的期初库存提供依据；未来事件仅在可用后应用，不能补齐过去未知成本。capital-exception-event-v1 保留新的完整金额计算；frozen-exception-event-v1 继续严格限制旧计算。unified-research-input-v3 与 backtest-run-v10 绑定明确金额输入、分离的授权／执行事件及既有研究账户。缺失成本声明保持 UNKNOWN，明确空金额程序不授予任何权限。完整输入参与哈希，未来来源事件不改变较早私有授权标识。禁止读取当前用户数据或可变当前预算／费用。
 
@@ -59,3 +59,5 @@ capital-replay-program-v1 按 available_at/order 冻结唯一有序事件。最�
 CapitalReplayState 仅对已可用的冻结声明，在私有事务内调用 confirm_capital_opening，解析准确的 OPENING/BUY_SIGNAL 批次，并保留 CapitalReplayOutcome 的来源、封装、来源分类与私有记录哈希。必须匹配完整当前批次，声明不改变库存。政策替换后，延迟声明仍绑定冻结调度中的原审核快照；私有应用仍检查当前已审核 Schema9 计划与准确当前库存。这仅延续成本事实，不延续旧 BUY 授权。backtest-run-v10 仅在显式预算程序存在时接纳 Schema9。当前金额防护和准确实际分配记账继续共用；LoopAccount/ResearchValuation 的现金与盈亏保持独立。
 
 研究 CapitalSignalReference 保留 market_linkage_ref/pretrade_ref/capital_execution_ref；signal_linkage/signal_pretrade/signal_capital 各自仅保存一份不可变证据。CapitalLinkageReference 仅复用 base_evidence_hash 对应的逐字节等价市场事实，同时保留独立 calculation/approval_binding/evidence_hash。读取器重建并校验完整 CapitalMarketDecision 与 DailySignalState；缺失或篡改引用会失败。无需截断即可保留原32KiB结果项与总量限制。可选 capital_outcomes 在旧报告中省略；发布与重读将其绑定到准确可用的冻结来源序列。联动 Schema6/7/8/9 的自动准备数据另行复制至少60个前序指数交易日，不将其混为个股 daily_observations；冻结要求编码和旧存储输入保持不变。准备、调度和工作台命令携带 capitalProgram 与 capital-exception-program-v1；旧输入不能借用这些字段或版本。
+
+准备浏览器入口仅接受可选 capitalProgram/exceptionProgram 冻结记录。公开 capitalProgram 省略时，在持有的必填 v10 输入中规范为显式空 CapitalReplayProgram，不推断成本或授权；非零持仓成本缺失仍为 UNKNOWN。填写的声明仍须准确校验来源和上下文，当前用户账与研究成本绝不作为后备来源。

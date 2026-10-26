@@ -1,10 +1,10 @@
 # 规格：market-linkage-p3
 
-状态：已批准实施 — 2026-10-26。用户已批准 MLP3-D01–MLP3-D06，并授权全部任务及阶段验收。基线：`c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`（P0/P1/P2 已完成）。现已授权实施，实际进展记录在任务对及验收报告。
+状态：已实施并验收 — 2026-10-26。用户已批准 MLP3-D01–MLP3-D06，并授权全部任务及阶段验收。基线：`c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`（P0/P1/P2 已完成）。MLP3-T01–T24 与 C01–C08 已完成，实际测试及范围见任务对和验收报告。
 
 [英文规范版](SPEC-market-linkage-p3.md) · [实施计划与任务](../../../tasks/market-linkage-p3.zh-CN.md)。
 
-## MLP3-S01 — 来源、发现与建议目标
+## MLP3-S01 — 来源、基线发现与交付目标
 
 对照原始[新提示词.txt](../../../../docs/TradingAgents/reports/新提示词.txt)、维护中的[工具衔接提示词](../../../README.zh-CN.md#generic-trade-plan-prompt)、已验收 [P0](SPEC-market-linkage-p0.zh-CN.md)、[P1](SPEC-market-linkage-p1.zh-CN.md)、[P2](SPEC-market-linkage-p2.zh-CN.md)及 [P2 验收](../../verification/2026-10-26-market-linkage-p2.zh-CN.md)。原文位于本 Git 仓库之外，规范化 UTF-8 SHA-256 为 `f17e12b88f4c12d7af7b67caabede2e9d7c2712142a64e67a212c7621865f731`。分析缺口时不能用修订后的 README 替代原文。
 
@@ -16,9 +16,9 @@
 - 第154行：“真实成交、委托占额及部分成交仍在本会话/实际交易管理中按原文处理，工具不跟踪。”
 - 第155行：“每次工具模拟须由我显式确认，一次完整应用正数100股整数倍数量，与真实持仓分开”。
 
-已核实实现：`domain/unified_plan_models.py::UnifiedPositionPolicy` 强制要求 `max_qty`；`decision/quantity_policy.py` 和 `decision/unified_lifecycle.py` 按整笔股数容量控制。`state/daily_accounting.py` 保存隔离的模拟批次、买入日期与数量，不保存买入成本。`backtest/loop_account.py` 有独立研究成本／现金账本，但并非当前运行时的金额上限政策。P2 费用估算也不等于持续的持仓成本账本。路径均相对 `src/trade_plan_monitor/`。
+P0/P1/P2基线实现：`domain/unified_plan_models.py::UnifiedPositionPolicy` 强制要求 `max_qty`；`decision/quantity_policy.py` 和 `decision/unified_lifecycle.py` 按整笔股数容量控制。`state/daily_accounting.py` 保存隔离的模拟批次、买入日期与数量，不保存买入成本。`backtest/loop_account.py` 有独立研究成本／现金账本，但并非当前运行时的金额上限政策。P2 费用估算也不等于持续的持仓成本账本。路径均相对 `src/trade_plan_monitor/`。
 
-建议 P3 目标：在既有日线联动 TACTICAL BUY 流程中执行原文明确定义的**单证券金额持仓上限**，覆盖 P1 两条例外及 P2 数量／费用。支持仅金额上限及股数／金额同时约束，不编造最大股数；必要时提供明确审核的模拟预算基准。真实账户管理仍在工具之外。
+已交付 P3 目标：在既有日线联动 TACTICAL BUY 流程中执行原文明确定义的**单证券金额持仓上限**，覆盖 P1 两条例外及 P2 数量／费用。支持仅金额上限及股数／金额同时约束，不编造最大股数；必要时提供明确审核的模拟预算基准。真实账户管理仍在工具之外。
 
 ## MLP3-S02 — P0/P1/P2 完成后的剩余能力
 
@@ -30,7 +30,7 @@
 | G02 | P2 按原文明确定义的 ATR14/收盘价档位生成 Q0；任意波动驱动的确认变化与公式仍不支持 | 后续候选：另行审核的确认政策。必要但不支持的确认变化继续阻断，P3 不声称补齐。 |
 | G03 | P2 精确费用／净收益／风险估算及可选明确 BUY 门槛 | 主观交易价值、自动更新官方费率、发现券商收费及可复用费用目录仍属人工／暂缓。P3 复用明确费用算术，不建设费用数据服务。 |
 | G04 | P2 对其压力／风险引用进行来源与依据检查；已有适用范围内的人工技术事实 | 自动寻找全部三个价位、证明依据独立、自动验证每个普通结构／量价／指标组合，仍是研究／审核责任。MA20/BOLL_MIDDLE 算同一维度。 |
-| G05 | 原生可执行上限仍要求股数；没有运行时金额上限账本 | **P3 优先，限定工具模拟范围：**明确持仓成本或市值上限、仅金额或股数／金额组合、连续隔离预算基准及原子复核。真实账户合规仍按 G06 人工处理。 |
+| G05 | P3已交付仅金额／双重上限及独立模拟预算账 | **P3已交付，限定工具模拟范围：**明确持仓成本或市值上限、仅金额或股数／金额组合、连续隔离预算基准及原子复核。真实账户合规仍按 G06 人工处理。 |
 | G06 | 真实成交、部分成交、未成交委托占额及从聊天推导真实账户连续状态 | 原提示词明确排除，非 P3 缺陷；不做券商账本、委托预留或自动修改真实持仓。 |
 | G07 | 官方申报网格与正数100股整笔模拟的交集 | 工具明确边界。非100股执行、零股处理和普通底仓新建需另行产品决策；不能改写真实股数来凑合规。 |
 | G08 | 已有明确日期有效期、审核替换及技术风控连续性 | 后续候选：有来源的事件相对期限及权息等效换算。事件时间发现、自动重新评估和自动风险线换算仍属人工／必要时阻断。 |
@@ -67,7 +67,7 @@
 
 按该顺序实施，并遵循任务表中的可验证小片。本地图、契约及任务作为一个已批准实施包；在实现验收前，现有生产能力地图不能将 P3 记为已交付。
 
-## MLP3-S05 — 建议版本与来源契约
+## MLP3-S05 — 版本与来源契约
 
 Schema 9 新增 `position.limit` 判别联合：
 
@@ -80,7 +80,7 @@ Schema 9 新增 `position.limit` 判别联合：
 
 数量／分值均为不超过9007199254740991的严格整数；执行数量继续满足合法正数100股整数倍。小数费率使用字符串，沿用 P2 边界／规范化。复用500批次上限；冻结期初／校正事件和操作各保留既有10000事件包络，并核验重复、顺序、时间截止及既有字节预算。不新增依赖或任意表达式求值器。
 
-建议版本域：`plan-review-content-v6`、`plan-extract-v12`、`capital-book-v1`、`capital-limit-evidence-v1`、`capital-market-calculation-v1`、`capital-consumed-v1`、`capital-exception-event-v1`、`backtest-run-v10`。MLP3-T01 将准确 DTO 固化到双语 CONTRACT 附录。Schema 9 新计算依据使用 `share_capacity`：BOUNDED（remaining_qty）、UNBOUNDED（无股数上限且库存已知）、UNKNOWN；不能向旧授权数量模型填入虚假数字／未知哨兵。复用 P0/P1 路径与合法向下取整算法，新增版本化组合；旧 schema 保留旧计算表示及 frozen-exception-event-v1 校验。Schema 9 冻结例外事件用独立版本携带新计算证明，不放松旧事件包络来接受虚假容量。
+交付版本域：`plan-review-content-v6`、`plan-extract-v12`、`capital-book-v1`、`capital-limit-evidence-v1`、`capital-market-calculation-v1`、`capital-consumed-v1`、`capital-exception-event-v1`、`backtest-run-v10`。MLP3-T01 已将准确 DTO 固化到双语 CONTRACT 附录。Schema 9 新计算依据使用 `share_capacity`：BOUNDED（remaining_qty）、UNBOUNDED（无股数上限且库存已知）、UNKNOWN；不能向旧授权数量模型填入虚假数字／未知哨兵。复用 P0/P1 路径与合法向下取整算法，新增版本化组合；旧 schema 保留旧计算表示及 frozen-exception-event-v1 校验。Schema 9 冻结例外事件用独立版本携带新计算证明，不放松旧事件包络来接受虚假容量。
 
 A 必须明确上限含义／范围、金额、适用数量形式、必要买入费用假设及全部 P0/P1/P2 策略参数。仅写“总投入预算”且核算意义未清，继续属于适用范围内的审核阻断。候选缺项保留 null，不转成零、UNBOUNDED 或其他 schema。每个新增可执行叶子须绑定来源或既有明确人工补充。期初预算依据是独立人工动作，提取、计划审核和启用均不能代为创建。
 
@@ -171,7 +171,7 @@ Schema1–8 内容哈希、序列化、原批准回执及历史回测身份保�
 
 沿用当前 Python3.14/Pydantic/FastAPI/SQLAlchemy/SQLite 和 Vue/TypeScript。纯计算放 `decision/`，严格契约放 `domain/`，账本／事务放 `state/`，调度放 `runtime/`，HTTP 放 `web/`，冻结适配放 `backtest/`。使用既有严格不可变模型、整数分、精确 Decimal/Fraction 和 Composition API `<script setup lang="ts">`，不建议新增依赖。纯判定示意：`after_fen = before_fen + buy_debit_fen; allowed = after_fen <= cap_fen`，授权前先完成输入／溢出核验。
 
-[任务表](../../../tasks/market-linkage-p3.zh-CN.md)定义完整可执行 V01–V08 命令、建议测试文件、24项有序任务和八个检查点。新测试须先存在，并以独立预期复现失败；空选择不是通过。实施时再新建双语验收报告，本次不预填。每片目标3–5文件；读取器／生成器／界面／回放等宽接缝须在编辑前明确拆小。保留 `tasks/plan.md`、`tasks/todo.md`，本草案不授权委派／并行代理。
+[任务表](../../../tasks/market-linkage-p3.zh-CN.md)定义完整可执行 V01–V08 命令、建议测试文件、24项有序任务和八个检查点。新测试须先存在，并以独立预期复现失败；空选择不是通过。实际阶段结果及最终验收记录在双语验收报告，不用批准替代测试证据。每片目标3–5文件；读取器／生成器／界面／回放等宽接缝须在编辑前明确拆小。保留 `tasks/plan.md`、`tasks/todo.md`，本阶段未使用委派／并行代理。
 
 始终保留来源约束、风险优先、历史黄金样例、精确算术、既有容量／时间／字节门槛及双语一致。后续实施指令可授权代码、增量迁移开发及临时库验证，不等于对用户库应用迁移。新策略语义、超出两种模式的金额含义、历史权限不兼容或范围扩展须审核；不推断现金、不削弱测试、不静默迁移历史文档、不自动批准例外、不发券商订单。
 
@@ -180,3 +180,5 @@ Schema1–8 内容哈希、序列化、原批准回执及历史回测身份保�
 请将 MLP3-D01–MLP3-D06、模块地图、仅金额契约及验收标准一并审核。核心选择是 OPEN_COST_CAP 含义／释放规则，以及明确隔离的期初预算流程；若“总投入预算”实际意指其他口径，须先修订 D02 及样例，不能伪装成保留成本。
 
 用户已批准本次有边界的 P3 包，授权实施及本地测试。P0/P1/P2 兼容及范围边界仍必须保留；用户库修改、live 供应商、部署及推送不在本次实施授权内。任务／检查点标记和验收报告记录实际完成情况，批准本身不等于测试验收。
+
+验收：[最终逐项证据](../../verification/2026-10-26-market-linkage-p3.zh-CN.md)。G05仅交付本规格限定的单证券模拟金额上限；其他排除／人工／后续范围保持原审核边界。
