@@ -1,0 +1,37 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+F.F..                                                                    [100%]
+================================== FAILURES ===================================
+________ test_open_cost_equality_and_whole_rejection[1000-PASS-550500] ________
+
+price = 1000, expected = 'PASS', after = 550500
+
+    @pytest.mark.parametrize("price,expected,after", [(1000, "PASS", 550500),
+                                                    (1001, "FAIL", 550600)])
+    def test_open_cost_equality_and_whole_rejection(price, expected, after):
+        result = capital(price_fen=price)
+>       assert result.outcome == expected
+E       AssertionError: assert 'FAIL' == 'PASS'
+E
+E         - PASS
+E         + FAIL
+
+tests\unit\test_p3_capital_gate.py:75: AssertionError
+_ test_value_cap_uses_all_holdings_not_costs_or_tactical_only[1000-PASS-500000] _
+
+price = 1000, expected = 'PASS', after = 500000
+
+    @pytest.mark.parametrize("price,expected,after", [(1000, "PASS", 500000),
+        (1001, "FAIL", 500500), (990, "PASS", 495000)])
+    def test_value_cap_uses_all_holdings_not_costs_or_tactical_only(price, expected, after):
+        result = capital("MARKET_VALUE_CAP", price_fen=price, retained_basis_fen=None)
+>       assert result.outcome == expected and result.after_fen == after
+E       AssertionError: assert ('FAIL' == 'PASS'
+E
+E         - PASS
+E         + FAIL)
+
+tests\unit\test_p3_capital_gate.py:86: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_p3_capital_gate.py::test_open_cost_equality_and_whole_rejection[1000-PASS-550500]
+FAILED tests/unit/test_p3_capital_gate.py::test_value_cap_uses_all_holdings_not_costs_or_tactical_only[1000-PASS-500000]
+2 failed, 3 passed, 19 deselected in 1.29s

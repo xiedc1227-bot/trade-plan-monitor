@@ -1,0 +1,144 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/p3-capital.spec.ts
+
+
+Running 4 tests using 1 worker
+
+
+
+(node:50512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/4] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  1) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+
+
+      51 |     await page.getByLabel("粘贴中文计划原文", {exact: true}).fill(setup.source);
+      52 |     await page.getByRole("button", {name: "生成计划草稿", exact: true}).click();
+    > 53 |     await expect(page.getByRole("heading", {name: "编辑规则、周期与执行窗口"})).toBeVisible();
+         |                                                                     ^
+      54 |     await expect(page.getByRole("region", {name: "金额上限政策审核"})).toContainText("超限不会自动缩量");
+      55 |     for (const input of await page.getByLabel("本句实际对应的技术参数路径（逗号分隔）", {exact: true}).all())
+      56 |       await input.fill("ordinary_rules[0].pretrade_policy.sizing.base_qty");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\p3-capital.spec.ts:53:69
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-2becb-te-fail-recovery-and-reload-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-2becb-te-fail-recovery-and-reload-chrome\error-context.md
+
+
+
+(node:70172) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[2/4] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  2) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+
+
+      51 |     await page.getByLabel("粘贴中文计划原文", {exact: true}).fill(setup.source);
+      52 |     await page.getByRole("button", {name: "生成计划草稿", exact: true}).click();
+    > 53 |     await expect(page.getByRole("heading", {name: "编辑规则、周期与执行窗口"})).toBeVisible();
+         |                                                                     ^
+      54 |     await expect(page.getByRole("region", {name: "金额上限政策审核"})).toContainText("超限不会自动缩量");
+      55 |     for (const input of await page.getByLabel("本句实际对应的技术参数路径（逗号分隔）", {exact: true}).all())
+      56 |       await input.fill("ordinary_rules[0].pretrade_policy.sizing.base_qty");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\p3-capital.spec.ts:53:69
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-OPEN-COST-CAP-C-e6b2f-te-fail-recovery-and-reload-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-OPEN-COST-CAP-C-e6b2f-te-fail-recovery-and-reload-chrome\error-context.md
+
+
+
+(node:81464) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[3/4] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  3) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+
+
+      51 |     await page.getByLabel("粘贴中文计划原文", {exact: true}).fill(setup.source);
+      52 |     await page.getByRole("button", {name: "生成计划草稿", exact: true}).click();
+    > 53 |     await expect(page.getByRole("heading", {name: "编辑规则、周期与执行窗口"})).toBeVisible();
+         |                                                                     ^
+      54 |     await expect(page.getByRole("region", {name: "金额上限政策审核"})).toContainText("超限不会自动缩量");
+      55 |     for (const input of await page.getByLabel("本句实际对应的技术参数路径（逗号分隔）", {exact: true}).all())
+      56 |       await input.fill("ordinary_rules[0].pretrade_policy.sizing.base_qty");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\p3-capital.spec.ts:53:69
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-a1b52-te-fail-recovery-and-reload-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-a1b52-te-fail-recovery-and-reload-chrome\error-context.md
+
+
+
+(node:105268) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/4] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  4) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+
+
+      51 |     await page.getByLabel("粘贴中文计划原文", {exact: true}).fill(setup.source);
+      52 |     await page.getByRole("button", {name: "生成计划草稿", exact: true}).click();
+    > 53 |     await expect(page.getByRole("heading", {name: "编辑规则、周期与执行窗口"})).toBeVisible();
+         |                                                                     ^
+      54 |     await expect(page.getByRole("region", {name: "金额上限政策审核"})).toContainText("超限不会自动缩量");
+      55 |     for (const input of await page.getByLabel("本句实际对应的技术参数路径（逗号分隔）", {exact: true}).all())
+      56 |       await input.fill("ordinary_rules[0].pretrade_policy.sizing.base_qty");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\p3-capital.spec.ts:53:69
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-OPEN-COST-CAP-Q-dae53-te-fail-recovery-and-reload-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-OPEN-COST-CAP-Q-dae53-te-fail-recovery-and-reload-chrome\error-context.md
+
+
+  4 failed
+    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload

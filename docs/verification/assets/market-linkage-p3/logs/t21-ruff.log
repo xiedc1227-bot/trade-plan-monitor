@@ -1,0 +1,23 @@
+B023 Function definition does not bind loop variable `version`
+  --> tests\integration\test_p3_replay_mutations.py:78:60
+   |
+76 |             from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+77 |             def scheduled(plan, at, identity):
+78 |                 return ScheduledPlanVersion.model_validate(version.model_dump(mode="python") | dict(
+   |                                                            ^^^^^^^
+79 |                     version_id=identity, snapshot=plan, plan_hash=plan_sha256(plan),
+80 |                     available_at=at, information_cutoff=at,
+   |
+
+B023 Function definition does not bind loop variable `version`
+  --> tests\integration\test_p3_replay_mutations.py:81:28
+   |
+79 |                     version_id=identity, snapshot=plan, plan_hash=plan_sha256(plan),
+80 |                     available_at=at, information_cutoff=at,
+81 |                     review=version.review.model_copy(update=dict(reviewed_at=at,
+   |                            ^^^^^^^
+82 |                         content_hash=daily_plan_content_sha256(plan)))))
+83 |             old = scheduled(chain.plan, start, "original-capital")
+   |
+
+Found 7 errors (5 fixed, 2 remaining).

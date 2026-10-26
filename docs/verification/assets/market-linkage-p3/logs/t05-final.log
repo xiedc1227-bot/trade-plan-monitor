@@ -1,0 +1,47 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+...................F....                                                 [100%]
+================================== FAILURES ===================================
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes5-CAPITAL_BASE_UNKNOWN] _
+
+changes = {'retained_basis_fen': -1}, reason = 'CAPITAL_BASE_UNKNOWN'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_p3_capital_gate.py:66: in capital
+    return assess_capital(plan.position, **({"quantity": 100, "price_fen": 1000,
+src\trade_plan_monitor\decision\p3_capital.py:119: in assess_capital
+    return result("FAIL" if blockers else "PASS", tuple(blockers),
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+outcome = 'PASS', blockers = ()
+values = {'before_fen': -1, 'after_fen': 100499, 'remaining_fen': 450001, 'buy_debit': BuyDebitResult(outcome='PASS', reason=None, notional_fen=100000, total_fees_fen=500, fees={'COMMISSION': 500}, debit_fen=100500)}
+
+    def result(outcome, blockers=(), **values):
+        unsigned = CapitalAssessment.model_construct(**(raw | values), outcome=outcome,
+                                                     blockers=blockers, evidence_hash="")
+        data = unsigned.model_dump(mode="json", exclude={"evidence_hash"})
+>       return CapitalAssessment.model_validate(data | {
+            "evidence_hash": daily_hash("capital-limit-evidence-v1", data)})
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for CapitalAssessment
+E       before_fen
+E         Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-1, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+
+src\trade_plan_monitor\decision\p3_capital.py:89: ValidationError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes5-CAPITAL_BASE_UNKNOWN]
+1 failed, 23 passed in 1.09s

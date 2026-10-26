@@ -1,0 +1,112 @@
+...........FF........................................................... [ 42%]
+........................................................................ [ 84%]
+..........................                                               [100%]
+================================== FAILURES ===================================
+_____ test_v10_loop_freezes_unknown_cost_without_fake_max_or_cash[False] ______
+
+combined = False
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t20-unit/test_v10_loop_freezes_unknown_0')
+
+    @pytest.mark.parametrize("combined", [False, True])
+    def test_v10_loop_freezes_unknown_cost_without_fake_max_or_cash(combined, tmp_path):
+        from trade_plan_monitor.backtest.loop_input import decode_monitor_loop_input_json
+        from trade_plan_monitor.backtest.loop_session import LoopSession
+
+        value = capital_loop_input(combined=combined)
+        assert decode_monitor_loop_input_json(value.model_dump_json()) == value
+        assert value.initial_account.cash.kind == "POSITION_LIMIT_ONLY"
+        assert value.initial_account.accounting_cost_fen is None
+        assert "max_qty" not in value.schedule.entries[0].version.snapshot.position.model_dump()
+>       with LoopSession(tmp_path, value, ()) as session:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_replay_contract.py:158:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\backtest\loop_session.py:88: in __init__
+    self.run_input.schedule.preflight(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = LoopSchedule(entries=(LoopScheduleEntry(effective_trade_date=datetime.date(2026, 10, 26), version=LoopPlanVersion(vers...aaaaaaaaaaaaaaaaaaaaaaaaaaaa',), evidence_hash='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'))),))
+calendar = ()
+started_at = datetime.datetime(2026, 10, 26, 10, 0, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai'))
+evidence_cutoff = datetime.datetime(2026, 10, 26, 23, 59, 59, 999999, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai'))
+
+    def preflight(
+        self,
+        calendar: tuple[TradingDay, ...],
+        *,
+        started_at: datetime,
+        evidence_cutoff: datetime,
+    ) -> None:
+        """Reject closed/unknown dates using supplied evidence, without provider access."""
+        started_at = require_loop_timestamp(started_at)
+        evidence_cutoff = require_loop_timestamp(evidence_cutoff)
+        if started_at > evidence_cutoff:
+            raise ValueError("start follows evidence cutoff")
+        exchange = self.entries[0].version.snapshot.market
+        days = {day.cal_date: day for day in calendar if day.exchange == exchange}
+        if len(days) != sum(day.exchange == exchange for day in calendar):
+            raise ValueError("duplicate calendar dates")
+        for row in self.entries:
+            day = days.get(row.effective_trade_date)
+            if day is None or not day.is_open:
+>               raise ValueError("effective date must be a known trading day")
+E               ValueError: effective date must be a known trading day
+
+src\trade_plan_monitor\backtest\plan_schedule.py:236: ValueError
+______ test_v10_loop_freezes_unknown_cost_without_fake_max_or_cash[True] ______
+
+combined = True
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t20-unit/test_v10_loop_freezes_unknown_1')
+
+    @pytest.mark.parametrize("combined", [False, True])
+    def test_v10_loop_freezes_unknown_cost_without_fake_max_or_cash(combined, tmp_path):
+        from trade_plan_monitor.backtest.loop_input import decode_monitor_loop_input_json
+        from trade_plan_monitor.backtest.loop_session import LoopSession
+
+        value = capital_loop_input(combined=combined)
+        assert decode_monitor_loop_input_json(value.model_dump_json()) == value
+        assert value.initial_account.cash.kind == "POSITION_LIMIT_ONLY"
+        assert value.initial_account.accounting_cost_fen is None
+        assert "max_qty" not in value.schedule.entries[0].version.snapshot.position.model_dump()
+>       with LoopSession(tmp_path, value, ()) as session:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_replay_contract.py:158:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\backtest\loop_session.py:88: in __init__
+    self.run_input.schedule.preflight(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = LoopSchedule(entries=(LoopScheduleEntry(effective_trade_date=datetime.date(2026, 10, 26), version=LoopPlanVersion(vers...aaaaaaaaaaaaaaaaaaaaaaaaaaaa',), evidence_hash='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'))),))
+calendar = ()
+started_at = datetime.datetime(2026, 10, 26, 10, 0, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai'))
+evidence_cutoff = datetime.datetime(2026, 10, 26, 23, 59, 59, 999999, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai'))
+
+    def preflight(
+        self,
+        calendar: tuple[TradingDay, ...],
+        *,
+        started_at: datetime,
+        evidence_cutoff: datetime,
+    ) -> None:
+        """Reject closed/unknown dates using supplied evidence, without provider access."""
+        started_at = require_loop_timestamp(started_at)
+        evidence_cutoff = require_loop_timestamp(evidence_cutoff)
+        if started_at > evidence_cutoff:
+            raise ValueError("start follows evidence cutoff")
+        exchange = self.entries[0].version.snapshot.market
+        days = {day.cal_date: day for day in calendar if day.exchange == exchange}
+        if len(days) != sum(day.exchange == exchange for day in calendar):
+            raise ValueError("duplicate calendar dates")
+        for row in self.entries:
+            day = days.get(row.effective_trade_date)
+            if day is None or not day.is_open:
+>               raise ValueError("effective date must be a known trading day")
+E               ValueError: effective date must be a known trading day
+
+src\trade_plan_monitor\backtest\plan_schedule.py:236: ValueError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_p3_replay_contract.py::test_v10_loop_freezes_unknown_cost_without_fake_max_or_cash[False]
+FAILED tests/unit/test_p3_replay_contract.py::test_v10_loop_freezes_unknown_cost_without_fake_max_or_cash[True]
+2 failed, 168 passed in 2.33s

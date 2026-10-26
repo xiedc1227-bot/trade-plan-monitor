@@ -1,0 +1,57 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+E501 Line too long (101 > 100)
+   --> src\trade_plan_monitor\ai\daily_review.py:227:101
+    |
+225 |                 visit(child, f"{path}[{index}]")
+226 |         elif value is not None or (
+227 |             draft.schema_version in {5, 6, 7, 8, 9} and path in {"levels.low_buy", "levels.pressure"}
+    |                                                                                                     ^
+228 |         ):
+229 |             values[path] = value
+    |
+
+E501 Line too long (102 > 100)
+   --> src\trade_plan_monitor\ai\daily_review.py:616:101
+    |
+614 |                 )
+615 |
+616 |                 if draft.schema_version not in {5, 6, 7, 8, 9} or not semantic_interpretation_matches(
+    |                                                                                                     ^^
+617 |                     binding.path, actual, excerpt, draft,
+618 |                 ):
+    |
+
+E501 Line too long (138 > 100)
+   --> src\trade_plan_monitor\ai\daily_review.py:657:101
+    |
+655 | …     p2_empty = (draft.schema_version in {8, 9} and re.fullmatch(
+656 | …         r"ordinary_rules\[\d+\]\.pretrade_policy\.(?:level_evidence|"
+657 | …         r"economics\.fee_schedule\.components)|position\.limit\.capital_policy\.buy_cost_schedule\.components", binding.path))
+    |                                                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+658 | …     if (name is None and not p2_empty) or not re.fullmatch(
+659 | …         rf"(?:{re.escape(binding.path)}\s*=\s*\[\]|无{name})",
+    |
+
+E501 Line too long (103 > 100)
+  --> src\trade_plan_monitor\ai\plan_update_extraction.py:73:101
+   |
+71 |     base_hash: Sha256Hex
+72 |     snapshot: (
+73 |         P3TradePlan | P2TradePlan | MarketExceptionTradePlan | MarketLinkedTradePlan | UnifiedTradePlan
+   |                                                                                                     ^^^
+74 |     )
+75 |     available_at: LoopTimestamp
+   |
+
+E501 Line too long (104 > 100)
+   --> src\trade_plan_monitor\config.py:162:101
+    |
+160 |     temperature: float = Field(default=0, ge=0, le=0.3)
+161 |     prompt_version: Literal[
+162 |         "plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"
+    |                                                                                                     ^^^^
+163 |     ] = (
+164 |         "plan-extract-v12"
+    |
+
+Found 5 errors.

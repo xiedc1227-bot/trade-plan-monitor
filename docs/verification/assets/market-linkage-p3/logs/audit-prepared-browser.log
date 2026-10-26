@@ -1,0 +1,16 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/monitor-loop-backtest.spec.ts -g real upload/retry/edit/review/run journey
+
+
+Running 1 test using 1 worker
+
+
+
+(node:57568) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/1] [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:97:1 › real upload/retry/edit/review/run journey retains original 503 intent and causal results
+[chrome] › tests\e2e\monitor-loop-backtest.spec.ts:97:1 › real upload/retry/edit/review/run journey retains original 503 intent and causal results
+18:49:07 [vite] (client) Re-optimizing dependencies because vite config has changed
+
+  1 passed (21.2s)

@@ -1,0 +1,37 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+F.F...................                                                   [100%]
+================================== FAILURES ===================================
+_ test_explicit_position_variants_roundtrip_without_inferred_capacity[False-OPEN_COST_CAP] _
+
+mode = 'OPEN_COST_CAP', combined = False
+
+    @pytest.mark.parametrize("mode", ["OPEN_COST_CAP", "MARKET_VALUE_CAP"])
+    @pytest.mark.parametrize("combined", [False, True])
+    def test_explicit_position_variants_roundtrip_without_inferred_capacity(mode, combined):
+        raw = p3_payload(mode, combined)
+>       plan = P3TradePlan.model_validate(raw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for P3TradePlan
+E         Value error, budget fee schedule must cover this security [type=value_error, input_value={'schema_version': 9, 'ex...dex_code': '000001.SH'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\unit\test_p3_policy_contract.py:40: ValidationError
+_ test_explicit_position_variants_roundtrip_without_inferred_capacity[True-OPEN_COST_CAP] _
+
+mode = 'OPEN_COST_CAP', combined = True
+
+    @pytest.mark.parametrize("mode", ["OPEN_COST_CAP", "MARKET_VALUE_CAP"])
+    @pytest.mark.parametrize("combined", [False, True])
+    def test_explicit_position_variants_roundtrip_without_inferred_capacity(mode, combined):
+        raw = p3_payload(mode, combined)
+>       plan = P3TradePlan.model_validate(raw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for P3TradePlan
+E         Value error, budget fee schedule must cover this security [type=value_error, input_value={'schema_version': 9, 'ex...dex_code': '000001.SH'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\unit\test_p3_policy_contract.py:40: ValidationError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_p3_policy_contract.py::test_explicit_position_variants_roundtrip_without_inferred_capacity[False-OPEN_COST_CAP]
+FAILED tests/unit/test_p3_policy_contract.py::test_explicit_position_variants_roundtrip_without_inferred_capacity[True-OPEN_COST_CAP]
+2 failed, 20 passed in 1.28s

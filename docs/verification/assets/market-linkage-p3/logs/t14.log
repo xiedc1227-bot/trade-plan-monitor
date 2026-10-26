@@ -1,0 +1,53 @@
+.F.....                                                                  [100%]
+================================== FAILURES ===================================
+______ test_opening_receipt_retry_and_preview_use_complete_reviewed_lots ______
+
+capital_api = (<tests.integration.p3_private_chain.PrivateChain object at 0x000001C7A4605590>, <tests.integration.test_daily_plan_ch...:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t14/test_opening_receipt_retry_and0/capital.sqlite'))
+
+    def test_opening_receipt_retry_and_preview_use_complete_reviewed_lots(capital_api):
+        private, shell, path = capital_api
+        with private.work() as work:
+            batches = work.daily.get("simulation-position-"+private.plan.symbol)["payload"]["batches"]
+        body = dict(planVersionId=private.version_id, expectedInventoryRevision=1,
+            expectedBookRevision=0, observedAt=private.now.isoformat(),
+            source="Synthetic reviewed simulation opening",
+            excerpt="Retained basis of the current complete lot is450000fen",
+            reason="Explicit budget opening confirmation", confirmed=True,
+            lots=[dict(lot_id=b["id"], bucket=b["bucket"], quantity=b["quantity"],
+                       retained_basis_fen=450000) for b in batches])
+>       first = shell.post("simulation-capital-openings", body, key="opening-once")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_api.py:53:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <tests.integration.test_daily_plan_chain.Chain object at 0x000001C7A47CCB90>
+path = 'simulation-capital-openings'
+data = {'planVersionId': '90000000-0000-4000-8000-000000000001', 'expectedInventoryRevision': 1, 'expectedBookRevision': 0, 'observedAt': '2026-09-18T16:00:00+08:00', ...}
+key = 'opening-once', status = 200
+
+    def post(self, path, data, *, key=None, status=200):
+        path = {
+            "daily-plan-review-supplements": "plan-review-supplements",
+            "daily-position-confirmations": "simulation-position-confirmations",
+            "daily-plan-facts": "plan-facts",
+            "daily-simulated-trades": "simulated-trades",
+        }.get(path, path)
+        response = self.client.post(
+            "/api/v1/" + path, json=data, headers={"Idempotency-Key": key or uuid4().hex}
+        )
+>       assert response.status_code == status, response.text
+E       AssertionError: {"error":{"code":"VALIDATION_ERROR","message":"Request validation failed","details":[{"location":["body","observedAt"],"code":"DATETIME_TYPE","message":"Invalid value"},{"location":["body","lots"],"code":"TUPLE_TYPE","message":"Invalid value"}],"requestId":"f078abfb420a4610ae77e47f261cefd8"}}
+E       assert <HTTPStatus.UNPROCESSABLE_CONTENT: 422> == 200
+E        +  where <HTTPStatus.UNPROCESSABLE_CONTENT: 422> = <Response [422 Unprocessable Entity]>.status_code
+
+tests\integration\test_daily_plan_chain.py:88: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_api.py::test_opening_receipt_retry_and_preview_use_complete_reviewed_lots
+1 failed, 6 passed, 1 warning in 4.56s

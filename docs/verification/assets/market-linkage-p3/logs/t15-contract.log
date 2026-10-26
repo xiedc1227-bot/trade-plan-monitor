@@ -1,0 +1,129 @@
+.F...................F........FFF.....                                   [100%]
+================================== FAILURES ===================================
+____________ test_openapi_change_requires_bilingual_spec_approval _____________
+
+    def test_openapi_change_requires_bilingual_spec_approval() -> None:
+        _generator, snapshot, _typescript = _generated_documents()
+        digest = sha256(snapshot.encode("utf-8")).hexdigest()
+
+>       assert f"OpenAPI snapshot SHA-256: `{digest}`" in LOCAL_WEB_SPEC_PATH.read_text(
+            encoding="utf-8"
+        )
+E       AssertionError: assert 'OpenAPI snapshot SHA-256: `01c2f0af7bf6dbe25fb45d6d701e24845f2a78af2fa6b4e397bd529db7e0ce19`' in '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...6115fb531ba80f8cd3bf10bc9043e2d2f97a`; canonical `6f485c92d4470f4521b68d51a85f9be8af670ac4153ebf9a6ee9087abf7a7b0c`.\n'
+E        +  where '# Specification: One Trade Plan Workflow\n\nCurrent extension (2026-10-24): the approved [market-linkage P0](SPEC-mar...6115fb531ba80f8cd3bf10bc9043e2d2f97a`; canonical `6f485c92d4470f4521b68d51a85f9be8af670ac4153ebf9a6ee9087abf7a7b0c`.\n' = read_text(encoding='utf-8')
+E        +    where read_text = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/docs/specifications/monitoring/SPEC-unified-plan.md').read_text
+
+tests\integration\test_openapi_snapshot.py:169: AssertionError
+______ test_public_schema_and_read_projection_preserve_linked_authority _______
+
+linked_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x0000025B910F2780>
+
+    def test_public_schema_and_read_projection_preserve_linked_authority(linked_chain):
+        chain = linked_chain
+        command = ready(chain)
+        contract = chain.client.get("/api/v1/plan-editor-schema").json()
+>       assert contract["supportedSchemaVersions"] == [5, 6, 7, 8]
+E       assert [5, 6, 7, 8, 9] == [5, 6, 7, 8]
+E
+E         Left contains one more item: 9
+E         Use -v to get more diff
+
+tests\integration\test_market_linkage_api.py:209: AssertionError
+____ test_public_schema_advertises_complete_exception_policy[WEAK_MINIMUM] ____
+
+exception_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x0000025B92245EF0>
+
+    def test_public_schema_advertises_complete_exception_policy(exception_chain):
+        response = exception_chain.client.get("/api/v1/plan-editor-schema")
+        assert response.status_code == 200
+        data = response.json()
+>       assert data["supportedSchemaVersions"] == [5, 6, 7, 8]
+E       assert [5, 6, 7, 8, 9] == [5, 6, 7, 8]
+E
+E         Left contains one more item: 9
+E         Use -v to get more diff
+
+tests\integration\test_market_exception_api.py:92: AssertionError
+___ test_public_schema_advertises_complete_exception_policy[BROKEN_STRONG] ____
+
+exception_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x0000025B8EAAA1A0>
+
+    def test_public_schema_advertises_complete_exception_policy(exception_chain):
+        response = exception_chain.client.get("/api/v1/plan-editor-schema")
+        assert response.status_code == 200
+        data = response.json()
+>       assert data["supportedSchemaVersions"] == [5, 6, 7, 8]
+E       assert [5, 6, 7, 8, 9] == [5, 6, 7, 8]
+E
+E         Left contains one more item: 9
+E         Use -v to get more diff
+
+tests\integration\test_market_exception_api.py:92: AssertionError
+__________ test_plan_capability_reports_current_condition_activation __________
+
+    def test_plan_capability_reports_current_condition_activation() -> None:
+        plan_json = dump_plan_json(current_three_rule_plan())
+        with TestClient(_app(plan_service=_RejectPlanService()), base_url=BASE_URL) as client:
+            capability = client.get("/api/v1/plan-capabilities")
+            blocked = client.post(
+                "/api/v1/plan-drafts",
+                headers={"Idempotency-Key": "r09-v3-blocked"},
+                json={
+                    "basePlanVersionId": None,
+                    "extractionId": None,
+                    "planJson": plan_json,
+                    "sourceText": "isolated trusted review only",
+                    "reviewIssues": [],
+                    "expectedRevision": 0,
+                },
+            )
+            partial = json.loads(plan_json)
+            partial["ordinary_rules"][0]["confirmation"] = None
+            invalid = client.post(
+                "/api/v1/plan-drafts",
+                headers={"Idempotency-Key": "r09-v3-partial"},
+                json={
+                    "planJson": json.dumps(partial),
+                    "sourceText": "incomplete source-only draft",
+                    "reviewIssues": [],
+                    "expectedRevision": 0,
+                },
+            )
+
+        assert capability.status_code == 200
+>       assert capability.json() == {
+            "supportedSchemaVersions": [5, 6, 7, 8],
+            "linkedExecutionVersion": "condition-plan-v2",
+            "exceptionExecutionVersion": "condition-plan-v3",
+            "pretradeExecutionVersion": "condition-plan-v4",
+            "schemaVersion": 5,
+            "executionMode": "CONDITION_PLAN",
+            "executionVersion": "condition-plan-v1",
+            "supportedActions": ["BUY", "SELL", "RISK_ALERT"],
+            "publicActivationAvailable": True,
+            "isolatedTrustedReviewOnly": False,
+            "pendingRequirements": [],
+        }
+E       AssertionError: assert {'schemaVersi...7, 8, 9], ...} == {'supportedSc...plan-v4', ...}
+E
+E         Omitting 10 identical items, use -vv to show
+E         Differing items:
+E         {'supportedSchemaVersions': [5, 6, 7, 8, 9]} != {'supportedSchemaVersions': [5, 6, 7, 8]}
+E         Left contains 1 more item:
+E         {'capitalExecutionVersion': 'condition-plan-v5'}
+E         Use -v to get more diff
+
+tests\integration\test_explicit_transport.py:176: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_openapi_snapshot.py::test_openapi_change_requires_bilingual_spec_approval
+FAILED tests/integration/test_market_linkage_api.py::test_public_schema_and_read_projection_preserve_linked_authority
+FAILED tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[WEAK_MINIMUM]
+FAILED tests/integration/test_market_exception_api.py::test_public_schema_advertises_complete_exception_policy[BROKEN_STRONG]
+FAILED tests/integration/test_explicit_transport.py::test_plan_capability_reports_current_condition_activation
+5 failed, 33 passed, 1 warning in 36.50s

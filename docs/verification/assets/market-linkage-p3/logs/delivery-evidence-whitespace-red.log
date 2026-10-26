@@ -1,0 +1,956 @@
+docs/verification/assets/market-linkage-p3/logs/audit-admission.log:22: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/audit-admission.log:26: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/audit-empty.log:22: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/audit-empty.log:26: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/audit-form-css.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/audit-form-final.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/audit-form-green.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/audit-form-red.log:166: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/audit-form-reentry.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/audit-form-types.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/audit-form-types2.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/audit-raw-budget-green.log:19: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/audit-raw-budget-green.log:35: trailing whitespace.
++.venv\Lib\site-packages\_pytest\runner.py:361:
+docs/verification/assets/market-linkage-p3/logs/audit-source-red.log:16: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/audit-source-red.log:48: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:17: trailing whitespace.
++  1) [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:487:1 › actual originals are prepared individually and require date confirmation before AI
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:72: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:74: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:77: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:79: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:81: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:83: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:92: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:99: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/browser-audit-rerun.log:116: trailing whitespace.
++    [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:487:1 › actual originals are prepared individually and require date confirmation before AI
+docs/verification/assets/market-linkage-p3/logs/browser-final-all.log:134: trailing whitespace.
++  1) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/browser-final-all.log:168: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/c02-mutation.log:14: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/c02-mutation.log:29: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/c06-browser.log:54: trailing whitespace.
++  1) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/c06-browser.log:85: trailing whitespace.
++  2) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/c06-browser.log:111: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/c06-browser.log:112: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/c06-labels.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/c06-types.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:74: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:85: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:89: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:93: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:104: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:117: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:119: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:160: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:188: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:208: trailing whitespace.
++tests\integration\test_explicit_plan_review_api.py:94:
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:234: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:256: trailing whitespace.
++tests\integration\test_explicit_plan_review_api.py:94:
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:282: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:304: trailing whitespace.
++tests\integration\test_explicit_plan_review_api.py:94:
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:330: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:348: trailing whitespace.
++tests\integration\test_explicit_plan_review_api.py:194:
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:374: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:426: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:438: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:493: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:505: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:528: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:534: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:545: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:556: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:558: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:561: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:567: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:574: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:580: trailing whitespace.
++tests\integration\test_market_exception_review.py:144:
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:604: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:633: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:636: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:658: trailing whitespace.
++tests\integration\test_plan_extraction_diagnostics.py:312:
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:684: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:699: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:707: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:714: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:717: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:732: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:738: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:740: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:754: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:771: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:809: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:819: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:822: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:832: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:849: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:887: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:897: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:900: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:910: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:921: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:926: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:928: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:939: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:952: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:968: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:970: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:986: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:997: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1012: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1030: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1035: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1037: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1059: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1073: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1087: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1102: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1105: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1112: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1125: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1143: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1146: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1154: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1169: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1185: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1187: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1199: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1211: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1224: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1239: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1242: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1251: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1281: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1299: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1308: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1321: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1325: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1328: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1344: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1356: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-integration.log:1365: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:78: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:94: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:103: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:115: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:117: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:121: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:135: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:137: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:140: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:152: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:154: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:157: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:184: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:198: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:203: trailing whitespace.
++tests\unit\test_daily_extraction.py:94:
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:250: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:264: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:269: trailing whitespace.
++tests\unit\test_daily_extraction.py:94:
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:302: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:304: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:311: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:335: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:349: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/full-unit.log:354: trailing whitespace.
++tests\unit\test_unified_plan_domain.py:359:
+docs/verification/assets/market-linkage-p3/logs/full-web-final.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/full-web.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t05-final.log:22: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:14: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:74:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:34: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:74:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:54: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:85:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:75: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:85:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:96: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:85:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:125: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:153: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:181: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:209: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:237: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:265: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:293: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t05-red.log:321: trailing whitespace.
++tests\unit\test_p3_capital_gate.py:101:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:20: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:24: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:34: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:40: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:42: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:47: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:58: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:61: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:63: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:79: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:132: trailing whitespace.
++.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:157: trailing whitespace.
++tests\integration\test_p3_accounting.py:46:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:229: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:233: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:243: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:249: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:251: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:256: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:267: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:270: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:272: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:288: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:341: trailing whitespace.
++.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:366: trailing whitespace.
++tests\integration\test_p3_accounting.py:62:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:438: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:442: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:452: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:458: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:460: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:465: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:476: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:479: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:481: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:497: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:550: trailing whitespace.
++.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:576: trailing whitespace.
++tests\integration\test_p3_accounting.py:84:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:648: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:652: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:662: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:668: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:670: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:675: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:686: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:689: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:691: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:707: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:760: trailing whitespace.
++.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969:
+docs/verification/assets/market-linkage-p3/logs/t09-green.log:789: trailing whitespace.
++tests\integration\test_p3_accounting.py:97:
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:13: trailing whitespace.
++tests\integration\test_p3_accounting.py:45:
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:33: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:36: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:60: trailing whitespace.
++tests\integration\test_p3_accounting.py:61:
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:80: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:83: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:107: trailing whitespace.
++tests\integration\test_p3_accounting.py:72:
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:127: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:130: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:154: trailing whitespace.
++tests\integration\test_p3_accounting.py:82:
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:174: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:177: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:201: trailing whitespace.
++tests\integration\test_p3_accounting.py:93:
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:221: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:224: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:247: trailing whitespace.
++tests\integration\test_p3_accounting.py:109:
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:267: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red.log:270: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:13: trailing whitespace.
++tests\integration\test_p3_accounting.py:46:
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:37: trailing whitespace.
++tests\integration\test_p3_accounting.py:62:
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:63: trailing whitespace.
++tests\integration\test_p3_accounting.py:74:
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:89: trailing whitespace.
++tests\integration\test_p3_accounting.py:84:
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:121: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:125: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:135: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:141: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:143: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:148: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:159: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:162: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:164: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:180: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:233: trailing whitespace.
++.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969:
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:262: trailing whitespace.
++tests\integration\test_p3_accounting.py:97:
+docs/verification/assets/market-linkage-p3/logs/t09-red2.log:327: trailing whitespace.
++tests\integration\test_p3_accounting.py:114:
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:9: trailing whitespace.
++tests\integration\test_p3_review.py:15:
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:21: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:29: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:35: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:68: trailing whitespace.
++tests\integration\test_p3_review.py:36:
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:134: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:214: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:221: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:244: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:267: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:291: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:314: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a-red.log:326: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10a2.log:7: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:66: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:92: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:147: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:173: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:228: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:254: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:309: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:335: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:390: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:416: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:471: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:497: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:552: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:578: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:633: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:101:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:659: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:683: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:118:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:709: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:733: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:118:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:759: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:783: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:118:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:809: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:833: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:118:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:859: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:872: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:125:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:898: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:913: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:133:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:939: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:954: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:956: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:961: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:965: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:152:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:991: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1006: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1008: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1013: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1017: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:152:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1043: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1058: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1060: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1065: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1069: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:152:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1095: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1110: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1112: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1117: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1121: trailing whitespace.
++tests\unit\test_current_plan_extraction_security.py:152:
+docs/verification/assets/market-linkage-p3/logs/t10b-green.log:1147: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:7: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:20: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:146: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:148: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:152: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:157: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:164: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:168: trailing whitespace.
++tests\integration\test_p3_review.py:112:
+docs/verification/assets/market-linkage-p3/logs/t10b-red.log:192: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:11: trailing whitespace.
++tests\unit\test_p3_composition.py:21:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:41: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:44: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:54: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:81: trailing whitespace.
++tests\unit\test_p3_composition.py:43:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:111: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:114: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:124: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:151: trailing whitespace.
++tests\unit\test_p3_composition.py:43:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:181: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:184: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:194: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:221: trailing whitespace.
++tests\unit\test_p3_composition.py:43:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:251: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:254: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:264: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:291: trailing whitespace.
++tests\unit\test_p3_composition.py:43:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:321: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:324: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:334: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:349: trailing whitespace.
++tests\unit\test_p3_composition.py:53:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:379: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:382: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:392: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:411: trailing whitespace.
++tests\unit\test_p3_composition.py:66:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:441: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:444: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:454: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:473: trailing whitespace.
++tests\unit\test_p3_composition.py:66:
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:503: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:506: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t11a-green.log:516: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t12a-red.log:96: trailing whitespace.
++tests\integration\test_p3_simulation.py:44:
+docs/verification/assets/market-linkage-p3/logs/t12a-red.log:112: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t12a-red.log:125: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t12b-green.log:16: trailing whitespace.
++tests\integration\test_p3_simulation.py:63:
+docs/verification/assets/market-linkage-p3/logs/t12b-green.log:166: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t12b.log:19: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t12b.log:35: trailing whitespace.
++.venv\Lib\site-packages\_pytest\runner.py:361:
+docs/verification/assets/market-linkage-p3/logs/t14.log:21: trailing whitespace.
++tests\integration\test_p3_api.py:53:
+docs/verification/assets/market-linkage-p3/logs/t15-contract.log:8: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t15-contract.log:27: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t15-contract.log:42: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t15-contract.log:57: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t15-contract.log:92: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t15-contract.log:108: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t15b.log:16: trailing whitespace.
++tests\integration\test_p3_chain.py:61:
+docs/verification/assets/market-linkage-p3/logs/t16-final.log:9: trailing whitespace.
++[Vue warn]: Unhandled error during execution of render function
+docs/verification/assets/market-linkage-p3/logs/t16-final.log:10: trailing whitespace.
++  at <P3CapitalOpening planVersionId="version-a" symbol="601021.SH" costRequired=true  ... >
+docs/verification/assets/market-linkage-p3/logs/t16-final.log:12: trailing whitespace.
++[Vue warn]: Unhandled error during execution of component update
+docs/verification/assets/market-linkage-p3/logs/t16-final.log:13: trailing whitespace.
++  at <P3CapitalOpening planVersionId="version-a" symbol="601021.SH" costRequired=true  ... >
+docs/verification/assets/market-linkage-p3/logs/t16-final.log:46: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t16-final2.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t16-types2.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t16-types4.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t16a.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t16b.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t16c.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t17-final.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t17-types-final.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t17-types.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t17-ui.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t17a.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t18-browser-fix.log:28: trailing whitespace.
++  1) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser-fix.log:57: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:13: trailing whitespace.
++  1) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:46: trailing whitespace.
++  2) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:79: trailing whitespace.
++  3) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:112: trailing whitespace.
++  4) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:141: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:142: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:143: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-browser.log:144: trailing whitespace.
++    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+docs/verification/assets/market-linkage-p3/logs/t18-extract.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:8: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:10: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:14: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:19: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:26: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:36: trailing whitespace.
++tests\integration\test_p3_review.py:118:
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:73: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t18-extract2.log:76: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t18-types.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t18-ui-regression.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:12: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:14: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:21: trailing whitespace.
++tests\integration\test_market_linkage_api.py:129:
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:29: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:80: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:82: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:89: trailing whitespace.
++tests\integration\test_market_linkage_api.py:129:
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:97: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:145: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:150: trailing whitespace.
++tests\integration\test_backtest_service_contract.py:76:
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:158: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:206: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:211: trailing whitespace.
++tests\integration\test_backtest_service_contract.py:76:
+docs/verification/assets/market-linkage-p3/logs/t20-contract.log:219: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:12: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:14: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:24: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:40: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:42: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:52: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:65: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:77: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:92: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:130: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:143: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:155: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:170: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-contract2.log:208: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t20-contract3.log:8: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-types.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t20-types2.log:4: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t20-ui.log:13: new blank line at EOF.
+docs/verification/assets/market-linkage-p3/logs/t20-unit.log:14: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-unit.log:23: trailing whitespace.
++tests\unit\test_p3_replay_contract.py:158:
+docs/verification/assets/market-linkage-p3/logs/t20-unit.log:66: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20-unit.log:75: trailing whitespace.
++tests\unit\test_p3_replay_contract.py:158:
+docs/verification/assets/market-linkage-p3/logs/t20a.log:21: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:27: trailing whitespace.
++.venv\Lib\site-packages\sqlalchemy\engine\base.py:144:
+docs/verification/assets/market-linkage-p3/logs/t20a.log:88: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:90: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:96: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:116: trailing whitespace.
++tests\integration\test_p3_replay.py:166:
+docs/verification/assets/market-linkage-p3/logs/t20a.log:209: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:215: trailing whitespace.
++.venv\Lib\site-packages\sqlalchemy\engine\base.py:144:
+docs/verification/assets/market-linkage-p3/logs/t20a.log:276: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:278: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:284: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20a.log:304: trailing whitespace.
++tests\integration\test_p3_replay.py:166:
+docs/verification/assets/market-linkage-p3/logs/t20b.log:11: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:13: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:19: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:30: trailing whitespace.
++tests\integration\test_p3_replay.py:279:
+docs/verification/assets/market-linkage-p3/logs/t20b.log:42: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:46: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:57: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:95: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:97: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:103: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:114: trailing whitespace.
++tests\integration\test_p3_replay.py:279:
+docs/verification/assets/market-linkage-p3/logs/t20b.log:126: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:130: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:141: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:179: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:181: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:187: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:198: trailing whitespace.
++tests\integration\test_p3_replay.py:279:
+docs/verification/assets/market-linkage-p3/logs/t20b.log:210: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:214: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:225: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:263: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:265: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:271: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:282: trailing whitespace.
++tests\integration\test_p3_replay.py:279:
+docs/verification/assets/market-linkage-p3/logs/t20b.log:294: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:298: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20b.log:309: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20c.log:43: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20c.log:59: trailing whitespace.
++tests\integration\test_p3_frozen_workers.py:78:
+docs/verification/assets/market-linkage-p3/logs/t20c.log:90: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20c.log:103: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20c2.log:43: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20c3.log:43: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t20c4.log:43: trailing whitespace.
++
+docs/verification/assets/market-linkage-p3/logs/t21a2.log:68: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/t21a2.log:70: trailing whitespace.
++E
+docs/verification/assets/market-linkage-p3/logs/types-final.log:4: new blank line at EOF.

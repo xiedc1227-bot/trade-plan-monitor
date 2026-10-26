@@ -1,0 +1,12 @@
+E501 Line too long (105 > 100)
+  --> tests\unit\test_preparation_prompt_budget.py:22:101
+   |
+20 | @pytest.mark.parametrize("path", SOURCES, ids=lambda path: path.name)
+21 | @pytest.mark.parametrize("preserve_line_endings", [False, True], ids=["normalized", "browser-raw"])
+22 | def test_actual_originals_fit_default_budget_without_losing_source_evidence(path, preserve_line_endings):
+   |                                                                                                     ^^^^^
+23 |     source = (path.read_bytes().decode("utf-8-sig") if preserve_line_endings
+24 |               else path.read_text(encoding="utf-8-sig"))
+   |
+
+Found 1 error.

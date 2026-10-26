@@ -1,0 +1,57 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/p3-capital.spec.ts --grep MARKET_VALUE_CAP CAPITAL_ONLY
+
+
+Running 1 test using 1 worker
+
+
+
+(node:8608) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/1] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+[chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\asyncio\proactor_events.py", line 166, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Զ������ǿ�ȹر���һ�����е����ӡ�
+
+
+  1) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: '编辑规则、周期与执行窗口' })
+
+
+      51 |     await page.getByLabel("粘贴中文计划原文", {exact: true}).fill(setup.source);
+      52 |     await page.getByRole("button", {name: "生成计划草稿", exact: true}).click();
+    > 53 |     await expect(page.getByRole("heading", {name: "编辑规则、周期与执行窗口"})).toBeVisible();
+         |                                                                     ^
+      54 |     await expect(page.getByRole("region", {name: "金额上限政策审核"})).toContainText("超限不会自动缩量");
+      55 |     for (const input of await page.getByLabel("本句实际对应的技术参数路径（逗号分隔）", {exact: true}).all())
+      56 |       await input.fill("ordinary_rules[0].pretrade_policy.sizing.base_qty");
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\p3-capital.spec.ts:53:69
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-2becb-te-fail-recovery-and-reload-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-2becb-te-fail-recovery-and-reload-chrome\error-context.md
+
+
+  1 failed
+    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload

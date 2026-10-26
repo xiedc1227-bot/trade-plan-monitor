@@ -1,0 +1,35 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+E501 Line too long (102 > 100)
+  --> src\trade_plan_monitor\state\p3_capital_repository.py:30:101
+   |
+28 |             return None
+29 |         value = CapitalBook.model_validate_json(row.payload_json)
+30 |         if (value.symbol, value.revision, value.inventory_revision, value.updated_at.isoformat()) != (
+   |                                                                                                     ^^
+31 |                 row.symbol, row.revision, row.inventory_revision, row.updated_at):
+32 |             raise ValueError("capital book columns differ from immutable payload")
+   |
+
+E501 Line too long (103 > 100)
+  --> src\trade_plan_monitor\state\p3_capital_service.py:79:101
+   |
+77 |     previous = repo.event(command_id)
+78 |     if previous is not None:
+79 |         if previous.request_hash != request_hash or previous.kind not in {"OPENING", "RECONCILIATION"}:
+   |                                                                                                     ^^^
+80 |             raise CapitalCommandConflict("CAPITAL_IDEMPOTENCY_CONFLICT")
+81 |         return previous
+   |
+
+E501 Line too long (101 > 100)
+   --> src\trade_plan_monitor\state\p3_capital_service.py:109:101
+    |
+107 |         request_hash=request_hash, kind="OPENING" if before is None else "RECONCILIATION", now=now,
+108 |         details={"plan_version_id": str(context.plan_version_id),
+109 |             "content_hash": context.content_hash, "review_binding_hash": context.review_binding_hash,
+    |                                                                                                     ^
+110 |             "observed_at": command.observed_at.isoformat(), "source": command.source,
+111 |             "excerpt": command.excerpt, "reason": command.reason, "confirmed": True,
+    |
+
+Found 4 errors (1 fixed, 3 remaining).

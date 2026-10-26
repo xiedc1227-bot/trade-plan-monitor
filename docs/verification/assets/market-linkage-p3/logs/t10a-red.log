@@ -1,0 +1,343 @@
+FFFF..FF.FF                                                              [100%]
+================================== FAILURES ===================================
+_______ test_schema9_draft_load_retains_exact_money_only_source_policy ________
+
+    def test_schema9_draft_load_retains_exact_money_only_source_policy():
+>       draft = load_daily_draft_json(json.dumps(p3_payload()))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_review.py:15:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = '{"schema_version": 9, "execution_mode": "CONDITION_PLAN", "execution_version": "condition-plan-v5", "plan_id": "synth..., "reference_market": {"selection": "AUTO_BOARD", "mapping_version": "board-index-map-v1", "index_code": "000001.SH"}}'
+
+    def load_daily_draft_json(document):
+        from trade_plan_monitor.domain.plan_codec import (
+            _normalize_document,
+            _reject_duplicate_json_keys,
+            _reject_json_constant,
+            _validate_data_tree,
+        )
+
+        raw = json.loads(
+            _normalize_document(document),
+            object_pairs_hook=_reject_duplicate_json_keys,
+            parse_constant=_reject_json_constant,
+        )
+        if isinstance(raw, dict) and raw.get("schema_version") in {6, 7, 8}:
+            from trade_plan_monitor.domain.market_linkage_validation import parse_current_draft
+
+            _validate_data_tree(raw)
+            return parse_current_draft(raw)
+        if isinstance(raw, dict) and raw.get("schema_version") == 5:
+            from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+            from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+
+            _validate_data_tree(raw)
+            try:
+                return UnifiedPlanDraft.from_executable(UnifiedTradePlan.model_validate(raw))
+            except ValidationError:
+                return UnifiedPlanDraft.model_validate(raw)
+        if not isinstance(raw, dict) or raw.get("schema_version") != 4:
+>           raise ValueError("not a Schema 4 draft")
+E           ValueError: not a Schema 4 draft
+
+src\trade_plan_monitor\domain\daily_plan_validation.py:168: ValueError
+_____ test_complete_capital_review_retains_all_prior_strategy_expansions ______
+
+    def test_complete_capital_review_retains_all_prior_strategy_expansions():
+        draft = P3PlanDraft.model_validate(p3_payload())
+>       assert len([p for p in semantic_values(draft) if ".expanded." in p]) == 11
+E       assert 0 == 11
+E        +  where 0 = len([])
+
+tests\integration\test_p3_review.py:22: AssertionError
+_______ test_missing_cap_or_source_binding_cannot_be_acknowledged_away ________
+
+    def test_missing_cap_or_source_binding_cannot_be_acknowledged_away():
+        raw = p3_payload()
+        path = "position.limit.capital_policy.cap_fen"
+        draft = P3PlanDraft.model_validate(raw)
+        source, mapping = source_mapping(draft)
+        changed = mapping.model_copy(update={"bindings": tuple(
+            b for b in mapping.bindings if b.path != path)})
+        assert any(i.path == path and i.code == "DAILY_SOURCE_BINDING_REQUIRED"
+>                  for i in build_daily_review(draft, changed, source).issues)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_review.py:36:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+draft = P3PlanDraft(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>))
+mapping = DailyMapping(mapping_version='daily-mapping-v1', candidate_content_hash='83d0290aa6f545618fb09803ba87d078bc9cde626db07...00001.SH', origin='SOURCE', unit='JSON', clause_ids=('clause-9979572f68d39973',), supplement_id=None)), supplements=())
+source_text = 'schema_version = 9\nexecution_mode = "CONDITION_PLAN"\nexecution_version = "condition-plan-v5"\nsymbol = "601021.SH"\...ion = "AUTO_BOARD"\nreference_market.mapping_version = "board-index-map-v1"\nreference_market.index_code = "000001.SH"'
+
+    def build_daily_review(draft, mapping, source_text):
+        mapping = DailyMapping.model_validate(mapping.model_dump())
+        # These fixed software values need no source or human broker-rule evidence.
+        existing_paths = {binding.path for binding in mapping.bindings}
+        product_rules = tuple(
+            binding
+            for binding in daily_contract_bindings(draft)
+            if binding.path.startswith("trading_rules.") and binding.path not in existing_paths
+        )
+        mapping = mapping.model_copy(update={"bindings": (*mapping.bindings, *product_rules)})
+        digest = daily_draft_content_sha256(draft)
+        if mapping.candidate_content_hash != digest:
+            raise ValueError("mapping candidate content changed")
+        expected = server_source_clauses(source_text)
+        if len(mapping.clauses) != len(expected):
+            raise MappingValidationError("source clause count differs", "source_clauses")
+        for index, (actual_clause, expected_clause) in enumerate(
+            zip(mapping.clauses, expected, strict=True)
+        ):
+            for field in ("clause_id", "start", "end", "excerpt"):
+                if getattr(actual_clause, field) != getattr(expected_clause, field):
+                    raise MappingValidationError(
+                        "source clause differs from exact source",
+                        f"source_clauses[{index}].{field}" if index <= 255 else "source_clauses",
+                    )
+        values = semantic_values(draft)
+        selections = tuple(
+            s for c in mapping.clauses for s in c.exclusions if s.origin == "HUMAN_SCOPE_SELECTION"
+        )
+        for selection in selections:
+            if (
+                selection.source_hash != scope_hash(source_text)
+                or selection.excerpt != source_text[selection.start : selection.end]
+            ):
+                raise ValueError("human scope exclusion differs from exact source span")
+            require_nontechnical_exclusion(selection.excerpt)
+        canonical_treatments = {c.clause_id: c for c in daily_source_clauses(source_text, selections)}
+        for clause in mapping.clauses:
+            canonical = canonical_treatments[clause.clause_id]
+            if clause.exclusions != canonical.exclusions:
+                raise ValueError("exact fundamental source exclusion is required")
+            if canonical.exclusions:
+                expected_spans = tuple((r.start, r.end, r.excerpt) for r in canonical.remainders)
+                actual_spans = tuple((r.start, r.end, r.excerpt) for r in clause.remainders)
+                if expected_spans != actual_spans:
+                    raise ValueError("technical remainder coverage differs from source")
+                if not canonical.remainders:
+                    if (
+                        clause.disposition != "BACKGROUND"
+                        or clause.paths
+                        or clause.reason != EXCLUSION_REASON
+                    ):
+                        raise ValueError("excluded source cannot bind executable policy")
+                elif clause.disposition == "BACKGROUND" or set(clause.paths) != {
+                    path for remainder in clause.remainders for path in remainder.paths
+                }:
+                    raise ValueError("mixed technical remainder must retain its scoped paths")
+            elif clause.disposition == "CONTEXT":
+                from trade_plan_monitor.ai.source_resolution import can_be_context
+
+                semantic_context = (clause.semantic_role in {"HISTORICAL", "ACCOUNT", "COMMENTARY"}
+                                    and bool(clause.reason.strip()))
+                if clause.paths or not (semantic_context or can_be_context(clause.excerpt)):
+                    raise ValueError("context cannot hide a forward trading instruction")
+            elif clause.disposition == "BACKGROUND":
+                raise ValueError("BACKGROUND requires a registered exact scope exclusion")
+            elif clause.remainders:
+                raise ValueError("technical remainder requires exact exclusion coverage")
+        clauses = {c.clause_id: c for c in mapping.clauses}
+        supplements = {s.supplement_id: s for s in mapping.supplements}
+        if len(supplements) != len(mapping.supplements):
+            raise ValueError("duplicate supplement")
+        bound = set()
+        used = set()
+        for binding_index, binding in enumerate(mapping.bindings):
+            diagnostic_path = (
+                f"field_bindings[{binding_index}]" if binding_index <= 255 else "field_bindings"
+            )
+            if binding.path in bound or binding.path not in values:
+                raise MappingValidationError(
+                    "duplicate or unknown binding path", diagnostic_path + ".path"
+                )
+            actual = values[binding.path]
+            if type(actual) is not type(binding.value) or actual != binding.value:
+                raise MappingValidationError(
+                    "binding value differs from current candidate", diagnostic_path + ".value"
+                )
+            if binding.origin == "PRODUCT_CONTRACT":
+                if (
+                    binding.clause_ids
+                    or binding.supplement_id
+                    or _contract_values(draft).get(binding.path) != actual
+                ):
+                    raise ValueError("trading policy cannot be inferred from product contract")
+            elif binding.origin == "HUMAN_SUPPLEMENT":
+                supplement = supplements.get(binding.supplement_id)
+                if (
+                    binding.clause_ids
+                    or supplement is None
+                    or supplement.candidate_content_hash != digest
+                ):
+                    raise ValueError("human supplement is missing or belongs to another candidate")
+                if (
+                    supplement.path != binding.path
+                    or type(supplement.value) is not type(actual)
+                    or supplement.value != actual
+                ):
+                    raise ValueError("supplement differs from scoped candidate policy")
+                used.add(supplement.supplement_id)
+            else:
+                if binding.supplement_id or not binding.clause_ids:
+                    raise ValueError("source binding requires source clauses")
+                excerpts = []
+                for identity in binding.clause_ids:
+                    clause = clauses.get(identity)
+                    if (
+                        clause is None
+                        or clause.disposition != "POLICY"
+                        or binding.path not in clause.paths
+                    ):
+                        raise ValueError("source binding is absent from its exact clause")
+                    if clause.exclusions:
+                        excerpts.extend(
+                            r.excerpt
+                            for r in clause.remainders
+                            if binding.path in r.paths and r.disposition == "POLICY"
+                        )
+                    else:
+                        excerpts.append(clause.excerpt)
+                excerpt = " ".join(excerpts)
+                if draft.schema_version in {7, 8} and (
+                    ".market_policy.expanded." in binding.path
+                    or ".market_policy.exception_routes." in binding.path
+                    or ".pretrade_policy." in binding.path and isinstance(actual, str)
+                    and re.fullmatch(r"[+-]?\d+(?:\.\d+)?", actual)
+                ):
+                    from trade_plan_monitor.ai.semantic_validation import (
+                        semantic_interpretation_matches,
+                    )
+
+                    if not semantic_interpretation_matches(binding.path, actual, excerpt, draft):
+                        raise ValueError("exception permission differs from source evidence")
+                if binding.origin == "SOURCE_SEMANTIC":
+                    from trade_plan_monitor.ai.semantic_validation import (
+                        semantic_interpretation_matches,
+                    )
+
+                    if draft.schema_version not in {5, 6, 7, 8} or not semantic_interpretation_matches(
+                        binding.path, actual, excerpt, draft,
+                    ):
+>                       raise ValueError("semantic source value differs from its exact evidence")
+E                       ValueError: semantic source value differs from its exact evidence
+
+src\trade_plan_monitor\ai\daily_review.py:612: ValueError
+_ test_capital_mode_must_have_explicit_noncontradictory_source_meaning[OPEN_COST_CAP-\u603b\u6295\u5165\u9884\u7b97-False] _
+
+mode = 'OPEN_COST_CAP', text = '��Ͷ��Ԥ��', allowed = False
+
+    @pytest.mark.parametrize("mode,text,allowed", [
+        ("OPEN_COST_CAP", "��Ͷ��Ԥ��", False),
+        ("OPEN_COST_CAP", "�ֲֳɱ�ռ������", True),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP", True),
+        ("OPEN_COST_CAP", "������ OPEN_COST_CAP", False),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP means cumulative lifetime purchases", False),
+        ("MARKET_VALUE_CAP", "�ֲ���ֵ����", True),
+        ("MARKET_VALUE_CAP", "������ MARKET_VALUE_CAP", False),
+    ])
+    def test_capital_mode_must_have_explicit_noncontradictory_source_meaning(mode, text, allowed):
+        from trade_plan_monitor.ai.semantic_validation import semantic_interpretation_matches
+
+        draft = P3PlanDraft.model_validate(p3_payload(mode))
+>       assert semantic_interpretation_matches("position.limit.capital_policy.mode",
+                                               mode, text, draft) is allowed
+E       AssertionError: assert True is False
+E        +  where True = <function semantic_interpretation_matches at 0x000002A7AFCFE980>('position.limit.capital_policy.mode', 'OPEN_COST_CAP', '��Ͷ��Ԥ��', P3PlanDraft(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>)))
+
+tests\integration\test_p3_review.py:57: AssertionError
+_ test_capital_mode_must_have_explicit_noncontradictory_source_meaning[OPEN_COST_CAP-\u4e0d\u91c7\u7528 OPEN_COST_CAP-False] _
+
+mode = 'OPEN_COST_CAP', text = '������ OPEN_COST_CAP', allowed = False
+
+    @pytest.mark.parametrize("mode,text,allowed", [
+        ("OPEN_COST_CAP", "��Ͷ��Ԥ��", False),
+        ("OPEN_COST_CAP", "�ֲֳɱ�ռ������", True),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP", True),
+        ("OPEN_COST_CAP", "������ OPEN_COST_CAP", False),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP means cumulative lifetime purchases", False),
+        ("MARKET_VALUE_CAP", "�ֲ���ֵ����", True),
+        ("MARKET_VALUE_CAP", "������ MARKET_VALUE_CAP", False),
+    ])
+    def test_capital_mode_must_have_explicit_noncontradictory_source_meaning(mode, text, allowed):
+        from trade_plan_monitor.ai.semantic_validation import semantic_interpretation_matches
+
+        draft = P3PlanDraft.model_validate(p3_payload(mode))
+>       assert semantic_interpretation_matches("position.limit.capital_policy.mode",
+                                               mode, text, draft) is allowed
+E       AssertionError: assert True is False
+E        +  where True = <function semantic_interpretation_matches at 0x000002A7AFCFE980>('position.limit.capital_policy.mode', 'OPEN_COST_CAP', '������ OPEN_COST_CAP', P3PlanDraft(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>)))
+
+tests\integration\test_p3_review.py:57: AssertionError
+_ test_capital_mode_must_have_explicit_noncontradictory_source_meaning[OPEN_COST_CAP-OPEN_COST_CAP means cumulative lifetime purchases-False] _
+
+mode = 'OPEN_COST_CAP'
+text = 'OPEN_COST_CAP means cumulative lifetime purchases', allowed = False
+
+    @pytest.mark.parametrize("mode,text,allowed", [
+        ("OPEN_COST_CAP", "��Ͷ��Ԥ��", False),
+        ("OPEN_COST_CAP", "�ֲֳɱ�ռ������", True),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP", True),
+        ("OPEN_COST_CAP", "������ OPEN_COST_CAP", False),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP means cumulative lifetime purchases", False),
+        ("MARKET_VALUE_CAP", "�ֲ���ֵ����", True),
+        ("MARKET_VALUE_CAP", "������ MARKET_VALUE_CAP", False),
+    ])
+    def test_capital_mode_must_have_explicit_noncontradictory_source_meaning(mode, text, allowed):
+        from trade_plan_monitor.ai.semantic_validation import semantic_interpretation_matches
+
+        draft = P3PlanDraft.model_validate(p3_payload(mode))
+>       assert semantic_interpretation_matches("position.limit.capital_policy.mode",
+                                               mode, text, draft) is allowed
+E       AssertionError: assert True is False
+E        +  where True = <function semantic_interpretation_matches at 0x000002A7AFCFE980>('position.limit.capital_policy.mode', 'OPEN_COST_CAP', 'OPEN_COST_CAP means cumulative lifetime purchases', P3PlanDraft(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>)))
+
+tests\integration\test_p3_review.py:57: AssertionError
+_ test_capital_mode_must_have_explicit_noncontradictory_source_meaning[MARKET_VALUE_CAP-\u4e0d\u91c7\u7528 MARKET_VALUE_CAP-False] _
+
+mode = 'MARKET_VALUE_CAP', text = '������ MARKET_VALUE_CAP', allowed = False
+
+    @pytest.mark.parametrize("mode,text,allowed", [
+        ("OPEN_COST_CAP", "��Ͷ��Ԥ��", False),
+        ("OPEN_COST_CAP", "�ֲֳɱ�ռ������", True),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP", True),
+        ("OPEN_COST_CAP", "������ OPEN_COST_CAP", False),
+        ("OPEN_COST_CAP", "OPEN_COST_CAP means cumulative lifetime purchases", False),
+        ("MARKET_VALUE_CAP", "�ֲ���ֵ����", True),
+        ("MARKET_VALUE_CAP", "������ MARKET_VALUE_CAP", False),
+    ])
+    def test_capital_mode_must_have_explicit_noncontradictory_source_meaning(mode, text, allowed):
+        from trade_plan_monitor.ai.semantic_validation import semantic_interpretation_matches
+
+        draft = P3PlanDraft.model_validate(p3_payload(mode))
+>       assert semantic_interpretation_matches("position.limit.capital_policy.mode",
+                                               mode, text, draft) is allowed
+E       AssertionError: assert True is False
+E        +  where True = <function semantic_interpretation_matches at 0x000002A7AFCFE980>('position.limit.capital_policy.mode', 'MARKET_VALUE_CAP', '������ MARKET_VALUE_CAP', P3PlanDraft(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>)))
+
+tests\integration\test_p3_review.py:57: AssertionError
+________ test_fee_rate_source_must_match_exact_number_not_a_substring _________
+
+    def test_fee_rate_source_must_match_exact_number_not_a_substring():
+        from trade_plan_monitor.ai.semantic_validation import semantic_interpretation_matches
+
+        draft = P3PlanDraft.model_validate(p3_payload("OPEN_COST_CAP"))
+        path = "position.limit.capital_policy.buy_cost_schedule.commission_rate"
+>       assert not semantic_interpretation_matches(path, "0", "commission_rate=0.03", draft)
+E       AssertionError: assert not True
+E        +  where True = <function semantic_interpretation_matches at 0x000002A7AFCFE980>('position.limit.capital_policy.buy_cost_schedule.commission_rate', '0', 'commission_rate=0.03', P3PlanDraft(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>)))
+
+tests\integration\test_p3_review.py:66: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_review.py::test_schema9_draft_load_retains_exact_money_only_source_policy
+FAILED tests/integration/test_p3_review.py::test_complete_capital_review_retains_all_prior_strategy_expansions
+FAILED tests/integration/test_p3_review.py::test_missing_cap_or_source_binding_cannot_be_acknowledged_away
+FAILED tests/integration/test_p3_review.py::test_capital_mode_must_have_explicit_noncontradictory_source_meaning[OPEN_COST_CAP-\u603b\u6295\u5165\u9884\u7b97-False]
+FAILED tests/integration/test_p3_review.py::test_capital_mode_must_have_explicit_noncontradictory_source_meaning[OPEN_COST_CAP-\u4e0d\u91c7\u7528 OPEN_COST_CAP-False]
+FAILED tests/integration/test_p3_review.py::test_capital_mode_must_have_explicit_noncontradictory_source_meaning[OPEN_COST_CAP-OPEN_COST_CAP means cumulative lifetime purchases-False]
+FAILED tests/integration/test_p3_review.py::test_capital_mode_must_have_explicit_noncontradictory_source_meaning[MARKET_VALUE_CAP-\u4e0d\u91c7\u7528 MARKET_VALUE_CAP-False]
+FAILED tests/integration/test_p3_review.py::test_fee_rate_source_must_match_exact_number_not_a_substring
+8 failed, 3 passed in 0.59s

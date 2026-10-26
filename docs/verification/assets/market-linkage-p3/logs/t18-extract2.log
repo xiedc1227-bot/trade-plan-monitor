@@ -1,0 +1,108 @@
+..............F.............                                             [100%]
+================================== FAILURES ===================================
+_ test_real_current_extraction_produces_reviewed_capital_draft_without_authority _
+
+    def test_real_current_extraction_produces_reviewed_capital_draft_without_authority():
+        import asyncio
+        from uuid import uuid4
+
+        from tests.unit.test_ai_plan_extraction_v4 import _config
+
+        from trade_plan_monitor.ai.extraction import extract_plan
+        from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
+        from trade_plan_monitor.ai.provider import RawAIResponse
+
+        candidate = P3PlanDraft.model_validate(p3_payload())
+        source, mapping = source_mapping(candidate)
+        output = CurrentPlanExtractionOutput(draft=candidate, clauses=mapping.clauses,
+                                              bindings=mapping.bindings)
+
+        class Provider:
+            async def extract_plan(self, request):
+                assert request.config.prompt_version == "plan-extract-v12"
+                return RawAIResponse(request_id=request.request_id,
+                    provider_id=request.config.provider_id, model=request.config.model,
+                    content=output.model_dump_json(), finish_reason="stop", attempts=1, usage=None)
+
+        result = asyncio.run(extract_plan(request_id=uuid4(), source_text=source,
+            config=_config().model_copy(update={"max_input_chars": 200000}), provider=Provider()))
+        assert result.status == "SUCCEEDED" and result.draft.schema_version == 9
+        assert result.validation_issues == ()
+        from trade_plan_monitor.web.ai_service import _completed_extraction_view, _now
+        now = _now()
+>       view = _completed_extraction_view(result=result, submitted_at=now, started_at=now,
+                                         completed_at=now, diagnostic_status=None)
+
+tests\integration\test_p3_review.py:118:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = CurrentPlanExtractionResult(request_id=UUID('99f8484d-f4df-479c-bace-8f0237e7668d'), provider_id=UUID('c738345b-8265-4...finish_reason='stop', model_matches_configured=True, attempts=1), status=<PlanExtractionStatus.SUCCEEDED: 'SUCCEEDED'>)
+submitted_at = datetime.datetime(2026, 10, 26, 16, 44, 58, 877634, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai'))
+started_at = datetime.datetime(2026, 10, 26, 16, 44, 58, 877634, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai'))
+completed_at = datetime.datetime(2026, 10, 26, 16, 44, 58, 877634, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai'))
+diagnostic_status = None
+
+    def _completed_extraction_view(
+        *,
+        result: PlanExtractionResult,
+        submitted_at: datetime,
+        started_at: datetime,
+        completed_at: datetime,
+        diagnostic_status: str | None = None,
+    ) -> PlanExtractionView:
+        status = PlanExtractionOperationStatus(result.status.value)
+        if result.status is not PlanExtractionStatus.SUCCEEDED:
+            return PlanExtractionView(
+                id=result.request_id,
+                provider_id=result.provider_id,
+                status=status,
+                submitted_at=submitted_at,
+                started_at=started_at,
+                completed_at=completed_at,
+                validation_issues=result.validation_issues,
+                diagnostic_status=diagnostic_status,
+            )
+        usage = None
+        if result.usage is not None:
+            usage = AIUsageView(
+                prompt_tokens=result.usage.prompt_tokens,
+                completion_tokens=result.usage.completion_tokens,
+                total_tokens=result.usage.total_tokens,
+            )
+        from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionResult
+
+        if isinstance(result, CurrentPlanExtractionResult):
+            from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+
+>           return PlanExtractionView(
+                id=result.request_id,
+                provider_id=result.provider_id,
+                status=status,
+                submitted_at=submitted_at,
+                started_at=started_at,
+                completed_at=completed_at,
+                source_text_sha256=result.source_text_sha256,
+                model=result.model,
+                prompt_version=result.prompt_version,
+                draft_plan_json=daily_draft_json(result.draft),
+                daily_mapping=result.daily_mapping,
+                assumptions=result.assumptions,
+                warnings=result.warnings,
+                validation_issues=result.validation_issues,
+                usage=usage,
+                diagnostic_status=diagnostic_status,
+            )
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for PlanExtractionView
+E             Value error, successful extraction requires complete review data [type=value_error, input_value={'id': UUID('99f8484d-f4d...iagnostic_status': None}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+src\trade_plan_monitor\web\ai_service.py:495: ValidationError
+============================== warnings summary ===============================
+tests/integration/test_p2_review.py::test_explicit_target_must_bind_to_reviewed_pressure_range[190-True]
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_review.py::test_real_current_extraction_produces_reviewed_capital_draft_without_authority
+1 failed, 27 passed, 1 warning in 2.88s

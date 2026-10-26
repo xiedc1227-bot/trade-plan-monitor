@@ -1,0 +1,539 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+FFFFFFFF..................................................               [100%]
+================================== FAILURES ===================================
+____ test_amount_only_keeps_p2_then_market_quantity_without_fake_capacity _____
+
+    def test_amount_only_keeps_p2_then_market_quantity_without_fake_capacity():
+        plan, inputs = inputs_for()
+>       result = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:21:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022ACC8A53B0>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+_____ test_gate_rejects_the_full_selected_quantity_without_resizing[cap] ______
+
+kind = 'cap'
+
+    @pytest.mark.parametrize("kind", ["cap", "inventory", "basis", "shares"])
+    def test_gate_rejects_the_full_selected_quantity_without_resizing(kind):
+        plan, inputs = inputs_for(mode="OPEN_COST_CAP" if kind == "basis" else
+                                 "MARKET_VALUE_CAP", combined=kind == "shares")
+        raw = plan.model_dump(mode="json")
+        if kind == "cap":
+            raw["position"]["limit"]["capital_policy"]["cap_fen"] = 1
+        if kind == "shares":
+            raw["position"]["limit"]["max_qty"] = 100
+        if kind == "inventory":
+            inputs["inventory"] = {"known": False, "total_qty": 0}
+        plan = P3TradePlan.model_validate(raw)
+>       result = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:43:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022AC9364050>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+__ test_gate_rejects_the_full_selected_quantity_without_resizing[inventory] ___
+
+kind = 'inventory'
+
+    @pytest.mark.parametrize("kind", ["cap", "inventory", "basis", "shares"])
+    def test_gate_rejects_the_full_selected_quantity_without_resizing(kind):
+        plan, inputs = inputs_for(mode="OPEN_COST_CAP" if kind == "basis" else
+                                 "MARKET_VALUE_CAP", combined=kind == "shares")
+        raw = plan.model_dump(mode="json")
+        if kind == "cap":
+            raw["position"]["limit"]["capital_policy"]["cap_fen"] = 1
+        if kind == "shares":
+            raw["position"]["limit"]["max_qty"] = 100
+        if kind == "inventory":
+            inputs["inventory"] = {"known": False, "total_qty": 0}
+        plan = P3TradePlan.model_validate(raw)
+>       result = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:43:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022AC9364230>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+____ test_gate_rejects_the_full_selected_quantity_without_resizing[basis] _____
+
+kind = 'basis'
+
+    @pytest.mark.parametrize("kind", ["cap", "inventory", "basis", "shares"])
+    def test_gate_rejects_the_full_selected_quantity_without_resizing(kind):
+        plan, inputs = inputs_for(mode="OPEN_COST_CAP" if kind == "basis" else
+                                 "MARKET_VALUE_CAP", combined=kind == "shares")
+        raw = plan.model_dump(mode="json")
+        if kind == "cap":
+            raw["position"]["limit"]["capital_policy"]["cap_fen"] = 1
+        if kind == "shares":
+            raw["position"]["limit"]["max_qty"] = 100
+        if kind == "inventory":
+            inputs["inventory"] = {"known": False, "total_qty": 0}
+        plan = P3TradePlan.model_validate(raw)
+>       result = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:43:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022AC9364410>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+____ test_gate_rejects_the_full_selected_quantity_without_resizing[shares] ____
+
+kind = 'shares'
+
+    @pytest.mark.parametrize("kind", ["cap", "inventory", "basis", "shares"])
+    def test_gate_rejects_the_full_selected_quantity_without_resizing(kind):
+        plan, inputs = inputs_for(mode="OPEN_COST_CAP" if kind == "basis" else
+                                 "MARKET_VALUE_CAP", combined=kind == "shares")
+        raw = plan.model_dump(mode="json")
+        if kind == "cap":
+            raw["position"]["limit"]["capital_policy"]["cap_fen"] = 1
+        if kind == "shares":
+            raw["position"]["limit"]["max_qty"] = 100
+        if kind == "inventory":
+            inputs["inventory"] = {"known": False, "total_qty": 0}
+        plan = P3TradePlan.model_validate(raw)
+>       result = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:43:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022AC9364690>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+________ test_cost_and_inventory_changes_do_not_create_new_occurrence _________
+
+    def test_cost_and_inventory_changes_do_not_create_new_occurrence():
+        plan, inputs = inputs_for()
+>       first = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:53:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022AC93649B0>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+_ test_exception_candidate_never_gets_automatic_authority[200-WEAK_MINIMUM-100] _
+
+base = 200, route = 'WEAK_MINIMUM', candidate = 100
+
+    @pytest.mark.parametrize(("base", "route", "candidate"), [
+        (200, "WEAK_MINIMUM", 100), (1000, "BROKEN_STRONG", None)])
+    def test_exception_candidate_never_gets_automatic_authority(base, route, candidate):
+        plan, inputs = inputs_for(base, route)
+>       result = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:66:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022AC93642D0>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+_ test_exception_candidate_never_gets_automatic_authority[1000-BROKEN_STRONG-None] _
+
+base = 1000, route = 'BROKEN_STRONG', candidate = None
+
+    @pytest.mark.parametrize(("base", "route", "candidate"), [
+        (200, "WEAK_MINIMUM", 100), (1000, "BROKEN_STRONG", None)])
+    def test_exception_candidate_never_gets_automatic_authority(base, route, candidate):
+        plan, inputs = inputs_for(base, route)
+>       result = evaluate_p3_market(plan, plan.ordinary_rules[0], **inputs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_composition.py:66:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\trade_plan_monitor\decision\p3_composition.py:164: in evaluate_p3_market
+    decision = seal_capital_decision(dict(version="capital-market-evidence-v1",
+src\trade_plan_monitor\decision\p3_composition.py:112: in seal_capital_decision
+    "evidence_hash": daily_hash("capital-market-evidence-v1", raw)})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:14: in daily_hash
+    return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
+                                              ^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\domain\daily_hash.py:8: in canonical
+    return json.dumps(
+C:\Program Files\Python314\Lib\json\__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\json\encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.encoder.JSONEncoder object at 0x0000022AC9364C30>
+o = datetime.date(2026, 9, 18)
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type date is not JSON serializable
+E       when serializing dict item 'decision_session'
+
+C:\Program Files\Python314\Lib\json\encoder.py:182: TypeError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/unit/test_p3_composition.py::test_amount_only_keeps_p2_then_market_quantity_without_fake_capacity
+FAILED tests/unit/test_p3_composition.py::test_gate_rejects_the_full_selected_quantity_without_resizing[cap]
+FAILED tests/unit/test_p3_composition.py::test_gate_rejects_the_full_selected_quantity_without_resizing[inventory]
+FAILED tests/unit/test_p3_composition.py::test_gate_rejects_the_full_selected_quantity_without_resizing[basis]
+FAILED tests/unit/test_p3_composition.py::test_gate_rejects_the_full_selected_quantity_without_resizing[shares]
+FAILED tests/unit/test_p3_composition.py::test_cost_and_inventory_changes_do_not_create_new_occurrence
+FAILED tests/unit/test_p3_composition.py::test_exception_candidate_never_gets_automatic_authority[200-WEAK_MINIMUM-100]
+FAILED tests/unit/test_p3_composition.py::test_exception_candidate_never_gets_automatic_authority[1000-BROKEN_STRONG-None]
+8 failed, 50 passed, 1 warning in 5.60s

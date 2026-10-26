@@ -1,0 +1,350 @@
+......FFFF                                                               [100%]
+================================== FAILURES ===================================
+_ test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain0] _
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487F9A96A0>
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t20b/test_loop_preserves_capital_po0')
+
+    def test_loop_preserves_capital_policy_separate_approval_and_report_integrity(p3_chain, tmp_path):
+        from datetime import datetime, time
+        from types import SimpleNamespace
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+
+        from trade_plan_monitor.backtest.loop_publication import validate_report_input
+        from trade_plan_monitor.backtest.loop_report import LoopReportWriter, verify_loop_events
+        from trade_plan_monitor.backtest.loop_runner import LoopRunner
+        from trade_plan_monitor.backtest.loop_session import LoopSession
+        from trade_plan_monitor.backtest.research_input import ResearchSimulation
+
+        chain = p3_chain
+        opening = frozen_opening(chain) if chain.capital_mode == "OPEN_COST_CAP" else None
+        event = frozen_approval(chain) if chain.p3_route != "ORDINARY" else None
+        quantity = 200 if event is None else 100 if chain.route == "WEAK_MINIMUM" else 300
+        operation = ResearchSimulation(kind="SIMULATE", operation_id="p3-explicit-request", order=2,
+            at=datetime.combine(TUESDAY, time(9, 35), SH),
+            rule_id=chain.plan.ordinary_rules[0].rule_id, occurrence=1, quantity=quantity)
+>       run = capital_loop_input(chain, openings=() if opening is None else (opening,),
+            events=() if event is None else (event,), operations=() if event is None else (operation,))
+
+tests\integration\test_p3_replay.py:279:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_replay.py:202: in capital_loop_input
+    old = exception_loop_input(chain, mode=mode)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487F9A96A0>
+events = (), operations = (), mode = 'FOLLOW_REMINDERS'
+
+    def exception_loop_input(chain, *, events=(), operations=(), mode="FOLLOW_REMINDERS"):
+        from datetime import datetime, time
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+        from tests.unit.test_monitor_loop_input import account, costs
+        from tests.unit.test_monitor_loop_schedule import version
+
+        from trade_plan_monitor.backtest.loop_input import (
+            KnownLoopCash,
+            LoopResponsePolicy,
+            MonitorLoopInput,
+        )
+        from trade_plan_monitor.backtest.plan_schedule import (
+            LoopEndBoundary,
+            LoopSchedule,
+            LoopScheduleEntry,
+        )
+
+        start = events[0].candidate.created_at if events else chain.now
+>       return MonitorLoopInput(
+            run_formula_version="backtest-run-v9",
+            exception_program=ExceptionReplayProgram(
+                exception_authorization_events=events, operations=operations
+            ),
+            schedule=LoopSchedule(
+                entries=(
+                    LoopScheduleEntry(
+                        effective_trade_date=start.date(),
+                        version=version(plan=chain.plan, available=start),
+                    ),
+                )
+            ),
+            boundary=LoopEndBoundary.resolve(
+                started_at=start, submitted_at=datetime.combine(TUESDAY, time(10, 0, 12), SH)
+            ),
+            initial_account=account(
+                snapshot_at=start, lots=(), cash=KnownLoopCash(balance_fen=1000000)
+            ),
+            dataset_hash="a" * 64,
+            response=LoopResponsePolicy(mode=mode),
+            costs=costs(),
+        )
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for MonitorLoopInput
+E         Value error, P3_LOOP_REQUIRES_EXPLICIT_CAPITAL_V10 [type=value_error, input_value={'run_formula_version': '...1, sell_slippage_fen=1)}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\integration\test_p2_replay.py:234: ValidationError
+_ test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain1] _
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487E24C7C0>
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t20b/test_loop_preserves_capital_po1')
+
+    def test_loop_preserves_capital_policy_separate_approval_and_report_integrity(p3_chain, tmp_path):
+        from datetime import datetime, time
+        from types import SimpleNamespace
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+
+        from trade_plan_monitor.backtest.loop_publication import validate_report_input
+        from trade_plan_monitor.backtest.loop_report import LoopReportWriter, verify_loop_events
+        from trade_plan_monitor.backtest.loop_runner import LoopRunner
+        from trade_plan_monitor.backtest.loop_session import LoopSession
+        from trade_plan_monitor.backtest.research_input import ResearchSimulation
+
+        chain = p3_chain
+        opening = frozen_opening(chain) if chain.capital_mode == "OPEN_COST_CAP" else None
+        event = frozen_approval(chain) if chain.p3_route != "ORDINARY" else None
+        quantity = 200 if event is None else 100 if chain.route == "WEAK_MINIMUM" else 300
+        operation = ResearchSimulation(kind="SIMULATE", operation_id="p3-explicit-request", order=2,
+            at=datetime.combine(TUESDAY, time(9, 35), SH),
+            rule_id=chain.plan.ordinary_rules[0].rule_id, occurrence=1, quantity=quantity)
+>       run = capital_loop_input(chain, openings=() if opening is None else (opening,),
+            events=() if event is None else (event,), operations=() if event is None else (operation,))
+
+tests\integration\test_p3_replay.py:279:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_replay.py:202: in capital_loop_input
+    old = exception_loop_input(chain, mode=mode)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487E24C7C0>
+events = (), operations = (), mode = 'FOLLOW_REMINDERS'
+
+    def exception_loop_input(chain, *, events=(), operations=(), mode="FOLLOW_REMINDERS"):
+        from datetime import datetime, time
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+        from tests.unit.test_monitor_loop_input import account, costs
+        from tests.unit.test_monitor_loop_schedule import version
+
+        from trade_plan_monitor.backtest.loop_input import (
+            KnownLoopCash,
+            LoopResponsePolicy,
+            MonitorLoopInput,
+        )
+        from trade_plan_monitor.backtest.plan_schedule import (
+            LoopEndBoundary,
+            LoopSchedule,
+            LoopScheduleEntry,
+        )
+
+        start = events[0].candidate.created_at if events else chain.now
+>       return MonitorLoopInput(
+            run_formula_version="backtest-run-v9",
+            exception_program=ExceptionReplayProgram(
+                exception_authorization_events=events, operations=operations
+            ),
+            schedule=LoopSchedule(
+                entries=(
+                    LoopScheduleEntry(
+                        effective_trade_date=start.date(),
+                        version=version(plan=chain.plan, available=start),
+                    ),
+                )
+            ),
+            boundary=LoopEndBoundary.resolve(
+                started_at=start, submitted_at=datetime.combine(TUESDAY, time(10, 0, 12), SH)
+            ),
+            initial_account=account(
+                snapshot_at=start, lots=(), cash=KnownLoopCash(balance_fen=1000000)
+            ),
+            dataset_hash="a" * 64,
+            response=LoopResponsePolicy(mode=mode),
+            costs=costs(),
+        )
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for MonitorLoopInput
+E         Value error, P3_LOOP_REQUIRES_EXPLICIT_CAPITAL_V10 [type=value_error, input_value={'run_formula_version': '...1, sell_slippage_fen=1)}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\integration\test_p2_replay.py:234: ValidationError
+_ test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain2] _
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487FA57550>
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t20b/test_loop_preserves_capital_po2')
+
+    def test_loop_preserves_capital_policy_separate_approval_and_report_integrity(p3_chain, tmp_path):
+        from datetime import datetime, time
+        from types import SimpleNamespace
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+
+        from trade_plan_monitor.backtest.loop_publication import validate_report_input
+        from trade_plan_monitor.backtest.loop_report import LoopReportWriter, verify_loop_events
+        from trade_plan_monitor.backtest.loop_runner import LoopRunner
+        from trade_plan_monitor.backtest.loop_session import LoopSession
+        from trade_plan_monitor.backtest.research_input import ResearchSimulation
+
+        chain = p3_chain
+        opening = frozen_opening(chain) if chain.capital_mode == "OPEN_COST_CAP" else None
+        event = frozen_approval(chain) if chain.p3_route != "ORDINARY" else None
+        quantity = 200 if event is None else 100 if chain.route == "WEAK_MINIMUM" else 300
+        operation = ResearchSimulation(kind="SIMULATE", operation_id="p3-explicit-request", order=2,
+            at=datetime.combine(TUESDAY, time(9, 35), SH),
+            rule_id=chain.plan.ordinary_rules[0].rule_id, occurrence=1, quantity=quantity)
+>       run = capital_loop_input(chain, openings=() if opening is None else (opening,),
+            events=() if event is None else (event,), operations=() if event is None else (operation,))
+
+tests\integration\test_p3_replay.py:279:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_replay.py:202: in capital_loop_input
+    old = exception_loop_input(chain, mode=mode)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487FA57550>
+events = (), operations = (), mode = 'FOLLOW_REMINDERS'
+
+    def exception_loop_input(chain, *, events=(), operations=(), mode="FOLLOW_REMINDERS"):
+        from datetime import datetime, time
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+        from tests.unit.test_monitor_loop_input import account, costs
+        from tests.unit.test_monitor_loop_schedule import version
+
+        from trade_plan_monitor.backtest.loop_input import (
+            KnownLoopCash,
+            LoopResponsePolicy,
+            MonitorLoopInput,
+        )
+        from trade_plan_monitor.backtest.plan_schedule import (
+            LoopEndBoundary,
+            LoopSchedule,
+            LoopScheduleEntry,
+        )
+
+        start = events[0].candidate.created_at if events else chain.now
+>       return MonitorLoopInput(
+            run_formula_version="backtest-run-v9",
+            exception_program=ExceptionReplayProgram(
+                exception_authorization_events=events, operations=operations
+            ),
+            schedule=LoopSchedule(
+                entries=(
+                    LoopScheduleEntry(
+                        effective_trade_date=start.date(),
+                        version=version(plan=chain.plan, available=start),
+                    ),
+                )
+            ),
+            boundary=LoopEndBoundary.resolve(
+                started_at=start, submitted_at=datetime.combine(TUESDAY, time(10, 0, 12), SH)
+            ),
+            initial_account=account(
+                snapshot_at=start, lots=(), cash=KnownLoopCash(balance_fen=1000000)
+            ),
+            dataset_hash="a" * 64,
+            response=LoopResponsePolicy(mode=mode),
+            costs=costs(),
+        )
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for MonitorLoopInput
+E         Value error, P3_LOOP_REQUIRES_EXPLICIT_CAPITAL_V10 [type=value_error, input_value={'run_formula_version': '...1, sell_slippage_fen=1)}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\integration\test_p2_replay.py:234: ValidationError
+_ test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain3] _
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487FF1DF50>
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t20b/test_loop_preserves_capital_po3')
+
+    def test_loop_preserves_capital_policy_separate_approval_and_report_integrity(p3_chain, tmp_path):
+        from datetime import datetime, time
+        from types import SimpleNamespace
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+
+        from trade_plan_monitor.backtest.loop_publication import validate_report_input
+        from trade_plan_monitor.backtest.loop_report import LoopReportWriter, verify_loop_events
+        from trade_plan_monitor.backtest.loop_runner import LoopRunner
+        from trade_plan_monitor.backtest.loop_session import LoopSession
+        from trade_plan_monitor.backtest.research_input import ResearchSimulation
+
+        chain = p3_chain
+        opening = frozen_opening(chain) if chain.capital_mode == "OPEN_COST_CAP" else None
+        event = frozen_approval(chain) if chain.p3_route != "ORDINARY" else None
+        quantity = 200 if event is None else 100 if chain.route == "WEAK_MINIMUM" else 300
+        operation = ResearchSimulation(kind="SIMULATE", operation_id="p3-explicit-request", order=2,
+            at=datetime.combine(TUESDAY, time(9, 35), SH),
+            rule_id=chain.plan.ordinary_rules[0].rule_id, occurrence=1, quantity=quantity)
+>       run = capital_loop_input(chain, openings=() if opening is None else (opening,),
+            events=() if event is None else (event,), operations=() if event is None else (operation,))
+
+tests\integration\test_p3_replay.py:279:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_replay.py:202: in capital_loop_input
+    old = exception_loop_input(chain, mode=mode)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000001487FF1DF50>
+events = (), operations = (), mode = 'FOLLOW_REMINDERS'
+
+    def exception_loop_input(chain, *, events=(), operations=(), mode="FOLLOW_REMINDERS"):
+        from datetime import datetime, time
+
+        from tests.integration.test_daily_plan_chain import SH, TUESDAY
+        from tests.unit.test_monitor_loop_input import account, costs
+        from tests.unit.test_monitor_loop_schedule import version
+
+        from trade_plan_monitor.backtest.loop_input import (
+            KnownLoopCash,
+            LoopResponsePolicy,
+            MonitorLoopInput,
+        )
+        from trade_plan_monitor.backtest.plan_schedule import (
+            LoopEndBoundary,
+            LoopSchedule,
+            LoopScheduleEntry,
+        )
+
+        start = events[0].candidate.created_at if events else chain.now
+>       return MonitorLoopInput(
+            run_formula_version="backtest-run-v9",
+            exception_program=ExceptionReplayProgram(
+                exception_authorization_events=events, operations=operations
+            ),
+            schedule=LoopSchedule(
+                entries=(
+                    LoopScheduleEntry(
+                        effective_trade_date=start.date(),
+                        version=version(plan=chain.plan, available=start),
+                    ),
+                )
+            ),
+            boundary=LoopEndBoundary.resolve(
+                started_at=start, submitted_at=datetime.combine(TUESDAY, time(10, 0, 12), SH)
+            ),
+            initial_account=account(
+                snapshot_at=start, lots=(), cash=KnownLoopCash(balance_fen=1000000)
+            ),
+            dataset_hash="a" * 64,
+            response=LoopResponsePolicy(mode=mode),
+            costs=costs(),
+        )
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for MonitorLoopInput
+E         Value error, P3_LOOP_REQUIRES_EXPLICIT_CAPITAL_V10 [type=value_error, input_value={'run_formula_version': '...1, sell_slippage_fen=1)}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\integration\test_p2_replay.py:234: ValidationError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_replay.py::test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain0]
+FAILED tests/integration/test_p3_replay.py::test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain1]
+FAILED tests/integration/test_p3_replay.py::test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain2]
+FAILED tests/integration/test_p3_replay.py::test_loop_preserves_capital_policy_separate_approval_and_report_integrity[p3_chain3]
+4 failed, 6 passed, 1 warning in 7.62s

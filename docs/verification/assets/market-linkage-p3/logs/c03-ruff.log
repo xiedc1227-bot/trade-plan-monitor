@@ -1,0 +1,91 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+E501 Line too long (102 > 100)
+  --> src\trade_plan_monitor\state\p3_capital_repository.py:30:101
+   |
+28 |             return None
+29 |         value = CapitalBook.model_validate_json(row.payload_json)
+30 |         if (value.symbol, value.revision, value.inventory_revision, value.updated_at.isoformat()) != (
+   |                                                                                                     ^^
+31 |                 row.symbol, row.revision, row.inventory_revision, row.updated_at):
+32 |             raise ValueError("capital book columns differ from immutable payload")
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> src\trade_plan_monitor\state\p3_capital_service.py:3:1
+   |
+ 1 |   """Explicit reviewed simulated opening costs never initialize holdings or approval."""
+ 2 |
+ 3 | / from typing import Literal
+ 4 | | from uuid import UUID
+ 5 | |
+ 6 | | from pydantic import Field, model_validator
+ 7 | |
+ 8 | | from trade_plan_monitor.decision.p3_basis import CapitalLot
+ 9 | | from trade_plan_monitor.domain.daily_hash import daily_hash
+10 | | from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier, PositiveWholeQty, Text
+11 | | from trade_plan_monitor.domain.p2_policy_models import MAX_SAFE, SafeFen
+12 | | from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
+13 | | from trade_plan_monitor.state.p3_capital_repository import CapitalCommandConflict, CapitalRepository
+14 | | from trade_plan_monitor.state.p3_models import CapitalBook
+15 | | from trade_plan_monitor.state.repositories import RevisionConflictError
+   | |_______________________________________________________________________^
+help: Organize imports
+   |
+9  | from trade_plan_monitor.domain.daily_hash import daily_hash
+   - from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier, PositiveWholeQty, Text
+10 + from trade_plan_monitor.domain.daily_plan_models import (
+11 +     DailyValue,
+12 +     Identifier,
+13 +     PositiveWholeQty,
+14 +     Text,
+15 + )
+16 | from trade_plan_monitor.domain.p2_policy_models import MAX_SAFE, SafeFen
+   |
+
+E501 Line too long (102 > 100)
+  --> src\trade_plan_monitor\state\p3_capital_service.py:10:101
+   |
+ 8 | from trade_plan_monitor.decision.p3_basis import CapitalLot
+ 9 | from trade_plan_monitor.domain.daily_hash import daily_hash
+10 | from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier, PositiveWholeQty, Text
+   |                                                                                                     ^^
+11 | from trade_plan_monitor.domain.p2_policy_models import MAX_SAFE, SafeFen
+12 | from trade_plan_monitor.market_data.models import AShareSymbol, ShanghaiDatetime
+   |
+
+E501 Line too long (103 > 100)
+  --> src\trade_plan_monitor\state\p3_capital_service.py:74:101
+   |
+72 |     previous = repo.event(command_id)
+73 |     if previous is not None:
+74 |         if previous.request_hash != request_hash or previous.kind not in {"OPENING", "RECONCILIATION"}:
+   |                                                                                                     ^^^
+75 |             raise CapitalCommandConflict("CAPITAL_IDEMPOTENCY_CONFLICT")
+76 |         return previous
+   |
+
+E731 Do not assign a `lambda` expression, use a `def`
+  --> src\trade_plan_monitor\state\p3_capital_service.py:87:5
+   |
+85 |     if command.observed_at > now:
+86 |         raise CapitalOpeningError("CAPITAL_OBSERVATION_FUTURE", 422)
+87 |     quantities = lambda values: {(p.lot_id, p.bucket): p.quantity for p in values}
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+88 |     if quantities(command.lots) != quantities(context.lots):
+89 |         raise CapitalOpeningError("CAPITAL_LOTS_CHANGED")
+   |
+help: Rewrite `quantities` as a `def`
+
+E501 Line too long (101 > 100)
+   --> src\trade_plan_monitor\state\p3_capital_service.py:102:101
+    |
+100 |         request_hash=request_hash, kind="OPENING" if before is None else "RECONCILIATION", now=now,
+101 |         details={"plan_version_id": str(context.plan_version_id),
+102 |             "content_hash": context.content_hash, "review_binding_hash": context.review_binding_hash,
+    |                                                                                                     ^
+103 |             "observed_at": command.observed_at.isoformat(), "source": command.source,
+104 |             "excerpt": command.excerpt, "reason": command.reason, "confirmed": True,
+    |
+
+Found 6 errors.
+[*] 1 fixable with the `--fix` option (1 hidden fix can be enabled with the `--unsafe-fixes` option).

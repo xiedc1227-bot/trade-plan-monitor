@@ -1,0 +1,4 @@
+generated openapi.runtime-status.json (canonical monitor v2)
+generated web\src\api\generated-runtime-status.ts (canonical monitor v2)
+generated openapi.json (compatibility monitor v1)
+generated web\src\api\generated.ts (compatibility monitor v1)

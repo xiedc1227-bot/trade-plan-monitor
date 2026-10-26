@@ -1,0 +1,12 @@
+[main 920619d] fix: 同步当前提取版本单元验收预期
+ 5 files changed, 8 insertions(+), 8 deletions(-)
+[main 677ccb7] fix: 同步当前提取接口与浏览器夹具版本
+ 5 files changed, 9 insertions(+), 9 deletions(-)
+[main d72c36f] test: 补齐预算附属表迁移验收
+ 3 files changed, 18 insertions(+), 14 deletions(-)
+warning: in the working copy of 'tests/integration/test_p3_frozen_admission.py', LF will be replaced by CRLF the next time Git touches it
+[main c862b42] fix: 保留准备回放未声明成本的未知状态
+ 2 files changed, 28 insertions(+), 11 deletions(-)
+warning: in the working copy of 'web/src/api/capitalReplayValues.ts', LF will be replaced by CRLF the next time Git touches it
+[main 42bf81d] feat: 增加准备回放冻结记录录入
+ 5 files changed, 115 insertions(+), 6 deletions(-)

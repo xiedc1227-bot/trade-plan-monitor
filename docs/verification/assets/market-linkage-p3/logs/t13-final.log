@@ -1,0 +1,80 @@
+..FF                                                                     [100%]
+================================== FAILURES ===================================
+_ test_money_failure_keeps_exact_exception_intent_without_resizing[WEAK_MINIMUM-200-80000-None] _
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t13-final\test_money_fai...space/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t13-final/test_money_failure_keeps_exact0/capital.sqlite'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001CFA3155130>
+route = 'WEAK_MINIMUM', base = 200, cap = 80000, proposed = None
+
+    @pytest.mark.parametrize(("route", "base", "cap", "proposed"), [
+        ("WEAK_MINIMUM", 200, 80000, None), ("BROKEN_STRONG", 1000, 100000, 300)])
+    def test_money_failure_keeps_exact_exception_intent_without_resizing(
+        database, monkeypatch, route, base, cap, proposed,
+    ):
+        engine, _ = database
+        plan, _ = inputs_for(base, route)
+        raw = plan.model_dump(mode="json")
+        raw["position"]["limit"]["capital_policy"]["cap_fen"] = cap
+        plan = type(plan).model_validate(raw)
+        chain = PrivateChain(engine, monkeypatch, plan=plan, route=route, quantity=400)
+        resource = chain.evaluate().snapshot["exception_candidates"][0]
+        candidate = resource["candidate"]
+        with chain.work() as work:
+            command = ExceptionPreviewCommand(candidate_id=candidate["candidate_id"],
+                expected_revision=1, proposed_quantity=proposed)
+            with pytest.raises(ExceptionAuthorityError, match="CAPITAL_LIMIT_EXCEEDED"):
+                preview_exception(work.daily, command,
+                    current=lambda c: current_exception_authority(work, c, chain.now), now=chain.now)
+            assert not work.daily.list(symbol=plan.symbol, kind="SIGNAL")
+            assert not work.daily.list(symbol=plan.symbol, kind="SIMULATION")
+            assert not work.daily.list(symbol=plan.symbol, kind="EXCEPTION_PREVIEW")
+        chain.now = datetime.combine(TUESDAY, time(9, 35), SH)
+>       signal = chain.evaluate().snapshot["signals"][0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests\integration\test_p3_exceptions.py:84: IndexError
+_ test_money_failure_keeps_exact_exception_intent_without_resizing[BROKEN_STRONG-1000-100000-300] _
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t13-final\test_money_fai...space/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t13-final/test_money_failure_keeps_exact1/capital.sqlite'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001CFA3457460>
+route = 'BROKEN_STRONG', base = 1000, cap = 100000, proposed = 300
+
+    @pytest.mark.parametrize(("route", "base", "cap", "proposed"), [
+        ("WEAK_MINIMUM", 200, 80000, None), ("BROKEN_STRONG", 1000, 100000, 300)])
+    def test_money_failure_keeps_exact_exception_intent_without_resizing(
+        database, monkeypatch, route, base, cap, proposed,
+    ):
+        engine, _ = database
+        plan, _ = inputs_for(base, route)
+        raw = plan.model_dump(mode="json")
+        raw["position"]["limit"]["capital_policy"]["cap_fen"] = cap
+        plan = type(plan).model_validate(raw)
+        chain = PrivateChain(engine, monkeypatch, plan=plan, route=route, quantity=400)
+        resource = chain.evaluate().snapshot["exception_candidates"][0]
+        candidate = resource["candidate"]
+        with chain.work() as work:
+            command = ExceptionPreviewCommand(candidate_id=candidate["candidate_id"],
+                expected_revision=1, proposed_quantity=proposed)
+            with pytest.raises(ExceptionAuthorityError, match="CAPITAL_LIMIT_EXCEEDED"):
+                preview_exception(work.daily, command,
+                    current=lambda c: current_exception_authority(work, c, chain.now), now=chain.now)
+            assert not work.daily.list(symbol=plan.symbol, kind="SIGNAL")
+            assert not work.daily.list(symbol=plan.symbol, kind="SIMULATION")
+            assert not work.daily.list(symbol=plan.symbol, kind="EXCEPTION_PREVIEW")
+        chain.now = datetime.combine(TUESDAY, time(9, 35), SH)
+>       signal = chain.evaluate().snapshot["signals"][0]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests\integration\test_p3_exceptions.py:84: IndexError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_exceptions.py::test_money_failure_keeps_exact_exception_intent_without_resizing[WEAK_MINIMUM-200-80000-None]
+FAILED tests/integration/test_p3_exceptions.py::test_money_failure_keeps_exact_exception_intent_without_resizing[BROKEN_STRONG-1000-100000-300]
+2 failed, 2 passed, 1 warning in 3.32s

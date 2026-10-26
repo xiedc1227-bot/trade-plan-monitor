@@ -1,0 +1,203 @@
+............FFF                                                          [100%]
+================================== FAILURES ===================================
+_ test_current_extraction_prompt_declares_capital_scope_and_no_inferred_quantities _
+
+    def test_current_extraction_prompt_declares_capital_scope_and_no_inferred_quantities():
+        from trade_plan_monitor.ai.prompts import build_plan_extraction_prompt
+
+        prompt = build_plan_extraction_prompt("Explicit source only")
+        for value in ("plan-extract-v12", "capital-policy-v1", "CAPITAL_ONLY", "OPEN_COST_CAP",
+                      "MARKET_VALUE_CAP", "schema_version=9", "no available-cash"):
+>           assert value in prompt
+E           assert 'plan-extract-v12' in '\nOpt-in market linkage: use schema_version=6/condition-plan-v2 ONLY when source explicitly defines daily BUY market ...p rules to save tokens."}\nUNTRUSTED_PLAN_DATA_START\n{"source_text": "Explicit source only"}\nUNTRUSTED_PLAN_DATA_END'
+
+tests\integration\test_p3_review.py:77: AssertionError
+__________ test_followup_source_snapshot_preserves_money_only_policy __________
+
+    def test_followup_source_snapshot_preserves_money_only_policy():
+        from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateContext
+        from trade_plan_monitor.domain.p3_policy_models import P3TradePlan
+
+        plan = P3TradePlan.model_validate(p3_payload())
+>       context = PlanUpdateContext.model_validate(dict(base_hash="a"*64,
+            snapshot=plan.model_dump(mode="json"), available_at="2026-10-26T10:00:00+08:00"))
+E       pydantic_core._pydantic_core.ValidationError: 38 validation errors for PlanUpdateContext
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), P2TradePlan]].schema_version
+E         Input should be 8 [type=literal_error, input_value=9, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), P2TradePlan]].execution_version
+E         Input should be 'condition-plan-v4' [type=literal_error, input_value='condition-plan-v5', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), P2TradePlan]].position.max_qty
+E         Field required [type=missing, input_value={'limit': {'mode': 'CAPIT...nthetic human proposal'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), P2TradePlan]].position.limit
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'mode': 'CAPITAL_ONLY', ...URRENT_ADMITTED_QUOTE'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].schema_version
+E         Input should be 7 [type=literal_error, input_value=9, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].execution_version
+E         Input should be 'condition-plan-v3' [type=literal_error, input_value='condition-plan-v5', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].position.max_qty
+E         Field required [type=missing, input_value={'limit': {'mode': 'CAPIT...nthetic human proposal'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].position.limit
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'mode': 'CAPITAL_ONLY', ...URRENT_ADMITTED_QUOTE'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].ordinary_rules.0.MarketExceptionRule.quantity_policy.mode
+E         Input should be 'MARKET_FACTOR' [type=literal_error, input_value='DERIVED_MARKET_FACTOR', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].ordinary_rules.0.MarketExceptionRule.quantity_policy.base_quantity
+E         Field required [type=missing, input_value={'mode': 'DERIVED_MARKET_...ntity_policy': 'FREEZE'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].ordinary_rules.0.MarketExceptionRule.pretrade_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'pretr...}, 'level_evidence': []}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].quantity
+E         Field required [type=missing, input_value={'status': 'ENABLED', 'si..., 'level_evidence': []}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].market_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'marke...ong': 'PER_OCCURRENCE'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].quantity_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'mode': 'DERIVED_MARKET_...ntity_policy': 'FREEZE'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketExceptionTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].pretrade_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'pretr...}, 'level_evidence': []}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].schema_version
+E         Input should be 6 [type=literal_error, input_value=9, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].execution_version
+E         Input should be 'condition-plan-v2' [type=literal_error, input_value='condition-plan-v5', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].position.max_qty
+E         Field required [type=missing, input_value={'limit': {'mode': 'CAPIT...nthetic human proposal'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].position.limit
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'mode': 'CAPITAL_ONLY', ...URRENT_ADMITTED_QUOTE'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.MarketLinkedRule.market_policy.policy_version
+E         Input should be 'market-linkage-v1' [type=literal_error, input_value='market-linkage-v2', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.MarketLinkedRule.market_policy.exception_policy
+E         Input should be 'BLOCK_P1' [type=literal_error, input_value='REVIEW_PER_OCCURRENCE', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.MarketLinkedRule.market_policy.exception_routes
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'weak_minimum': 'PER_OCC...rong': 'PER_OCCURRENCE'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.MarketLinkedRule.quantity_policy.mode
+E         Input should be 'MARKET_FACTOR' [type=literal_error, input_value='DERIVED_MARKET_FACTOR', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.MarketLinkedRule.quantity_policy.base_quantity
+E         Field required [type=missing, input_value={'mode': 'DERIVED_MARKET_...ntity_policy': 'FREEZE'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.MarketLinkedRule.pretrade_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'pretr...}, 'level_evidence': []}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].quantity
+E         Field required [type=missing, input_value={'status': 'ENABLED', 'si..., 'level_evidence': []}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].market_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'marke...ong': 'PER_OCCURRENCE'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].quantity_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'mode': 'DERIVED_MARKET_...ntity_policy': 'FREEZE'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[linked_contract(), function-after[semantic_contract(), MarketLinkedTradePlan]].ordinary_rules.0.function-after[temporal_contract(), UnifiedRule].pretrade_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'pretr...}, 'level_evidence': []}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].schema_version
+E         Input should be 5 [type=literal_error, input_value=9, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].execution_version
+E         Input should be 'condition-plan-v1' [type=literal_error, input_value='condition-plan-v5', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].position.max_qty
+E         Field required [type=missing, input_value={'limit': {'mode': 'CAPIT...nthetic human proposal'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].position.limit
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'mode': 'CAPITAL_ONLY', ...URRENT_ADMITTED_QUOTE'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].ordinary_rules.0.quantity
+E         Field required [type=missing, input_value={'status': 'ENABLED', 'si..., 'level_evidence': []}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].ordinary_rules.0.market_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'marke...ong': 'PER_OCCURRENCE'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].ordinary_rules.0.quantity_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'mode': 'DERIVED_MARKET_...ntity_policy': 'FREEZE'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].ordinary_rules.0.pretrade_policy
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'policy_version': 'pretr...}, 'level_evidence': []}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       snapshot.function-after[semantic_contract(), UnifiedTradePlan].reference_market
+E         Extra inputs are not permitted [type=extra_forbidden, input_value={'selection': 'AUTO_BOARD...ndex_code': '000001.SH'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+
+tests\integration\test_p3_review.py:85: ValidationError
+_ test_real_current_extraction_produces_reviewed_capital_draft_without_authority _
+
+    def test_real_current_extraction_produces_reviewed_capital_draft_without_authority():
+        import asyncio
+        from uuid import uuid4
+
+        from tests.unit.test_ai_plan_extraction_v4 import _config
+
+        from trade_plan_monitor.ai.extraction import extract_plan
+        from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
+        from trade_plan_monitor.ai.provider import RawAIResponse
+
+        candidate = P3PlanDraft.model_validate(p3_payload())
+        source, mapping = source_mapping(candidate)
+        output = CurrentPlanExtractionOutput(draft=candidate, clauses=mapping.clauses,
+                                              bindings=mapping.bindings)
+
+        class Provider:
+            async def extract_plan(self, request):
+                assert request.config.prompt_version == "plan-extract-v12"
+                return RawAIResponse(request_id=request.request_id,
+                    provider_id=request.config.provider_id, model=request.config.model,
+                    content=output.model_dump_json(), finish_reason="stop", attempts=1, usage=None)
+
+>       result = asyncio.run(extract_plan(request_id=uuid4(), source_text=source,
+            config=_config().model_copy(update={"max_input_chars": 200000}), provider=Provider()))
+
+tests\integration\test_p3_review.py:112:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_p3_review.test_real_current_extraction_produces_reviewed_capital_draft_without_authority.<locals>.Provider object at 0x0000026A2127A510>
+request = PlanExtractionRequest(request_id=UUID('ddacc8d1-dc15-473b-810e-9963704fc3a6'), config=AIProviderConfig(provider_id=UUI... only; rejected or revoked occurrences cannot reopen; approval does not execute a trade\\""}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v12"
+E       AssertionError: assert 'plan-extract-v11' == 'plan-extract-v12'
+E
+E         - plan-extract-v12
+E         ?                ^
+E         + plan-extract-v11
+E         ?                ^
+
+tests\integration\test_p3_review.py:107: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_review.py::test_current_extraction_prompt_declares_capital_scope_and_no_inferred_quantities
+FAILED tests/integration/test_p3_review.py::test_followup_source_snapshot_preserves_money_only_policy
+FAILED tests/integration/test_p3_review.py::test_real_current_extraction_produces_reviewed_capital_draft_without_authority
+3 failed, 12 passed in 1.54s

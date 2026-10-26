@@ -1,0 +1,20 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+I001 [*] Import block is un-sorted or un-formatted
+   --> tests\unit\test_p3_capital_gate.py:123:5
+    |
+122 |   def test_capital_assessment_detects_tampering_and_never_selects_a_sell():
+123 | /     from pydantic import ValidationError
+124 | |     from trade_plan_monitor.decision.p3_capital import CapitalAssessment
+    | |________________________________________________________________________^
+125 |
+126 |       result = capital("MARKET_VALUE_CAP", total_qty=600)
+    |
+help: Organize imports
+    |
+123 |     from pydantic import ValidationError
+124 +
+125 |     from trade_plan_monitor.decision.p3_capital import CapitalAssessment
+    |
+
+Found 1 error.
+[*] 1 fixable with the `--fix` option.

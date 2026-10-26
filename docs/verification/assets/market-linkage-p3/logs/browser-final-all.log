@@ -1,0 +1,169 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/p3-capital.spec.ts tests/e2e/p2-pretrade.spec.ts tests/e2e/market-exceptions.spec.ts tests/e2e/market-linkage.spec.ts
+
+
+Running 19 tests using 1 worker
+
+
+
+(node:91844) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM consume › source review, explicit occurrence approval and separate whole execution
+[2/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM revoke › source review, explicit occurrence approval and separate whole execution
+[3/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM reject › source review, explicit occurrence approval and separate whole execution
+[4/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › WEAK_MINIMUM correction › source review, explicit occurrence approval and separate whole execution
+[5/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG consume › source review, explicit occurrence approval and separate whole execution
+[chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG consume › source review, explicit occurrence approval and separate whole execution
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\asyncio\proactor_events.py", line 166, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Զ������ǿ�ȹر���һ�����е����ӡ�
+
+
+[6/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG revoke › source review, explicit occurrence approval and separate whole execution
+[chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG revoke › source review, explicit occurrence approval and separate whole execution
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\asyncio\proactor_events.py", line 166, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Զ������ǿ�ȹر���һ�����е����ӡ�
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+
+
+[7/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG reject › source review, explicit occurrence approval and separate whole execution
+[chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG reject › source review, explicit occurrence approval and separate whole execution
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\asyncio\proactor_events.py", line 166, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Զ������ǿ�ȹر���һ�����е����ӡ�
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+
+
+[8/19] [chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG correction › source review, explicit occurrence approval and separate whole execution
+[chrome] › tests\e2e\market-exceptions.spec.ts:37:1 › BROKEN_STRONG correction › source review, explicit occurrence approval and separate whole execution
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\asyncio\proactor_events.py", line 166, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] Զ������ǿ�ȹر���һ�����е����ӡ�
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+
+
+[9/19] [chrome] › tests\e2e\market-linkage.spec.ts:34:1 › linked plan review, frozen full quantity, P1 block and independent reminder
+[10/19] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › WEAK_MINIMUM consume › source review, explicit occurrence approval and separate whole execution
+[11/19] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › WEAK_MINIMUM correction › source review, explicit occurrence approval and separate whole execution
+[12/19] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › WEAK_MINIMUM preview › source review, explicit occurrence approval and separate whole execution
+[13/19] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › BROKEN_STRONG consume › source review, explicit occurrence approval and separate whole execution
+[14/19] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › BROKEN_STRONG correction › source review, explicit occurrence approval and separate whole execution
+[15/19] [chrome] › tests\e2e\p2-pretrade.spec.ts:37:1 › BROKEN_STRONG preview › source review, explicit occurrence approval and separate whole execution
+[16/19] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+[17/19] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+[18/19] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  1) [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+
+    Error: Offline P3 fixture readiness
+
+    Offline P3 fixture readiness
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 0
+
+    Call Log:
+    - Test timeout of 30000ms exceeded
+
+      28 |     server.stderr?.on("data", value => {log += String(value);});
+      29 |     await expect.poll(async () => {try {return (await request.get(`${base}/_test/isolation`)).status();} catch {return 0;}},
+    > 30 |       {timeout: 30_000, message: "Offline P3 fixture readiness"}).toBe(200);
+         |                                                                   ^
+      31 |   });
+      32 |   test.afterAll(async ({request}) => {
+      33 |     if (server?.exitCode === null) {
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\p3-capital.spec.ts:30:67
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-a1b52-te-fail-recovery-and-reload-chrome\error-context.md
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\p3-capital-MARKET-VALUE-CA-a1b52-te-fail-recovery-and-reload-chrome\error-context.md
+
+
+
+(node:25700) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[19/19] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  1 failed
+    [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  18 passed (4.1m)

@@ -1,0 +1,38 @@
+I001 [*] Import block is un-sorted or un-formatted
+   --> tests\integration\test_p3_replay_mutations.py:110:5
+    |
+108 |   @pytest.mark.parametrize("p3_chain", [("OPEN_COST_CAP", False, "ORDINARY")], indirect=True)
+109 |   def test_delayed_source_budget_survives_reviewed_policy_replacement(p3_chain, tmp_path):
+110 | /     from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
+111 | |     from trade_plan_monitor.backtest.p3_replay_input import CapitalReplayProgram
+112 | |     from trade_plan_monitor.backtest.plan_schedule import (
+113 | |         ScheduledLoopSchedule, ScheduledPlanVersion, ScheduledScheduleEntry,
+114 | |     )
+115 | |     from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+    | |__________________________________________________________________________________________^
+116 |
+117 |       chain = p3_chain
+    |
+help: Organize imports
+    |
+112 |     from trade_plan_monitor.backtest.plan_schedule import (
+    -         ScheduledLoopSchedule, ScheduledPlanVersion, ScheduledScheduleEntry,
+113 +         ScheduledLoopSchedule,
+114 +         ScheduledPlanVersion,
+115 +         ScheduledScheduleEntry,
+116 |     )
+    |
+
+E501 Line too long (103 > 100)
+   --> tests\integration\test_p3_replay_mutations.py:179:101
+    |
+177 |         signal = ready.snapshot["signals"][0]
+178 |         filled = session.apply_operation(ResearchSimulation(kind="SIMULATE", operation_id="buy",
+179 |             at=chain.now, order=1, rule_id=signal["rule_id"], occurrence=1, quantity=200), ended=False)
+    |                                                                                                     ^^^
+180 |         assert filled.status == "APPLIED"
+181 |         raw = opening.model_dump(mode="python", exclude={"envelope_hash"})
+    |
+
+Found 2 errors.
+[*] 1 fixable with the `--fix` option.

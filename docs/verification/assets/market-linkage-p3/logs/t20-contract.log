@@ -1,0 +1,272 @@
+FF..........FF..............                                             [100%]
+================================== FAILURES ===================================
+_______ test_all_pre_linkage_schema_shapes_and_routes_are_preserved[1] ________
+
+profile = 1
+
+    @pytest.mark.parametrize("profile", [1, 2])
+    def test_all_pre_linkage_schema_shapes_and_routes_are_preserved(profile):
+        import json
+        import subprocess
+        from pathlib import Path
+
+        from scripts import generate_frontend_types as generator
+
+        root = Path(__file__).resolve().parents[2]
+        path = "openapi.json" if profile == 1 else "openapi.runtime-status.json"
+        prior = json.loads(subprocess.check_output(["git", "show", "c7378a4:" + path], cwd=root))
+>       current = schema5_projection(generator.build_openapi_document(monitor_contract_version=profile))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_market_linkage_api.py:129:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+                "pretradeCandidateSchema",
+                "capitalCandidateSchema",
+            ),
+            "DailyEvaluationApiView": (
+                "marketLinkage", "linkedIndexSource", "exceptionCandidates", "pretrade"),
+            "DailySignalApiView": (
+                "marketLinkage", "pretrade", "pretradeExecution", "capitalExecution"),
+            "DailySignalState": (
+                "market_linkage", "pretrade", "pretrade_execution", "capital_execution"),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion",
+                "pretradeExecutionVersion", "capitalExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": (
+                "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade",
+                "capital_outcomes", "signal_capital"),
+            "PreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "MonitorLoopReport": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "LoopRequest": ("source_operation",),
+            "DailyAlertCenterView": ("pretradeMode", "capitalMode"),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+>               assert field in schemas[name]["properties"]
+E               AssertionError: assert 'capital_outcomes' in {'report_schema_version': {'type': 'string', 'const': 'backtest-report-v5', 'title': 'Report Schema Version'}, 'run_id... 'title': 'Input Hash'}, 'dataset_hash': {'type': 'string', 'pattern': '^[0-9a-f]{64}$', 'title': 'Dataset Hash'}, ...}
+
+tests\integration\test_market_linkage_api.py:57: AssertionError
+_______ test_all_pre_linkage_schema_shapes_and_routes_are_preserved[2] ________
+
+profile = 2
+
+    @pytest.mark.parametrize("profile", [1, 2])
+    def test_all_pre_linkage_schema_shapes_and_routes_are_preserved(profile):
+        import json
+        import subprocess
+        from pathlib import Path
+
+        from scripts import generate_frontend_types as generator
+
+        root = Path(__file__).resolve().parents[2]
+        path = "openapi.json" if profile == 1 else "openapi.runtime-status.json"
+        prior = json.loads(subprocess.check_output(["git", "show", "c7378a4:" + path], cwd=root))
+>       current = schema5_projection(generator.build_openapi_document(monitor_contract_version=profile))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_market_linkage_api.py:129:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+                "pretradeCandidateSchema",
+                "capitalCandidateSchema",
+            ),
+            "DailyEvaluationApiView": (
+                "marketLinkage", "linkedIndexSource", "exceptionCandidates", "pretrade"),
+            "DailySignalApiView": (
+                "marketLinkage", "pretrade", "pretradeExecution", "capitalExecution"),
+            "DailySignalState": (
+                "market_linkage", "pretrade", "pretrade_execution", "capital_execution"),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion",
+                "pretradeExecutionVersion", "capitalExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": (
+                "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade",
+                "capital_outcomes", "signal_capital"),
+            "PreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "MonitorLoopReport": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "LoopRequest": ("source_operation",),
+            "DailyAlertCenterView": ("pretradeMode", "capitalMode"),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+>               assert field in schemas[name]["properties"]
+E               AssertionError: assert 'capital_outcomes' in {'report_schema_version': {'type': 'string', 'const': 'backtest-report-v5', 'title': 'Report Schema Version'}, 'run_id... 'title': 'Input Hash'}, 'dataset_hash': {'type': 'string', 'pattern': '^[0-9a-f]{64}$', 'title': 'Dataset Hash'}, ...}
+
+tests\integration\test_market_linkage_api.py:57: AssertionError
+_ test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1] _
+
+contract = (1, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
+        from tests.integration.test_market_linkage_api import schema5_projection
+
+        version, document = contract
+>       document = schema5_projection(document)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_backtest_service_contract.py:76:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+                "pretradeCandidateSchema",
+                "capitalCandidateSchema",
+            ),
+            "DailyEvaluationApiView": (
+                "marketLinkage", "linkedIndexSource", "exceptionCandidates", "pretrade"),
+            "DailySignalApiView": (
+                "marketLinkage", "pretrade", "pretradeExecution", "capitalExecution"),
+            "DailySignalState": (
+                "market_linkage", "pretrade", "pretrade_execution", "capital_execution"),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion",
+                "pretradeExecutionVersion", "capitalExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": (
+                "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade",
+                "capital_outcomes", "signal_capital"),
+            "PreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "MonitorLoopReport": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "LoopRequest": ("source_operation",),
+            "DailyAlertCenterView": ("pretradeMode", "capitalMode"),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+>               assert field in schemas[name]["properties"]
+E               AssertionError: assert 'capital_outcomes' in {'report_schema_version': {'type': 'string', 'const': 'backtest-report-v5', 'title': 'Report Schema Version'}, 'run_id... 'title': 'Input Hash'}, 'dataset_hash': {'type': 'string', 'pattern': '^[0-9a-f]{64}$', 'title': 'Dataset Hash'}, ...}
+
+tests\integration\test_market_linkage_api.py:57: AssertionError
+_ test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2] _
+
+contract = (2, {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard...': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}})
+
+    def test_all_prior_routes_and_schemas_preserve_their_mounted_meaning(contract):
+        from tests.integration.test_market_linkage_api import schema5_projection
+
+        version, document = contract
+>       document = schema5_projection(document)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_backtest_service_contract.py:76:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = {'openapi': '3.1.0', 'info': {'title': 'Trade Plan Monitor API', 'version': '0.1.0'}, 'paths': {'/api/v1/dashboard': {...s': False, 'type': 'object', 'required': ['config', 'secretStatus', 'revision', 'createdAt', 'updatedAt'], ...}, ...}}}
+
+    def schema5_projection(document):
+        """Remove only the approved additive fields/union variants for legacy comparisons."""
+        from copy import deepcopy
+
+        result = deepcopy(document)
+        schemas = result["components"]["schemas"]
+        additions = {
+            "DailyEditorSchemaView": (
+                "supportedSchemaVersions",
+                "linkedCandidateSchema",
+                "linkedPolicyDefinitions",
+                "exceptionCandidateSchema",
+                "exceptionPolicyDefinitions",
+                "pretradeCandidateSchema",
+                "capitalCandidateSchema",
+            ),
+            "DailyEvaluationApiView": (
+                "marketLinkage", "linkedIndexSource", "exceptionCandidates", "pretrade"),
+            "DailySignalApiView": (
+                "marketLinkage", "pretrade", "pretradeExecution", "capitalExecution"),
+            "DailySignalState": (
+                "market_linkage", "pretrade", "pretrade_execution", "capital_execution"),
+            "ExplicitPlanCapabilityView": (
+                "supportedSchemaVersions", "linkedExecutionVersion", "exceptionExecutionVersion",
+                "pretradeExecutionVersion", "capitalExecutionVersion"),
+            "LoopEvaluation": ("market_linkage",),
+            "ResearchDecisionEvent": (
+                "market_linkage", "exception_outcomes", "signal_linkage", "signal_pretrade",
+                "capital_outcomes", "signal_capital"),
+            "PreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "ScheduledPreparedBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "WorkbenchBacktestRunCommand": ("exceptionProgram", "capitalProgram"),
+            "MonitorLoopReport": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "BacktestScheduledReportHeader": (
+                "exception_outcomes", "exception_requests", "exception_provenance", "capital_outcomes"),
+            "LoopRequest": ("source_operation",),
+            "DailyAlertCenterView": ("pretradeMode", "capitalMode"),
+        }
+        for name, fields in additions.items():
+            for field in fields:
+>               assert field in schemas[name]["properties"]
+E               AssertionError: assert 'capital_outcomes' in {'report_schema_version': {'type': 'string', 'const': 'backtest-report-v5', 'title': 'Report Schema Version'}, 'run_id... 'title': 'Input Hash'}, 'dataset_hash': {'type': 'string', 'pattern': '^[0-9a-f]{64}$', 'title': 'Dataset Hash'}, ...}
+
+tests\integration\test_market_linkage_api.py:57: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[1]
+FAILED tests/integration/test_market_linkage_api.py::test_all_pre_linkage_schema_shapes_and_routes_are_preserved[2]
+FAILED tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[compatibility-v1]
+FAILED tests/integration/test_backtest_service_contract.py::test_all_prior_routes_and_schemas_preserve_their_mounted_meaning[canonical-v2]
+4 failed, 24 passed, 1 warning in 44.44s

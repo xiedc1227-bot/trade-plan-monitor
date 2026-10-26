@@ -1,0 +1,62 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+_ test_real_prepared_http_admission_freezes_missing_cost_unknown_and_replays_same_job[p3_chain0] _
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x0000015F8A4D63C0>
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-audit-empty/test_real_prepared_http_admiss0')
+
+    @pytest.mark.parametrize("p3_chain", [("OPEN_COST_CAP", False, "ORDINARY")], indirect=True)
+    def test_real_prepared_http_admission_freezes_missing_cost_unknown_and_replays_same_job(
+        p3_chain, tmp_path,
+    ):
+        chain = p3_chain
+        market, _, _, _, _, _ = market_fixture(tmp_path, chain.plan, chain.route)
+        opening = frozen_opening(chain)
+        run = capital_loop_input(chain, openings=(opening,))
+        prepared = prepared_fixture(tmp_path, chain.plan, chain.now, run.initial_account)
+        jobs = BacktestJobRepository(tmp_path / "admission-results.sqlite",
+            clock=lambda: datetime.combine(TUESDAY, time(10, 0, 12), SH))
+        results = BacktestResultStore(jobs.database_path)
+        coordinator = Coordinator()
+        signer = HmacCursorSigner(b"x"*32)
+
+        async def read_prepared(identity):
+            assert identity == prepared.preparation_id
+            return prepared
+
+        service = _ProductionBacktestService(plan_snapshot_reader=None, market_store=market,
+            repository=jobs, result_store=results,
+            dataset_service=BacktestDatasetService(store=market, cursor_signer=signer),
+            result_service=BacktestResultService(store=results, cursor_signer=signer),
+            coordinator=coordinator, result_cursor_signer=signer,
+            job_cursor_signer=BacktestApiCursorSigner(b"x"*32), prepared_plan_reader=read_prepared)
+        client = _client(operation_service=service)
+        try:
+            missing = client.post("/api/v1/backtest-runs", json=payload(prepared),
+                headers={"Idempotency-Key": "missing-budget"})
+            assert missing.status_code == 202, missing.text
+            absent = results.get_loop_input(results.get_loop_input_reference(missing.json()["runId"]))
+            assert absent.run_input.capital_program.opening_events == ()
+            assert absent.run_input.initial_account.accounting_cost_fen is None
+            assert absent.run_input.initial_account.cash.kind == "POSITION_LIMIT_ONLY"
+            assert coordinator.authorized == [missing.json()["jobId"]]
+            values = payload(prepared,
+                capitalProgram=CapitalReplayProgram(opening_events=(opening,)).model_dump(mode="json"),
+                exceptionProgram=CapitalExceptionReplayProgram().model_dump(mode="json"))
+            first = client.post("/api/v1/backtest-runs", json=values,
+                headers={"Idempotency-Key": "explicit-budget"})
+>           assert first.status_code == 202, first.text
+E           AssertionError: {"error":{"code":"CONFLICT","message":"Request conflicts with current state","details":[],"requestId":"4a51e8301da44d0f85cfd8913b09f22c"}}
+E           assert <HTTPStatus.CONFLICT: 409> == 202
+E            +  where <HTTPStatus.CONFLICT: 409> = <Response [409 Conflict]>.status_code
+
+tests\integration\test_p3_frozen_admission.py:67: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_frozen_admission.py::test_real_prepared_http_admission_freezes_missing_cost_unknown_and_replays_same_job[p3_chain0]
+1 failed, 1 warning in 5.41s

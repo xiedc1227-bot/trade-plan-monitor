@@ -1,0 +1,15 @@
+usage: trade-plan-monitor [-h] {validate,monitor,web,replay,backup,ai} ...
+
+Local AI-assisted deterministic trade-plan monitor.
+
+options:
+  -h, --help            show this help message and exit
+
+commands:
+  {validate,monitor,web,replay,backup,ai}
+    validate            validate configuration and plans
+    monitor             run the headless monitor
+    web                 serve the local Web application
+    replay              replay deterministic market fixtures
+    backup              create or inspect local backups
+    ai                  test or use the configured AI provider

@@ -1,0 +1,45 @@
+
+> trade-plan-monitor-web@0.1.0 test
+> vitest --run tests/unit/p3Review.spec.ts tests/unit/marketExceptionRuntime.spec.ts tests/unit/p2Review.spec.ts
+
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+stderr | tests/unit/p3Review.spec.ts > independent budget opening review > starts costs blank and requires complete explicit confirmation before one opening command
+[Vue warn]: Unhandled error during execution of render function
+  at <P3CapitalOpening planVersionId="version-a" symbol="601021.SH" costRequired=true  ... >
+  at <VTUROOT>
+[Vue warn]: Unhandled error during execution of component update
+  at <P3CapitalOpening planVersionId="version-a" symbol="601021.SH" costRequired=true  ... >
+  at <VTUROOT>
+ ❯ tests/unit/p3Review.spec.ts (8 tests | 1 failed) 45ms
+     × starts costs blank and requires complete explicit confirmation before one opening command 19ms
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/p3Review.spec.ts > independent budget opening review > starts costs blank and requires complete explicit confirmation before one opening command
+TypeError: value?.trim is not a function
+ ❯ src/components/plans/P3CapitalOpening.vue:19:17
+     17| const complete = computed(() => rows.value.every(lot => {
+     18|   const value = bases[`${lot.bucket}:${lot.lot_id}`];
+     19|   return value?.trim() !== "" && value !== undefined && Number.isSafeI…
+       |                 ^
+     20| }) && Number.isSafeInteger(rows.value.reduce((sum, lot) => sum + Numbe…
+     21| const canSubmit = computed(() => props.current && resource.value?.inve…
+ ❯ ComputedRefImpl.fn src/components/plans/P3CapitalOpening.vue:17:44
+ ❯ refreshComputed node_modules/@vue/reactivity/dist/reactivity.cjs.js:422:28
+ ❯ ComputedRefImpl.get value [as value] node_modules/@vue/reactivity/dist/reactivity.cjs.js:1743:5
+ ❯ ComputedRefImpl.fn src/components/plans/P3CapitalOpening.vue:21:113
+ ❯ refreshComputed node_modules/@vue/reactivity/dist/reactivity.cjs.js:422:28
+ ❯ ComputedRefImpl.get value [as value] node_modules/@vue/reactivity/dist/reactivity.cjs.js:1743:5
+ ❯ unref node_modules/@vue/reactivity/dist/reactivity.cjs.js:1568:45
+ ❯ Object.get node_modules/@vue/reactivity/dist/reactivity.cjs.js:1574:64
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 22 passed (23)
+   Start at  16:29:14
+   Duration  1.16s (transform 497ms, setup 0ms, import 1.15s, tests 123ms, environment 1.76s)

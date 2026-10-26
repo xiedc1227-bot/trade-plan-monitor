@@ -1,0 +1,362 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+.........FFFFFFFFFFFFFFF                                                 [100%]
+================================== FAILURES ===================================
+________ test_open_cost_equality_and_whole_rejection[1000-PASS-550500] ________
+
+price = 1000, expected = 'PASS', after = 550500
+
+    @pytest.mark.parametrize("price,expected,after", [(1000, "PASS", 550500),
+                                                    (1001, "FAIL", 550600)])
+    def test_open_cost_equality_and_whole_rejection(price, expected, after):
+>       result = capital(price_fen=price)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:74:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'price_fen': 1000}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+________ test_open_cost_equality_and_whole_rejection[1001-FAIL-550600] ________
+
+price = 1001, expected = 'FAIL', after = 550600
+
+    @pytest.mark.parametrize("price,expected,after", [(1000, "PASS", 550500),
+                                                    (1001, "FAIL", 550600)])
+    def test_open_cost_equality_and_whole_rejection(price, expected, after):
+>       result = capital(price_fen=price)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:74:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'price_fen': 1001}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_value_cap_uses_all_holdings_not_costs_or_tactical_only[1000-PASS-500000] _
+
+price = 1000, expected = 'PASS', after = 500000
+
+    @pytest.mark.parametrize("price,expected,after", [(1000, "PASS", 500000),
+        (1001, "FAIL", 500500), (990, "PASS", 495000)])
+    def test_value_cap_uses_all_holdings_not_costs_or_tactical_only(price, expected, after):
+>       result = capital("MARKET_VALUE_CAP", price_fen=price, retained_basis_fen=None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:85:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'MARKET_VALUE_CAP'
+changes = {'price_fen': 1000, 'retained_basis_fen': None}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_value_cap_uses_all_holdings_not_costs_or_tactical_only[1001-FAIL-500500] _
+
+price = 1001, expected = 'FAIL', after = 500500
+
+    @pytest.mark.parametrize("price,expected,after", [(1000, "PASS", 500000),
+        (1001, "FAIL", 500500), (990, "PASS", 495000)])
+    def test_value_cap_uses_all_holdings_not_costs_or_tactical_only(price, expected, after):
+>       result = capital("MARKET_VALUE_CAP", price_fen=price, retained_basis_fen=None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:85:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'MARKET_VALUE_CAP'
+changes = {'price_fen': 1001, 'retained_basis_fen': None}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_value_cap_uses_all_holdings_not_costs_or_tactical_only[990-PASS-495000] _
+
+price = 990, expected = 'PASS', after = 495000
+
+    @pytest.mark.parametrize("price,expected,after", [(1000, "PASS", 500000),
+        (1001, "FAIL", 500500), (990, "PASS", 495000)])
+    def test_value_cap_uses_all_holdings_not_costs_or_tactical_only(price, expected, after):
+>       result = capital("MARKET_VALUE_CAP", price_fen=price, retained_basis_fen=None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:85:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'MARKET_VALUE_CAP'
+changes = {'price_fen': 990, 'retained_basis_fen': None}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes0-CAPITAL_POSITION_UNKNOWN] _
+
+changes = {'total_qty': None}, reason = 'CAPITAL_POSITION_UNKNOWN'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'total_qty': None}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes1-CAPITAL_POSITION_UNKNOWN] _
+
+changes = {'total_qty': True}, reason = 'CAPITAL_POSITION_UNKNOWN'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'total_qty': True}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes2-CAPITAL_QUANTITY_UNKNOWN] _
+
+changes = {'quantity': 99}, reason = 'CAPITAL_QUANTITY_UNKNOWN'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'quantity': 99}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes3-CAPITAL_QUOTE_UNKNOWN] _
+
+changes = {'price_fen': None}, reason = 'CAPITAL_QUOTE_UNKNOWN'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'price_fen': None}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes4-CAPITAL_BASE_UNKNOWN] _
+
+changes = {'retained_basis_fen': None}, reason = 'CAPITAL_BASE_UNKNOWN'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'retained_basis_fen': None}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes5-CAPITAL_BASE_UNKNOWN] _
+
+changes = {'retained_basis_fen': -1}, reason = 'CAPITAL_BASE_UNKNOWN'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'retained_basis_fen': -1}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes6-CAPITAL_OVERFLOW] _
+
+changes = {'retained_basis_fen': 9007199254740991}, reason = 'CAPITAL_OVERFLOW'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'retained_basis_fen': 9007199254740991}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+_ test_unknown_inputs_block_only_the_dependent_calculation[changes7-CAPITAL_OVERFLOW] _
+
+changes = {'price_fen': 9007199254740991}, reason = 'CAPITAL_OVERFLOW'
+
+    @pytest.mark.parametrize("changes,reason", [
+        ({"total_qty": None}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"total_qty": True}, "CAPITAL_POSITION_UNKNOWN"),
+        ({"quantity": 99}, "CAPITAL_QUANTITY_UNKNOWN"),
+        ({"price_fen": None}, "CAPITAL_QUOTE_UNKNOWN"),
+        ({"retained_basis_fen": None}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": -1}, "CAPITAL_BASE_UNKNOWN"),
+        ({"retained_basis_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+        ({"price_fen": 9007199254740991}, "CAPITAL_OVERFLOW"),
+    ])
+    def test_unknown_inputs_block_only_the_dependent_calculation(changes, reason):
+>       result = capital(**changes)
+                 ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_p3_capital_gate.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mode = 'OPEN_COST_CAP', changes = {'price_fen': 9007199254740991}
+
+    def capital(mode="OPEN_COST_CAP", **changes):
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:60: ModuleNotFoundError
+___________ test_combined_share_limit_and_amount_only_are_distinct ____________
+
+    def test_combined_share_limit_and_amount_only_are_distinct():
+>       from trade_plan_monitor.decision.p3_capital import assess_capital
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:107: ModuleNotFoundError
+_____ test_capital_assessment_detects_tampering_and_never_selects_a_sell ______
+
+    def test_capital_assessment_detects_tampering_and_never_selects_a_sell():
+        from pydantic import ValidationError
+>       from trade_plan_monitor.decision.p3_capital import CapitalAssessment
+E       ModuleNotFoundError: No module named 'trade_plan_monitor.decision.p3_capital'
+
+tests\unit\test_p3_capital_gate.py:124: ModuleNotFoundError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_p3_capital_gate.py::test_open_cost_equality_and_whole_rejection[1000-PASS-550500]
+FAILED tests/unit/test_p3_capital_gate.py::test_open_cost_equality_and_whole_rejection[1001-FAIL-550600]
+FAILED tests/unit/test_p3_capital_gate.py::test_value_cap_uses_all_holdings_not_costs_or_tactical_only[1000-PASS-500000]
+FAILED tests/unit/test_p3_capital_gate.py::test_value_cap_uses_all_holdings_not_costs_or_tactical_only[1001-FAIL-500500]
+FAILED tests/unit/test_p3_capital_gate.py::test_value_cap_uses_all_holdings_not_costs_or_tactical_only[990-PASS-495000]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes0-CAPITAL_POSITION_UNKNOWN]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes1-CAPITAL_POSITION_UNKNOWN]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes2-CAPITAL_QUANTITY_UNKNOWN]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes3-CAPITAL_QUOTE_UNKNOWN]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes4-CAPITAL_BASE_UNKNOWN]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes5-CAPITAL_BASE_UNKNOWN]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes6-CAPITAL_OVERFLOW]
+FAILED tests/unit/test_p3_capital_gate.py::test_unknown_inputs_block_only_the_dependent_calculation[changes7-CAPITAL_OVERFLOW]
+FAILED tests/unit/test_p3_capital_gate.py::test_combined_share_limit_and_amount_only_are_distinct
+FAILED tests/unit/test_p3_capital_gate.py::test_capital_assessment_detects_tampering_and_never_selects_a_sell
+15 failed, 9 passed in 1.17s

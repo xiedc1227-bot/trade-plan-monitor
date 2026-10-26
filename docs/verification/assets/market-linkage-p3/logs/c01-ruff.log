@@ -1,0 +1,13 @@
+Failed to find real location of C:\Program Files\Python314\python.exe
+E501 Line too long (105 > 100)
+  --> tests\unit\test_p3_codec.py:25:101
+   |
+23 |     content = plan.model_dump(mode="json", exclude={"plan_id", "version", "name", "metadata"})
+24 |     expected = sha256(b"plan-review-content-v6\x00" + json.dumps(content,
+25 |         ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+   |                                                                                                     ^^^^^
+26 |     assert daily_plan_content_sha256(plan) == daily_draft_content_sha256(draft) == expected
+27 |     assert daily_draft_issues(draft) == ()
+   |
+
+Found 1 error.

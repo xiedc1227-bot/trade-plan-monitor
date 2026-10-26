@@ -1,0 +1,12 @@
+
+> trade-plan-monitor-web@0.1.0 test
+> vitest --run tests/unit/p3Review.spec.ts tests/unit/p2Review.spec.ts
+
+
+ RUN  v4.1.10 D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/web
+
+
+ Test Files  2 passed (2)
+      Tests  6 passed (6)
+   Start at  16:24:38
+   Duration  1.29s (transform 435ms, setup 0ms, import 607ms, tests 34ms, environment 1.68s)

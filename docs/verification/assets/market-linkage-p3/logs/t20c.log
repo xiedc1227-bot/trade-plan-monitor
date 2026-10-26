@@ -1,0 +1,124 @@
+F
+================================== FAILURES ===================================
+_ test_real_frozen_workers_publish_reopen_capital_and_preserve_both_exception_routes[p3_chain0] _
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x0000024E264DD7F0>
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t20c/test_real_frozen_workers_publi0')
+
+    @pytest.mark.parametrize("p3_chain", [("MARKET_VALUE_CAP", True, "WEAK_MINIMUM"),
+        ("OPEN_COST_CAP", True, "BROKEN_STRONG")], indirect=True)
+    def test_real_frozen_workers_publish_reopen_capital_and_preserve_both_exception_routes(
+        p3_chain, tmp_path,
+    ):
+        chain = p3_chain
+        market, dataset, calendar, daily, indices, factors = market_fixture(
+            tmp_path, chain.plan, chain.route)
+        opening = frozen_opening(chain) if chain.capital_mode == "OPEN_COST_CAP" else None
+        openings = () if opening is None else (opening,)
+        event = frozen_market_approval(tmp_path, chain, calendar, daily, indices, factors,
+            run_input_factory=lambda c: research_run_input(c, openings=openings))
+        quantity = 100 if chain.route == "WEAK_MINIMUM" else 300
+        operation = ResearchSimulation(kind="SIMULATE", operation_id="explicit-p3-buy", order=2,
+            at=datetime.combine(TUESDAY, time(9, 35, 12), SH),
+            rule_id=event.candidate.binding.rule_id, occurrence=1, quantity=quantity)
+        run = research_run_input(chain, openings=openings, events=(event,), operations=(operation,))
+        proof = ResearchAdjustmentProof(proof_id="explicit-frozen-basis", dataset_hash=dataset,
+            symbol=chain.plan.symbol, provider="TUSHARE", available_at=chain.now,
+            received_at=chain.now, adjustment_as_of=FRIDAY, quote_basis_factor=Decimal(1),
+            factors=tuple(ResearchFactor(trade_date=d.trade_date, factor=Decimal(1))
+                for d in daily if d.trade_date <= FRIDAY), evidence="Synthetic verified basis")
+        frozen = run.research_input.model_copy(update=dict(adjustment_proofs=(proof,),
+            calendar_extension=tuple(d for d in calendar if d.cal_date > TUESDAY)))
+        report = OfflineBacktestRunner(market).run(plan=chain.plan, dataset_hash=dataset,
+            initial_cash_fen=run.initial_cash_fen, initial_lots=run.initial_lots,
+            execution_config=_execution_config(), manual_event_risk=False, research_input=frozen)
+        assert report.exception_outcomes[0].status == "APPLIED", report.exception_outcomes
+        assert report.metrics.trade_count == 1, report.operations
+        assert report.final_inventory.total_qty == 100+quantity
+        if opening is not None:
+            assert report.capital_outcomes[0].status == "APPLIED", report.capital_outcomes
+        from trade_plan_monitor.backtest.reporting import persist_report
+        from trade_plan_monitor.backtest.results import BacktestDetailKind, BacktestResultStore
+        from trade_plan_monitor.backtest.run_input import BacktestRunInput
+
+        with market.open_frozen_dataset(dataset) as reader:
+            frozen_input = BacktestRunInput.create(plan=chain.plan, manifest=reader.manifest,
+                initial_cash_fen=run.initial_cash_fen, initial_lots=run.initial_lots,
+                execution_config=_execution_config(), manual_event_risk=False, research_input=frozen)
+        for decision in report.current_events:
+            assert len(json.dumps(decision.model_dump(mode="json")).encode()) < 32000
+        results = BacktestResultStore(tmp_path / "research-results.sqlite")
+        persist_report(results, report, run_input=frozen_input)
+        details = BacktestResultStore(results.database_path).list_details(
+            report.run_id, kind=BacktestDetailKind.DECISION)
+        assert any(d.payload.get("exception_outcomes") for d in details)
+        if opening is not None:
+            assert any(d.payload.get("capital_outcomes") for d in details)
+>       publish_loop(tmp_path, market, dataset, chain, openings, event, operation, quantity)
+
+tests\integration\test_p3_frozen_workers.py:78:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_frozen_workers.py:89: in publish_loop
+    prepared = prepared_fixture(directory, chain.plan, chain.now, run.initial_account)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\market_exception_replay_support.py:209: in prepared_fixture
+    store.review_and_freeze(
+src\trade_plan_monitor\backtest\preparation_store.py:877: in review_and_freeze
+    return self._operation(
+src\trade_plan_monitor\backtest\preparation_store.py:187: in _operation
+    record = change(existing, self._clock())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\backtest\preparation_store.py:855: in change
+    manifest = prepare_frozen_plan(record, command, now)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\trade_plan_monitor\backtest\preparation_review.py:352: in prepare_frozen_plan
+    return FrozenPreparedPlan(
+src\trade_plan_monitor\backtest\preparation_review.py:180: in bound
+    if sum(lot.quantity for lot in self.account.lots) > self.version.snapshot.position.max_qty:
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = P3Position(limit=CombinedCapitalLimit(mode='QUANTITY_AND_CAPITAL', max_qty=1000, capital_policy=MarketValueCap(policy_...arget_qty=100, tactical_target_qty=0, allocation_provenance='PROPOSED', allocation_evidence='Synthetic human proposal')
+item = 'max_qty'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'P3Position' object has no attribute 'max_qty'
+
+.venv\Lib\site-packages\pydantic\main.py:1042: AttributeError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_frozen_workers.py::test_real_frozen_workers_publish_reopen_capital_and_preserve_both_exception_routes[p3_chain0]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 1 warning in 15.56s

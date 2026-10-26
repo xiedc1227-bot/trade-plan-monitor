@@ -1,0 +1,23 @@
+E501 Line too long (104 > 100)
+  --> src\trade_plan_monitor\backtest\research_signal_projection.py:55:101
+   |
+53 |             if proof.evidence_hash not in current:
+54 |                 base = next((p for p in values.get("market_linkage", ())
+55 |                     if isinstance(p, CapitalMarketDecision) and isinstance(proof, CapitalMarketDecision)
+   |                                                                                                     ^^^^
+56 |                     and _shared_facts(p) == _shared_facts(proof)), None)
+57 |                 proofs[proof.evidence_hash] = (proof if base is None else CapitalLinkageReference(
+   |
+
+E501 Line too long (102 > 100)
+   --> src\trade_plan_monitor\web\backtest_schemas.py:515:101
+    |
+513 |     execution_config: BacktestExecutionConfigInput
+514 |     event_risk_assumption: Literal["NO_EVENT_RISK", "MANUAL_EVENT_RISK"]
+515 |     research_input: CapitalResearchInput | ExceptionResearchInput | UnifiedResearchInput | None = None
+    |                                                                                                     ^^
+516 |
+517 |     @field_validator("research_input", mode="before")
+    |
+
+Found 4 errors (2 fixed, 2 remaining).

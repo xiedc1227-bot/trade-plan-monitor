@@ -1,0 +1,1174 @@
+..................F........FFFFFFFFFFFFFFFFFF                            [100%]
+================================== FAILURES ===================================
+_ test_actual_originals_fit_default_budget_without_losing_source_evidence[04-20261009-091956.txt] _
+
+path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/tests/fixtures/shengxin_sources/04-20261009-091956.txt')
+
+    @pytest.mark.parametrize("path", SOURCES, ids=lambda path: path.name)
+    def test_actual_originals_fit_default_budget_without_losing_source_evidence(path):
+        source = path.read_text(encoding="utf-8-sig")
+        prompt = build_loop_plan_prompt(source)
+>       request = PlanExtractionRequest(request_id=uuid4(),
+            config=_config().model_copy(update={"max_input_chars": 50_000}), prompt=prompt)
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PlanExtractionRequest
+E         Value error, prompt exceeds config max_input_chars [type=value_error, input_value={'request_id': UUID('fe82...NTRUSTED_PLAN_DATA_END'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\unit\test_preparation_prompt_budget.py:24: ValidationError
+_______ test_current_ai_cannot_forge_review_or_hide_source[extra_root] ________
+
+attack = 'extra_root'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3CB0>
+request = PlanExtractionRequest(request_id=UUID('4d11de41-0d41-4528-a71f-099c33d6e68c'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+____ test_current_ai_cannot_forge_review_or_hide_source[extra_plan_field] _____
+
+attack = 'extra_plan_field'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3770>
+request = PlanExtractionRequest(request_id=UUID('61460c52-1d20-4331-ad36-6429241f862f'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_____ test_current_ai_cannot_forge_review_or_hide_source[missing_clause] ______
+
+attack = 'missing_clause'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F38C0>
+request = PlanExtractionRequest(request_id=UUID('2d7f3a05-4958-4667-a0d0-3f08a47677d3'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+___ test_current_ai_cannot_forge_review_or_hide_source[changed_source_span] ___
+
+attack = 'changed_source_span'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3A10>
+request = PlanExtractionRequest(request_id=UUID('e2ad64d6-6b30-49b2-b085-544aadb82fd4'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+______ test_current_ai_cannot_forge_review_or_hide_source[forged_human] _______
+
+attack = 'forged_human'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3B60>
+request = PlanExtractionRequest(request_id=UUID('2bb2b5a0-be5e-495d-bde9-bf9f913cca6a'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_____ test_current_ai_cannot_forge_review_or_hide_source[forged_contract] _____
+
+attack = 'forged_contract'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3CB0>
+request = PlanExtractionRequest(request_id=UUID('9e2dc607-d973-4b5e-b1ad-e826fcf9b693'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+____ test_current_ai_cannot_forge_review_or_hide_source[wrong_bound_value] ____
+
+attack = 'wrong_bound_value'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F38C0>
+request = PlanExtractionRequest(request_id=UUID('c68d51d7-4b6d-451b-bc92-997fe7ac2949'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+__ test_current_ai_cannot_forge_review_or_hide_source[fundamental_condition] __
+
+attack = 'fundamental_condition'
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "extra_root",
+            "extra_plan_field",
+            "missing_clause",
+            "changed_source_span",
+            "forged_human",
+            "forged_contract",
+            "wrong_bound_value",
+            "fundamental_condition",
+        ],
+    )
+    def test_current_ai_cannot_forge_review_or_hide_source(attack):
+        output = current_output()
+        if attack == "extra_root":
+            output["SECRET_untrusted"] = "execute arbitrary code"
+        elif attack == "extra_plan_field":
+            output["draft"]["execute_python"] = "SECRET_untrusted"
+        elif attack == "missing_clause":
+            output["clauses"] = []
+        elif attack == "changed_source_span":
+            output["clauses"][0]["excerpt"] = "SECRET_untrusted"
+        elif attack == "fundamental_condition":
+            output["draft"]["ordinary_rules"][0]["condition"] = {
+                "type": "REVIEWED_FACT",
+                "fact_kind": "PRICE_STRUCTURE",
+                "evidence_requirement": "Fundamental announcement verification",
+                "validity_scope": "TRADE_DATE",
+            }
+        else:
+            output["bindings"] = [
+                {
+                    "path": "position.max_qty" if attack == "forged_contract" else "schema_version",
+                    "value": 300 if attack == "forged_contract" else 4,
+                    "origin": "HUMAN_SUPPLEMENT" if attack == "forged_human" else "PRODUCT_CONTRACT",
+                    "unit": "JSON",
+                    "clause_ids": [],
+                    "supplement_id": "SECRET_untrusted" if attack == "forged_human" else None,
+                }
+            ]
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:101:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3B60>
+request = PlanExtractionRequest(request_id=UUID('4775a2ba-6f6a-47ef-8360-53e7ade6e79a'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_ test_current_json_boundary_rejects_ambiguous_or_malformed_output[{"draft":null,"draft":null}] _
+
+content = '{"draft":null,"draft":null}'
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            '{"draft":null,"draft":null}',
+            '{"draft": NaN}',
+            "[1,2,3]",
+            '{"SECRET_untrusted":',
+        ],
+    )
+    def test_current_json_boundary_rejects_ambiguous_or_malformed_output(content):
+>       result = extract(content)
+                 ^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:118:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3CB0>
+request = PlanExtractionRequest(request_id=UUID('0f291051-d713-47d9-b60b-a949f3677d8f'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_ test_current_json_boundary_rejects_ambiguous_or_malformed_output[{"draft": NaN}] _
+
+content = '{"draft": NaN}'
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            '{"draft":null,"draft":null}',
+            '{"draft": NaN}',
+            "[1,2,3]",
+            '{"SECRET_untrusted":',
+        ],
+    )
+    def test_current_json_boundary_rejects_ambiguous_or_malformed_output(content):
+>       result = extract(content)
+                 ^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:118:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3B60>
+request = PlanExtractionRequest(request_id=UUID('93eae4e6-3643-43e6-a7de-99e886727d1b'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+__ test_current_json_boundary_rejects_ambiguous_or_malformed_output[[1,2,3]] __
+
+content = '[1,2,3]'
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            '{"draft":null,"draft":null}',
+            '{"draft": NaN}',
+            "[1,2,3]",
+            '{"SECRET_untrusted":',
+        ],
+    )
+    def test_current_json_boundary_rejects_ambiguous_or_malformed_output(content):
+>       result = extract(content)
+                 ^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:118:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A44E4050>
+request = PlanExtractionRequest(request_id=UUID('ac0f4292-e099-4e76-9d9e-1a3b1da456bd'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_ test_current_json_boundary_rejects_ambiguous_or_malformed_output[{"SECRET_untrusted":] _
+
+content = '{"SECRET_untrusted":'
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            '{"draft":null,"draft":null}',
+            '{"draft": NaN}',
+            "[1,2,3]",
+            '{"SECRET_untrusted":',
+        ],
+    )
+    def test_current_json_boundary_rejects_ambiguous_or_malformed_output(content):
+>       result = extract(content)
+                 ^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:118:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3B60>
+request = PlanExtractionRequest(request_id=UUID('a6b5bcf4-ce2f-47ce-b44f-d2677c1135b6'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+__________ test_current_truncated_valid_output_never_creates_a_draft __________
+
+    def test_current_truncated_valid_output_never_creates_a_draft():
+>       result = extract(current_output(), finish_reason="length")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:125:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A44E41A0>
+request = PlanExtractionRequest(request_id=UUID('3f5cf078-f20d-43c5-b9c6-6c4b5067f0e5'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+____ test_current_missing_parameters_remain_a_reviewable_blocked_candidate ____
+
+    def test_current_missing_parameters_remain_a_reviewable_blocked_candidate():
+        output = current_output()
+        output["draft"]["ordinary_rules"][0]["quantity"] = None
+>       result = extract(output)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:133:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A44E4440>
+request = PlanExtractionRequest(request_id=UUID('e1a49e33-a362-4ec5-b7bc-555b00871d63'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_ test_non_success_http_extraction_never_exposes_current_source_mapping[QUEUED] _
+
+status = 'QUEUED'
+
+    @pytest.mark.parametrize("status", ["QUEUED", "RUNNING", "INVALID_OUTPUT", "PROVIDER_ERROR"])
+    def test_non_success_http_extraction_never_exposes_current_source_mapping(status):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from pydantic import ValidationError
+
+        from trade_plan_monitor.web.routers.plans import (
+            PlanExtractionOperationStatus,
+            PlanExtractionView,
+        )
+
+>       result = extract(current_output())
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:152:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242ECF8E3C0>
+request = PlanExtractionRequest(request_id=UUID('5a693e4c-24ab-4ca3-b130-9757e626b136'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_ test_non_success_http_extraction_never_exposes_current_source_mapping[RUNNING] _
+
+status = 'RUNNING'
+
+    @pytest.mark.parametrize("status", ["QUEUED", "RUNNING", "INVALID_OUTPUT", "PROVIDER_ERROR"])
+    def test_non_success_http_extraction_never_exposes_current_source_mapping(status):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from pydantic import ValidationError
+
+        from trade_plan_monitor.web.routers.plans import (
+            PlanExtractionOperationStatus,
+            PlanExtractionView,
+        )
+
+>       result = extract(current_output())
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:152:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242ECF8E120>
+request = PlanExtractionRequest(request_id=UUID('3be2515f-3ed2-4157-999b-8570f66d66ac'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_ test_non_success_http_extraction_never_exposes_current_source_mapping[INVALID_OUTPUT] _
+
+status = 'INVALID_OUTPUT'
+
+    @pytest.mark.parametrize("status", ["QUEUED", "RUNNING", "INVALID_OUTPUT", "PROVIDER_ERROR"])
+    def test_non_success_http_extraction_never_exposes_current_source_mapping(status):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from pydantic import ValidationError
+
+        from trade_plan_monitor.web.routers.plans import (
+            PlanExtractionOperationStatus,
+            PlanExtractionView,
+        )
+
+>       result = extract(current_output())
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:152:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242A30F3CB0>
+request = PlanExtractionRequest(request_id=UUID('9219309e-c0cc-4613-afd1-48a2d9ce2560'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+_ test_non_success_http_extraction_never_exposes_current_source_mapping[PROVIDER_ERROR] _
+
+status = 'PROVIDER_ERROR'
+
+    @pytest.mark.parametrize("status", ["QUEUED", "RUNNING", "INVALID_OUTPUT", "PROVIDER_ERROR"])
+    def test_non_success_http_extraction_never_exposes_current_source_mapping(status):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from pydantic import ValidationError
+
+        from trade_plan_monitor.web.routers.plans import (
+            PlanExtractionOperationStatus,
+            PlanExtractionView,
+        )
+
+>       result = extract(current_output())
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_current_plan_extraction_security.py:152:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_current_plan_extraction_security.py:55: in extract
+    return asyncio.run(
+C:\Program Files\Python314\Lib\asyncio\runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Program Files\Python314\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+src\trade_plan_monitor\ai\extraction.py:70: in extract_plan
+    result = await _extract_output(
+src\trade_plan_monitor\ai\extraction.py:123: in _extract_output
+    raw = await provider.extract_plan(request)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_current_plan_extraction_security.extract.<locals>.Provider object at 0x00000242ECF8E120>
+request = PlanExtractionRequest(request_id=UUID('6b19aabe-c302-4492-af05-c6124ca33171'), config=AIProviderConfig(provider_id=UUI...e_text": "Synthetic reviewed source with technical choices still awaiting explicit review."}\nUNTRUSTED_PLAN_DATA_END')
+
+    async def extract_plan(self, request):
+>       assert request.config.prompt_version == "plan-extract-v11"
+E       AssertionError: assert 'plan-extract-v12' == 'plan-extract-v11'
+E
+E         - plan-extract-v11
+E         ?                ^
+E         + plan-extract-v12
+E         ?                ^
+
+tests\unit\test_current_plan_extraction_security.py:44: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_preparation_prompt_budget.py::test_actual_originals_fit_default_budget_without_losing_source_evidence[04-20261009-091956.txt]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[extra_root]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[extra_plan_field]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[missing_clause]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[changed_source_span]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[forged_human]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[forged_contract]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[wrong_bound_value]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_ai_cannot_forge_review_or_hide_source[fundamental_condition]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_json_boundary_rejects_ambiguous_or_malformed_output[{"draft":null,"draft":null}]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_json_boundary_rejects_ambiguous_or_malformed_output[{"draft": NaN}]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_json_boundary_rejects_ambiguous_or_malformed_output[[1,2,3]]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_json_boundary_rejects_ambiguous_or_malformed_output[{"SECRET_untrusted":]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_truncated_valid_output_never_creates_a_draft
+FAILED tests/unit/test_current_plan_extraction_security.py::test_current_missing_parameters_remain_a_reviewable_blocked_candidate
+FAILED tests/unit/test_current_plan_extraction_security.py::test_non_success_http_extraction_never_exposes_current_source_mapping[QUEUED]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_non_success_http_extraction_never_exposes_current_source_mapping[RUNNING]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_non_success_http_extraction_never_exposes_current_source_mapping[INVALID_OUTPUT]
+FAILED tests/unit/test_current_plan_extraction_security.py::test_non_success_http_extraction_never_exposes_current_source_mapping[PROVIDER_ERROR]
+19 failed, 26 passed in 3.04s

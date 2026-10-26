@@ -1,0 +1,117 @@
+
+> trade-plan-monitor-web@0.1.0 test:e2e
+> playwright test tests/e2e/p3-capital.spec.ts tests/e2e/monitor-loop-backtest.spec.ts -g review, reconcile|.*
+
+
+Running 9 tests using 1 worker
+
+
+
+(node:35740) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1/9] [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:97:1 › real upload/retry/edit/review/run journey retains original 503 intent and causal results
+[2/9] [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:237:1 › unknown extraction cancellation survives navigation and requires explicit ended confirmation
+[3/9] [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:256:1 › start automatically fills missing history with the real worker and then replays
+[4/9] [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:299:1 › four complete plans produce one continuous account and one run in real Chrome
+[5/9] [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:487:1 › actual originals are prepared individually and require date confirmation before AI
+  1) [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:487:1 › actual originals are prepared individually and require date confirmation before AI
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('region', { name: '准备进度' })
+    Expected substring: "AI 服务限流"
+    Received string:    "准备进度提取失败第 1 份 · 2026-10-09 · 已提取 1 / 3 次提取失败完整提取请求超过当前 AI 输入长度上限，尚未发送给 AI。请检查原文长度和 AI 最大输入字符数设置，再重试。重试提取刷新状态"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('region', { name: '准备进度' })
+        - locator resolved to <section data-v-b35fa21a="" data-v-a3462bad="" aria-labelledby="v-1-title" class="preparation-progress">…</section>
+        - unexpected value "准备进度待提取第 1 份 · 2026-10-09 · 已提取 0 / 3 次等待提取正在提交操作…刷新状态"
+        - locator resolved to <section data-v-b35fa21a="" data-v-a3462bad="" aria-labelledby="v-1-title" class="preparation-progress">…</section>
+        - unexpected value "准备进度正在提取第 1 份 · 2026-10-09 · 已提取 1 / 3 次正在提取 · 当前条目正在逐条处理或等待取消排空，完成前保持唯一任务占用。正在提交操作…刷新状态"
+        6 × locator resolved to <section data-v-b35fa21a="" data-v-a3462bad="" aria-labelledby="v-1-title" class="preparation-progress">…</section>
+          - unexpected value "准备进度正在提取第 1 份 · 2026-10-09 · 已提取 1 / 3 次正在提取 · 当前条目正在逐条处理或等待取消排空，完成前保持唯一任务占用。请求取消刷新状态"
+        25 × locator resolved to <section data-v-b35fa21a="" data-v-a3462bad="" aria-labelledby="v-1-title" class="preparation-progress">…</section>
+           - unexpected value "准备进度提取失败第 1 份 · 2026-10-09 · 已提取 1 / 3 次提取失败完整提取请求超过当前 AI 输入长度上限，尚未发送给 AI。请检查原文长度和 AI 最大输入字符数设置，再重试。重试提取刷新状态"
+
+
+      511 |   }
+      512 |   await page.getByTestId("extract-preparation").click();
+    > 513 |   await expect(page.getByRole("region",{name:"准备进度"})).toContainText("AI 服务限流",{timeout:15000});
+          |                                                        ^
+      514 |   expect((await (await page.request.get(url+"/fixture/counters")).json()).extractions).toBe(1);
+      515 |   for (const width of [320,1440]) { await page.setViewportSize({width,height:900}); expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); await page.screenshot({path:testInfo.outputPath(`actual-single-${width}.png`),fullPage:true}); }
+      516 | });
+        at D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\web\tests\e2e\monitor-loop-backtest.spec.ts:513:56
+
+    attachment #1: preparation-reads (application/json) ────────────────────────────────────────────
+    C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\monitor-loop-backtest-actu-36bbe-date-confirmation-before-AI-chrome\attachments\preparation-reads-be3ca2856741a68c5ce089c7e7dd006413f3793b.json
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: page-state (text/plain) ─────────────────────────────────────────────────────────
+    跳到主要内容
+    PLAN / MONITOR
+    交易计划监控
+    01
+    监控总览
+    02
+    计划
+    03
+    提醒
+    04
+    系统
+    05
+    回测
+    ●
+    测试连接
+    LOCAL WORKSPACE / UTC+08:00
+    运行记录
+    新建回测
+    历史行情数据
+
+    回测历史可读取
+
+    服务管理
+    创建回测
+
+    选计划，核对设置，开始回测。历史数据由程序自动准备。
+
+    返回回测研究台
+
+    仅供研究与回放 · 不连接券商、不自动下单
+
+    工作台计划
+    复用工作台中已审核的计划
+    计划时间线
+    复用历史更新，或从原文新建
+    01 选择或准备计划
+    02 核对回测设置
+    03 开始回测
+    选择计划时间线
+
+    选用后核对回测范围与费用；同一路径的全部已审核更新会自动带...
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: backend-output (text/plain) ─────────────────────────────────────────────────────
+    D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+      from starlette.testclient import TestClient as TestClient  # noqa
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: C:\Users\xiedc\AppData\Local\Temp\trade-plan-monitor-playwright-results\monitor-loop-backtest-actu-36bbe-date-confirmation-before-AI-chrome\error-context.md
+
+
+(node:108416) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[6/9] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+[7/9] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP CAPITAL_ONLY ORDINARY › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+[8/9] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › MARKET_VALUE_CAP QUANTITY_AND_CAPITAL WEAK_MINIMUM › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+[9/9] [chrome] › tests\e2e\p3-capital.spec.ts:40:3 › OPEN_COST_CAP QUANTITY_AND_CAPITAL BROKEN_STRONG › review, reconcile, preview, approve separately, whole quote fail/recovery and reload
+  Slow test file: [chrome] › tests\e2e\monitor-loop-backtest.spec.ts (5.4m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 failed
+    [chrome] › tests\e2e\monitor-loop-backtest.spec.ts:487:1 › actual originals are prepared individually and require date confirmation before AI
+  8 passed (6.3m)

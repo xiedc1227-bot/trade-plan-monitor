@@ -1,0 +1,23 @@
+.......F...........                                                      [100%]
+================================== FAILURES ===================================
+_ test_actual_originals_fit_default_budget_without_losing_source_evidence[browser-raw-04-20261009-091956.txt] _
+
+path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/tests/fixtures/shengxin_sources/04-20261009-091956.txt')
+preserve_line_endings = True
+
+    @pytest.mark.parametrize("path", SOURCES, ids=lambda path: path.name)
+    @pytest.mark.parametrize("preserve_line_endings", [False, True], ids=["normalized", "browser-raw"])
+    def test_actual_originals_fit_default_budget_without_losing_source_evidence(path, preserve_line_endings):
+        source = (path.read_bytes().decode("utf-8-sig") if preserve_line_endings
+                  else path.read_text(encoding="utf-8-sig"))
+        prompt = build_loop_plan_prompt(source)
+>       request = PlanExtractionRequest(request_id=uuid4(),
+            config=_config().model_copy(update={"max_input_chars": 50_000}), prompt=prompt)
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PlanExtractionRequest
+E         Value error, prompt exceeds config max_input_chars [type=value_error, input_value={'request_id': UUID('229d...NTRUSTED_PLAN_DATA_END'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests\unit\test_preparation_prompt_budget.py:26: ValidationError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_preparation_prompt_budget.py::test_actual_originals_fit_default_budget_without_losing_source_evidence[browser-raw-04-20261009-091956.txt]
+1 failed, 18 passed in 1.76s

@@ -1,0 +1,9 @@
+
+> trade-plan-monitor-web@0.1.0 type-check
+> vue-tsc --noEmit -p tsconfig.json
+
+tests/unit/p3Capital.spec.ts(28,36): error TS2493: Tuple type '[]' of length '0' has no element at index '0'.
+tests/unit/p3Capital.spec.ts(46,59): error TS2345: Argument of type 'Mock<() => Promise<unknown>>' is not assignable to parameter of type '<T>(url: string, body?: object | undefined) => Promise<T>'.
+  Type 'Promise<unknown>' is not assignable to type 'Promise<T>'.
+    Type 'unknown' is not assignable to type 'T'.
+      'T' could be instantiated with an arbitrary type which could be unrelated to 'unknown'.

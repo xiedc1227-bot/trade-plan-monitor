@@ -1,0 +1,55 @@
+...F                                                                     [100%]
+================================== FAILURES ===================================
+_ test_public_schema9_complete_chain_preserves_exact_quantity_and_book[p3_chain3] _
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x000002293EF96C40>
+
+    def test_public_schema9_complete_chain_preserves_exact_quantity_and_book(p3_chain):
+        chain = p3_chain
+        if chain.p3_route == "ORDINARY":
+            chain.runtime.run_inputs(plan=chain.plan, inputs=exception_inputs(chain))
+            expected = 200
+        else:
+>           expected = approve_current(chain).candidate.frozen_quantity
+                       ^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_chain.py:61:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_market_exception_runtime.py:92: in approve_current
+    shown = preview_exception(work.daily, ExceptionPreviewCommand(
+src\trade_plan_monitor\state\market_exception_service.py:184: in preview_exception
+    quantity = _quantity(candidate, context, command.proposed_quantity)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+candidate = ExceptionCandidate(version='market-linkage-exception-candidate-v1', candidate_id='f5a2607aaa80272f65e00eb3106a83c27ca7...ldren=()),), occurrence_mode=None), projection_hash='afb0d29de07dd39bdad328acf2fccbb9329e577d3bc8da5ed93adb004c7af3b5')
+context = CapitalAuthorityContext(binding_hash='985985efa0c4dabddc1731c8ce827446cb18e4e70ff2ede2f674d28ef700bd5a', inventory_rev...=100, retained_basis_fen=20000, book_revision=1, price_fen=161, symbol='601021.SH', session=datetime.date(2026, 9, 18))
+proposed = 300
+
+    def _quantity(candidate, context, proposed):
+        b = candidate.binding
+        operands = dict(route=b.route, base_quantity=b.base_quantity, minimum=b.minimum,
+                        increment=b.increment, proposed_quantity=proposed)
+        if isinstance(context, CapitalAuthorityContext):
+            result = exception_quantity_grid(**operands)
+        else:
+            result = validate_exception_quantity(**operands, capacity=context.capacity)
+        if result.blockers:
+            raise ExceptionAuthorityError(result.blockers[0], status=(
+                422 if result.blockers[0].startswith("EXCEPTION_QUANTITY") else 409))
+        if isinstance(context, CapitalAuthorityContext):
+            capital = assess_exception_capital(context, result.candidate_quantity)
+            if capital.blockers:
+>               raise ExceptionAuthorityError(capital.blockers[0])
+E               trade_plan_monitor.state.market_exception_service.ExceptionAuthorityError: MAX_QUANTITY_CAPACITY
+
+src\trade_plan_monitor\state\market_exception_service.py:169: ExceptionAuthorityError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_chain.py::test_public_schema9_complete_chain_preserves_exact_quantity_and_book[p3_chain3]
+1 failed, 3 passed, 1 warning in 4.96s

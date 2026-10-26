@@ -1,0 +1,291 @@
+FFFFFF                                                                   [100%]
+================================== FAILURES ===================================
+_____ test_budget_buy_and_actual_newest_sell_allocation_have_exact_basis ______
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t09-red\test_budget_buy_...rkspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t09-red/test_budget_buy_and_actual_new0/capital.sqlite'))
+
+    def test_budget_buy_and_actual_newest_sell_allocation_have_exact_basis(database):
+        engine, _ = database
+        with Session(engine) as session, session.begin():
+>           account = setup_account(session)
+                      ^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_accounting.py:45:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_accounting.py:22: in setup_account
+    session.add(TradingCalendar(exchange="SSE", cal_date=day, is_open=True,
+<string>:4: in __init__
+    ???
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <trade_plan_monitor.state.models.TradingCalendar object at 0x00000164580C3CB0>
+kwargs = {'exchange': 'SSE', 'cal_date': datetime.date(2026, 10, 26), 'is_open': True, 'previous_trade_date': datetime.date(2026, 10, 25), ...}
+
+    def _declarative_constructor(self: Any, **kwargs: Any) -> None:
+        """A simple constructor that allows initialization from kwargs.
+
+        Sets attributes on the constructed instance using the names and
+        values in ``kwargs``.
+
+        Only keys that are present as
+        attributes of the instance's class are allowed. These could be,
+        for example, any mapped columns or relationships.
+        """
+        cls_ = type(self)
+        for k in kwargs:
+            if not hasattr(cls_, k):
+>               raise TypeError(
+                    "%r is an invalid keyword argument for %s" % (k, cls_.__name__)
+                )
+E               TypeError: 'source' is an invalid keyword argument for TradingCalendar
+
+.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py:2193: TypeError
+_ test_older_buy_records_unknown_and_selling_unknown_lot_restores_known_basis _
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t09-red\test_older_buy_r...rkspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t09-red/test_older_buy_records_unknown0/capital.sqlite'))
+
+    def test_older_buy_records_unknown_and_selling_unknown_lot_restores_known_basis(database):
+        engine, _ = database
+        with Session(engine) as session, session.begin():
+>           account = setup_account(session)
+                      ^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_accounting.py:61:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_accounting.py:22: in setup_account
+    session.add(TradingCalendar(exchange="SSE", cal_date=day, is_open=True,
+<string>:4: in __init__
+    ???
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <trade_plan_monitor.state.models.TradingCalendar object at 0x00000164596C0B90>
+kwargs = {'exchange': 'SSE', 'cal_date': datetime.date(2026, 10, 26), 'is_open': True, 'previous_trade_date': datetime.date(2026, 10, 25), ...}
+
+    def _declarative_constructor(self: Any, **kwargs: Any) -> None:
+        """A simple constructor that allows initialization from kwargs.
+
+        Sets attributes on the constructed instance using the names and
+        values in ``kwargs``.
+
+        Only keys that are present as
+        attributes of the instance's class are allowed. These could be,
+        for example, any mapped columns or relationships.
+        """
+        cls_ = type(self)
+        for k in kwargs:
+            if not hasattr(cls_, k):
+>               raise TypeError(
+                    "%r is an invalid keyword argument for %s" % (k, cls_.__name__)
+                )
+E               TypeError: 'source' is an invalid keyword argument for TradingCalendar
+
+.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py:2193: TypeError
+__ test_missing_old_cost_blocks_known_budget_buy_before_any_inventory_write ___
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t09-red\test_missing_old...rkspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t09-red/test_missing_old_cost_blocks_k0/capital.sqlite'))
+
+    def test_missing_old_cost_blocks_known_budget_buy_before_any_inventory_write(database):
+        engine, _ = database
+        with Session(engine) as session, session.begin():
+>           account = setup_account(session, with_book=False)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_accounting.py:72:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_accounting.py:22: in setup_account
+    session.add(TradingCalendar(exchange="SSE", cal_date=day, is_open=True,
+<string>:4: in __init__
+    ???
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <trade_plan_monitor.state.models.TradingCalendar object at 0x000001645977E210>
+kwargs = {'exchange': 'SSE', 'cal_date': datetime.date(2026, 10, 26), 'is_open': True, 'previous_trade_date': datetime.date(2026, 10, 25), ...}
+
+    def _declarative_constructor(self: Any, **kwargs: Any) -> None:
+        """A simple constructor that allows initialization from kwargs.
+
+        Sets attributes on the constructed instance using the names and
+        values in ``kwargs``.
+
+        Only keys that are present as
+        attributes of the instance's class are allowed. These could be,
+        for example, any mapped columns or relationships.
+        """
+        cls_ = type(self)
+        for k in kwargs:
+            if not hasattr(cls_, k):
+>               raise TypeError(
+                    "%r is an invalid keyword argument for %s" % (k, cls_.__name__)
+                )
+E               TypeError: 'source' is an invalid keyword argument for TradingCalendar
+
+.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py:2193: TypeError
+_______ test_explicit_empty_inventory_creates_budget_only_with_the_buy ________
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t09-red\test_explicit_em...rkspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t09-red/test_explicit_empty_inventory_0/capital.sqlite'))
+
+    def test_explicit_empty_inventory_creates_budget_only_with_the_buy(database):
+        engine, _ = database
+        with Session(engine) as session, session.begin():
+>           account = setup_account(session, quantity=0, with_book=False)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_accounting.py:82:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_accounting.py:22: in setup_account
+    session.add(TradingCalendar(exchange="SSE", cal_date=day, is_open=True,
+<string>:4: in __init__
+    ???
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <trade_plan_monitor.state.models.TradingCalendar object at 0x0000016459A58180>
+kwargs = {'exchange': 'SSE', 'cal_date': datetime.date(2026, 10, 26), 'is_open': True, 'previous_trade_date': datetime.date(2026, 10, 25), ...}
+
+    def _declarative_constructor(self: Any, **kwargs: Any) -> None:
+        """A simple constructor that allows initialization from kwargs.
+
+        Sets attributes on the constructed instance using the names and
+        values in ``kwargs``.
+
+        Only keys that are present as
+        attributes of the instance's class are allowed. These could be,
+        for example, any mapped columns or relationships.
+        """
+        cls_ = type(self)
+        for k in kwargs:
+            if not hasattr(cls_, k):
+>               raise TypeError(
+                    "%r is an invalid keyword argument for %s" % (k, cls_.__name__)
+                )
+E               TypeError: 'source' is an invalid keyword argument for TradingCalendar
+
+.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py:2193: TypeError
+___ test_old_binary_quantity_change_marks_cost_unknown_without_vetoing_sell ___
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t09-red\test_old_binary_...rkspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t09-red/test_old_binary_quantity_chang0/capital.sqlite'))
+
+    def test_old_binary_quantity_change_marks_cost_unknown_without_vetoing_sell(database):
+        engine, _ = database
+        with Session(engine) as session, session.begin():
+>           account = setup_account(session)
+                      ^^^^^^^^^^^^^^^^^^^^^^
+
+tests\integration\test_p3_accounting.py:93:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_accounting.py:22: in setup_account
+    session.add(TradingCalendar(exchange="SSE", cal_date=day, is_open=True,
+<string>:4: in __init__
+    ???
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <trade_plan_monitor.state.models.TradingCalendar object at 0x0000016459A59BA0>
+kwargs = {'exchange': 'SSE', 'cal_date': datetime.date(2026, 10, 26), 'is_open': True, 'previous_trade_date': datetime.date(2026, 10, 25), ...}
+
+    def _declarative_constructor(self: Any, **kwargs: Any) -> None:
+        """A simple constructor that allows initialization from kwargs.
+
+        Sets attributes on the constructed instance using the names and
+        values in ``kwargs``.
+
+        Only keys that are present as
+        attributes of the instance's class are allowed. These could be,
+        for example, any mapped columns or relationships.
+        """
+        cls_ = type(self)
+        for k in kwargs:
+            if not hasattr(cls_, k):
+>               raise TypeError(
+                    "%r is an invalid keyword argument for %s" % (k, cls_.__name__)
+                )
+E               TypeError: 'source' is an invalid keyword argument for TradingCalendar
+
+.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py:2193: TypeError
+____ test_fault_after_inventory_and_budget_writes_rolls_every_effect_back _____
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t09-red\test_fault_after...rkspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t09-red/test_fault_after_inventory_and0/capital.sqlite'))
+
+    def test_fault_after_inventory_and_budget_writes_rolls_every_effect_back(database):
+        engine, _ = database
+        with Session(engine) as session, session.begin():
+>           setup_account(session)
+
+tests\integration\test_p3_accounting.py:109:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p3_accounting.py:22: in setup_account
+    session.add(TradingCalendar(exchange="SSE", cal_date=day, is_open=True,
+<string>:4: in __init__
+    ???
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:596: in _initialize_instance
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv\Lib\site-packages\sqlalchemy\orm\state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <trade_plan_monitor.state.models.TradingCalendar object at 0x0000016459A028D0>
+kwargs = {'exchange': 'SSE', 'cal_date': datetime.date(2026, 10, 26), 'is_open': True, 'previous_trade_date': datetime.date(2026, 10, 25), ...}
+
+    def _declarative_constructor(self: Any, **kwargs: Any) -> None:
+        """A simple constructor that allows initialization from kwargs.
+
+        Sets attributes on the constructed instance using the names and
+        values in ``kwargs``.
+
+        Only keys that are present as
+        attributes of the instance's class are allowed. These could be,
+        for example, any mapped columns or relationships.
+        """
+        cls_ = type(self)
+        for k in kwargs:
+            if not hasattr(cls_, k):
+>               raise TypeError(
+                    "%r is an invalid keyword argument for %s" % (k, cls_.__name__)
+                )
+E               TypeError: 'source' is an invalid keyword argument for TradingCalendar
+
+.venv\Lib\site-packages\sqlalchemy\orm\decl_base.py:2193: TypeError
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_accounting.py::test_budget_buy_and_actual_newest_sell_allocation_have_exact_basis
+FAILED tests/integration/test_p3_accounting.py::test_older_buy_records_unknown_and_selling_unknown_lot_restores_known_basis
+FAILED tests/integration/test_p3_accounting.py::test_missing_old_cost_blocks_known_budget_buy_before_any_inventory_write
+FAILED tests/integration/test_p3_accounting.py::test_explicit_empty_inventory_creates_budget_only_with_the_buy
+FAILED tests/integration/test_p3_accounting.py::test_old_binary_quantity_change_marks_cost_unknown_without_vetoing_sell
+FAILED tests/integration/test_p3_accounting.py::test_fault_after_inventory_and_budget_writes_rolls_every_effect_back
+6 failed in 2.36s

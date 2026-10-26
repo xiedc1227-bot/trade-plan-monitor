@@ -1,0 +1,16 @@
+
+=================================== ERRORS ====================================
+____________ ERROR collecting tests/integration/test_p3_storage.py ____________
+ImportError while importing test module 'D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\tests\integration\test_p3_storage.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Program Files\Python314\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_p3_storage.py:15: in <module>
+    from trade_plan_monitor.state.p3_capital_repository import CapitalCommandConflict, CapitalRepository
+E   ModuleNotFoundError: No module named 'trade_plan_monitor.state.p3_capital_repository'
+=========================== short test summary info ===========================
+ERROR tests/integration/test_p3_storage.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 1.30s

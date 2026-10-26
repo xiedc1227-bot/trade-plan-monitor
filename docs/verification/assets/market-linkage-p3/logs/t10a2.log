@@ -1,0 +1,24 @@
+..........F...................................                           [100%]
+================================== FAILURES ===================================
+________ test_fee_rate_source_must_match_exact_number_not_a_substring _________
+
+    def test_fee_rate_source_must_match_exact_number_not_a_substring():
+        from trade_plan_monitor.ai.semantic_validation import semantic_interpretation_matches
+
+        draft = P3PlanDraft.model_validate(p3_payload("OPEN_COST_CAP"))
+        path = "position.limit.capital_policy.buy_cost_schedule.commission_rate"
+        assert not semantic_interpretation_matches(path, "0", "commission_rate=0.03", draft)
+>       assert semantic_interpretation_matches(path, "0.0003", "Ӷ����0.03%", draft)
+E       AssertionError: assert False
+E        +  where False = <function semantic_interpretation_matches at 0x000001CABC966C40>('position.limit.capital_policy.buy_cost_schedule.commission_rate', '0.0003', 'Ӷ����0.03%', P3PlanDraft(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>)))
+
+tests\integration\test_p3_review.py:67: AssertionError
+============================== warnings summary ===============================
+tests/integration/test_p2_review.py::test_explicit_target_must_bind_to_reviewed_pressure_range[190-True]
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_review.py::test_fee_rate_source_must_match_exact_number_not_a_substring
+1 failed, 45 passed, 1 warning in 2.90s

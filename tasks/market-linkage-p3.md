@@ -1,6 +1,6 @@
 # Implementation plan and tasks: market-linkage-p3
 
-Status: IMPLEMENTING — 2026-10-26. The user approved all six decisions and implementation; marks record actual progress. [Chinese review copy](market-linkage-p3.zh-CN.md) · [Specification and six approved decisions](../docs/specifications/monitoring/SPEC-market-linkage-p3.md).
+Status: COMPLETE AND ACCEPTED — 2026-10-26. The user approved all six decisions and implementation; marks record actual progress. [Chinese review copy](market-linkage-p3.zh-CN.md) · [Specification and six approved decisions](../docs/specifications/monitoring/SPEC-market-linkage-p3.md).
 
 ## MLP3-P01 — Authority, scope and working method
 
@@ -206,28 +206,28 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T22 — Run complete regressions without weakening gates
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T21.
 - Files/scope: tests only when a failure justifies repair, paired verification-report draft. Split repairs by root cause; do not widen assertions or overwrite golden history to hide failures.
 - Acceptance: MLP3-A12. Verify: V01–V08, including capacity in isolation. Record commands, revision, unique/overlapping counts, original failures, exact reruns, skipped/live exclusions and resource limits honestly.
 
 ### MLP3-T23 — Update bilingual operating/prompt/capability documents
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T22.
 - Files/scope: T23a new operations pair plus verification pair (4); T23b root README pair plus docs index pair (4); T23c capability-map pair (2).
 - Acceptance: MLP3-A01,MLP3-A11,MLP3-A12. Verify: V08. Clearly explain both cap meanings, explicit simulation opening basis, ordinary/exception quantities, cash independence and still-manual/unsupported original requirements. Do not mark excluded capabilities delivered.
 
 ### MLP3-T24 — Audit acceptance and prepare reviewed delivery
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T23.
 - Files/scope: T24a report/task pairs (4); T24b specification/contract pairs (4); T24c scoped final Git review and Chinese Conventional Commits. Keep protected task files unchanged.
 - Acceptance: MLP3-A01–MLP3-A12. Verify: V07,V08. Every criterion maps to actual tests/results; all required failures are closed before marking completion. No push/deployment under implementation authorization alone.
 
 ### MLP3-C08 — Final acceptance
 
-- [ ] V01–V08 pass; MLP3-A01–MLP3-A12 complete. Review the complete diff, paired documents, source trace, report references, byte/budget limits, scope and commit messages. Only then mark 24 tasks/eight checkpoints complete.
+- [x] V01–V08 pass; MLP3-A01–MLP3-A12 complete. Review the complete diff, paired documents, source trace, report references, byte/budget limits, scope and commit messages. Only then mark 24 tasks/eight checkpoints complete.
 
 ## MLP3-P04 — Risks, mitigations and review boundary
 

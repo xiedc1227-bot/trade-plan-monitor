@@ -1,0 +1,30 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+______ test_private_runtime_executes_atomic_cost_debit_and_rejects_reuse ______
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t12b3\test_private_runti...Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t12b3/test_private_runtime_executes_0/capital.sqlite'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002C19BF16EA0>
+
+    def test_private_runtime_executes_atomic_cost_debit_and_rejects_reuse(database, monkeypatch):
+        from tests.integration.p3_private_chain import PrivateChain
+        from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
+        from trade_plan_monitor.state.simulation import simulate_inventory, SimulationAuthorityError
+        engine, _ = database
+        chain = PrivateChain(engine, monkeypatch, mode="OPEN_COST_CAP")
+        chain.evaluate()
+        chain.now = datetime.combine(TUESDAY, time(9, 35), SH)
+        current = chain.evaluate()
+>       assert current.snapshot["signals"], current.snapshot["market_linkage"]
+E       AssertionError: [{'version': 'capital-market-evidence-v1', 'rule_id': 'low-buy', 'content_hash': '93af2c833154cc8125968275cbdb0cc3b9dc70749e9072cfeffd23d8344ac86f', 'decision_session': '2026-09-18', ...}]
+E       assert []
+
+tests\integration\test_p3_simulation.py:66: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_simulation.py::test_private_runtime_executes_atomic_cost_debit_and_rejects_reuse
+1 failed, 4 deselected, 1 warning in 2.60s

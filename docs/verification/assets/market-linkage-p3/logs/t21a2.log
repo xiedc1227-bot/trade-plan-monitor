@@ -1,0 +1,82 @@
+.............F                                                           [100%]
+================================== FAILURES ===================================
+____ test_future_changes_preserve_earlier_loop_decisions[policy-p3_chain0] ____
+
+p3_chain = <tests.integration.test_daily_plan_chain.Chain object at 0x0000021BA7AD3690>
+tmp_path = WindowsPath('D:/Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t21a2/test_future_changes_preserve_e2')
+mutation = 'policy'
+
+    @pytest.mark.parametrize("p3_chain", [("OPEN_COST_CAP", False, "ORDINARY")], indirect=True)
+    @pytest.mark.parametrize("mutation", ["book", "quote", "policy"])
+    def test_future_changes_preserve_earlier_loop_decisions(p3_chain, tmp_path, mutation):
+        chain = p3_chain
+        start = chain.now
+        late = datetime.combine(TUESDAY, time(9, 30 if mutation == "policy" else 37), SH)
+        opening = frozen_opening(chain, available_at=late)
+        calendar = calendar_for(chain)
+        prefixes = []
+        for index in range(2):
+            chain.now = start
+            run = capital_loop_input(chain, mode="OBSERVE_ONLY",
+                openings=(opening,) if index and mutation == "book" else ())
+            frames = loop_frames(chain, calendar)
+            if index and mutation == "quote":
+                last = frames[-1]
+                quote = last.runtime.quote.model_copy(update={"price_fen": 162})
+                frames[-1] = LoopFrame(runtime=last.runtime.model_copy(update={"quote": quote}))
+            if index and mutation == "policy":
+                from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
+                from trade_plan_monitor.backtest.plan_schedule import (
+                    ScheduledLoopSchedule,
+                    ScheduledScheduleEntry,
+                    ScheduledPlanVersion,
+                )
+                version = run.schedule.entries[0].version
+                raw = chain.plan.model_dump(mode="json")
+                raw["position"]["limit"]["capital_policy"]["cap_fen"] += 1
+                future_plan = type(chain.plan).model_validate(raw)
+                from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+                def scheduled(plan, at, identity, version=version):
+                    return ScheduledPlanVersion.model_validate(version.model_dump(mode="python") | dict(
+                        version_id=identity, snapshot=plan, plan_hash=plan_sha256(plan),
+                        available_at=at, information_cutoff=at,
+                        review=version.review.model_copy(update=dict(reviewed_at=at,
+                            content_hash=daily_plan_content_sha256(plan)))))
+                old = scheduled(chain.plan, start, version.version_id)
+                new = scheduled(future_plan, late, "future-capital")
+                schedule = ScheduledLoopSchedule(entries=tuple(ScheduledScheduleEntry(
+                    effective_trade_date=d, version=v) for d, v in ((start.date(), old), (TUESDAY, new))))
+                # Both sides use scheduled identity rules; only the future entry differs.
+                run = ScheduledLoopInput.model_validate(run.model_dump(mode="python") | dict(
+                    schema_version="monitor-loop-input-v2", schedule=schedule))
+            elif mutation == "policy":
+                # Construct the same scheduled original prefix without the future entry.
+                from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
+                from trade_plan_monitor.backtest.plan_schedule import ScheduledLoopSchedule
+                schedule = ScheduledLoopSchedule.model_validate_json(run.schedule.model_dump_json())
+                run = ScheduledLoopInput.model_validate(run.model_dump(mode="python") | dict(
+                    schema_version="monitor-loop-input-v2", schedule=schedule))
+            audit = []
+            with LoopSession(tmp_path / f"{mutation}-{index}", run, calendar) as session:
+                writer = LoopReportWriter(session, sink=audit.append)
+                report = writer.finish(LoopRunner(session, report_writer=writer).run(frames))
+                assert report.cycle.fills == 0
+                verify_loop_events(report, audit)
+            prefixes.append([(e.at, e.payload) for e in audit if e.at < late])
+>       assert prefixes[0] == prefixes[1]
+E       AssertionError: assert [(datetime.da..._UNKNOWN'))))] == [(datetime.da..._UNKNOWN'))))]
+E
+E         At index 1 diff: (datetime.datetime(2026, 9, 18, 16, 0, tzinfo=zoneinfo.ZoneInfo(key='Asia/Shanghai')), LoopEvaluation(market_linkage=(CapitalMarketDecision(version='capital-market-evidence-v1', rule_id='low-buy', content_hash='b2ab26c96820d538ab69f8fdf8a47259230975b54e7d8d74b40aab5c4d16f32e', decision_session=datetime.date(2026, 9, 18), evidence_cutoff=datetime.datetime(2026, 9, 18, 16, 0, tzinfo=TzInfo(28800)), market=MarketRegimeEvidence(formula_version='market-linkage-v1', facts=LinkedIndexFacts(formula_version='market-linkage-index-v1', reference_market=ReferenceMa...
+E
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+
+tests\integration\test_p3_replay_mutations.py:104: AssertionError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_replay_mutations.py::test_future_changes_preserve_earlier_loop_decisions[policy-p3_chain0]
+1 failed, 13 passed, 1 warning in 11.49s

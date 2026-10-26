@@ -1,0 +1,204 @@
+....F                                                                    [100%]
+================================== FAILURES ===================================
+______ test_private_runtime_executes_atomic_cost_debit_and_rejects_reuse ______
+
+database = (Engine(sqlite+pysqlite:///D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.pytest-p3-t12b\test_private_runtim.../Workspace/Projects/ai-quant-pilot/trade-plan-monitor/.pytest-p3-t12b/test_private_runtime_executes_0/capital.sqlite'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x00000287122A28B0>
+
+    def test_private_runtime_executes_atomic_cost_debit_and_rejects_reuse(database, monkeypatch):
+        from tests.integration.p3_private_chain import PrivateChain
+        from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
+        from trade_plan_monitor.state.simulation import simulate_inventory, SimulationAuthorityError
+        engine, _ = database
+        chain = PrivateChain(engine, monkeypatch, mode="OPEN_COST_CAP")
+>       chain.evaluate()
+
+tests\integration\test_p3_simulation.py:63:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\p3_private_chain.py:73: in evaluate
+    return self.runtime.run_inputs(plan=self.plan, inputs=data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <trade_plan_monitor.runtime.daily_service.DailyRuntimeEvaluationService object at 0x0000028755C681A0>
+plan = P3TradePlan(schema_version=9, execution_mode='CONDITION_PLAN', execution_version='condition-plan-v5', plan_id='synthet...selection='AUTO_BOARD', mapping_version='board-index-map-v1', index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>))
+inputs = DailyRuntimeInputs(linked_index=MarketIndexSnapshot(index_code=<MarketIndexCode.SSE_COMPOSITE: '000001.SH'>, display_n...a_blockers=(), minute_prefix=(), five_minute_bars=(), trading_calendar=(), minute_target=None, runtime_generation=None)
+expected_activation_revision = None, ordinary_authority_ended = False
+allow_ineligible_observation = False
+
+    def run_inputs(
+        self, *, plan: DailyTradePlan | UnifiedTradePlan, inputs: DailyRuntimeInputs,
+        expected_activation_revision=None,
+        ordinary_authority_ended=False,
+        allow_ineligible_observation=False,
+    ):
+        inputs = DailyRuntimeInputs.model_validate(inputs.model_dump())
+        now = inputs.evaluated_at
+        series = inputs.series
+        if series is not None and series.cutoff > now:
+            raise ValueError("daily series cutoff follows evaluation")
+        quote = inputs.quote
+        if quote is not None:
+            quote = quote.model_copy(update={"evaluated_at": now})
+            if quote.symbol != plan.symbol:
+                raise ValueError("quote symbol mismatch")
+        if series is not None and series.symbol != plan.symbol:
+            raise ValueError("daily series symbol mismatch")
+        official = inputs.official_trade_date
+        with self._work() as work:
+            work.daily.lock_symbol(plan.symbol)
+            if expected_activation_revision is not None:
+                current = work.plans.get_active(plan.symbol)
+                if current is None or current.revision != expected_activation_revision:
+                    raise DailyActivationChangedError(
+                        "daily activation changed during acquisition")
+            active, binding = self._binding(work, plan)
+            if (
+                expected_activation_revision is not None
+                and active.revision != expected_activation_revision
+            ):
+                raise DailyActivationChangedError("daily activation changed during acquisition")
+            ordinary_eligible = _eligible(plan, now.date()) and not ordinary_authority_ended
+            accounting = DailyAccounting(work.daily)
+            legacy_reason = None if _alert_only(plan) else accounting.legacy_reason(plan.symbol)
+            historical_risks = (
+                work.daily.list(symbol=plan.symbol, kind="RISK")
+                if not _alert_only(plan)
+                and not legacy_reason
+                else ()
+            )
+            maintain_risk = any(
+                r["payload"]["status"] in {"PENDING", "CONFIRMED", "FULFILLED"}
+                or r["payload"].get("reassessment_id")
+                for r in historical_risks
+            )
+            if (not ordinary_eligible and not maintain_risk and not ordinary_authority_ended
+                and not allow_ineligible_observation) or (
+                self._admission is not None and not self._admission()
+            ):
+                raise ValueError("daily runtime commit admission is closed")
+            if legacy_reason:
+                return DailyRuntimeCycleResult(
+                    symbol=plan.symbol,
+                    plan_hash=plan_sha256(plan),
+                    activation_revision=active.revision,
+                    evaluated_at=now,
+                    duplicate=False,
+                    snapshot={
+                        "status": "UNSUPPORTED",
+                        "reason": "DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED",
+                        "risks": list(accounting.obsolete_risks(plan.symbol)),
+                    },
+                    event_ids=(),
+                )
+            inventory = (_alert_inventory(plan.symbol) if _alert_only(plan)
+                else accounting.snapshot(plan.symbol, now.date()))
+            capital_inputs = None
+            if plan.schema_version == 9:
+                from trade_plan_monitor.state.p3_current import current_capital_inputs
+                capital_inputs = current_capital_inputs(accounting, plan.symbol, now)
+            lots = accounting.lots(plan.symbol, now.date())
+            fact_rows = work.daily.list(symbol=plan.symbol, kind="FACT")
+            facts = tuple(
+                {**row["payload"], "id": row["id"]}
+                for row in fact_rows
+                if row["payload"]["plan_version_id"] == active.plan_version_id
+                and row["payload"]["content_hash"] == binding["content_hash"]
+                and datetime.fromisoformat(row["payload"]["verified_at"]) <= now
+                and datetime.fromisoformat(row["payload"]["available_at"]) <= now
+            )
+            eligible_ids = {f["id"] for f in facts}
+            risk_rows = (() if _alert_only(plan)
+                else work.daily.list(symbol=plan.symbol, kind="RISK"))
+            target = {
+                **({"capital_inputs": capital_inputs} if capital_inputs is not None else {}),
+                "plan_hash": plan_sha256(plan),
+                "activation_revision": active.revision,
+                "review_id": binding["review_id"],
+                "target": now.isoformat(),
+                "official_trade_date": None if official is None else str(official),
+                "quote": None if quote is None else quote.model_dump(mode="json"),
+                "inventory_revision": inventory["revision"],
+                "facts": [(r["id"], r["revision"]) for r in fact_rows if r["id"] in eligible_ids],
+                "risk_revisions": [(r["id"], r["revision"]) for r in risk_rows],
+                "basis": None if series is None else series.basis_id,
+                "minute_target": None
+                if inputs.minute_target is None
+                else inputs.minute_target.isoformat(),
+                "minute_prefix": [m.model_dump(mode="json") for m in inputs.minute_prefix],
+                "daily_evidence": None
+                if series is None
+                else daily_hash("daily-series-v1", series.model_dump(mode="json")),
+            }
+            linked_source_current = True
+            if isinstance(plan, MarketLinkedTradePlan):
+                target["linked_index"] = (None if inputs.linked_index is None
+                                          else inputs.linked_index.snapshot_hash)
+                if inputs.linked_index is not None:
+                    from trade_plan_monitor.market_index.canonical import (
+                        validate_market_index_snapshot_integrity,
+                    )
+                    validate_market_index_snapshot_integrity(inputs.linked_index)
+                    if (inputs.linked_index.index_code != plan.reference_market.index_code
+                            or inputs.linked_index.observed_at > now):
+                        raise ValueError("linked index identity or cutoff mismatch")
+                    work.projections.put_market_index_snapshot(inputs.linked_index,
+                        provider_content_revision=inputs.linked_index.revision)
+                    head = work.projections.get_market_index_head(
+                        mapping_version=inputs.linked_index.mapping_version,
+                        index_code=inputs.linked_index.index_code,
+                        decision_cutoff=inputs.linked_index.decision_cutoff,
+                        request_set_hash=inputs.linked_index.request_set_hash)
+                    # Re-evaluation may reuse a cached snapshot. It cannot roll
+                    # back a correction already admitted by the owned collector.
+                    if head is None or (
+                        inputs.linked_index.revision != head.provider_content_revision
+                        and inputs.linked_index.observed_at > head.snapshot.observed_at
+                    ):
+                        work.projections.advance_market_index_head(
+                            inputs.linked_index,
+                            provider_content_revision=inputs.linked_index.revision,
+                            observed_at=inputs.linked_index.observed_at,
+                        )
+                    from trade_plan_monitor.state.market_linkage_authority import (
+                        linked_index_current,
+                    )
+
+                    linked_source_current = linked_index_current(work.daily.session, {
+                        "market_linkage": True,
+                        "linked_index_source": inputs.linked_index.model_dump(mode="json"),
+                    }, now)
+                    target["linked_source_current"] = linked_source_current
+            if ordinary_authority_ended:
+                target["ordinary_authority_ended"] = True
+            if plan.schema_version in {7, 8}:
+                target["exception_revisions"] = [
+                    (row["id"], row["revision"]) for row in work.daily.list(
+                        symbol=plan.symbol, kind="EXCEPTION_CANDIDATE")]
+            identity = daily_hash("daily-decision-result-v1", target)
+            existing = work.daily.get(identity)
+            if existing is not None:
+                return DailyRuntimeCycleResult(
+                    symbol=plan.symbol,
+                    plan_hash=plan_sha256(plan),
+                    activation_revision=active.revision,
+                    evaluated_at=now,
+                    duplicate=True,
+                    snapshot=existing["payload"],
+                    event_ids=(),
+                )
+            previous_risks = tuple(r["payload"] for r in risk_rows)
+>           effective_start = active.activated_at.date()
+                              ^^^^^^^^^^^^^^^^^^^
+E           AttributeError: 'types.SimpleNamespace' object has no attribute 'activated_at'
+
+src\trade_plan_monitor\runtime\daily_service.py:561: AttributeError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\Workspace\Projects\ai-quant-pilot\trade-plan-monitor\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_p3_simulation.py::test_private_runtime_executes_atomic_cost_debit_and_rejects_reuse
+1 failed, 4 passed, 1 warning in 2.77s
