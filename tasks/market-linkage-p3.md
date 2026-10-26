@@ -170,14 +170,14 @@ Keep backend directories in separate processes because existing unit/integration
 
 ### MLP3-T18 — Verify complete browser journeys
 
-- [ ] Deliver slice and independent evidence.
+- [x] Deliver slice and independent evidence.
 - Depends on: T17.
 - Files/scope: deterministic browser fixture/server, `web/tests/e2e/p3-capital.spec.ts` (new), fixture and unit repairs only if justified.
 - Acceptance: MLP3-A09,MLP3-A11. Verify: V04,V05. Both modes and limit forms, unknown/reconciled basis, both exceptions, quote fail/recovery, separate approval/execution, reload and 320/768/1024/1440 overflow checks; no external network.
 
 ### MLP3-C06 — Browser/workflow acceptance
 
-- [ ] V03–V05,V07 pass; MLP3-A05,MLP3-A07–MLP3-A09,MLP3-A11 covered with screenshots and actual request identity checks. Replay acceptance remains pending.
+- [x] V03–V05,V07 pass; MLP3-A05,MLP3-A07–MLP3-A09,MLP3-A11 covered with screenshots and actual request identity checks. Replay acceptance remains pending.
 
 ### MLP3-T19 — Freeze budget inputs and causal opening events
 

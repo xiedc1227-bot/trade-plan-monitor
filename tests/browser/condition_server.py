@@ -49,7 +49,7 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
 
     async def start(self):
         config = _config().model_copy(update={"prompt_version": (
-            "plan-extract-v11")})
+            "plan-extract-v12")})
         owner = self
 
         class Provider:
@@ -112,6 +112,11 @@ def main():
     parser.add_argument("--linked", action="store_true")
     parser.add_argument("--exception", choices=("WEAK_MINIMUM", "BROKEN_STRONG"))
     parser.add_argument("--p2", action="store_true")
+    parser.add_argument("--p3", choices=("OPEN_COST_CAP", "MARKET_VALUE_CAP"))
+    parser.add_argument("--p3-limit", choices=("CAPITAL_ONLY", "QUANTITY_AND_CAPITAL"),
+                        default="CAPITAL_ONLY")
+    parser.add_argument("--p3-route", choices=("ORDINARY", "WEAK_MINIMUM", "BROKEN_STRONG"),
+                        default="ORDINARY")
     parser.add_argument("--p2-economics", choices=("REQUIRED", "PREVIEW_ONLY"), default="REQUIRED")
     args = parser.parse_args()
     with TemporaryDirectory(prefix="tpm-daily-browser-") as directory:
@@ -198,6 +203,21 @@ def main():
             chain.plan, _ = fixture(200 if chain.route == "WEAK_MINIMUM" else 1000, chain.route)
             from tests.integration.test_p2_chain import with_economics
             chain.plan = with_economics(chain.plan, args.p2_economics)
+        if args.p3:
+            from tests.unit.test_p3_composition import inputs_for
+            chain.route = "BROKEN_STRONG" if args.p3_route == "BROKEN_STRONG" else "WEAK_MINIMUM"
+            chain.plan, _ = inputs_for(200 if args.p3_route == "WEAK_MINIMUM" else 1000,
+                chain.route, args.p3, args.p3_limit == "QUANTITY_AND_CAPITAL")
+            raw = chain.plan.model_dump(mode="json")
+            q = {"ORDINARY": 200, "WEAK_MINIMUM": 100, "BROKEN_STRONG": 300}[args.p3_route]
+            policy = raw["position"]["limit"]["capital_policy"]
+            policy["cap_fen"] = (100+q)*161 if args.p3 == "MARKET_VALUE_CAP" else 20000+q*161+500
+            if args.p3 == "OPEN_COST_CAP":
+                policy["buy_cost_schedule"].update(effective_from="2026-01-01",
+                    effective_through="2026-12-31")
+            if args.p3_limit == "QUANTITY_AND_CAPITAL":
+                raw["position"]["limit"]["max_qty"] = 1000
+            chain.plan = type(chain.plan).model_validate(raw)
         ai.plan = chain.plan
         ai.source = (
             "合成离线条件计划：日线收盘低于40元且完整5分钟收盘低于40元时，确认模拟买入100股。"
@@ -220,6 +240,10 @@ def main():
                 "broken_strong PER_OCCURRENCE；" + "。".join(
                     EXPANDED_EXCEPTION_POLICY_ZH.values())
             )
+        if args.p3:
+            ai.source += (f"。单只证券CORE与TACTICAL合计采用{args.p3}，"
+                f"cap_fen={chain.plan.position.limit.capital_policy.cap_fen}。"
+                "先确定整笔数量再检查预算，超限不缩量。明确开仓成本与逐次批准、模拟执行分开。")
         ai._review_store = chain.plans
         app = create_app(
             runtime_factory=lambda: OfflineRuntime(chain),
@@ -335,8 +359,8 @@ def main():
         @app.post("/_test/p2-quote/{price}")
         def p2_quote(price: int):
             from tests.integration.test_market_exception_runtime import exception_inputs
-            if not args.p2:
-                raise ValueError("P2 fixture required")
+            if not (args.p2 or args.p3):
+                raise ValueError("P2/P3 fixture required")
             chain.now += timedelta(seconds=1)
             inputs = exception_inputs(chain)
             inputs = inputs.model_copy(update={"quote": inputs.quote.model_copy(

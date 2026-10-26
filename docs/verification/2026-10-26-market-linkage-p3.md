@@ -1,6 +1,6 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T17 and C01–C05 complete; T18–T24/C06–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: IMPLEMENTING. MLP3-T01–T18 and C01–C06 complete; T19–T24/C07–C08 remain unexecuted. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -41,3 +41,11 @@ T15 public complete chain plus API:11 passed,1 warning,7.53s. Both modes and pol
 ## MLP3-V08 — Source/opening UI and current capital interaction
 
 T16/T17 frontend group:39 passed in6files,1.87s; vue-tsc passed. HTTP capital resources/send-time notifications/P2 risk:11 passed,1 warning,7.29s. The UI uses actual bounded server inventoryLots before a book exists; all cost amounts start empty, complete source/time/reason and explicit confirmation are separate from inventory, exception approval and simulation. Tests caught Vue number inputs returning numbers and corrected the typed state without loosening numeric checks. Current amount previews preserve manual BROKEN_STRONG input, whole frozen quantity and stale-response disposal. Both current/research read-only draft displays carry9; frozen execution admission remains closed. Notification delivery immediately rejects a cost correction or exact-boundary value quote failure, with no simulation effects. Browser acceptance remains pending.
+
+## MLP3-V09 — Complete browser workflow acceptance
+
+C06 full prescribed browser selection:19 passed,4.3min, including15 existing P0/P1/P2 cases and4 P3 cases. All320/768/1024/1440 width checks, request identities, zero external requests, console/network assertions, reload and independent approval/execution checks passed. Final screenshot review found an exposed capital diagnostic code; Chinese explanations were added, their targeted group passed11 tests/1.54s and all4 P3 Chrome journeys passed again in1.0min. Four final screenshots are archived under [browser evidence](../assets/verification/market-linkage-p3/browser/). Browser testing used the existing isolated pinned Chrome/Playwright because Chrome DevTools MCP was unavailable; no browser/tool was installed.
+
+Original4 browser failures localized to missing plan-extract-v12 metadata acceptance in server/web response guards; direct synthetic-provider→record→response reproduction proved the boundary, and both guards were fixed. Current response/P2 regression:28 passed,1 warning,3.14s; unchanged prompt budget:12 passed,1.68s; AI transport/P3 UI:25 passed,1.21s. An incorrect test-directory selection ran zero cases and was rerun using the actual unit/integration directories. The first full browser run passed17 and failed2 on Chrome canonical datetime-local input spelling; exact minute-format input fixed the fixture without relaxing time or monetary validation. All original logs are retained. A Windows Proactor WinError10054 callback was logged during controlled fixture connection teardown; no log or assertion was suppressed, and the19-case run passed.
+
+Complete P3 integration:62 passed,4738 deselected,3 existing warnings,18.96s. API snapshot/legacy projection:22 passed,1 warning,32.31s. Both generated contracts, vue-tsc, build, Ruff and whitespace checks passed. Current authority/UI acceptance is complete; frozen9 admission remains closed and T19–T24/C07–C08 are pending.

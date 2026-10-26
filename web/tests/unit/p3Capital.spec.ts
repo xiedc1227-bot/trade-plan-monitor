@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import P3CapitalRuntime from "../../src/components/plans/P3CapitalRuntime.vue";
 import P3CapitalAssessment from "../../src/components/plans/P3CapitalAssessment.vue";
+import MarketLinkageEvidence from "../../src/components/plans/MarketLinkageEvidence.vue";
 import { validCapitalResponse } from "../../src/api/p3Capital";
 import fixture from "../fixtures/p3-capital.json";
 
@@ -10,6 +11,11 @@ function props(request: <T>(url: string, body?: object) => Promise<T>) {
   return {evidence: value().evidence, planVersionId: "p3-plan", current: true, authorityRevision: 1, request};
 }
 describe("current monetary preview", () => {
+  it("explains unresolved exception quantity without exposing capital codes", () => {
+    const wrapper = mount(MarketLinkageEvidence, {props: {decision: JSON.parse(JSON.stringify(fixture.brokenDecision))}});
+    expect(wrapper.text()).toContain("例外数量须人工填写");
+    expect(wrapper.text()).not.toContain("CAPITAL_QUANTITY_UNKNOWN");
+  });
   it("validates strict non-authority and complete assessment responses", () => {
     expect(validCapitalResponse("/plan-capital-previews", value())).toBe(true);
     expect(validCapitalResponse("/plan-capital-previews", {...value(), authorityGranted: true})).toBe(false);

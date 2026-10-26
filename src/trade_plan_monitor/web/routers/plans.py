@@ -652,7 +652,7 @@ class PlanExtractionView(ApiValue):
             if (
                 self.prompt_version
                 not in {"plan-extract-v8", "plan-extract-v9",
-                        "plan-extract-v10", "plan-extract-v11"}
+                        "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"}
                 or not isinstance(plan, DailyPlanDraft)
                 or plan.schema_version not in {5, 6, 7, 8, 9}
                 or self.daily_mapping is None

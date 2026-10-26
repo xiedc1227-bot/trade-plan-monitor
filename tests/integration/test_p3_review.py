@@ -95,7 +95,7 @@ def test_real_current_extraction_produces_reviewed_capital_draft_without_authori
 
     from trade_plan_monitor.ai.extraction import extract_plan
     from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
-    from trade_plan_monitor.ai.provider import RawAIResponse
+    from trade_plan_monitor.ai.provider import AIUsage, RawAIResponse
 
     candidate = P3PlanDraft.model_validate(p3_payload())
     source, mapping = source_mapping(candidate)
@@ -107,9 +107,15 @@ def test_real_current_extraction_produces_reviewed_capital_draft_without_authori
             assert request.config.prompt_version == "plan-extract-v12"
             return RawAIResponse(request_id=request.request_id,
                 provider_id=request.config.provider_id, model=request.config.model,
-                content=output.model_dump_json(), finish_reason="stop", attempts=1, usage=None)
+                content=output.model_dump_json(), finish_reason="stop", attempts=1,
+                usage=AIUsage(prompt_tokens=10, completion_tokens=10, total_tokens=20))
 
     result = asyncio.run(extract_plan(request_id=uuid4(), source_text=source,
         config=_config().model_copy(update={"max_input_chars": 200000}), provider=Provider()))
     assert result.status == "SUCCEEDED" and result.draft.schema_version == 9
     assert result.validation_issues == ()
+    from trade_plan_monitor.web.ai_service import _completed_extraction_view, _now
+    now = _now()
+    view = _completed_extraction_view(result=result, submitted_at=now, started_at=now,
+                                     completed_at=now, diagnostic_status=None)
+    assert view.status == "SUCCEEDED" and view.prompt_version == "plan-extract-v12"

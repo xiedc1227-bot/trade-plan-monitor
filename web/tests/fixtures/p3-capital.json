@@ -160,5 +160,470 @@
       "evidence_hash": "744ef75c7fc204507028ad3b8de9fa7b64fe99d66a6d7ce8de656f69193655e4"
     },
     "authorityGranted": false
+  },
+  "brokenDecision": {
+    "version": "capital-market-evidence-v1",
+    "rule_id": "low-buy",
+    "content_hash": "af41bc454afbd6d7334e8082efcd0e6741a5f074c506456c4615a9d229b66396",
+    "decision_session": "2026-09-18",
+    "evidence_cutoff": "2026-09-18T16:00:00+08:00",
+    "market": {
+      "formula_version": "market-linkage-v1",
+      "facts": {
+        "formula_version": "market-linkage-index-v1",
+        "reference_market": {
+          "selection": "AUTO_BOARD",
+          "mapping_version": "board-index-map-v1",
+          "index_code": "000001.SH"
+        },
+        "decision_session": "2026-09-18",
+        "evidence_cutoff": "2026-09-18T16:00:00+08:00",
+        "close": "180",
+        "ma20": "198.5",
+        "ma60": "199.5",
+        "ma20_5": "200",
+        "low20": "189",
+        "source_hashes": [
+          [
+            "formula",
+            "b61e9f480ca8638a927434c74f62e3a799b3680171a2ebb461dbc33d7e166d40"
+          ],
+          [
+            "close",
+            "ea352620a95fe315ef3004966d7568902a1cd87b8d60cee053144b8f08bbe4e8"
+          ],
+          [
+            "ma20",
+            "c8a102eea7ca44ec9c610c2c51fa94970825543cd550c73146c40d6a4b0c59a5"
+          ],
+          [
+            "ma60",
+            "3f905092cad94496320115680c02fa7c98d758509bfe70189122039164dee327"
+          ],
+          [
+            "ma20_5",
+            "12ecec3648c4ad56ecfa9420f9f726401fa59c6ba9c4803063aae6d47607b629"
+          ],
+          [
+            "low20",
+            "db65472c02d966489bff35ea821ac6178090c294498bfaf85104741d4bf200d1"
+          ]
+        ],
+        "reasons": []
+      },
+      "regime": "BROKEN",
+      "below_low20": "SATISFIED",
+      "below_ma60": "SATISFIED",
+      "below_ma20": "SATISFIED",
+      "falling_ma20": "SATISFIED",
+      "broken": "SATISFIED",
+      "weak": "SATISFIED"
+    },
+    "strength": {
+      "formula_version": "market-linkage-strength-v1",
+      "strength": "STRONG",
+      "decision_session": "2026-09-18",
+      "cutoff": "2026-09-18T16:00:00+08:00",
+      "endpoint_dates": [
+        "2026-08-29",
+        "2026-09-13",
+        "2026-09-18"
+      ],
+      "stock_endpoints": [
+        "141",
+        "154",
+        "161"
+      ],
+      "index_endpoints": [
+        "200",
+        "200",
+        "180"
+      ],
+      "stock_return5": "0.0454545454545454545454545454545454545454545454545",
+      "stock_return20": "0.1418439716312056737588652482269503546099290780142",
+      "index_return5": "-0.1",
+      "index_return20": "-0.1",
+      "difference5": "0.1454545454545454545454545454545454545454545454545",
+      "difference20": "0.2418439716312056737588652482269503546099290780142",
+      "stock_close": "161",
+      "stock_ma20": "150.5",
+      "outperform5": "SATISFIED",
+      "outperform20": "SATISFIED",
+      "above_ma20": "SATISFIED",
+      "basis_id": "frozen-qfq",
+      "stock_provider": "fixture",
+      "source_hashes": [
+        "2026-08-29",
+        "2026-08-30",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-06",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09",
+        "2026-09-10",
+        "2026-09-11",
+        "2026-09-12",
+        "2026-09-13",
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+        "2026-09-18",
+        "26b36b7de75c62f440cd81825bf756127a368e4b1f32a0fcacee57a3781c93b5"
+      ],
+      "reasons": []
+    },
+    "selection": {
+      "group": "S2",
+      "blocker": null,
+      "needs_strength": true
+    },
+    "calculation": {
+      "formula_version": "capital-market-calculation-v1",
+      "base_quantity": 500,
+      "factor": null,
+      "ceiling": 500,
+      "minimum": 100,
+      "increment": 100,
+      "candidate_quantity": null,
+      "share_capacity": {
+        "mode": "UNBOUNDED"
+      },
+      "capital": {
+        "version": "capital-limit-evidence-v1",
+        "mode": "MARKET_VALUE_CAP",
+        "phase": "CONFIRMATION",
+        "policy_hash": "2a6922245c50eab7526506c3552f39de2d486bd2128413498e4c1389a1c2be14",
+        "outcome": "UNKNOWN",
+        "quantity": null,
+        "price_fen": 161,
+        "total_qty": 0,
+        "inventory_revision": null,
+        "book_revision": null,
+        "cap_fen": 550500,
+        "before_fen": null,
+        "after_fen": null,
+        "remaining_fen": null,
+        "share_capacity": {
+          "mode": "UNBOUNDED"
+        },
+        "buy_debit": null,
+        "blockers": [
+          "CAPITAL_QUANTITY_UNKNOWN"
+        ],
+        "evidence_hash": "6a990673d4dbd739ebbf6295cad695c4c2449f4e6d73090546f9f3b4062655ba"
+      },
+      "authorized_quantity": 0,
+      "route": "BROKEN_STRONG",
+      "approval": null,
+      "blockers": [
+        "EXCEPTION_APPROVAL_REQUIRED",
+        "CAPITAL_QUANTITY_UNKNOWN"
+      ],
+      "calculation_hash": "ba09b3b03f1acc8ed3ce82a66dfcb635f751b1ccee4abd1e5003a17da48fe9aa"
+    },
+    "quantity_rules": {
+      "version": "cn-equity-buy-grid-2026-07-06",
+      "board": "SSE_MAIN",
+      "effective_from": "2026-07-06",
+      "published_on": "2026-04-24",
+      "minimum": 100,
+      "increment": 100,
+      "source_url": "https://www.sse.com.cn/lawandrules/sselawsrules2025/trade/universal/c/c_20260424_10816492.shtml",
+      "article": "3.3.8"
+    },
+    "confirmation": [
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_PRICE_IN_RANGE",
+          "field": "close",
+          "offset": 0,
+          "range": {
+            "low_fen": 100,
+            "high_fen": 200,
+            "include_low": true,
+            "include_high": true
+          }
+        },
+        "bar_ids": [
+          "2026-09-18"
+        ],
+        "session_dates": [
+          "2026-09-18"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "161",
+          "100",
+          "200"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      },
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_PRICE_IN_RANGE",
+          "field": "close",
+          "offset": 1,
+          "range": {
+            "low_fen": 100,
+            "high_fen": 200,
+            "include_low": true,
+            "include_high": true
+          }
+        },
+        "bar_ids": [
+          "2026-09-17"
+        ],
+        "session_dates": [
+          "2026-09-17"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "158",
+          "100",
+          "200"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      },
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_PRICE_IN_RANGE",
+          "field": "close",
+          "offset": 0,
+          "range": {
+            "low_fen": 100,
+            "high_fen": 200,
+            "include_low": true,
+            "include_high": true
+          }
+        },
+        "bar_ids": [
+          "2026-09-18"
+        ],
+        "session_dates": [
+          "2026-09-18"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "161",
+          "100",
+          "200"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      },
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_CLOSE_SEQUENCE",
+          "offset": 0,
+          "sessions": 2,
+          "mode": "PAIRWISE_NONDECREASING",
+          "comparator": null,
+          "reference": null
+        },
+        "bar_ids": [
+          "2026-09-18",
+          "2026-09-17"
+        ],
+        "session_dates": [
+          "2026-09-18",
+          "2026-09-17"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "158",
+          "161"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      },
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_VOLUME_RATIO",
+          "offset": 0,
+          "baseline": "MEAN",
+          "window": 20,
+          "comparator": "LTE",
+          "ratio": "1"
+        },
+        "bar_ids": [
+          "2026-09-18",
+          "2026-08-29",
+          "2026-08-30",
+          "2026-08-31",
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-05",
+          "2026-09-06",
+          "2026-09-07",
+          "2026-09-08",
+          "2026-09-09",
+          "2026-09-10",
+          "2026-09-11",
+          "2026-09-12",
+          "2026-09-13",
+          "2026-09-14",
+          "2026-09-15",
+          "2026-09-16",
+          "2026-09-17"
+        ],
+        "session_dates": [
+          "2026-09-18",
+          "2026-08-29",
+          "2026-08-30",
+          "2026-08-31",
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-05",
+          "2026-09-06",
+          "2026-09-07",
+          "2026-09-08",
+          "2026-09-09",
+          "2026-09-10",
+          "2026-09-11",
+          "2026-09-12",
+          "2026-09-13",
+          "2026-09-14",
+          "2026-09-15",
+          "2026-09-16",
+          "2026-09-17"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "1000",
+          "1000",
+          "1",
+          "1"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      },
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_INDICATOR_COMPARE",
+          "indicator": "RSI14",
+          "formula_version": "daily-ta-v2",
+          "parameters": {
+            "period": 14
+          },
+          "offset": 0,
+          "comparator": "GT",
+          "reference": {
+            "mode": "DYNAMIC",
+            "indicator": "RSI14",
+            "formula_version": "daily-ta-v2",
+            "parameters": {
+              "period": 14
+            },
+            "offset": 1
+          }
+        },
+        "bar_ids": [
+          "2026-09-18",
+          "2026-09-17"
+        ],
+        "session_dates": [
+          "2026-09-18",
+          "2026-09-17"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "76.41129457309556",
+          "73.64017229273263"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      },
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_PRICE_COMPARE",
+          "field": "close",
+          "offset": 1,
+          "comparator": "GTE",
+          "reference": {
+            "mode": "DYNAMIC",
+            "indicator": "MA20",
+            "formula_version": "daily-ta-v2",
+            "parameters": {
+              "period": 20
+            },
+            "offset": 0
+          }
+        },
+        "bar_ids": [
+          "2026-09-17"
+        ],
+        "session_dates": [
+          "2026-09-17"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "158",
+          "149.500"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      },
+      {
+        "outcome": "SATISFIED",
+        "condition": {
+          "type": "DAILY_PRICE_COMPARE",
+          "field": "close",
+          "offset": 0,
+          "comparator": "GTE",
+          "reference": {
+            "mode": "DYNAMIC",
+            "indicator": "MA20",
+            "formula_version": "daily-ta-v2",
+            "parameters": {
+              "period": 20
+            },
+            "offset": 0
+          }
+        },
+        "bar_ids": [
+          "2026-09-18"
+        ],
+        "session_dates": [
+          "2026-09-18"
+        ],
+        "basis_id": "frozen-qfq",
+        "operands": [
+          "161",
+          "150.5000000000000100"
+        ],
+        "fact_ids": [],
+        "reason": null,
+        "children": []
+      }
+    ],
+    "consumed_hash": "dccc93a5e9b1cef68203cb67197f8a8907d2b74af67832003972a6e7e31e8d8c",
+    "evidence_hash": "2ef553275fe159e96172b258d6d5bd0d123983e6eaf9b33bfe05ac1efff68aec",
+    "approval_binding": null
   }
 }

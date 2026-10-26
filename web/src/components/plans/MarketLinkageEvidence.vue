@@ -17,6 +17,12 @@ const labels: Record<string, string> = {
   CONFIRMATION_UNKNOWN: "所选确认条件输入不足", CONFIRMATION_UNMET: "所选确认条件未满足",
   HIGHER_PRIORITY_RISK: "更高优先级风险阻断", RISK_INPUT_UNKNOWN: "风险输入尚未核实",
   POSITION_UNKNOWN: "模拟持仓未知", MAX_QUANTITY_CAPACITY: "仓位容量不足，整笔阻断",
+  CAPITAL_POSITION_UNKNOWN: "模拟库存未知，需先明确初始化",
+  CAPITAL_QUANTITY_UNKNOWN: "本次数量尚未明确，例外数量须人工填写",
+  CAPITAL_BASE_UNKNOWN: "完整批次成本未知，需单独核对并确认",
+  CAPITAL_QUOTE_UNKNOWN: "当前核实报价不足，暂停买入",
+  CAPITAL_LIMIT_EXCEEDED: "买入后超过金额上限，整笔暂停",
+  CAPITAL_OVERFLOW: "金额超出可精确计算范围，暂停买入",
   MARKET_QUANTITY_INCOMPATIBLE: "市场数量单位与模拟交易单位没有合法交集",
   MARKET_QUANTITY_BELOW_MINIMUM: "候选数量低于市场最小买入量，暂停普通买入",
 };
