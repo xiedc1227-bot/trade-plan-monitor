@@ -1,6 +1,8 @@
 # Verification: market-linkage-p3
 
-Status: IMPLEMENTING. MLP3-T01–T21 and C01–C07 complete; T22–T24/C08 remain pending. User approved MLP3-D01–D06 and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+Status: COMPLETE AND ACCEPTED. MLP3-T01–T24 and C01–C08 complete; MLP3-A01–A12 map below. Local commits only, no push. User approved all six decisions and implementation. Baseline `c9ad16aa352d9bdb5ec49f16cd9fcd90151f9c46`. [Chinese copy](2026-10-26-market-linkage-p3.zh-CN.md) · [tasks](../../tasks/market-linkage-p3.md).
+
+V01–V13 preserve stage-specific historical findings; ‘closed/pending’ describes that stage. V14–V15 own final status. Original failures and exact successful reruns remain, and overlapping selection counts are never additive.
 
 ## MLP3-V01 — Contracts and historical boundary
 
@@ -10,7 +12,7 @@ T03/C01:223 passed,1.97s, including private Schema9 round trips, exact plan-revi
 
 A restricted Windows local-communication regression process stopped progressing after69%; only its exact owned test processes were terminated. The expanded group completed in an environment allowing local communication. Interrupted runs are not passes. No test was skipped or weakened. Ruff passed for the new contract/source files. Exact later commands and logs will be archived at final acceptance; downstream tests are not yet created or claimed.
 
-## MLP3-V02 — Remaining acceptance
+## MLP3-V02 — Acceptance tracking at T03
 
 MLP3-A01/A02 have stage-specific source/contract evidence; full current authority, budget book, exact capital predicates, transaction gates, APIs/UI, frozen replay and complete regression remain pending. Do not infer implementation completion from the approved specification or stage-only tests. No user database, live provider, deployment or push is involved. Preserve tasks/plan.md and tasks/todo.md.
 
@@ -54,10 +56,6 @@ Complete P3 integration:62 passed,4738 deselected,3 existing warnings,18.96s. AP
 
 T19 input/old loop/schedule/codec checks:68 passed,1.73s. Actual recorded P3 source envelopes and P2 replay regression:18 passed,1 existing warning,15.22s. Both limit forms use backtest-run-v10 with explicit capital and authorization programs; unified research uses v3. Exact recorded opening receipts, complete lot references, provenance, availability/order and safe bounded costs are validated without querying a current budget database. Research cost99999fen intentionally differs from recorded budget basis; neither is inferred from the other. Future budget append changes the whole run ID while preserving earlier authority. Old envelopes/readers retain their rejection boundary. Execution remains explicitly closed until T20 completes the private guard chain. Initial missing-module tests failed as expected; no historical golden was rewritten.
 
-## MLP3-V10 — Frozen input contract
-
-T19 input/old loop/schedule/codec checks:68 passed,1.73s. Actual recorded P3 source envelopes and P2 replay regression:18 passed,1 existing warning,15.22s. Both limit forms use backtest-run-v10 with explicit capital and authorization programs; unified research uses v3. Exact recorded opening receipts, complete lot references, provenance, availability/order and safe bounded costs are validated without querying a current budget database. Research cost99999fen intentionally differs from recorded budget basis; neither is inferred from the other. Future budget append changes the whole run ID while preserving earlier authority. Old envelopes/readers retain their rejection boundary. Execution remains explicitly closed until T20 completes the private guard chain. Initial missing-module tests failed as expected; no historical golden was rewritten.
-
 ## MLP3-V11 — Private replay, publication and current contract
 
 T20 current/private P3 and old P2 replay:20 passed,1 existing warning,16.41s. Four real monitor-loop policy/route cases:10 passed (overlapping selection),1 warning,9.46s. Actual P3 frozen workers published and reopened both exception routes:2 passed,1 warning,41.48s. Expanded P3/P1/P2 frozen worker/replay group:34 passed,1 warning,183.78s. Research/account cash and P&L remain distinct from explicit budget basis; exact current capital guards and ordinary/exception simulations share the real services. Both v10 private paths are admitted after this chain, with explicit capital input and no live-book lookup. Generated public request/report types and transport guards carry the same contract.
@@ -78,4 +76,41 @@ A private actual200-share buy is reconciled through its stable source signal int
 
 A new delayed-source/reviewed-replacement oracle initially failed with CAPITAL_REPLAY_PLAN_MISMATCH. The private adapter had required the source plan to remain the currently active policy, despite the symbol inventory/book continuity contract. It now validates the original exact receipt/review against a listed immutable Schema9 source snapshot, requires a currently reviewed Schema9 symbol context and exact current complete lots, and applies no earlier BUY authority. The original failure is retained; the exact new oracle and related current/private replay group passed19 tests,1 warning,15.19s. No source hash, cost inference, window, quantity or original authorization was relaxed. Whole-project regression/capacity and final audit are still in progress.
 
-Actual mounted prepared-run HTTP testing found LINKED_INDEX_REPLAY_HISTORY_MISSING: automatic warm-up used only stock daily_observations, while the existing index-source guard requires60 preceding sessions. The request builder now includes that existing dependency for linked6/7/8/9 without altering frozen stock requirements, old stored inputs or resource thresholds. The original409 failure is retained. P3 HTTP admission, current-book isolation, idempotent same-job replay and historical automatic/submission checks passed33 tests,1 warning,15.01s. Missing explicit P3 capital input remains409 before a job is admitted. Ruff passed after normal import/line formatting repairs; no diagnostic suppression was added.
+Actual mounted prepared-run HTTP testing found LINKED_INDEX_REPLAY_HISTORY_MISSING: automatic warm-up used only stock daily_observations, while the existing index-source guard requires60 preceding sessions. The request builder now includes that existing dependency for linked6/7/8/9 without altering frozen stock requirements, old stored inputs or resource thresholds. The original409 failure is retained. P3 HTTP admission, current-book isolation, idempotent same-job replay and historical automatic/submission checks passed33 tests,1 warning,15.01s. At this intermediate stage, missing explicit P3 capital input returned409 before admission; the final prepared-command behavior below supersedes that extra gate. Ruff passed after normal import/line formatting repairs; no diagnostic suppression was added.
+
+Final prepared-command audit found that the browser lacked a frozen-record entry and could not submit optional source declarations. The prepared form now has a blank, full-width advanced JSON entry accepting only capitalProgram/exceptionProgram, with strict transport checks and explicit reentry after a reviewed-context change. Client prices/totals are rejected before data acquisition. The owned v10 model still requires an explicit capital program; a public prepared command that omits it freezes an explicit empty program. This grants no approval or cost evidence, performs no live-book/research-cost lookup and leaves nonzero missing costs UNKNOWN. It permits monitored/research runs with unknown costs while dependent buys remain blocked. Exact mounted HTTP omission/explicit-source cases passed2 tests,1 warning,7.14s; their private books remain independent of the deliberately populated current book. Latest P3 selection passed92 tests,4738 deselected,3 existing warnings,80.60s. The first two-job test fixture hit the existing single-active-job conflict and was split into isolated parameter cases; the production gate remains unchanged.
+
+Prepared form/transport tests passed44 cases in3 files; exact context-reentry tests passed32 cases after the last logic change, and final display tests passed32. Type-check and build passed. A new real prepared Chrome journey passed, including invalid client-price rejection with no run request, clearing records, actual worker publication/retry/results, four viewport widths and accessibility checks. Final browser/regression reconciliation and isolated capacity results follow in V14.
+
+## MLP3-V14 — Complete regression and isolated capacity acceptance
+
+Tested code revision `d54cbf3b65c93b25698dab3c76bf9a5cdcf39de8`. Backend unit:3800 passed (60.15s,2 existing warnings); contract/replay:13 passed,4 live deselected (14.69s). Initial complete integration:4790 passed,28 failed,1 existing platform skip (2949.46s). All exact28 failed nodes passed after correcting current extraction-version and migration-head/table-set expectations (18.43s). Historical strategy/frozen goldens, original-row preservation and lossy-downgrade rejection assertions remain. Reconcile all4819 cases through the initial run and exact rerun; this is not a single all-green invocation. Final added P3 selection:92 passed (80.60s), overlapping those groups. Only live cases are excluded; V15 lists the exact platform skip and reason.
+
+Frontend:1295 passed in94 files (12.65s); exact final form logic and style groups each passed32. Type-check, final build, both generated API checks, Ruff and whitespace passed. The final19-case browser run passed18 with one local-fixture startup timeout before any trading step; isolated9-case rerun passed all4 P3 and4 real replay journeys, with its one long-original failure repaired and the exact node passing (10.6s). The30s readiness threshold, zero retries and original assertions remain. All15 prior P0/P1/P2 journeys passed in the19-case run. Browser-preserved CRLF made that full prompt50014characters; removing only embedded JSON spaces preserves every policy, source/span and the50000 limit. Raw/normalized-original and source regressions passed138 (5.17s), including7 added cases. The initial137-pass/one temporary-directory permission error was closed by the exact group using an isolated project directory. The new frozen-record screenshot was visually reviewed for full-width display;320/768/1024/1440 layouts and accessibility checks passed. Windows connection-teardown and color-environment warnings were not hidden.
+
+All8 capacity cases ran alone, without competing heavy tests/builds/browsers. Result:`8 passed, 1 warning in 2234.94s (0:37:14)`. Retained120s/symbol,768MiB working-set delta,512MiB market and192MiB result including WAL, plus original traced-heap/query/100k-row-export bounds; no threshold increased. Exact measurements are in [reconciliation and measurements](assets/market-linkage-p3/regression-reconciliation.json), with commands and original failed/successful logs in the same directory.
+
+Exact ten-symbol annual measurement: `88.72–92.02s/symbol; working-set delta 100102144 bytes; market/WAL 519073792 bytes; result/WAL 184938496 bytes`.
+
+## MLP3-V15 — Final criterion trace and delivery review
+
+Unit files live in tests/unit, integration files in tests/integration, browser files in web/tests/e2e, and form unit files in web/tests/unit. Each criterion passed its stage and final regression; overlapping counts are not additive.
+
+| Criterion | Actual evidence files/records | Verified behavior |
+| --- | --- | --- |
+| MLP3-A01 | test_p3_source_contract.py; source-document-audit.json; operations O06 | source hash, five excerpts, bilingual and remaining boundaries |
+| MLP3-A02 | test_p3_policy_contract.py; test_p3_codec.py; test_p3_review.py; test_p3_replay_contract.py | strict versions, source, review and historical compatibility |
+| MLP3-A03 | test_p3_capital_gate.py | exact equality, rejection, unknown, rounding and capacity states |
+| MLP3-A04 | test_p3_composition.py; test_p3_exception_quantity.py; test_p3_exceptions.py | Q0 then market/exception, whole check without resizing |
+| MLP3-A05 | test_p3_storage.py; test_p3_opening.py; test_p3_frozen_admission.py | complete lots, zero versus unknown, restart, backup and migration |
+| MLP3-A06 | test_p3_capital_basis.py; test_p3_accounting.py; test_p3_replay_mutations.py | actual selected lots, 32701-fen residual and policy continuity |
+| MLP3-A07 | test_p3_concurrency.py; test_p3_simulation.py | two-connection race, retry, revocation and late atomic rollback |
+| MLP3-A08 | test_p3_simulation.py; test_p3_notifications.py; p3-capital.spec.ts | same quantity quote failure/recovery, independent risk SELL |
+| MLP3-A09 | test_p3_api.py; test_p3_chain.py; MonitorLoopRunForm.spec.ts | real HTTP, explicit confirmation, read-only preview and stale context |
+| MLP3-A10 | test_p3_replay.py; test_p3_replay_mutations.py; test_p3_frozen_workers.py | real worker publish/read-back, causality and shared-proof integrity |
+| MLP3-A11 | p3-capital.spec.ts (4); monitor-loop-backtest.spec.ts (5); browser screenshots | both modes/forms, both exceptions, four widths and separate explicit operations |
+| MLP3-A12 | V14; regression-reconciliation.json; raw logs | full regression, isolated capacity, generated contracts and scope review |
+
+Existing Windows platform skip: `test_backtest_production_composition.py::test_cursor_key_rejects_foreign_posix_owner_before_use (requires POSIX ownership semantics)`.
+
+Reviewed source→specification→implementation→acceptance, three APIs/generated types, exact whole capital predicates, lot-cost conservation, transaction/notification/replay boundaries, shared-proof reconstruction, byte/capacity limits, every bilingual counterpart and remaining original-prompt scope. tasks/plan.md, tasks/todo.md, the original prompt, dependencies and historical goldens remain unchanged; source hash and five excerpts passed again. No user database, live provider, broker, deployment or remote push was used. All24 tasks/eight checkpoints are closed, with no user-decision blocker. Detailed document checks are in source-document-audit.json.
