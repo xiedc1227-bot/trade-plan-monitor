@@ -276,6 +276,19 @@ class PersistentPlanWebLifecycle:
 
         return await self._run(partial(preview_economics, self), command=command)
 
+    async def read_capital_book(self, *, symbol):
+        from trade_plan_monitor.web.p3_service import read_capital_book
+        return await self._run(partial(read_capital_book, self), symbol=symbol)
+
+    async def open_capital(self, *, command, context):
+        from trade_plan_monitor.web.p3_service import open_capital
+        return await self._run_mutation(partial(open_capital, self),
+            operation="SIMULATION_CAPITAL_OPENING", command=command, context=context)
+
+    async def preview_capital(self, *, command):
+        from trade_plan_monitor.web.p3_service import preview_capital
+        return await self._run(partial(preview_capital, self), command=command)
+
     async def read_daily_supplements(self, *, candidate_json):
         from trade_plan_monitor.web.daily_service import read_daily_supplements
 
@@ -288,7 +301,7 @@ class PersistentPlanWebLifecycle:
         context: MutationContext,
     ) -> PlanVersionView:
         plan = _load_reviewable_plan(command.plan_json)
-        if plan.schema_version not in {5, 6, 7, 8}:
+        if plan.schema_version not in {5, 6, 7, 8, 9}:
             raise PlanSaveBlockedError(
                 "Historical plan formats are read-only; "
                 "extract the preserved source into a current draft"
@@ -589,7 +602,8 @@ class PersistentPlanWebLifecycle:
             details = work.plans.get_version_details(str(command.plan_version_id))
             if (
                 details is not None
-                and _load_reviewable_plan(details.payload_json).schema_version not in {5, 6, 7, 8}
+                and _load_reviewable_plan(details.payload_json).schema_version
+                not in {5, 6, 7, 8, 9}
             ):
                 raise PlanSaveBlockedError("Historical review bindings are read-only")
             if details is not None and details.daily_mapping is not None:
@@ -638,7 +652,7 @@ class PersistentPlanWebLifecycle:
                     "DAILY_DRAFT_OBSOLETE: re-extract preserved source and review a new draft"
                 )
             stored_plan = _load_reviewable_plan(details.payload_json)
-            if stored_plan.schema_version not in {5, 6, 7, 8}:
+            if stored_plan.schema_version not in {5, 6, 7, 8, 9}:
                 raise PlanActivationBlockedError(
                     "Historical plan formats require a new current draft and explicit review"
                 )
@@ -738,7 +752,7 @@ def _plan_version_summary(record: object) -> PlanVersionSummary:
         obsolete_reason="DAILY_DRAFT_OBSOLETE"
         if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
         else "LEGACY_PLANS_REQUIRE_REVIEW"
-        if not can_activate and _plan is not None and _plan.schema_version not in {5, 6, 7, 8}
+        if not can_activate and _plan is not None and _plan.schema_version not in {5, 6, 7, 8, 9}
         else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
@@ -767,7 +781,7 @@ def _plan_version_view(record: object) -> PlanVersionView:
         obsolete_reason="DAILY_DRAFT_OBSOLETE"
         if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
         else "LEGACY_PLANS_REQUIRE_REVIEW"
-        if plan is not None and plan.schema_version not in {5, 6, 7, 8}
+        if plan is not None and plan.schema_version not in {5, 6, 7, 8, 9}
         else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
@@ -813,7 +827,7 @@ def _validated_plan_state(
         )
         return None, validation, False
     plan = _validated_persisted_plan(details)
-    if plan.schema_version not in {5, 6, 7, 8}:
+    if plan.schema_version not in {5, 6, 7, 8, 9}:
         return (
             plan,
             PlanValidationResult(
