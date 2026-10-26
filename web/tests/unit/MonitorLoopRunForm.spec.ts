@@ -61,6 +61,37 @@ function controller(backtest = api(), prepared: () => PreparationFrozenView | Co
   return { form, backtest };
 }
 
+it("carries explicit frozen budget and authorization records without deriving opening costs", async () => {
+  const { form, backtest } = controller();
+  const records = { capitalProgram: { schema_version: "capital-replay-program-v1", opening_events: [] },
+    exceptionProgram: { schema_version: "capital-exception-program-v1", exception_authorization_events: [], operations: [] } };
+  form.updateField("researchInputJson", JSON.stringify(records));
+  await form.submit();
+  expect(backtest.submitRun.mock.calls[0]?.[0]).toMatchObject(records);
+});
+
+it("rejects arbitrary prepared research fields before data acquisition", async () => {
+  const { form, backtest } = controller();
+  form.updateField("researchInputJson", JSON.stringify({ price_fen: 1, retained_basis_fen: 0 }));
+  await form.submit();
+  expect(backtest.submitRun).not.toHaveBeenCalled();
+  expect(backtest.checkPreparedData).not.toHaveBeenCalled();
+  expect(form.errors.value.researchInputJson).toBeTruthy();
+});
+
+it("does not reuse entered frozen records for another reviewed context", async () => {
+  let prepared = frozen();
+  const { form, backtest } = controller(api(), () => prepared);
+  form.updateField("researchInputJson", JSON.stringify({ capitalProgram: {} }));
+  prepared = { ...prepared, manifestHash: "d".repeat(64) };
+  await form.submit();
+  expect(backtest.submitRun).not.toHaveBeenCalled();
+  expect(form.errors.value.researchInputJson).toContain("另一份");
+  form.updateField("researchInputJson", JSON.stringify({ capitalProgram: {} }));
+  await form.submit();
+  expect(backtest.submitRun).toHaveBeenCalledTimes(1);
+});
+
 it.each([["single plan", frozen], ["timeline", collectionFrozen]] as const)("prefills editable low costs and submits them for a %s", async (_label, prepared) => {
   const { form, backtest } = controller(api(), prepared, undefined, false);
   expect(form.draft.value).toMatchObject({ commissionRate: "0.0001", minimumCommissionFen: "500",
@@ -244,6 +275,11 @@ describe("one run from an ordered reviewed collection", () => {
     for (const version of collectionFrozen().versions) expect(versions.text()).toContain(version.sourceId);
     expect(wrapper.find("#initial-cash-fen").exists()).toBe(false);
     expect(wrapper.find("#research-input-json").exists()).toBe(false);
+    const records = wrapper.get("#prepared-research-records");
+    expect((records.element as HTMLTextAreaElement).value).toBe("");
+    expect(wrapper.text()).toContain("成本未知不会按零处理");
+    await records.setValue("{}");
+    expect(wrapper.emitted("updateField")?.at(-1)).toEqual(["researchInputJson", "{}"]);
     expect(wrapper.get("#end-date").attributes("required")).toBeUndefined();
     await wrapper.get('[data-testid="submit-backtest-run"]').trigger("click");
     expect(wrapper.emitted("submit")).toHaveLength(1);

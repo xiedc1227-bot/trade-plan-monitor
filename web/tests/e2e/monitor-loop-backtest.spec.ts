@@ -130,6 +130,22 @@ test("real upload/retry/edit/review/run journey retains original 503 intent and 
   for (const [id, value] of Object.entries({ "commission-rate": "0.0001", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "0", "sell-slippage-fen": "0" }))
     await expect(page.locator("#" + id)).toHaveValue(value);
   for (const [id, value] of Object.entries({ "commission-rate": "0.0003", "minimum-commission-fen": "500", "stamp-duty-rate": "0.0005", "transfer-fee-rate": "0.00001", "buy-slippage-fen": "1", "sell-slippage-fen": "1", "end-date": fixture.cutoff.slice(0, 10) })) await page.locator("#" + id).fill(value);
+  await page.getByText("预算与复评研究记录（可选）", { exact: true }).click();
+  const frozenRecords = page.getByLabel("冻结记录 JSON", { exact: true });
+  await expect(frozenRecords).toHaveValue("");
+  await expect(page.getByText(/成本未知不会按零处理/)).toBeVisible();
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({width, height: 1000});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.screenshot({path: join(root, "docs/assets/verification/market-linkage-p3/browser/replay-records.png"), fullPage: true});
+  const frozenRunRequests: string[] = [];
+  page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/v1/backtest-runs") frozenRunRequests.push(request.url()); });
+  await frozenRecords.fill('{"retained_basis_fen":0,"price_fen":1}');
+  await page.getByTestId("submit-backtest-run").click();
+  await expect(page.getByTestId("run-form-error-summary")).toContainText("不可直接填写报价");
+  expect(frozenRunRequests).toHaveLength(0);
+  await frozenRecords.fill("");
   const acceptedPromise = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/backtest-runs");
   await page.getByTestId("submit-backtest-run").click();
   const accepted = await acceptedPromise; expect(accepted.status(), await accepted.text()).toBe(202);

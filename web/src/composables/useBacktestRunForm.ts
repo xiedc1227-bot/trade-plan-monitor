@@ -12,6 +12,7 @@ import type {
   PreparationFrozenView,
 } from "../api/generated";
 import { isResearchInput } from "../api/researchValues";
+import { preparedReplayRecords } from "../api/capitalReplayValues";
 import { createBacktestApi, type BacktestApi } from "../api/backtests";
 import {
   isBoardLotQuantity,
@@ -190,6 +191,14 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
   let submissionIntent: SubmissionIntent | null = null;
   let coverageController: AbortController | null = null;
   let coverageGeneration = 0;
+  let preparedReplayBinding: string | null = null;
+
+  function replayContextKey(): string | null {
+    const prepared = options.prepared?.() ?? null;
+    return prepared === null ? null : "selectionId" in prepared
+      ? `${prepared.selectionId}:${prepared.selectionHash}`
+      : `${prepared.preparationId}:${prepared.manifestHash}`;
+  }
 
   function clearReferenceMarketCoverage(): void {
     coverageGeneration += 1;
@@ -263,7 +272,11 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
           ? "MANUAL_EVENT_RISK"
           : "NO_EVENT_RISK"
         : field === "responseMode" ? value === "OBSERVE_ONLY" ? "OBSERVE_ONLY" : "FOLLOW_REMINDERS" : value;
-    if (draft.value[field] === normalizedValue) return;
+    if (field === "researchInputJson") preparedReplayBinding = replayContextKey();
+    if (draft.value[field] === normalizedValue) {
+      if (field === "researchInputJson") { clearErrors(); abandonSettledIntent(); }
+      return;
+    }
     draft.value = Object.freeze({ ...draft.value, [field]: normalizedValue });
     clearErrors();
     abandonSettledIntent();
@@ -482,6 +495,18 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
     if (current.endDate !== "" && !isCalendarDate(current.endDate)) {
       nextErrors.endDate = "请输入有效的结束日期，或留空使用服务端默认值";
     }
+    let records: Pick<PreparedBacktestRunCommand, "capitalProgram" | "exceptionProgram"> = {};
+    if (current.researchInputJson.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(current.researchInputJson);
+        if (!preparedReplayRecords(parsed)) throw new Error("invalid frozen records");
+        if (preparedReplayBinding !== replayContextKey()) {
+          nextErrors.researchInputJson = "记录属于另一份已冻结计划，请重新核对并录入。";
+        } else records = parsed;
+      } catch {
+        nextErrors.researchInputJson = "请填写完整的冻结预算／复评记录；不可直接填写报价、总成本或批准声明。";
+      }
+    }
     errors.value = Object.freeze(nextErrors);
     if (Object.keys(nextErrors).length || prepared === null || minimumCommissionFen === null ||
         buySlippageFen === null || sellSlippageFen === null || responseDelaySeconds === null) {
@@ -489,6 +514,7 @@ export function useBacktestRunForm(options: UseBacktestRunFormOptions) {
       return null;
     }
     return deepFreeze({
+      ...records,
       ...("schemaVersion" in prepared && prepared.schemaVersion === "prepared-loop-plan-v2" ? { schemaVersion: "prepared-loop-plan-v2" as const } : {}),
       ...("selectionId" in prepared ? { schemaVersion: "workbench-loop-selection-v1" as const, selectionId: prepared.selectionId, selectionHash: prepared.selectionHash } : { preparationId: prepared.preparationId, manifestHash: prepared.manifestHash }),
       response: { mode: current.responseMode, responseDelaySeconds },

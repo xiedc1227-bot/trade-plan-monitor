@@ -100,7 +100,7 @@ function errorTargetId(field: string): string {
   const definition = [...fieldDefinitions, ...preparedFieldDefinitions].find((candidate) => candidate.field === field);
   if (definition !== undefined) return definition.id;
   if (field === "eventRiskAssumption") return "event-risk-assumption";
-  if (field === "researchInputJson") return "research-input-json";
+  if (field === "researchInputJson") return props.preparedMode ? "prepared-research-records" : "research-input-json";
   if (field === "initialLots") return "initial-lots-title";
 
   const lotField =
@@ -175,12 +175,12 @@ function focusErrorField(field: string, event: MouseEvent): void {
         <h3>{{ preparedVersions ? `${preparedVersions.length} 份已复核计划 · 一次连续回测` : `一份已审核计划 · ${preparedSymbol}` }}</h3>
         <div class="run-form__account-facts">
         <p>初始账户快照：{{ formatDisplayDateTime(preparedAccount.snapshot_at) }}</p>
-        <p>资金模式：{{ preparedAccount.cash.kind === 'POSITION_LIMIT_ONLY' ? '按计划最大持仓执行，无现金限制' : preparedAccount.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(preparedAccount.cash.balance_fen))} 元（历史资金模式）` : '未知（历史资金模式）' }}</p>
+        <p>资金模式：{{ preparedAccount.cash.kind === 'POSITION_LIMIT_ONLY' ? '按计划上限执行，无现金限制' : preparedAccount.cash.kind === 'KNOWN' ? `${formatFenAsYuan(String(preparedAccount.cash.balance_fen))} 元（历史资金模式）` : '未知（历史资金模式）' }}</p>
         <p>库存：{{ preparedAccount.inventory_known ? '已知' : '未知；不会推断为空仓' }}</p>
         </div>
         <ul v-if="preparedAccount.lots.length">
           <li v-for="lot in preparedAccount.lots" :key="lot.lot_key">
-            {{ lot.bucket }} · {{ lot.quantity }} 股；总成本 {{ lot.cost_basis_fen === null ? '未知' : `${formatFenAsYuan(String(lot.cost_basis_fen))} 元` }}；可卖 {{ lot.sellable_quantity ?? '未知' }} 股
+            {{ lot.bucket }} · {{ lot.quantity }} 股；研究成本 {{ lot.cost_basis_fen === null ? '未知' : `${formatFenAsYuan(String(lot.cost_basis_fen))} 元` }}；可卖 {{ lot.sellable_quantity ?? '未知' }} 股
           </li>
         </ul>
         <details v-if="preparedVersions">
@@ -190,6 +190,7 @@ function focusErrorField(field: string, event: MouseEvent): void {
         </details>
         <p v-else>预置计划未声明历史可用时间时，从生效交易日开盘起执行。</p>
         <p>计划规则与已确认期初账户已冻结；提交一次，逐日沿用同一个账户。此处设置回放响应、结束日期及费用。</p>
+        <p>若计划有金额上限，预算成本按另行冻结的记录计算；期初研究成本不自动成为预算成本。</p>
       </div>
       <p v-else role="status">请先完成当前计划的审核，之后才能提交回测。</p>
 
@@ -239,6 +240,16 @@ function focusErrorField(field: string, event: MouseEvent): void {
         <p id="event-risk-assumption-help" class="run-form__help">显式选择生成契约枚举</p>
       </div>
 
+      <details v-if="preparedMode" class="run-form__field run-form__research-records">
+        <summary>预算与复评研究记录（可选）</summary>
+        <label for="prepared-research-records">冻结记录 JSON</label>
+        <textarea id="prepared-research-records" :value="draft.researchInputJson" rows="8"
+          :disabled="editingDisabled()" aria-describedby="prepared-research-records-help"
+          :aria-invalid="errors.researchInputJson ? 'true' : undefined"
+          @input="emit('updateField', 'researchInputJson', inputValue($event))" />
+        <p id="prepared-research-records-help" class="run-form__help">留空时不声明开仓成本或例外批准；成本未知不会按零处理，也不从期初研究成本或当前模拟账补值。填写时使用 capitalProgram / exceptionProgram 完整冻结记录；服务端核验来源、批次、时点及独立操作。</p>
+        <p v-if="errors.researchInputJson" role="alert">{{ errors.researchInputJson }}</p>
+      </details>
       <div v-if="!preparedMode" class="run-form__field">
         <label for="research-input-json">统一计划研究输入 JSON</label>
         <textarea id="research-input-json" :value="draft.researchInputJson" rows="10"
@@ -318,6 +329,20 @@ function focusErrorField(field: string, event: MouseEvent): void {
 .run-form__account-facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); }
 .run-form__account > p, .run-form__account summary { color: var(--color-text-muted); font-size: .875rem; }
 .run-form__account summary { display: list-item; min-height: 2.75rem; padding-block: var(--space-2); cursor: pointer; }
+
+.run-form__research-records { grid-column: 1 / -1; }
+.run-form__research-records summary { min-height: 2.75rem; padding-block: var(--space-2); cursor: pointer; }
+.run-form__research-records textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: 10rem;
+  padding: var(--space-3);
+  border: var(--border-technical);
+  background: var(--color-surface-raised);
+  color: var(--color-text-mineral);
+  resize: vertical;
+}
 
 .run-form__field label {
   display: grid;

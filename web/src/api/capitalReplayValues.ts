@@ -1,10 +1,16 @@
-import type { CapitalReplayProgram } from "./generated";
-import { exceptionProvenance } from "./exceptionReplayValues";
+import type { CapitalReplayProgram, PreparedBacktestRunCommand } from "./generated";
+import { exceptionProgram, exceptionProvenance } from "./exceptionReplayValues";
 import { isShanghaiDateTime } from "./shanghaiTime";
 
 const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const hash = (v: unknown) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
 const safe = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0;
+
+export function preparedReplayRecords(v: unknown): v is Pick<PreparedBacktestRunCommand, "capitalProgram" | "exceptionProgram"> {
+  return record(v) && Object.keys(v).every(k => ["capitalProgram", "exceptionProgram"].includes(k)) &&
+    (v.capitalProgram === undefined || capitalProgram(v.capitalProgram)) &&
+    (v.exceptionProgram === undefined || exceptionProgram(v.exceptionProgram));
+}
 
 /** Transport bounds only; exact lot bindings, self hashes and authority are server-owned. */
 export function capitalProgram(v: unknown): v is CapitalReplayProgram {
