@@ -18,8 +18,12 @@ SOURCES = sorted((Path(__file__).parents[1] / "fixtures/shengxin_sources").glob(
 
 
 @pytest.mark.parametrize("path", SOURCES, ids=lambda path: path.name)
-def test_actual_originals_fit_default_budget_without_losing_source_evidence(path):
-    source = path.read_text(encoding="utf-8-sig")
+@pytest.mark.parametrize("preserve_line_endings", [False, True], ids=["normalized", "browser-raw"])
+def test_actual_originals_fit_default_budget_without_losing_source_evidence(
+    path, preserve_line_endings,
+):
+    source = (path.read_bytes().decode("utf-8-sig") if preserve_line_endings
+              else path.read_text(encoding="utf-8-sig"))
     prompt = build_loop_plan_prompt(source)
     request = PlanExtractionRequest(request_id=uuid4(),
         config=_config().model_copy(update={"max_input_chars": 50_000}), prompt=prompt)
@@ -34,8 +38,10 @@ def test_actual_originals_fit_default_budget_without_losing_source_evidence(path
 
 
 @pytest.mark.parametrize("path", SOURCES[1:], ids=lambda path: path.name)
-def test_actual_followups_fit_with_validated_past_context(path):
-    source = path.read_text(encoding="utf-8-sig")
+@pytest.mark.parametrize("preserve_line_endings", [False, True], ids=["normalized", "browser-raw"])
+def test_actual_followups_fit_with_validated_past_context(path, preserve_line_endings):
+    source = (path.read_bytes().decode("utf-8-sig") if preserve_line_endings
+              else path.read_text(encoding="utf-8-sig"))
     context = update_context()
     prompt = build_plan_update_prompt(source, context)
     PlanExtractionRequest(request_id=uuid4(),

@@ -59,9 +59,10 @@ def linkage_prompt_contract():
         "Plan permission is not occurrence approval. AI never creates approval IDs/events, "
         "approved quantities or human authority; BROKEN_STRONG quantity is entered later "
         "by the user, never inferred or added to the plan. Schema 6 expanded definitions: "
-        + json.dumps(EXPANDED_LINKAGE_POLICY, ensure_ascii=False)
+        + json.dumps(EXPANDED_LINKAGE_POLICY, ensure_ascii=False, separators=(",", ":"))
         + "\nSchema 7 retains those definitions except these replacements/additions: "
         + json.dumps({k: v for k, v in EXPANDED_EXCEPTION_POLICY.items()
-                      if EXPANDED_LINKAGE_POLICY.get(k) != v}, ensure_ascii=False)
+                      if EXPANDED_LINKAGE_POLICY.get(k) != v}, ensure_ascii=False,
+                     separators=(",", ":"))
         + "\n"
     )
