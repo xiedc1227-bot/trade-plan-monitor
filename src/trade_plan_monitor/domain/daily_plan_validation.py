@@ -218,12 +218,16 @@ def daily_draft_content_sha256(draft):
     for key in ("plan_id", "version", "name", "metadata"):
         data.pop(key)
     domain = {4: "daily-plan-review-content-v1", 5: "plan-review-content-v2",
-              6: "plan-review-content-v3", 7: "plan-review-content-v4"}[draft.schema_version]
+              6: "plan-review-content-v3", 7: "plan-review-content-v4",
+              8: "plan-review-content-v5"}[draft.schema_version]
     return daily_hash(domain, data)
 
 
 def daily_draft_issues(draft):
     """Validation is rerun server-side; a missing field cannot be dismissed by acknowledgement."""
+    if draft.schema_version == 8:
+        from trade_plan_monitor.domain.p2_validation import p2_draft_issues
+        return p2_draft_issues(draft)
     if draft.schema_version in {5, 6, 7}:
         from trade_plan_monitor.domain.unified_plan_validation import unified_plan_issues
 
