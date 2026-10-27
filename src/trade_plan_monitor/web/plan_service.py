@@ -59,6 +59,11 @@ from trade_plan_monitor.state.repositories import (
     RepositoryError,
     RevisionConflictError,
 )
+from trade_plan_monitor.state.source_coverage_authority import (
+    SourceCoverageAuthorityError,
+    require_current_coverage,
+)
+from trade_plan_monitor.state.source_coverage_store import SourceCoverageUpgradeRequired
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, operation_hash
@@ -78,7 +83,7 @@ from trade_plan_monitor.web.routers.plans import (
     PlanVersionView,
     RequiredReviewIssueView,
 )
-from trade_plan_monitor.web.schemas import MutationContext, OperationReceipt
+from trade_plan_monitor.web.schemas import ErrorDetail, MutationContext, OperationReceipt
 
 DEFAULT_MONITOR_DATABASE = Path("data/monitor.sqlite3")
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -209,7 +214,9 @@ class PersistentPlanWebLifecycle:
             details = work.plans.get_version_details(version_id)
             if details is None:
                 return None
-            draft, _validation, eligible = _validated_plan_state(details)
+            coverage_issue = _source_coverage_issue(work, details)
+            draft, _validation, eligible = _validated_plan_state(details,
+                                                               coverage_issue=coverage_issue)
             if not eligible or details.review_confirmed_at is None:
                 raise PlanSaveBlockedError("Reviewed current workbench plan required")
             snapshot = draft.to_executable()
@@ -430,9 +437,21 @@ class PersistentPlanWebLifecycle:
                 **kwargs,
             )
         except IdempotencyKeyReuseError:
+            if operation == "CONFIRM_PLAN_REVIEW":
+                raise ApiError(ApiErrorCode.CONFLICT, details=(ErrorDetail(
+                    location=("body", "coverageEvidenceHash"), code="SOURCE_COVERAGE_STALE",
+                    message="Review intent differs from its recorded proof.",
+                ),)) from None
             raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
         except PlanVersionNotFoundError:
             raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        except (SourceCoverageAuthorityError, SourceCoverageUpgradeRequired) as error:
+            reason = (error.reason if isinstance(error, SourceCoverageAuthorityError)
+                      else "SOURCE_COVERAGE_UPGRADE_REQUIRED")
+            raise ApiError(ApiErrorCode.CONFLICT, details=(ErrorDetail(
+                location=("body", "coverageEvidenceHash"), code=reason,
+                message="Current source coverage must be complete and match this review.",
+            ),)) from None
         except PlanSaveBlockedError:
             raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
         except (
@@ -463,7 +482,8 @@ class PersistentPlanWebLifecycle:
                     symbol=symbol,
                     status=status_value,
                 )
-                items = tuple(_plan_version_summary(record) for record in records)
+                items = tuple(_plan_version_summary(record,
+                    coverage_issue=_source_coverage_issue(work, record)) for record in records)
             else:
                 window: list[PlanVersionSummary] = []
                 matched_total = 0
@@ -477,7 +497,8 @@ class PersistentPlanWebLifecycle:
                         status=status_value,
                     )
                     for record in records:
-                        summary = _plan_version_summary(record)
+                        summary = _plan_version_summary(record,
+                            coverage_issue=_source_coverage_issue(work, record))
                         if summary.can_activate is can_activate:
                             if offset <= matched_total < offset + limit:
                                 window.append(summary)
@@ -497,7 +518,8 @@ class PersistentPlanWebLifecycle:
     def _get_plan_version_sync(self, *, version_id: str) -> PlanVersionView | None:
         with self._unit_of_work() as work:
             record = work.plans.get_version_details(version_id)
-            return None if record is None else _plan_version_view(record)
+            return None if record is None else _plan_version_view(record,
+                coverage_issue=_source_coverage_issue(work, record))
 
     def _get_plan_activation_state_sync(self, *, symbol: str) -> ActivePlanView | None:
         with self._unit_of_work() as work:
@@ -570,7 +592,9 @@ class PersistentPlanWebLifecycle:
                     )
                 except ValueError as error:
                     raise PlanSaveBlockedError("Daily source mapping is invalid") from error
-                result = _plan_version_view(work.plans.get_version_details(identity))
+                details = work.plans.get_version_details(identity)
+                result = _plan_version_view(details,
+                    coverage_issue=_source_coverage_issue(work, details))
                 complete_replay(work, context=context, request_hash=request_hash, response=result)
                 work.commit()
                 return result
@@ -598,6 +622,16 @@ class PersistentPlanWebLifecycle:
                 model_type=PlanReviewConfirmationView,
             )
             if replay is not None:
+                details = work.plans.get_version_details(str(command.plan_version_id))
+                if details is None:
+                    raise PlanVersionNotFoundError("Plan version was not found")
+                work.daily.lock_symbol(details.symbol)
+                details = work.plans.get_version_details(details.id)
+                stored = require_current_coverage(work, details, require_review=True)
+                if (command.coverage_evidence_hash, command.coverage_rules_version) != (
+                    stored.assessment.evidence_hash, stored.assessment.rules_version,
+                ):
+                    raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
                 return replay
             details = work.plans.get_version_details(str(command.plan_version_id))
             if (
@@ -609,6 +643,8 @@ class PersistentPlanWebLifecycle:
             if details is not None and details.daily_mapping is not None:
                 try:
                     record = confirm_daily_review(work, command, clock=self._clock)
+                except SourceCoverageAuthorityError:
+                    raise
                 except ValueError as error:
                     raise PlanSaveBlockedError(
                         "Daily review has unresolved or stale evidence"
@@ -738,9 +774,23 @@ class PersistentPlanWebLifecycle:
         return self._session_factory
 
 
-def _plan_version_summary(record: object) -> PlanVersionSummary:
+def _source_coverage_issue(work, details):
+    if details.daily_mapping is None or any(
+        issue.code == "DAILY_DRAFT_OBSOLETE" for issue in details.daily_issues
+    ):
+        return None
+    try:
+        require_current_coverage(work, details, require_review=details.review_id is not None)
+    except SourceCoverageAuthorityError as error:
+        return error.reason
+    except SourceCoverageUpgradeRequired:
+        return "SOURCE_COVERAGE_UPGRADE_REQUIRED"
+    return None
+
+
+def _plan_version_summary(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIRED"):
     details = cast(_PlanVersionDetails, record)
-    _plan, _validation, can_activate = _validated_plan_state(details)
+    _plan, _validation, can_activate = _validated_plan_state(details, coverage_issue=coverage_issue)
     return PlanVersionSummary(
         id=UUID(details.id),
         plan_id=details.plan_id,
@@ -759,9 +809,9 @@ def _plan_version_summary(record: object) -> PlanVersionSummary:
     )
 
 
-def _plan_version_view(record: object) -> PlanVersionView:
+def _plan_version_view(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIRED"):
     details = cast(_PlanVersionDetails, record)
-    plan, validation, can_activate = _validated_plan_state(details)
+    plan, validation, can_activate = _validated_plan_state(details, coverage_issue=coverage_issue)
     resolved_ids = tuple(item.issue_id for item in details.resolutions)
     unresolved = tuple(
         issue for issue in details.required_review_issues if issue.issue_id not in set(resolved_ids)
@@ -811,6 +861,7 @@ def _plan_version_view(record: object) -> PlanVersionView:
 
 def _validated_plan_state(
     details: _PlanVersionDetails,
+    *, coverage_issue="SOURCE_COVERAGE_REQUIRED",
 ) -> tuple[TradePlan | ExplicitPlanDraft, PlanValidationResult, bool]:
     if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues):
         validation = PlanValidationResult(
@@ -847,6 +898,11 @@ def _validated_plan_state(
             False,
         )
     if isinstance(plan, DailyPlanDraft):
+        coverage_issues = () if coverage_issue is None else (ValidationIssue(
+            code=coverage_issue, path="source", severity=ValidationSeverity.WARNING,
+            message="Review all mandatory source conditions. Already confirmed versions need "
+                    "a new version before receiving current authority.", activation_blocking=True,
+        ),)
         validation = PlanValidationResult(
             issues=tuple(
                 ValidationIssue(
@@ -857,13 +913,14 @@ def _validated_plan_state(
                     activation_blocking=True,
                 )
                 for i in details.daily_issues
-            )
+            ) + coverage_issues
         )
         return (
             plan,
             validation,
             plan.to_executable() is not None
             and not details.daily_issues
+            and coverage_issue is None
             and details.review_id is not None,
         )
     raise RuntimeError("current plan is missing its server-owned source review")

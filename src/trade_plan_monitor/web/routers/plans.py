@@ -285,6 +285,7 @@ class PlanVersionView(PlanVersionSummary):
                 or self.can_activate
                 != (
                     not snapshot.issues
+                    and not any(issue.activation_blocking for issue in self.validation_issues)
                     and plan.to_executable() is not None
                     and self.review_id is not None
                 )
@@ -545,6 +546,8 @@ class PlanReviewConfirmationCommand(ApiValue):
     content_hash: Sha256Hex
     source_hash: Sha256Hex
     review_evidence_hash: Sha256Hex
+    coverage_evidence_hash: Sha256Hex | None = None
+    coverage_rules_version: Annotated[str, Field(min_length=1, max_length=64)] | None = None
     expected_revision: NonNegativeSafeInteger
     resolutions: tuple[PlanReviewResolution, ...] = Field(default=(), max_length=512, strict=False)
 

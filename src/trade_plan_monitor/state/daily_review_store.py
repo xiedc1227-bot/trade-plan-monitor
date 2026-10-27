@@ -265,19 +265,22 @@ def confirm_daily_review(work, command, *, clock):
     work.daily.lock_symbol(details.symbol)
     # Re-read after acquiring the symbol fence, before writing the binding.
     details = work.plans.get_version_details(details.id)
-    if (details.content_hash, details.source_hash, details.review_evidence_hash) != (
-        command.content_hash,
-        command.source_hash,
-        command.review_evidence_hash,
-    ) or command.resolutions:
-        raise ValueError("daily review requires exact current content/source/evidence")
-    if details.review_revision != command.expected_revision:
-        raise RevisionConflictError(details.review_revision)
     from trade_plan_monitor.state.source_coverage_authority import (
+        SourceCoverageAuthorityError,
         require_confirmation_coverage,
         save_coverage_receipt,
     )
 
+    if (details.content_hash, details.source_hash, details.review_evidence_hash) != (
+        command.content_hash,
+        command.source_hash,
+        command.review_evidence_hash,
+    ):
+        raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
+    if command.resolutions:
+        raise ValueError("daily review does not accept issue waivers")
+    if details.review_revision != command.expected_revision:
+        raise RevisionConflictError(details.review_revision)
     coverage = require_confirmation_coverage(work, details, command)
     draft = load_daily_draft_json(details.payload_json)
     if details.daily_issues or draft.to_executable() is None:
