@@ -20,6 +20,7 @@ from trade_plan_monitor.ai.source_semantics import (
     equal_declaration,
     relation_groups,
 )
+from trade_plan_monitor.ai.source_treatments import missing_value_supplement, source_parts
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.daily_scope import scope_hash
@@ -61,11 +62,19 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 message="The original candidate or complete normalization trace is unproven."))
         else:
             normalization_hash = normalization.evidence_hash
-    for clause in clauses:
+    for clause in source_parts(source, clauses):
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
         path, group, meaning, relations = (), None, None, ()
-        if declaration is not None:
+        if clause.excluded or clause.limited:
+            kind, scope = ("UNKNOWN", "UNKNOWN") if clause.limited else ("SCOPE_EXCLUSION", "PLAN")
+            state = "UNRESOLVED" if clause.limited else "SCOPE_EXCLUDED"
+            meaning = canonical(dict(treatment="FUNDAMENTALS_REVIEWED_AT_PLAN_GENERATION"))
+            if clause.limited:
+                issues.append(CoverageIssue(code="SOURCE_COVERAGE_LIMIT_EXCEEDED",
+                    path="source." + clause.clause_id, start=clause.start, end=clause.end,
+                    message="Complete source partition exceeds the bounded obligation contract."))
+        elif declaration is not None:
             actual = values.get(declaration.path, MISSING)
             if actual is MISSING:
                 actual = value_at(payload, declaration.path)
@@ -79,12 +88,19 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 matched = bool(positive_context(literal, metadata=metadata))
             else:
                 matched = equal_declaration(declaration, values, payload)
+            supplement = None if identity else missing_value_supplement(declaration, draft, mapping)
+            matched = matched or supplement is not None
             own, relations = declaration_relations(declaration, groups)
             kind = "CONTEXT" if identity else "RELATION" if own else "PREDICATE"
             scope = source_scope(declaration.path, payload)
             state = ("CONTEXT_VERIFIED" if identity else "MAPPED") if matched else "CONFLICT"
+            if supplement is not None:
+                state = "MAPPED_WITH_REGISTERED_SUPPLEMENT"
             path, group = (declaration.path,), own or declaration.group_id
             meaning = canonical(dict(path=declaration.path, value=declaration.value))
+            if supplement is not None:
+                meaning = canonical(dict(path=declaration.path, value=declaration.value,
+                    supplement=supplement.model_dump(mode="json")))
             if matched and not identity:
                 for proven in declared_paths(declaration, values):
                     proven_paths.setdefault(proven, set()).add(clause.clause_id)

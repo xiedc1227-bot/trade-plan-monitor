@@ -149,7 +149,9 @@ class CoverageAssessment(DailyValue):
 
     @property
     def automatic_fidelity_verified(self):
-        return self.coverage_complete and self.origin == "AI_NEW" and bool(self.normalization_hash)
+        return (self.coverage_complete and self.origin == "AI_NEW" and bool(self.normalization_hash)
+                and not any(row.state == "MAPPED_WITH_REGISTERED_SUPPLEMENT"
+                            for row in self.obligations))
 
     @model_validator(mode="after")
     def verify(self):
