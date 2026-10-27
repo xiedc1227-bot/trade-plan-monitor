@@ -123,6 +123,10 @@ def save_daily_draft(work, draft, *, mapping, source_text, clock, extraction_id=
             "plan_version_id": version.id,
         },
     )
+    from trade_plan_monitor.state.source_coverage_authority import save_version_coverage
+
+    save_version_coverage(work, version.id, draft, mapping, source_text,
+                          extraction_id=extraction_id, clock=clock)
     return version.id
 
 
@@ -130,9 +134,12 @@ def record_daily_extraction(work, result, *, clock):
     identity = "extraction-" + str(result.request_id)
     payload = result.model_dump(mode="json", exclude={"diagnostic"})
     existing = work.daily.get(identity)
+    from trade_plan_monitor.state.source_coverage_authority import save_extraction_inputs
+
     if existing is not None:
         if existing["payload"] != payload:
             raise ValueError("extraction identity was reused")
+        save_extraction_inputs(work, result, replay=True)
         return
     work.daily.save(
         identity,
@@ -159,6 +166,7 @@ def record_daily_extraction(work, result, *, clock):
         )
     )
     work.plans._session.flush()
+    save_extraction_inputs(work, result)
 
 
 def daily_version_details(version, source, review, provenance):
@@ -265,6 +273,12 @@ def confirm_daily_review(work, command, *, clock):
         raise ValueError("daily review requires exact current content/source/evidence")
     if details.review_revision != command.expected_revision:
         raise RevisionConflictError(details.review_revision)
+    from trade_plan_monitor.state.source_coverage_authority import (
+        require_confirmation_coverage,
+        save_coverage_receipt,
+    )
+
+    coverage = require_confirmation_coverage(work, details, command)
     draft = load_daily_draft_json(details.payload_json)
     if details.daily_issues or draft.to_executable() is None:
         raise ValueError("daily review has unresolved parameters or source evidence")
@@ -287,4 +301,6 @@ def confirm_daily_review(work, command, *, clock):
         },
     )
     work.plans._session.flush()
-    return work.plans.get_version_details(details.id)
+    confirmed = work.plans.get_version_details(details.id)
+    save_coverage_receipt(work, confirmed, coverage)
+    return confirmed

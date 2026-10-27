@@ -1124,6 +1124,12 @@ class PlanRepository:
                 if target is None or target.plan_hash != plan_sha256(plan):
                     raise PlanVersionNotFoundError("Plan version was not found")
                 self._reject_invalidated_plan_version(target)
+                if plan.schema_version in {5, 6, 7, 8, 9}:
+                    from trade_plan_monitor.state.source_coverage_authority import (
+                        require_repository_review,
+                    )
+
+                    require_repository_review(self, target.id)
                 unresolved_close = self._session.scalar(
                     select(PendingOfficialClose).where(PendingOfficialClose.symbol == plan.symbol)
                 )
