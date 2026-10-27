@@ -2,7 +2,8 @@
 
 import re
 from collections.abc import Mapping
-from datetime import date
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from trade_plan_monitor.ai.source_boundaries import PARTITION_MARKERS
 from trade_plan_monitor.domain.daily_hash import canonical
@@ -23,6 +24,13 @@ _METADATA_LINE = re.compile(
 _TITLE_VALUE = re.compile(
     r"(?:Synthetic )?(?:Reviewed|Trade|Trading|Observation|Monitor|Monitoring) plan"
     r"|交易计划|观察计划|监控计划", re.I,
+)
+_ACCOUNT_QUANTITY = re.compile(r"(?:实际|CORE|TACTICAL)持仓(?P<quantity>0|[1-9][0-9]{0,15})股。")
+_ACCOUNT_COST = re.compile(
+    r"每股成本(?P<cost>(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,64})?)元/股。"
+)
+_ACCOUNT_SNAPSHOT = re.compile(
+    r"账户快照(?P<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+08:00)。"
 )
 _EXACT_CONTEXT = {
     "# Trade plan": "TITLE_EN",
@@ -54,6 +62,22 @@ def _historical_record(text: str) -> str | None:
             return None
         if int(match["quantity"]) <= _MAX_SAFE_QUANTITY:
             return identity
+    return None
+
+
+def _account_record(text: str) -> str | None:
+    """Recognize exact factual syntax; account truth/initialization is a separate owner."""
+    if match := _ACCOUNT_QUANTITY.fullmatch(text):
+        return "ACCOUNT_QUANTITY_ZH" if int(match["quantity"]) <= _MAX_SAFE_QUANTITY else None
+    if match := _ACCOUNT_COST.fullmatch(text):
+        return "ACCOUNT_UNIT_COST_ZH" if Decimal(match["cost"]) <= _MAX_SAFE_QUANTITY else None
+    if match := _ACCOUNT_SNAPSHOT.fullmatch(text):
+        try:
+            snapshot = datetime.fromisoformat(match["at"])
+        except ValueError:
+            return None
+        if snapshot.utcoffset() == timedelta(hours=8) and snapshot.isoformat() == match["at"]:
+            return "ACCOUNT_SNAPSHOT_ZH"
     return None
 
 
@@ -91,6 +115,8 @@ def positive_context(text: str, *, metadata: Mapping[str, object] | None = None)
     if identity := _EXACT_CONTEXT.get(text):
         return identity
     if identity := _historical_record(text):
+        return identity
+    if identity := _account_record(text):
         return identity
     if _matching_metadata(text, metadata):
         return "METADATA_EXACT_JSON"
