@@ -14,6 +14,7 @@ from trade_plan_monitor.ai.source_control_models import (
 )
 from trade_plan_monitor.ai.source_coverage_models import CoverageIssue
 from trade_plan_monitor.ai.source_obligations import bounded_clauses, declarations
+from trade_plan_monitor.ai.source_position_directives import parse_position_directive
 from trade_plan_monitor.domain.daily_hash import daily_hash
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.daily_scope import scope_hash
@@ -152,6 +153,11 @@ def _units(source):
         if start == end:
             continue
         literal = source[start:end]
+        position = (parse_position_directive(literal) if pending is None and not quotes else None)
+        if position is not None:
+            yield start + position.start, start + position.cap_end
+            yield start + position.tail_start, start + position.end
+            continue
         # Complete declaration/context lines are atomic. An unfinished natural
         # preamble still owns subsequent lines, including otherwise valid JSON.
         if pending is None and not quotes and (literal.startswith("operations[")

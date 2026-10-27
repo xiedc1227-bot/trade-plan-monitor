@@ -7,6 +7,7 @@ from decimal import Decimal
 from math import isfinite
 
 from trade_plan_monitor.ai.review import server_source_clauses
+from trade_plan_monitor.ai.source_position_directives import parse_position_directive
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_scope import scope_hash
 
@@ -54,7 +55,7 @@ def _exact_float(text):
 
 
 def declarations(source):
-    """Consume whole path=JSON lines; any unexplained suffix stays unrecognized."""
+    """Consume complete JSON lines or one closed position sentence's cap only."""
     digest = scope_hash(source)
     result = []
     for line in re.finditer(r"[^\r\n]+", source):
@@ -69,6 +70,12 @@ def declarations(source):
         result.append(SourceDeclaration(line.start(), line.end(), match[1], value,
             daily_hash("source-declaration-v1", dict(source_hash=digest,
                 start=line.start(), end=line.end(), path=match[1], value=value))))
+    position = parse_position_directive(source)
+    if position is not None:
+        path = "position.max_qty"
+        result.append(SourceDeclaration(position.start, position.cap_end, path, position.value,
+            daily_hash("source-declaration-v1", dict(source_hash=digest,
+                start=position.start, end=position.cap_end, path=path, value=position.value))))
     return tuple(result)
 
 
