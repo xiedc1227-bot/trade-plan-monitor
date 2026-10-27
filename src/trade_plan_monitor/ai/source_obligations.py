@@ -3,6 +3,8 @@
 import json
 import re
 from dataclasses import dataclass
+from decimal import Decimal
+from math import isfinite
 
 from trade_plan_monitor.ai.review import server_source_clauses
 from trade_plan_monitor.domain.daily_hash import daily_hash
@@ -44,16 +46,23 @@ def _unique_object(pairs):
     return result
 
 
+def _exact_float(text):
+    value = float(text)
+    if not isfinite(value) or Decimal(text) != Decimal(str(value)):
+        raise ValueError("source number cannot be represented without changing meaning")
+    return value
+
+
 def declarations(source):
     """Consume whole path=JSON lines; any unexplained suffix stays unrecognized."""
     digest = scope_hash(source)
     result = []
     for line in re.finditer(r"[^\r\n]+", source):
         match = _DECLARATION.fullmatch(line.group())
-        if match is None:
+        if match is None or len(match[1]) > 512:
             continue
         try:
-            value = json.loads(match[2], parse_constant=_invalid_number,
+            value = json.loads(match[2], parse_constant=_invalid_number, parse_float=_exact_float,
                                object_pairs_hook=_unique_object)
         except (ValueError, RecursionError):
             continue

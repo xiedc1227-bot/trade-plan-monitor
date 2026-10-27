@@ -1,6 +1,7 @@
 """Independent reverse-provenance attacks never authorize or edit a saved plan."""
 
 import json
+from copy import deepcopy
 
 import pytest
 from tests.integration.test_market_linkage_review import source_mapping
@@ -147,3 +148,23 @@ def test_display_name_cannot_swallow_an_additional_mandatory_instruction(padding
     ))
 
     _assert_legacy_passes_but_current_blocks(draft, changed, source)
+
+
+def test_a_global_legacy_issue_stays_inspectable_with_a_nonempty_projection_path():
+    raw = p3_payload()
+    second = deepcopy(raw["ordinary_rules"][0])
+    second["rule_id"] = "unrequested-second-buy"
+    raw["ordinary_rules"].append(second)
+    draft = P3PlanDraft.model_validate(raw)
+    source, mapping = source_mapping(draft)
+    old = build_daily_review(draft, mapping, source)
+    global_issues = [issue for issue in old.issues if not issue.path]
+    assert global_issues
+
+    result = assess_source_coverage(draft, mapping, source)
+
+    assert result.status == "BLOCKED"
+    assert result.authority_granted is False
+    for original in global_issues:
+        assert any(issue.code == original.code and issue.path == "draft"
+                   and issue.message == original.reason[:512] for issue in result.issues)

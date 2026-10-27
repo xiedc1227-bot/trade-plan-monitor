@@ -101,6 +101,11 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 issues.append(CoverageIssue(code="SOURCE_CONTEXT_UNVERIFIED",
                     path="source." + clause.clause_id, start=clause.start, end=clause.end,
                     message="This source span has no proven complete policy or context treatment."))
+        if meaning is not None and len(meaning) > 8192 or len(relations) > 64:
+            kind, scope, state, meaning, relations = "UNKNOWN", "UNKNOWN", "UNRESOLVED", None, ()
+            issues.append(CoverageIssue(code="SOURCE_COVERAGE_LIMIT_EXCEEDED",
+                path="source." + clause.clause_id, start=clause.start, end=clause.end,
+                message="The complete source meaning exceeds the bounded evidence contract."))
         obligations.append(SourceObligation.build(source_hash=source_hash,
             clause_id=clause.clause_id, start=clause.start, end=clause.end,
             excerpt=source[clause.start:clause.end], kind=kind, scope=scope, state=state,
