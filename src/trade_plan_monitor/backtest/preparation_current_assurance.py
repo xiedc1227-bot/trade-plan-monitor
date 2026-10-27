@@ -37,8 +37,10 @@ from trade_plan_monitor.backtest.preparation_models import (
 )
 from trade_plan_monitor.backtest.preparation_review import (
     PreparationSemanticError,
+    frozen_collection,
     frozen_preparation,
 )
+from trade_plan_monitor.domain.daily_hash import daily_hash
 
 
 def _conflict(code):
@@ -236,8 +238,10 @@ def read_current_assurance(connection, record):
         raise _conflict("SOURCE_COVERAGE_INTEGRITY") from None
     except RecursionError:
         raise _conflict("SOURCE_COVERAGE_LIMIT_EXCEEDED") from None
-    except (ValueError, TypeError, KeyError):
-        raise _conflict("SOURCE_COVERAGE_STALE") from None
+    except (ValueError, TypeError, KeyError) as error:
+        code = ("SOURCE_COVERAGE_LIMIT_EXCEEDED" if "SOURCE_COVERAGE_LIMIT_EXCEEDED" in str(error)
+                else "SOURCE_COVERAGE_STALE")
+        raise _conflict(code) from None
 
 
 def require_current_preparation(connection, record):
@@ -254,6 +258,8 @@ def verify_current_review_candidate(connection, previous, proposed):
     Human policy corrections require their own registered operation proof; until
     supplied, a complete original extraction cannot certify a changed snapshot.
     """
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
     proofs = require_current_preparation(connection, previous)
     if type(previous) is not type(proposed) or proposed.status != "REVIEWED":
         raise _conflict("SOURCE_COVERAGE_STALE")
@@ -261,8 +267,86 @@ def verify_current_review_candidate(connection, previous, proposed):
         current = (_collection(connection, proposed)
                    if isinstance(proposed, CollectionPreparationRecord)
                    else _single(connection, proposed))
-    except (ValueError, TypeError, KeyError, RecursionError):
-        raise _conflict("SOURCE_COVERAGE_REQUIRED") from None
+    except PreparationConflictError:
+        raise
+    except (ValueError, TypeError, KeyError, RecursionError) as error:
+        code = ("SOURCE_COVERAGE_LIMIT_EXCEEDED" if isinstance(error, RecursionError)
+                or "SOURCE_COVERAGE_LIMIT_EXCEEDED" in str(error) else "SOURCE_COVERAGE_REQUIRED")
+        raise _conflict(code) from None
     if current != proofs:
         raise _conflict("SOURCE_COVERAGE_STALE")
     return proofs
+
+
+def _manifest(record):
+    return (frozen_collection(record) if isinstance(record, CollectionPreparationRecord)
+            else frozen_preparation(record))
+
+
+def save_current_review(connection, previous, proposed, *, command_id, command_request_hash, now):
+    """Save the new receipt in the same transaction as the original human review."""
+    from trade_plan_monitor.backtest.preparation_review_assurance_models import (
+        PreparationReviewAssurance,
+    )
+    from trade_plan_monitor.backtest.preparation_review_assurance_store import save_review_assurance
+
+    if proposed.review is None or (proposed.updated_at, proposed.review.reviewed_at) != (now, now):
+        raise _conflict("SOURCE_COVERAGE_STALE")
+    proofs = verify_current_review_candidate(connection, previous, proposed)
+    try:
+        receipt = PreparationReviewAssurance.build(preparation_id=proposed.preparation_id,
+            command_id=command_id, command_request_hash=command_request_hash,
+            previous_revision=previous.revision, reviewed_revision=proposed.revision,
+            review_revision=proposed.review_revision, original_review_hash=daily_hash(
+                "preparation-original-review-v1", proposed.review.model_dump(mode="json")),
+            frozen_manifest_hash=_manifest(proposed).manifest_hash, proofs=proofs, created_at=now)
+    except RecursionError:
+        raise _conflict("SOURCE_COVERAGE_LIMIT_EXCEEDED") from None
+    except (ValueError, TypeError) as error:
+        code = ("SOURCE_COVERAGE_LIMIT_EXCEEDED" if "SOURCE_COVERAGE_LIMIT_EXCEEDED" in str(error)
+                else "SOURCE_COVERAGE_INTEGRITY")
+        raise _conflict(code) from None
+    return save_review_assurance(connection, receipt)
+
+
+def require_current_reviewed_preparation(connection, record):
+    """Fresh reuse needs the actual human receipt and current source proof together."""
+    from trade_plan_monitor.backtest.preparation_review_assurance_store import review_assurance
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    actual = _actual_record(connection, record)
+    if actual.status != "REVIEWED" or actual.review is None:
+        raise _conflict("SOURCE_COVERAGE_REQUIRED")
+    proofs = require_current_preparation(connection, actual)
+    receipt = review_assurance(connection, actual.preparation_id, actual.review_revision)
+    if receipt is None:
+        raise _conflict("SOURCE_COVERAGE_REQUIRED")
+    try:
+        manifest = _manifest(actual)
+    except PreparationConflictError:
+        raise
+    except (ValueError, TypeError, KeyError, RecursionError) as error:
+        code = ("SOURCE_COVERAGE_LIMIT_EXCEEDED" if isinstance(error, RecursionError)
+                or "SOURCE_COVERAGE_LIMIT_EXCEEDED" in str(error) else "SOURCE_COVERAGE_INTEGRITY")
+        raise _conflict(code) from None
+    try:
+        original = connection.execute(
+            "SELECT request_hash,response_json FROM backtest_preparation_idempotency "
+            "WHERE idempotency_key=?", (receipt.command_id,),
+        ).fetchone()
+    except sqlite3.DatabaseError:
+        raise _conflict("SOURCE_COVERAGE_INTEGRITY") from None
+    if original is None or original[0] != receipt.command_request_hash:
+        raise _conflict("SOURCE_COVERAGE_STALE")
+    try:
+        original_response = decode_preparation_record_json(original[1])
+    except (ValueError, TypeError, KeyError, RecursionError):
+        raise _conflict("SOURCE_COVERAGE_INTEGRITY") from None
+    if (receipt.reviewed_revision != actual.revision
+            or receipt.created_at != actual.review.reviewed_at
+            or receipt.original_review_hash != daily_hash(
+                "preparation-original-review-v1", actual.review.model_dump(mode="json"))
+            or receipt.frozen_manifest_hash != manifest.manifest_hash
+            or receipt.proofs != proofs or original_response != actual):
+        raise _conflict("SOURCE_COVERAGE_STALE")
+    return receipt

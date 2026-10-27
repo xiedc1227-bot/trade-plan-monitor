@@ -925,16 +925,19 @@ class PreparationStore:
 
         return self._operation(
             "REVIEW_AND_FREEZE", preparation_id, command, idempotency_key, change,
-            assurance=self._verify_current_review,
+            assurance=lambda connection, previous, proposed, now: self._verify_current_review(
+                connection, previous, proposed, now, command, idempotency_key),
         )
 
     @staticmethod
-    def _verify_current_review(connection, previous, proposed, now):
+    def _verify_current_review(connection, previous, proposed, now, command, idempotency_key):
         from trade_plan_monitor.backtest.preparation_current_assurance import (
-            verify_current_review_candidate,
+            save_current_review,
         )
 
-        verify_current_review_candidate(connection, previous, proposed)
+        save_current_review(connection, previous, proposed, now=now,
+            command_id=idempotency_key, command_request_hash=_request_hash(
+                "REVIEW_AND_FREEZE", proposed.preparation_id, command))
 
     def correct_collection_item(self, preparation_id, *, command, idempotency_key):
         if not isinstance(command, CollectionItemCorrectionCommand):
@@ -1015,7 +1018,8 @@ class PreparationStore:
 
         return self._operation(
             "REVIEW_AND_FREEZE", preparation_id, command, idempotency_key, change,
-            assurance=self._verify_current_review,
+            assurance=lambda connection, previous, proposed, now: self._verify_current_review(
+                connection, previous, proposed, now, command, idempotency_key),
         )
 
     def replay_review(self, preparation_id, *, command, idempotency_key):
