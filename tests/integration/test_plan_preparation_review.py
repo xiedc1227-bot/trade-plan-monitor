@@ -10,8 +10,16 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
-from tests.unit.test_daily_review import reviewed_mapping
-from tests.unit.test_monitor_loop_extraction import CASES, extract, fact, output_for
+from tests.integration.preparation_review_current_fixtures import (
+    ACCOUNT_FACTS,
+    SINGLE_MISSING_PATH,
+    current_collection,
+    field_source,
+    loop_candidate,
+    reviewed_mapping,
+    single_draft,
+)
+from tests.unit.test_monitor_loop_extraction import CASES, fact, output_for
 from tests.unit.test_unified_replay_input import research_plan
 
 from trade_plan_monitor.backtest.loop_input import KnownLoopCash, LoopAccountInput
@@ -29,62 +37,8 @@ AVAILABLE = datetime(2026, 8, 20, 9, tzinfo=ZoneInfo("Asia/Shanghai"))
 def ready_collection(
     tmp_path, *, later_text=None, first_available=None, without_source_times=False,
 ):
-    from tests.integration.test_plan_preparation_worker import (
-        collection_claim,
-        collection_update_result,
-    )
-    from tests.unit.test_monitor_loop_schedule import at
-    from tests.unit.test_plan_update_bindings import current_update, prior_review
-
-    from trade_plan_monitor.ai.update_review import (
-        build_initial_review,
-        context_from_review,
-        materialize_extraction,
-    )
-    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
-
-    base = prior_review()
-    source, output = current_update() if later_text is None else current_update(later_text)
-    first = PreparationSource(
-        source_id="first", text="Synthetic human-reviewed supplements for this fixture.",
-        authored_at=first_available or at(19), available_at=first_available or at(19),
-        effective_trade_date=at(19).date(),
-    )
-    if without_source_times:
-        first = first.model_copy(update={"authored_at": None, "available_at": None})
-        source = source.model_copy(update={"authored_at": None, "available_at": None})
-    if first_available is not None or without_source_times:
-        draft = UnifiedPlanDraft.from_executable(research_plan())
-        base = build_initial_review(draft, reviewed_mapping(draft, first.text), first)
-    store = PreparationStore(tmp_path / "collection-review.sqlite", clock=lambda: NOW)
-    record = store.create(
-        PlanCollectionPreparationInput(preparation_id="collection-review", sources=(first, source)),
-        idempotency_key="create",
-    )
-    for index in range(2):
-        claim = collection_claim(record, index, generation=str(uuid4()))
-        record = store.start_attempt(
-            record.preparation_id, expected_revision=record.revision,
-            idempotency_key=f"start-{index}", work_claim=claim,
-        )
-        record = store.begin_call(
-            record.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
-            expected_revision=record.revision,
-        )
-        candidate = base.to_preparation_candidate()
-        if index:
-            context = context_from_review(base, record.items[0].candidate.candidate_hash)
-            result = collection_update_result(base, source, output, UUID(claim.generation), context)
-            candidate = materialize_extraction(base, context.base_hash, source, result)
-            candidate = candidate.to_preparation_candidate()
-        record = store.finish_attempt(
-            record.preparation_id, attempt_id=claim.generation, expected_revision=record.revision,
-            idempotency_key=f"finish-{index}", worker_owner_id=claim.owner_id, candidate=candidate,
-        )
-    record = store.clear_work_claim(
-        record.preparation_id, generation=claim.generation, expected_revision=record.revision,
-    )
-    return store, record
+    return current_collection(tmp_path, now=NOW, later_text=later_text,
+        first_available=first_available, without_source_times=without_source_times)
 
 
 def item_binding(item):
@@ -297,7 +251,7 @@ def test_collection_review_time_does_not_change_earlier_causal_authority(tmp_pat
     )
     first = frozen_preparation(reviewed)
     later_store, later_ready = ready_collection(
-        tmp_path / "second", later_text="调整最大仓位为300股，其余规则保留。",
+        tmp_path / "second", later_text="position.max_qty = 300\n其余规则不变。",
     )
     later_store._clock = lambda: NOW + timedelta(hours=1)
     rereviewed = later_store.review_and_freeze(
@@ -458,7 +412,12 @@ def test_collection_first_raw_extraction_requires_explicit_correction_before_con
 
 
 def ready_preparation(tmp_path, *, source_text=None, opening_snapshot=False, metadata=None):
-    text = source_text or CASES[0]["source"].split("参考行情", 1)[0]
+    from trade_plan_monitor.ai.loop_plan_extraction import LoopPlanExtractionOutput
+
+    # This workflow explicitly reviews one missing independent-event definition.
+    # Its source cap is known 1000, never the old known 300 silently waived to 1000.
+    text = source_text or field_source(single_draft(), missing=(SINGLE_MISSING_PATH,),
+                                        tail=ACCOUNT_FACTS)
     if opening_snapshot:
         text += "账户快照2026-08-20T09:00:00+08:00。"
     case = {**CASES[0], "source": text}
@@ -477,26 +436,20 @@ def ready_preparation(tmp_path, *, source_text=None, opening_snapshot=False, met
         output["opening_account"]["snapshot_at"] = fact(
             text, "账户快照2026-08-20T09:00:00+08:00", AVAILABLE.isoformat()
         )
-    result = extract(
-        output,
-        source.text,
-        authored_at=source.authored_at,
-        available_at=source.available_at,
-        effective_trade_date=source.effective_trade_date,
-    )
     store = PreparationStore(tmp_path / "preparation.sqlite3", clock=lambda: NOW)
     record = store.create(
         SinglePlanPreparationInput(preparation_id="one", sources=(source,)),
         idempotency_key="create",
     )
     running = store.start_attempt("one", expected_revision=record.revision, idempotency_key="start")
-    result = result.model_copy(update={"request_id": UUID(running.attempts[-1].attempt_id)})
+    result, inputs = loop_candidate(source, LoopPlanExtractionOutput.model_validate_json(
+        json.dumps(output)), UUID(running.attempts[-1].attempt_id))
     ready = store.finish_attempt(
         "one",
         attempt_id=running.attempts[-1].attempt_id,
         expected_revision=running.revision,
         candidate=result.to_preparation_candidate(),
-        idempotency_key="finish",
+        idempotency_key="finish", inputs=inputs,
     )
     return store, ready
 
@@ -725,6 +678,48 @@ def test_human_review_cannot_reclassify_unsupported_execution_as_background(tmp_
     with pytest.raises(PreparationConflictError, match="UNSUPPORTED_SOURCE"):
         store.review_and_freeze("one", command=review_command(ready), idempotency_key="review")
     assert store.get("one") == ready
+
+
+def test_old_natural_known_limit_cannot_be_replaced_by_generic_human_supplements(tmp_path):
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    source = CASES[0]["source"].split("参考行情", 1)[0]
+    assert "持仓上限300股。" in source
+    store, ready = ready_preparation(tmp_path, source_text=source)
+    with pytest.raises(PreparationConflictError, match="SOURCE_COVERAGE_REQUIRED"):
+        store.review_and_freeze("one", command=review_command(ready), idempotency_key="must-block")
+    assert store.get("one") == ready
+
+
+def test_old_generic_review_candidate_without_registered_current_proof_cannot_freeze(tmp_path):
+    from tests.integration.test_plan_preparation_worker import collection_claim
+    from tests.unit.test_monitor_loop_schedule import at
+    from tests.unit.test_plan_update_bindings import prior_review
+
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    source = PreparationSource(source_id="first",
+        text="Synthetic human-reviewed supplements for this fixture.",
+        authored_at=at(19), available_at=at(19), effective_trade_date=at(19).date())
+    store = PreparationStore(tmp_path / "old-generic.sqlite3", clock=lambda: NOW)
+    record = store.create(PlanCollectionPreparationInput(preparation_id="old-generic",
+        sources=(source,)), idempotency_key="create")
+    claim = collection_claim(record, 0, generation=str(uuid4()))
+    running = store.start_attempt(record.preparation_id, expected_revision=record.revision,
+        idempotency_key="start", work_claim=claim)
+    calling = store.begin_call(record.preparation_id, generation=claim.generation,
+        owner_id=claim.owner_id, expected_revision=running.revision)
+    ready = store.finish_attempt(record.preparation_id, attempt_id=claim.generation,
+        expected_revision=calling.revision, idempotency_key="finish",
+        worker_owner_id=claim.owner_id,
+        candidate=prior_review().to_preparation_candidate())
+    ready = store.clear_work_claim(record.preparation_id, generation=claim.generation,
+                                  expected_revision=ready.revision)
+    with pytest.raises(PreparationConflictError, match="SOURCE_COVERAGE_REQUIRED"):
+        store.review_and_freeze(ready.preparation_id, command=collection_review_command(ready),
+                                idempotency_key="must-block")
+    assert store.get(ready.preparation_id) == ready
 
 
 @pytest.mark.parametrize("expired", [False, True])
