@@ -1,5 +1,7 @@
 """Current source coverage is additional evidence, never a historical decoder."""
 
+from dataclasses import replace
+
 from trade_plan_monitor.ai.daily_review import DailyMapping, build_daily_review, semantic_values
 from trade_plan_monitor.ai.source_boundaries import (
     partition_at,
@@ -102,7 +104,9 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 matched = equal_declaration(declaration, values, payload)
             supplement = None if identity else missing_value_supplement(declaration, draft, mapping)
             matched = matched or supplement is not None
-            text_supported = identity or declaration_text_supported(declaration, values)
+            treatment_declaration = (replace(declaration, value=supplement.value)
+                                     if supplement is not None else declaration)
+            text_supported = identity or declaration_text_supported(treatment_declaration, values)
             own, relations = declaration_relations(declaration, groups)
             kind = "CONTEXT" if identity else "RELATION" if own else "PREDICATE"
             scope = source_scope(declaration.path, payload)
