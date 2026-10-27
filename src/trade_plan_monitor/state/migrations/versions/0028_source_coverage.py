@@ -96,6 +96,8 @@ def upgrade():
     connection.execute(sa.text(
         "INSERT INTO source_coverage_installation VALUES (1,:id,:json,:hash)"),
         dict(id=installation_id, json=_canonical(marker), hash=marker["evidence_hash"]))
+    for statement in _coverage_triggers().values():
+        connection.exec_driver_sql(statement)
 
 
 def downgrade():
@@ -163,3 +165,30 @@ def _verify_payload(row, version, keys):
                 key: value for key, value in payload.items() if key != "evidence_hash"})):
         raise ValueError("signed payload")
     return payload
+
+
+def _coverage_triggers():
+    # Frozen migration representation; the current store checks these exact guards.
+    result = {}
+    for table in ("source_coverage_installation", "source_coverage_cutover",
+                  "source_coverage_input", "source_coverage_assessment", "source_coverage_review"):
+        for operation in ("update", "delete"):
+            name = f"pma_seal_{table}_{operation}"
+            result[name] = (
+                f"CREATE TRIGGER {name} BEFORE {operation.upper()} ON {table} "
+                "BEGIN SELECT RAISE(ABORT,'source coverage evidence is immutable'); END"
+            )
+    for table in ("source_coverage_installation", "source_coverage_cutover"):
+        name = f"pma_seal_{table}_insert"
+        result[name] = (
+            f"CREATE TRIGGER {name} BEFORE INSERT ON {table} "
+            "BEGIN SELECT RAISE(ABORT,'source coverage cutover is immutable'); END"
+        )
+    name = "pma_seal_source_coverage_assessment_insert"
+    result[name] = (
+        f"CREATE TRIGGER {name} BEFORE INSERT ON source_coverage_assessment "
+        "WHEN NEW.revision != COALESCE((SELECT MAX(revision) FROM source_coverage_assessment "
+        "WHERE plan_version_id=NEW.plan_version_id),0)+1 "
+        "BEGIN SELECT RAISE(ABORT,'source coverage revision is not consecutive'); END"
+    )
+    return result

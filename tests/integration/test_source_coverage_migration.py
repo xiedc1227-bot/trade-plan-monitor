@@ -241,6 +241,7 @@ def test_downgrade_rejects_marker_hash_corruption_even_when_all_evidence_tables_
     try:
         _upgrade(engine, _REVISION)
         with engine.begin() as connection:
+            connection.exec_driver_sql("DROP TRIGGER pma_seal_source_coverage_installation_update")
             connection.exec_driver_sql(
                 "UPDATE source_coverage_installation SET evidence_hash = ?", ("0" * 64,))
 
@@ -261,6 +262,11 @@ def _resign(value):
 def _tamper_cutover(engine, legacy, attack):
     new = _seed_legacy(engine, number=2) if attack == "added_member" else None
     with engine.begin() as connection:
+        # Explicit storage-corruption injection bypasses the immutable SQL guards.
+        for name in connection.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'pma_seal_%'",
+        ).scalars().all():
+            connection.exec_driver_sql(f"DROP TRIGGER {name}")
         marker = connection.exec_driver_sql(
             "SELECT * FROM source_coverage_installation").mappings().one()
         member = connection.exec_driver_sql(

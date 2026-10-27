@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tests.integration.test_index_permission_scope_migration import _migrate
 from tests.unit.test_source_coverage_baseline import _baseline
@@ -29,6 +30,10 @@ from trade_plan_monitor.state.source_coverage_values import CoverageInputs
 NOW = datetime(2026, 10, 27, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
 VERSION = "00000000-0000-0000-0000-000000000001"
 SOURCE = "00000000-0000-0000-0000-000000000002"
+
+
+def _damage_seal(connection, table, operation):
+    connection.exec_driver_sql(f"DROP TRIGGER pma_seal_{table}_{operation}")
 
 
 @pytest.fixture
@@ -112,6 +117,7 @@ def test_stored_tampering_is_sanitized(database, column, value):
     with Session(engine) as session, session.begin():
         append(SourceCoverageStore(session), assessment)
     with engine.begin() as connection:
+        _damage_seal(connection, "source_coverage_assessment", "update")
         connection.execute(text(f"UPDATE source_coverage_assessment SET {column}=:value"),
                            {"value": value})
     with Session(engine) as session, pytest.raises(SourceCoverageIntegrityError) as error:
@@ -160,6 +166,7 @@ def test_absent_migration_and_marker_never_create_authority(tmp_path):
             SourceCoverageStore(session).latest(VERSION)
         _migrate(engine, "head")
         with engine.begin() as connection:
+            _damage_seal(connection, "source_coverage_installation", "delete")
             connection.execute(text("DELETE FROM source_coverage_installation"))
         with Session(engine) as session, pytest.raises(SourceCoverageUpgradeRequired):
             SourceCoverageStore(session).latest(VERSION)
@@ -174,6 +181,7 @@ def test_missing_history_revision_is_detected(database):
         append(store, assessment)
         append(store, assessment, revision=1, command="second")
     with engine.begin() as connection:
+        _damage_seal(connection, "source_coverage_assessment", "delete")
         connection.execute(text("DELETE FROM source_coverage_assessment WHERE revision=1"))
     with Session(engine) as session, pytest.raises(SourceCoverageIntegrityError):
         SourceCoverageStore(session).latest(VERSION)
@@ -191,3 +199,25 @@ def test_old_plan_bytes_are_unchanged_by_current_assessment(database):
             "SELECT payload_json FROM source_coverage_assessment",
         )).scalar()
         assert json.loads(payload)["authority_granted"] is False
+
+
+@pytest.mark.parametrize("operation", ["update", "delete"])
+def test_normal_sql_cannot_rewrite_or_delete_coverage_history(database, operation):
+    engine, _, assessment, _, _ = database
+    with Session(engine) as session, session.begin():
+        expected = append(SourceCoverageStore(session), assessment)
+    query = ("DELETE FROM source_coverage_assessment" if operation == "delete" else
+             "UPDATE source_coverage_assessment SET command_id='changed'")
+    with pytest.raises(IntegrityError, match="immutable"):
+        with engine.begin() as connection:
+            connection.exec_driver_sql(query)
+    with Session(engine) as session:
+        assert SourceCoverageStore(session).latest(VERSION) == expected
+
+
+def test_removing_a_guard_is_integrity_failure_even_before_rows_change(database):
+    engine, _, _, _, _ = database
+    with engine.begin() as connection:
+        _damage_seal(connection, "source_coverage_cutover", "insert")
+    with Session(engine) as session, pytest.raises(SourceCoverageIntegrityError):
+        SourceCoverageStore(session).installation()

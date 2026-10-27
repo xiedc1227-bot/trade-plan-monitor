@@ -1,8 +1,6 @@
 """Exact assurance history inside the caller's existing transaction and fence."""
 
-from hashlib import sha256
-
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
 from trade_plan_monitor.domain.daily_hash import canonical
@@ -15,6 +13,7 @@ from trade_plan_monitor.domain.daily_scope import scope_hash
 from trade_plan_monitor.state.models import PlanReviewProvenance, PlanSource, PlanVersion
 from trade_plan_monitor.state.repositories import RepositoryError, RevisionConflictError
 from trade_plan_monitor.state.source_coverage_models import (
+    COVERAGE_TRIGGER_SQL,
     CoverageAssessmentRow,
     CoverageCutoverRow,
     CoverageInputRow,
@@ -73,18 +72,10 @@ class SourceCoverageStore:
         marker = _decode(CoverageInstallation, row.payload_json, row.evidence_hash)
         if row.id != 1 or marker.installation_id != row.installation_id:
             raise SourceCoverageIntegrityError()
-        digest = sha256(b"source-coverage-membership-v1\0[")
-        count = 0
-        for member in self.session.execute(select(
-            CoverageCutoverRow.plan_version_id, CoverageCutoverRow.plan_hash,
-            CoverageCutoverRow.source_hash, CoverageCutoverRow.evidence_hash,
-        ).order_by(CoverageCutoverRow.plan_version_id)):
-            if count:
-                digest.update(b",")
-            digest.update(canonical(list(member)).encode())
-            count += 1
-        digest.update(b"]")
-        if (count, digest.hexdigest()) != (marker.member_count, marker.membership_hash):
+        guards = dict(self.session.execute(text(
+            "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'pma_seal_%'",
+        )).all())
+        if any(guards.get(name) != statement for name, statement in COVERAGE_TRIGGER_SQL.items()):
             raise SourceCoverageIntegrityError()
         return marker
 

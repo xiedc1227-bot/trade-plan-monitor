@@ -6,6 +6,35 @@ from sqlalchemy.orm import Mapped, mapped_column
 from trade_plan_monitor.state.models import Base
 
 
+def _coverage_triggers():
+    result = {}
+    for table in ("source_coverage_installation", "source_coverage_cutover",
+                  "source_coverage_input", "source_coverage_assessment", "source_coverage_review"):
+        for operation in ("update", "delete"):
+            name = f"pma_seal_{table}_{operation}"
+            result[name] = (
+                f"CREATE TRIGGER {name} BEFORE {operation.upper()} ON {table} "
+                "BEGIN SELECT RAISE(ABORT,'source coverage evidence is immutable'); END"
+            )
+    for table in ("source_coverage_installation", "source_coverage_cutover"):
+        name = f"pma_seal_{table}_insert"
+        result[name] = (
+            f"CREATE TRIGGER {name} BEFORE INSERT ON {table} "
+            "BEGIN SELECT RAISE(ABORT,'source coverage cutover is immutable'); END"
+        )
+    name = "pma_seal_source_coverage_assessment_insert"
+    result[name] = (
+        f"CREATE TRIGGER {name} BEFORE INSERT ON source_coverage_assessment "
+        "WHEN NEW.revision != COALESCE((SELECT MAX(revision) FROM source_coverage_assessment "
+        "WHERE plan_version_id=NEW.plan_version_id),0)+1 "
+        "BEGIN SELECT RAISE(ABORT,'source coverage revision is not consecutive'); END"
+    )
+    return result
+
+
+COVERAGE_TRIGGER_SQL = _coverage_triggers()
+
+
 class CoverageInstallationRow(Base):
     __tablename__ = "source_coverage_installation"
     __table_args__ = (CheckConstraint("id = 1", name="ck_coverage_installation_singleton"),)
