@@ -72,14 +72,14 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T06 — Preserve incomplete candidates with coverage blockers
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T05.
-- Files/scope: current extraction/review adapter, typed result projection and focused extraction tests (3–5 files).
+- Files/scope: sequential T06a direct extraction (3 files), T06b compact propagation (4), T06c private derivation models (2), T06d deterministic replay (2), T06e update-result evidence (2), T06f materialization (4), each independently tested. Source scope and actual evaluator support receive focused regression slices; public persistence/authority remains T07–T09.
 - Acceptance: A01,A04,A05; Verify: V01,V02. Distinguish malformed/tampered output from valid incomplete coverage; retain source/candidate/mapping, and never present SUCCEEDED as reviewable when coverage blocks. Pin v12 bytes or declare a new prompt version honestly.
 
 ### PMA-C02 — Extraction coverage checkpoint
 
-- [ ] New pure coverage and existing source/extraction regressions pass. A01–A04 covered; source normalization cannot hide mandatory omissions. Persistence/activation remains pending.
+- [x] New pure coverage and existing source/extraction regressions pass. A01–A04 covered; source normalization cannot hide mandatory omissions. Persistence/activation remains pending.
 
 ### PMA-T07 — Persist assurance without invalidating history
 

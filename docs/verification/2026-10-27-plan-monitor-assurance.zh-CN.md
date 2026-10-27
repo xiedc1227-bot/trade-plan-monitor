@@ -12,7 +12,7 @@
 
 ## PMA-R02 — 剩余验收
 
-T01–T05及C01完成，T06进行中，T07–T24及C02–C08待完成。不能从纯测试或批准契约推断完整流程覆盖已完成。真实尝试0/48，调用前只读调查原文语料资格。工程完成、准确版本真实提取、实际安装就绪将分别报告。
+T01–T06及C01–C02完成，T07–T24及C03–C08待完成。不能从纯测试或批准契约推断完整流程覆盖已完成。真实尝试0/48，调用前只读调查原文语料资格。工程完成、准确版本真实提取、实际安装就绪将分别报告。
 
 ## PMA-R03 — T02有界证据模型
 
@@ -32,6 +32,13 @@ T01–T05及C01完成，T06进行中，T07–T24及C02–C08待完成。不能�
 
 规范化初始14失败／3通过（模块不存在），后17通过；完整轨迹不能掩盖仅评估处理删除BUY规则。注册基本面排除保留准确混合余项；缺参要求准确人工补充，不能覆盖明确已知值。A/B标记不豁免，强制字段移B报冲突。准确注册期限转换仍记为人工调整。处理及边界初始分别7失败／5通过、7失败／8通过，后续聚焦组通过。日志：`t05-normalization-red.log`、`t05-normalization-final.log`、`t05-treatments-red.log`、`t05-treatments-green.log`、`t05-boundaries-red.log`、`t05-boundaries-green.log`、`t05-human-text-red.log`、`t05-human-text-green.log`。
 
-## PMA-R06 — T06提取进度
+## PMA-R06 — T06及C02提取证明
 
-直接当前提取原像／可检查阻断测试初始13失败／8通过（缺载体）；实施后与既有安全测试39项通过，2.93秒。既有提取／v12预算／P3编解码及新增直接测试88项通过，3.84秒（`t06-current-green.log`、`t06-compat.log`）。固定当前输出schema规范SHA256为 `7a7d35473a44ebb8de02d6fea035b005c5b3d0774644f68aebc1ef455653c3f4`，固定来源提示词SHA256为 `6649fd2feca4ad6d7384838ee66ede890afbdc647c9e54d39728abd571084b6f`，均未变化；服务端私有证明不进入供应商输出契约。compact／update传递、持久化及授权验收待完成，C02尚未关闭。合成提取夹具声明自身本地输入预算，不改变真实调用活动配置。
+直接当前提取原像／可检查阻断测试初始13失败／8通过（缺载体）；实施后与既有安全测试39项通过，2.93秒。既有提取／v12预算／P3编解码及新增直接测试88项通过，3.84秒（`t06-current-green.log`、`t06-compat.log`）。固定当前输出schema规范SHA256为 `7a7d35473a44ebb8de02d6fea035b005c5b3d0774644f68aebc1ef455653c3f4`，固定来源提示词SHA256为 `6649fd2feca4ad6d7384838ee66ede890afbdc647c9e54d39728abd571084b6f`，均未变化；服务端私有证明不进入供应商输出契约。合成提取夹具声明自身本地输入预算，不改变真实调用活动配置。
+
+
+compact及前序补丁证明现保留准确原始JSON、上下文、按序扩展／规范化／物化及复制后的私有阻断。聚焦修正缺少依赖时仍阻断。派生模型57项通过、回放36、更新提取10、物化26；物化／回放／提取组合72项通过，3.50秒。保留原始缺模块／字段失败及真实超限分类失败；时间序列化／超限措辞的测试修正不算生产缺陷。历史payload／审核哈希仍固定。日志：`t06-derivation-green.log`、`t06-derivation-extraction-agent-green2.log`、`readiness-materialization-expanded-02.log`、`t06-materialize-root-final.log`。
+
+C02提取回归277项通过，13.96秒（`c02-extraction.log`）；既有集成21项通过，6.39秒（`c02-existing-integration.log`）；来源组567项通过，20.08秒（`c02-final-source.log`）。原生支持修复后，`rg --files tests/unit -g 'test_source_*.py'` 加 `test_daily_review.py`、`test_daily_source_exclusions.py`、`test_persistent_rule_validity.py`：528项通过，16.18秒（`c02-source-confirm.log`）。先前一次选择含不存在文件、未运行测试，不记验收。保留1条既有Starlette警告。原生支持／提取组60项通过，3.40秒；Ruff通过。未调用供应商、迁移用户库或开放新运行授权。
+
+作用域对抗先5项失败，后增加未知文字失败；只有原文证明的方向才能确定交易义务范围，未注册文字即使放入BUY容器也保持UNKNOWN。一次过严容器回归已修复，相关32项通过。原生支持对抗：7失败／3通过，后10项通过。新防护阻断不可计算的指标参数／单位组合，不改历史schema／引擎默认值。仅PMA新增正例辅助改为MA20 period20，旧夹具不变。
