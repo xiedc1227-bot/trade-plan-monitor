@@ -288,6 +288,24 @@ def _review_current_output(output, source_text, request_id, config, raw):
                 if isinstance(error, MappingValidationError)
                 else "mapping",
             )
+        from trade_plan_monitor.ai.source_coverage import assess_source_coverage
+        from trade_plan_monitor.ai.source_normalization import capture_normalization
+
+        trace = None
+        if output._source_preimage_json is not None:
+            try:
+                trace = capture_normalization(json.loads(output._source_preimage_json),
+                    output.draft.model_dump(mode="json"), source_text)
+            except (ValueError, TypeError, RecursionError):
+                pass  # Missing complete evidence remains an explicit coverage blocker.
+        coverage = assess_source_coverage(output.draft, snapshot.mapping, source_text,
+            normalization=trace, origin="AI_NEW")
+        validation_issues = tuple(
+            _blocking_warning(i.code, i.path, i.reason) for i in snapshot.issues
+        )
+        known = {(i.code, i.path, i.message) for i in validation_issues}
+        validation_issues += tuple(_blocking_warning(i.code, i.path, i.message)
+            for i in coverage.issues if (i.code, i.path, i.message) not in known)
         return CurrentPlanExtractionResult(
             request_id=request_id,
             provider_id=raw.provider_id,
@@ -298,9 +316,9 @@ def _review_current_output(output, source_text, request_id, config, raw):
             daily_mapping=snapshot.mapping,
             assumptions=output.assumptions,
             warnings=output.warnings,
-            validation_issues=tuple(
-                _blocking_warning(i.code, i.path, i.reason) for i in snapshot.issues
-            ),
+            validation_issues=validation_issues,
+            coverage=coverage,
+            normalization_trace=trace,
             usage=_usage_snapshot(raw),
             diagnostic=_diagnostic(
                 stage="completed", reason="NONE", raw=raw, configured_model=config.model
@@ -341,7 +359,15 @@ def _parse_untrusted_output[OutputT: BaseModel](
         allow_nan=False,
         separators=(",", ":"),
     )
-    return output_model.model_validate_json(normalized)
+    output = output_model.model_validate_json(normalized)
+    target = getattr(output, "root", output)
+    if hasattr(target, "_source_preimage_json") and isinstance(parsed, dict):
+        original_draft = parsed.get("draft")
+        if isinstance(original_draft, dict):
+            from trade_plan_monitor.domain.daily_hash import canonical
+
+            target._source_preimage_json = canonical(original_draft)
+    return output
 
 
 def _enforce_json_budget(value: object) -> None:

@@ -3,7 +3,7 @@
 import json
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from trade_plan_monitor.ai.daily_review import (
     DailyClause,
@@ -18,6 +18,7 @@ from trade_plan_monitor.ai.models import (
     ExtractionIssue,
     PlanExtractionStatus,
 )
+from trade_plan_monitor.ai.source_coverage_models import CoverageAssessment, NormalizationTrace
 from trade_plan_monitor.domain.daily_plan_models import DailyValue
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.market_linkage_validation import CurrentPlanDraft
@@ -25,6 +26,8 @@ from trade_plan_monitor.domain.plan_validation import ValidationIssue
 
 
 class CurrentPlanExtractionOutput(DailyValue):
+    _source_preimage_json: str | None = PrivateAttr(default=None)
+
     draft: CurrentPlanDraft
     clauses: tuple[DailyClause, ...] = Field(min_length=1, max_length=512)
     bindings: tuple[DailyFieldBinding, ...] = Field(max_length=2000)
@@ -63,6 +66,8 @@ class CurrentPlanExtractionResult(DailyValue):
     validation_issues: tuple[ValidationIssue, ...]
     usage: AIUsageSnapshot | None
     diagnostic: ExtractionDiagnostic | None = Field(default=None, exclude=True)
+    coverage: CoverageAssessment | None = Field(default=None, exclude=True)
+    normalization_trace: NormalizationTrace | None = Field(default=None, exclude=True)
     status: PlanExtractionStatus
 
     def model_copy(self, *, update=None, deep=False):
@@ -70,6 +75,8 @@ class CurrentPlanExtractionResult(DailyValue):
             return super().model_copy(deep=deep)
         values = self.model_dump(mode="python")
         values["diagnostic"] = self.diagnostic
+        values["coverage"] = self.coverage
+        values["normalization_trace"] = self.normalization_trace
         return type(self).model_validate({**values, **update})
 
 
