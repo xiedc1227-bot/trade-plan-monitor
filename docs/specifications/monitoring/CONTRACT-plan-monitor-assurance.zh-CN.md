@@ -123,3 +123,9 @@ revision1的COMPOSITION以已登记LINEAGE和全部选中项真实当前审核�
 `current_prepared_run_fence(store, preparation_id, expected_manifest_hash)` 持有真实准备库BEGIN IMMEDIATE，重算当前REVIEW／LINEAGE／来源证明并核对准确冻结manifest；yield冻结值期间持续保留来源writer预约，不写业务行，退出时释放。PreparationService.current_run_fence仅以私有同步能力提供。历史get_frozen、数据读取及已经完成的请求回执保留既有合同。
 
 新的prepared提交在拷贝行情前取得真实服务能力，并向finalize_run_submission传入服务端私有 `admission_guard` factory。任务库writer核对真实预约后，先进入来源栅栏，再复用活动操作或写新任务／响应。锁顺序为jobs→preparation，任务库COMMIT或ROLLBACK完成后才释放准备库栅栏；on_admitted仍在提交之后。两类writer内不调用供应商或获取行情。准入拒绝前已拷贝的不可变输入可以保留为孤立证据，不授予排队任务、已完成响应或coordinator授权。不增加公共请求／哈希／codec字段或legacy模式标志。新key是新准入；准确已完成回执重放在当前检查之前返回原结果。缺服务端能力为unavailable，缺失／过期当前证明为conflict，存储损坏为脱敏integrity失败。既有全局准入／资源限制保持不变。
+
+## PMA-K15 — 完整来源风险控制的操作对应
+
+完整变更分析根据准确当前来源和完整前驱独立重解析风险控制。每个已识别控制必须匹配实际操作的稳定目标、action及完整before/after哈希。只有派生交集令完整分支保持不变时，来源MODIFY才可对应实际RETAIN。仅holding_scope语义叶子获得当前来源派生；不变的价格、确认方式、目标及其余策略继续保留前驱owner。未消费控制、额外策略变化、未知余项、B分区控制及ordinary/risk两registry之间重复操作序号均阻断完成。
+
+序号比较仅消费有限parser已经识别的控制。读取operations索引前，剥一层完整外部Markdown `**` 包装，与既有ordinary parser认可的格式一致；从不提升未识别文字。AI原始重放与已登记Human重评共用同一语义对应；两类协议均不能绕过完整来源，或仅凭控制helper主张新授权。混合表格价格角色须另有独立关系证明。

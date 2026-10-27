@@ -125,4 +125,10 @@ LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`）。独立21项�
 
 物理调用预检初始5失败／7通过，随后12项通过，4.10秒（`t08-current-call-red.log`、`t08-current-call-01.log`）；提交 `655ccfd`。未启动的来源失败准确结束，无供应商调用、重试或未知物理状态。既有相关组合225通过／11失败，因旧worker种子缺原始INPUT／Human登记（`t08-current-call-existing.log`）。合法worker夹具随后聚焦79项通过，14.96秒，保留全部189条原始断言及共享旧结果helper完整源码（`readiness-current-worker-all-01.log`、`readiness-current-worker-assert-audit-01.log`）；提交 `90132ec`。
 
-准备库持有writer栅栏6项通过，10.35秒（`t08-run-fence-01.log`）；独立调用／栅栏组合18项通过，12.78秒（`t08-call-run-independent-review.log`）；提交 `d37aabb`。最终任务准入factory16项通过，8.14秒；扩大jobs／input检查51通过／1个旧自然来源夹具在任务提交前失败（`t08-job-admission-guard-regression.log`）；提交 `dfacba9`。真实Facade新增18场景通过，16.38秒（`t08-current-submission-01.log`），含拷贝后原文／同文元数据变更、缺审核／能力及已完成回执重放。扩大最终Facade回归及独立审查仍在进行。T08／C03继续开放，含剩余自然来源／表格语义、操作／发送防护及后续公共接口／UI／语料／就绪阶段。真实供应商尝试仍0/48，用户数据库未迁移。
+准备库持有writer栅栏6项通过，10.35秒（`t08-run-fence-01.log`）；独立调用／栅栏组合18项通过，12.78秒（`t08-call-run-independent-review.log`）；提交 `d37aabb`。最终任务准入factory16项通过，8.14秒；扩大jobs／input检查51通过／1个旧自然来源夹具在任务提交前失败（`t08-job-admission-guard-regression.log`）；提交 `dfacba9`。真实Facade新增18场景通过，16.38秒（`t08-current-submission-01.log`），含拷贝后原文／同文元数据变更、缺审核／能力及已完成回执重放。最终Facade组合67项通过，39.61秒（`t08-current-submission-final.log`），独立审查未发现必改项；提交 `e7881cc`。T08／C03继续开放，含剩余自然来源／表格语义、操作／发送防护及后续公共接口／UI／语料／就绪阶段。真实供应商尝试仍0/48，用户数据库未迁移。
+
+## PMA-R15 — T08实际风险操作与独立根计划夹具
+
+完整来源风险控制现于AI及Human路径核对准确完整操作对应。最终粗体序号修复前，source选择1042项通过，61.10秒（`risk-control-agent-source-regression.log`）。root审查随后复现一个真实绕过：已识别的粗体ordinary JSON操作可与普通risk操作重复序号，仍误报COMPLETE；合法对照通过而冲突案例失败（`risk-control-agent-bold-red.log`）。修复仅改变已识别控制的序号读取。最终风险／控制／core／aggregate聚焦组合121项通过，16.37秒（`risk-control-agent-bold-green2.log`），含新增35项及旧8组准确字节／哈希固定校验；Ruff通过；提交 `48d2c3a`。中间一次命令指定不存在测试，未运行任何测试，不计为验收证据。表格角色接入仍待完成。
+
+旧独立根组合夹具复制其他计划的Human候选，却无自身实际操作／输入证明。原失败保留于 `t08-library-independent-red.log`。现建立自身完整合成来源、原始输入及真实提取／审核命令。原57条Assert节点全部一致。library组合15项通过／1项未选中，7.66秒（`t08-library-independent-green.log`）；提交 `9254f5c`。未选中的四来源测试采用混合合成文字及非JSON字段拼写，并非四份原始盛新来源；其当前来源夹具仍待在不改变原始来源夹具、历史／golden的前提下校正。不主张自然语言语料验收完成。计数重叠；真实供应商发送仍0/48，用户数据库未迁移。
