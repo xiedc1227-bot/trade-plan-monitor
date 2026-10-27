@@ -48,7 +48,7 @@ def _one_condition_container():
     mapping = DailyMapping.model_validate(old.model_dump(mode="python") | dict(
         clauses=clauses, bindings=bindings,
     ))
-    assert len(groups[_ROOT]) >= 2  # The unchanged native subtree crosses512 code points.
+    assert len(groups[_ROOT]) >= 2  # The unchanged subtree crosses a canonical chunk boundary.
     assert not build_daily_review(draft, mapping, source).issues
     return draft, source, mapping, condition, ranges[_ROOT]
 
@@ -134,7 +134,15 @@ def _append_untrusted_container(value):
     return draft, source, mapping
 
 
-@pytest.mark.parametrize("value", [{"type": "ALL"}, {"type": "ANY"}])
+@pytest.mark.parametrize("value", [
+    {"type": "ALL"},
+    {"type": "ANY"},
+    {"type": "ALL", "conditions": None},
+    {"type": "ALL", "conditions": 1},
+    {"type": "ALL", "conditions": "unknown"},
+    {"type": "ALL", "conditions": {"a": 1}},
+    {"type": ["ALL"], "conditions": []},
+])
 def test_incomplete_untrusted_relation_retains_blocked_assessment(value):
     draft, source, mapping = _append_untrusted_container(value)
 
