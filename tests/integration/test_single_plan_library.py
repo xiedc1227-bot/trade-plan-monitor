@@ -316,56 +316,56 @@ def test_library_http_preserves_single_source_and_rejects_unreviewed_predecessor
 
 
 def test_composition_of_independent_reviewed_plans_keeps_first_account(tmp_path):
-    from tests.unit.test_daily_review import reviewed_mapping
+    from uuid import uuid4
 
-    from trade_plan_monitor.ai.update_review import build_initial_review
-    from trade_plan_monitor.backtest.plan_library import compose_reviewed_plans
+    from tests.integration.preparation_review_current_fixtures import (
+        field_source,
+        loop_candidate,
+        reviewed_mapping,
+    )
+    from tests.integration.test_plan_preparation_worker import collection_claim
+
+    from trade_plan_monitor.ai.loop_plan_extraction import (
+        LoopPlanExtractionOutput,
+        OpeningAccountFacts,
+        OpeningFact,
+    )
+    from trade_plan_monitor.backtest.plan_library import (
+        compose_reviewed_plans,
+        create_single_preparation,
+    )
 
     store, first, first_ref = approved_single(tmp_path)
+    draft = frozen_preparation(first).items[0].mapping.draft
+    account = "账户记录：当前持仓0股。"
+    text = field_source(draft, tail=(account,))
     source = first.items[0].source.model_copy(
         update={
             "source_id": "independent",
+            "text": text,
             "effective_trade_date": first.items[0].source.effective_trade_date + timedelta(days=1),
         }
     )
-    item = first.items[0]
-    reviewed = build_initial_review(
-        frozen_preparation(first).items[0].mapping.draft,
-        reviewed_mapping(frozen_preparation(first).items[0].mapping.draft, source.text),
-        source,
-    )
-    candidate = item.candidate.model_copy(
-        update={
-            **reviewed.to_preparation_candidate().model_dump(),
-            "source_hash": source.binding_hash,
-        }
-    )
-    new_item = item.model_copy(
-        update={
-            "independent": True,
-            "source": source,
-            "candidate": candidate,
-            "attempts": tuple(
-                a.model_copy(update={"source_hash": source.binding_hash}) for a in item.attempts
-            ),
-        }
-    )
-    second = store._operation(
-        "TEST_FULL",
-        "second",
-        {},
-        "make-second",
-        lambda old, now: first.model_copy(
-            update={
-                "preparation_id": "second",
-                "revision": 1,
-                "status": "CANDIDATE",
-                "items": (new_item,),
-                "review": None,
-                "review_revision": 0,
-            }
-        ),
-    )
+    second = create_single_preparation(store, SingleSourcePreparationInput(
+        preparation_id="second", source=source), idempotency_key="make-second")
+    mapping = reviewed_mapping(draft, text)
+    output = LoopPlanExtractionOutput(schema_version="monitor-loop-extraction-v1", draft=draft,
+        clauses=mapping.clauses, bindings=mapping.bindings,
+        opening_account=OpeningAccountFacts(inventory_quantity=OpeningFact(value=0,
+            start=text.index(account), end=len(text), excerpt=account), lots=(), cash_fen=None,
+            snapshot_at=None))
+    result, inputs = loop_candidate(source, output, uuid4())
+    claim = collection_claim(second, 0, generation=str(result.request_id)).model_copy(
+        update={"claimed_at": first.updated_at})
+    second = store.start_attempt("second", expected_revision=second.revision,
+        idempotency_key="start-second", work_claim=claim)
+    second = store.begin_call("second", generation=claim.generation, owner_id=claim.owner_id,
+                             expected_revision=second.revision)
+    second = store.finish_attempt("second", attempt_id=claim.generation,
+        expected_revision=second.revision, idempotency_key="finish-second",
+        worker_owner_id=claim.owner_id, candidate=result.to_preparation_candidate(), inputs=inputs)
+    second = store.clear_work_claim("second", generation=claim.generation,
+                                    expected_revision=second.revision)
     second = store.review_and_freeze(
         "second", command=collection_review_command(second), idempotency_key="approve-second"
     )
