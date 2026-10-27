@@ -132,3 +132,11 @@ LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`）。独立21项�
 完整来源风险控制现于AI及Human路径核对准确完整操作对应。最终粗体序号修复前，source选择1042项通过，61.10秒（`risk-control-agent-source-regression.log`）。root审查随后复现一个真实绕过：已识别的粗体ordinary JSON操作可与普通risk操作重复序号，仍误报COMPLETE；合法对照通过而冲突案例失败（`risk-control-agent-bold-red.log`）。修复仅改变已识别控制的序号读取。最终风险／控制／core／aggregate聚焦组合121项通过，16.37秒（`risk-control-agent-bold-green2.log`），含新增35项及旧8组准确字节／哈希固定校验；Ruff通过；提交 `48d2c3a`。中间一次命令指定不存在测试，未运行任何测试，不计为验收证据。表格角色接入仍待完成。
 
 旧独立根组合夹具复制其他计划的Human候选，却无自身实际操作／输入证明。原失败保留于 `t08-library-independent-red.log`。现建立自身完整合成来源、原始输入及真实提取／审核命令。原57条Assert节点全部一致。library组合15项通过／1项未选中，7.66秒（`t08-library-independent-green.log`）；提交 `9254f5c`。未选中的四来源测试采用混合合成文字及非JSON字段拼写，并非四份原始盛新来源；其当前来源夹具仍待在不改变原始来源夹具、历史／golden的前提下校正。不主张自然语言语料验收完成。计数重叠；真实供应商发送仍0/48，用户数据库未迁移。
+
+## PMA-R16 — T08有限来源载体与合成来源校正
+
+闭合仓位句新增71项纯测试及16项完整wire测试。最终相邻组合191项通过，25.33秒（`readiness-position-directive-final-01.log`），含原input-store全部20项及原有准确自然语言仓位／保留句；提交 `ea57e0c`。真实MODIFY和同值RETAIN通过；数值错配、抹除修改、条件、引用、否定及额外来源文字均阻断。旧4组change及4组aggregate字节／哈希固定校验保持准确。原始纯测试及完整wire RED日志均保留。
+
+有限现金／标题／独立事件文本载体初始6失败／13通过（`t08-continuity-carriers-red.log`）。独立审查发现真实低精度Decimal绕过，边界测试2失败／21通过（`t08-continuity-cash-precision-red.log`）。整数分解析已修复；最终相邻组合169项通过，2.74秒（`t08-continuity-carriers-final.log`），Ruff通过；提交 `b5a5d87`。中间一次命令引用不存在文件，未运行测试。识别不推断现金真实或事件已满足。
+
+合成continuity来源工厂现将全部策略值以规范JSON输出，含null、布尔值及空集合，准确绑定原文并分开账户／范围语句。原始叙述／快照夹具文件、历史／golden及全部39条既有断言不变。新增8项合同测试初始失败（`t08-continuity-source-red.log`）；最终来源／raw／未知执行组合13项通过／3项未选中，2.38秒（`t08-continuity-source-final.log`），Ruff通过；提交 `19bdcd9`。较早扩大组合保留13通过／1项存储前驱失败：首来源当前覆盖完整，但后续完整替换控制尚未注册（`t08-continuity-source-green.log`）。该项继续待办，不豁免回归或宣称语料通过。T08／C03及后续阶段继续开放；真实供应商发送0/48，用户迁移0。
