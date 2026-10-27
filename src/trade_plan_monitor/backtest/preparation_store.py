@@ -15,8 +15,11 @@ from trade_plan_monitor.backtest.loop_input import MAX_EXTRACTION_ATTEMPTS
 from trade_plan_monitor.backtest.models import StableIdentifier
 from trade_plan_monitor.backtest.preparation_assurance_store import (
     ASSURANCE_TABLES,
+    PreparationInputEvidence,
     assurance_available,
     create_assurance_schema,
+    input_evidence,
+    save_input_evidence,
 )
 from trade_plan_monitor.backtest.preparation_models import (
     PREPARATION_DOMAIN,
@@ -49,6 +52,7 @@ from trade_plan_monitor.backtest.preparation_review import (
 )
 from trade_plan_monitor.backtest.storage_guard import reject_incompatible_database
 from trade_plan_monitor.backtest.time import SHANGHAI
+from trade_plan_monitor.state.source_coverage_values import CoverageInputs
 
 _IDENTIFIER = TypeAdapter(StableIdentifier)
 _TABLES = {
@@ -158,6 +162,12 @@ class PreparationStore:
         with self._connect() as connection:
             return self._read(connection, preparation_id)
 
+    def input_evidence(self, preparation_id, attempt_id):
+        preparation_id = _IDENTIFIER.validate_python(preparation_id)
+        attempt_id = _IDENTIFIER.validate_python(attempt_id)
+        with self._connect() as connection:
+            return input_evidence(connection, preparation_id, attempt_id)
+
     @staticmethod
     def _read(
         connection: sqlite3.Connection, preparation_id: str,
@@ -173,7 +183,7 @@ class PreparationStore:
             raise ValueError("stored preparation identity does not match its key")
         return record
 
-    def _operation(self, name, preparation_id, payload, idempotency_key, change):
+    def _operation(self, name, preparation_id, payload, idempotency_key, change, *, assurance=None):
         preparation_id = _IDENTIFIER.validate_python(preparation_id)
         idempotency_key = _IDENTIFIER.validate_python(idempotency_key)
         request_hash = _request_hash(name, preparation_id, payload)
@@ -198,7 +208,10 @@ class PreparationStore:
             if (isinstance(existing, CollectionPreparationRecord) and existing.workflow != "LEGACY"
                     and existing.status == "REVIEWED"):
                 raise PreparationConflictError("REVIEWED_PLAN_IMMUTABLE")
-            record = change(existing, self._clock())
+            now = self._clock()
+            record = change(existing, now)
+            if assurance is not None:
+                assurance(connection, existing, record, now)
             encoded = record.model_dump_json()
             connection.execute(
                 "INSERT INTO backtest_preparation VALUES (?, ?) "
@@ -667,6 +680,7 @@ class PreparationStore:
         worker_owner_id: str | None = None,
         repair_feedback: tuple[str, ...] = (),
         repair_context_json: str | None = None,
+        inputs: CoverageInputs | None = None,
     ) -> PreparationRecord:
         if candidate is not None and not isinstance(candidate, PreparationCandidateInput):
             raise TypeError("candidate must be PreparationCandidateInput")
@@ -674,6 +688,8 @@ class PreparationStore:
             raise ValueError("finish requires exactly one candidate or classified error")
         if candidate is not None and retryable:
             raise ValueError("successful candidate cannot be retryable")
+        if inputs is not None and (not isinstance(inputs, CoverageInputs) or candidate is None):
+            raise ValueError("private source evidence requires its typed candidate")
         attempt_id = _IDENTIFIER.validate_python(attempt_id)
 
         def change(previous, now):
@@ -717,7 +733,26 @@ class PreparationStore:
             payload["repair_feedback"] = repair_feedback
         if repair_context_json is not None:
             payload["repair_context_json"] = repair_context_json
-        return self._operation("FINISH_ATTEMPT", preparation_id, payload, idempotency_key, change)
+        if inputs is not None:
+            payload["source_coverage_input_hash"] = inputs.evidence_hash
+
+        def persist_inputs(connection, before, after, now):
+            index, item = (self._collection_active_item(before, attempt_id)
+                           if isinstance(before, CollectionPreparationRecord) else (0, before))
+            if (inputs.source_hash != item.source.source_hash
+                    or inputs.source_binding_hash != item.source.binding_hash):
+                raise PreparationConflictError("SOURCE_COVERAGE_STALE")
+            bound = after.items[index].candidate if isinstance(
+                after, CollectionPreparationRecord) else after.candidate
+            evidence = PreparationInputEvidence.build(preparation_id=preparation_id,
+                item_index=index, attempt_id=attempt_id,
+                source_binding_hash=item.source.binding_hash,
+                candidate_hash=bound.candidate_hash, candidate_json=bound.payload_json,
+                inputs=inputs, created_at=now)
+            save_input_evidence(connection, evidence)
+
+        return self._operation("FINISH_ATTEMPT", preparation_id, payload, idempotency_key, change,
+                               assurance=persist_inputs if inputs is not None else None)
 
     def cancel(
         self, preparation_id: str, *, expected_revision: int, idempotency_key: str,

@@ -459,12 +459,14 @@ class PreparationService:
                 retryable=True, repair_feedback=feedback,
                 repair_context_json=correction_context(outcome.result))
         elif outcome.candidate is not None:
-            ended = self._store.finish_attempt(identity, **common, candidate=outcome.candidate)
+            ended = self._store.finish_attempt(identity, **common, candidate=outcome.candidate,
+                                               inputs=outcome.inputs)
         elif isinstance(outcome.result, LoopPlanExtractionResult):
             ended = self._store.finish_attempt(
                 identity,
                 **common,
                 candidate=outcome.result.to_preparation_candidate(),
+                inputs=outcome.inputs,
             )
         else:
             result = outcome.result

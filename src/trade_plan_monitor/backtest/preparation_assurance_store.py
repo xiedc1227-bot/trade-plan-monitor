@@ -6,7 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.source_coverage_models import MAX_PROOF_BYTES, Hash
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
@@ -48,6 +48,8 @@ def _conflict(code):
 
 
 class PreparationInputEvidence(DailyValue):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=False)
+
     version: Literal["preparation-input-evidence-v1"] = "preparation-input-evidence-v1"
     kind: Literal["INPUT"] = "INPUT"
     preparation_id: Identifier
@@ -55,11 +57,22 @@ class PreparationInputEvidence(DailyValue):
     attempt_id: Identifier
     source_binding_hash: Hash
     candidate_hash: Hash
+    candidate_json: str | None = Field(default=None, min_length=2, max_length=1024 * 1024)
     inputs: CoverageInputs
     created_at: ShanghaiDatetime
     authority_granted: Literal[False] = False
     evidence_key: Hash
     evidence_hash: Hash
+
+    @field_validator("candidate_json")
+    @classmethod
+    def exact_candidate(cls, value):
+        if value is not None:
+            from trade_plan_monitor.backtest.preparation_models import PreparationCandidateInput
+
+            PreparationCandidateInput(payload_json=value, validation="UNRESOLVED",
+                                      evidence_hash="0" * 64, issues=("SOURCE_COVERAGE_REQUIRED",))
+        return value
 
     def identity(self):
         return daily_hash("preparation-input-evidence-key-v1", dict(
