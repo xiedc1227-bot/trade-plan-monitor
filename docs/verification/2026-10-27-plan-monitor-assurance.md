@@ -12,7 +12,7 @@ Logs currently retained in ignored `.pytest_cache/pma-v01.log`, `.pytest_cache/p
 
 ## PMA-R02 — Remaining acceptance
 
-T01–T06 and C01–C02 are complete. T07–T24 and C03–C08 remain pending. Do not infer full workflow coverage from pure tests or approved contracts. Real attempt count remains0/48; source-corpus eligibility is being investigated read-only before any provider call. Engineering completion, exact-version real extraction and actual-installation readiness will be reported separately.
+T01–T07 and C01–C02 are complete. T08–T24 and C03–C08 remain pending. Do not infer full workflow coverage from pure tests or approved contracts. Real attempt count remains0/48; source-corpus eligibility is being investigated read-only before any provider call. Engineering completion, exact-version real extraction and actual-installation readiness will be reported separately.
 
 ## PMA-R03 — T02 bounded evidence models
 
@@ -42,3 +42,12 @@ Compact and predecessor-patch evidence now preserve exact raw JSON, context, ord
 C02 extraction regression277 passed in13.96s (`c02-extraction.log`); existing integration21 passed in6.39s (`c02-existing-integration.log`); source group567 passed in20.08s (`c02-final-source.log`). After native-support fixes, `rg --files tests/unit -g 'test_source_*.py'` plus `test_daily_review.py`, `test_daily_source_exclusions.py`, `test_persistent_rule_validity.py`:528 passed in16.18s (`c02-source-confirm.log`). One prior selection named absent files and ran no tests; it is not acceptance. One existing Starlette warning remains. Native-support/extraction group60 passed in3.40s; Ruff passes. No provider calls, user migration or new runtime authority occurred.
 
 Scope attacks first produced5 failures and then an unknown-prose failure. Only source-proven sides may classify trading obligations; unregistered prose remains UNKNOWN even in BUY containers. One over-conservative container regression was repaired;32 affected checks passed. Native-support attacks:7 failed/3 passed, then10 passed. The new guard blocks unusable indicator parameter/unit combinations without changing historical schemas/evaluator defaults. Only new PMA positive helpers changed to MA20 period20; old fixtures remain unchanged.
+
+
+## PMA-R07 — T07 immutable persistence
+
+Additive0028 migration and five sidecars preserve old plan/source/review bytes. Independent migration19 and missing-table reads6 checks pass. Original RED was missing tables; another real defect allowed downgrade with damaged membership. Downgrade now verifies full marker/member self-hashes, scalar projections and membership root, refusing any evidence or post-cutover versions, including backdated drafts. Migration tests use temporary databases only.
+
+Core storage18 checks initially failed collection for absent store; later passed in3.42s. Independent attacks reproduced5 history integrity failures (nonadjacent deletion and ancestor scalar mismatch); SQL seals plus exact definition checks repair them. Three new SQL protection tests initially failed, then the seal/core/migration/old-capital group47 passed in8.42s. Independent storage attacks50 passed in10.48s, including all13 guards, private exact bytes, receipt bindings and at most2 assessment SELECTs after24 revisions. The first attack attempt contained two test-only typed-model/transaction mistakes, corrected without counting as production bugs. Final combined persistence/old-P3-review112 passed in19.28s (`t07-checkpoint.log`), with2 existing SQLAlchemy reflection warnings. Final source group532 passed in19.10s (`t07-source-final.log`), with1 existing Starlette warning; Ruff passes. Original failures: `readiness-migration-red-02.log`, `readiness-migration-down-red-01.log`, `t07-storage-red.log`, `t07-storage-adversarial-agent-red2.log`, `t07-seal-red.log`.
+
+New annotation/unknown-path regressions from independent review also pass: initial2 COMPLETE escapes and2 incorrect BUY scopes are fixed; unknown labels cannot obtain registered meaning via punctuation. The finite registry remains intentionally conservative. Current workflow guards and actual natural-source corpus signoff remain pending. Real provider0/48; no user database migration, activation or send.

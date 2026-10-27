@@ -83,9 +83,9 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T07 — Persist assurance without invalidating history
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T06.
-- Files/scope: sidecar models/store, next-free additive migration, metadata registration and `test_source_coverage_storage.py` (5 files).
+- Files/scope: sequential T07a SQL metadata/migration/registration and independent migration tests (4 files); T07b bounded proof/store and core/upgrade tests (4); T07c immutable guards and fault injection (5); T07d independent storage attacks (1). Each slice is separately verified. User migration remains prohibited.
 - Acceptance: A05,A06; Verify: focused V03. Disposable old populated databases reopen under historical verification; new proof history/CAS/retry/backup are exact; cutover cannot be forged; lossy downgrade is blocked. No user migration.
 
 ### PMA-T08 — Bind save, review, activation and reuse
