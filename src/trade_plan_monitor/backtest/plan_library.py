@@ -53,33 +53,39 @@ def create_single_preparation(store, command: SingleSourcePreparationInput, *, i
     def change(previous, now):
         if previous is not None:
             raise PreparationConflictError("PREPARATION_EXISTS")
-        source = command.source.with_inferred_date()
-        prefix, account = (), None
+        parent = (None if command.reviewed_base is None else
+                  reviewed_entry(store, command.reviewed_base))
+        return _single_record(store, command, now, parent)
+
+    def assure(connection, previous, proposed, now):
         if command.reviewed_base is not None:
-            base, frozen = reviewed_entry(store, command.reviewed_base)
-            account = frozen.account
-            if (
-                source.effective_trade_date is not None
-                and source.effective_trade_date <= base.items[-1].source.effective_trade_date
-            ):
-                raise PreparationConflictError("SOURCE_DATE_CONFLICT")
-            prefix = base.items
-        sources = tuple(item.source for item in prefix) + (source,)
-        _validate_sources(store, sources)
-        return CollectionPreparationRecord(
-            preparation_id=command.preparation_id,
-            revision=1,
-            workflow="SINGLE",
-            reviewed_base=command.reviewed_base,
-            base_account=account,
-            items=(*prefix, PreparationItem(source=source, status="DRAFT", independent=not prefix)),
-            created_at=now,
-            updated_at=now,
-        )
+            from trade_plan_monitor.backtest.preparation_lineage_authority import (
+                register_creation_lineage,
+            )
+            register_creation_lineage(connection, previous, proposed, command,
+                operation="CREATE_SINGLE", command_id=idempotency_key, now=now, store=store)
 
     return store._operation(
-        "CREATE_SINGLE", command.preparation_id, command, idempotency_key, change
+        "CREATE_SINGLE", command.preparation_id, command, idempotency_key, change, assurance=assure,
     )
+
+
+def _single_record(store, command, now, parent):
+    """Reproduce exact creation bytes from an explicitly selected parent."""
+    source = command.source.with_inferred_date()
+    prefix, account = (), None
+    if parent is not None:
+        base, frozen = parent
+        account = frozen.account
+        if (source.effective_trade_date is not None
+                and source.effective_trade_date <= base.items[-1].source.effective_trade_date):
+            raise PreparationConflictError("SOURCE_DATE_CONFLICT")
+        prefix = base.items
+    _validate_sources(store, tuple(item.source for item in prefix) + (source,))
+    return CollectionPreparationRecord(preparation_id=command.preparation_id, revision=1,
+        workflow="SINGLE", reviewed_base=command.reviewed_base, base_account=account,
+        items=(*prefix, PreparationItem(source=source, status="DRAFT", independent=not prefix)),
+        created_at=now, updated_at=now)
 
 
 def _validate_sources(store, sources):
@@ -174,64 +180,46 @@ def compose_reviewed_plans(store, command: PreparedPlanCompositionInput, *, idem
         if previous is not None:
             raise PreparationConflictError("PREPARATION_EXISTS")
         selected = [(ref, *reviewed_entry(store, ref)) for ref in command.plans]
-        selected.sort(key=lambda value: value[2].items[-1].source.effective_trade_date)
-        prior = None
-        for ref, record, _frozen in selected:
-            if record.reviewed_base is not None and record.reviewed_base != prior:
-                raise PreparationConflictError("PREDECESSOR_SELECTION_REQUIRED")
-            prior = ref
-        items = tuple(record.items[-1] for _, record, _ in selected)
-        _validate_sources(store, tuple(item.source for item in items))
-        frozen_items = tuple(frozen.items[-1] for _, _, frozen in selected)
-        if (
-            len(
-                {
-                    (item.version.snapshot.symbol, item.version.snapshot.market)
-                    for item in frozen_items
-                }
-            )
-            != 1
-        ):
-            raise PreparationConflictError("SOURCE_ASSET_CONFLICT")
-        first = selected[0][2]
-        values = dict(
-            preparation_id=command.preparation_id,
-            revision=1,
-            items=frozen_items,
-            reused_reviews=True,
-            schedule=ScheduledLoopSchedule(
-                entries=tuple(
-                    ScheduledScheduleEntry(
-                        effective_trade_date=item.source.effective_trade_date,
-                        version=item.version,
-                    )
-                    for item in frozen_items
-                )
-            ),
-            account=first.account,
-            account_origin=first.account_origin,
-            opening_evidence=first.opening_evidence,
-            reviewed_at=now,
-            schema_version="prepared-loop-plan-v2",
+        return _composition_record(store, command, now, selected)
+
+    def assure(connection, previous, proposed, now):
+        from trade_plan_monitor.backtest.preparation_lineage_authority import (
+            register_creation_lineage,
         )
-        frozen = FrozenPreparedCollection(**values, review_hash=_collection_review_hash(values))
-        return CollectionPreparationRecord(
-            preparation_id=command.preparation_id,
-            revision=1,
-            workflow="COMPOSITION",
-            items=items,
-            status="REVIEWED",
-            review_revision=1,
-            created_at=now,
-            updated_at=now,
-            review=CollectionPreparationReview(
-                items=tuple(collection_item_binding(item) for item in items),
-                confirmed=True,
-                reviewed_at=now,
-                manifest_json=canonical_json(frozen),
-            ),
-        )
+        register_creation_lineage(connection, previous, proposed, command,
+            operation="COMPOSE_REVIEWED", command_id=idempotency_key, now=now, store=store)
 
     return store._operation(
-        "COMPOSE_REVIEWED", command.preparation_id, command, idempotency_key, change
+        "COMPOSE_REVIEWED", command.preparation_id, command, idempotency_key, change,
+        assurance=assure,
     )
+
+
+def _composition_record(store, command, now, selected):
+    """Keep the original frozen codec and chronological selected-entry behavior."""
+    selected = sorted(selected, key=lambda value: value[2].items[-1].source.effective_trade_date)
+    prior = None
+    for ref, record, _frozen in selected:
+        if record.reviewed_base is not None and record.reviewed_base != prior:
+            raise PreparationConflictError("PREDECESSOR_SELECTION_REQUIRED")
+        prior = ref
+    items = tuple(record.items[-1] for _, record, _ in selected)
+    _validate_sources(store, tuple(item.source for item in items))
+    frozen_items = tuple(frozen.items[-1] for _, _, frozen in selected)
+    if len({(item.version.snapshot.symbol, item.version.snapshot.market)
+            for item in frozen_items}) != 1:
+        raise PreparationConflictError("SOURCE_ASSET_CONFLICT")
+    first = selected[0][2]
+    values = dict(preparation_id=command.preparation_id, revision=1, items=frozen_items,
+        reused_reviews=True, schedule=ScheduledLoopSchedule(entries=tuple(
+            ScheduledScheduleEntry(effective_trade_date=item.source.effective_trade_date,
+                version=item.version) for item in frozen_items)),
+        account=first.account, account_origin=first.account_origin,
+        opening_evidence=first.opening_evidence, reviewed_at=now,
+        schema_version="prepared-loop-plan-v2")
+    frozen = FrozenPreparedCollection(**values, review_hash=_collection_review_hash(values))
+    return CollectionPreparationRecord(preparation_id=command.preparation_id, revision=1,
+        workflow="COMPOSITION", items=items, status="REVIEWED", review_revision=1,
+        created_at=now, updated_at=now, review=CollectionPreparationReview(
+            items=tuple(collection_item_binding(item) for item in items), confirmed=True,
+            reviewed_at=now, manifest_json=canonical_json(frozen)))

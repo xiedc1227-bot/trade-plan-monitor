@@ -177,12 +177,15 @@ def _single(connection, record):
                                   evidence.inputs, binding=binding),)
 
 
-def _collection(connection, record, stop_count=None):
-    if record.reviewed_base is not None or record.workflow == "COMPOSITION":
-        # Original owners must come from explicit immutable reuse lineage, never a hash search.
-        raise _conflict("SOURCE_COVERAGE_REQUIRED")
-    proofs, base = [], None
-    for index, item in enumerate(record.items[:stop_count]):
+def _collection(connection, record, stop_count=None, *, _context=None):
+    from trade_plan_monitor.backtest.preparation_lineage_authority import resolve_creation_lineage
+
+    resolved = resolve_creation_lineage(connection, record, context=_context)
+    count = len(record.items) if stop_count is None else stop_count
+    proofs = [] if resolved is None else list(resolved.proofs[:count])
+    base = None if not proofs else resolved.reviews[len(proofs) - 1]
+    for index in range(len(proofs), count):
+        item = record.items[index]
         if item.candidate is None:
             raise _conflict("SOURCE_COVERAGE_REQUIRED")
         if json.loads(item.candidate.payload_json).get("schema_version") == (
@@ -190,7 +193,7 @@ def _collection(connection, record, stop_count=None):
         ):
             from trade_plan_monitor.backtest.preparation_human_authority import read_human_assurance
             proof = read_human_assurance(connection, record, index,
-                                          prefix_proofs=tuple(proofs), base_review=base)
+                prefix_proofs=tuple(proofs), base_review=base, _context=_context)
             proofs.append(proof)
             base = PlanCandidateReview.model_validate_json(item.candidate.payload_json)
             continue
@@ -229,14 +232,17 @@ def _collection(connection, record, stop_count=None):
     return tuple(proofs)
 
 
-def _read_current_assurance(connection, record, stop_count=None):
+def _read_current_assurance(connection, record, stop_count=None, *, _context=None):
     """Purely read and recompute all original source proofs on this SQLite connection.
 
     Missing historical input cannot acquire retrospective fidelity. This function
     intentionally has no caller-provided source/header/hash override and never
     creates tables, upgrades a store, or writes an assessment or review receipt.
     """
+    from trade_plan_monitor.backtest.preparation_lineage_authority import assurance_context
     from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+
+    context = assurance_context(connection, _context)
 
     try:
         if not assurance_available(connection):
@@ -249,8 +255,9 @@ def _read_current_assurance(connection, record, stop_count=None):
             raise _conflict("SOURCE_COVERAGE_STALE")
         if stop_count == 0:
             return ()
-        return (_collection(connection, actual, stop_count)
-                if isinstance(actual, CollectionPreparationRecord) else _single(connection, actual))
+        return (_collection(connection, actual, stop_count, _context=context)
+                if isinstance(actual, CollectionPreparationRecord)
+                else _single(connection, actual))
     except PreparationConflictError:
         raise
     except sqlite3.DatabaseError:
@@ -263,19 +270,19 @@ def _read_current_assurance(connection, record, stop_count=None):
         raise _conflict(code) from None
 
 
-def read_current_assurance(connection, record):
+def read_current_assurance(connection, record, *, _context=None):
     """Read/recompute every source; a complete proof is not human review authority."""
-    return _read_current_assurance(connection, record)
+    return _read_current_assurance(connection, record, _context=_context)
 
 
-def read_current_assurance_prefix(connection, record, stop_count):
+def read_current_assurance_prefix(connection, record, stop_count, *, _context=None):
     """Private selected-item mutation dependency, always verified against actual state."""
-    return _read_current_assurance(connection, record, stop_count)
+    return _read_current_assurance(connection, record, stop_count, _context=_context)
 
 
-def require_current_preparation(connection, record):
+def require_current_preparation(connection, record, *, _context=None):
     """Require current complete coverage; this is not a human review permission."""
-    proofs = read_current_assurance(connection, record)
+    proofs = read_current_assurance(connection, record, _context=_context)
     if not proofs or any(not proof.coverage_complete for proof in proofs):
         raise _conflict("SOURCE_COVERAGE_REQUIRED")
     return proofs
@@ -287,13 +294,15 @@ def verify_current_review_candidate(connection, previous, proposed):
     Human policy corrections require their own registered operation proof; until
     supplied, a complete original extraction cannot certify a changed snapshot.
     """
+    from trade_plan_monitor.backtest.preparation_lineage_authority import assurance_context
     from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
 
-    proofs = require_current_preparation(connection, previous)
+    context = assurance_context(connection)
+    proofs = require_current_preparation(connection, previous, _context=context)
     if type(previous) is not type(proposed) or proposed.status != "REVIEWED":
         raise _conflict("SOURCE_COVERAGE_STALE")
     try:
-        current = (_collection(connection, proposed)
+        current = (_collection(connection, proposed, _context=context)
                    if isinstance(proposed, CollectionPreparationRecord)
                    else _single(connection, proposed))
     except PreparationConflictError:
@@ -350,15 +359,22 @@ def save_current_review(connection, previous, proposed, *, command_id, command_r
     return save_review_assurance(connection, receipt)
 
 
-def require_current_reviewed_preparation(connection, record):
-    """Fresh reuse needs the actual human receipt and current source proof together."""
+def _require_current_reviewed_preparation(connection, actual, *, context):
     from trade_plan_monitor.backtest.preparation_review_assurance_store import review_assurance
     from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
 
-    actual = _actual_record(connection, record)
     if actual.status != "REVIEWED" or actual.review is None:
         raise _conflict("SOURCE_COVERAGE_REQUIRED")
-    proofs = require_current_preparation(connection, actual)
+    proofs = require_current_preparation(connection, actual, _context=context)
+    if isinstance(actual, CollectionPreparationRecord) and actual.workflow == "COMPOSITION":
+        from trade_plan_monitor.backtest.preparation_lineage_authority import (
+            resolve_creation_lineage,
+        )
+
+        resolved = resolve_creation_lineage(connection, actual, context=context)
+        if resolved is None or resolved.proofs != proofs:
+            raise _conflict("SOURCE_COVERAGE_STALE")
+        return resolved
     receipt = review_assurance(connection, actual.preparation_id, actual.review_revision)
     if receipt is None:
         raise _conflict("SOURCE_COVERAGE_REQUIRED")
@@ -390,4 +406,25 @@ def require_current_reviewed_preparation(connection, record):
             or receipt.frozen_manifest_hash != manifest.manifest_hash
             or receipt.proofs != proofs or original_response != actual):
         raise _conflict("SOURCE_COVERAGE_STALE")
+    return receipt
+
+
+def require_current_reviewed_preparation(connection, record, *, _context=None):
+    """Authenticate genuine REVIEW or selected-parent LINEAGE within this transaction."""
+    from trade_plan_monitor.backtest.preparation_lineage_authority import (
+        _guard,
+        assurance_context,
+    )
+
+    context = assurance_context(connection, _context)
+    actual = _guard(_actual_record, connection, record)
+    key = (actual.preparation_id, actual.revision)
+    cached = context.reviewed.get(key)
+    if cached is not None:
+        if cached[0] != actual:
+            raise _conflict("SOURCE_COVERAGE_STALE")
+        return cached[1]
+    with context.visiting(actual):
+        receipt = _guard(_require_current_reviewed_preparation, connection, actual, context=context)
+    context.reviewed[key] = (actual, receipt)
     return receipt

@@ -194,9 +194,15 @@ def _proof(operation, prefix_proofs, base_review):
         base_review=base_review, verified_parent=parent, binding=binding, prefix=prefix)
 
 
-def read_human_assurance(connection, record, index, *, prefix_proofs=(), base_review=None):
+def read_human_assurance(connection, record, index, *, prefix_proofs=(), base_review=None,
+                         _context=None):
     """Committed operations require their actual immutable command response, not a self-hash."""
     from trade_plan_monitor.backtest import preparation_human_assurance_store as store
+
+    if isinstance(record, CollectionPreparationRecord):
+        from trade_plan_monitor.backtest.preparation_lineage_authority import require_owned_item
+
+        require_owned_item(connection, record, index, context=_context)
 
     selected = _item(record, index)
     operation = store.human_operation(connection, record.preparation_id, index,
@@ -212,8 +218,7 @@ def read_human_assurance(connection, record, index, *, prefix_proofs=(), base_re
             or operation.attempt_id != selected.attempts[-1].attempt_id):
         raise _conflict("SOURCE_COVERAGE_STALE")
     if isinstance(record, CollectionPreparationRecord):
-        if (operation.operation != "CORRECT_ITEM" or record.reviewed_base is not None
-                or record.workflow == "COMPOSITION"
+        if (operation.operation != "CORRECT_ITEM"
                 or response.items[:index] != record.items[:index]):
             raise _conflict()
         actual_review = PlanCandidateReview.model_validate_json(selected.candidate.payload_json)
@@ -318,10 +323,15 @@ def _register_human_correction(connection, previous, proposed, command, *, comma
     if type(previous) is not type(proposed):
         raise _conflict("SOURCE_COVERAGE_STALE")
     collection = isinstance(previous, CollectionPreparationRecord)
-    if collection and (previous.reviewed_base is not None or previous.workflow == "COMPOSITION"):
-        raise _conflict()
+    from trade_plan_monitor.backtest.preparation_lineage_authority import (
+        CurrentAssuranceContext,
+        require_owned_item,
+    )
+
+    context = CurrentAssuranceContext()
     if collection:
         index, review = correct_collection_candidate(previous, command)
+        require_owned_item(connection, previous, index, context=context)
         selected, after = previous.items[index], proposed.items[index]
         expected_candidate = CollectionPreparationCandidate(
             **review.to_preparation_candidate().model_dump(mode="python"),
@@ -357,7 +367,8 @@ def _register_human_correction(connection, previous, proposed, command, *, comma
     operation_name = "CORRECT_ITEM" if collection else "REVIEW_AND_FREEZE"
     if command_request_hash != _request_hash(operation_name, previous.preparation_id, command):
         raise _conflict("SOURCE_COVERAGE_STALE")
-    prefix_proofs = current.read_current_assurance_prefix(connection, previous, index)
+    prefix_proofs = current.read_current_assurance_prefix(connection, previous, index,
+                                                         _context=context)
     base = (None if not index or selected.independent else
             preparation_candidate_review(previous, index - 1)) if collection else None
     if (collection and index and not selected.independent
