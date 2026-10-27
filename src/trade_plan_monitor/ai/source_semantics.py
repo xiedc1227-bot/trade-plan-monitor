@@ -5,7 +5,8 @@ from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 
 
 def equal_declaration(declaration, values, payload):
-    actual = values.get(declaration.path, MISSING)
+    actual = (value_at(payload, declaration.path) if isinstance(declaration.value, (dict, list))
+              else values.get(declaration.path, MISSING))
     if actual is MISSING:
         actual = value_at(payload, declaration.path)
     return actual is not MISSING and canonical(actual) == canonical(declaration.value)

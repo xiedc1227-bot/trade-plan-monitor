@@ -1,5 +1,6 @@
 """Current source coverage is additional evidence, never a historical decoder."""
 
+from collections import Counter
 from dataclasses import replace
 
 from trade_plan_monitor.ai.daily_review import DailyMapping, build_daily_review, semantic_values
@@ -22,6 +23,7 @@ from trade_plan_monitor.ai.source_obligations import (
     value_at,
 )
 from trade_plan_monitor.ai.source_policy_text import declaration_text_supported
+from trade_plan_monitor.ai.source_semantic_atoms import semantic_atoms
 from trade_plan_monitor.ai.source_semantics import (
     declaration_relations,
     declared_paths,
@@ -64,6 +66,10 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
     groups = relation_groups(parsed, source_hash)
     proven_paths = {}
     obligations, issues = [], []
+    parts = source_parts(source, clauses)
+    base_counts = Counter(row.clause_id for row in parts)
+    expanded_counts = Counter()
+    atom_cache, total_expanded = {}, 0
     normalization_hash = None
     if normalization is not None:
         from trade_plan_monitor.ai.source_normalization import validate_policy_preservation
@@ -75,7 +81,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 message="The original candidate or complete normalization trace is unproven."))
         else:
             normalization_hash = normalization.evidence_hash
-    for clause in source_parts(source, clauses):
+    for clause in parts:
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
         path, group, meaning, relations = (), None, None, ()
@@ -128,6 +134,10 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                     message="A new policy in background cannot supply executable A authority."))
             path, group = (declaration.path,), own or declaration.group_id
             meaning = canonical(dict(path=declaration.path, value=declaration.value))
+            if isinstance(declaration.value, (dict, list)) and declaration.value:
+                meaning = canonical(dict(path=declaration.path,
+                    treatment="COMPLETE_JSON_DECLARATION", source_start=declaration.start,
+                    source_end=declaration.end, container_hash=declaration.group_id))
             if supplement is not None:
                 meaning = canonical(dict(path=declaration.path, value=declaration.value,
                     supplement=supplement.model_dump(mode="json")))
@@ -162,6 +172,42 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
             clause_id=clause.clause_id, start=clause.start, end=clause.end,
             excerpt=source[clause.start:clause.end], kind=kind, scope=scope, state=state,
             semantics_json=meaning, group_id=group, relation_ids=relations, paths=path))
+
+        if (declaration is not None and kind == "PREDICATE"
+                and isinstance(declaration.value, (dict, list)) and declaration.value):
+            try:
+                if declaration.group_id not in atom_cache:
+                    atom_cache[declaration.group_id] = "SOURCE_COVERAGE_UNSUPPORTED"
+                    atom_cache[declaration.group_id] = semantic_atoms(source, declaration)
+                atoms = atom_cache[declaration.group_id]
+                if isinstance(atoms, str):
+                    raise ValueError(atoms)
+                atoms = tuple(atom for atom in atoms if atom.start < clause.end
+                              and atom.end > clause.start)
+                if (base_counts[clause.clause_id] + expanded_counts[clause.clause_id]
+                        + len(atoms) > 64 or len(parts) + total_expanded + len(atoms) > 4096):
+                    raise ValueError("SOURCE_COVERAGE_LIMIT_EXCEEDED")
+                expanded = []
+                for atom in atoms:
+                    begin, end = max(atom.start, clause.start), min(atom.end, clause.end)
+                    expanded.append(SourceObligation.build(source_hash=source_hash,
+                        clause_id=clause.clause_id, start=begin, end=end,
+                        excerpt=source[begin:end], kind=atom.kind, scope=scope, state=state,
+                        semantics_json=canonical(dict(path=atom.path, value=atom.value)),
+                        group_id=atom.group_id, relation_ids=atom.relation_ids,
+                        paths=(atom.path,)))
+            except (ValueError, TypeError, RecursionError) as error:
+                code = ("SOURCE_COVERAGE_LIMIT_EXCEEDED" if
+                        str(error) == "SOURCE_COVERAGE_LIMIT_EXCEEDED"
+                        else "SOURCE_COVERAGE_UNSUPPORTED")
+                atom_cache[declaration.group_id] = code
+                issues.append(CoverageIssue(code=code,
+                    path="source." + clause.clause_id, start=clause.start, end=clause.end,
+                    message="The complete native source graph is unproven within its contract."))
+            else:
+                obligations.extend(expanded)
+                expanded_counts[clause.clause_id] += len(expanded)
+                total_expanded += len(expanded)
 
     for binding in mapping.bindings:
         if (binding.origin in {"SOURCE", "SOURCE_INTERPRETATION", "SOURCE_SEMANTIC"}
