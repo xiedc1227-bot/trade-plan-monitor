@@ -14,6 +14,7 @@ from trade_plan_monitor.ai.source_obligations import (
     source_scope,
     value_at,
 )
+from trade_plan_monitor.ai.source_policy_text import declaration_text_supported
 from trade_plan_monitor.ai.source_semantics import (
     declaration_relations,
     declared_paths,
@@ -90,18 +91,24 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 matched = equal_declaration(declaration, values, payload)
             supplement = None if identity else missing_value_supplement(declaration, draft, mapping)
             matched = matched or supplement is not None
+            text_supported = identity or declaration_text_supported(declaration, values)
             own, relations = declaration_relations(declaration, groups)
             kind = "CONTEXT" if identity else "RELATION" if own else "PREDICATE"
             scope = source_scope(declaration.path, payload)
             state = ("CONTEXT_VERIFIED" if identity else "MAPPED") if matched else "CONFLICT"
             if supplement is not None:
                 state = "MAPPED_WITH_REGISTERED_SUPPLEMENT"
+            if matched and not text_supported:
+                state = "UNRESOLVED"
+                issues.append(CoverageIssue(code="SOURCE_CONTEXT_UNVERIFIED",
+                    path=declaration.path, start=clause.start, end=clause.end,
+                    message="Policy prose has no complete registered executable meaning."))
             path, group = (declaration.path,), own or declaration.group_id
             meaning = canonical(dict(path=declaration.path, value=declaration.value))
             if supplement is not None:
                 meaning = canonical(dict(path=declaration.path, value=declaration.value,
                     supplement=supplement.model_dump(mode="json")))
-            if matched and not identity:
+            if matched and text_supported and not identity:
                 for proven in declared_paths(declaration, values):
                     proven_paths.setdefault(proven, set()).add(clause.clause_id)
             if not matched:

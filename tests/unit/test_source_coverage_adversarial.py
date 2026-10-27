@@ -168,3 +168,25 @@ def test_a_global_legacy_issue_stays_inspectable_with_a_nonempty_projection_path
     for original in global_issues:
         assert any(issue.code == original.code and issue.path == "draft"
                    and issue.message == original.reason[:512] for issue in result.issues)
+
+
+@pytest.mark.parametrize("carrier", ["reference-source", "generic-reviewed-fact"])
+def test_unmonitored_numeric_condition_cannot_hide_inside_a_sourced_text_value(carrier):
+    raw = _native_candidate("ALL").model_dump(mode="json")
+    conditions = raw["ordinary_rules"][0]["condition"]["conditions"]
+    if carrier == "reference-source":
+        conditions[0]["reference"]["source"] = (
+            "Threshold from yesterday. Only buy when turnover exceeds 3 percent."
+        )
+    else:
+        conditions.append({
+            "type": "REVIEWED_FACT", "fact_kind": "TECHNICAL",
+            "evidence_requirement": "Only buy when turnover exceeds 3 percent.",
+            "validity_scope": "TRADE_DATE",
+        })
+    draft = P3PlanDraft.model_validate(raw)
+    source, mapping = source_mapping(draft)
+
+    # Each JSON field is independently sourced; equality cannot prove that
+    # provenance prose or a generic manual fact implements this numeric gate.
+    _assert_legacy_passes_but_current_blocks(draft, mapping, source)
