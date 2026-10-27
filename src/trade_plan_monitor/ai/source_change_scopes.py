@@ -56,18 +56,32 @@ def _side_owner(base, parent, index, side):
     owner = next((row for row in parent.owners if row.path == path), None)
     bound = next((row for row in base.bindings if row.path == path), None)
     if (owner is None or bound is None or not owner.obligation_ids
-            or owner.origin not in {"CURRENT", "BASE"}
-            or bound.binding.origin not in _SOURCE_ORIGINS
+            or owner.origin not in {"CURRENT", "BASE", "HUMAN"}
+            or bound.binding.origin not in _SOURCE_ORIGINS | {"HUMAN_SUPPLEMENT"}
             or bound.binding.value != side or owner.original_path != bound.original_path
             or owner.source_id != bound.source_id
             or owner.source_binding_hash != bound.source_hash):
         return None
+    current_proof = owner.proof_hash == parent.source_assessment.evidence_hash
+    supplied = bound.binding.origin == "HUMAN_SUPPLEMENT"
+    human = (owner.origin == "HUMAN" or supplied or current_proof
+             and parent.source_assessment.origin == "HUMAN")
+    if human and not owner.human_receipt_hash:
+        return None
+    if current_proof and (human_hash := getattr(
+        parent.source_assessment, "human_operation_hash", None
+    )) is not None and owner.human_receipt_hash != human_hash:
+        return None
     # Current source links are available in full and must include the actual side.
     # An inherited owner already belongs to the complete verified parent graph.
-    if owner.proof_hash == parent.source_assessment.evidence_hash:
+    if current_proof:
         rows = {row.obligation_id: row for row in parent.source_assessment.obligations}
         if not any((row := rows.get(identity)) is not None
-                   and row.state == "MAPPED" and row.scope == side
+                   and row.state == ("MAPPED_WITH_REGISTERED_SUPPLEMENT" if supplied else "MAPPED")
+                   and row.scope == side
+                   and (not supplied or row.semantics_json == canonical(dict(
+                       path=owner.original_path, value=None,
+                       supplement=bound.supplement.model_dump(mode="json"))))
                    and owner.original_path in row.paths for identity in owner.obligation_ids):
             return None
     return owner
@@ -90,7 +104,8 @@ def inherit_change_scopes(obligations, proposed_draft, base_review, verified_par
     """Add parent-side evidence only to freshly proven, complete scalar declarations.
 
     This helper does not establish source coverage or authority. Container atoms,
-    relations, unregistered prose and human corrections retain their existing scope.
+    relations and unregistered prose retain their existing scope. Human provenance
+    is consumed only from the complete parent authenticated by the state adapter.
     """
     original = tuple(obligations)
     base, parent = _parent_identity(base_review, verified_parent)
