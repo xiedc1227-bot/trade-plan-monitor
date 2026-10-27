@@ -109,4 +109,10 @@ Human范围连续性新增23项测试，初始7项真实失败／16项通过（`
 
 明确复用alias新增42项纯测试，相邻组合185项通过（`readiness-reuse-alias-adjacent-green-01.log`）。完整来源／delta组合888项通过，46.13秒（`t08-reuse-source-final.log`），保留四份AI变更及四份聚合字节／哈希固定检查。Ruff通过；提交 `c1737e7`。alias保留原始叶子证据及全部来源／Human归属，本身不证明实际父项审核授权。
 
-LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`），独立审查仍在进行。首轮发现真实严格修订序列化缺陷，另有pytest参数过长造成环境错误，原始日志均保留。实际继承／组合writer登记、递归当前授权及新运行／操作核对仍待完成。T08／C03继续开放；真实提取仍0/48，未迁移用户数据库，未操作真实账户／行情／通知。
+LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`）。独立21项随后发现6项真实失败：同owner哈希矛盾、消费方叶子自引用及解析前文本／字节边界缺失（`lineage-storage-agent-adversarial-red.log`）。现已修复，新增与既有INPUT/HUMAN/REVIEW/LINEAGE存储174项通过，21.24秒（`t08-lineage-storage-final.log`），Ruff通过；提交 `fd46297`。首轮另发现严格修订序列化缺陷及pytest参数过长造成环境错误，原始日志仍保留。实际继承／组合writer登记、递归当前授权及新运行／操作核对仍待完成。T08／C03继续开放；真实提取仍0/48，未迁移用户数据库，未操作真实账户／行情／通知。
+
+## PMA-R13 — T08风险控制与剩余来源／复用接缝
+
+独立有限风险控制解析新增56项测试，关联风险／来源控制组合153项通过，8.69秒（`t08-risk-control-final.log`）。root独立验证新增56项通过，3.92秒（`t08-risk-control-root.log`），Ruff通过；提交 `860b1ab`。类型化前后校验保留每个非scope风险字段，准确求范围交集，保留未知来源单元。原缺模块RED及证明超限错误分类RED仍保存在 `t08-risk-control-red.log`、`t08-risk-control-limit-red.log`。这些是helper检查，完整来源风险／价格角色接入仍待完成。
+
+独立来源物理提取不需要前置策略许可；依赖前驱的begin_call则必须在既有writer事务内取得其真实当前证明。新增测试现复现3项真实失败／4项通过（`current-reuse-agent-independent-red.log`）：两类未证明的VALID前驱被接收，正例路径未重验当前INPUT。独立context／base、取消、CAS及旧回执重试继续覆盖。该待补防护、完整JSON容器范围继承、实际血缘writer／复用接入及混合表格角色均未因helper结果获得验收。中间结果不关闭阶段／检查点，供应商尝试仍0/48。

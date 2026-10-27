@@ -104,6 +104,14 @@
 
 私有 `preparation-lineage-v1` 的kind为LINEAGE，绑定 `preparation_id`、CREATE_SINGLE/COMPOSE_REVIEWED `operation`、规范类型化 `command_json`、真实 `command_id`／`command_request_hash`、`created_revision=1`、`creation_response_hash`、`selection_order`、`placements`、服务端 `created_at`、字面false授权及主键／哈希。每项placement保留消费index、直接 `owner_binding`／修订／审核修订／审核哈希／manifest哈希／proof哈希，以及叶子binding／assurance／review／manifest哈希。保留原命令顺序，selection_order记录确定性位置排列。CREATE_SINGLE复制明确父项的完整前缀并保留新自有尾项；COMPOSITION选择每个明确owner的最后条目。既有256条目、1MiB命令、8MiB完整证明边界不变。
 
-既有封存辅助表使用单一创建主键及LINEAGE内部槽位 `lineage-create`。SQL投影最后真实复用来源／候选，因为继承SINGLE的新尾项在创建时没有候选。同意图重试保留原时间，意图改变报冲突。登记须在既有同一writer事务中，根据实际父项当前审核重建／匹配待写响应，再将lineage、record及原幂等响应原子保存。后续读取先认证真实命令／响应及新鲜父项授权，再重建alias。血缘缺失或未登记时阻断新授权，历史读取仍可用。
+既有封存辅助表使用单一创建主键及LINEAGE内部槽位 `lineage-create`。SQL投影最后真实复用来源／候选，因为继承SINGLE的新尾项在创建时没有候选。同意图重试保留原时间，意图改变报冲突。登记须在既有同一writer事务中，根据实际父项当前审核重建／匹配待写响应，再将lineage、record及原幂等响应原子保存。创建响应哈希使用 `preparation-lineage-creation-response-v1`。后续读取先认证真实命令／响应及新鲜父项授权，再重建alias。血缘缺失或未登记时阻断新授权，历史读取仍可用。
 
 revision1的COMPOSITION以已登记LINEAGE和全部选中项真实当前审核建立复用授权，不伪造previous_revision0的人工REVIEW，不放宽v1 REVIEW codec。新审核的继承SINGLE使用既有真实REVIEW回执及连续消费证明。仅前缀读取和Human修正只使用实际选中前缀，复制父条目不能在消费preparation下获得新Human操作。解析使用事务内memoization、环检测及既有链长边界，无全局缓存、截断或复制INPUT／操作记录。模型／存储与实际writer／复用验收是独立实施检查点。
+
+## PMA-K13 — 独立风险适用范围控制
+
+`source-risk-control-v1`、`source-risk-control-analysis-v1` 针对上游已认证的准确当前前驱，解析有限完整来源单元。它们保留准确来源／binding／生效日期／review／parent身份、原始跨度、类型化前后风险值及其 `source-operation-value-v1` 哈希。`preserved_policy_hash` 使用 `source-risk-policy-v1` 哈希全部before字段，仅排除holding_scope。授权为字面false，analysis不提供覆盖状态或完整性声明。未知跨度保持准确、有界、未解决。
+
+专用risk JSON准确包含target/rule_id/action/scope_assessment，局部MODIFY才额外包含scope_change。整条REVOKE/RETAIN要求ENTIRE_RULE，局部MODIFY要求PARTIAL_RULE及EXISTING_POSITIONS_ONLY或NEW_POSITIONS_ONLY。自然语句为 `source_risk_controls.py` 中明确stable-ID的中英文封闭字典；泛撤销、把部分撤销表示为整条退出、引述／条件／假设及未指名歧义目标继续不支持。额外未知文字、重复目标／操作序号继续阻断。
+
+局部控制仅通过既有restrict_scope，将实际前驱范围与已绑定生效交易日求交，派生holding_scope。缺日期或空交集保持未解决，空交集从不授权撤销。保留其余全部风控字段，含适用时的价格／比较符、TWO_OFFICIAL_CLOSES、零目标、稳定身份及RESUME_FIRST_CLOSE。确定性不变交集仍保留原文MODIFY意图，供后续与实际no-op对照。完整来源覆盖及实际操作／字段归属对应仍须独立消费这些控制后才能开放授权。混合表格价格角色及未识别文字另待完成，该helper不能使原文04或整份计划通过验收。
