@@ -40,7 +40,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T02 — Define bounded obligation and proof models
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T01.
 - Files/scope: `ai/source_coverage_models.py`, `ai/source_obligations.py`, `tests/unit/test_source_obligations.py` (3 files).
 - Acceptance: A02–A04; Verify: focused V02. Exact spans/IDs/relations, known/unknown scope,4096 total/64 per clause and existing512/2000 limits; overflow blocks without truncation.

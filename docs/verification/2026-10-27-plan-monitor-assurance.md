@@ -12,4 +12,8 @@ Logs currently retained in ignored `.pytest_cache/pma-v01.log`, `.pytest_cache/p
 
 ## PMA-R02 — Remaining acceptance
 
-Only T01 is complete. T02–T24 and C01–C08 remain pending. Do not infer coverage completion from baseline zero issues or approved contracts. Real attempt count remains0/48; source-corpus eligibility is being investigated read-only before any provider call. Engineering completion, exact-version real extraction and actual-installation readiness will be reported separately.
+T01/T02 are complete. T03–T24 and C01–C08 remain pending. Do not infer coverage completion from baseline zero issues or approved contracts. Real attempt count remains0/48; source-corpus eligibility is being investigated read-only before any provider call. Engineering completion, exact-version real extraction and actual-installation readiness will be reported separately.
+
+## PMA-R03 — T02 bounded evidence models
+
+New model tests initially failed because the module was absent. Final focused model/historical group:28 passed,0.73s; Ruff passed. Covers strict scalars, canonical finite JSON, proof/obligation tamper,4096/4097 total bound,64/65 per-clause bound, duplicate evidence, stable source identity across treatment changes and AI_NEW missing-preimage blocking. These pure models grant no authority; current interfaces remain gated. Logs: `.pytest_cache/pma/t02-red.log`, `t02-final.log`, `t02-ruff.log`.

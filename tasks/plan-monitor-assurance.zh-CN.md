@@ -40,7 +40,7 @@
 
 ### PMA-T02 — 定义有界义务与证明模型
 
-- [ ] 交付并验证。
+- [x] 交付并验证。
 - 依赖：T01。
 - 文件／范围：`ai/source_coverage_models.py`、`ai/source_obligations.py`、`tests/unit/test_source_obligations.py`，3文件。
 - 验收：A02–A04；验证：聚焦V02。准确跨度／ID／关系、已知／未知范围、总4096／每条64及原512／2000边界，超限阻断不截断。
