@@ -896,11 +896,13 @@ class _ProductionBacktestService:
         reservation: BacktestRunSubmissionReservation,
         lost: asyncio.Event,
     ) -> DomainBacktestJobReceipt:
+        admission = {}
         if isinstance(command, WorkbenchBacktestRunCommand):
             prepared = await self._read_selection(command.selection_id, command.selection_hash)
             await self._require_current_workbench(prepared)
         else:
             prepared = await self._load_command_preparation(command)
+            admission["admission_guard"] = await self._prepared_run_guard(prepared)
         try:
             reference = await self._run_sync(
                 self._freeze_prepared_input, prepared, command, reservation
@@ -909,12 +911,32 @@ class _ProductionBacktestService:
             raise ApiError(ApiErrorCode.VALIDATION_ERROR) from None
         if lost.is_set():
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
-        return await self._run_sync(
-            self._repository.finalize_run_submission,
-            MonitorLoopJobRequest(input_reference=reference),
-            reservation,
-            on_admitted=self._coordinator.authorize_new_job,
-        )
+        try:
+            return await self._run_sync(
+                self._repository.finalize_run_submission,
+                MonitorLoopJobRequest(input_reference=reference),
+                reservation,
+                on_admitted=self._coordinator.authorize_new_job,
+                **admission,
+            )
+        except PreparationConflictError as error:
+            code = (ApiErrorCode.NOT_FOUND if error.code == "PREPARATION_NOT_FOUND" else
+                    ApiErrorCode.INTERNAL_ERROR if error.code == "SOURCE_COVERAGE_INTEGRITY" else
+                    ApiErrorCode.CONFLICT)
+            raise ApiError(code) from None
+
+    async def _prepared_run_guard(self, prepared):
+        """Resolve the actual local capability before copying; acquire it in finalization."""
+        if self._preparation_service_reader is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        try:
+            preparation = await self._preparation_service_reader()
+        except BacktestServiceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
+        fence = getattr(preparation, "current_run_fence", None)
+        if not callable(fence):
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        return partial(fence, prepared.preparation_id, prepared.manifest_hash)
 
     async def _require_current_workbench(self, prepared):
         """A historical selection receipt cannot authorize a fresh run by itself."""

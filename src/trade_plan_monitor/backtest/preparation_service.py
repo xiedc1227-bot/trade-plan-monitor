@@ -167,6 +167,14 @@ class PreparationService:
     async def get_frozen(self, preparation_id: str) -> FrozenPreparedPlan:
         return await self._metadata.run(self._read_frozen, preparation_id)
 
+    def current_run_fence(self, preparation_id: str, expected_manifest_hash: str):
+        """Private final-admission capability; historical frozen reads remain independent."""
+        if self._closed:
+            raise BacktestServiceUnavailable()
+        from trade_plan_monitor.backtest.preparation_run_fence import current_prepared_run_fence
+
+        return current_prepared_run_fence(self._store, preparation_id, expected_manifest_hash)
+
     @staticmethod
     def _frozen(record):
         if record is None:

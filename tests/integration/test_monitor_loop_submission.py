@@ -67,6 +67,9 @@ def services(tmp_path, monkeypatch, *, scheduled=False):
         calls.append(identity)
         return await preparations.get_frozen(identity)
 
+    async def read_preparation_service():
+        return preparations
+
     coordinator = Coordinator()
     signer = HmacCursorSigner(b"x" * 32)
     service = _ProductionBacktestService(
@@ -80,6 +83,7 @@ def services(tmp_path, monkeypatch, *, scheduled=False):
         result_cursor_signer=signer,
         job_cursor_signer=BacktestApiCursorSigner(b"x" * 32),
         prepared_plan_reader=read_prepared,
+        preparation_service_reader=read_preparation_service,
     )
     return service, preparations, prepared, market, results, clock, calls, coordinator
 
