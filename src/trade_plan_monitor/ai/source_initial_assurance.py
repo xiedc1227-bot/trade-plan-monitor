@@ -21,17 +21,29 @@ from trade_plan_monitor.state.source_coverage_values import CoverageInputs
 
 
 def _verify_initial_derivation(inputs, review, mapping, source):
+    from trade_plan_monitor.ai.loop_plan_extraction import (
+        LOOP_EXTRACTION_VERSION,
+        LoopPlanExtractionOutput,
+        validate_opening_evidence,
+    )
     from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
 
     evidence = inputs.derivation
-    if (evidence.kind != "FULL_DRAFT" or len(evidence.stages) != 1
+    if (evidence.kind != "FULL_DRAFT" or evidence.source_hash != source.source_hash
+            or len(evidence.stages) != 1
             or evidence.stages[0].phase != "SOURCE_NORMALIZED" or inputs.normalization is None):
         raise ValueError("initial evidence has no complete observed full-draft protocol")
     before = validate_normalization(inputs.normalization, review.draft, source.text)
     raw = json.loads(evidence.raw_json)
     after = json.loads(evidence.stages[0].output_json)
-    original = CurrentPlanExtractionOutput.model_validate_json(evidence.raw_json)
-    CurrentPlanExtractionOutput.model_validate_json(evidence.stages[0].output_json)
+    model = (LoopPlanExtractionOutput if raw.get("schema_version") == LOOP_EXTRACTION_VERSION
+             else CurrentPlanExtractionOutput)
+    original = model.model_validate_json(evidence.raw_json)
+    normalized = model.model_validate_json(evidence.stages[0].output_json)
+    if isinstance(original, LoopPlanExtractionOutput):
+        if original.opening_account != normalized.opening_account:
+            raise ValueError("normalization changed the observed opening-account evidence")
+        validate_opening_evidence(original.opening_account, source.text)
     if (raw.get("draft") != before or after.get("draft") != review.draft.model_dump(mode="json")
             or original.review(source.text).issues
             or after.get("clauses") != [row.model_dump(mode="json") for row in mapping.clauses]
