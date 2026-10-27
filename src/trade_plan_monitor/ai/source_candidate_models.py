@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from trade_plan_monitor.ai.source_assurance_binding import CandidateBinding as CandidateBinding
+from trade_plan_monitor.ai.source_change_models import SourceChangeAssessment
 from trade_plan_monitor.ai.source_coverage_models import (
     COMPLETE_STATES,
     MAX_PROOF_BYTES,
@@ -64,7 +65,7 @@ class SourceCandidateAssurance(DailyValue):
     version: Literal["source-candidate-assurance-v1"] = "source-candidate-assurance-v1"
     binding: CandidateBinding
     content_hash: Hash
-    source_assessment: CoverageAssessment
+    source_assessment: CoverageAssessment | SourceChangeAssessment
     source_refs: tuple[AssuranceSourceRef, ...] = Field(min_length=1, max_length=512)
     owners: tuple[SourceOwner, ...] = Field(max_length=2000)
     global_obligations: tuple[SourceObligationRef, ...] = Field(default=(), max_length=4096)
