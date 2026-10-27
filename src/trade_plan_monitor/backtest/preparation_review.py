@@ -493,7 +493,7 @@ def correct_collection_candidate(record, command):
     ):
         raise PreparationSemanticError("REVIEW_BINDING_CONFLICT")
     item = record.items[index]
-    if not index:
+    if not index or item.independent:
         if command.update is not None:
             raise PreparationSemanticError("REVIEW_SEMANTIC_CONFLICT")
         try:

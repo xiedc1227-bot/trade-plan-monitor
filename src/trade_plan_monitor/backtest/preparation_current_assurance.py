@@ -19,6 +19,7 @@ from trade_plan_monitor.ai.source_change_composition import assess_change_curren
 from trade_plan_monitor.ai.source_initial_assurance import assess_initial_current
 from trade_plan_monitor.ai.update_review import (
     MaterializedUpdateCandidate,
+    PlanCandidateReview,
     build_initial_review,
     context_from_review,
     materialize_extraction,
@@ -144,6 +145,12 @@ def _single(connection, record):
         raise _conflict("SOURCE_COVERAGE_REQUIRED")
     manifest = None
     if record.status == "REVIEWED":
+        from trade_plan_monitor.backtest.preparation_human_assurance_store import human_operation
+        saved_human = human_operation(connection, record.preparation_id, 0,
+                                      record.candidate_revision)
+        if saved_human is not None:
+            from trade_plan_monitor.backtest.preparation_human_authority import read_human_assurance
+            return (read_human_assurance(connection, record, 0),)
         try:
             manifest = frozen_preparation(record)
         except PreparationSemanticError:
@@ -170,18 +177,23 @@ def _single(connection, record):
                                   evidence.inputs, binding=binding),)
 
 
-def _collection(connection, record):
+def _collection(connection, record, stop_count=None):
     if record.reviewed_base is not None or record.workflow == "COMPOSITION":
         # Original owners must come from explicit immutable reuse lineage, never a hash search.
         raise _conflict("SOURCE_COVERAGE_REQUIRED")
     proofs, base = [], None
-    for index, item in enumerate(record.items):
+    for index, item in enumerate(record.items[:stop_count]):
         if item.candidate is None:
             raise _conflict("SOURCE_COVERAGE_REQUIRED")
         if json.loads(item.candidate.payload_json).get("schema_version") == (
             "monitor-loop-candidate-evidence-v1"
         ):
-            raise _conflict("SOURCE_COVERAGE_REQUIRED")
+            from trade_plan_monitor.backtest.preparation_human_authority import read_human_assurance
+            proof = read_human_assurance(connection, record, index,
+                                          prefix_proofs=tuple(proofs), base_review=base)
+            proofs.append(proof)
+            base = PlanCandidateReview.model_validate_json(item.candidate.payload_json)
+            continue
         evidence = _original_input(connection, record, index, item, item.candidate.candidate_hash)
         candidate = _bound_original(item, evidence, collection=True)
         prefix = tuple(PrefixAssuranceRef(binding=proof.binding,
@@ -217,7 +229,7 @@ def _collection(connection, record):
     return tuple(proofs)
 
 
-def read_current_assurance(connection, record):
+def _read_current_assurance(connection, record, stop_count=None):
     """Purely read and recompute all original source proofs on this SQLite connection.
 
     Missing historical input cannot acquire retrospective fidelity. This function
@@ -230,8 +242,15 @@ def read_current_assurance(connection, record):
         if not assurance_available(connection):
             raise _conflict("SOURCE_COVERAGE_UPGRADE_REQUIRED")
         actual = _actual_record(connection, record)
-        return (_collection(connection, actual) if isinstance(actual, CollectionPreparationRecord)
-                else _single(connection, actual))
+        length = len(actual.items) if isinstance(actual, CollectionPreparationRecord) else 1
+        if stop_count is not None and (
+            type(stop_count) is not int or not 0 <= stop_count <= length
+        ):
+            raise _conflict("SOURCE_COVERAGE_STALE")
+        if stop_count == 0:
+            return ()
+        return (_collection(connection, actual, stop_count)
+                if isinstance(actual, CollectionPreparationRecord) else _single(connection, actual))
     except PreparationConflictError:
         raise
     except sqlite3.DatabaseError:
@@ -242,6 +261,16 @@ def read_current_assurance(connection, record):
         code = ("SOURCE_COVERAGE_LIMIT_EXCEEDED" if "SOURCE_COVERAGE_LIMIT_EXCEEDED" in str(error)
                 else "SOURCE_COVERAGE_STALE")
         raise _conflict(code) from None
+
+
+def read_current_assurance(connection, record):
+    """Read/recompute every source; a complete proof is not human review authority."""
+    return _read_current_assurance(connection, record)
+
+
+def read_current_assurance_prefix(connection, record, stop_count):
+    """Private selected-item mutation dependency, always verified against actual state."""
+    return _read_current_assurance(connection, record, stop_count)
 
 
 def require_current_preparation(connection, record):
@@ -283,7 +312,8 @@ def _manifest(record):
             else frozen_preparation(record))
 
 
-def save_current_review(connection, previous, proposed, *, command_id, command_request_hash, now):
+def save_current_review(connection, previous, proposed, *, command_id, command_request_hash, now,
+                        command=None):
     """Save the new receipt in the same transaction as the original human review."""
     from trade_plan_monitor.backtest.preparation_review_assurance_models import (
         PreparationReviewAssurance,
@@ -292,7 +322,18 @@ def save_current_review(connection, previous, proposed, *, command_id, command_r
 
     if proposed.review is None or (proposed.updated_at, proposed.review.reviewed_at) != (now, now):
         raise _conflict("SOURCE_COVERAGE_STALE")
-    proofs = verify_current_review_candidate(connection, previous, proposed)
+    from trade_plan_monitor.backtest.preparation_store import PreparationConflictError
+    try:
+        proofs = verify_current_review_candidate(connection, previous, proposed)
+    except PreparationConflictError as error:
+        if (error.code != "SOURCE_COVERAGE_REQUIRED" or command is None
+                or isinstance(previous, CollectionPreparationRecord)):
+            raise
+        from trade_plan_monitor.backtest.preparation_human_authority import (
+            register_human_correction,
+        )
+        proofs = (register_human_correction(connection, previous, proposed, command,
+            command_id=command_id, command_request_hash=command_request_hash, now=now),)
     try:
         receipt = PreparationReviewAssurance.build(preparation_id=proposed.preparation_id,
             command_id=command_id, command_request_hash=command_request_hash,

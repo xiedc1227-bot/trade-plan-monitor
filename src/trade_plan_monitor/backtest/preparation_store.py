@@ -937,7 +937,7 @@ class PreparationStore:
 
         save_current_review(connection, previous, proposed, now=now,
             command_id=idempotency_key, command_request_hash=_request_hash(
-                "REVIEW_AND_FREEZE", proposed.preparation_id, command))
+                "REVIEW_AND_FREEZE", proposed.preparation_id, command), command=command)
 
     def correct_collection_item(self, preparation_id, *, command, idempotency_key):
         if not isinstance(command, CollectionItemCorrectionCommand):
@@ -980,7 +980,16 @@ class PreparationStore:
                 status="CANDIDATE" if index == len(record.items) - 1 else "DRAFT",
             )
 
-        return self._operation("CORRECT_ITEM", preparation_id, command, idempotency_key, change)
+        def assure(connection, previous, proposed, now):
+            from trade_plan_monitor.backtest.preparation_human_authority import (
+                register_human_correction,
+            )
+            register_human_correction(connection, previous, proposed, command,
+                command_id=idempotency_key, command_request_hash=_request_hash(
+                    "CORRECT_ITEM", preparation_id, command), now=now)
+
+        return self._operation("CORRECT_ITEM", preparation_id, command, idempotency_key, change,
+                               assurance=assure)
 
     def _review_collection(self, preparation_id, command, idempotency_key):
         command = CollectionPreparationReviewCommand.model_validate_json(command.model_dump_json())
