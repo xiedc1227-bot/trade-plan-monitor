@@ -15,6 +15,7 @@ from trade_plan_monitor.ai.source_change_scopes import inherit_change_scopes
 from trade_plan_monitor.ai.source_controls import parse_source_controls
 from trade_plan_monitor.ai.source_coverage_core import analyze_source
 from trade_plan_monitor.ai.source_coverage_models import CoverageIssue, SourceObligation
+from trade_plan_monitor.ai.source_risk_controls import parse_source_risk_controls
 from trade_plan_monitor.ai.update_review import (
     PlanCandidateReview,
     build_update_review,
@@ -76,6 +77,15 @@ def _in_target(path, change, draft):
     return index is not None and (path == prefix or path.startswith(prefix + "."))
 
 
+def _risk_matches(control, change):
+    action = (change.action == control.action or control.action == "MODIFY"
+              and change.action == "RETAIN" and control.before_hash == control.after_hash)
+    return action and (change.target, change.rule_id,
+        daily_hash("source-operation-value-v1", change.before),
+        daily_hash("source-operation-value-v1", change.after)) == (
+        control.target, control.rule_id, control.before_hash, control.after_hash)
+
+
 def analyze_source_changes(
     source: PreparationSource, output: PlanUpdateExtractionOutput, reviewed: PlanCandidateReview,
     complete_mapping: DailyMapping, *, context: PlanUpdateContext, base_review: PlanCandidateReview,
@@ -103,11 +113,15 @@ def analyze_source_changes(
     if merged.draft != reviewed.draft:
         raise ValueError("current review draft differs from the complete materialization")
     controls = parse_source_controls(source, base_review, verified_parent)
+    risk_controls = (parse_source_risk_controls(source, base_review, verified_parent)
+                     if verified_parent.coverage_complete else None)
     analysis = analyze_source(output.draft, complete_mapping, source.text,
-                              controls=controls)
+                              controls=controls, risk_controls=risk_controls)
     obligations, scope_issues = inherit_change_scopes(
         analysis.obligations, output.draft, base_review, verified_parent, source=source.text)
     issues = [*analysis.issues, *scope_issues, *controls.issues]
+    if risk_controls is not None:
+        issues.extend(risk_controls.issues)
 
     def issue(message, path="source", code="SOURCE_COVERAGE_REQUIRED"):
         issues.append(CoverageIssue(code=code, path=path, message=message))
@@ -144,11 +158,14 @@ def analyze_source_changes(
         ):
             issue("The current binding does not cite its independently proven exact declaration.",
                   bound.path, "SOURCE_RELATION_MISMATCH")
-    control_rows = {}
+    control_rows, risk_rows = {}, {}
     for row in obligations:
         meaning = None if row.semantics_json is None else json.loads(row.semantics_json)
         if isinstance(meaning, dict) and meaning.get("treatment") == "REGISTERED_SOURCE_CONTROL":
             control_rows.setdefault(meaning["source_control"]["control_id"], []).append(row)
+        if (isinstance(meaning, dict)
+                and meaning.get("treatment") == "REGISTERED_SOURCE_RISK_CONTROL"):
+            risk_rows.setdefault(meaning["source_risk_control"]["control_id"], []).append(row)
     for control in controls.controls:
         if control.target == "plan":
             valid = (all(change.action == "RETAIN" for change in merged.changes)
@@ -161,6 +178,10 @@ def analyze_source_changes(
                         for change in merged.changes)
         if not valid:
             issue("The complete source control was not applied to its exact predecessor target.",
+                  control.target, "SOURCE_RELATION_MISMATCH")
+    for control in (() if risk_controls is None else risk_controls.controls):
+        if not any(_risk_matches(control, change) for change in merged.changes):
+            issue("The exact full risk control was not applied to its predecessor branch.",
                   control.target, "SOURCE_RELATION_MISMATCH")
     proofs, changed = [], set()
     for change in merged.changes:
@@ -182,6 +203,10 @@ def analyze_source_changes(
         paths = tuple(sorted(paths))
         changed.update(paths)
         linked = set()
+        matching_risks = [control for control in (() if risk_controls is None else
+                          risk_controls.controls) if _risk_matches(control, change)]
+        linked.update(row.obligation_id for control in matching_risks
+                      for row in risk_rows.get(control.control_id, ()))
         if change.action != "RETAIN":
             if change.action == "REVOKE":
                 matching = [control for control in controls.controls if (
@@ -208,7 +233,8 @@ def analyze_source_changes(
             before_hash=daily_hash("source-operation-value-v1", change.before),
             after_hash=daily_hash("source-operation-value-v1", change.after), changed_paths=paths,
             obligation_ids=tuple(sorted(linked)),
-            origin="PRODUCT_RETENTION" if change.action == "RETAIN" else "SOURCE"))
+            origin="PRODUCT_RETENTION" if change.action == "RETAIN" and not matching_risks
+            else "SOURCE"))
     return SourceChangeAnalysis(mapping=analysis.mapping, draft=merged.draft,
         source_hash=source.source_hash, source_binding_hash=source.binding_hash,
         content_hash=daily_draft_content_sha256(merged.draft),

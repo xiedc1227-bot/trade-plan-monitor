@@ -1,5 +1,6 @@
 """Bounded whole-source analysis; callers separately prove full or inherited coverage."""
 
+import re
 from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Literal
@@ -26,6 +27,7 @@ from trade_plan_monitor.ai.source_obligations import (
     value_at,
 )
 from trade_plan_monitor.ai.source_policy_text import declaration_text_supported
+from trade_plan_monitor.ai.source_risk_control_models import SourceRiskControlAnalysis
 from trade_plan_monitor.ai.source_semantic_atoms import semantic_atoms
 from trade_plan_monitor.ai.source_semantics import (
     declaration_relations,
@@ -41,6 +43,7 @@ from trade_plan_monitor.ai.source_treatments import (
 from trade_plan_monitor.domain.daily_hash import canonical
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.daily_scope import scope_hash
+from trade_plan_monitor.domain.risk_scope import risk_identity
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +70,43 @@ def _integrity(draft, mapping, clauses):
     return mapping
 
 
-def analyze_source(draft, mapping, source, *, normalization=None, controls=None):
+def _risk_parts(source, parts, controls):
+    if controls is None or not controls.controls:
+        return parts
+    result = []
+    for part in parts:
+        cuts = {part.start, part.end}
+        for row in controls.controls:
+            cuts.update(point for point in (row.start, row.end) if part.start < point < part.end)
+        ordered = sorted(cuts)
+        for start, end in zip(ordered, ordered[1:], strict=False):
+            if source[start:end].strip(" 。；，,;、.!?！？\n\r\t"):
+                result.append(replace(part, start=start, end=end, excerpt=source[start:end]))
+    if len(result) > 4096 or any(count > 64 for count in Counter(
+        row.clause_id for row in result).values()
+    ):
+        raise ValueError("SOURCE_COVERAGE_LIMIT_EXCEEDED")
+    return tuple(result)
+
+
+def _cross_control_conflicts(controls, risk_controls):
+    ordinals = {}
+    for registry in (controls, risk_controls):
+        if registry is None:
+            continue
+        for row in registry.controls:
+            excerpt = row.excerpt
+            normalized = excerpt[2:-2] if excerpt.startswith("**") and excerpt.endswith("**") else (
+                excerpt)
+            match = re.match(r"operations\[(0|[1-9][0-9]?)\][ \t]*=", normalized)
+            if match:
+                ordinals.setdefault(int(match[1]), []).append(row.control_id)
+    return {identity for identities in ordinals.values() if len(identities) > 1
+            for identity in identities}
+
+
+def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
+                   risk_controls: SourceRiskControlAnalysis | None = None):
     """Classify every canonical span using server grammar, not AI background labels."""
     clauses = bounded_clauses(source)
     mapping = _integrity(draft, mapping, clauses)
@@ -78,6 +117,14 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None)
             source[row.start:row.end] != row.excerpt for row in controls.controls
         ):
             raise ValueError("source controls differ from the exact original source")
+    if risk_controls is not None:
+        risk_controls = SourceRiskControlAnalysis.model_validate_json(
+            risk_controls.model_dump_json())
+        if (risk_controls.source_hash != source_hash or risk_controls.source_length != len(source)
+                or any(source[row.start:row.end] != row.excerpt for row in (
+                    *risk_controls.controls, *risk_controls.unresolved))):
+            raise ValueError("risk source controls differ from the exact original source")
+    control_conflicts = _cross_control_conflicts(controls, risk_controls)
     values = semantic_values(draft)
     payload = draft.executable_payload()
     metadata = draft.model_dump(mode="json")
@@ -92,11 +139,14 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None)
     groups = relation_groups(parsed, source_hash)
     proven_paths = {}
     obligations, issues = [], []
-    parts = source_parts(source, clauses)
+    parts = _risk_parts(source, source_parts(source, clauses), risk_controls)
     base_counts = Counter(row.clause_id for row in parts)
     expanded_counts = Counter()
     atom_cache, total_expanded = {}, 0
     normalization_hash = None
+    if control_conflicts:
+        issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
+            message="Independent source control registries repeat an operation ordinal."))
     if normalization is not None:
         from trade_plan_monitor.ai.source_normalization import validate_policy_preservation
 
@@ -109,6 +159,9 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None)
             normalization_hash = normalization.evidence_hash
     for clause in parts:
         control = None if controls is None else next((row for row in controls.controls
+            if row.start <= clause.start < clause.end <= row.end), None)
+        risk_control = None if risk_controls is None else next((
+            row for row in risk_controls.controls
             if row.start <= clause.start < clause.end <= row.end), None)
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
@@ -127,11 +180,39 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None)
             group = control.control_id
             meaning = canonical(dict(treatment="REGISTERED_SOURCE_CONTROL",
                                      source_control=control.model_dump(mode="json")))
+            if control.control_id in control_conflicts:
+                state = "CONFLICT"
             if partition_at(partitions, clause.start) == "B":
                 state = "CONFLICT"
                 issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
                     path="source." + clause.clause_id, start=clause.start, end=clause.end,
                     message="A new background control cannot authorize executable policy."))
+        elif risk_control is not None:
+            kind, scope, state = "PREDICATE", "RISK", "MAPPED"
+            group = risk_control.control_id
+            meaning = canonical(dict(treatment="REGISTERED_SOURCE_RISK_CONTROL",
+                                     source_risk_control=risk_control.model_dump(mode="json")))
+            if (risk_control.control_id in control_conflicts
+                    or partition_at(partitions, clause.start) == "B"):
+                state = "CONFLICT"
+                issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
+                    path="source." + clause.clause_id, start=clause.start, end=clause.end,
+                    message="A conflicting or background risk control cannot supply policy."))
+            if risk_control.action == "MODIFY":
+                index = next((index for index, branch in enumerate(draft.risk_branches)
+                              if risk_identity(branch) == risk_control.rule_id), None)
+                actual = (None if index is None else
+                          draft.risk_branches[index].model_dump(mode="json"))
+                if canonical(actual) != canonical(risk_control.after.model_dump(mode="json")):
+                    state = "CONFLICT"
+                    issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
+                        path="risk_branches", start=clause.start, end=clause.end,
+                        message="The full proposed risk branch differs from the exact control."))
+                elif state == "MAPPED":
+                    prefix = f"risk_branches[{index}].holding_scope."
+                    path = tuple(own for own in values if own.startswith(prefix))
+                    for proven in path:
+                        proven_paths.setdefault(proven, set()).add(clause.clause_id)
         elif declaration is not None:
             actual = values.get(declaration.path, MISSING)
             if actual is MISSING:
@@ -212,7 +293,8 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None)
             excerpt=source[clause.start:clause.end], kind=kind, scope=scope, state=state,
             semantics_json=meaning, group_id=group, relation_ids=relations, paths=path))
 
-        if (control is None and declaration is not None and kind == "PREDICATE"
+        if (control is None and risk_control is None
+                and declaration is not None and kind == "PREDICATE"
                 and isinstance(declaration.value, (dict, list)) and declaration.value):
             try:
                 if declaration.group_id not in atom_cache:
