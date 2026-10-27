@@ -15,6 +15,7 @@ from trade_plan_monitor.ai.source_coverage_models import (
     Hash,
     Path,
 )
+from trade_plan_monitor.ai.source_human_change_models import HumanSourceChangeAssessment
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier
 
@@ -65,7 +66,7 @@ class SourceCandidateAssurance(DailyValue):
     version: Literal["source-candidate-assurance-v1"] = "source-candidate-assurance-v1"
     binding: CandidateBinding
     content_hash: Hash
-    source_assessment: CoverageAssessment | SourceChangeAssessment
+    source_assessment: CoverageAssessment | HumanSourceChangeAssessment | SourceChangeAssessment
     source_refs: tuple[AssuranceSourceRef, ...] = Field(min_length=1, max_length=512)
     owners: tuple[SourceOwner, ...] = Field(max_length=2000)
     global_obligations: tuple[SourceObligationRef, ...] = Field(default=(), max_length=4096)
