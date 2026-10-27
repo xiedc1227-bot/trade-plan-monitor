@@ -13,6 +13,11 @@ from pydantic import TypeAdapter
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.loop_input import MAX_EXTRACTION_ATTEMPTS
 from trade_plan_monitor.backtest.models import StableIdentifier
+from trade_plan_monitor.backtest.preparation_assurance_store import (
+    ASSURANCE_TABLES,
+    assurance_available,
+    create_assurance_schema,
+)
 from trade_plan_monitor.backtest.preparation_models import (
     PREPARATION_DOMAIN,
     PREPARATION_SCHEMA_VERSION,
@@ -118,16 +123,25 @@ class PreparationStore:
                     "INSERT INTO backtest_preparation_metadata VALUES (1, ?, ?)",
                     (PREPARATION_DOMAIN, 2),
                 )
-            elif (tables == _TABLES - {"backtest_plan_selection"} and connection.execute(
-                "SELECT singleton, domain, schema_version FROM backtest_preparation_metadata"
-            ).fetchall() == [(1, PREPARATION_DOMAIN, PREPARATION_SCHEMA_VERSION)]):
-                connection.execute(_SELECTION_SCHEMA)
-                connection.execute("UPDATE backtest_preparation_metadata SET schema_version = 2")
-            elif tables != _TABLES or connection.execute(
-                "SELECT singleton, domain, schema_version FROM backtest_preparation_metadata"
-            ).fetchall() != [(1, PREPARATION_DOMAIN, 2)]:
-                raise ValueError("database_path is not a supported tagged preparation store")
+                create_assurance_schema(connection)
+            else:
+                if tables & ASSURANCE_TABLES:
+                    assurance_available(connection)
+                tables -= ASSURANCE_TABLES
+                self._validate_existing_schema(connection, tables)
             connection.commit()
+
+    @staticmethod
+    def _validate_existing_schema(connection, tables):
+        if (tables == _TABLES - {"backtest_plan_selection"} and connection.execute(
+            "SELECT singleton, domain, schema_version FROM backtest_preparation_metadata"
+        ).fetchall() == [(1, PREPARATION_DOMAIN, PREPARATION_SCHEMA_VERSION)]):
+            connection.execute(_SELECTION_SCHEMA)
+            connection.execute("UPDATE backtest_preparation_metadata SET schema_version = 2")
+        elif tables != _TABLES or connection.execute(
+            "SELECT singleton, domain, schema_version FROM backtest_preparation_metadata"
+        ).fetchall() != [(1, PREPARATION_DOMAIN, 2)]:
+            raise ValueError("database_path is not a supported tagged preparation store")
 
     @property
     def database_path(self) -> Path:
