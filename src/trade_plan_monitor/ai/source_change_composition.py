@@ -24,6 +24,35 @@ def assess_change_current(source, output, materialized, inputs, *, context, base
         raise ValueError("current source prefix differs from the exact verified predecessor")
     assessment = assess_source_changes(source, output, materialized, inputs, context=context,
         base_review=base_review, verified_parent=verified_parent, binding=binding)
+    return compose_source_change_assurance(source, materialized.review, assessment,
+        base_review=base_review, verified_parent=verified_parent, binding=binding, prefix=prefix)
+
+
+def compose_source_change_assurance(source, reviewed, assessment, *, base_review,
+                                    verified_parent, binding, prefix):
+    """Combine freshly checked semantics and separately authenticated provenance.
+
+    This adapter never makes an assessment complete or registers a human action.
+    Its caller owns raw extraction or actual human-operation verification.
+    """
+    assessment = type(assessment).model_validate_json(assessment.model_dump_json())
+    prefix = tuple(PrefixAssuranceRef.model_validate_json(row.model_dump_json()) for row in prefix)
+    expected_prefix = (*verified_parent.prefix, PrefixAssuranceRef(
+        binding=verified_parent.binding, assurance_hash=verified_parent.evidence_hash))
+    if prefix != expected_prefix or binding.independent or (
+        binding.preparation_id != verified_parent.binding.preparation_id
+        or binding.item_index != verified_parent.binding.item_index + 1
+    ) or (assessment.binding, assessment.source_hash, assessment.source_binding_hash,
+        assessment.review_evidence_hash, assessment.content_hash, assessment.base_hash,
+        assessment.parent_assurance_hash) != (
+        binding, source.source_hash, source.binding_hash, reviewed.evidence_hash,
+        daily_draft_content_sha256(reviewed.draft), verified_parent.binding.candidate_hash,
+        verified_parent.evidence_hash,
+    ):
+        raise ValueError("source composition differs from its exact current/parent proof")
+    human_hash = getattr(assessment, "human_operation_hash", None)
+    if (assessment.origin == "HUMAN") != (human_hash is not None):
+        raise ValueError("human change composition requires its separate operation proof")
     ref = AssuranceSourceRef(source_id=source.source_id, source_hash=source.source_hash,
         source_binding_hash=source.binding_hash, proof_hash=assessment.evidence_hash,
         proof_kind="CHANGE")
@@ -34,9 +63,9 @@ def assess_change_current(source, output, materialized, inputs, *, context, base
     previous_owners = {row.path: row for row in verified_parent.owners}
     previous_values = semantic_values(base_review.draft)
     previous_bindings = {row.path: row for row in base_review.bindings}
-    values = semantic_values(materialized.review.draft)
+    values = semantic_values(reviewed.draft)
     owners, issues = [], []
-    for bound in materialized.review.bindings:
+    for bound in reviewed.bindings:
         if (bound.source_id, bound.source_hash) == (source.source_id, source.binding_hash):
             linked = tuple(row.obligation_id for row in assessment.obligations if any(
                 bound.original_path == path or bound.original_path.startswith(path + ".")
@@ -46,14 +75,17 @@ def assess_change_current(source, output, materialized, inputs, *, context, base
                     message="Complete current field ownership exceeds its evidence bound."))
                 continue
             origin = ("PRODUCT_CONTRACT" if bound.binding.origin == "PRODUCT_CONTRACT"
+                      else "HUMAN" if human_hash is not None
                       else "HUMAN" if bound.binding.origin == "HUMAN_SUPPLEMENT" else "CURRENT")
-            if not linked and origin != "PRODUCT_CONTRACT":
+            supplied = human_hash is not None and bound.binding.origin == "HUMAN_SUPPLEMENT"
+            if not linked and origin != "PRODUCT_CONTRACT" and not supplied:
                 issues.append(CoverageIssue(code="SOURCE_COVERAGE_REQUIRED", path=bound.path,
                     message="The current field has no independent complete source obligation."))
             owners.append(SourceOwner(**common, path=bound.path,
-                original_path=bound.original_path, origin=origin, obligation_ids=linked))
+                original_path=bound.original_path, origin=origin, obligation_ids=linked,
+                human_receipt_hash=human_hash if origin == "HUMAN" else None))
         else:
-            previous_path = corresponding_path(bound.path, materialized.review.draft,
+            previous_path = corresponding_path(bound.path, reviewed.draft,
                                                base_review.draft)
             owner = previous_owners.get(previous_path)
             prior = previous_bindings.get(previous_path)
@@ -76,7 +108,7 @@ def assess_change_current(source, output, materialized, inputs, *, context, base
         for row in assessment.obligations if row.scope == "UNKNOWN" or not row.paths
         and row.kind not in {"CONTEXT", "SCOPE_EXCLUSION"}))
     return SourceCandidateAssurance.build(binding=binding,
-        content_hash=daily_draft_content_sha256(materialized.review.draft),
+        content_hash=daily_draft_content_sha256(reviewed.draft),
         source_assessment=assessment, source_refs=(*verified_parent.source_refs, ref),
         owners=tuple(owners), global_obligations=globals_, prefix=prefix,
         prefix_hash=source_prefix_hash(prefix, binding), parent_hash=verified_parent.evidence_hash,
