@@ -106,7 +106,7 @@ def analyze_source_changes(
     analysis = analyze_source(output.draft, complete_mapping, source.text,
                               controls=controls)
     obligations, scope_issues = inherit_change_scopes(
-        analysis.obligations, output.draft, base_review, verified_parent)
+        analysis.obligations, output.draft, base_review, verified_parent, source=source.text)
     issues = [*analysis.issues, *scope_issues, *controls.issues]
 
     def issue(message, path="source", code="SOURCE_COVERAGE_REQUIRED"):
