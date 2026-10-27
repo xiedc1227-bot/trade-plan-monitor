@@ -120,6 +120,8 @@ class NormalizationTrace(DailyValue):
 
     @classmethod
     def build(cls, **values):
+        values["changes"] = tuple(NormalizationChange.model_validate(row)
+                                  for row in values.get("changes", ()))
         unsigned = cls.model_construct(**values, evidence_hash="")
         return cls.model_validate(unsigned.model_dump(mode="json") | {
             "evidence_hash": daily_hash(unsigned.version,

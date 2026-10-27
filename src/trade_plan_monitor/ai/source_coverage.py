@@ -50,6 +50,17 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
     groups = relation_groups(parsed, source_hash)
     proven_paths = set()
     obligations, issues = [], []
+    normalization_hash = None
+    if normalization is not None:
+        from trade_plan_monitor.ai.source_normalization import validate_policy_preservation
+
+        try:
+            validate_policy_preservation(normalization, draft, source)
+        except (ValueError, TypeError, RecursionError):
+            issues.append(CoverageIssue(code="SOURCE_NORMALIZATION_LOSS",
+                message="The original candidate or complete normalization trace is unproven."))
+        else:
+            normalization_hash = normalization.evidence_hash
     for clause in clauses:
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
@@ -110,5 +121,5 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
     return CoverageAssessment.build(source_hash=source_hash,
         content_hash=daily_draft_content_sha256(draft),
         mapping_hash=daily_hash("source-coverage-mapping-v1", mapping.model_dump(mode="json")),
-        normalization_hash=None if normalization is None else normalization.evidence_hash,
+        normalization_hash=normalization_hash,
         origin=origin, obligations=tuple(obligations), issues=tuple(issues))
