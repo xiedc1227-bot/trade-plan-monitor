@@ -7,6 +7,7 @@ from trade_plan_monitor.ai.daily_review import semantic_values
 from trade_plan_monitor.ai.source_candidate_models import CandidateBinding, SourceCandidateAssurance
 from trade_plan_monitor.ai.source_change_models import SourceChangeAssessment, SourceOperationProof
 from trade_plan_monitor.ai.source_change_scopes import inherit_change_scopes
+from trade_plan_monitor.ai.source_controls import parse_source_controls
 from trade_plan_monitor.ai.source_coverage_core import analyze_source
 from trade_plan_monitor.ai.source_coverage_models import CoverageIssue
 from trade_plan_monitor.ai.source_derivation_replay import verify_update_derivation
@@ -86,10 +87,12 @@ def assess_source_changes(source, output, materialized, inputs, *, context, base
     if materialized.review != expected.review:
         raise ValueError("current materialization differs from its exact source and predecessor")
     merged = materialize_plan_update(context.snapshot, output)
-    analysis = analyze_source(output.draft, output.review(source.text).mapping, source.text)
+    controls = parse_source_controls(source, base_review, verified_parent)
+    analysis = analyze_source(output.draft, output.review(source.text).mapping, source.text,
+                              controls=controls)
     obligations, scope_issues = inherit_change_scopes(
         analysis.obligations, output.draft, base_review, verified_parent)
-    issues = [*analysis.issues, *scope_issues]
+    issues = [*analysis.issues, *scope_issues, *controls.issues]
 
     def issue(message, path="source", code="SOURCE_COVERAGE_REQUIRED"):
         issues.append(CoverageIssue(code=code, path=path, message=message))
@@ -118,14 +121,13 @@ def assess_source_changes(source, output, materialized, inputs, *, context, base
               code="SOURCE_NORMALIZATION_LOSS")
     before, proposed, final = (semantic_values(value) for value in (
         base_review.draft, output.draft, merged.draft))
-    changed = set()
+    surviving_changed = set()
     for path, value in final.items():
         old = corresponding_path(path, merged.draft, base_review.draft)
         if old not in before or type(value) is not type(before[old]) or value != before[old]:
-            changed.add(path)
+            surviving_changed.add(path)
     removed = {path for path in before if corresponding_path(
         path, base_review.draft, merged.draft) not in final}
-    changed.update(removed)
     for path in analysis.proven_paths:
         actual = corresponding_path(path, output.draft, merged.draft)
         if (actual not in final or type(proposed[path]) is not type(final[actual])
@@ -143,19 +145,56 @@ def assess_source_changes(source, output, materialized, inputs, *, context, base
         ):
             issue("The current binding does not cite its independently proven exact declaration.",
                   bound.path, "SOURCE_RELATION_MISMATCH")
-    proofs = []
+    control_rows = {}
+    for row in obligations:
+        meaning = None if row.semantics_json is None else json.loads(row.semantics_json)
+        if isinstance(meaning, dict) and meaning.get("treatment") == "REGISTERED_SOURCE_CONTROL":
+            control_rows.setdefault(meaning["source_control"]["control_id"], []).append(row)
+    for control in controls.controls:
+        if control.target == "plan":
+            valid = (all(change.action == "RETAIN" for change in merged.changes)
+                     if control.action == "NO_NEW_INSTRUCTIONS"
+                     else output.retain_unmentioned is True)
+        else:
+            valid = any((change.target, change.rule_id, change.action,
+                         daily_hash("source-operation-value-v1", change.before)) == (
+                         control.target, control.rule_id, control.action, control.before_hash)
+                        for change in merged.changes)
+        if not valid:
+            issue("The complete source control was not applied to its exact predecessor target.",
+                  control.target, "SOURCE_RELATION_MISMATCH")
+    proofs, changed = [], set()
     for change in merged.changes:
-        # Reordered collection indices can name a removed rule and a retained
-        # sibling. Retention never consumes the removed sibling's old paths.
-        paths = (() if change.action == "RETAIN" else tuple(sorted(
-            path for path in changed if _in_target(path, change, merged.draft)
-            or _in_target(path, change, base_review.draft))))
+        # Compute each operation in its own stable-rule coordinates. Removed
+        # siblings never donate their old index to a surviving modified rule.
+        paths = set()
+        if change.action == "REVOKE":
+            paths.update(path for path in removed if _in_target(path, change, base_review.draft))
+        elif change.action != "RETAIN":
+            paths.update(path for path in surviving_changed
+                         if _in_target(path, change, merged.draft))
+            if change.action == "MODIFY":
+                paths.update(mapped for path in removed
+                    if _in_target(path, change, base_review.draft)
+                    and (mapped := corresponding_path(
+                        path, base_review.draft, merged.draft)) is not None)
+        if change.action != "RETAIN" and change.target in surviving_changed | removed:
+            paths.add(change.target)
+        paths = tuple(sorted(paths))
+        changed.update(paths)
         linked = set()
         if change.action != "RETAIN":
             if change.action == "REVOKE":
-                issue("Removing a rule requires independent whole-rule cancellation evidence.",
-                      change.target)
-            for path in paths:
+                matching = [control for control in controls.controls if (
+                    control.target, control.rule_id, control.action, control.before_hash) == (
+                    change.target, change.rule_id, "REVOKE",
+                    daily_hash("source-operation-value-v1", change.before))]
+                linked.update(row.obligation_id for control in matching
+                              for row in control_rows.get(control.control_id, ()))
+                if not linked:
+                    issue("Removing a rule requires independent whole-rule cancellation evidence.",
+                          change.target)
+            for path in (() if change.action == "REVOKE" else paths):
                 proposed_path = corresponding_path(path, merged.draft, output.draft)
                 clauses = analysis.proven_paths.get(proposed_path, frozenset())
                 if not clauses or not clauses & set(change.clause_ids):

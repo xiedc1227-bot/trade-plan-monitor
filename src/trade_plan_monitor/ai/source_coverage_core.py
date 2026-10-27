@@ -11,6 +11,7 @@ from trade_plan_monitor.ai.source_boundaries import (
     source_partitions,
 )
 from trade_plan_monitor.ai.source_context import positive_context
+from trade_plan_monitor.ai.source_control_models import SourceControlAnalysis
 from trade_plan_monitor.ai.source_coverage_models import (
     COMPLETE_STATES,
     CoverageIssue,
@@ -66,11 +67,17 @@ def _integrity(draft, mapping, clauses):
     return mapping
 
 
-def analyze_source(draft, mapping, source, *, normalization=None):
+def analyze_source(draft, mapping, source, *, normalization=None, controls=None):
     """Classify every canonical span using server grammar, not AI background labels."""
     clauses = bounded_clauses(source)
     mapping = _integrity(draft, mapping, clauses)
     source_hash = scope_hash(source)
+    if controls is not None:
+        controls = SourceControlAnalysis.model_validate_json(controls.model_dump_json())
+        if controls.source_hash != source_hash or controls.source_length != len(source) or any(
+            source[row.start:row.end] != row.excerpt for row in controls.controls
+        ):
+            raise ValueError("source controls differ from the exact original source")
     values = semantic_values(draft)
     payload = draft.executable_payload()
     metadata = draft.model_dump(mode="json")
@@ -101,6 +108,8 @@ def analyze_source(draft, mapping, source, *, normalization=None):
         else:
             normalization_hash = normalization.evidence_hash
     for clause in parts:
+        control = None if controls is None else next((row for row in controls.controls
+            if row.start <= clause.start < clause.end <= row.end), None)
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
         path, group, meaning, relations = (), None, None, ()
@@ -113,6 +122,16 @@ def analyze_source(draft, mapping, source, *, normalization=None):
                 issues.append(CoverageIssue(code="SOURCE_COVERAGE_LIMIT_EXCEEDED",
                     path="source." + clause.clause_id, start=clause.start, end=clause.end,
                     message="Complete source partition exceeds the bounded obligation contract."))
+        elif control is not None:
+            kind, scope, state = "PREDICATE", control.scope, "MAPPED"
+            group = control.control_id
+            meaning = canonical(dict(treatment="REGISTERED_SOURCE_CONTROL",
+                                     source_control=control.model_dump(mode="json")))
+            if partition_at(partitions, clause.start) == "B":
+                state = "CONFLICT"
+                issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
+                    path="source." + clause.clause_id, start=clause.start, end=clause.end,
+                    message="A new background control cannot authorize executable policy."))
         elif declaration is not None:
             actual = values.get(declaration.path, MISSING)
             if actual is MISSING:
@@ -193,7 +212,7 @@ def analyze_source(draft, mapping, source, *, normalization=None):
             excerpt=source[clause.start:clause.end], kind=kind, scope=scope, state=state,
             semantics_json=meaning, group_id=group, relation_ids=relations, paths=path))
 
-        if (declaration is not None and kind == "PREDICATE"
+        if (control is None and declaration is not None and kind == "PREDICATE"
                 and isinstance(declaration.value, (dict, list)) and declaration.value):
             try:
                 if declaration.group_id not in atom_cache:
