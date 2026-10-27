@@ -17,6 +17,8 @@ _MANUAL_REQUIREMENTS = {
 _INDEPENDENT_REQUIREMENTS = {
     "New structure linked to prior signal",
     "Human confirms a new independent technical event",
+    "Explicit reviewed independent event linked to the prior signal; "
+    "unchanged true evidence never resets it.",
 }
 _SCOPE_REQUIREMENTS = {"Synthetic reviewed holding structure invalidation"}
 _ANNOTATIONS = {
