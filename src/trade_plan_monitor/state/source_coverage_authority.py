@@ -67,14 +67,20 @@ def save_version_coverage(work, version_id, draft, mapping, source, *, extractio
             # source span; retain the old private input, without raw fidelity claims.
             origin = "HUMAN"
         elif inputs is not None and inputs.normalization is not None and before != draft:
-            preimage = validate_normalization(inputs.normalization, before, source)
-            trace = capture_normalization(preimage, draft.model_dump(mode="json"), source,
-                                          reason="SERVER_VERSION_ASSIGNMENT")
-            inputs = CoverageInputs.build(source_hash=inputs.source_hash,
-                source_binding_hash=inputs.source_binding_hash,
-                initial_coverage=inputs.initial_coverage,
-                normalization=trace, derivation=inputs.derivation,
-                derivation_issues=inputs.derivation_issues)
+            try:
+                preimage = validate_normalization(inputs.normalization, before, source)
+                trace = capture_normalization(preimage, draft.model_dump(mode="json"), source,
+                                              reason="SERVER_VERSION_ASSIGNMENT")
+            except (ValueError, TypeError, RecursionError):
+                # Preserve the unproven trace and inspectable DRAFT. The independent
+                # assessment records normalization loss; never invent its preimage.
+                pass
+            else:
+                inputs = CoverageInputs.build(source_hash=inputs.source_hash,
+                    source_binding_hash=inputs.source_binding_hash,
+                    initial_coverage=inputs.initial_coverage,
+                    normalization=trace, derivation=inputs.derivation,
+                    derivation_issues=inputs.derivation_issues)
     assessment = _assessment(draft, mapping, source, inputs=inputs, origin=origin)
     return store.append(version_id, assessment, inputs=inputs, expected_revision=0,
                         command_id="coverage-save-" + version_id, now=clock())

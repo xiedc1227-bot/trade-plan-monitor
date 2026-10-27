@@ -300,6 +300,44 @@ def test_server_assigned_version_rebuilds_full_trace_from_the_original_provider_
     _assert_draft_without_receipt(state, version_id, assigned, source, mapping)
 
 
+@pytest.mark.parametrize("version_increment", [0, 1], ids=["original_version", "assigned_version"])
+def test_valid_candidate_with_mismatched_trace_stays_inspectable_after_version_assignment(
+    state, version_increment,
+):
+    draft, source, mapping = _baseline()
+    wrong_image = draft.model_dump(mode="json")
+    wrong_image["name"] = "A different candidate after-image"
+    trace = capture_normalization(wrong_image, wrong_image, source)
+    assert type(trace).model_validate_json(trace.model_dump_json()) == trace
+    with pytest.raises(ValueError, match="after-image mismatch"):
+        validate_normalization(trace, draft, source)
+    blocked = assess_source_coverage(draft, mapping, source, normalization=trace, origin="AI_NEW")
+    assert blocked.status == "BLOCKED"
+    assert any(issue.code == "SOURCE_NORMALIZATION_LOSS" for issue in blocked.issues)
+    extraction = _ai_result(draft, source, mapping).model_copy(update={
+        "normalization_trace": trace, "coverage": blocked,
+        "validation_issues": tuple(_blocking_warning(issue.code, issue.path, issue.message)
+                                   for issue in blocked.issues),
+    })
+    assigned = draft.model_copy(update={"version": draft.version + version_increment})
+    assert draft.to_executable() is not None
+    assert build_daily_review(assigned, mapping, source).issues == ()
+
+    version_id = _save(state, assigned, source, mapping, extraction=extraction)
+
+    stored = _stored(state, version_id)
+    assert stored.assessment.origin == "AI_NEW" and stored.assessment.status == "BLOCKED"
+    assert stored.assessment.automatic_fidelity_verified is False
+    assert stored.assessment.normalization_hash is None
+    assert any(issue.code == "SOURCE_NORMALIZATION_LOSS" for issue in stored.assessment.issues)
+    assert stored.inputs.normalization == trace  # Retain the unproven original, without repair.
+    with state.sessions() as session:
+        original = SourceCoverageStore(session).input(str(extraction.request_id))
+        assert original.normalization == trace
+        assert original.initial_coverage == blocked
+    _assert_draft_without_receipt(state, version_id, assigned, source, mapping)
+
+
 def test_read_version_coverage_rederives_exact_proof_without_business_writes(state):
     from trade_plan_monitor.state.source_coverage_authority import read_version_coverage
 
