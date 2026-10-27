@@ -178,6 +178,17 @@ def _derive(source, base, parent, parsed, start, end):
             {key: value for key, value in previous.items() if key != "holding_scope"}))
 
 
+def derive_source_risk_control(source, base_review, verified_parent, *, grammar_id,
+                               rule_id, action, scope_change, start, end):
+    """Build value evidence after a caller independently recognizes a complete form.
+
+    This is not a recognizer or an authority boundary. Callers must validate the
+    exact source/parent and retain all other source meanings independently.
+    """
+    return _derive(source, base_review, verified_parent,
+                   (grammar_id, rule_id, action, scope_change, None), start, end)
+
+
 def parse_source_risk_controls(source, base_review, verified_parent):
     """Parse evidence only; upstream owns parent authentication and final authority.
 
