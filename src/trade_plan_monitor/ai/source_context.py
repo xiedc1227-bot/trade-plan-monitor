@@ -19,6 +19,10 @@ _METADATA_LINE = re.compile(
     r"(?P<path>plan_id|version|name|metadata\.[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)"
     r"[ \t]*=[ \t]*(?P<value>.+)"
 )
+_TITLE_VALUE = re.compile(
+    r"(?:Synthetic )?(?:Reviewed|Trade|Trading|Observation|Monitor|Monitoring) plan"
+    r"|交易计划|观察计划|监控计划", re.I,
+)
 _EXACT_CONTEXT = {
     "# Trade plan": "TITLE_EN",
     "# 交易计划": "TITLE_ZH",
@@ -60,6 +64,10 @@ def _matching_metadata(text: str, metadata: Mapping[str, object] | None) -> bool
         if not isinstance(value, Mapping) or part not in value:
             return False
         value = value[part]
+    if match["path"] == "name" and (
+        not isinstance(value, str) or _TITLE_VALUE.fullmatch(value) is None
+    ):
+        return False
     try:
         return match["value"] == canonical(value)
     except (TypeError, ValueError, RecursionError):

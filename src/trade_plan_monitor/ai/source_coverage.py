@@ -48,7 +48,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
     metadata = draft.model_dump(mode="json")
     parsed = declarations(source)
     groups = relation_groups(parsed, source_hash)
-    proven_paths = set()
+    proven_paths = {}
     obligations, issues = [], []
     normalization_hash = None
     if normalization is not None:
@@ -74,8 +74,11 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
             )
             if identity:
                 actual = value_at(metadata, declaration.path)
-            matched = (actual is not MISSING and canonical(actual) == canonical(declaration.value)
-                       if identity else equal_declaration(declaration, values, payload))
+            if identity:
+                literal = declaration.path + " = " + canonical(declaration.value)
+                matched = bool(positive_context(literal, metadata=metadata))
+            else:
+                matched = equal_declaration(declaration, values, payload)
             own, relations = declaration_relations(declaration, groups)
             kind = "CONTEXT" if identity else "RELATION" if own else "PREDICATE"
             scope = source_scope(declaration.path, payload)
@@ -83,7 +86,8 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
             path, group = (declaration.path,), own or declaration.group_id
             meaning = canonical(dict(path=declaration.path, value=declaration.value))
             if matched and not identity:
-                proven_paths.update(declared_paths(declaration, values))
+                for proven in declared_paths(declaration, values):
+                    proven_paths.setdefault(proven, set()).add(clause.clause_id)
             if not matched:
                 issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
                     path=declaration.path, start=clause.start, end=clause.end,
@@ -99,12 +103,13 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                     message="This source span has no proven complete policy or context treatment."))
         obligations.append(SourceObligation.build(source_hash=source_hash,
             clause_id=clause.clause_id, start=clause.start, end=clause.end,
-            excerpt=clause.excerpt, kind=kind, scope=scope, state=state,
+            excerpt=source[clause.start:clause.end], kind=kind, scope=scope, state=state,
             semantics_json=meaning, group_id=group, relation_ids=relations, paths=path))
 
     for binding in mapping.bindings:
         if (binding.origin in {"SOURCE", "SOURCE_INTERPRETATION", "SOURCE_SEMANTIC"}
-                and binding.path not in proven_paths):
+                and (binding.path not in proven_paths or not set(binding.clause_ids)
+                     <= proven_paths[binding.path])):
             issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH", path=binding.path,
                 message="Candidate policy lacks an independent complete source derivation."))
 
@@ -116,7 +121,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
         issues.append(CoverageIssue(code="SOURCE_COVERAGE_REQUIRED",
             message=str(error)[:512] or "Existing source evidence is invalid."))
     else:
-        issues.extend(CoverageIssue(code=i.code, path=i.path[:512],
+        issues.extend(CoverageIssue(code=i.code, path=i.path[:512] or "draft",
             message=i.reason[:512]) for i in old.issues)
     return CoverageAssessment.build(source_hash=source_hash,
         content_hash=daily_draft_content_sha256(draft),

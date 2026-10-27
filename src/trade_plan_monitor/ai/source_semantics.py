@@ -14,8 +14,9 @@ def equal_declaration(declaration, values, payload):
 def declared_paths(declaration, values):
     """Only an exact complete container may prove its existing descendant leaves."""
     root = declaration.path
-    return tuple(path for path in values if path == root or path.startswith(root + ".")
-                 or path.startswith(root + "["))
+    container = isinstance(declaration.value, (dict, list))
+    return tuple(path for path in values if path == root or container and (
+        path.startswith(root + ".") or path.startswith(root + "[")))
 
 
 def relation_groups(declarations, source_hash):
