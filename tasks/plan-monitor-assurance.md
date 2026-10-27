@@ -92,7 +92,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 - [ ] Deliver and verify.
 - Depends on: T07.
-- Files/scope: sequential T08a save/reload and history dispatch; T08b confirm/activation/reuse with exact proof and authoritative transaction; each3–5 files including `test_source_coverage_authority.py`.
+- Files/scope: sequential T08a save/reload/first confirmation/repository guards and independent tests (5 files); T08b unproven version-trace retention (2); T08c HTTP bindings/projection/current workbench reader (5); T08d fresh workbench-run guard (2); T08e worker private carriage (3); T08f tagged preparation auxiliary storage (4); then T08g atomic finish integration, T08h per-source initial/change/inheritance assessment, and T08i current preparation review/freeze/reuse, each at most5 files and independently tested. Original historical codecs and frozen inputs remain unchanged.
 - Acceptance: A05,A06; Verify: focused V03 and existing current-plan API tests. Incomplete DRAFT stays savable; old hashes stay valid; missing/stale/blocked new proof cannot confirm/activate or use a client-selected legacy mode.
 
 ### PMA-T09 — Carry coverage through current actions and delivery
