@@ -14,6 +14,12 @@ from trade_plan_monitor.ai.source_obligations import (
     source_scope,
     value_at,
 )
+from trade_plan_monitor.ai.source_semantics import (
+    declaration_relations,
+    declared_paths,
+    equal_declaration,
+    relation_groups,
+)
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.daily_scope import scope_hash
@@ -41,11 +47,13 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
     payload = draft.executable_payload()
     metadata = draft.model_dump(mode="json")
     parsed = declarations(source)
+    groups = relation_groups(parsed, source_hash)
+    proven_paths = set()
     obligations, issues = [], []
     for clause in clauses:
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
-        path, group, meaning = (), None, None
+        path, group, meaning, relations = (), None, None, ()
         if declaration is not None:
             actual = values.get(declaration.path, MISSING)
             if actual is MISSING:
@@ -55,11 +63,16 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
             )
             if identity:
                 actual = value_at(metadata, declaration.path)
-            matched = actual is not MISSING and canonical(actual) == canonical(declaration.value)
-            kind, scope = "DECLARATION", source_scope(declaration.path, payload)
+            matched = (actual is not MISSING and canonical(actual) == canonical(declaration.value)
+                       if identity else equal_declaration(declaration, values, payload))
+            own, relations = declaration_relations(declaration, groups)
+            kind = "CONTEXT" if identity else "RELATION" if own else "PREDICATE"
+            scope = source_scope(declaration.path, payload)
             state = ("CONTEXT_VERIFIED" if identity else "MAPPED") if matched else "CONFLICT"
-            path, group = (declaration.path,), declaration.group_id
+            path, group = (declaration.path,), own or declaration.group_id
             meaning = canonical(dict(path=declaration.path, value=declaration.value))
+            if matched and not identity:
+                proven_paths.update(declared_paths(declaration, values))
             if not matched:
                 issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
                     path=declaration.path, start=clause.start, end=clause.end,
@@ -76,7 +89,13 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
         obligations.append(SourceObligation.build(source_hash=source_hash,
             clause_id=clause.clause_id, start=clause.start, end=clause.end,
             excerpt=clause.excerpt, kind=kind, scope=scope, state=state,
-            semantics_json=meaning, group_id=group, paths=path))
+            semantics_json=meaning, group_id=group, relation_ids=relations, paths=path))
+
+    for binding in mapping.bindings:
+        if (binding.origin in {"SOURCE", "SOURCE_INTERPRETATION", "SOURCE_SEMANTIC"}
+                and binding.path not in proven_paths):
+            issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH", path=binding.path,
+                message="Candidate policy lacks an independent complete source derivation."))
 
     # The old verifier still owns its field/provenance constraints. Its success
     # cannot waive the independent source obligations above.
