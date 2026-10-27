@@ -85,6 +85,12 @@ class PreparationHumanOperation(DailyValue):
     independent: bool = Field(strict=True)
     final_frozen_hash: Hash | None = None
     previous_human_ref: Hash | None = None
+    command_id: Identifier | None = Field(default=None, strict=True,
+        exclude_if=lambda value: value is None)
+    command_request_hash: Hash | None = Field(default=None, strict=True,
+        exclude_if=lambda value: value is None)
+    after_record_hash: Hash | None = Field(default=None, strict=True,
+        exclude_if=lambda value: value is None)
     created_at: ShanghaiDatetime
     authority_granted: Literal[False] = False
     evidence_key: Hash
@@ -114,6 +120,11 @@ class PreparationHumanOperation(DailyValue):
 
     @model_validator(mode="after")
     def verify(self):
+        registration = (self.command_id, self.command_request_hash, self.after_record_hash)
+        if any(value is not None for value in registration) and any(
+            value is None for value in registration
+        ):
+            raise ValueError("human operation registration binding is incomplete")
         if (self.after_revision != self.before_revision + 1
                 or self.after_candidate_revision != self.before_candidate_revision + 1):
             raise ValueError("human operation revision transition differs")
@@ -167,6 +178,9 @@ class PreparationHumanOperation(DailyValue):
 
     @classmethod
     def build(cls, **values):
+        for name in ("command_id", "command_request_hash", "after_record_hash"):
+            if values.get(name) is not None and type(values[name]) is not str:
+                raise ValueError("human operation registration fields require strict strings")
         key = human_operation_key(values["preparation_id"], values["item_index"],
                                   values["after_candidate_revision"])
         unsigned = cls.model_construct(**values, evidence_key=key, evidence_hash="")

@@ -91,3 +91,5 @@
 稳定证明主键哈希preparation_id/item_index/after_candidate_revision。既有通用SQL表使用HUMAN_OPERATION内部的 `attempt_id` 槽位 `human-<item_index>-<after_candidate_revision>`，该槽位绝非供应商尝试。来源／候选投影保留真实来源绑定与后候选哈希。读取最多两次索引点查，验证五项既有保护及准确规范／哈希／投影对应，不写入。同意图重试保留原时间，意图改变报冲突。这些模型／存储检查仅证明完整性，不证明真实人工授权或语义完备。
 
 只有既有授权事务在匹配实际前后状态、明确类型化命令、原检查点／输入、当前来源及前缀后，才能登记该操作。人工来源重评仍须消费每个原始跨度并证明全部受支持政策及关系语义。注册缺参／期限／基本面处理保持有限；未知技术要求不可豁免。Human评估不伪造规范化轨迹，不声称raw-delta、供应商完整草稿或自动忠实度。独立当前REVIEW回执绑定最终完整证明后，才可复用／运行授权。纯人工评估及事务接入在存储切片后仍待完成。
+
+增量字段 `command_id`、`command_request_hash`、`after_record_hash` 为严格字符串／哈希，须全部缺省或全部存在。缺省时不进入序列化，保留既有未登记artifact字节／哈希。当前登记要求三者齐全，并独立核对真实原幂等命令及变更响应；响应哈希使用 `preparation-human-after-record-v1`。字段存在本身绝非登记／状态／授权标志；事务owner核对准确来源／候选变更、前缀及捕获时间后，后续当前审核才能使用。初始Human证明及独立 `source-human-change-coverage-v1` 类型仍保持raw／full／fidelity声明false；缺INPUT不变为虚构供应商记录。
