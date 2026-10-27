@@ -5,11 +5,12 @@ import json
 from datetime import date, datetime, timedelta
 from hashlib import sha256
 from threading import Event, get_ident
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
+from tests.integration.preparation_worker_current_fixtures import recorded_worker_update_result
 from tests.integration.test_backtest_jobs import _SHANGHAI, _Clock
 from tests.integration.test_backtest_single_task import request
 from tests.integration.test_plan_preparation_store import candidate
@@ -525,18 +526,18 @@ def test_collection_store_advances_serially_and_fences_wrong_base_or_old_generat
 
 
 def collection_worker_setup(tmp_path, *, future_source=None, start_successor=True):
+    from tests.integration.preparation_review_current_fixtures import loop_candidate
+    from tests.integration.preparation_worker_current_fixtures import worker_initial_source
     from tests.integration.test_plan_preparation_store import NOW
     from tests.unit.test_monitor_loop_schedule import at
-    from tests.unit.test_plan_update_bindings import current_update, prior_review
+    from tests.unit.test_plan_update_bindings import current_update
 
+    from trade_plan_monitor.ai.update_review import build_initial_review
     from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
 
-    base = prior_review()
-    current, output = current_update()
-    first = PreparationSource(
-        source_id="first", text="Synthetic human-reviewed supplements for this fixture.",
-        authored_at=at(19), available_at=at(19), effective_trade_date=at(19).date(),
-    )
+    first, initial = worker_initial_source()
+    base = build_initial_review(initial.draft, initial.review(first.text).mapping, first)
+    current, output = current_update("position.max_qty = 300\n其余规则保留。")
     future = future_source or PreparationSource(
         source_id="future", text="FUTURE_CONTENT_MUST_NOT_REACH_CURRENT_PROVIDER",
         authored_at=at(21), available_at=at(21), effective_trade_date=at(21).date(),
@@ -563,9 +564,10 @@ def collection_worker_setup(tmp_path, *, future_source=None, start_successor=Tru
         record.preparation_id, generation=claim.generation, owner_id=claim.owner_id,
         expected_revision=running.revision,
     )
+    result, inputs = loop_candidate(first, initial, UUID(claim.generation))
     seeded = store.finish_attempt(
         record.preparation_id, attempt_id=claim.generation, expected_revision=calling.revision,
-        idempotency_key="seed-finish", candidate=base.to_preparation_candidate(),
+        idempotency_key="seed-finish", candidate=result.to_preparation_candidate(), inputs=inputs,
         worker_owner_id=claim.owner_id,
     )
     if not start_successor:
@@ -598,13 +600,75 @@ def collection_update_result(base, source, output, identity, context):
     })
 
 
+def test_worker_fixture_keeps_strong_policy_and_registers_actual_full_raw_input(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    from tests.unit.test_unified_replay_input import research_plan
+
+    from trade_plan_monitor.ai.loop_plan_extraction import LoopPlanExtractionOutput
+    from trade_plan_monitor.backtest.preparation_current_assurance import (
+        read_current_assurance_prefix,
+    )
+
+    store, _, ready, base, _ = collection_worker_setup(tmp_path, start_successor=False)
+    first = ready.items[0]
+    observed = store.input_evidence(ready.preparation_id, first.attempts[-1].attempt_id)
+    assert observed is not None and observed.candidate_json == first.candidate.payload_json
+    assert base.draft.to_executable() == research_plan()
+    assert f"position.max_qty = {research_plan().position.max_qty}" in first.source.text
+    raw = LoopPlanExtractionOutput.model_validate_json(observed.inputs.derivation.raw_json)
+    assert raw.draft == base.draft and observed.inputs.normalization is not None
+    with closing(sqlite3.connect(store.database_path)) as connection:
+        proof, = read_current_assurance_prefix(connection, ready, 1)
+    assert proof.coverage_complete and proof.current_automatic_fidelity_verified
+    assert all(owner.origin != "HUMAN" for owner in proof.owners)
+
+
+def test_generic_unregistered_human_seed_cannot_authorize_a_dependent_current_call(tmp_path):
+    from tests.integration.test_plan_preparation_store import NOW
+    from tests.unit.test_monitor_loop_schedule import at
+    from tests.unit.test_plan_update_bindings import current_update, prior_review
+
+    from trade_plan_monitor.backtest.preparation_models import PlanCollectionPreparationInput
+
+    base = prior_review()
+    first = PreparationSource(source_id="first",
+        text="Synthetic human-reviewed supplements for this fixture.",
+        authored_at=at(19), available_at=at(19), effective_trade_date=at(19).date())
+    current, _ = current_update()
+    store = PreparationStore(tmp_path / "old-generic-parent.sqlite3", clock=lambda: NOW)
+    record = store.create(PlanCollectionPreparationInput(preparation_id="old-generic-parent",
+        sources=(first, current)), idempotency_key="create-generic")
+    claim = collection_claim(record, 0, generation=str(uuid4()))
+    record = store.start_attempt(record.preparation_id, expected_revision=record.revision,
+        idempotency_key="generic-start", work_claim=claim)
+    record = store.begin_call(record.preparation_id, generation=claim.generation,
+        owner_id=claim.owner_id, expected_revision=record.revision)
+    # This is a historically inspectable candidate, deliberately without INPUT
+    # or a real human operation. Its old VALID flag cannot grant current reuse.
+    ready = store.finish_attempt(record.preparation_id, attempt_id=claim.generation,
+        expected_revision=record.revision, idempotency_key="generic-finish",
+        candidate=base.to_preparation_candidate(), worker_owner_id=claim.owner_id)
+    assert ready.items[0].candidate.validation == "VALID"
+    assert store.input_evidence(ready.preparation_id, claim.generation) is None
+    next_claim = collection_claim(ready, 1, generation=str(uuid4()))
+    running = store.start_attempt(ready.preparation_id, expected_revision=ready.revision,
+        idempotency_key="generic-successor", work_claim=next_claim)
+    with pytest.raises(PreparationConflictError, match="SOURCE_COVERAGE_REQUIRED"):
+        store.begin_call(running.preparation_id, generation=next_claim.generation,
+            owner_id=next_claim.owner_id, expected_revision=running.revision)
+    assert store.get(running.preparation_id) == running
+    assert running.work_claim.phase == "READY" and running.items[1].candidate is None
+
+
 def test_collection_worker_only_sends_current_source_and_bound_predecessor(tmp_path):
     store, jobs, running, base, output = collection_worker_setup(tmp_path)
     calls = []
 
     def extract(identity, source, token, *, context):
         calls.append((identity, source, context))
-        return collection_update_result(base, source, output, identity, context)
+        return recorded_worker_update_result(base, source, output, identity, context)
 
     outcome = run_attempt(store, jobs, running, PreparationExtractor(extract), CancellationToken())
     assert len(calls) == 1
@@ -633,7 +697,7 @@ def test_collection_worker_rejects_unbound_provider_result_without_candidate(tmp
         calls.append(identity)
         if tamper == "review-type":
             return base  # A provider cannot return trusted server-reviewed evidence.
-        result = collection_update_result(base, source, output, identity, context)
+        result = recorded_worker_update_result(base, source, output, identity, context)
         changes = {
             "generation": {"request_id": uuid4()},
             "base": {"base_hash": "f" * 64},
@@ -735,11 +799,20 @@ def test_collection_unknown_recovery_retains_prefix_and_bounds_owned_retries(tmp
 
 
 def test_collection_explicitly_corrected_successor_can_seed_next_context(tmp_path):
-    from trade_plan_monitor.ai.update_review import build_update_review, context_from_review
+    from trade_plan_monitor.ai.update_review import (
+        build_update_review,
+        context_from_review,
+        materialize_extraction,
+    )
     from trade_plan_monitor.backtest.preparation_models import CollectionPreparationRecord
+    from trade_plan_monitor.backtest.preparation_review import (
+        CollectionItemCorrectionCommand,
+        collection_item_binding,
+    )
     from trade_plan_monitor.backtest.preparation_worker import preparation_candidate_review
+    from trade_plan_monitor.state.source_coverage_authority import extraction_inputs
 
-    store, _, running, base, output = collection_worker_setup(tmp_path)
+    store, jobs, running, base, output = collection_worker_setup(tmp_path)
     source = running.items[1].source
     # This is trusted server review evidence persisted by an explicit correction,
     # distinct from the provider's allowed extraction result type.
@@ -749,11 +822,33 @@ def test_collection_explicitly_corrected_successor_can_seed_next_context(tmp_pat
         running.preparation_id, generation=claim.generation,
         owner_id=claim.owner_id, expected_revision=running.revision,
     )
+    context = context_from_review(base, running.items[0].candidate.candidate_hash)
+    result = recorded_worker_update_result(base, source, output, UUID(claim.generation), context)
+    materialized = materialize_extraction(base, context.base_hash, source, result)
     ready = store.finish_attempt(
         running.preparation_id, attempt_id=claim.generation,
         expected_revision=calling.revision, idempotency_key="explicit-successor-review",
-        candidate=corrected.to_preparation_candidate(), worker_owner_id=claim.owner_id,
+        candidate=materialized.to_preparation_candidate(),
+        inputs=extraction_inputs(materialized.extraction), worker_owner_id=claim.owner_id,
     )
+    reservation = jobs.get_run_submission_reservation(claim.intent_json, claim.admission_key)
+    jobs.release_run_submission(reservation)
+    ready = store.clear_work_claim(ready.preparation_id, generation=claim.generation,
+                                   expected_revision=ready.revision)
+    ready = store.correct_collection_item(ready.preparation_id,
+        command=CollectionItemCorrectionCommand(expected_revision=ready.revision,
+            binding=collection_item_binding(ready.items[1]), confirmed=True, update=output,
+            mapping=output.review(source.text).mapping,
+            evidence="Explicit source-bound reassessment of this observed successor."),
+        idempotency_key="registered-successor-review")
+    from trade_plan_monitor.backtest.preparation_current_assurance import (
+        read_current_assurance_prefix,
+    )
+
+    with store._connect() as connection:
+        current_proofs = read_current_assurance_prefix(connection, ready, 2)
+    assert all(proof.coverage_complete for proof in current_proofs)
+    assert current_proofs[-1].source_assessment.origin == "HUMAN"
     predecessor = preparation_candidate_review(ready, 1)
     assert predecessor == corrected
     context = context_from_review(predecessor, ready.items[1].candidate.candidate_hash)
@@ -1448,7 +1543,7 @@ def test_collection_successor_cancel_waits_for_physical_call_and_preserves_prefi
         calls.append(source.source_id)
         entered.set()
         assert release.wait(10), "synthetic provider was not drained"
-        return collection_update_result(base, source, output, identity, context)
+        return recorded_worker_update_result(base, source, output, identity, context)
 
     async def scenario():
         service = PreparationService(store, jobs, PreparationExtractor(extract))
