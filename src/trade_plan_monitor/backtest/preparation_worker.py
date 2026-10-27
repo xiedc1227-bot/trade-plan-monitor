@@ -25,7 +25,11 @@ from trade_plan_monitor.backtest.preparation_models import (
     PreparationRecord,
 )
 from trade_plan_monitor.backtest.preparation_review import _original_extraction
-from trade_plan_monitor.backtest.preparation_store import PreparationConflictError, PreparationStore
+from trade_plan_monitor.backtest.preparation_store import (
+    SOURCE_COVERAGE_CALL_BLOCKERS,
+    PreparationConflictError,
+    PreparationStore,
+)
 from trade_plan_monitor.state.source_coverage_authority import extraction_inputs
 from trade_plan_monitor.state.source_coverage_values import CoverageInputs
 
@@ -129,12 +133,19 @@ def run_attempt(
         raise PreparationConflictError("STALE_WORKER")
     if token.cancelled:
         return PreparationCallOutcome()
-    store.begin_call(
-        record.preparation_id,
-        generation=claim.generation,
-        owner_id=claim.owner_id,
-        expected_revision=record.revision,
-    )
+    try:
+        store.begin_call(
+            record.preparation_id,
+            generation=claim.generation,
+            owner_id=claim.owner_id,
+            expected_revision=record.revision,
+        )
+    except PreparationConflictError as error:
+        if error.code in SOURCE_COVERAGE_CALL_BLOCKERS:
+            # The writer rejected CALLING before it was saved. READY proves that
+            # no provider call was authorized; this is a terminal preflight result.
+            return PreparationCallOutcome(error_code=error.code)
+        raise
     if token.cancelled:
         return PreparationCallOutcome()
     try:

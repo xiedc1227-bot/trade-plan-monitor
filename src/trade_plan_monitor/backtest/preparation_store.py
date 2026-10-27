@@ -55,6 +55,10 @@ from trade_plan_monitor.backtest.time import SHANGHAI
 from trade_plan_monitor.state.source_coverage_values import CoverageInputs
 
 _IDENTIFIER = TypeAdapter(StableIdentifier)
+SOURCE_COVERAGE_CALL_BLOCKERS = frozenset({
+    "SOURCE_COVERAGE_REQUIRED", "SOURCE_COVERAGE_STALE", "SOURCE_COVERAGE_INTEGRITY",
+    "SOURCE_COVERAGE_UPGRADE_REQUIRED", "SOURCE_COVERAGE_LIMIT_EXCEEDED",
+})
 _TABLES = {
     "backtest_preparation_metadata",
     "backtest_preparation",
@@ -615,10 +619,26 @@ class PreparationStore:
                 raise PreparationConflictError("STALE_WORKER")
             return self._updated(record, now, work_claim=claim.model_copy(update={"phase": phase}))
 
+        def assure(connection, previous, proposed, now):
+            if phase != "CALLING" or not isinstance(previous, CollectionPreparationRecord):
+                return
+            index, item = self._collection_active_item(previous, generation)
+            if not index or item.independent:
+                return
+            from trade_plan_monitor.backtest.preparation_current_assurance import (
+                read_current_assurance_prefix,
+            )
+
+            proofs = read_current_assurance_prefix(connection, previous, index)
+            if not proofs or not proofs[-1].coverage_complete:
+                raise PreparationConflictError("SOURCE_COVERAGE_REQUIRED")
+            if proofs[-1].binding.candidate_hash != previous.work_claim.base_hash:
+                raise PreparationConflictError("SOURCE_COVERAGE_STALE")
+
         return self._operation("WORK_PHASE", preparation_id, {
             "generation": generation, "owner_id": owner_id,
             "expected_revision": expected_revision, "phase": phase,
-        }, str(uuid4()), change)  # A progress transition must never replay old call authority.
+        }, str(uuid4()), change, assurance=assure)  # Progress never replays old call authority.
 
     def begin_call(self, preparation_id, *, generation, owner_id, expected_revision):
         return self._work_phase(preparation_id, generation, owner_id, expected_revision, "CALLING")
@@ -696,7 +716,10 @@ class PreparationStore:
             record = self._require_revision(previous, expected_revision)
             if record.work_claim is not None:
                 claim = self._owned_claim(record, attempt_id, worker_owner_id)
-                if claim.phase != "CALLING":
+                unstarted_block = (claim.phase == "READY" and candidate is None
+                                   and error_code in SOURCE_COVERAGE_CALL_BLOCKERS
+                                   and not retryable)
+                if claim.phase != "CALLING" and not unstarted_block:
                     raise PreparationConflictError("STALE_WORKER")
             if isinstance(record, CollectionPreparationRecord):
                 return self._finish_collection_attempt(
