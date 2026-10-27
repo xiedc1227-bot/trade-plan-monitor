@@ -62,6 +62,12 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
     payload = draft.executable_payload()
     metadata = draft.model_dump(mode="json")
     parsed = declarations(source)
+    human_sides = {}
+    for declaration in parsed:
+        if declaration.path.endswith(".side"):
+            supplement = missing_value_supplement(declaration, draft, mapping)
+            if supplement is not None:
+                human_sides[declaration.path] = supplement.value
     partitions = source_partitions(source)
     groups = relation_groups(parsed, source_hash)
     proven_paths = {}
@@ -115,7 +121,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
             text_supported = identity or declaration_text_supported(treatment_declaration, values)
             own, relations = declaration_relations(declaration, groups)
             kind = "CONTEXT" if identity else "RELATION" if own else "PREDICATE"
-            scope = source_scope(declaration.path, payload)
+            scope = source_scope(declaration.path, payload, parsed, human_sides)
             state = ("CONTEXT_VERIFIED" if identity else "MAPPED") if matched else "CONFLICT"
             if supplement is not None:
                 state = "MAPPED_WITH_REGISTERED_SUPPLEMENT"
@@ -149,8 +155,8 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                     path=declaration.path, start=clause.start, end=clause.end,
                     message="The complete source declaration differs from the candidate."))
         elif deadline is not None and partition_at(partitions, clause.start) == "A":
-            kind, scope, state = ("PREDICATE", source_scope(deadline.path, payload),
-                                  "MAPPED_WITH_REGISTERED_SUPPLEMENT")
+            kind, state = "PREDICATE", "MAPPED_WITH_REGISTERED_SUPPLEMENT"
+            scope = source_scope(deadline.path, payload, parsed, human_sides)
             path = (deadline.path,)
             meaning = canonical(dict(treatment="REGISTERED_DEADLINE_CONVERSION",
                 supplement=deadline.model_dump(mode="json")))
@@ -192,7 +198,8 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                     begin, end = max(atom.start, clause.start), min(atom.end, clause.end)
                     expanded.append(SourceObligation.build(source_hash=source_hash,
                         clause_id=clause.clause_id, start=begin, end=end,
-                        excerpt=source[begin:end], kind=atom.kind, scope=scope, state=state,
+                        excerpt=source[begin:end], kind=atom.kind,
+                        scope=source_scope(atom.path, payload, parsed, human_sides), state=state,
                         semantics_json=canonical(dict(path=atom.path, value=atom.value)),
                         group_id=atom.group_id, relation_ids=atom.relation_ids,
                         paths=(atom.path,)))

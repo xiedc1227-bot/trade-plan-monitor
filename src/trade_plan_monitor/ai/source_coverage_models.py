@@ -163,7 +163,7 @@ class CoverageAssessment(DailyValue):
         if any(o.source_hash != self.source_hash for o in self.obligations):
             raise ValueError("obligation belongs to another source")
         complete = bool(self.obligations) and not self.issues and all(
-            o.state in COMPLETE_STATES for o in self.obligations
+            o.state in COMPLETE_STATES and o.scope != "UNKNOWN" for o in self.obligations
         ) and (self.origin != "AI_NEW" or self.normalization_hash is not None)
         if self.coverage_complete != complete:
             raise ValueError("source coverage status mismatch")
@@ -181,8 +181,11 @@ class CoverageAssessment(DailyValue):
         if values.get("origin") == "AI_NEW" and values.get("normalization_hash") is None:
             issues += (CoverageIssue(code="SOURCE_NORMALIZATION_LOSS",
                 message="New extraction requires its original normalization preimage."),)
+        if any(row.scope == "UNKNOWN" and row.state in COMPLETE_STATES for row in obligations):
+            issues += (CoverageIssue(code="SOURCE_COVERAGE_REQUIRED",
+                message="The source does not prove the scope of a mapped trading obligation."),)
         complete = bool(obligations) and not issues and all(
-            o.state in COMPLETE_STATES for o in obligations
+            o.state in COMPLETE_STATES and o.scope != "UNKNOWN" for o in obligations
         )
         unsigned = cls.model_construct(**(values | dict(obligations=obligations, issues=issues)),
             status="COMPLETE" if complete else "BLOCKED", evidence_hash="")

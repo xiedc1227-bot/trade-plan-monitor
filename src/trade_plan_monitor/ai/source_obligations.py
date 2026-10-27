@@ -7,7 +7,7 @@ from decimal import Decimal
 from math import isfinite
 
 from trade_plan_monitor.ai.review import server_source_clauses
-from trade_plan_monitor.domain.daily_hash import daily_hash
+from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_scope import scope_hash
 
 _PATH = re.compile(r"[A-Za-z_]\w*(?:(?:\.[A-Za-z_]\w*)|(?:\[\d+\]))*")
@@ -84,11 +84,32 @@ def value_at(payload, path):
     return value
 
 
-def source_scope(path, payload):
+def declared_value_at(source_declarations, path):
+    values = []
+    for declaration in source_declarations:
+        if declaration.path == path:
+            value = declaration.value
+        elif path.startswith(declaration.path + ".") or path.startswith(declaration.path + "["):
+            value = value_at({"root": declaration.value}, "root" + path[len(declaration.path):])
+        else:
+            continue
+        if value is not MISSING:
+            values.append(value)
+    if not values or any(canonical(value) != canonical(values[0]) for value in values):
+        return MISSING
+    return values[0]
+
+
+def source_scope(path, payload, source_declarations=(), human_sides=None):
     match = re.match(r"ordinary_rules\[(\d+)\]", path)
     if match:
-        side = value_at(payload, f"ordinary_rules[{match[1]}].side")
-        return side if side in {"BUY", "SELL"} else "UNKNOWN"
+        side_path = f"ordinary_rules[{match[1]}].side"
+        actual = value_at(payload, side_path)
+        side = declared_value_at(source_declarations, side_path)
+        if side is None and human_sides:
+            side = human_sides.get(side_path, MISSING)
+        return side if isinstance(side, str) and side in {"BUY", "SELL"} and side == actual else (
+            "UNKNOWN")
     if path.startswith("risk_branches"):
         return "RISK"
     if path.startswith("alert_rules"):

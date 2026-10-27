@@ -58,7 +58,7 @@ def declaration_text_supported(declaration, values):
 
     for path in declared_paths(declaration, values):
         value = (declaration.value if path == declaration.path else value_at(
-            declaration.value, path[len(declaration.path):].lstrip(".")))
+            {"root": declaration.value}, "root" + path[len(declaration.path):]))
         if value is MISSING or not supported_policy_text(path, value, values):
             return False
     return supported_policy_text(declaration.path, declaration.value, values)
