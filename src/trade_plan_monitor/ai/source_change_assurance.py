@@ -6,6 +6,7 @@ import re
 from trade_plan_monitor.ai.daily_review import semantic_values
 from trade_plan_monitor.ai.source_candidate_models import CandidateBinding, SourceCandidateAssurance
 from trade_plan_monitor.ai.source_change_models import SourceChangeAssessment, SourceOperationProof
+from trade_plan_monitor.ai.source_change_scopes import inherit_change_scopes
 from trade_plan_monitor.ai.source_coverage_core import analyze_source
 from trade_plan_monitor.ai.source_coverage_models import CoverageIssue
 from trade_plan_monitor.ai.source_derivation_replay import verify_update_derivation
@@ -71,10 +72,10 @@ def assess_source_changes(source, output, materialized, inputs, *, context, base
         raise ValueError("current update belongs to another preparation/candidate/attempt")
     if (binding.source_id, binding.source_binding_hash, binding.review_evidence_hash,
         binding.inputs_hash, materialized.review.source_id, materialized.review.source_hash,
-        materialized.extraction.base_hash, materialized.extraction.output) != (
+        materialized.extraction.base_hash, materialized.extraction.output.model_dump_json()) != (
         source.source_id, source.binding_hash, materialized.review.evidence_hash,
         None if inputs is None else inputs.evidence_hash, source.source_id, source.binding_hash,
-        context.base_hash, output,
+        context.base_hash, output.model_dump_json(),
     ) or inputs is not None and (
         inputs.source_hash != source.source_hash
         or inputs.source_binding_hash != source.binding_hash
@@ -86,7 +87,9 @@ def assess_source_changes(source, output, materialized, inputs, *, context, base
         raise ValueError("current materialization differs from its exact source and predecessor")
     merged = materialize_plan_update(context.snapshot, output)
     analysis = analyze_source(output.draft, output.review(source.text).mapping, source.text)
-    issues = list(analysis.issues)
+    obligations, scope_issues = inherit_change_scopes(
+        analysis.obligations, output.draft, base_review, verified_parent)
+    issues = [*analysis.issues, *scope_issues]
 
     def issue(message, path="source", code="SOURCE_COVERAGE_REQUIRED"):
         issues.append(CoverageIssue(code=code, path=path, message=message))
@@ -158,7 +161,7 @@ def assess_source_changes(source, output, materialized, inputs, *, context, base
                 if not clauses or not clauses & set(change.clause_ids):
                     issue("An actual policy change has no complete current-source derivation.",
                           path)
-                linked.update(row.obligation_id for row in analysis.obligations
+                linked.update(row.obligation_id for row in obligations
                               if row.clause_id in clauses and any(
                                   proposed_path == own or proposed_path.startswith(own + ".")
                                   or proposed_path.startswith(own + "[") for own in row.paths))
@@ -180,4 +183,4 @@ def assess_source_changes(source, output, materialized, inputs, *, context, base
         raw_delta_verified=raw_verified, provider_full_draft_supplied=full_supplied,
         full_draft_fidelity_verified=False, parent_verified=verified_parent.coverage_complete,
         operations=tuple(proofs), changed_paths=tuple(sorted(changed)),
-        obligations=analysis.obligations, issues=tuple(issues))
+        obligations=obligations, issues=tuple(issues))
