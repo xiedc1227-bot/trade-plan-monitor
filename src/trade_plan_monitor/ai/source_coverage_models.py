@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier
@@ -51,6 +51,8 @@ class CoverageIssue(DailyValue):
 
 
 class SourceObligation(DailyValue):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=False)
+
     version: Literal["source-obligation-v1"] = "source-obligation-v1"
     rules_version: Literal["source-coverage-rules-v1"] = "source-coverage-rules-v1"
     source_hash: Hash

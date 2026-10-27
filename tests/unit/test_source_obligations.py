@@ -78,6 +78,12 @@ def test_unknown_source_state_cannot_be_complete_even_without_a_separate_issue()
     assert not assessment(obligations=()).coverage_complete
 
 
+def test_exact_source_excerpt_preserves_whitespace_at_chunk_boundary():
+    text = " close >10"
+    row = obligation(excerpt=text, end=len(text))
+    assert row.excerpt == text
+
+
 def test_new_ai_requires_a_normalization_preimage_for_automatic_acceptance():
     result = assessment(origin="AI_NEW")
     assert not result.coverage_complete and not result.automatic_fidelity_verified
