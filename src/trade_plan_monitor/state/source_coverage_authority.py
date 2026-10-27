@@ -11,6 +11,7 @@ from trade_plan_monitor.domain.daily_plan_validation import (
 from trade_plan_monitor.domain.daily_scope import scope_hash
 from trade_plan_monitor.state.source_coverage_store import (
     SourceCoverageCommandConflict,
+    SourceCoverageIntegrityError,
     SourceCoverageStore,
 )
 from trade_plan_monitor.state.source_coverage_values import CoverageInputs, CoverageReviewReceipt
@@ -93,15 +94,15 @@ def save_version_coverage(work, version_id, draft, mapping, source, *, extractio
 
 def read_version_coverage(work, details):
     """Read/recompute current correspondence without writes or new authority."""
-    return _read_version_coverage(work.daily.session, details)
+    return _read_version_coverage(work.daily.session, details, clock=work.daily.clock)
 
 
-def _read_version_coverage(session, details):
+def _read_version_coverage(session, details, *, clock):
     stored = SourceCoverageStore(session).latest(details.id)
     if stored is None:
         return None
     draft = load_daily_draft_json(details.payload_json)
-    _verify_supplements(session, draft, details.daily_mapping)
+    _verify_supplements(session, draft, details.daily_mapping, clock=clock)
     if stored.assessment.source_hash != scope_hash(details.source_text):
         raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
     current = _assessment(draft, details.daily_mapping, details.source_text,
@@ -111,7 +112,7 @@ def _read_version_coverage(session, details):
     return stored
 
 
-def _verify_supplements(session, draft, mapping):
+def _verify_supplements(session, draft, mapping, *, clock):
     if not mapping.supplements:
         return
     from trade_plan_monitor.state.daily_repository import DailyRepository
@@ -119,7 +120,10 @@ def _verify_supplements(session, draft, mapping):
     identity = daily_hash("daily-human-supplements-v1", dict(
         symbol=draft.symbol, content_hash=daily_draft_content_sha256(draft),
     ))
-    record = DailyRepository(session, clock=None, id_factory=None).get(identity)
+    try:
+        record = DailyRepository(session, clock=clock, id_factory=None).get(identity)
+    except (ValueError, TypeError, RecursionError):
+        raise SourceCoverageIntegrityError() from None
     if (record is None or record["kind"] != "DRAFT"
             or record["payload"].get("source") != "EXPLICIT_HUMAN_OPERATION"
             or record["payload"].get("supplements") != [
@@ -127,8 +131,8 @@ def _verify_supplements(session, draft, mapping):
         raise SourceCoverageAuthorityError()
 
 
-def _require_current_coverage(session, details, *, require_review=False):
-    stored = _read_version_coverage(session, details)
+def _require_current_coverage(session, details, *, clock, require_review=False):
+    stored = _read_version_coverage(session, details, clock=clock)
     if stored is None or not stored.assessment.coverage_complete:
         raise SourceCoverageAuthorityError()
     if require_review:
@@ -152,7 +156,8 @@ def _require_current_coverage(session, details, *, require_review=False):
 
 
 def require_current_coverage(work, details, *, require_review=False):
-    return _require_current_coverage(work.daily.session, details, require_review=require_review)
+    return _require_current_coverage(work.daily.session, details, clock=work.daily.clock,
+                                     require_review=require_review)
 
 
 def require_confirmation_coverage(work, details, command):
@@ -186,4 +191,4 @@ def require_repository_review(repo, version_id):
     details = repo.get_version_details(version_id)
     if details is None or details.daily_mapping is None:
         raise SourceCoverageAuthorityError()
-    return _require_current_coverage(repo._session, details, require_review=True)
+    return _require_current_coverage(repo._session, details, clock=repo._clock, require_review=True)
