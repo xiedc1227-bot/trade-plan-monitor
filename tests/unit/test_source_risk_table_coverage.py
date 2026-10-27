@@ -4,20 +4,37 @@ import json
 from datetime import timedelta
 
 import pytest
+from tests.integration.test_market_linkage_review import source_mapping
 from tests.unit.test_source_change_composition_attacks import _next
 from tests.unit.test_source_change_scopes import _replace_parent
 from tests.unit.test_source_control_changes import _assess
+from tests.unit.test_source_initial_assurance import _binding
 from tests.unit.test_source_risk_table_controls import _ORIGINAL, _parent, _row, _table
 from tests.unit.test_source_risk_table_integration import _case
 
+from trade_plan_monitor.ai.daily_review import DailyClause, DailyFieldBinding, semantic_values
+from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
+from trade_plan_monitor.ai.review import server_source_clauses
+from trade_plan_monitor.ai.source_candidate_models import PrefixAssuranceRef
+from trade_plan_monitor.ai.source_change_composition import assess_change_current
+from trade_plan_monitor.ai.source_coverage import assess_source_coverage
 from trade_plan_monitor.ai.source_coverage_core import analyze_source
 from trade_plan_monitor.ai.source_coverage_models import CoverageIssue
+from trade_plan_monitor.ai.source_derivation import DerivationStage, SourceDerivationEvidence
+from trade_plan_monitor.ai.source_initial_assurance import assess_initial_current
+from trade_plan_monitor.ai.source_normalization import capture_normalization
+from trade_plan_monitor.ai.source_obligations import declarations, value_at
 from trade_plan_monitor.ai.source_risk_controls import parse_source_risk_controls
 from trade_plan_monitor.ai.source_risk_table_controls import parse_source_risk_table_controls
 from trade_plan_monitor.ai.source_risk_table_coverage import (
     build_risk_table_coverage,
     validate_risk_table_coverage,
 )
+from trade_plan_monitor.ai.source_semantic_atoms import semantic_atoms
+from trade_plan_monitor.ai.update_review import build_initial_review
+from trade_plan_monitor.backtest.preparation_models import PreparationSource
+from trade_plan_monitor.domain.daily_hash import canonical
+from trade_plan_monitor.state.source_coverage_values import CoverageInputs
 
 
 def _coverage(case):
@@ -215,3 +232,153 @@ def test_full_unedited_original04_remains_blocked_until_its_other_real_meanings_
     assert any(row.scope == "UNKNOWN" and row.state == "UNRESOLVED"
                for row in result.source_assessment.obligations)
     assert case[0].text == _ORIGINAL.read_text(encoding="utf-8")
+
+
+def _container_parent(root, *, shared_price=False):
+    base, _ = _parent(branch_price=2599 if root != "levels" else None,
+                      no_global=root != "levels" and not shared_price)
+    draft = base.draft
+    values = semantic_values(draft)
+    lines = [(path, canonical(value)) for path, value in values.items()
+             if path != root and not path.startswith((root + ".", root + "["))]
+    lines.append((root, canonical(value_at(draft.executable_payload(), root))))
+    text = "\n".join(path + " = " + value for path, value in lines)
+    canonical_clauses = server_source_clauses(text)
+    container = next(row for row in declarations(text) if row.path == root)
+    atoms = semantic_atoms(text, container)
+    groups, offset = {}, 0
+    for path, value in lines:
+        end = offset + len(path + " = " + value)
+        source_rows = tuple(row for row in canonical_clauses if offset <= row.start < end)
+        paths = tuple(own for own in values
+                      if own == path or own.startswith((path + ".", path + "[")))
+        for own in paths:
+            related = [atom for atom in atoms if own == atom.path
+                       or own.startswith((atom.path + ".", atom.path + "["))]
+            atom = max(related, key=lambda row: len(row.path)) if path == root and related else None
+            groups[own] = tuple(row.clause_id for row in source_rows if atom is None or (
+                row.start < atom.end and row.end > atom.start))
+        if path == root:
+            # Optional null members have no semantic_values binding slot. Keep
+            # their exact container clauses linked to its stable kind instead
+            # of deleting those raw members or pretending they were background.
+            cited = {identity for own in paths for identity in groups[own]}
+            uncited = tuple(row.clause_id for row in source_rows if row.clause_id not in cited)
+            anchor = next((own for own in paths if own.endswith(".kind")), paths[0])
+            groups[anchor] = (*groups[anchor], *uncited)
+        offset = end + 1
+    clauses = tuple(DailyClause.model_validate(row.model_dump() | dict(disposition="POLICY",
+        paths=tuple(path for path, identities in groups.items() if row.clause_id in identities),
+        reason="Exact complete source inventory with native-atom field citations"))
+        for row in canonical_clauses)
+    _, template = source_mapping(draft)
+    mapping = template.model_copy(update=dict(clauses=clauses, bindings=tuple(
+        DailyFieldBinding(path=path, value=value, origin=(
+            "SOURCE_SEMANTIC" if value is None or type(value) is bool else "SOURCE"),
+            unit="JSON", clause_ids=groups[path], supplement_id=None)
+        for path, value in values.items())))
+    source = PreparationSource(source_id="container-price-parent", text=text,
+        available_at=base.available_at, effective_trade_date=base.available_at.date())
+    review = build_initial_review(draft, mapping, source)
+    assert review.issues == ()
+    output = CurrentPlanExtractionOutput(draft=draft, clauses=mapping.clauses,
+                                         bindings=mapping.bindings)
+    image = draft.model_dump(mode="json")
+    trace = capture_normalization(image, image, text)
+    coverage = assess_source_coverage(draft, mapping, text, normalization=trace, origin="AI_NEW")
+    raw = "\n" + json.dumps(output.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
+    derivation = SourceDerivationEvidence.build(kind="FULL_DRAFT", source_hash=source.source_hash,
+        raw_json=raw,
+        context_json=None, base_hash=None, stages=(DerivationStage.build(
+            phase="SOURCE_NORMALIZED", output_json=canonical(output.model_dump(mode="json"))),))
+    inputs = CoverageInputs.build(source_hash=source.source_hash,
+        source_binding_hash=source.binding_hash, normalization=trace,
+        initial_coverage=coverage, derivation=derivation)
+    parent = assess_initial_current(source, review, mapping, inputs,
+                                     binding=_binding(source, review, inputs))
+    assert coverage.coverage_complete and parent.coverage_complete, parent.issues
+    return source, review, parent
+
+
+@pytest.mark.parametrize("root", ["levels", "risk_branches[0]", "risk_branches"],
+                         ids=["global-levels", "local-branch", "branch-list-with-all"])
+def test_complete_container_parent_price_atoms_support_the_actual_table_update(root):
+    source, base, parent = _container_parent(root)
+    assert root + " = {" in source.text or root + " = [" in source.text
+    assert any(json.loads(row.semantics_json or "{}").get("treatment") == (
+        "COMPLETE_JSON_DECLARATION") for row in parent.source_assessment.obligations)
+    if root == "risk_branches":
+        assert any(row.kind == "RELATION" for row in parent.source_assessment.obligations)
+    price_path = "levels.risk_line_fen" if root == "levels" else "risk_branches[0].risk_line_fen"
+    owner = next(row for row in parent.owners if row.path == price_path)
+    linked = [row for row in parent.source_assessment.obligations
+              if row.obligation_id in owner.obligation_ids]
+    assert any(json.loads(row.semantics_json or "{}") == dict(path=price_path, value=2599)
+               for row in linked)
+    case = _case(base=base, parent=parent)
+    assert case[2].review.issues == () and len(case[3].derivation.stages) == 3
+
+    result = _assess(case)
+
+    assert result.coverage_complete, result.source_assessment.issues
+    dependency = build_risk_table_coverage(case[0], base, parent).references[0]
+    assert dependency.price_owner == owner
+    assert len(canonical(dict(treatment="REGISTERED_STRUCTURAL_RECOVERY_REFERENCE",
+        structural_reference=dependency.reference.model_dump(mode="json"),
+        price_dependency=dependency.model_dump(mode="json")))) <= 8192
+
+
+def test_inherited_complete_container_price_owner_supports_actual_multihop_table_update():
+    _, base, parent = _container_parent("risk_branches[0]")
+    middle_case = _next(base, parent)
+    middle = _assess(middle_case)
+    assert middle.coverage_complete
+    case = list(_case(base=middle_case[2].review, parent=middle))
+    case[7] = case[7].model_copy(update={"item_index": middle.binding.item_index + 1})
+    source, output, materialized, inputs, context, base, parent, binding = case
+
+    result = assess_change_current(source, output, materialized, inputs, context=context,
+        base_review=base, verified_parent=parent, binding=binding, prefix=(
+            *parent.prefix, PrefixAssuranceRef(binding=parent.binding,
+                                              assurance_hash=parent.evidence_hash)))
+
+    assert result.coverage_complete, result.source_assessment.issues
+    dependency = build_risk_table_coverage(source, base, parent).references[0]
+    assert dependency.price_owner.origin == "BASE"
+
+
+@pytest.mark.parametrize("problem", ["wrong-price-field", "same-value-other-path", "missing-owner",
+                                      "container-label-only"])
+def test_container_price_owner_cannot_be_replaced_by_an_unrelated_or_selfsigned_meaning(problem):
+    _, base, parent = _container_parent("risk_branches[0]", shared_price=True)
+    path = "risk_branches[0].risk_line_fen"
+    source_rows = parent.source_assessment.obligations
+    other = next(row for row in source_rows if row.paths == ("levels.risk_line_fen",))
+    assert json.loads(other.semantics_json) == dict(path="levels.risk_line_fen", value=2599)
+    owners = []
+    for owner in parent.owners:
+        if owner.path == path:
+            if problem == "missing-owner":
+                continue
+            if problem == "wrong-price-field":
+                owner = owner.model_copy(update={"original_path": "levels.risk_line_fen"})
+            elif problem == "same-value-other-path":
+                owner = owner.model_copy(update={"obligation_ids": (other.obligation_id,)})
+            else:
+                ids = tuple(row.obligation_id for row in source_rows
+                            if row.obligation_id in owner.obligation_ids and json.loads(
+                                row.semantics_json or "{}").get("treatment") == (
+                                    "COMPLETE_JSON_DECLARATION"))
+                assert ids
+                owner = owner.model_copy(update={"obligation_ids": ids})
+        owners.append(owner)
+    changed = _replace_parent(parent, owners=tuple(owners))
+    assert changed.coverage_complete  # Self-consistent model status is not source proof.
+    case = _case(base=base, parent=changed)
+    assert case[2].review.issues == () and len(case[3].derivation.stages) == 3
+
+    evidence = build_risk_table_coverage(case[0], base, changed)
+    result = _assess(case)
+
+    assert evidence.references == () and evidence.issues
+    assert not result.coverage_complete and result.source_assessment.issues
