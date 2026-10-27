@@ -81,3 +81,13 @@
 私有 `preparation-review-assurance-v1` 回执kind为REVIEW，绑定 `preparation_id`、`command_id`、`command_request_hash`、`previous_revision`、`reviewed_revision`、`review_revision`、`original_review_hash`、`frozen_manifest_hash`、完整 `proofs`、服务端 `created_at`，且 `authority_granted=false`。修订为严格正安全整数，reviewed_revision=previous_revision+1。1–512份证明须完整、同一准备、实际条目从0连续，且每项前缀准确等于此前完整证明引用。完整回执上限8MiB，不截断。主键 `evidence_key` 仅哈希preparation_id/review_revision；payload `evidence_hash` 覆盖完整版本化回执。当前授权owner另须将其绑定实际存储审核／冻结状态。
 
 复用既有封存通用辅助表，不增加DDL。INPUT保持实际attempt投影不变。对于非INPUT的REVIEW行，SQL列 `attempt_id` 明确作为kind内槽位 `review-<review_revision>`，绝不解读为供应商尝试；实际尝试保留于 `proofs[].binding.attempt_id`。其余来源／候选投影使用最后实际证明绑定。按准确主键读取，完整验证规范payload／哈希／投影及五项保护，读取不写入。同意图重试保留原时间，变更命令／证明报冲突。回执与旧审核／manifest／幂等响应同事务保存，回执故障注入须整体回滚。本附录规定剩余T08i工作，不表示复用／操作验收完成。
+
+## PMA-K11 — 明确人工操作检查点
+
+`preparation-human-operation-v1` 的kind为HUMAN_OPERATION，与原始INPUT及当前REVIEW分离。它记录实际明确的REVIEW_AND_FREEZE或CORRECT_ITEM命令、完整来源／元数据与来源修订、准备／条目身份、前后准备及候选修订／哈希／证明、真实可空 `attempt_id`、原始候选检查点／修订、PRESENT/MISSING原始输入引用、完整改定draft／mapping／update／review、assessment绑定及有序前缀／parent、independent标志、可选最终冻结哈希／前次人工引用及服务端捕获时间。所有授权标志保持false。类型化规范 `command_json` 上限1MiB UTF-8，完整记录上限8MiB。修订为严格正安全整数，前后各修订准确+1。操作哈希不纳入最终当前评估，避免哈希循环。
+
+依赖更新中，`resolved_draft`、`resolved_mapping` 对应 `resolved_update.draft`；`resolved_review.draft` 对应实际物化最终命名空间，两者不必相等。初始／独立来源中改定draft与改定review的draft相等。assessment绑定标识派生review；单计划冻结仍以原提取候选身份做来源评估，并在操作中另外绑定新冻结槽位／哈希。缺原始raw／私有证据记录为MISSING，不伪造或重标。保留原始INPUT字节及完整未绑定来源条款；之前的人工后像不能成为供应商前像。
+
+稳定证明主键哈希preparation_id/item_index/after_candidate_revision。既有通用SQL表使用HUMAN_OPERATION内部的 `attempt_id` 槽位 `human-<item_index>-<after_candidate_revision>`，该槽位绝非供应商尝试。来源／候选投影保留真实来源绑定与后候选哈希。读取最多两次索引点查，验证五项既有保护及准确规范／哈希／投影对应，不写入。同意图重试保留原时间，意图改变报冲突。这些模型／存储检查仅证明完整性，不证明真实人工授权或语义完备。
+
+只有既有授权事务在匹配实际前后状态、明确类型化命令、原检查点／输入、当前来源及前缀后，才能登记该操作。人工来源重评仍须消费每个原始跨度并证明全部受支持政策及关系语义。注册缺参／期限／基本面处理保持有限；未知技术要求不可豁免。Human评估不伪造规范化轨迹，不声称raw-delta、供应商完整草稿或自动忠实度。独立当前REVIEW回执绑定最终完整证明后，才可复用／运行授权。纯人工评估及事务接入在存储切片后仍待完成。
