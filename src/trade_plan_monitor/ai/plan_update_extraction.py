@@ -29,6 +29,7 @@ from trade_plan_monitor.ai.models import (
 from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
 from trade_plan_monitor.ai.provider import AIProvider
 from trade_plan_monitor.ai.review import server_source_clauses
+from trade_plan_monitor.ai.source_derivation import SourceDerivationEvidence
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.loop_input import SafeShares
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
@@ -199,12 +200,23 @@ class PlanUpdateExtractionResult(ResearchValue):
     evidence_hash: Sha256Hex
     usage: AIUsageSnapshot | None
     diagnostic: ExtractionDiagnostic | None = Field(default=None, exclude=True)
+    source_derivation: SourceDerivationEvidence | None = Field(default=None, exclude=True)
+    derivation_issues: tuple[str, ...] = Field(default=(), max_length=16, exclude=True)
     status: Literal[PlanExtractionStatus.SUCCEEDED] = PlanExtractionStatus.SUCCEEDED
+
+    def model_copy(self, *, update=None, deep=False):
+        if not update:
+            return super().model_copy(deep=deep)
+        values = self.model_dump(mode="python") | dict(
+            source_derivation=self.source_derivation, derivation_issues=self.derivation_issues,
+            diagnostic=self.diagnostic)
+        return type(self).model_validate(values | update)
 
     def to_preparation_candidate(self) -> PreparationCandidateInput:
         return PreparationCandidateInput(
             payload_json=canonical_json(self), validation="UNRESOLVED",
-            evidence_hash=self.evidence_hash, issues=("UPDATE_MATERIALIZATION_REQUIRED",),
+            evidence_hash=self.evidence_hash,
+            issues=("UPDATE_MATERIALIZATION_REQUIRED", *self.derivation_issues),
         )
 
 
@@ -351,6 +363,21 @@ async def extract_plan_update(
             if isinstance(output, CompactUpdateOutput):
                 output = expand_compact_output(output, source, context=context)
         validate_update_evidence(output, source, context)
+        from trade_plan_monitor.ai.source_derivation_replay import expand_update_with_evidence
+
+        source_derivation, derivation_issues = None, ()
+        try:
+            if prior is not None:
+                raise ValueError("focused correction requires its preceding admitted proposal")
+            replayed, source_derivation = expand_update_with_evidence(raw.content, source, context)
+            if canonical_json(replayed) != canonical_json(output):
+                raise ValueError("provider update differs from deterministic source derivation")
+        except (ValueError, TypeError, RecursionError) as error:
+            source_derivation = None
+            text = str(error).casefold()
+            derivation_issues = (("SOURCE_COVERAGE_LIMIT_EXCEEDED" if any(
+                marker in text for marker in ("byte limit", "string_too_long", "mib", "too large")
+            ) else "SOURCE_NORMALIZATION_LOSS"),)
         evidence_hash = sha256(canonical_json({
             "domain": "monitor-loop-update-evidence-v1",
             "source_binding_hash": source.binding_hash, "context": context, "output": output,
@@ -362,6 +389,7 @@ async def extract_plan_update(
             authored_at=source.authored_at, available_at=source.available_at,
             effective_trade_date=source.effective_trade_date, output=output,
             evidence_hash=evidence_hash, usage=_usage_snapshot(raw),
+            source_derivation=source_derivation, derivation_issues=derivation_issues,
             diagnostic=_diagnostic(stage="completed", reason="NONE", raw=raw,
                                    configured_model=config.model),
         )
