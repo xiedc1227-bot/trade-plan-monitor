@@ -55,3 +55,10 @@
 `predecessor-materialization-v1`记录有序完整阶段输出及SHA256：DELTA_EXPANDED、SOURCE_NORMALIZED、MATERIALIZED。补丁证据允许该序列的非空前缀；完整草稿从SOURCE_NORMALIZED开始。重复、逆序或跳阶段无效。raw／context／单阶段各<=1MiB，最多8阶段，证据总<=8MiB，不提高现有供应商／准入上限。阶段／context JSON规范化，raw JSON保留原始空白。证据以 `daily_hash(version, payload_without_evidence_hash)` 自哈希，且 `authority_granted=false`。
 
 使用准确context重放原始准入协议，确定性核对展开、恢复、范围调整及最终物化。服务端派生候选不是供应商原始完整草稿。缺原始补丁、重放无效或缺当前继承证明仍阻断；有效不完整候选保留可检查性。T08分别评估当前原文义务与继承义务，按稳定规则身份合并。这是已批准后续更新流程的证据记账，不新增交易权限、人工豁免或冻结回放输入字段。当前不完整提取、旧历史完整性及完整自动保真仍须分别陈述。
+
+
+## PMA-K08 — 已实施不可变存储边界
+
+迁移0028增加 `source_coverage_installation`、`source_coverage_cutover`、`source_coverage_input`、`source_coverage_assessment`、`source_coverage_review`。安装标记固定实际版本／来源哈希、原审核／启用身份及完整成员根，不从客户端时间／schema推断成员。私有 `source-coverage-inputs-v1` 显式保留原序列化排除的规范化／派生／初次覆盖／问题；重试比较这些输入及旧序列化结果。`source-coverage-record-v1` 绑定评估、私有输入、命令意图、版本、前条哈希及服务端时间。回执另绑定完整包与原审核身份。自哈希检验对应及完整性，来源真实性由服务端捕获和可信存储建立。
+
+十三项SQLite保护拒绝五表改删、安装／切换表后续插入及不连续评估版本。读取验证准确保护定义，再验证所需完整证明及相邻前条，不在每次轮询解码全部历史。缺表／标记须升级且不写入；证明／保护受损返回净化完整性错误。管理降级独立验证每个切换payload／投影和成员根，存在私有输入、评估、回执或切换后版本均拒绝。故障测试先显式绕过保护再损坏临时库，另证普通SQL修改被拒。未迁移用户数据库。
