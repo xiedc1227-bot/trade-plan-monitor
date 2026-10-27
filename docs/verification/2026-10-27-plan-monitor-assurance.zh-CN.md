@@ -140,3 +140,11 @@ LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`）。独立21项�
 有限现金／标题／独立事件文本载体初始6失败／13通过（`t08-continuity-carriers-red.log`）。独立审查发现真实低精度Decimal绕过，边界测试2失败／21通过（`t08-continuity-cash-precision-red.log`）。整数分解析已修复；最终相邻组合169项通过，2.74秒（`t08-continuity-carriers-final.log`），Ruff通过；提交 `b5a5d87`。中间一次命令引用不存在文件，未运行测试。识别不推断现金真实或事件已满足。
 
 合成continuity来源工厂现将全部策略值以规范JSON输出，含null、布尔值及空集合，准确绑定原文并分开账户／范围语句。原始叙述／快照夹具文件、历史／golden及全部39条既有断言不变。新增8项合同测试初始失败（`t08-continuity-source-red.log`）；最终来源／raw／未知执行组合13项通过／3项未选中，2.38秒（`t08-continuity-source-final.log`），Ruff通过；提交 `19bdcd9`。较早扩大组合保留13通过／1项存储前驱失败：首来源当前覆盖完整，但后续完整替换控制尚未注册（`t08-continuity-source-green.log`）。该项继续待办，不豁免回归或宣称语料通过。T08／C03及后续阶段继续开放；真实供应商发送0/48，用户迁移0。
+
+## PMA-R17 — T08混合表格证明与日内工作流回归
+
+混合表格接入初始两个合法完整wire价格owner案例均失败（`risk-table-agent-wire-red.log`）。现保留独立范围／引用义务、准确上游价格归属及非执行关系含义。最终表格／风险／core／aggregate相关组合131项通过，18.14秒（`risk-table-agent-final.log`），含新增23项及旧8组字节／哈希固定校验；Ruff通过；提交 `deb132d`。完整原文04保留原字节，仍为BLOCKED，不豁免其他原始义务。容器价格探针仍按既有证明边界检查，不扩大限制。
+
+当前提取安全／P3／预算单元基线62项通过，2.25秒（`t08-baseline-unit.log`）。集成基线初始15通过／6项setup错误：新补充校验器构造DailyRepository时clock=None（`t08-baseline-integration.log`）。修正一次测试表名误用后，三项定向案例复现真实缺陷（`t08-supplement-clock-red.log`、`t08-supplement-clock-red2.log`）。实际时钟传递及无效／未来登记记录脱敏处理修复后，保存／审核／API相关54项通过，16.62秒（`t08-supplement-clock-green.log`）；提交 `1d7374b`。
+
+剩余旧P3夹具审核缺当前coverage绑定（`t08-p3-fixture-source-red.log`）。默认合成工作流现声明完整策略并绑定实际读取的证明，仅确有缺参时提交Human补充；P2合成证据使用既有准确fixture标注语法。日内链43条及P2链3条原断言全部一致。真实current夹具／P3组合22项通过，7.88秒（`t08-current-daily-fixture-green2.log`）；最终日内／联动／例外／P2／风险／模拟组合60项通过，40.74秒（`t08-current-daily-fixture-final.log`），Ruff通过；提交 `5eceb6c`。中间空补充及不支持合成标注失败均保留。以上确定性结果计数重叠，不关闭T08／C03，也不替代真实验收。供应商0/48，用户迁移0。
