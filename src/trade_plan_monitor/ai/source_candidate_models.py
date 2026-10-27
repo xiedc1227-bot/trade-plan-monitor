@@ -16,6 +16,7 @@ from trade_plan_monitor.ai.source_coverage_models import (
     Path,
 )
 from trade_plan_monitor.ai.source_human_change_models import HumanSourceChangeAssessment
+from trade_plan_monitor.ai.source_reuse_models import AssuranceReuseRef
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier
 
@@ -76,6 +77,8 @@ class SourceCandidateAssurance(DailyValue):
     issues: tuple[CoverageIssue, ...] = Field(default=(), max_length=8192)
     status: Literal["COMPLETE", "BLOCKED"]
     authority_granted: Literal[False] = False
+    reuse_ref: AssuranceReuseRef | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     evidence_hash: Hash
 
     @property
@@ -95,6 +98,12 @@ class SourceCandidateAssurance(DailyValue):
 
     @model_validator(mode="after")
     def verify(self):
+        placement = {"preparation_id", "item_index"}
+        if self.reuse_ref is not None and (
+            self.binding.model_dump(exclude=placement)
+            != self.reuse_ref.original_owner_binding.model_dump(exclude=placement)
+        ):
+            raise ValueError("reuse alias original owner differs from its preserved binding")
         if self.prefix_hash != source_prefix_hash(self.prefix, self.binding):
             raise ValueError("source assurance prefix differs")
         expected_parent = (None if self.binding.independent or not self.prefix
