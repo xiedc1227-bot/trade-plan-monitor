@@ -1,0 +1,77 @@
+# Specification: source-condition-coverage
+
+Status: APPROVED FOR IMPLEMENTATION — 2026-10-27. Module of [plan-monitor-assurance](SPEC-plan-monitor-assurance.md); approval/implementation and external operations follow PMA-D01–D06. [Chinese copy](SPEC-source-condition-coverage.zh-CN.md).
+
+## SCC-S01 — Guarantee and scope
+
+For supported syntax and registered review scope, no unproven mandatory or suspicious forward trading obligation may pass current review/activation/action eligibility merely because it was labeled background. Unrecognized meaning stays blocking. This is deliberately conservative; it neither proves arbitrary natural-language semantics nor eliminates the final human review.
+
+The known `semantic_context` shortcut and the keyword-absence fallback in `can_be_context` both require coverage by the new current guard. Removing only one shortcut, lengthening a keyword blacklist, or asking another AI to agree is insufficient. Existing historical verification must remain reproducible under its old rules; the new guard is an additional, versioned current assessment.
+
+## SCC-S02 — Source inventory, atoms and relations
+
+Start from the complete preserved source, not the normalized candidate or the provider's chosen POLICY clauses. Retain current canonical clause IDs, exact Unicode code-point spans and excerpts. AI dispositions, semantic roles, reasons and proposed paths are untrusted proposals. A server-owned positive registry may prove a whole span is metadata, genuinely historical/account commentary or an already registered nontechnical exclusion. Absence of trading keywords is never positive proof. Unknown prose is `UNRESOLVED`, including indirect/keyword-free preconditions.
+
+Produce `source-obligation-v1` records for atomic requirements and their relationships. At minimum own: `obligationId`, `clauseId`, exact `start/end`, source excerpt, scope (plan/rule/BUY/SELL/risk/alert), kind, polarity, comparator/value/unit, observation cycle/offset, validity/window, quantity/capacity/permission and relation/group references where applicable. Preserve conditional antecedent/consequent, ALL/ANY, negation, exceptions and independent-signal meaning. A whole-clause citation cannot discharge multiple predicates by binding only one leaf. Cross-clause or512-code-point chunk boundaries must not silently sever a relation; uncertain reconstruction blocks.
+
+Use existing exact numeric types and registered condition semantics. No new evaluator or arbitrary expression execution is added. “Price condition AND turnover condition” needs both obligations and AND; two leaves under ANY do not satisfy it. “No ordinary rules” is a checkable absence/permission declaration, not a reason to invent a BUY. A title mentioning a trading plan does not create a trading obligation.
+
+The normative owner is a finite, versioned server recognizer/grammar plus relation/equivalence and positive-context registries, frozen at T01 and implemented in T02–T05. It must account for the entire source independently of the AI-selected obligation list. Unconsumed or uncertain semantic remainder is UNRESOLVED even when the recognizer produced zero atoms; “nothing recognized” is never “nothing required”. The registries define supported syntax explicitly, with positive and negative examples and bounded work.
+
+## SCC-S03 — Treatment states and release rules
+
+| State | Meaning | Allows coverage completion? |
+| --- | --- | --- |
+| `MAPPED` | Supported source obligation and all relevant relations exactly match the candidate graph | Yes |
+| `MAPPED_WITH_REGISTERED_SUPPLEMENT` | An existing allowed exact supplement/override is bound and visible as a human adjustment | Yes for review, separately counted from automatic fidelity |
+| `CONTEXT_VERIFIED` | Entire exact span passes a narrow positive non-policy treatment | Yes; never counted as a monitored trading condition |
+| `SCOPE_EXCLUDED` | Exact existing registered exclusion and all technical remainders are accounted for | Yes only for that approved exclusion; explicitly outside monitored coverage |
+| `UNRESOLVED` | Meaning, scope, atom partition or necessary parameter is unproven | No |
+| `UNSUPPORTED` | Mandatory content lacks a registered executable or permitted treatment | No |
+| `CONFLICT` | Source, relation, candidate or supplement contradicts the declared requirement | No |
+
+No generic `IGNORE`, “confirmed”, `COMMENTARY`, `ACCOUNT`, `HISTORICAL` or free-text reason releases an obligation. Mixed sentences must be partitioned into exact spans: a valid account/history portion never exempts the forward remainder. Preserve the existing generation-time fundamental exclusions; do not turn them into new runtime gates or expand them to arbitrary technical exclusions.
+
+The user may correct a source-bound supported rule, supply parameters through the existing registered supplement route, use an existing specifically authorized override (including the current limited deadline override), or save a clarified source version. Each change invalidates the affected coverage/review binding. A supplement must retain exact content/path/value/scope provenance; it cannot cancel an unsupported condition by reason alone. Human changes are shown as such, not reported as original automatic extraction accuracy. If an unsupported mandatory condition remains, the affected new authority remains blocked.
+
+## SCC-S04 — Normalization and semantic comparison
+
+New provider extractions must capture the candidate before source normalization, the normalized candidate, normalization version and an explicit change trace. Missing the original preimage cannot count as accepted raw automatic extraction. Human-origin and historical drafts identify their origin/missing preimage and do not invent a provider record; they may obtain a new current source-to-candidate proof, but not a retrospective automatic-fidelity claim. Evaluate obligations against original source before and after normalization; source/Markdown transformations retain a mapping to original code points.
+
+In particular, `evaluation_only` clearing ordinary rules, restoration/defaulting of fields, removal of optional content and scope exclusions cannot erase source obligations. A safe registered metadata/default normalization remains allowed and auditable. Unsupported or unexplained removal becomes `SOURCE_NORMALIZATION_LOSS`. A reminder-only source stays reminder-only; a forward trade condition cannot be removed by relabeling the whole source as evaluation-only.
+
+Comparison must independently detect: missing atoms; unmapped conjuncts; AND/OR substitution; negation/exception changes; `>` versus `>=`; fen/yuan or percent/ratio changes; daily/minute/offset changes; effective dates/session windows; quantities/ceilings; permissions and occurrence identity; A/B execution/background boundary. Supported equivalence requires an explicit versioned equivalence rule, not model confidence or token similarity. Unknown equivalence blocks; existing product defaults remain the finite registered defaults only.
+
+An A/B section label is not a whole-section waiver. If B introduces a new forward technical prerequisite intended to constrain tool execution, it cannot fill missing executable A and cannot be ignored to pass A: report a source/partition CONFLICT and require clarification in a new A version. Genuine account/history explanations, already-covered explanatory repetition and registered fundamental exclusions retain their existing non-executable scope. Add a mutation moving a mandatory condition from A into B; neither removal nor unauthorized B import may pass.
+
+## SCC-S05 — Versioned proof and historical compatibility
+
+`source-coverage-v1` deterministically hashes the complete ordered obligations/relations/treatments/issues, original source hash, current candidate/content hash, mapping/review evidence hash, normalization trace and registry/rules version. Preserve the existing canonical source/content hash functions. Source-derived obligation IDs bind source/version/span/meaning; neither quotes, budget books, request attempts nor assessment time may create a new trading occurrence. A changed source/candidate/mapping/normalization/registry invalidates the coverage proof and its human binding.
+
+An explicit server-timed `source-coverage-review-v1` receipt binds coverage evidence to the exact existing review identity, expected revision and human confirmation. The server rederives it at the authoritative boundary; caller flags such as `covered=true`, forged issue lists or a supplied background label are not evidence. Read-only calculations do not create a receipt. Plan save may persist an incomplete DRAFT; it grants no authority. Confirmation/activation and later relevant actions require current complete bound coverage, in addition to all existing guards, subject only to the narrow already-authorized historical technical-risk continuity in SCC-S06. That exception cannot create a new ordinary/exception authority or silently scope an unknown obligation to BUY.
+
+Do not globally tighten historical `build_daily_review` and then compare new issues against old stored `required_issues_json`: that can make valid old records unreadable. Keep trusted historical verification dispatch separate from current eligibility. Preserve old payload bytes, mappings, issue lists, review hashes/receipts and completed simulations. Client-selected versions, backdated timestamps and absence of new metadata cannot manufacture legacy status. T01 must freeze a trusted server/storage cutover rule before persistence work; T07 tests it on disposable pre-upgrade databases.
+
+Use an additive, independently versioned assurance sidecar and immutable receipt/history; choose the next free migration revision at T01 without altering0027. Old records without new reviewed proof are `LEGACY_UNASSESSED/NEEDS_REVIEW`, not corrupt and not current-PASS. Missing sidecar/storage after an upgrade mismatch is explicit `UPGRADE_REQUIRED/UNKNOWN`. Migration development is authorized only after implementation is ordered, and actual user migration remains separate.
+
+## SCC-S06 — Current authority and risk priority
+
+Extraction, saving, reloading, source confirmation, activation and current plan reuse must share the same current assessment. Recheck exact source/content/coverage/review/activation binding inside the existing authoritative write fence for ordinary simulations and exception decisions/consumption. Same command/body replays the same receipt; changed proof/revision conflicts. Provider I/O stays outside the transaction. Current actionable notifications recheck their relevant coverage at send time.
+
+Scope obligations conservatively. A source-proven BUY-only prerequisite must not become a SELL gate. Global missing constraints block new plan authorization and affected ordinary action claims; UNKNOWN scope blocks all new trade authority until scope is proven, never silently assuming BUY-only scope. Preserve valid independent technical-risk continuity under its existing reviewed branch and authority. Missing BUY coverage/cost data alone cannot veto that risk SELL or suppress a clearly labeled read-only risk warning; uncertainty affecting the risk branch itself remains visible and cannot create liquidation authority. No source reassessment resizes a frozen quantity, reopens an execution window, resets consumed signals or grants an exception.
+
+For historical active versions, expose historical integrity and current coverage separately. New ordinary action/approval authority must not use a legacy zero-issue shortcut. Existing read-only observations and independently authorized technical-risk behavior retain their original guards and explicit legacy/coverage status; they cannot be presented as fully assured new-plan monitoring. Saving an incomplete replacement never activates it or silently replaces the active version.
+
+## SCC-S07 — Issues, UI and bounded API
+
+Proposed issue details: `SOURCE_CONDITION_OMITTED`, `SOURCE_RELATION_MISMATCH`, `SOURCE_CONTEXT_UNVERIFIED`, `SOURCE_NORMALIZATION_LOSS`, `SOURCE_COVERAGE_UNSUPPORTED`, `SOURCE_COVERAGE_REQUIRED`, `SOURCE_COVERAGE_STALE`, `SOURCE_COVERAGE_LIMIT_EXCEEDED`. Preserve canonical API error codes; these are structured reasons. Valid spans with semantic omissions return inspectable blocking issues and retain source/candidate/mapping. Structural/hash/span tamper retains invalid-output/admission handling. A transport `SUCCEEDED` with blocked coverage must visibly say extraction completed but review/activation is unavailable.
+
+The coverage view shows original span → atomic requirement/relation → exact rule/path or explicit blocker/treatment. Show AI proposal versus server treatment, normalization changes, source-defined versus human-adjusted values, and actual monitor scope. Default to unresolved, never preselect an omission waiver. Context/source/version changes discard stale responses; loading/errors/cached results never show current complete coverage.
+
+Retain current source/input/tree/byte limits: DailyMapping clauses<=512, bindings/supplements<=2000; clause excerpt<=512 code points. Propose at most4096 obligations overall and64 per canonical clause; exceed either bound with an explicit blocker, preserving source and never truncating obligations. Full proof hashing covers all records before pagination. The read-only coverage GET has default `limit=50`, maximum100, a1MiB page bound and cursor binding to source/candidate/mapping/ruleset. Excerpts remain<=512; whole meaning is represented by spans/relations or an explicit unresolved issue. No unbounded full-history scan per UI poll. Size/semantic limits are admission failures, not permission to omit source text. Existing32KiB frozen result items and unrelated budgets stay unchanged.
+
+## SCC-S08 — Acceptance and owned implementation seams
+
+Acceptance: PMA-A01–A06,A11,A12. New focused tests should cover both original languages, all three context roles, keyword-free requirements, same-clause omission, semantically wrong complete bindings, cross-clause relations, normalization loss, true context, allowed exclusions/supplements, bounds, tamper and current/historical separation. HTTP/store/runtime tests must prove blocked confirmation/activation/ordinary action, inspectable drafts, no legacy downgrade, retry/race behavior and preserved risk priority. Preserve exact old golden/history readers; never regenerate expected history to match the new rule.
+
+Suggested seams: `ai/source_obligations.py`, `ai/source_coverage.py`, `ai/source_coverage_models.py`, focused normalization adapters; `state/source_coverage_store.py` and additive migration; existing review/plan/runtime/notification boundaries; `web/source_coverage_schemas.py` and the existing plan workbench. Prospective filenames are tasks, not files already implemented. No production or test code is added by this specification.
