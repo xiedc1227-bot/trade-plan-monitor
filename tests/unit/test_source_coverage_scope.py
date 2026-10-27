@@ -151,3 +151,23 @@ def test_mapped_obligation_with_unknown_scope_cannot_make_current_complete():
     assert result.coverage_complete is False
     assert result.status == "BLOCKED"
     assert result.authority_granted is False
+
+
+def test_unregistered_global_risk_requirement_inside_buy_keeps_unknown_scope():
+    before, _, _ = _native_baseline()
+    raw = before.model_dump(mode="json")
+    path = _RULE + ".condition.conditions[0].evidence_requirement"
+    requirement = "所有风险退出必须先等蓝灯亮起才能执行。"
+    raw["ordinary_rules"][0]["condition"]["conditions"][0]["evidence_requirement"] = requirement
+    draft = P3PlanDraft.model_validate(raw)
+    source, mapping = source_mapping(draft)
+    assert json.dumps(requirement, ensure_ascii=False) in source
+
+    result = assess_source_coverage(draft, mapping, source)
+
+    unknown = [atom for atom in result.obligations
+               if path in atom.paths and atom.state == "UNRESOLVED"]
+    assert result.status == "BLOCKED"
+    assert result.authority_granted is False
+    assert unknown
+    assert all(atom.scope == "UNKNOWN" for atom in unknown)

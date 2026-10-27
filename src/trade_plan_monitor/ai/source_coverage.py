@@ -125,8 +125,9 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
             state = ("CONTEXT_VERIFIED" if identity else "MAPPED") if matched else "CONFLICT"
             if supplement is not None:
                 state = "MAPPED_WITH_REGISTERED_SUPPLEMENT"
-            if matched and not text_supported:
-                state = "UNRESOLVED"
+            if not text_supported:
+                state = "UNRESOLVED" if matched else "CONFLICT"
+                scope = "UNKNOWN"
                 issues.append(CoverageIssue(code="SOURCE_CONTEXT_UNVERIFIED",
                     path=declaration.path, start=clause.start, end=clause.end,
                     message="Policy prose has no complete registered executable meaning."))
@@ -196,10 +197,13 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 expanded = []
                 for atom in atoms:
                     begin, end = max(atom.start, clause.start), min(atom.end, clause.end)
+                    atom_text_supported = atom.kind == "RELATION" or declaration_text_supported(
+                        replace(declaration, path=atom.path, value=atom.value), values)
                     expanded.append(SourceObligation.build(source_hash=source_hash,
                         clause_id=clause.clause_id, start=begin, end=end,
                         excerpt=source[begin:end], kind=atom.kind,
-                        scope=source_scope(atom.path, payload, parsed, human_sides), state=state,
+                        scope=(source_scope(atom.path, payload, parsed, human_sides)
+                               if atom_text_supported else "UNKNOWN"), state=state,
                         semantics_json=canonical(dict(path=atom.path, value=atom.value)),
                         group_id=atom.group_id, relation_ids=atom.relation_ids,
                         paths=(atom.path,)))
