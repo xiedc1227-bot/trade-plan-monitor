@@ -19,7 +19,7 @@ from tests.integration.test_plan_preparation_review import review_command
 from tests.unit.test_ai_plan_extraction_v4 import _config
 from tests.unit.test_monitor_loop_schedule import at, calendar
 
-from trade_plan_monitor.ai.daily_review import daily_contract_bindings, semantic_values
+from trade_plan_monitor.ai.daily_review import semantic_values
 from trade_plan_monitor.ai.loop_plan_extraction import extract_loop_plan
 from trade_plan_monitor.ai.provider import (
     AIProviderError,
@@ -40,6 +40,7 @@ from trade_plan_monitor.backtest.loop_report import (
 )
 from trade_plan_monitor.backtest.market_store import BacktestMarketStore
 from trade_plan_monitor.backtest.preparation_store import PreparationStore
+from trade_plan_monitor.domain.daily_hash import canonical
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.routers.plans import PlanVersionPage
@@ -55,20 +56,18 @@ CONTINUITY = json.loads((ROOT / "tests/fixtures/monitor_loop_continuity.json").r
 
 
 def continuity_sources():
-    """Full synthetic plans plus explicit field spellings, never reviewed authority."""
+    """Complete synthetic JSON declarations; original narrative fixtures stay intact."""
     sources = []
     for item in CONTINUITY["sources"]:
         draft = UnifiedPlanDraft.model_validate_json(json.dumps(item["snapshot"]))
         fields = semantic_values(draft)
-        text = item["text"] + "\n完整替换此前计划。\n" + "\n".join(
-            f"{path}={str(value).lower() if isinstance(value, bool) else value}"
-            for path, value in fields.items()
-            if not isinstance(value, bool) or path.endswith((".include_low", ".include_high"))
-        )
+        text = "# Trade plan\n" + ("完整替换此前计划。\n" if sources else "")
+        text += "\n".join(f"{path} = {canonical(value)}" for path, value in fields.items())
+        text += "\nname = " + canonical(draft.name)
         if not sources:
             text += "\n实际持仓0股。账户现金余额10000元。账户快照2026-08-20T09:00:00+08:00。\n"
         else:
-            text += f"\n原文所述核心仓持仓0股。原文所述机动仓持仓{item['stated_quantity']}股。\n"
+            text += f"\nCORE持仓0股。TACTICAL持仓{item['stated_quantity']}股。\n"
         sources.append({key: item[key] for key in (
             "source_id", "authored_at", "available_at", "effective_trade_date",
         )} | {"text": text})
@@ -83,27 +82,34 @@ def continuity_output(index, text):
     ))
     values = semantic_values(draft)
     clauses = server_source_clauses(text)
-    bindings = [binding.model_dump(mode="json") for binding in daily_contract_bindings(draft)]
-    bound = {binding["path"] for binding in bindings}
+    bindings = []
     for path, value in values.items():
-        if path in bound or isinstance(value, bool) and not path.endswith(
-            (".include_low", ".include_high"),
-        ):
-            continue
-        literal = f"{path}={str(value).lower() if isinstance(value, bool) else value}"
+        literal = f"{path} = {canonical(value)}"
         start = text.index(literal)
         end = start + len(literal)
         selected = [clause.clause_id for clause in clauses if clause.start < end
                     and clause.end > start]
-        bindings.append({"path": path, "value": value, "origin": "SOURCE", "unit": "JSON",
+        bindings.append({"path": path, "value": value,
+                         "origin": "SOURCE_SEMANTIC" if value is None or type(value) is bool
+                         else "SOURCE", "unit": "JSON",
                          "clause_ids": selected, "supplement_id": None})
+
+    def clause_output(clause):
+        paths = [binding["path"] for binding in bindings
+                 if clause.clause_id in binding["clause_ids"]]
+        policy = bool(paths) or clause.excerpt == "完整替换此前计划。"
+        account = clause.excerpt.startswith(("实际持仓", "账户现金余额", "账户快照",
+                                             "CORE持仓", "TACTICAL持仓"))
+        return clause.model_dump(mode="json") | {
+            "disposition": "POLICY" if policy else "CONTEXT", "paths": paths,
+            "reason": "Exact complete synthetic declaration, scope control or account syntax.",
+            "semantic_role": None if policy else "ACCOUNT" if account else "COMMENTARY",
+        }
+
     output = {"schema_version": "monitor-loop-extraction-v1",
               "draft": draft.model_dump(mode="json"),
-              "clauses": [clause.model_dump(mode="json") | {
-                  "disposition": "POLICY", "paths": [binding["path"] for binding in bindings
-                      if clause.clause_id in binding["clause_ids"]] or ["symbol"],
-                  "reason": "Complete synthetic plan and explicit canonical policy spellings.",
-              } for clause in clauses], "bindings": bindings, "assumptions": [], "warnings": []}
+              "clauses": [clause_output(clause) for clause in clauses],
+              "bindings": bindings, "assumptions": [], "warnings": []}
     if index == 0:
         output["opening_account"] = {
             "inventory_quantity": fact(text, "实际持仓0股", 0), "lots": [],
@@ -116,9 +122,9 @@ def continuity_output(index, text):
                       scope_clause_ids=[clause.clause_id for clause in clauses
                                         if "完整替换此前计划" in clause.excerpt],
                       retain_unmentioned=False, operations=[], account_context={
-                          "core_qty": fact(text, "原文所述核心仓持仓0股", 0),
+                          "core_qty": fact(text, "CORE持仓0股", 0),
                           "tactical_qty": fact(text,
-                              f"原文所述机动仓持仓{CONTINUITY['sources'][index]['stated_quantity']}股",
+                              f"TACTICAL持仓{CONTINUITY['sources'][index]['stated_quantity']}股",
                               CONTINUITY["sources"][index]["stated_quantity"]),
                           "dependent_rule_ids": [], "dependency_clause_ids": [],
                       })
@@ -192,10 +198,7 @@ def test_continuity_actual_or_conditional_unsupported_execution_stays_blocked(cl
     from trade_plan_monitor.backtest.preparation_models import PreparationSource
 
     raw = continuity_sources()[0]
-    raw["text"] = raw["text"].replace(
-        "No recorded future transactions, partial fills, external fundamentals or "
-        "discretionary conditions.", clause,
-    )
+    raw["text"] += "\n" + clause
     source = PreparationSource.model_validate_json(json.dumps(raw))
 
     class Provider:
@@ -230,7 +233,7 @@ class BrowserAI(FakeAI):
         outer = self
         if self.mode.startswith("continuity"):
             source_index = next(index for index, item in enumerate(CONTINUITY["sources"])
-                                if source.text.startswith(item["text"]))
+                                if source.source_id == item["source_id"])
             self.source_calls.append(source_index)
             if self.mode == "continuity-retry" and source_index == 1 and (
                 self.source_calls.count(1) == 2
@@ -242,7 +245,7 @@ class BrowserAI(FakeAI):
             async def extract_plan(self, request):
                 if outer.mode.startswith("continuity"):
                     index = next(index for index, item in enumerate(CONTINUITY["sources"])
-                                 if source.text.startswith(item["text"]))
+                                 if source.source_id == item["source_id"])
                     if outer.mode == "continuity-retry" and index == 1 and (
                         outer.source_calls.count(1) == 1
                     ):
