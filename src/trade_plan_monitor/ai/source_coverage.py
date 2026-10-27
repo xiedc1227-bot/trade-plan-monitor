@@ -11,10 +11,12 @@ from trade_plan_monitor.ai.source_boundaries import (
 )
 from trade_plan_monitor.ai.source_context import positive_context
 from trade_plan_monitor.ai.source_coverage_models import (
+    COMPLETE_STATES,
     CoverageAssessment,
     CoverageIssue,
     SourceObligation,
 )
+from trade_plan_monitor.ai.source_native_support import native_support_issues
 from trade_plan_monitor.ai.source_obligations import (
     MISSING,
     bounded_clauses,
@@ -220,6 +222,16 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 expanded_counts[clause.clause_id] += len(expanded)
                 total_expanded += len(expanded)
 
+    native_issues = native_support_issues(payload, source, parsed)
+    issues.extend(native_issues)
+    if native_issues:
+        obligations = [row.model_copy(update={"state": "UNSUPPORTED"}) if (
+            row.state in COMPLETE_STATES and any(
+                path == issue.path or issue.path.startswith(path + ".")
+                or path.startswith(issue.path + ".")
+                for path in row.paths for issue in native_issues
+            )
+        ) else row for row in obligations]
     for binding in mapping.bindings:
         if (binding.origin in {"SOURCE", "SOURCE_INTERPRETATION", "SOURCE_SEMANTIC"}
                 and (binding.path not in proven_paths or not set(binding.clause_ids)

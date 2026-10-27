@@ -30,7 +30,7 @@ def _native_candidate(join):
                  "unit": "FEN", "as_of": None, "source": "Exact synthetic threshold"}},
             {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
              "comparator": "GT", "reference": {"mode": "DYNAMIC", "indicator": "MA20",
-                 "formula_version": "daily-ta-v2", "parameters": {}, "offset": 0}},
+                 "formula_version": "daily-ta-v2", "parameters": {"period": 20}, "offset": 0}},
         ],
     }
     return P3PlanDraft.model_validate(raw)
