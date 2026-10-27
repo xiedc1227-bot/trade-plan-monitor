@@ -70,4 +70,14 @@
 
 当前详情／列表／筛选／工作台读取独立检查来源覆盖，不改旧daily问题及哈希派生。未核验的纯投影默认缺覆盖。从已存工作台选择发起新运行须重验当前reader；已完成选择的GET／幂等回执重放保留历史契约。既有冻结运行及manifest不改。
 
-准备 `preparation-input-evidence-v1` 记录准备／条目／尝试身份、原始来源绑定、候选哈希、完整私有输入及服务端捕获时间，且authority_granted=false。稳定evidence_key不含时间／私有内容；同意图重试返回原时间，私有内容改变则冲突。辅助 `backtest_preparation_assurance_metadata`、`backtest_preparation_assurance` 与准备数据库共享事务但不改旧文档／哈希codec。新空库初始化两表；既有缺表库仍可读且不自动升级，仅显式 `upgrade_preparation_assurance` 增表，开发只在临时库执行。五项准确SQLite保护封存标记及不可变证明。当前前缀／继承评估及finish原子接入仍须分别完成；内存传递或输入自哈希不是当前批准。
+准备 `preparation-input-evidence-v1` 记录准备／条目／尝试身份、原始来源绑定、候选哈希、完整私有输入及服务端捕获时间，且authority_granted=false。稳定evidence_key不含时间／私有内容；同意图重试返回原时间，私有内容改变则冲突。辅助 `backtest_preparation_assurance_metadata`、`backtest_preparation_assurance` 与准备数据库共享事务但不改旧文档／哈希codec。新空库初始化两表；既有缺表库仍可读且不自动升级，仅显式 `upgrade_preparation_assurance` 增表，开发只在临时库执行。五项准确SQLite保护封存标记及不可变证明。原子finish现已保留完整原始候选JSON及输入；当前证明／回执／复用仍须独立核验。内存传递或输入自哈希不是当前批准。
+
+## PMA-K10 — 准备当前证明及审核回执
+
+`source-candidate-assurance-v1` 绑定实际准备／条目／来源／候选修订及哈希、实际尝试／私有输入、完整有序前缀、当前来源证明、逐字段原始归属及独立全局义务。初始来源使用完整 `source-coverage-v1`；继承更新使用 `source-change-coverage-v1` 加准确完整的当前前置证明。从不可变INPUT候选JSON重算实际完整前缀，不按相同来源／内容哈希扫描猜owner。自洽哈希、旧VALID／零问题审核或复制manifest不是当前来源证明。未识别来源条件及全局UNKNOWN义务跨后续变更保留。继承BUY/SELL范围只能使用同一稳定规则的完整前置方向证明，并将依赖纳入当前义务身份；未知文字及矛盾方向仍未解决。
+
+事务内当前reader不授人工审核或执行权限。新审核在现有BEGIN IMMEDIATE内、旧记录／幂等写入前，核对准确原始与拟冻结策略。人工政策修正须有已注册操作证明并重新完整评估来源；通用确认或背景标签不豁免强制条件。旧冻结读取及原已完成回执重放保留历史codec及含义。新的复用／运行授权另须匹配当前审核回执并重新核验来源／前缀。
+
+私有 `preparation-review-assurance-v1` 回执kind为REVIEW，绑定 `preparation_id`、`command_id`、`command_request_hash`、`previous_revision`、`reviewed_revision`、`review_revision`、`original_review_hash`、`frozen_manifest_hash`、完整 `proofs`、服务端 `created_at`，且 `authority_granted=false`。修订为严格正安全整数，reviewed_revision=previous_revision+1。1–512份证明须完整、同一准备、实际条目从0连续，且每项前缀准确等于此前完整证明引用。完整回执上限8MiB，不截断。主键 `evidence_key` 仅哈希preparation_id/review_revision；payload `evidence_hash` 覆盖完整版本化回执。当前授权owner另须将其绑定实际存储审核／冻结状态。
+
+复用既有封存通用辅助表，不增加DDL。INPUT保持实际attempt投影不变。对于非INPUT的REVIEW行，SQL列 `attempt_id` 明确作为kind内槽位 `review-<review_revision>`，绝不解读为供应商尝试；实际尝试保留于 `proofs[].binding.attempt_id`。其余来源／候选投影使用最后实际证明绑定。按准确主键读取，完整验证规范payload／哈希／投影及五项保护，读取不写入。同意图重试保留原时间，变更命令／证明报冲突。回执与旧审核／manifest／幂等响应同事务保存，回执故障注入须整体回滚。本附录规定剩余T08i工作，不表示复用／操作验收完成。
