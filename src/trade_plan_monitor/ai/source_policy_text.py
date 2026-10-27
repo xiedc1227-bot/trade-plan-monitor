@@ -1,8 +1,7 @@
 """Finite positive meanings for policy prose; text equality is not an evaluator."""
 
-import re
-
 from trade_plan_monitor.ai.source_obligations import MISSING, value_at
+from trade_plan_monitor.market_data.daily_indicators import PARAMETERS
 
 # These are complete atomic requirements, never satisfied runtime facts. The
 # synthetic forms support deterministic contract fixtures, not real-AI accuracy.
@@ -20,7 +19,18 @@ _INDEPENDENT_REQUIREMENTS = {
     "Human confirms a new independent technical event",
 }
 _SCOPE_REQUIREMENTS = {"Synthetic reviewed holding structure invalidation"}
-_ANNOTATION_PHRASES = {"synthetic, not market rates", "Synthetic human proposal"}
+_ANNOTATIONS = {
+    ".source": {
+        "fixture", "Exact synthetic threshold", "Exact synthetic fixed threshold",
+        "Synthetic threshold",
+    },
+    ".excerpt": {"synthetic, not market rates"},
+    ".schedule_id": {"synthetic"},
+    ".version": {"test-v1"},
+    ".indicator": frozenset(PARAMETERS),
+    ".reason": frozenset(),
+    ".allocation_evidence": {"Synthetic human proposal"},
+}
 _ATOM_KINDS = {
     "Review technical evidence for SEVERE_STRUCTURE": {"SEVERE_STRUCTURE"},
     "Review technical evidence for SEVERE_DETERIORATION": {"SEVERE_DETERIORATION"},
@@ -29,9 +39,6 @@ _ATOM_KINDS = {
     "明显下影": {"VOLUME_OR_CANDLE"},
     "相对深证成指不再转弱": {"TECHNICAL", "TRADE_VIABILITY"},
 }
-_ANNOTATION = re.compile(
-    r"[A-Za-z0-9_./:#-]{1,256}|Exact synthetic (?:fixed )?threshold"
-)
 
 
 def supported_policy_text(path, value, values):
@@ -46,9 +53,9 @@ def supported_policy_text(path, value, values):
         required = _ATOM_KINDS.get(value)
         kind = values.get(path.removesuffix("evidence_requirement") + "fact_kind")
         return value in _MANUAL_REQUIREMENTS and (required is None or kind in required)
-    if path.endswith((".source", ".excerpt", ".schedule_id", ".version", ".indicator",
-                      ".reason", ".allocation_evidence")):
-        return value in _ANNOTATION_PHRASES or _ANNOTATION.fullmatch(value) is not None
+    for suffix, meanings in _ANNOTATIONS.items():
+        if path.endswith(suffix):
+            return value in meanings
     return True  # Other string leaves are typed identifiers/enums/decimals.
 
 

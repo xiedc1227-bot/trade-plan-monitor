@@ -123,7 +123,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
             text_supported = identity or declaration_text_supported(treatment_declaration, values)
             own, relations = declaration_relations(declaration, groups)
             kind = "CONTEXT" if identity else "RELATION" if own else "PREDICATE"
-            scope = source_scope(declaration.path, payload, parsed, human_sides)
+            scope = source_scope(declaration.path, payload, parsed, human_sides, values)
             state = ("CONTEXT_VERIFIED" if identity else "MAPPED") if matched else "CONFLICT"
             if supplement is not None:
                 state = "MAPPED_WITH_REGISTERED_SUPPLEMENT"
@@ -159,7 +159,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                     message="The complete source declaration differs from the candidate."))
         elif deadline is not None and partition_at(partitions, clause.start) == "A":
             kind, state = "PREDICATE", "MAPPED_WITH_REGISTERED_SUPPLEMENT"
-            scope = source_scope(deadline.path, payload, parsed, human_sides)
+            scope = source_scope(deadline.path, payload, parsed, human_sides, values)
             path = (deadline.path,)
             meaning = canonical(dict(treatment="REGISTERED_DEADLINE_CONVERSION",
                 supplement=deadline.model_dump(mode="json")))
@@ -204,7 +204,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                     expanded.append(SourceObligation.build(source_hash=source_hash,
                         clause_id=clause.clause_id, start=begin, end=end,
                         excerpt=source[begin:end], kind=atom.kind,
-                        scope=(source_scope(atom.path, payload, parsed, human_sides)
+                        scope=(source_scope(atom.path, payload, parsed, human_sides, values)
                                if atom_text_supported else "UNKNOWN"), state=state,
                         semantics_json=canonical(dict(path=atom.path, value=atom.value)),
                         group_id=atom.group_id, relation_ids=atom.relation_ids,

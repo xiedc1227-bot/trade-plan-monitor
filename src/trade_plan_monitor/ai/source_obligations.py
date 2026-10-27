@@ -100,7 +100,9 @@ def declared_value_at(source_declarations, path):
     return values[0]
 
 
-def source_scope(path, payload, source_declarations=(), human_sides=None):
+def source_scope(path, payload, source_declarations=(), human_sides=None, semantic_paths=()):
+    if path not in semantic_paths and value_at(payload, path) is MISSING:
+        return "UNKNOWN"
     match = re.match(r"ordinary_rules\[(\d+)\]", path)
     if match:
         side_path = f"ordinary_rules[{match[1]}].side"
