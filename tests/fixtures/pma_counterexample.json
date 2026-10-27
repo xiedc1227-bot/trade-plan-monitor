@@ -1,0 +1,47 @@
+{
+  "fixture_version": "pma-counterexample-v1",
+  "baseline_revision": "a5546ad",
+  "evidence_class": "SYNTHETIC_HISTORICAL_VALIDATION_BLINDNESS",
+  "candidate_factory": "tests.unit.test_p3_policy_contract.p3_payload",
+  "mapping_factory": "tests.integration.test_market_linkage_review.source_mapping",
+  "baseline": {
+    "source_sha256_utf8": "bce6be4181500b9842d37c7bd8d305037139f5f9524a02599f7b10e3afb0bf6b",
+    "candidate_content_hash": "83d0290aa6f545618fb09803ba87d078bc9cde626db07adbdfc655a040df0721",
+    "clause_count": 145,
+    "binding_count": 128,
+    "legacy_issue_count": 0
+  },
+  "appended_requirements": [
+    {
+      "case_id": "turnover-en",
+      "language": "en",
+      "text": "Only buy when turnover exceeds 3 percent."
+    },
+    {
+      "case_id": "turnover-zh",
+      "language": "zh-CN",
+      "text": "仅当换手率超过3%时才允许买入。"
+    }
+  ],
+  "misclassification": {
+    "disposition": "CONTEXT",
+    "semantic_roles": ["COMMENTARY", "HISTORICAL", "ACCOUNT"],
+    "paths": [],
+    "reason": "Background commentary"
+  },
+  "after_append": {
+    "clause_count": 146,
+    "binding_count": 128,
+    "legacy_issue_count": 0,
+    "candidate_unchanged": true
+  },
+  "required_current_assessment": {
+    "coverage_complete": false,
+    "can_confirm": false,
+    "can_activate": false,
+    "reason": "An unimplemented mandatory BUY prerequisite cannot be discharged by an AI context label."
+  },
+  "activation_performed": false,
+  "confers_authority": false,
+  "interpretation": "The legacy zero-issue result freezes the historical blind spot only. It is not proof of semantic coverage, human confirmation, activation, monitoring readiness or trading authority."
+}

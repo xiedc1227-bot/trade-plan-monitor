@@ -1,0 +1,39 @@
+# Contract: plan-monitor-assurance
+
+Status: implementation contract — 2026-10-27. [Approved package](SPEC-plan-monitor-assurance.md) · [Chinese copy](CONTRACT-plan-monitor-assurance.zh-CN.md). Baseline `a5546ad`; no user migration, deployment or push is authorized.
+
+## PMA-K01 — Historical boundary and source ownership
+
+Keep existing Schema1–9 plan bytes, `daily-mapping-v1`, canonical source/content/review hashes, historical review derivation and frozen-run contracts unchanged. `build_daily_review` remains the historical source-evidence verifier. New `assess_source_coverage(draft, mapping, source, *, normalization=None, origin=...)` independently checks the complete source; it does not infer completeness from AI classifications or the old zero-issue result. New public authority is enabled only after C03/C04 guards are complete.
+
+Freeze the reproduced appended-condition fixture in `tests/fixtures/pma_counterexample.json`:145 clauses/128 bindings before,146/128 after, with unchanged candidate and historical zero issues. COMMENTARY/HISTORICAL/ACCOUNT cannot discharge it under the new assessment. The historical result is not permission to confirm/activate.
+
+## PMA-K02 — Current models and deterministic evidence
+
+`source-obligation-v1` owns exact canonical `clause_id`, `start/end`, `excerpt` (maximum512 code points), server-derived `obligation_id`, `kind`, `scope`, `state`, finite semantic meaning, relation references and exact bound paths. Kinds are DECLARATION/PREDICATE/RELATION/CONTEXT/SCOPE_EXCLUSION/UNKNOWN; scopes PLAN/BUY/SELL/RISK/ALERT/UNKNOWN. States are MAPPED/MAPPED_WITH_REGISTERED_SUPPLEMENT/CONTEXT_VERIFIED/SCOPE_EXCLUDED/UNRESOLVED/UNSUPPORTED/CONFLICT. At most4096 obligations total,64 per canonical clause; preserve mapping clauses512, bindings/supplements2000 and all existing byte/tree bounds.
+
+Server-owned finite field/natural-condition grammar, relation/equivalence and positive-context registries use `source-coverage-rules-v1`. Every nonpunctuation span is accounted for; no recognized atoms is not proof of no requirement. Explicit path/JSON source declarations are compared to actual candidate semantic values; segmented clauses retain the complete declaration and relationships. No keyword-absence or whole-section background waiver.
+
+`source-coverage-v1` owns current content/source/mapping hashes, normalization evidence hash, rules version, all ordered obligations/issues and a self-validating `evidence_hash`. Coverage status COMPLETE/BLOCKED is a calculation, not human authority. Public projection additionally distinguishes LEGACY_UNASSESSED/UNKNOWN and review binding. Source obligation/hash inputs exclude runtime quote/book/acquisition identities and calculation time; assessment never rearms or resizes a signal.
+
+New AI normalization evidence binds origin AI_NEW, exact pre/post candidate hashes, normalization version and complete bounded changes. Missing preimage cannot certify automatic fidelity. HUMAN/AI_HISTORICAL declare absent preimage; no retrospective raw-provider record is invented. Canonical source functions remain the existing owners; new hash domains never rewrite old preimages.
+
+## PMA-K03 — Proof storage, cutover and authority
+
+Reserve migration `0028_source_coverage` after existing0027, subject to a collision check before creation. Add assurance/receipt tables and a trusted cutover record of pre-existing plan-version identity/hash; do not change old payload/review rows. Current legacy status derives only from this server-created immutable cutover membership and matching stored identity, never a request version/flag or backdated client timestamp. New records missing proof are unknown/blocking. Downgrade rejects new assurance/receipt evidence or post-cutover versions that would lose their current authority contract; pristine safe downgrade is tested on temporary databases.
+
+`source-coverage-review-v1` is immutable and server-timed, binding current coverage evidence/rules/source/content/mapping to the exact original review ID/revision. Confirmation checks expected revision and exact hashes inside the existing symbol transaction. Same intent/body replays; changed body/proof conflicts. Extraction/save/read produce no confirmed receipt. Save keeps valid incomplete DRAFTs inspectable.
+
+Keep trusted historical decode and current eligibility separate. Missing assurance tables return upgrade/unknown without schema creation. New current ordinary/exception authority and affected send-time actionable notifications require exact bound coverage. Only the already-authorized, server-identifiable independent historical technical-risk continuity in SCC-S06 remains a narrow exception; it grants no new ordinary/exception authority or current-coverage label. UNKNOWN scope blocks all new trade authority until resolved. No user database migration is performed in implementation tests.
+
+## PMA-K04 — Public resources and errors
+
+Add only the two GET resources in PMA-S05, after guards: `/api/v1/plan-versions/{version_id}/source-coverage` and `/api/v1/plan-versions/{version_id}/monitor-readiness`. Both return literal `authorityGranted=false`; neither writes, acquires providers, updates heartbeat, activates, sends or migrates. Coverage pagination defaults50/max100, page<=1MiB, cursor binds exact source/content/mapping/rules/evidence. Full proof is validated before pagination; omitted rows cannot hide a summary blocker.
+
+The existing review command adds `coverageEvidenceHash` and `coverageRulesVersion`; absent/stale/blocked current proof is structured409. Invalid body/span/hash remains422; stored corruption uses existing secret-free integrity errors. A semantically incomplete, structurally valid extraction retains its source/candidate/mapping and blockers rather than being erased as INVALID_OUTPUT. Exact DTOs/generation remain gated until T10; preserve both API profiles and approved historical projection.
+
+## PMA-K05 — Real acceptance and read-only installation
+
+`extraction-acceptance-v1` freezes12 independent source/truth cases before response inspection.24 v12 planned outcomes; only changed instruction/template/output-schema contract adds a separate24 candidate-version set. Each assembled case prompt has its own hash without itself changing the template version. Shared ceiling48 actual client-provider attempts, atomic reservation before send, no automatic retry or refund after crash/unknown delivery. No real calls before the bounded runner/ledger and redacted corpus guards exist. User approved D05 and explicit implementation, so no repeated permission request is needed within this scope.
+
+`plan-monitor-readiness-v1` reuses current runtime authority and exposes six dependency-aware axes, actual scope, target, generation, freshness and delivery evidence. Summary precedence and independent trade eligibility follow MRD-S03. Database-only auditing is PERSISTED_ONLY and cannot establish current owner authority. Engineering/finite-corpus/real-installation claims remain separate; no synthetic response or old heartbeat becomes live acceptance.
