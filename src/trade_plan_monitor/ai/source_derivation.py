@@ -16,6 +16,15 @@ Document = Annotated[str, Field(min_length=1, max_length=MAX_ITEM_BYTES)]
 Phase = Literal["DELTA_EXPANDED", "SOURCE_NORMALIZED", "MATERIALIZED"]
 
 
+def derivation_issue_code(error):
+    text = str(error).casefold()
+    if any(marker in text for marker in (
+        "source_coverage_limit_exceeded", "byte limit", "string_too_long", "mib", "too large",
+    )):
+        return "SOURCE_COVERAGE_LIMIT_EXCEEDED"
+    return "SOURCE_NORMALIZATION_LOSS"
+
+
 def _unique(pairs):
     result = {}
     for key, value in pairs:

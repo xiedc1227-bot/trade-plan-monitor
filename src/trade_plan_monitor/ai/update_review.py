@@ -608,6 +608,13 @@ class MaterializedUpdateCandidate(ResearchValue):
     extraction: PlanUpdateExtractionResult
     review: PlanCandidateReview
 
+    def model_copy(self, *, update=None, deep=False):
+        if not update:
+            return super().model_copy(deep=deep)
+        values = self.model_dump(mode="python")
+        values["extraction"] = self.extraction.model_copy(deep=deep)
+        return type(self).model_validate(values | update)
+
     @classmethod
     def model_validate_json(cls, json_data, **kwargs):
         import json
@@ -633,16 +640,20 @@ class MaterializedUpdateCandidate(ResearchValue):
         # Invalid provider attribution is a processing correction, never a VALID
         # candidate that later fails only when the user tries to review it.
         type(self).model_validate_json(payload)
+        issues = tuple(dict.fromkeys((*self.review.issues, *self.extraction.derivation_issues)))
         return PreparationCandidateInput(
             payload_json=payload,
             evidence_hash=self.review.evidence_hash,
-            validation="UNRESOLVED" if self.review.issues else "VALID",
-            issues=self.review.issues,
+            validation="UNRESOLVED" if issues else "VALID",
+            issues=issues,
         )
 
 
 def materialize_extraction(base, base_hash, source, extraction, *, historical=False):
     """Bind the semantic result to the exact predecessor and current provider response."""
+    private_derivation = extraction.source_derivation
+    private_issues = extraction.derivation_issues
+    diagnostic = extraction.diagnostic
     extraction = PlanUpdateExtractionResult.model_validate(extraction.model_dump(mode="python"))
     context = context_from_review(base, base_hash)
     expected = sha256(
@@ -666,6 +677,19 @@ def materialize_extraction(base, base_hash, source, extraction, *, historical=Fa
         or extraction.effective_trade_date != source.effective_trade_date
     ):
         raise ValueError("update extraction differs from current source or predecessor")
+    if private_derivation is not None and not historical:
+        from trade_plan_monitor.ai.source_derivation import derivation_issue_code
+        from trade_plan_monitor.ai.source_derivation_replay import append_materialized_derivation
+
+        try:
+            private_derivation = append_materialized_derivation(
+                private_derivation, source, context, extraction.output)
+        except (ValueError, TypeError, RecursionError) as error:
+            private_derivation = None
+            private_issues = tuple(dict.fromkeys((*private_issues, derivation_issue_code(error))))
+    extraction = extraction.model_copy(update=dict(
+        source_derivation=private_derivation, derivation_issues=private_issues,
+        diagnostic=diagnostic))
     return MaterializedUpdateCandidate(
         extraction=extraction,
         review=build_update_review(base, source, extraction.output, historical=historical),

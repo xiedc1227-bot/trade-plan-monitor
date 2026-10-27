@@ -29,7 +29,7 @@ from trade_plan_monitor.ai.models import (
 from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
 from trade_plan_monitor.ai.provider import AIProvider
 from trade_plan_monitor.ai.review import server_source_clauses
-from trade_plan_monitor.ai.source_derivation import SourceDerivationEvidence
+from trade_plan_monitor.ai.source_derivation import SourceDerivationEvidence, derivation_issue_code
 from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.loop_input import SafeShares
 from trade_plan_monitor.backtest.models import Sha256Hex, StableIdentifier
@@ -374,10 +374,7 @@ async def extract_plan_update(
                 raise ValueError("provider update differs from deterministic source derivation")
         except (ValueError, TypeError, RecursionError) as error:
             source_derivation = None
-            text = str(error).casefold()
-            derivation_issues = (("SOURCE_COVERAGE_LIMIT_EXCEEDED" if any(
-                marker in text for marker in ("byte limit", "string_too_long", "mib", "too large")
-            ) else "SOURCE_NORMALIZATION_LOSS"),)
+            derivation_issues = (derivation_issue_code(error),)
         evidence_hash = sha256(canonical_json({
             "domain": "monitor-loop-update-evidence-v1",
             "source_binding_hash": source.binding_hash, "context": context, "output": output,
