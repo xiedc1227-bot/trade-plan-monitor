@@ -102,7 +102,12 @@ class Chain:
             update={"version": version, **({"plan_id": plan_id} if plan_id else {})}
         )
         draft = UnifiedPlanDraft.from_executable(self.plan)
-        mapping = reviewed_mapping(draft, source)
+        if source == "Synthetic human-reviewed supplements for this fixture.":
+            from tests.integration.test_market_linkage_review import source_mapping
+
+            source, mapping = source_mapping(draft)
+        else:
+            mapping = reviewed_mapping(draft, source)
         from trade_plan_monitor.ai.daily_review import daily_source_clauses
 
         treatments = {}
@@ -119,15 +124,16 @@ class Chain:
             mapping = mapping.model_copy(
                 update={"clauses": tuple(treatments.get(c.clause_id, c) for c in mapping.clauses)}
             )
-        self.post(
-            "daily-plan-review-supplements",
-            {
-                "candidateJson": daily_draft_json(draft),
-                "contentHash": mapping.candidate_content_hash,
-                "supplements": [s.model_dump(mode="json") for s in mapping.supplements],
-                "expectedRevision": supplement_revision,
-            },
-        )
+        if mapping.supplements:
+            self.post(
+                "daily-plan-review-supplements",
+                {
+                    "candidateJson": daily_draft_json(draft),
+                    "contentHash": mapping.candidate_content_hash,
+                    "supplements": [s.model_dump(mode="json") for s in mapping.supplements],
+                    "expectedRevision": supplement_revision,
+                },
+            )
         saved = self.post(
             "plan-drafts",
             {
@@ -147,7 +153,15 @@ class Chain:
             "sourceHash": saved["sourceHash"],
             "reviewEvidenceHash": saved["reviewEvidenceHash"],
         }
-        reviewed = self.post("plan-review-confirmations", {**binding, "expectedRevision": 0})
+        from trade_plan_monitor.state.source_coverage_authority import read_version_coverage
+
+        with self.plans._unit_of_work() as work:
+            coverage = read_version_coverage(work, work.plans.get_version_details(saved["id"]))
+        reviewed = self.post("plan-review-confirmations", {
+            **binding, "expectedRevision": 0,
+            "coverageEvidenceHash": coverage.assessment.evidence_hash,
+            "coverageRulesVersion": coverage.assessment.rules_version,
+        })
         assert reviewed["canActivate"]
         active = self.post(
             "plan-activations",

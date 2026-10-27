@@ -22,7 +22,7 @@ def with_economics(plan, mode="REQUIRED"):
     policy["economics"]["fee_schedule"].update(effective_from="2026-09-01",
         effective_through="2026-10-31", minimum_commission_fen=0, symbols=[plan.symbol])
     policy["level_evidence"] = [dict(level=level, dimension=dimension,
-        source="synthetic", excerpt="reviewed fixture evidence", as_of=None, indicator=None)
+        source="fixture", excerpt="synthetic, not market rates", as_of=None, indicator=None)
         for level in ("PRESSURE", "RISK") for dimension in ("PRICE_STRUCTURE", "TREND")]
     if mode == "PREVIEW_ONLY":
         policy["economics"]["mode"] = mode
