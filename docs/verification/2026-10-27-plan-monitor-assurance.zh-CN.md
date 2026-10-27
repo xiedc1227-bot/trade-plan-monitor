@@ -116,3 +116,13 @@ LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`）。独立21项�
 独立有限风险控制解析新增56项测试，关联风险／来源控制组合153项通过，8.69秒（`t08-risk-control-final.log`）。root独立验证新增56项通过，3.92秒（`t08-risk-control-root.log`），Ruff通过；提交 `860b1ab`。类型化前后校验保留每个非scope风险字段，准确求范围交集，保留未知来源单元。原缺模块RED及证明超限错误分类RED仍保存在 `t08-risk-control-red.log`、`t08-risk-control-limit-red.log`。这些是helper检查，完整来源风险／价格角色接入仍待完成。
 
 独立来源物理提取不需要前置策略许可；依赖前驱的begin_call则必须在既有writer事务内取得其真实当前证明。新增测试现复现3项真实失败／4项通过（`current-reuse-agent-independent-red.log`）：两类未证明的VALID前驱被接收，正例路径未重验当前INPUT。独立context／base、取消、CAS及旧回执重试继续覆盖。该待补防护、完整JSON容器范围继承、实际血缘writer／复用接入及混合表格角色均未因helper结果获得验收。中间结果不关闭阶段／检查点，供应商尝试仍0/48。
+
+## PMA-R14 — T08当前血缘、完整容器及最终运行进展
+
+实际SINGLE继承／自有尾项修正及COMPOSITION，在原事务中验证真实创建命令／响应及父项当前审核。root最终相邻组合180项通过，67.76秒（`t08-lineage-authority-final.log`）；提交 `cb4e60b`、`8263c33`。三类存储owner损坏原误报STALE，现报INTEGRITY。独立SQL测试发现同连接跨事务缓存问题，context现检测事务／写入／data／schema变化，同事务只读缓存仍有效；独立生命周期3项通过，2.79秒。root较早组合179通过／1失败，因无用的单来源私有keyword打断既有资源错误注入；删除该无用参数后恢复原合同。原失败均保留。
+
+完整原文JSON容器及ALL/ANY关系，独立重建全来源后，仅继承同一已验证稳定规则方向。新增27项通过（`container-scopes-agent-final2.log`），完整source选择在最后新增未知余项测试之前1008项通过，55.37秒；root最终容器／Human／固定输出组合70项通过，8.03秒（`t08-container-scope-root.log`）；提交 `a6c144e`。混合风险表格helper新增53项，保留独立范围与结构价格含义；相关206项通过，10.26秒，root109项通过，6.73秒（`t08-risk-table-final.log`、`t08-risk-table-root.log`）；提交 `41d0df1`。计数重叠；整来源表格角色消费仍待完成。
+
+物理调用预检初始5失败／7通过，随后12项通过，4.10秒（`t08-current-call-red.log`、`t08-current-call-01.log`）；提交 `655ccfd`。未启动的来源失败准确结束，无供应商调用、重试或未知物理状态。既有相关组合225通过／11失败，因旧worker种子缺原始INPUT／Human登记（`t08-current-call-existing.log`）。合法worker夹具随后聚焦79项通过，14.96秒，保留全部189条原始断言及共享旧结果helper完整源码（`readiness-current-worker-all-01.log`、`readiness-current-worker-assert-audit-01.log`）；提交 `90132ec`。
+
+准备库持有writer栅栏6项通过，10.35秒（`t08-run-fence-01.log`）；独立调用／栅栏组合18项通过，12.78秒（`t08-call-run-independent-review.log`）；提交 `d37aabb`。最终任务准入factory16项通过，8.14秒；扩大jobs／input检查51通过／1个旧自然来源夹具在任务提交前失败（`t08-job-admission-guard-regression.log`）；提交 `dfacba9`。真实Facade新增18场景通过，16.38秒（`t08-current-submission-01.log`），含拷贝后原文／同文元数据变更、缺审核／能力及已完成回执重放。扩大最终Facade回归及独立审查仍在进行。T08／C03继续开放，含剩余自然来源／表格语义、操作／发送防护及后续公共接口／UI／语料／就绪阶段。真实供应商尝试仍0/48，用户数据库未迁移。
