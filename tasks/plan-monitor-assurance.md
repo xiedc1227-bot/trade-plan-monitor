@@ -47,14 +47,14 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T03 — Close the background-label and negative-keyword escapes
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T02.
 - Files/scope: `ai/source_coverage.py`, positive-treatment seam in `ai/source_resolution.py`, `test_source_coverage.py`, `test_source_coverage_context.py` (4 files).
 - Acceptance: A01,A03; Verify: focused V02. All three roles, nonempty reasons and keyword-free conditions remain blocked unless the exact span has a valid positive non-policy treatment. Preserve real context and no invented trades.
 
 ### PMA-C01 — Obligation and context checkpoint
 
-- [ ] V01,V02,V08 available-stage checks pass; A01/A03/A04 have real evidence. No current/frozen authority is opened merely by creating models.
+- [x] V01,V02,V08 available-stage checks pass; A01/A03/A04 have real evidence. No current/frozen authority is opened merely by creating models.
 
 ### PMA-T04 — Compare complete predicate and relation semantics
 

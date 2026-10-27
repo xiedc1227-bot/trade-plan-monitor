@@ -12,8 +12,14 @@ Logs currently retained in ignored `.pytest_cache/pma-v01.log`, `.pytest_cache/p
 
 ## PMA-R02 — Remaining acceptance
 
-T01/T02 are complete. T03–T24 and C01–C08 remain pending. Do not infer coverage completion from baseline zero issues or approved contracts. Real attempt count remains0/48; source-corpus eligibility is being investigated read-only before any provider call. Engineering completion, exact-version real extraction and actual-installation readiness will be reported separately.
+T01–T03 and C01 are complete. T04–T24 and C02–C08 remain pending. Do not infer full source coverage from baseline zero issues or approved contracts. Real attempt count remains0/48; source-corpus eligibility is being investigated read-only before any provider call. Engineering completion, exact-version real extraction and actual-installation readiness will be reported separately.
 
 ## PMA-R03 — T02 bounded evidence models
 
 New model tests initially failed because the module was absent. Final focused model/historical group:28 passed,0.73s; Ruff passed. Covers strict scalars, canonical finite JSON, proof/obligation tamper,4096/4097 total bound,64/65 per-clause bound, duplicate evidence, stable source identity across treatment changes and AI_NEW missing-preimage blocking. These pure models grant no authority; current interfaces remain gated. Logs: `.pytest_cache/pma/t02-red.log`, `t02-final.log`, `t02-ruff.log`.
+
+## PMA-R04 — T03 and C01 source context guard
+
+Combined current guard, registry, parser, models, historical boundary and preliminary semantic mutations:161 passed in2.18s (`.pytest_cache/pma/c01.log`); final targeted Ruff passed. The private guard rejects all three background roles, keyword-free and mixed-sentence requirements; whole path=JSON declarations must match complete candidate semantics. Historical verification is unchanged. Positive contexts are finite exact titles/history/account/metadata productions, not keyword absence. Public authority remains gated pending C03/C04.
+
+Two independent regressions exposed real defects and were repaired: source leading whitespace stripping (1 failed/18 passed, then29 passed) and duplicate JSON declaration keys (1 failed/6 passed, then the combined161 passed). Logs: `t02-span-red.log`, `t02-span-green.log`, `t03-parser-red.log`. The18 preliminary semantic tests passed under the whole-declaration guard after fixing their own nullable-position diagnostic; that diagnostic failure is not represented as a production defect or completed T04 acceptance.
