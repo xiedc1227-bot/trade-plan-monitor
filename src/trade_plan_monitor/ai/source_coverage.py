@@ -1,6 +1,11 @@
 """Current source coverage is additional evidence, never a historical decoder."""
 
 from trade_plan_monitor.ai.daily_review import DailyMapping, build_daily_review, semantic_values
+from trade_plan_monitor.ai.source_boundaries import (
+    partition_at,
+    repeats_executable,
+    source_partitions,
+)
 from trade_plan_monitor.ai.source_context import positive_context
 from trade_plan_monitor.ai.source_coverage_models import (
     CoverageAssessment,
@@ -21,7 +26,11 @@ from trade_plan_monitor.ai.source_semantics import (
     equal_declaration,
     relation_groups,
 )
-from trade_plan_monitor.ai.source_treatments import missing_value_supplement, source_parts
+from trade_plan_monitor.ai.source_treatments import (
+    deadline_supplement,
+    missing_value_supplement,
+    source_parts,
+)
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.daily_scope import scope_hash
@@ -49,6 +58,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
     payload = draft.executable_payload()
     metadata = draft.model_dump(mode="json")
     parsed = declarations(source)
+    partitions = source_partitions(source)
     groups = relation_groups(parsed, source_hash)
     proven_paths = {}
     obligations, issues = [], []
@@ -67,6 +77,7 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
         path, group, meaning, relations = (), None, None, ()
+        deadline = deadline_supplement(clause.excerpt, draft, mapping)
         if clause.excluded or clause.limited:
             kind, scope = ("UNKNOWN", "UNKNOWN") if clause.limited else ("SCOPE_EXCLUSION", "PLAN")
             state = "UNRESOLVED" if clause.limited else "SCOPE_EXCLUDED"
@@ -103,18 +114,32 @@ def assess_source_coverage(draft, mapping, source, *, normalization=None, origin
                 issues.append(CoverageIssue(code="SOURCE_CONTEXT_UNVERIFIED",
                     path=declaration.path, start=clause.start, end=clause.end,
                     message="Policy prose has no complete registered executable meaning."))
+            in_background = partition_at(partitions, clause.start) == "B" and not identity
+            partition_conflict = in_background and not repeats_executable(
+                declaration, parsed, partitions)
+            if partition_conflict:
+                state = "CONFLICT"
+                issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
+                    path=declaration.path, start=clause.start, end=clause.end,
+                    message="A new policy in background cannot supply executable A authority."))
             path, group = (declaration.path,), own or declaration.group_id
             meaning = canonical(dict(path=declaration.path, value=declaration.value))
             if supplement is not None:
                 meaning = canonical(dict(path=declaration.path, value=declaration.value,
                     supplement=supplement.model_dump(mode="json")))
-            if matched and text_supported and not identity:
+            if matched and text_supported and not identity and not partition_conflict:
                 for proven in declared_paths(declaration, values):
                     proven_paths.setdefault(proven, set()).add(clause.clause_id)
             if not matched:
                 issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
                     path=declaration.path, start=clause.start, end=clause.end,
                     message="The complete source declaration differs from the candidate."))
+        elif deadline is not None and partition_at(partitions, clause.start) == "A":
+            kind, scope, state = ("PREDICATE", source_scope(deadline.path, payload),
+                                  "MAPPED_WITH_REGISTERED_SUPPLEMENT")
+            path = (deadline.path,)
+            meaning = canonical(dict(treatment="REGISTERED_DEADLINE_CONVERSION",
+                supplement=deadline.model_dump(mode="json")))
         else:
             treatment = positive_context(clause.excerpt, metadata=metadata)
             kind, scope = ("CONTEXT", "PLAN") if treatment else ("UNKNOWN", "UNKNOWN")

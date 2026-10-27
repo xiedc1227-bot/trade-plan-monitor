@@ -1,6 +1,8 @@
 """Exact registered exclusions and explicit missing-value human supplements."""
 
+import re
 from dataclasses import dataclass
+from datetime import date
 
 from trade_plan_monitor.ai.source_obligations import MISSING, value_at
 from trade_plan_monitor.domain.daily_hash import canonical
@@ -55,5 +57,30 @@ def missing_value_supplement(declaration, draft, mapping):
             or supplement.path != binding.path
             or canonical(actual) != canonical(binding.value)
             or canonical(actual) != canonical(supplement.value)):
+        return None
+    return supplement
+
+
+def deadline_supplement(text, draft, mapping):
+    """Retain the existing narrowly scoped explicit deadline conversion route."""
+    match = re.fullmatch(r"本规则有效至(\d{4}-\d{2}-\d{2})。", text)
+    if match is None or len(draft.ordinary_rules) != 1:
+        return None
+    try:
+        date.fromisoformat(match[1])
+    except ValueError:
+        return None
+    path = "ordinary_rules[0].validity.mode"
+    binding = next((row for row in mapping.bindings if row.path == path), None)
+    if (binding is None or binding.origin != "HUMAN_SUPPLEMENT" or binding.clause_ids
+            or binding.value != "PLAN_ACTIVE"):
+        return None
+    supplement = next((row for row in mapping.supplements
+                       if row.supplement_id == binding.supplement_id), None)
+    if (supplement is None or supplement.path != path or supplement.value != "PLAN_ACTIVE"
+            or supplement.candidate_content_hash != mapping.candidate_content_hash
+            or value_at(draft.executable_payload(), path) != "PLAN_ACTIVE"
+            or text not in supplement.reason
+            or re.search(r"改为持续有效|convert to PLAN_ACTIVE", supplement.reason) is None):
         return None
     return supplement

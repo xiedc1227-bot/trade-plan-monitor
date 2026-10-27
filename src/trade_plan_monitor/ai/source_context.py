@@ -4,6 +4,7 @@ import re
 from collections.abc import Mapping
 from datetime import date
 
+from trade_plan_monitor.ai.source_boundaries import PARTITION_MARKERS
 from trade_plan_monitor.domain.daily_hash import canonical
 
 _MAX_SAFE_QUANTITY = 9_007_199_254_740_991
@@ -85,6 +86,8 @@ def positive_context(text: str, *, metadata: Mapping[str, object] | None = None)
     if not isinstance(text, str):
         return None
     text = text.strip()
+    if text in PARTITION_MARKERS:
+        return "PARTITION_MARKER_" + PARTITION_MARKERS[text]
     if identity := _EXACT_CONTEXT.get(text):
         return identity
     if identity := _historical_record(text):
