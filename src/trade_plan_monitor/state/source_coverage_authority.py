@@ -1,7 +1,7 @@
 """Current assurance orchestration; historical review derivation stays unchanged."""
 
 from trade_plan_monitor.ai.source_coverage import assess_source_coverage
-from trade_plan_monitor.ai.source_coverage_models import CoverageAssessment
+from trade_plan_monitor.ai.source_coverage_models import CoverageAssessment, CoverageIssue
 from trade_plan_monitor.ai.source_normalization import capture_normalization, validate_normalization
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_validation import (
@@ -24,12 +24,17 @@ class SourceCoverageAuthorityError(ValueError):
 
 def extraction_inputs(result):
     """Capture actual private carriers before the historical serializer excludes them."""
+    issues = tuple(row if isinstance(row, CoverageIssue) else CoverageIssue(
+        code=row if row in {"SOURCE_NORMALIZATION_LOSS", "SOURCE_COVERAGE_LIMIT_EXCEEDED"}
+        else "SOURCE_NORMALIZATION_LOSS", path="source",
+        message="The original extraction derivation is incomplete or exceeds its evidence limit.",
+    ) for row in getattr(result, "derivation_issues", ()))
     return CoverageInputs.build(source_hash=result.source_text_sha256,
         source_binding_hash=getattr(result, "source_binding_hash", None),
         initial_coverage=getattr(result, "coverage", None),
         normalization=getattr(result, "normalization_trace", None),
         derivation=getattr(result, "source_derivation", None),
-        derivation_issues=getattr(result, "derivation_issues", ()))
+        derivation_issues=issues)
 
 
 def save_extraction_inputs(work, result, *, replay=False):

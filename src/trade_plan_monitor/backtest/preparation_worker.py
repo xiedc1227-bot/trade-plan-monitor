@@ -26,6 +26,8 @@ from trade_plan_monitor.backtest.preparation_models import (
 )
 from trade_plan_monitor.backtest.preparation_review import _original_extraction
 from trade_plan_monitor.backtest.preparation_store import PreparationConflictError, PreparationStore
+from trade_plan_monitor.state.source_coverage_authority import extraction_inputs
+from trade_plan_monitor.state.source_coverage_values import CoverageInputs
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +56,7 @@ class PreparationCallOutcome:
     unknown: bool = False
     candidate: PreparationCandidateInput | None = None
     error_code: str | None = None
+    inputs: CoverageInputs | None = None
 
 
 def preparation_candidate_review(
@@ -168,13 +171,16 @@ def run_attempt(
             if result.diagnostic
             else None
         )
-        result = (
-            type(result)
-            .model_validate_json(result.model_dump_json())
-            .model_copy(
-                update={"diagnostic": diagnostic},
-            )
-        )
+        inputs = extraction_inputs(result)
+        restored = {"diagnostic": diagnostic}
+        if isinstance(result, LoopPlanExtractionResult):
+            restored.update(coverage=inputs.initial_coverage,
+                            normalization_trace=inputs.normalization)
+        elif isinstance(result, PlanUpdateExtractionResult):
+            restored.update(source_derivation=inputs.derivation,
+                            derivation_issues=tuple(row.code for row in inputs.derivation_issues))
+        validated = type(result).model_validate_json(result.model_dump_json())
+        result = validated.model_copy(update=restored)
         if (str(result.request_id), result.source_text_sha256) != (
             claim.generation,
             sha256(source.text.encode()).hexdigest(),
@@ -201,12 +207,16 @@ def run_attempt(
             ) != (source.authored_at, source.available_at, source.effective_trade_date):
                 return PreparationCallOutcome(unknown=True)
             try:
-                candidate = (result.to_preparation_candidate()
-                             if result.output.scope == "UNRESOLVED" else materialize_extraction(
-                                 base, claim.base_hash, source, result,
-                             ).to_preparation_candidate())
+                if result.output.scope == "UNRESOLVED":
+                    candidate = result.to_preparation_candidate()
+                else:
+                    materialized = materialize_extraction(base, claim.base_hash, source, result)
+                    result = materialized.extraction
+                    candidate = materialized.to_preparation_candidate()
+                    inputs = extraction_inputs(result)
             except ValueError:
-                return PreparationCallOutcome(result=result, error_code="INVALID_UPDATE_EVIDENCE")
+                return PreparationCallOutcome(result=result, inputs=inputs,
+                                               error_code="INVALID_UPDATE_EVIDENCE")
         diagnostics = (diagnostic,) if diagnostic else ()
         code = next((d.provider_error_code for d in diagnostics if d.provider_error_code), None)
         unknown = code == "TIMEOUT" or any(
@@ -214,7 +224,8 @@ def run_attempt(
             and d.transient_kind not in {"HTTP_408", "HTTP_5XX", "DNS", "TLS", "CONNECT", "PROXY"}
             for d in diagnostics
         )
-        return PreparationCallOutcome(result=result, unknown=unknown, candidate=candidate)
+        return PreparationCallOutcome(result=result, inputs=inputs,
+                                      unknown=unknown, candidate=candidate)
     except Exception:
         # No exception text, response body or credential enters durable preparation state.
         return PreparationCallOutcome(unknown=True)
