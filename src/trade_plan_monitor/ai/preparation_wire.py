@@ -8,7 +8,7 @@ import re
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import Field, RootModel, field_validator, model_validator
+from pydantic import Field, PrivateAttr, RootModel, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import (
     DailyFieldBinding,
@@ -136,12 +136,19 @@ class ExceptionWireDraft(MarketExceptionPlanDraft):
 
 
 class CompactPlanOutput(ResearchValue):
+    _source_preimage_json: str | None = PrivateAttr(default=None)
+
     type: Literal["json_object"] | None = Field(default=None, exclude=True)
     draft: ExceptionWireDraft | LinkedWireDraft | WireDraft
     clauses: tuple[ClauseDecision, ...] = Field(default=(), max_length=512)
     bindings: tuple[EvidenceReference, ...] = Field(default=(), max_length=2000)
     warnings: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
     clause_groups: tuple[SemanticClauseGroup, ...] = Field(default=(), max_length=64, exclude=True)
+
+    def model_copy(self, *, update=None, deep=False):
+        copied = super().model_copy(update=update, deep=deep)
+        copied._source_preimage_json = self._source_preimage_json
+        return copied
 
     @model_validator(mode="after")
     def expand_groups(self):
@@ -399,6 +406,7 @@ def expand_compact_output(output, source, *, context=None):
     from trade_plan_monitor.ai.loop_plan_extraction import LoopPlanExtractionOutput
     from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
 
+    preimage = output._source_preimage_json
     canonical = daily_source_clauses(source.text)
     semantic_mode = isinstance(output, (CompactPatchOutput, CompactInitialV2Output))
     known = {clause.clause_id for clause in canonical}
@@ -848,11 +856,13 @@ def expand_compact_output(output, source, *, context=None):
         warnings=tuple(warnings[:256]),
     )
     if isinstance(output, CompactInitialOutput):
-        return LoopPlanExtractionOutput(
+        expanded = LoopPlanExtractionOutput(
             schema_version="monitor-loop-extraction-v1",
             opening_account=recover_zero_inventory(output.opening_account, source.text),
             **common,
         )
+        expanded._source_preimage_json = preimage
+        return expanded
     operations = {}
     original_buys = [r for r in output.draft.ordinary_rules if r.side == "BUY"]
     cancellations = tuple(
@@ -899,7 +909,7 @@ def expand_compact_output(output, source, *, context=None):
                 }
             )
         operations[key] = operation
-    return PlanUpdateExtractionOutput(
+    expanded = PlanUpdateExtractionOutput(
         schema_version="monitor-loop-update-extraction-v1",
         scope=output.scope,
         scope_clause_ids=output.scope_clause_ids,
@@ -911,3 +921,5 @@ def expand_compact_output(output, source, *, context=None):
         ),
         **common,
     )
+    expanded._source_preimage_json = preimage
+    return expanded

@@ -34,6 +34,11 @@ class CurrentPlanExtractionOutput(DailyValue):
     assumptions: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
     warnings: tuple[ExtractionIssue, ...] = Field(default=(), max_length=256)
 
+    def model_copy(self, *, update=None, deep=False):
+        copied = super().model_copy(update=update, deep=deep)
+        copied._source_preimage_json = self._source_preimage_json
+        return copied
+
     @model_validator(mode="after")
     def no_human_authority(self):
         if any(

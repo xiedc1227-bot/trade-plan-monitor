@@ -488,6 +488,8 @@ async def extract_loop_plan(
     result = LoopPlanExtractionResult(
         **{**reviewed.model_dump(mode="python"), "validation_issues": tuple(issues)},
         diagnostic=reviewed.diagnostic,
+        coverage=reviewed.coverage,
+        normalization_trace=reviewed.normalization_trace,
         source_id=source.source_id,
         source_binding_hash=source.binding_hash,
         authored_at=source.authored_at,
