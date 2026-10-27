@@ -58,14 +58,14 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T04 — Compare complete predicate and relation semantics
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T03.
 - Files/scope: focused semantic comparator, registered equivalence adapter and `test_source_coverage_semantics.py` plus at most2 helpers/tests.
 - Acceptance: A02,A04; Verify: focused V02. Same-sentence omitted conjunct, AND/OR, negation/exception, comparator/unit, cycle/offset, dates, quantity, permissions and occurrence mutations are detected independently of existing bindings.
 
 ### PMA-T05 — Audit normalization and exact mixed-source treatments
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T04.
 - Files/scope: focused normalization trace adapter, existing normalization/exclusion seam, `test_source_coverage_normalization.py`, mixed-source regression (at most5 files).
 - Acceptance: A03,A04; Verify: V02 plus existing source-treatment tests. Record raw/normalized differences, prevent evaluation-only erasure, retain original code points, registered fundamental exclusions, technical remainders and scoped supplement/expiry overrides.
