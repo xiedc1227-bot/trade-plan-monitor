@@ -8,6 +8,10 @@ P2 原文定义的波动数量与买入前成本收益约束：[已批准规格]
 
 P3 已批准金额政策：[规格及六项决策](specifications/monitoring/SPEC-market-linkage-p3.zh-CN.md) · [操作及原提示词剩余边界](operations/market-linkage-p3.zh-CN.md) · [24项任务及八个检查点](../tasks/market-linkage-p3.zh-CN.md) · [实际验收状态](verification/2026-10-26-market-linkage-p3.zh-CN.md)。Schema9 支持明确成本／市值上限、纯金额／并用限制及连续隔离模拟预算成本。当前、运行与回放阶段已验收，全项目验收以报告为准。
 
+## 已批准实施中
+
+交易计划监控保证：[总规格、模块地图及六项建议决策](specifications/monitoring/SPEC-plan-monitor-assurance.zh-CN.md) · [强制原文条件覆盖](specifications/monitoring/SPEC-source-condition-coverage.zh-CN.md) · [v12完整计划提取验收](specifications/monitoring/SPEC-extraction-v12-acceptance.zh-CN.md) · [只读监控就绪](specifications/monitoring/SPEC-monitor-readiness.zh-CN.md) · [24项任务及八个检查点](../tasks/plan-monitor-assurance.zh-CN.md)。本阶段已批准实施，重点防止静默遗漏强制条件，区分提取质量与实际监控就绪；实施与阶段验收进行中，不授权迁移用户数据。
+
 ## 从这里开始
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。

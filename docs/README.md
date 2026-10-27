@@ -8,6 +8,10 @@ P2 source-defined volatility sizing and pre-buy economics: [approved specificati
 
 P3 approved monetary policies: [specification and six decisions](specifications/monitoring/SPEC-market-linkage-p3.md) · [operations and remaining original-prompt boundaries](operations/market-linkage-p3.md) · [24 tasks and eight checkpoints](../tasks/market-linkage-p3.md) · [actual acceptance status](verification/2026-10-26-market-linkage-p3.md). Schema9 supports explicit cost/value caps, amount-only/combined limits and continuous isolated simulation budget basis. Current/runtime/replay stages are accepted; whole-project acceptance follows the report.
 
+## Approved implementation in progress
+
+Plan monitoring assurance: [package, module map and six proposed decisions](specifications/monitoring/SPEC-plan-monitor-assurance.md) · [mandatory source-condition coverage](specifications/monitoring/SPEC-source-condition-coverage.md) · [v12 full-plan extraction acceptance](specifications/monitoring/SPEC-extraction-v12-acceptance.md) · [read-only monitoring readiness](specifications/monitoring/SPEC-monitor-readiness.md) · [24 tasks and eight checkpoints](../tasks/plan-monitor-assurance.md). This approved phase targets silent mandatory-condition omissions and separates extraction quality from actual monitoring readiness. Implementation and staged acceptance are in progress; user database migration remains unauthorized.
+
 ## Start here
 
 English documents are canonical implementation inputs; matching `.zh-CN.md` files are equivalent Chinese review copies. Use the [project README](../README.md) for installation and routine checks, the [capability map](architecture/CAPABILITY-MAP.md) for module boundaries, and [One Trade Plan Workflow](specifications/monitoring/SPEC-unified-plan.md) for current product behavior.
