@@ -20,6 +20,7 @@ _INDEPENDENT_REQUIREMENTS = {
     "Human confirms a new independent technical event",
 }
 _SCOPE_REQUIREMENTS = {"Synthetic reviewed holding structure invalidation"}
+_ANNOTATION_PHRASES = {"synthetic, not market rates", "Synthetic human proposal"}
 _ATOM_KINDS = {
     "Review technical evidence for SEVERE_STRUCTURE": {"SEVERE_STRUCTURE"},
     "Review technical evidence for SEVERE_DETERIORATION": {"SEVERE_DETERIORATION"},
@@ -45,8 +46,9 @@ def supported_policy_text(path, value, values):
         required = _ATOM_KINDS.get(value)
         kind = values.get(path.removesuffix("evidence_requirement") + "fact_kind")
         return value in _MANUAL_REQUIREMENTS and (required is None or kind in required)
-    if path.endswith(".source"):
-        return _ANNOTATION.fullmatch(value) is not None
+    if path.endswith((".source", ".excerpt", ".schedule_id", ".version", ".indicator",
+                      ".reason", ".allocation_evidence")):
+        return value in _ANNOTATION_PHRASES or _ANNOTATION.fullmatch(value) is not None
     return True  # Other string leaves are typed identifiers/enums/decimals.
 
 

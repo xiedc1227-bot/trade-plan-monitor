@@ -3,6 +3,7 @@
 import pytest
 from tests.integration.test_market_linkage_review import source_mapping
 from tests.unit.test_source_coverage_adversarial import _native_candidate
+from tests.unit.test_source_coverage_semantics import _native_baseline
 
 from trade_plan_monitor.ai.source_coverage import assess_source_coverage
 from trade_plan_monitor.domain.p3_validation import P3PlanDraft
@@ -18,4 +19,18 @@ def test_registered_volume_atom_cannot_be_reinterpreted_as_another_fact_kind(kin
     source, mapping = source_mapping(draft)
     proof = assess_source_coverage(draft, mapping, source)
     assert proof.coverage_complete is complete
+    assert proof.authority_granted is False
+
+
+@pytest.mark.parametrize("field", ["provenance.excerpt", "schedule_id", "version"])
+def test_fee_annotation_labels_cannot_hide_an_additional_forward_condition(field):
+    draft, _, _ = _native_baseline()
+    raw = draft.model_dump(mode="json")
+    schedule = raw["position"]["limit"]["capital_policy"]["buy_cost_schedule"]
+    parent = schedule["provenance"] if field.startswith("provenance.") else schedule
+    parent[field.split(".")[-1]] = "Only buy when turnover exceeds 3 percent."
+    draft = P3PlanDraft.model_validate(raw)
+    source, mapping = source_mapping(draft)
+    proof = assess_source_coverage(draft, mapping, source)
+    assert not proof.coverage_complete
     assert proof.authority_granted is False
