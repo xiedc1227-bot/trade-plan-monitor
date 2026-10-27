@@ -6,7 +6,7 @@ import json
 import re
 import sqlite3
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -233,6 +233,7 @@ class BacktestJobRepository:
         reservation: BacktestRunSubmissionReservation,
         *,
         on_admitted: Callable[[str], None] | None = None,
+        admission_guard: Callable[[], AbstractContextManager[object]] | None = None,
     ) -> BacktestJobReceipt:
         """Admit one resolved run only while its durable public-intent claim is owned."""
 
@@ -246,6 +247,7 @@ class BacktestJobRepository:
             request_id=None,
             reservation=reservation,
             on_admitted=on_admitted,
+            admission_guard=admission_guard,
         )
 
     def _submit(
@@ -256,8 +258,11 @@ class BacktestJobRepository:
         request_id: str | None,
         reservation: BacktestRunSubmissionReservation | None,
         on_admitted: Callable[[str], None] | None,
+        admission_guard: Callable[[], AbstractContextManager[object]] | None = None,
     ) -> BacktestJobReceipt:
 
+        if admission_guard is not None and not callable(admission_guard):
+            raise TypeError("admission_guard must be a context-manager factory")
         if not isinstance(
             request,
             (
@@ -282,7 +287,9 @@ class BacktestJobRepository:
         operation_hash = sha256(_OPERATION_HASH_DOMAIN + request_json.encode("utf-8")).hexdigest()
         run_id, dataset_hash = _request_identities(request)
 
-        with self._connect() as connection:
+        # The jobs connection exits first, so its commit/rollback precedes
+        # release of any caller-owned source authority lock.
+        with ExitStack() as admission, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             if reservation is None:
                 binding_request_hash = request_hash
@@ -306,6 +313,9 @@ class BacktestJobRepository:
             if replay is not None:
                 connection.commit()
                 return replay
+
+            if admission_guard is not None:
+                admission.enter_context(admission_guard())
 
             active = connection.execute(
                 f"""
