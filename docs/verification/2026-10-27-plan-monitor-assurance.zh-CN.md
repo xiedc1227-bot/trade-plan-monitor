@@ -100,3 +100,13 @@ T08／C03仍开放。合法人工修正仍须独立已注册操作回执及完�
 Human范围连续性新增23项测试，初始7项真实失败／16项通过（`t08-human-scope-final-red.log`）。修复允许已证明的原文方向及准确注册的空方向补充继续继承，并保留原始回执。当前Human来源证明不能借其他owner标签隐藏缺回执；补充语义保持准确。helper／wire组合59项通过，5.77秒（`t08-human-scope-root-01.log`）；完整来源／delta组合803项通过，47.41秒（`t08-human-scope-regression-01.log`）。独立审查另实跑两跳Human链，确认早期BASE回执不被当前操作哈希替换。这些计数重叠。
 
 旧准备工作流组合保留39项失败／157项通过（`human-authority-agent-old-regression.log`）：旧审核夹具缺原始INPUT或已登记Human证明，使用泛补充。该选择中的store／worker模块通过。当前工作流夹具正通过合法来源／输入／操作路径更新，旧冻结断言、哈希及golden不豁免。不声称关闭T08／C03或通过新继承／组合／复用／运行／操作验收。完整自然原文语料验收及就绪仍待完成。供应商发送仍0/48，用户数据库未迁移。
+
+## PMA-R12 — T08账户背景与复用基础
+
+完整非零持仓、准确每股成本及明确账户快照句初始22项失败／20项通过（`t08-account-context-red.log`）。有限正向识别仍将账户真实性／初始化保留为独立权威。独立探测36项附带条件案例保持阻断，并发现Python的24:00归一；新增准确时间RED为1失败／42通过，之后账户／背景／开户／基线组合175项通过，6.98秒（`t08-account-clock-red.log`、`t08-account-context-final.log`）。Ruff通过；提交 `d041320`。
+
+旧审核工作流夹具现使用完整支持的来源声明、原始合成raw／私有输入及真实登记的空参数修正。review／store／worker组合198项通过，33.43秒（`workflow-fixtures-agent-regression.log`），含两项新增旧来源拒绝案例。AST对比保留34个测试函数的全部108个原始Assert节点（`workflow-fixtures-agent-assert-parity.log`）；原账户／成本、CAS、回滚及冻结篡改断言保持。历史自然语言单元夹具及旧golden不变。提交 `8d41e13`，之前39项失败仍保留记录。
+
+明确复用alias新增42项纯测试，相邻组合185项通过（`readiness-reuse-alias-adjacent-green-01.log`）。完整来源／delta组合888项通过，46.13秒（`t08-reuse-source-final.log`），保留四份AI变更及四份聚合字节／哈希固定检查。Ruff通过；提交 `c1737e7`。alias保留原始叶子证据及全部来源／Human归属，本身不证明实际父项审核授权。
+
+LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`），独立审查仍在进行。首轮发现真实严格修订序列化缺陷，另有pytest参数过长造成环境错误，原始日志均保留。实际继承／组合writer登记、递归当前授权及新运行／操作核对仍待完成。T08／C03继续开放；真实提取仍0/48，未迁移用户数据库，未操作真实账户／行情／通知。

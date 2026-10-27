@@ -95,3 +95,15 @@
 只有既有授权事务在匹配实际前后状态、明确类型化命令、原检查点／输入、当前来源及前缀后，才能登记该操作。人工来源重评仍须消费每个原始跨度并证明全部受支持政策及关系语义。注册缺参／期限／基本面处理保持有限；未知技术要求不可豁免。Human评估不伪造规范化轨迹，不声称raw-delta、供应商完整草稿或自动忠实度。独立当前REVIEW回执绑定最终完整证明后，才可复用／运行授权。初始及依赖更新的Human纯重评已实施；事务接入及后续复用／操作验收仍须独立完成。
 
 增量字段 `command_id`、`command_request_hash`、`after_record_hash` 为严格字符串／哈希，须全部缺省或全部存在。缺省时不进入序列化，保留既有未登记artifact字节／哈希。当前登记要求三者齐全，并独立核对真实原幂等命令及变更响应；响应哈希使用 `preparation-human-after-record-v1`。字段存在本身绝非登记／状态／授权标志；事务owner核对准确来源／候选变更、前缀及捕获时间后，后续当前审核才能使用。初始Human证明及独立 `source-human-change-coverage-v1` 类型仍保持raw／full／fidelity声明false；缺INPUT不变为虚构供应商记录。
+
+## PMA-K12 — 明确复用血缘与消费位置
+
+可选 `SourceCandidateAssurance.reuse_ref` 为None时完全不序列化，保留旧证明字节／哈希。准确五字段为 `original_owner_binding`、`original_assurance_hash`、`original_current_review_hash`、`original_manifest_hash`、`lineage_hash`。前四项标识实际捕获或明确修正来源的原始叶子，后续复用保持不变；本次不可变LINEAGE标识创建命令直接选中的父项。两类owner均不可按相同来源／内容／候选哈希搜索推断。
+
+复用alias只改变聚合消费位置 `binding.preparation_id`／`item_index`、有序消费前缀／parent及自身引用／哈希。其余binding坐标必须与原证明一致；source assessment及内部binding／parent、来源引用、字段归属、义务ID、全局义务、Human回执、内容和问题全部准确保留。原阻断证明仍阻断。纯builder不认证父项、操作、审核或SQL登记。既有变更分析仍要求父项处于同一消费preparation。
+
+私有 `preparation-lineage-v1` 的kind为LINEAGE，绑定 `preparation_id`、CREATE_SINGLE/COMPOSE_REVIEWED `operation`、规范类型化 `command_json`、真实 `command_id`／`command_request_hash`、`created_revision=1`、`creation_response_hash`、`selection_order`、`placements`、服务端 `created_at`、字面false授权及主键／哈希。每项placement保留消费index、直接 `owner_binding`／修订／审核修订／审核哈希／manifest哈希／proof哈希，以及叶子binding／assurance／review／manifest哈希。保留原命令顺序，selection_order记录确定性位置排列。CREATE_SINGLE复制明确父项的完整前缀并保留新自有尾项；COMPOSITION选择每个明确owner的最后条目。既有256条目、1MiB命令、8MiB完整证明边界不变。
+
+既有封存辅助表使用单一创建主键及LINEAGE内部槽位 `lineage-create`。SQL投影最后真实复用来源／候选，因为继承SINGLE的新尾项在创建时没有候选。同意图重试保留原时间，意图改变报冲突。登记须在既有同一writer事务中，根据实际父项当前审核重建／匹配待写响应，再将lineage、record及原幂等响应原子保存。后续读取先认证真实命令／响应及新鲜父项授权，再重建alias。血缘缺失或未登记时阻断新授权，历史读取仍可用。
+
+revision1的COMPOSITION以已登记LINEAGE和全部选中项真实当前审核建立复用授权，不伪造previous_revision0的人工REVIEW，不放宽v1 REVIEW codec。新审核的继承SINGLE使用既有真实REVIEW回执及连续消费证明。仅前缀读取和Human修正只使用实际选中前缀，复制父条目不能在消费preparation下获得新Human操作。解析使用事务内memoization、环检测及既有链长边界，无全局缓存、截断或复制INPUT／操作记录。模型／存储与实际writer／复用验收是独立实施检查点。
