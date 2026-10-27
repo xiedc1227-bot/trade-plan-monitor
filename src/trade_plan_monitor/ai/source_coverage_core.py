@@ -28,6 +28,10 @@ from trade_plan_monitor.ai.source_obligations import (
 )
 from trade_plan_monitor.ai.source_policy_text import declaration_text_supported
 from trade_plan_monitor.ai.source_risk_control_models import SourceRiskControlAnalysis
+from trade_plan_monitor.ai.source_risk_table_coverage import (
+    RiskTableCoverage,
+    validate_risk_table_coverage,
+)
 from trade_plan_monitor.ai.source_semantic_atoms import semantic_atoms
 from trade_plan_monitor.ai.source_semantics import (
     declaration_relations,
@@ -71,12 +75,12 @@ def _integrity(draft, mapping, clauses):
 
 
 def _risk_parts(source, parts, controls):
-    if controls is None or not controls.controls:
+    if not controls:
         return parts
     result = []
     for part in parts:
         cuts = {part.start, part.end}
-        for row in controls.controls:
+        for row in controls:
             cuts.update(point for point in (row.start, row.end) if part.start < point < part.end)
         ordered = sorted(cuts)
         for start, end in zip(ordered, ordered[1:], strict=False):
@@ -106,7 +110,8 @@ def _cross_control_conflicts(controls, risk_controls):
 
 
 def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
-                   risk_controls: SourceRiskControlAnalysis | None = None):
+                   risk_controls: SourceRiskControlAnalysis | None = None,
+                   risk_tables: RiskTableCoverage | None = None):
     """Classify every canonical span using server grammar, not AI background labels."""
     clauses = bounded_clauses(source)
     mapping = _integrity(draft, mapping, clauses)
@@ -124,7 +129,20 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
                 or any(source[row.start:row.end] != row.excerpt for row in (
                     *risk_controls.controls, *risk_controls.unresolved))):
             raise ValueError("risk source controls differ from the exact original source")
+    if risk_tables is not None:
+        risk_tables = validate_risk_table_coverage(risk_tables, source)
+    table_groups = (() if risk_tables is None else risk_tables.analysis.groups)
+    table_by_control = {row.scope_control.control_id: row for row in table_groups}
+    table_dependencies = ({} if risk_tables is None else {
+        row.reference.group_id: row for row in risk_tables.references})
+    all_risks = (*(() if risk_controls is None else risk_controls.controls),
+                 *(row.scope_control for row in table_groups))
+    if len(all_risks) > 64:
+        raise ValueError("SOURCE_COVERAGE_LIMIT_EXCEEDED")
     control_conflicts = _cross_control_conflicts(controls, risk_controls)
+    risk_counts = Counter(row.rule_id for row in all_risks)
+    risk_conflicts = {row.control_id for row in all_risks if risk_counts[row.rule_id] > 1}
+    control_conflicts.update(risk_conflicts)
     values = semantic_values(draft)
     payload = draft.executable_payload()
     metadata = draft.model_dump(mode="json")
@@ -139,14 +157,18 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
     groups = relation_groups(parsed, source_hash)
     proven_paths = {}
     obligations, issues = [], []
-    parts = _risk_parts(source, source_parts(source, clauses), risk_controls)
+    parts = _risk_parts(source, source_parts(source, clauses), all_risks)
     base_counts = Counter(row.clause_id for row in parts)
     expanded_counts = Counter()
     atom_cache, total_expanded = {}, 0
     normalization_hash = None
     if control_conflicts:
         issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
-            message="Independent source control registries repeat an operation ordinal."))
+            message=("Independent source risk controls repeat the same predecessor target."
+                     if risk_conflicts else
+                     "Independent source control registries repeat an operation ordinal.")))
+    if risk_tables is not None:
+        issues.extend(risk_tables.issues)
     if normalization is not None:
         from trade_plan_monitor.ai.source_normalization import validate_policy_preservation
 
@@ -160,8 +182,9 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
     for clause in parts:
         control = None if controls is None else next((row for row in controls.controls
             if row.start <= clause.start < clause.end <= row.end), None)
-        risk_control = None if risk_controls is None else next((
-            row for row in risk_controls.controls
+        risk_control = next((row for row in all_risks
+            if row.start <= clause.start < clause.end <= row.end), None)
+        frame = None if risk_tables is None else next((row for row in risk_tables.framing
             if row.start <= clause.start < clause.end <= row.end), None)
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
@@ -213,6 +236,10 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
                     path = tuple(own for own in values if own.startswith(prefix))
                     for proven in path:
                         proven_paths.setdefault(proven, set()).add(clause.clause_id)
+        elif frame is not None:
+            kind, scope, state = "CONTEXT", "PLAN", "CONTEXT_VERIFIED"
+            meaning = canonical(dict(treatment="REGISTERED_RISK_TABLE_SYNTAX",
+                                     framing=frame.model_dump(mode="json")))
         elif declaration is not None:
             actual = values.get(declaration.path, MISSING)
             if actual is MISSING:
@@ -293,7 +320,36 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
             excerpt=source[clause.start:clause.end], kind=kind, scope=scope, state=state,
             semantics_json=meaning, group_id=group, relation_ids=relations, paths=path))
 
-        if (control is None and risk_control is None
+        table_group = (None if risk_control is None else
+                       table_by_control.get(risk_control.control_id))
+        if table_group is not None:
+            dependency = table_dependencies.get(table_group.group_id)
+            relation_state = "MAPPED" if dependency is not None else "UNRESOLVED"
+            if (risk_control.control_id in control_conflicts
+                    or partition_at(partitions, clause.start) == "B"):
+                relation_state = "CONFLICT"
+            relation_meaning = canonical(dict(treatment="REGISTERED_STRUCTURAL_RECOVERY_REFERENCE",
+                structural_reference=table_group.structural_reference.model_dump(mode="json"),
+                price_dependency=(None if dependency is None else
+                                  dependency.model_dump(mode="json"))))
+            if len(relation_meaning) > 8192:
+                relation_meaning, relation_state = None, "UNRESOLVED"
+                issues.append(CoverageIssue(code="SOURCE_COVERAGE_LIMIT_EXCEEDED",
+                    path="source." + clause.clause_id, start=clause.start, end=clause.end,
+                    message="The complete structural relationship exceeds its evidence bound."))
+            if (base_counts[clause.clause_id] + expanded_counts[clause.clause_id] + 1 > 64
+                    or len(parts) + total_expanded + 1 > 4096):
+                raise ValueError("SOURCE_COVERAGE_LIMIT_EXCEEDED")
+            obligations.append(SourceObligation.build(source_hash=source_hash,
+                clause_id=clause.clause_id, start=clause.start, end=clause.end,
+                excerpt=clause.excerpt,
+                kind="RELATION", scope="RISK", state=relation_state, paths=(),
+                semantics_json=relation_meaning, group_id=table_group.group_id,
+                relation_ids=(risk_control.control_id,)))
+            expanded_counts[clause.clause_id] += 1
+            total_expanded += 1
+
+        if (control is None and risk_control is None and frame is None
                 and declaration is not None and kind == "PREDICATE"
                 and isinstance(declaration.value, (dict, list)) and declaration.value):
             try:

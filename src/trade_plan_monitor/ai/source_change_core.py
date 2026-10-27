@@ -16,6 +16,7 @@ from trade_plan_monitor.ai.source_controls import parse_source_controls
 from trade_plan_monitor.ai.source_coverage_core import analyze_source
 from trade_plan_monitor.ai.source_coverage_models import CoverageIssue, SourceObligation
 from trade_plan_monitor.ai.source_risk_controls import parse_source_risk_controls
+from trade_plan_monitor.ai.source_risk_table_coverage import build_risk_table_coverage
 from trade_plan_monitor.ai.update_review import (
     PlanCandidateReview,
     build_update_review,
@@ -115,8 +116,14 @@ def analyze_source_changes(
     controls = parse_source_controls(source, base_review, verified_parent)
     risk_controls = (parse_source_risk_controls(source, base_review, verified_parent)
                      if verified_parent.coverage_complete else None)
+    risk_tables = (build_risk_table_coverage(source, base_review, verified_parent)
+                   if verified_parent.coverage_complete else None)
+    all_risks = (*(() if risk_controls is None else risk_controls.controls),
+                 *(() if risk_tables is None else
+                   tuple(row.scope_control for row in risk_tables.analysis.groups)))
     analysis = analyze_source(output.draft, complete_mapping, source.text,
-                              controls=controls, risk_controls=risk_controls)
+                              controls=controls, risk_controls=risk_controls,
+                              risk_tables=risk_tables)
     obligations, scope_issues = inherit_change_scopes(
         analysis.obligations, output.draft, base_review, verified_parent, source=source.text)
     issues = [*analysis.issues, *scope_issues, *controls.issues]
@@ -179,7 +186,7 @@ def analyze_source_changes(
         if not valid:
             issue("The complete source control was not applied to its exact predecessor target.",
                   control.target, "SOURCE_RELATION_MISMATCH")
-    for control in (() if risk_controls is None else risk_controls.controls):
+    for control in all_risks:
         if not any(_risk_matches(control, change) for change in merged.changes):
             issue("The exact full risk control was not applied to its predecessor branch.",
                   control.target, "SOURCE_RELATION_MISMATCH")
@@ -203,8 +210,7 @@ def analyze_source_changes(
         paths = tuple(sorted(paths))
         changed.update(paths)
         linked = set()
-        matching_risks = [control for control in (() if risk_controls is None else
-                          risk_controls.controls) if _risk_matches(control, change)]
+        matching_risks = [control for control in all_risks if _risk_matches(control, change)]
         linked.update(row.obligation_id for control in matching_risks
                       for row in risk_rows.get(control.control_id, ()))
         if change.action != "RETAIN":
