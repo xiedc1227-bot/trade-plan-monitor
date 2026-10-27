@@ -898,6 +898,7 @@ class _ProductionBacktestService:
     ) -> DomainBacktestJobReceipt:
         if isinstance(command, WorkbenchBacktestRunCommand):
             prepared = await self._read_selection(command.selection_id, command.selection_hash)
+            await self._require_current_workbench(prepared)
         else:
             prepared = await self._load_command_preparation(command)
         try:
@@ -914,6 +915,24 @@ class _ProductionBacktestService:
             reservation,
             on_admitted=self._coordinator.authorize_new_job,
         )
+
+    async def _require_current_workbench(self, prepared):
+        """A historical selection receipt cannot authorize a fresh run by itself."""
+        from trade_plan_monitor.state.repositories import PlanSaveBlockedError
+        from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
+        from trade_plan_monitor.state.source_coverage_store import SourceCoverageUpgradeRequired
+
+        reader = getattr(self._plan_snapshot_reader, "get_reviewed_backtest_plan", None)
+        if not callable(reader):
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        try:
+            current = await reader(version_id=str(prepared.reviewed.reference.plan_version_id))
+        except (PlanSaveBlockedError, SourceCoverageAuthorityError, SourceCoverageUpgradeRequired):
+            raise ApiError(ApiErrorCode.CONFLICT) from None
+        if current is None:
+            raise ApiError(ApiErrorCode.NOT_FOUND)
+        if current.reference != prepared.reviewed.reference:
+            raise ApiError(ApiErrorCode.CONFLICT)
 
     async def _load_command_preparation(self, command):
         if self._prepared_plan_reader is None:
