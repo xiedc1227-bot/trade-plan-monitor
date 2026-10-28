@@ -117,7 +117,7 @@
 
 - [ ] 交付并验证。
 - 依赖：T10。
-- 文件／范围：顺序T11a聚焦读取composable、纯来源跨度／展示helper及两个测试（4）；T11b小型覆盖容器／行／跨度组件及 `SourceCoverageReview.spec.ts`（4）；T11c实际workspace／工作台／审核归属及新增真实归属测试 `PlanWorkbenchCoverage.spec.ts`（4）；T11d提取摘要展示及聚焦已有／新增测试（最多4）；T11e1隔离无I/O浏览器夹具服务及真实生命周期集成测试（2），再T11e2真实Chrome旅程及有界证据（2–4）。每子片独立测试、提交后才编辑共享归属。独立T11e1后端夹具可在界面子片推进时使用已冻结T10 API，真实浏览器旅程验收等待其完成。使用T10 typed client，不把通用condition-plan请求强转成覆盖分页。历史preparation详情保持历史含义，preparation ID不是实时plan-version ID。用转义只读高亮保留来源代码点与CRLF。已有夹具若需对账，另拆有依据最多5文件子片，保留原断言和原始来源。
+- 文件／范围：顺序T11a聚焦读取composable、纯来源跨度／展示helper及两个测试（4）；T11b小型覆盖容器／行／跨度组件及 `SourceCoverageReview.spec.ts`（4）；T11c0准确workspace intent／load／mutation快照及聚焦并发测试，可选一个小型owner helper（2–3）；T11c1实际workspace／工作台／审核覆盖接入及新增真实归属测试 `PlanWorkbenchCoverage.spec.ts`（4）；T11d提取摘要展示及聚焦已有／新增测试（最多4）；T11e1隔离无I/O浏览器夹具服务及真实生命周期集成测试（2），再T11e2真实Chrome旅程及有界证据（2–4）。每子片独立测试、提交后才编辑共享归属。独立T11c0及T11e1可在T11b推进时使用已冻结T10 API；T11c1等待workspace及展示归属均完成，真实浏览器旅程验收等待全部界面子片。使用T10 typed client，不把通用condition-plan请求强转成覆盖分页。历史preparation详情保持历史含义，preparation ID不是实时plan-version ID。用转义只读高亮保留来源代码点与CRLF。已有夹具若需对账，另拆有依据最多5文件子片，保留原断言和原始来源。
 - 验收：A01、A03、A11；验证：V05单元／类型／构建。原文跨度、部分条件、AI与服务端处理、人工改定及无通用豁免均明确；上下文过期丢响应，不默认确认阻断。
 
 ### PMA-T12 — 关闭历史／legacy回归边界
