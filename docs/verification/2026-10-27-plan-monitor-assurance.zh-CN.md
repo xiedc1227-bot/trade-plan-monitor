@@ -241,3 +241,13 @@ ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21�
 独立审查发现实例方法替换与offset分页；两项真实RED保留在 `t09-loop-capture-final-red.log`（2.47秒）。类归属分派和keyset500页已修复。完整读取阶段no_autoflush包装强化边界；原Core prior／count查询本身不触发autoflush，因此不声称那里存在autoflush漏洞。最终新增29项加邻接50项，共79项10.26秒通过（`t09-loop-capture-final.log`），Ruff／差异检查及独立审查通过；提交 `1971a49`。新文件须显式加入下轮C03选择。既有冻结golden、策略数量、原43项断言及回执顺序未改；完整历史刷新成本仍待原capacity门槛验收。
 
 八项真实记录响应失败独立在6.50秒复现（`source-confirmation-agent-red.log`）。八个临时库只读审计均发现真实INPUT规范化trace、非identity策略变化、SOURCE_NORMALIZATION_LOSS及未知来源义务，不存在当前完整证明。按已批准A04／A05，这类新建当前审核无论资金已知与否均须拒绝。提交 `0edcefd` 有意修正当前审核预期，保留全部4来源／8响应字节哈希及全部12条原断言AST。原成功账户／冻结／前驱断言原样移到四个明确合成完整来源用例；合成结果不算真实供应商准确率。16项真实记录拒绝、4项合成正例及10项历史summary测试共30项17.04秒通过（`source-confirmation-contract-agent1.log`）；3项当前权限邻接4.23秒通过。SQL checkpoint证明拒绝不改记录或回执。C03仍待新完整组合运行。供应商0/48；用户迁移0。
+
+## PMA-R30 — C03持久授权检查点验收通过
+
+在冻结revision `a50881fc3a2cb0c472ec49a0bb24bd624921808c`，准确66文件来源／P3／v12单元选择1326项74.82秒通过（runner76.006秒；`c03-source-unit-final-v2.log`、`c03-source-unit-final-v2-files.json`、`c03-source-unit-final-v2-execution.json`）。保留此前65文件的全部选择并加入逐字句式测试，未删除基础防护。
+
+完整集成重跑1027项827.45秒通过（runner830.916秒；`c03-integration-final-v3.log`）。90选择器／65实际文件保留原89选择器，加入29项私有捕获测试文件；四项明确合成的确认正例作为保留原文件内的新增用例。实际收集1027项，0取消选择、0失败。选择SHA-256为 `c635520844d7f8a1ea6319b8acce6eb2c7777355621d7a2c30fe119f9442d42d`；日志SHA-256为 `72fbdab8a28d2b1a49fa87809be296161346dabfebef66bb68abe8fcca834d8a`。两轮均只有既有Starlette／httpx弃用警告；计数来自不同命令，不合称一轮总数。
+
+首轮994项中的54项失败仍保留，并在R28／R29逐项对账。中间集成v2因ignored pytest.main runner未把项目根加入sys.path，收集0项／5个导入错误；标为INVALID_COLLECTION，不算测试通过或生产RED。V3仅修运行器路径，使用新base／log／selection，保留全部原选择器。V3期间tracked revision及干净工作树均未改变。
+
+T09／C03现已通过本阶段适用来源／存储／审核／启用／复用／操作／例外／发送时／历史边界。公开覆盖资源工作流、界面、完整项目／capacity回归、真实提取语料及安装审计仍属后续任务，不推断通过。T10拆为分别测试的读取资源、计划摘要、提取摘要、生成契约、附录及前端client子片。真实供应商调用仍为0/48；用户迁移0；未使用实时行情或真实通知。

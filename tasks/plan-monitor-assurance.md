@@ -97,20 +97,20 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T09 — Carry coverage through current actions and delivery
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T08.
-- Files/scope: sequential T09a action-source reader, ordinary simulation, runtime production/frame, private frozen-loop and research adapters in separately tested children (at most5 files each); T09b1 preview/decision/consume and actual replay callers (5), T09b2 rejection-cleanup tests (1), T09b3 actual P3 source/review fixture (2), T09b4 frozen worker preparation/callers (1); targeted actual-read and consumer-binding repairs remain separate children (at most5 each). Then T09c notification send-time guard, targeting2 production files and2 independent test files. Stage marks remain open until the complete related regression and delivery gates pass.
+- Files/scope: sequential T09a action-source reader, ordinary simulation, runtime production/frame, private frozen-loop and research adapters in separately tested children (at most5 files each); T09b1 preview/decision/consume and actual replay callers (5), T09b2 rejection-cleanup tests (1), T09b3 actual P3 source/review fixture (2), T09b4 frozen worker preparation/callers (1); targeted actual-read and consumer-binding repairs are separate children (at most5 each). T09c1 send-time guard (4), T09c2 outbox reads (2), T09c3 private frozen capture (5), T09d complete literal minute sentences (4), and recorded-current/synthetic-positive test reconciliation (2) are separately verified. Complete related regression is recorded in PMA-R30.
 - Acceptance: A05,A06; Verify: focused V03, P1/P2/P3 action/race/notification tests. Exact relevant coverage checked in the existing write fence; stale/race/retry/rollback yields one outcome; BUY-only omissions do not veto independent technical-risk SELL. No new occurrence/window/quantity.
 
 ### PMA-C03 — Durable authority checkpoint
 
-- [ ] V01–V03 pass for A01–A06; history/current separation, atomic guards and risk continuity are proven. No API/UI-only bypass exists.
+- [x] Available-stage V01–V03 source/storage/authority/action/send-time selections pass for A01–A06; history/current separation, atomic guards and risk continuity are proven (PMA-R30). No API/UI-only authority bypass exists. New coverage-resource/UI workflow checks remain T10–T12/C04.
 
 ### PMA-T10 — Expose coverage resources and exact review binding
 
 - [ ] Deliver and verify.
 - Depends on: T09.
-- Files/scope: T10a DTO/GET/review-command/API tests (at most5); T10b both OpenAPI and TypeScript profiles plus projection test (5); T10c paired API-owner appendix and compatibility tests (at most4).
+- Files/scope: sequential T10a1 DTO/read composition/GET/service/HTTP tests (5); T10a2 same-fresh-record plan list/detail/save/workbench summaries and narrow ACTIVE DTO handling (3); T10a3 actual extraction summary and focused tests (at most4). Existing exact review-command fields/guards remain unchanged. Then T10b both OpenAPI and TypeScript profiles plus projection test (5); T10c paired API-owner appendix and compatibility tests (at most4); T10d typed frontend coverage client and focused tests (2). Each child is independently tested and committed before the next shared-owner edit.
 - Acceptance: A05,A06,A10; Verify: focused V03,V07. Exact source-bound pagination, no read writes,409/422/integrity errors, literal false authority, old projection preserved after only approved additions.
 
 ### PMA-T11 — Show source-to-rule coverage and blocked repairs
