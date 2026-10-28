@@ -14,7 +14,12 @@ from trade_plan_monitor.ai.source_change_models import SourceOperationProof
 from trade_plan_monitor.ai.source_change_scopes import inherit_change_scopes
 from trade_plan_monitor.ai.source_controls import parse_source_controls
 from trade_plan_monitor.ai.source_coverage_core import analyze_source
-from trade_plan_monitor.ai.source_coverage_models import CoverageIssue, SourceObligation
+from trade_plan_monitor.ai.source_coverage_models import (
+    COMPLETE_STATES,
+    CoverageIssue,
+    SourceObligation,
+)
+from trade_plan_monitor.ai.source_obligations import MISSING, declarations, value_at
 from trade_plan_monitor.ai.source_risk_controls import parse_source_risk_controls
 from trade_plan_monitor.ai.source_risk_table_coverage import build_risk_table_coverage
 from trade_plan_monitor.ai.update_review import (
@@ -24,7 +29,7 @@ from trade_plan_monitor.ai.update_review import (
 )
 from trade_plan_monitor.backtest.plan_updates import materialize_plan_update
 from trade_plan_monitor.backtest.preparation_models import PreparationSource
-from trade_plan_monitor.domain.daily_hash import daily_hash
+from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
 from trade_plan_monitor.domain.market_linkage_validation import CurrentPlanDraft
 from trade_plan_monitor.domain.risk_scope import risk_identity
@@ -85,6 +90,53 @@ def _risk_matches(control, change):
         daily_hash("source-operation-value-v1", change.before),
         daily_hash("source-operation-value-v1", change.after)) == (
         control.target, control.rule_id, control.before_hash, control.after_hash)
+
+
+def _replacement_absence(change, draft, parsed, obligations):
+    """A complete ordered ordinary/alert root list can prove a specific absence.
+
+    Risk withdrawal remains exclusively owned by its dedicated whole-risk
+    control. Leaf declarations never prove that another stable rule is absent.
+    """
+    if change.target not in {"ordinary_rules", "alert_rules"}:
+        return set()
+    after = [row.model_dump(mode="json") for row in getattr(draft, change.target)]
+    roots = [row for row in parsed if row.path == change.target]
+    if (not roots or any(type(row.value) is not list or canonical(row.value) != canonical(after)
+                         for row in roots)
+            or any(row["rule_id"] == change.rule_id for row in after)):
+        return set()
+    return {row.obligation_id for declaration in roots for row in obligations
+            if declaration.start <= row.start < row.end <= declaration.end
+            and row.state in COMPLETE_STATES and row.scope != "UNKNOWN"
+            and any(path == change.target or path.startswith(change.target + "[")
+                    for path in row.paths)}
+
+
+def _replacement_removed_evidence(path, draft, parsed, obligations):
+    """Prove an omitted leaf from an exact null or complete typed after-container.
+
+    A declaration of surviving sibling leaves never proves absence. The entire
+    enclosing declaration must equal the actual after-image, and every one of
+    its source obligations must retain a complete, known treatment.
+    """
+    payload = draft.executable_payload()
+    proven = set()
+    for declaration in parsed:
+        root = declaration.path
+        if not (path == root or path.startswith(root + ".") or path.startswith(root + "[")):
+            continue
+        actual = value_at(payload, root)
+        if (actual is MISSING or not (declaration.value is None
+                                     or isinstance(declaration.value, (dict, list)))
+                or canonical(actual) != canonical(declaration.value)):
+            continue
+        rows = [row for row in obligations
+                if declaration.start <= row.start < row.end <= declaration.end]
+        if (rows and all(row.state in COMPLETE_STATES and row.scope != "UNKNOWN" for row in rows)
+                and any(root in row.paths for row in rows)):
+            proven.update(row.obligation_id for row in rows)
+    return proven
 
 
 def analyze_source_changes(
@@ -173,11 +225,20 @@ def analyze_source_changes(
         if (isinstance(meaning, dict)
                 and meaning.get("treatment") == "REGISTERED_SOURCE_RISK_CONTROL"):
             risk_rows.setdefault(meaning["source_risk_control"]["control_id"], []).append(row)
+    full_controls = []
     for control in controls.controls:
         if control.target == "plan":
-            valid = (all(change.action == "RETAIN" for change in merged.changes)
-                     if control.action == "NO_NEW_INSTRUCTIONS"
-                     else output.retain_unmentioned is True)
+            if control.action == "FULL_REPLACEMENT":
+                valid = (output.scope == "FULL_REPLACEMENT"
+                         and output.retain_unmentioned is False and any(
+                             row.clause_id in output.scope_clause_ids and row.state == "MAPPED"
+                             for row in control_rows.get(control.control_id, ())))
+                if valid:
+                    full_controls.append(control)
+            else:
+                valid = (all(change.action == "RETAIN" for change in merged.changes)
+                         if control.action == "NO_NEW_INSTRUCTIONS"
+                         else output.retain_unmentioned is True)
         else:
             valid = any((change.target, change.rule_id, change.action,
                          daily_hash("source-operation-value-v1", change.before)) == (
@@ -186,6 +247,19 @@ def analyze_source_changes(
         if not valid:
             issue("The complete source control was not applied to its exact predecessor target.",
                   control.target, "SOURCE_RELATION_MISMATCH")
+    full_after = set(final) <= analysis.proven_paths.keys()
+    if output.scope == "FULL_REPLACEMENT":
+        if not full_controls:
+            issue("Full replacement requires its exact current-source scope control.",
+                  "plan", "SOURCE_RELATION_MISMATCH")
+        for path in sorted(set(final) - analysis.proven_paths.keys()):
+            issue("Every replacement after-image field needs independent current-source proof.",
+                  path)
+    replacement_proven = (output.scope == "FULL_REPLACEMENT" and bool(full_controls)
+                          and full_after and verified_parent.coverage_complete)
+    replacement_ids = {row.obligation_id for control in full_controls
+                       for row in control_rows.get(control.control_id, ()) if row.state == "MAPPED"}
+    replacement_declarations = declarations(source.text) if replacement_proven else ()
     for control in all_risks:
         if not any(_risk_matches(control, change) for change in merged.changes):
             issue("The exact full risk control was not applied to its predecessor branch.",
@@ -213,6 +287,8 @@ def analyze_source_changes(
         matching_risks = [control for control in all_risks if _risk_matches(control, change)]
         linked.update(row.obligation_id for control in matching_risks
                       for row in risk_rows.get(control.control_id, ()))
+        if replacement_proven and change.action != "REVOKE":
+            linked.update(replacement_ids)
         if change.action != "RETAIN":
             if change.action == "REVOKE":
                 matching = [control for control in controls.controls if (
@@ -221,13 +297,32 @@ def analyze_source_changes(
                     daily_hash("source-operation-value-v1", change.before))]
                 linked.update(row.obligation_id for control in matching
                               for row in control_rows.get(control.control_id, ()))
+                if replacement_proven:
+                    absence = _replacement_absence(change, merged.draft,
+                        replacement_declarations, obligations)
+                    if absence:
+                        linked.update(absence | replacement_ids)
                 if not linked:
                     issue("Removing a rule requires independent whole-rule cancellation evidence.",
                           change.target)
-            for path in (() if change.action == "REVOKE" else paths):
+            evidence_paths = (() if change.action == "REVOKE" else tuple(sorted(set(paths) | {
+                path for path in final if _in_target(path, change, merged.draft)}))
+                if replacement_proven else paths)
+            for path in evidence_paths:
                 proposed_path = corresponding_path(path, merged.draft, output.draft)
+                if replacement_proven and path not in final:
+                    absence = _replacement_removed_evidence(proposed_path, output.draft,
+                        replacement_declarations, obligations)
+                    absence.update(row.obligation_id for control in matching_risks
+                        for row in risk_rows.get(control.control_id, ())
+                        if row.state in COMPLETE_STATES and row.scope != "UNKNOWN")
+                    if not absence:
+                        issue("Removing an optional policy needs an explicit exact after-image.",
+                              path)
+                    linked.update(absence)
+                    continue
                 clauses = analysis.proven_paths.get(proposed_path, frozenset())
-                if not clauses or not clauses & set(change.clause_ids):
+                if not clauses or not replacement_proven and not clauses & set(change.clause_ids):
                     issue("An actual policy change has no complete current-source derivation.",
                           path)
                 linked.update(row.obligation_id for row in obligations
@@ -240,6 +335,7 @@ def analyze_source_changes(
             after_hash=daily_hash("source-operation-value-v1", change.after), changed_paths=paths,
             obligation_ids=tuple(sorted(linked)),
             origin="PRODUCT_RETENTION" if change.action == "RETAIN" and not matching_risks
+            and not replacement_proven
             else "SOURCE"))
     return SourceChangeAnalysis(mapping=analysis.mapping, draft=merged.draft,
         source_hash=source.source_hash, source_binding_hash=source.binding_hash,

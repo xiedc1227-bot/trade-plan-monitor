@@ -42,6 +42,7 @@ _PLAN = {
     "其余规则保留。": "RETAIN_UNMENTIONED",
     "其余规则不变。": "RETAIN_UNMENTIONED",
     "retain unmentioned.": "RETAIN_UNMENTIONED",
+    "完整替换此前计划。": "FULL_REPLACEMENT",
 }
 
 
@@ -256,6 +257,11 @@ def parse_source_controls(source, base_review, verified_parent):
     ):
         conflict.update(row.control_id for row in controls
                         if row.action in {"NO_NEW_INSTRUCTIONS", "REVOKE"})
+    if any(row.action == "FULL_REPLACEMENT" for row in controls) and any(
+        row.action in {"RETAIN_UNMENTIONED", "NO_NEW_INSTRUCTIONS"} for row in controls
+    ):
+        conflict.update(row.control_id for row in controls if row.action in {
+            "FULL_REPLACEMENT", "RETAIN_UNMENTIONED", "NO_NEW_INSTRUCTIONS"})
     if conflict:
         kept = []
         for row in controls:

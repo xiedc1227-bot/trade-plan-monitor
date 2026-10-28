@@ -44,7 +44,9 @@ class SourceControl(_ExactSpan):
     version: Literal["source-control-v1"] = "source-control-v1"
     grammar_id: Identifier
     scope: Literal["PLAN", "BUY", "SELL", "ALERT"]
-    action: Literal["REVOKE", "RETAIN", "NO_NEW_INSTRUCTIONS", "RETAIN_UNMENTIONED"]
+    action: Literal[
+        "REVOKE", "RETAIN", "NO_NEW_INSTRUCTIONS", "RETAIN_UNMENTIONED", "FULL_REPLACEMENT",
+    ]
     target: ControlTarget
     rule_id: Identifier | None
     parent_assurance_hash: Hash
@@ -62,7 +64,8 @@ class SourceControl(_ExactSpan):
                      and self.action in {"REVOKE", "RETAIN"})
         elif self.target == "plan":
             valid = (self.rule_id is None and self.scope == "PLAN"
-                     and self.action in {"NO_NEW_INSTRUCTIONS", "RETAIN_UNMENTIONED"})
+                     and self.action in {
+                         "NO_NEW_INSTRUCTIONS", "RETAIN_UNMENTIONED", "FULL_REPLACEMENT"})
         else:
             valid = self.rule_id is None and self.scope == "PLAN" and self.action == "RETAIN"
         if not valid:
