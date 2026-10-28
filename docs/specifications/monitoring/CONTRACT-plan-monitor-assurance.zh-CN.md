@@ -155,3 +155,9 @@ revision1的COMPOSITION以已登记LINEAGE和全部选中项真实当前审核�
 风险行须唯一匹配实际active稳定分支、价格／比较符／目标／范围及必要确认／执行日期顺序。已验证行保留计划优先级及同级稳定顺序，数据库创建顺序不能改变cause、批次或数量。严重风险条件树保留准确结构／结果／消费ID；REVIEWED_FACT叶还须解析真实历史FACT、原始存储版本／content归属、kind、日期、结果及可用时间。合法SUPERSEDED owner仍可为原始事实owner；不凭未知SIGNAL绑定捏造证据。原生行情证据继续由既有读取器／求值器及执行防护负责；此来源依据不是完整历史行情重放或可执行token。
 
 模拟交易在既有cause／symbol writer栅栏内核此依据。普通交易不能借风控许可；risk_execution仅消费已验证风险行集合，仍须匹配原完整报价动作／命令数量，不调整数量、不新建窗口或发生次数。准确已完成请求重放仍返回原结果。损坏来源证据走脱敏服务完整性错误；有效但缺失／过期当前证明仍为结构化冲突。既有行情、库存、资金、消费及回滚防护仍必需。运行时生成、例外及发送前检查须各自验收后才关闭C03。
+
+## PMA-K20 — 明确的冻结观测适配器
+
+仅冻结session owner明确传入的server-private reader可返回REPLAY_OBSERVATION，绑定原解码输入对象及canonical字节／哈希、准确私有引擎、当前schedule选择及实际SQL manifest／version／review／activation归属。实际SQL读取刷新已持有ORM对象。schedule启用在shared activation事务内核staged successor及原active owner。版本复用仍准确保留首次注册时间及不可变原review字节；人工审核沿既有历史submitted-time契约，不强加实时clock规则。
+
+此依据仅携带plan_version_id、activation_revision及risk_rows，不含coverage状态、COMPLETE声明或当前coverage hash。实时runtime／simulation默认仍要求当前来源授权；请求字段、缺属性、类名推断或legacy标签均不能选择replay。runtime风险行仍限定当前输入帧；replay simulation保留原归属行序及原生数量校验。普通schedule到期保留单独已授权技术风险的观测／退出。已完成account回执在新来源／执行检查前重放，绝不重建fill。既有冻结输入、公式版本、报告、事件和哈希不改写。独立ResearchSession适配器及例外／发送消费者仍须各自证据后才能关闭C03。

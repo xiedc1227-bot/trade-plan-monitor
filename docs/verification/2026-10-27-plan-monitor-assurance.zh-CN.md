@@ -184,3 +184,9 @@ source-action helper独立79项通过（`t09-risk-owned-final.log`，12.53秒）
 冻结loop调查在适配器实现前独立复现两项失败：原单版本周期丢失两笔fill，schedule启用在runtime reader之前触发实时provenance要求。shared activation现于原writer事务内调用私有 `_require_source_review(target_id)`，默认仍为准确实时 `require_repository_review`。独立拒绝reader测试先因启用忽略它而失败，随后通过且无启用／版本写入（`activation-reader-red.log`）；提交 `de57236`。仅此hook不代表待完成的冻结loop适配器通过验收。
 
 相邻组合最初25项通过、4项时区夹具失败（`activation-reader-green.log`）；旧布局提醒选择另有2失败／1通过（`alert-fixture-red.log`），均在审核时、目标断言前失败。合成固定阈值注释不是已注册来源文字。仅这两处本地夹具注释改用既有准确 `fixture` 形式；原7条时区和29条旧存储断言完全保留，阈值与存储约束不变。准确启用／来源／恢复／时区／旧提醒组合重跑32项通过，13.91秒，含既有Starlette弃用警告（`activation-reader-alert-fixture-green.log`）；提交 `6f0d645`。未扩大来源注册表。供应商0/48，用户迁移0。
+
+## PMA-R23 — 冻结loop来源归属与准确历史字节
+
+明确冻结LoopSession适配器提交为 `1dd578c`。初始真实周期／schedule切换RED保留于 `loop-source-agent-red-01.log`。独立实际SQL故障注入随后发现三处缓存归属错误放行，及一处仅后续guard拒绝；四例RED保留于 `loop-source-agent-sql-red-04.log`。刷新version／source／review／activation归属后，由来源检查本身拒绝并保留原子回滚。最终32项私有适配测试通过，4.20秒（`loop-source-agent-self-final-08.log`），覆盖clone引擎、相等输入克隆、嵌套修改、SQL／manifest／review／时间篡改、跳过successor、ABA复用、普通过期后风险延续、伪reader角色、默认实时拒绝及已完成回执重放。相邻选择85项通过，29.76秒，Ruff通过（`loop-source-agent-final-07.log`）；计数重叠。
+
+独立真实周期加载 `2c1154e` 原runtime，源码SHA-256 `63668a5c496670ae08ab6d0098a8353d12cb610b5ad6a61c9ae3bb080f3dc58d`，仅让旧constructor忽略新私有参数。原／当前报告及事件canonical字节完全相同：报告 `e3c0366cf1804d91b075f276869aeb131c17a7e6ec4887a80c15a46314e412b1`，事件 `8b3ba24d96f44c7eb76c95bb6433957df9c75f0d29fe8851d10a74cfed247430`（`loop-source-agent-old-runtime-byte-probe.log`）。既有冻结／golden预期未改。先前扩大87项组合84通过／3失败，39.83秒（`loop-source-agent-neighbor-03.log`）；三项失败属独立ResearchSession冻结路径，待其专用适配器。此项不代表完整历史／回放或C03通过。供应商0/48，用户迁移0。
