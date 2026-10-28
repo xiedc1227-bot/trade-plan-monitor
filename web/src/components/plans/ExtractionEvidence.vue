@@ -9,11 +9,13 @@ import {
   duplicateReviewKeys,
   extractionReviewItems,
 } from "./extractionReview";
+import ExtractionSourceCoverage from "./ExtractionSourceCoverage.vue";
 
 interface Props {
   extraction: PlanExtractionView;
   retryDisabled?: boolean;
   resolvedIssueKeys?: readonly string[];
+  sourceText?: string;
 }
 
 interface Emits {
@@ -32,6 +34,7 @@ interface ReviewItem {
 const props = withDefaults(defineProps<Props>(), {
   retryDisabled: false,
   resolvedIssueKeys: () => [],
+  sourceText: "",
 });
 const emit = defineEmits<Emits>();
 
@@ -146,9 +149,14 @@ function isResolved(item: ReviewItem): boolean {
         未解决重大问题：{{ unresolvedMaterialCount }}
       </p>
 
+      <ExtractionSourceCoverage v-if="extraction.sourceCoverage != null"
+        :extraction-id="extraction.id" :source-text="sourceText"
+        :source-text-sha256="extraction.sourceTextSha256 ?? null" :summary="extraction.sourceCoverage" />
+
       <section class="extraction-evidence__group" aria-labelledby="field-evidence-title">
-        <h3 id="field-evidence-title">字段证据</h3>
-        <p v-if="!extraction.evidence?.length">没有可展示证据；该结果不能进入启用流程。</p>
+        <h3 id="field-evidence-title">{{ extraction.dailyMapping ? '原文与字段映射' : '字段证据' }}</h3>
+        <p v-if="!extraction.evidence?.length && extraction.dailyMapping">当前提取使用逐句原文与字段映射。请核对来源摘要，并在保存版本后完成逐项审核。</p>
+        <p v-else-if="!extraction.evidence?.length">没有可展示证据；该结果不能进入启用流程。</p>
         <article
           v-for="item in extraction.evidence ?? []"
           :key="`${item.path}:${item.start ?? 'n'}:${item.end ?? 'n'}`"

@@ -236,6 +236,7 @@ function resolveIssue(issue: DraftReviewIssue): void {
     <ExtractionEvidence
       v-if="extraction && !reviewStale"
       :extraction="extraction"
+      :source-text="sourceText"
       :retry-disabled="extractionBusy"
       :resolved-issue-keys="resolvedIssueKeys"
       @resolve-issue="resolveIssue"
