@@ -209,6 +209,16 @@ describe("source coverage review presentation", () => {
     expect(wrapper.emitted("revealSource")).toEqual([[{ start, end, excerpt }]]);
   });
 
+  it("makes the scrollable original source reachable through the native keyboard tab order", async () => {
+    const wrapper = review({}, true);
+    await wrapper.get('button[aria-label="定位原文第 1 项"]').trigger("click");
+    const original = wrapper.get('pre[aria-label="原文及定位片段"]');
+    expect((original.element as HTMLElement).tabIndex).toBe(0);
+    (original.element as HTMLElement).focus();
+    expect(document.activeElement).toBe(original.element);
+    expect(original.element.textContent).toBe(rawSource);
+  });
+
   it("locates the second repeated excerpt by its exact offset and preserves raw emoji/combining/CRLF", async () => {
     const value = page(); const row = value.items[0]!;
     if (row.kind !== "OBLIGATION") throw new Error("fixture requires obligation");
