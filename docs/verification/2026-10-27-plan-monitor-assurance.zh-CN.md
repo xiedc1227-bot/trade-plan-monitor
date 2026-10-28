@@ -285,3 +285,13 @@ T10a3 `abc37a9` 增加实际提取诊断。根审查独立发现三项未接受t
 新冻结hash为v1 OpenAPI `c426102e7f9815b549a463a4fb4c38ec3c15c97213cd09864e65147a9a935cd7`、v2 OpenAPI `0361f3b1b69a23399ee8e3ec89cce87ef832c04980e7bcc88aeba72b2c0fd1f9`、v1 TypeScript `7db80baf8b0a53b837795ac1a0ae0bb8362c390af491068d5bbfc2a201d45256`、v2 TypeScript `8fdce46fec658cacfb7b782bcc91163c1ec0fa4b02d441c5d3c7356d114b5ddc`。准确批准增量投影后原四个hash归属不变。`t10b-frozen-output-summary.json` 索引证据。
 
 T10c首先有7项真实旧归属／白名单／投影失败，18.87秒（`t10c-owner-red.log`）。提交 `869e765` 追加双语U-PMA范围归属，并仅将准确来源投影组合进旧门禁。旧U-MLP3审批、文档前缀、旧路径／字段集合、公共错误及数值边界保持准确。五文件归属／linkage／backtest／promotion／source-projection回归57项134.85秒通过（`t10c-owner-green1.log`）；措辞澄清后归属hash门禁1项7.60秒通过。两套生成器检查、Ruff、diff及双语token／链接／阈值一致审计通过（`t10c-owner-parity-audit.json`）。前端严格client仍属T10d；T10／C04仍未完成。供应商0/48；用户迁移0。
+
+## PMA-R35 — T10前端契约验收
+
+T10d0 `baea360` 先有21项有效失败／23通过，1.33秒，再全部44项传输测试792毫秒通过（`t10d0-transport-agent-red.log`、`t10d0-transport-agent-green1.log`）。覆盖原始空白／转义、准确1MiB／+1、UTF-8分块、虚报响应头、取消／释放reader及非法请求上限。旧16项完整保留；类型检查6.79秒通过，不提高全局资源边界。
+
+T10d1 `68ccf3d` 先复现两个旧计划解码误拒。独立审查另保留请求cursor突变、历史CURRENT标签借用、四项旧Schema6–9缺省／null分派回归，以及COMPLETE／UNKNOWN范围不一致的真实RED（`t10d1-source-agent-red1.log`、`t10d1-source-agent-red2.log`、`t10d1-source-agent-legacy-red.log`、`t10d1-source-agent-scope-red.log`）。最终source140／旧plans37／transport44组合221项1.33秒通过；类型检查9.05秒通过（`t10d1-source-agent-final-green.log`、`t10d1-source-agent-final-typecheck.log`）。共享解码不实现第二套服务端hash／语义核验，旧测试文件不变。
+
+T10d2 `700afdc` 先有8项有效失败／12通过：三项实际SUCCEEDED来源新增被拒，五种非成功状态泄漏dailyMapping（`t10d2-ai-agent-red1.log`）。最终六文件client／diagnostic／drafting／source／plan／transport组合304项2.36秒通过；类型检查8.10秒通过（`t10d2-ai-agent-final-neighbor.log`、`t10d2-ai-agent-final-typecheck.log`）。根追加三项mapping-header交叉检查首次即通过：既有顶层guard已拒绝，故不重复加生产guard或声称漏洞。首次普通限制环境命令因Vite TEMP rename EPERM收集0项，其日志不算RED。实际定向检查3项通过，最终完整六文件重跑307项1.92秒通过（`t10d2-root-mapping-header-red2.log`、`t10d2-root-final307.log`）。早期类型错误是test-helper／closure收窄错误，不算生产RED，均保留。
+
+原AI测试正文及旧部分提取夹具SHA准确不变。根审查并逐个提交有界子片。T10现具API／后端／生成件／client证据；T11／T12及C04待完成，真实供应商、就绪、全项目及容量验收仍在后续。以上数量有重叠，不合计为一次运行。供应商0/48；用户迁移0。

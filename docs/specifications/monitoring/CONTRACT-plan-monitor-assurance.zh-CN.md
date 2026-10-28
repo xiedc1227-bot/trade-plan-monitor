@@ -222,3 +222,11 @@ GET /api/v1/plan-versions/{version_id}/source-coverage 在分页前核验同sess
 两套生成API仅增加一个source-coverage GET、十个新source DTO组件、三个已批准既有视图的sourceCoverage，以及已有两个来源绑定确认字段。兼容投影逐项校验批准增量，再重建原有四份OpenAPI／TypeScript字节哈希归属。未批准的路由、组件、旧字段改变或新source上限改变仍失败；不得按宽泛SOURCE前缀过滤或重写golden。
 
 旧部分提取浏览器夹具保持字节一致。其原有84项问题保持准确前缀，仅追加source.clause-fc6f7f64a0fc6526处SOURCE_CONTEXT_UNVERIFIED警告，activationBlocking=true，不代表覆盖成功。准确新增sourceCoverage及该独立固定诊断是此响应仅允许的增量。本契约证据不证明自然语言提取准确率或实际监控就绪。
+
+## PMA-K30 — 封闭浏览器契约与原始响应边界
+
+共享source client校验完整公开字段、可空值、字面量authorityGranted=false、计数、Unicode代码点跨度、三种行流及可见来源／审核peer身份。生成类型的可选false默认值不能豁免实际覆盖HTTP响应缺失authorityGranted。来源GET在JSON解析前对响应头／原始流执行逐请求1048576字节边界；旧默认4MiB、depth32及50000节点传输限制不变。请求limit／cursor在等待I/O前快照固定。完整行短页按实际索引推进，不按请求limit；后续界面归属仍须校验跨页上下文并丢弃过期响应。
+
+计划wire解码仅接受已批准sourceCoverage增量，绑定原生plan／source／content／review归属，并允许有准确解释的非当前ACTIVE观察。带来源摘要的当前Schema5–9必须保留准确execution／mapping身份。历史摘要缺失／null保留旧解码分派和字段省略；历史／obsolete文档不能借用新COMPLETE／current／confirmation标签。浏览器校验结构与peer一致，不核验服务端HMAC、不复刻Python canonical hash或独立交易语义。
+
+提取client复用该解码器处理当前带来源摘要的SUCCEEDED结果，并将source／content与实际提取／mapping peer比较。未保存观察禁止携带已保存bundle／revision／receipt、当前审核、确认及LEGACY_UNASSESSED。失败／运行中／排队任务不能泄漏dailyMapping或sourceCoverage结果。BLOCKED／UNKNOWN候选保持可查看；HUMAN／AI_HISTORICAL不获得自动忠实性。旧v4–v6无此摘要响应保留历史解码。API完成本身不代表T11归属／界面工作流完成。
