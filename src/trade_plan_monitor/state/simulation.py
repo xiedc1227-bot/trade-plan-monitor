@@ -64,6 +64,7 @@ def simulate_inventory(
     now: datetime,
     *,
     identity_factory=None,
+    _source_authority_reader=None,
 ) -> SimulationReceipt:
     """Recheck and write effects in the caller-owned UOW, without committing it."""
     from datetime import time
@@ -129,7 +130,19 @@ def simulate_inventory(
     from trade_plan_monitor.state.source_coverage_store import SourceCoverageIntegrityError
 
     try:
-        source_basis = require_source_action_authority(work, details.id, cause_id=cause["id"])
+        source_basis = (require_source_action_authority(work, details.id, cause_id=cause["id"])
+            if _source_authority_reader is None else _source_authority_reader(
+                work, details.id, cause_id=cause["id"]))
+        if _source_authority_reader is not None:
+            if (source_basis is None or getattr(source_basis, "basis", None) != "REPLAY_OBSERVATION"
+                    or hasattr(source_basis, "coverage_complete") or hasattr(source_basis, "status")
+                    or getattr(source_basis, "coverage_evidence_hash", None) is not None
+                    or type(getattr(source_basis, "risk_rows", None)) is not tuple):
+                raise SourceCoverageAuthorityError()
+            if (getattr(source_basis, "plan_version_id", None) != details.id
+                    or type(getattr(source_basis, "activation_revision", None)) is not int
+                    or source_basis.activation_revision != active.revision):
+                raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
     except SourceCoverageAuthorityError as error:
         if error.reason == "SOURCE_COVERAGE_INTEGRITY":
             raise SourceCoverageIntegrityError() from None

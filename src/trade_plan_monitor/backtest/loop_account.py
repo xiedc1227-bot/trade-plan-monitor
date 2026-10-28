@@ -213,7 +213,8 @@ class LoopAccountParticipant:
     def _quantities(batches):
         return {(batch["id"], batch["bucket"]): batch["quantity"] for batch in batches}
 
-    def apply(self, command, *, request_key, costs, now, identity_factory):
+    def apply(self, command, *, request_key, costs, now, identity_factory,
+              _source_authority_reader=None):
         command = SimulationCommand.model_validate(command.model_dump())
         request_key = _REQUEST_KEY.validate_python(request_key)
         prior = self.session.scalar(
@@ -266,7 +267,8 @@ class LoopAccountParticipant:
         if old_quantities != {(lot.lot_key, lot.bucket): lot.quantity for lot in before.lots}:
             raise ValueError("LOOP_MONEY_INVENTORY_MISMATCH")
         authority = simulate_inventory(
-            self.work, command, now=now, identity_factory=identity_factory
+            self.work, command, now=now, identity_factory=identity_factory,
+            _source_authority_reader=_source_authority_reader,
         )
         position = self.work.daily.get("simulation-position-" + details.symbol)
         new_quantities = self._quantities(position["payload"]["batches"])

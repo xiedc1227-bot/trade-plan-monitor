@@ -71,9 +71,15 @@ class _LoopPlans:
 class _LoopActivationPlans(PlanRepository):
     """Map a frozen version to a private key without rewriting its source snapshot."""
 
-    def __init__(self, *args, plan, storage_plan_id, **kwargs):
+    def __init__(self, *args, plan, storage_plan_id, source_authority_reader=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.plan, self.storage_plan_id = plan, storage_plan_id
+        self._source_authority_reader = source_authority_reader
+
+    def _require_source_review(self, target_id):
+        if self._source_authority_reader is None:
+            return super()._require_source_review(target_id)
+        self._source_authority_reader.require_activation(self._session, target_id)
 
     def get_version(self, plan_id, version):
         if (plan_id, version) != (self.plan.plan_id, self.plan.version):
@@ -106,6 +112,7 @@ class LoopSession:
                 point for point in points if self.now < point <= boundary.evidence_cutoff
             ))
         self._authority_available = True
+        self._closed = False
         self._lifecycle_day = self.now.date()
         self.context_mismatches = self.blocked_rule_ids = ()
         self._counter = 0
@@ -130,17 +137,24 @@ class LoopSession:
                 review_id=review_id,
                 payload_json=dump_plan_json(self.plan),
             )
+            self._seed(calendar)
+            from trade_plan_monitor.backtest.loop_source_authority import (
+                _issue_loop_source_authority,
+            )
+
+            self._source_authority_reader = _issue_loop_source_authority(self)
             self.runtime = DailyRuntimeEvaluationService(
                 self.work,
                 clock=lambda: self.now,
                 event_id_factory=lambda key: self.identity("reminder", key),
+                _source_authority_reader=self._source_authority_reader,
             )
-            self._seed(calendar)
             self.capital = CapitalReplayState(self, self.run_input.capital_program)
             self.capital.apply(self.now, before_order=0)
             if isinstance(self.run_input, ScheduledLoopInput):
                 self._compare_account_context()
         except BaseException:
+            self._closed = True
             self.engine.dispose()
             raise
 
@@ -172,6 +186,7 @@ class LoopSession:
                 plans = _LoopActivationPlans(
                     work.daily.session, clock=lambda: self.now, id_factory=self._id,
                     events=work.events, plan=self.plan, storage_plan_id=self.details.id,
+                    source_authority_reader=getattr(self, "_source_authority_reader", None),
                 )
             work._plans = _LoopPlans(plans, self.details)
             yield work
@@ -312,6 +327,7 @@ class LoopSession:
                 costs=self.run_input.costs,
                 now=self.now,
                 identity_factory=lambda: str(self.identity("fill", request_key)),
+                _source_authority_reader=self._source_authority_reader,
             )
             work.commit()
             return receipt
@@ -499,4 +515,5 @@ class LoopSession:
         return self
 
     def __exit__(self, *error):
+        self._closed = True
         self.engine.dispose()
