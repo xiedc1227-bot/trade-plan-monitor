@@ -1,20 +1,24 @@
-"""Private pre-admission harness; real UOW/runtime/accounting, no public Schema9 claim."""
+"""Synthetic P3 plans with actual source review, activation and accounting."""
 
 from contextlib import contextmanager
 from datetime import datetime, time, timedelta
-from types import SimpleNamespace
 from uuid import UUID
 
 from sqlalchemy.orm import sessionmaker
 from tests.integration.test_daily_plan_chain import FRIDAY, SH, TUESDAY, WEDNESDAY
 from tests.integration.test_market_exception_runtime import exception_inputs
+from tests.integration.test_market_linkage_review import source_mapping
 from tests.unit.test_p3_composition import inputs_for
 
-from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+from trade_plan_monitor.domain.market_linkage_validation import P3PlanDraft
+from trade_plan_monitor.domain.plan_validation import PlanValidationResult
 from trade_plan_monitor.runtime.daily_service import DailyRuntimeEvaluationService
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
+from trade_plan_monitor.state.daily_review_store import confirm_daily_review, save_daily_draft
 from trade_plan_monitor.state.models import TradingCalendar
+from trade_plan_monitor.state.source_coverage_store import SourceCoverageStore
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+from trade_plan_monitor.web.routers.plans import PlanReviewConfirmationCommand
 
 
 class PrivateChain:
@@ -29,27 +33,35 @@ class PrivateChain:
                 effective_from="2026-01-01", effective_through="2026-12-31")
             self.plan = type(self.plan).model_validate(raw)
         self.version_id = "90000000-0000-4000-8000-000000000001"
-        self.active = SimpleNamespace(plan_version_id=self.version_id, revision=1,
-                                      activated_at=self.now)
-        self.details = SimpleNamespace(id=self.version_id, symbol=self.plan.symbol,
-            plan_id=self.plan.plan_id, payload_json=self.plan.model_dump_json(), daily_issues=(),
-            plan_hash=plan_sha256(self.plan), content_hash=daily_plan_content_sha256(self.plan))
         self.factory = sessionmaker(engine, expire_on_commit=False)
-        # The executable boundary stays closed. Only this private harness supplies a strict model.
-        from trade_plan_monitor.domain import plan_codec
-        from trade_plan_monitor.runtime import market_exceptions
-        original = plan_codec.load_plan_json
-        def private_reader(raw):
-            import json
-            if json.loads(raw).get("schema_version") == 9:
-                return type(self.plan).model_validate_json(raw)
-            return original(raw)
-        monkeypatch.setattr(plan_codec, "load_plan_json", private_reader)
-        monkeypatch.setattr(market_exceptions, "load_plan_json", private_reader)
         self.runtime = DailyRuntimeEvaluationService(self.work, clock=lambda: self.now)
-        # Notifications require the public immutable plan tables; their acceptance belongs to T17.
+        # This isolated accounting harness emits no notifications.
         self.runtime._enqueue = lambda *args, **kwargs: None
         with self.work() as work:
+            draft = P3PlanDraft.from_executable(self.plan)
+            source, mapping = source_mapping(draft)
+            # Keep the harness's established version/review IDs. Only identity
+            # generation changes; source analysis and every authority guard run.
+            identities = iter(("90000000-0000-4000-8000-000000000002",
+                               self.version_id, "private-reviewed"))
+            original_identity = work.plans._id_factory
+            work.plans._id_factory = lambda: next(identities)
+            version_id = save_daily_draft(work, draft, mapping=mapping, source_text=source,
+                                         clock=lambda: self.now)
+            if version_id != self.version_id:
+                raise ValueError("The synthetic fixture version identity changed")
+            details = work.plans.get_version_details(version_id)
+            coverage = SourceCoverageStore(work.daily.session).latest(version_id)
+            confirm_daily_review(work, PlanReviewConfirmationCommand(
+                plan_version_id=UUID(version_id), content_hash=details.content_hash,
+                source_hash=details.source_hash, review_evidence_hash=details.review_evidence_hash,
+                coverage_evidence_hash=coverage.assessment.evidence_hash,
+                coverage_rules_version=coverage.assessment.rules_version,
+                expected_revision=0), clock=lambda: self.now)
+            work.plans._id_factory = original_identity
+            self.active = work.plans.activate(self.plan, expected_revision=0,
+                validation=PlanValidationResult(issues=()))
+            self.details = work.plans.get_version_details(version_id)
             history = tuple(FRIDAY-timedelta(days=i) for i in reversed(range(60)))
             for previous, day in zip((history[0]-timedelta(days=1), *history, TUESDAY),
                                      (*history, TUESDAY, WEDNESDAY), strict=True):
@@ -58,18 +70,11 @@ class PrivateChain:
             work.daily.session.flush()
             DailyAccounting(work.daily).initialize(symbol=self.plan.symbol, core_qty=0,
                 tactical_qty=quantity, expected_revision=0, now=self.now)
-            work.daily.save("review-"+self.version_id, kind="REVIEW", symbol=self.plan.symbol,
-                lineage=self.plan.plan_id, expected_revision=0, payload=dict(
-                    confirmed=True, content_hash=self.details.content_hash, source_hash="a"*64,
-                    evidence_hash="b"*64, review_id="private-reviewed", review_revision=1,
-                    plan_version_id=self.version_id))
             work.commit()
 
     @contextmanager
     def work(self):
         with SqlAlchemyUnitOfWork(self.factory, clock=lambda: self.now) as work:
-            work._plans = SimpleNamespace(get_active=lambda _: self.active,
-                get_version_details=lambda _: self.details)
             yield work
 
     def evaluate(self, price=161):
