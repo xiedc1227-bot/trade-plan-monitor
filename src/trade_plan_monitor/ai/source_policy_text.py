@@ -7,6 +7,7 @@ from trade_plan_monitor.market_data.daily_indicators import PARAMETERS
 # synthetic forms support deterministic contract fixtures, not real-AI accuracy.
 _MANUAL_REQUIREMENTS = {
     "Synthetic reviewer checks complete official evidence",
+    "Human verifies the completed five-minute pattern",
     "Review technical evidence for SEVERE_STRUCTURE",
     "Review technical evidence for SEVERE_DETERIORATION",
     "量能不能异常放大",
@@ -34,12 +35,16 @@ _ANNOTATIONS = {
     ".allocation_evidence": {"Synthetic human proposal"},
 }
 _ATOM_KINDS = {
+    "Human verifies the completed five-minute pattern": {"TECHNICAL"},
     "Review technical evidence for SEVERE_STRUCTURE": {"SEVERE_STRUCTURE"},
     "Review technical evidence for SEVERE_DETERIORATION": {"SEVERE_DETERIORATION"},
     "量能不能异常放大": {"VOLUME_OR_CANDLE"},
     "成交不异常放大": {"VOLUME_OR_CANDLE"},
     "明显下影": {"VOLUME_OR_CANDLE"},
     "相对深证成指不再转弱": {"TECHNICAL", "TRADE_VIABILITY"},
+}
+_ATOM_TYPES = {
+    "Human verifies the completed five-minute pattern": {"REVIEWED_FACT"},
 }
 
 
@@ -53,8 +58,11 @@ def supported_policy_text(path, value, values):
         return value in _INDEPENDENT_REQUIREMENTS
     if path.endswith(".evidence_requirement"):
         required = _ATOM_KINDS.get(value)
-        kind = values.get(path.removesuffix("evidence_requirement") + "fact_kind")
-        return value in _MANUAL_REQUIREMENTS and (required is None or kind in required)
+        prefix = path.removesuffix("evidence_requirement")
+        kind = values.get(prefix + "fact_kind")
+        types = _ATOM_TYPES.get(value)
+        return (value in _MANUAL_REQUIREMENTS and (required is None or kind in required)
+                and (types is None or values.get(prefix + "type") in types))
     for suffix, meanings in _ANNOTATIONS.items():
         if path.endswith(suffix):
             return value in meanings
