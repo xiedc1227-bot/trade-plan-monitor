@@ -206,3 +206,11 @@ ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21�
 另四项原失败使用虚拟plan归属及手写review的私有P3 harness。两文件修复现以HUMAN来源／保存／审核／启用经过实际server路径，保留固定version／review身份。原例外／模拟／API调用方及五项新审计24通过，14.27秒（`readiness-p3-private-source-red1.log`、`readiness-p3-private-source-green2.log`）；提交 `1d3d05f`。三个原调用文件49条断言完全保留，不主张AI_NEW／raw fidelity，不伪造COMPLETE；另验过期审核复用被拒。
 
 冻结helper现于预览／批准传真实session reader。首次四节点重跑2通过／2项更后续失败，53.68秒（`t09-replay-helper-agent-green.log`）：准备先按默认计划建mapping，再覆盖真实例外计划，且未保存实际提取输入。按真实draft／mapping／account直接构造同一review字段／evidence，并传 `extraction_inputs(extracted)` 修复前置，不改来源／raw／冻结预期。两项后续失败35.29秒通过；全部四个原worker节点随后73.16秒通过（`t09-replay-helper-agent-two-green.log`、`t09-replay-helper-agent-final.log`）；提交 `2ddc095`。原helper两条断言及全部旧golden保持不变。以上阶段重跑对应修复全部25项失败；独立实际读取／消费者绑定及发送前修复后仍须最终组合回归。T09／C03保持开放。供应商0/48，用户迁移0。
+
+## PMA-R26 — 实际SQL重读与三条实时消费绑定
+
+有效held-ORM探针11失败／10通过，18.25秒（`t09-live-orm-probe02.log`）：九项writer前修改均由原锁／刷新保护，direct reader及同writer中native读取后的案例暴露缓存归属。这是同连接故障注入，不声称外部writer可绕过SQLite锁。先前未类型化command的组合含夹具错误，不作为有效RED。direct自洽CURRENT启用最初误要求一律拒绝；校正判据要求实际revision2。隔离副本加载未经改动HEAD源码，独立因返回revision1失败（`t09-live-orm-corrected-head-red.log`，2.29秒）。分片前33项源码保留于 `t09-live-orm-before-split.py`，SHA-256 `8ac57505f3c71ee056b5dae6bc6e6efcc71c5eb81533ea09d0d1d9ff7ab5e32b`；不冒称其为最初21项源码哈希。
+
+实际RISK／FACT／历史owner及待保存修改RED另保留于 `t09-live-orm-pending-red.log`（12失败／21未选，5.39秒）。root随后发现缺相关owner误分类REQUIRED，两项真实删除RED固定原native完整性要求（`t09-live-orm-related-red.log`，2.87秒）。最终定向刷新clean owner、完整no_autoflush、待保存修改保留及native分类，101项16.82秒通过（freshness20、unit28、cutover53；`t09-live-orm-final02.log`），另92项60.97秒通过（独立消费者邻接；`t09-live-orm-adjacent-final.log`）；这是两次运行，不是单次193项命令。提交 `de25d25` 仅改reader、其私有helper及独立测试。历史FACT owner保留原内容归属，不要求新增当前来源许可。
+
+15项消费者分片保留2失败／13通过，14.74秒（`t09-live-fence-binding-red.log`）。root增加真实runtime绑定及两条例外路线后，6失败／13通过，17.27秒（`t09-live-consumer-bindings-red.log`）。三条实时消费现均与冻结消费一样，把实际来源version／activation与原native绑定核对。对应10文件组合160通过，90.79秒，含既有Starlette警告（`t09-live-consumer-bindings-green.log`）；独立复审无必改；提交 `63d4e71`。未把缓存变化当策略、未改数量，也未声称历史观测即当前coverage。发送前检查及C03最终回归仍待完成。供应商0/48，用户迁移0。

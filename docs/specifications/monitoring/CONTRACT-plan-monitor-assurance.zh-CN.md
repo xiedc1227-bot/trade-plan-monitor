@@ -169,3 +169,9 @@ ResearchSession单独重验冻结输入，在全新私库登记SQL manifest／ve
 新增例外预览、批准及消费，须在原writer栅栏内要求准确当前来源依据，同时保留原native context、证据、数量、资金和窗口防护。仅明确冻结session reader可用REPLAY_OBSERVATION；冻结预览／批准及后续模拟消费均须传此reader。公共command、Context、preview hash及数量公式均不加入来源标志。来源INTEGRITY保留脱敏服务错误；有效缺失／过期／upgrade／limit仍为结构化冲突。
 
 REJECT使用原native输入resolver，仅在本地诊断副本移除SOURCE_COVERAGE_REQUIRED、SOURCE_COVERAGE_STALE、SOURCE_COVERAGE_INTEGRITY、SOURCE_COVERAGE_UPGRADE_REQUIRED及SOURCE_COVERAGE_LIMIT_EXCEEDED，不调用新增来源授权、不清其他阻断、不改存储快照、不扩大原窗口。真实candidate／head／market／fact损坏不吞掉。既有撤销与终止清理沿原防护可用。取得原writer后，已完成command在任何新来源／context检查前返回原回执；缺失SIGNAL不修复、不重建。请求内容变化保留原冲突。全部报价／批准／消费数量仍按原整笔数量，不调整。
+
+## PMA-K22 — 实际读取与原生消费者绑定
+
+实时来源检查定向刷新准确且无待保存修改的SQL归属，含plan／source／review／provenance、activation、相关daily review／cause／risk／fact及历史事实content owner。完整reader在no_autoflush中执行；相关new／dirty／deleted归属阻断但不写入、不丢弃修改，无关待保存数据不受影响。RISK保留既有每页500行、完整证据及原优先级顺序。coverage store的Core Row仍按实际读取；不能忽略相关待保存coverage归属。缺失持久相关owner保留native完整性分类；历史FACT内容owner不要求新增当前来源／补参许可。
+
+自洽当前source reader返回实际启用revision，含合法新revision；缓存历史本身不是拒绝规则。产生效果前，runtime生成、模拟及例外授权须把准确plan_version_id和严格类型activation_revision与原native绑定核对，不能读取旧head／candidate后静默改用新启用版本。冻结reader保留额外REPLAY_OBSERVATION形状限制及相同准确绑定，不放宽行情、数量、机会、风险优先级或已完成回执规则。
