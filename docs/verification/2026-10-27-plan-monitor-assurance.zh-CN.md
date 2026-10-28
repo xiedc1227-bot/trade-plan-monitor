@@ -190,3 +190,9 @@ source-action helper独立79项通过（`t09-risk-owned-final.log`，12.53秒）
 明确冻结LoopSession适配器提交为 `1dd578c`。初始真实周期／schedule切换RED保留于 `loop-source-agent-red-01.log`。独立实际SQL故障注入随后发现三处缓存归属错误放行，及一处仅后续guard拒绝；四例RED保留于 `loop-source-agent-sql-red-04.log`。刷新version／source／review／activation归属后，由来源检查本身拒绝并保留原子回滚。最终32项私有适配测试通过，4.20秒（`loop-source-agent-self-final-08.log`），覆盖clone引擎、相等输入克隆、嵌套修改、SQL／manifest／review／时间篡改、跳过successor、ABA复用、普通过期后风险延续、伪reader角色、默认实时拒绝及已完成回执重放。相邻选择85项通过，29.76秒，Ruff通过（`loop-source-agent-final-07.log`）；计数重叠。
 
 独立真实周期加载 `2c1154e` 原runtime，源码SHA-256 `63668a5c496670ae08ab6d0098a8353d12cb610b5ad6a61c9ae3bb080f3dc58d`，仅让旧constructor忽略新私有参数。原／当前报告及事件canonical字节完全相同：报告 `e3c0366cf1804d91b075f276869aeb131c17a7e6ec4887a80c15a46314e412b1`，事件 `8b3ba24d96f44c7eb76c95bb6433957df9c75f0d29fe8851d10a74cfed247430`（`loop-source-agent-old-runtime-byte-probe.log`）。既有冻结／golden预期未改。先前扩大87项组合84通过／3失败，39.83秒（`loop-source-agent-neighbor-03.log`）；三项失败属独立ResearchSession冻结路径，待其专用适配器。此项不代表完整历史／回放或C03通过。供应商0/48，用户迁移0。
+
+## PMA-R24 — 独立研究归属与在线对照夹具
+
+ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21秒（`readiness-research-authority-red1.log`）。专用私有来源适配器、全新SQL归属及明确runtime／simulation接入后，24项通过，3.13秒（`readiness-research-authority-green1.log`）；提交 `cd3706f`。覆盖已持有ORM／实际SQL篡改、clone引擎、相等输入克隆、嵌套修改、虚拟归属、运行clock区间、关闭撤销、合法晚于虚拟时间的人工审核、真实执行、不重复执行及默认实时拒绝。root独立复审三个文件。原输入字节／run_id／authority_id及Daily REVIEW语义保持不变。
+
+相邻选择52通过／1失败，116.55秒（`readiness-research-authority-neighbor1.log`）。原ordinary预算与冻结批次引用失败已通过；剩余失败发生在在线对照前置。初步“审核请求缺字段”的判断有误，Chain.activate实际已发送该字段。root只读检查此隔离库，发现ordinary_rules[1].condition.reference.source存在SOURCE_CONTEXT_UNVERIFIED／SOURCE_RELATION_MISMATCH。仅将未注册合成注释改为既有 `fixture`；原17条断言及全部阈值／策略／golden完整保留。两个对照参数随后通过，29.78秒（`readiness-research-parity-annotation1.log`）；提交 `531b9eb`。由此对应修复该单项失败，未放宽来源防护。独立冻结例外消费者仍在T09b验收，不据此推断完整C03或项目通过。供应商0/48，用户迁移0。
