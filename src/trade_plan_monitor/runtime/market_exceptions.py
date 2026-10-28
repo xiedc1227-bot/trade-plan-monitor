@@ -151,10 +151,10 @@ def current_exception_authority(work, candidate, now, *, _source_authority_reade
                     or getattr(basis, "coverage_evidence_hash", None) is not None
                     or type(getattr(basis, "risk_rows", None)) is not tuple):
                 raise SourceCoverageAuthorityError()
-            if (getattr(basis, "plan_version_id", None) != binding.plan_version_id
-                    or type(getattr(basis, "activation_revision", None)) is not int
-                    or basis.activation_revision != binding.activation_revision):
-                raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
+        if (getattr(basis, "plan_version_id", None) != binding.plan_version_id
+                or type(getattr(basis, "activation_revision", None)) is not int
+                or basis.activation_revision != binding.activation_revision):
+            raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
     except SourceCoverageAuthorityError as error:
         if error.reason == "SOURCE_COVERAGE_INTEGRITY":
             raise SourceCoverageIntegrityError() from None

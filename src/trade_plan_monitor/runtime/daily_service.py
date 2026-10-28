@@ -209,10 +209,11 @@ def _action_source(work, version_id, *, cause_id=None, reader=None, activation_r
                 or getattr(basis, "coverage_evidence_hash", None) is not None
                 or type(getattr(basis, "risk_rows", None)) is not tuple):
             return None, {"blocker": "SOURCE_COVERAGE_REQUIRED"}
-        if (getattr(basis, "plan_version_id", None) != version_id
-                or type(getattr(basis, "activation_revision", None)) is not int
-                or basis.activation_revision != activation_revision):
-            return None, {"blocker": "SOURCE_COVERAGE_STALE"}
+    if (getattr(basis, "plan_version_id", None) != version_id
+            or type(getattr(basis, "activation_revision", None)) is not int
+            or basis.activation_revision != activation_revision):
+        return None, {"blocker": "SOURCE_COVERAGE_STALE"}
+    if reader is not None:
         return basis, {"basis": "REPLAY_OBSERVATION"}
     return basis, {
         "basis": basis.basis,

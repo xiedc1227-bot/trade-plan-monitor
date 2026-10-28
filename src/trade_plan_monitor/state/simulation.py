@@ -139,10 +139,10 @@ def simulate_inventory(
                     or getattr(source_basis, "coverage_evidence_hash", None) is not None
                     or type(getattr(source_basis, "risk_rows", None)) is not tuple):
                 raise SourceCoverageAuthorityError()
-            if (getattr(source_basis, "plan_version_id", None) != details.id
-                    or type(getattr(source_basis, "activation_revision", None)) is not int
-                    or source_basis.activation_revision != active.revision):
-                raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
+        if (getattr(source_basis, "plan_version_id", None) != details.id
+                or type(getattr(source_basis, "activation_revision", None)) is not int
+                or source_basis.activation_revision != active.revision):
+            raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
     except SourceCoverageAuthorityError as error:
         if error.reason == "SOURCE_COVERAGE_INTEGRITY":
             raise SourceCoverageIntegrityError() from None
