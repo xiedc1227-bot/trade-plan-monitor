@@ -507,9 +507,12 @@ def test_shutdown_awaits_the_owned_async_transport_cleanup(workspace):
 
 
 def test_shutdown_waits_for_websocket_transport_exit_without_waiting_on_its_http_request():
+    closing = []
+
     class Connection:
         def __init__(self, kind):
             self.scope = {"type": kind}
+            self.transport = SimpleNamespace(close=lambda: closing.append(kind))
 
     async def scenario():
         websocket, http, unstarted_http = (
@@ -523,6 +526,7 @@ def test_shutdown_waits_for_websocket_transport_exit_without_waiting_on_its_http
         cleanup = asyncio.create_task(_request_server_shutdown(server))
         await asyncio.sleep(0)
         assert not cleanup.done() and server.should_exit is False
+        assert closing == ["websocket"]
         connections.remove(websocket)
         await cleanup
         assert server.should_exit is True and connections == {http, unstarted_http}
@@ -533,7 +537,8 @@ def test_shutdown_waits_for_websocket_transport_exit_without_waiting_on_its_http
 def test_shutdown_reports_an_unclosed_websocket_instead_of_acknowledging_success():
     async def scenario():
         server = SimpleNamespace(should_exit=False, server_state=SimpleNamespace(
-            connections=[SimpleNamespace(scope={"type": "websocket"})]
+            connections=[SimpleNamespace(scope={"type": "websocket"},
+                transport=SimpleNamespace(close=lambda: None))]
         ))
         with pytest.raises(TimeoutError):
             await _request_server_shutdown(server, timeout_seconds=0.02)

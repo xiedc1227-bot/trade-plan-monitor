@@ -339,10 +339,13 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
 async def _request_server_shutdown(server, *, timeout_seconds=5.0):
     """Let this fixture's closed browser transports exit before stopping Uvicorn."""
     async with asyncio.timeout(timeout_seconds):
-        while any(
-            (getattr(connection, "scope", None) or {}).get("type") == "websocket"
+        while closing := tuple(
+            connection
             for connection in tuple(server.server_state.connections)
+            if (getattr(connection, "scope", None) or {}).get("type") == "websocket"
         ):
+            for connection in closing:
+                connection.transport.close()
             await asyncio.sleep(0.01)
     server.should_exit = True
 
