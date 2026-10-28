@@ -11,7 +11,7 @@ from hashlib import sha256
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, inspect, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -392,16 +392,14 @@ class AlertOutbox:
             raise TypeError("event must be a supported alert event")
         if isinstance(market_date, datetime) or not isinstance(market_date, date):
             raise TypeError("market_date must be a date")
+        if type(event) is DailyAlertEvent:
+            return self._daily_delivery_allowed(event)
         eligibility = self._session.get(AlertDeliveryEligibility, str(event.event_id))
         if eligibility is not None and eligibility.status != "ELIGIBLE":
             return False
         plan = self._active_plan_for_event(event)
         if plan is None:
             return False
-        if type(event) is DailyAlertEvent:
-            from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
-
-            return daily_delivery_allowed(self._session, event, self._now())
         if activation_is_eligible_on(plan.activation, market_date):
             return True
         return (
@@ -409,6 +407,35 @@ class AlertOutbox:
             and event.created_at.astimezone(_SHANGHAI).date() > event.trading_date
             and activation_is_eligible_on(plan.activation, event.trading_date)
         )
+
+    def _daily_delivery_allowed(self, event: DailyAlertEvent) -> bool:
+        from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
+        from trade_plan_monitor.state.source_coverage_store import SourceCoverageIntegrityError
+
+        # Admission is a read, including the filters before the source guard.
+        # Never flush caller changes or refresh away a pending metadata veto.
+        with self._session.no_autoflush:
+            identity = str(event.event_id)
+            for row in (*self._session.new, *self._session.dirty, *self._session.deleted):
+                if isinstance(row, AlertDeliveryEligibility):
+                    state = inspect(row)
+                    history = state.attrs.event_id.history
+                    if identity in (state.dict.get("event_id"), *history.deleted,
+                                    *history.added, *(state.identity or ())):
+                        return False
+            eligibility = self._session.scalar(select(AlertDeliveryEligibility).where(
+                AlertDeliveryEligibility.event_id == identity
+            ).execution_options(populate_existing=True))
+            if eligibility is not None and eligibility.status != "ELIGIBLE":
+                return False
+            # The common guard rejects related dirty source owners and refreshes
+            # their actual rows before the old exact active-plan filter reads them.
+            try:
+                if not daily_delivery_allowed(self._session, event, self._now()):
+                    return False
+            except SourceCoverageIntegrityError:
+                raise OutboxStorageError("Stored daily alert authority is invalid") from None
+            return self._active_plan_for_event(event) is not None
 
     def _active_plan_for_event(
         self, event: AlertEvent | ExplicitAlertEvent
