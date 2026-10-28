@@ -10,7 +10,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.unit.test_daily_review import reviewed_mapping
+from tests.integration.preparation_review_current_fixtures import (
+    field_source,
+)
+from tests.integration.preparation_review_current_fixtures import (
+    reviewed_mapping as field_mapping,
+)
+from tests.unit.test_daily_review import reviewed_mapping as legacy_mapping
 from tests.unit.test_unified_plan_domain import unified_payload
 
 from trade_plan_monitor.domain.plan_codec import (
@@ -48,7 +54,12 @@ def _source():
 
 def _draft(**values):
     draft = UnifiedPlanDraft.model_validate_json(values["plan_json"])
-    values["daily_mapping"] = reviewed_mapping(draft, values["source_text"])
+    source = values["source_text"]
+    values["daily_mapping"] = (
+        field_mapping(draft, source)
+        if source.startswith("schema_version = ")
+        else legacy_mapping(draft, source)
+    )
     return PlanDraftCommand(**values)
 
 
@@ -72,12 +83,18 @@ async def _save(service, *, command, context):
 
 
 async def _confirm(service, saved, key):
+    coverage = await service.get_source_coverage(version_id=str(saved.id))
+    assert coverage is not None
+    assert coverage.summary.status == "COMPLETE"
+    assert coverage.summary.can_confirm_review is True
     result = await service.confirm_plan_review(
         command=PlanReviewConfirmationCommand(
             plan_version_id=saved.id,
             content_hash=saved.content_hash,
             source_hash=saved.source_hash,
             review_evidence_hash=saved.review_evidence_hash,
+            coverage_evidence_hash=coverage.summary.coverage_evidence_hash,
+            coverage_rules_version=coverage.summary.rules_version,
             expected_revision=saved.review_revision,
         ),
         context=_context(key),
@@ -305,8 +322,9 @@ def test_plan_operations_and_idempotency_survive_independent_lifecycles(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "monitor.sqlite3"
-    source_v1 = _source()
-    plan_v1 = load_plan_yaml(source_v1)
+    plan_v1 = load_plan_yaml(_source())
+    # This lifecycle positive uses complete engineering declarations of the same plan.
+    source_v1 = field_source(UnifiedPlanDraft.from_executable(plan_v1))
     save_command = _draft(
         plan_json=dump_plan_json(plan_v1),
         source_text=source_v1,
@@ -374,7 +392,10 @@ def test_plan_operations_and_idempotency_survive_independent_lifecycles(
         assert activated_v1.revision == 1
         await second.stop()
 
-        source_v2 = source_v1.replace("\nversion: 1\n", "\nversion: 2\n", 1)
+        plan_v2 = plan_v1.model_copy(update={"version": 2})
+        source_v2 = field_source(
+            UnifiedPlanDraft.from_executable(plan_v2), tail=("# Trade plan",),
+        )
         third = PersistentPlanWebLifecycle(database_path=database_path, clock=lambda: _FIXED_NOW)
         await third.start()
         restored_active = await third.get_plan_activation_state(symbol="003043.SZ")
@@ -382,7 +403,7 @@ def test_plan_operations_and_idempotency_survive_independent_lifecycles(
         imported_v2 = await _save(
             third,
             command=_draft(
-                plan_json=dump_plan_json(load_plan_yaml(source_v2)),
+                plan_json=dump_plan_json(plan_v2),
                 source_text=source_v2,
                 expected_revision=restored_active.revision,
             ),
@@ -390,6 +411,7 @@ def test_plan_operations_and_idempotency_survive_independent_lifecycles(
         )
         assert imported_v2.version == 2
         assert imported_v2.source_text == source_v2
+        assert imported_v2.source_hash != saved.source_hash
         assert imported_v2.review_issues == ()
         assert not imported_v2.can_activate
         reviewed_draft = await _save(
@@ -779,9 +801,9 @@ def test_can_activate_filter_retains_only_the_requested_result_window(
         nonlocal alive
         alive -= 1
 
-    def tracked_summary(record: object):
+    def tracked_summary(record: object, **kwargs):
         nonlocal alive, peak_alive
-        summary = original_summary(record)
+        summary = original_summary(record, **kwargs)
         alive += 1
         peak_alive = max(peak_alive, alive)
         weakref.finalize(summary, release_view)
@@ -796,7 +818,7 @@ def test_can_activate_filter_retains_only_the_requested_result_window(
                 service,
                 command=_draft(
                     plan_json=dump_plan_json(plan),
-                    source_text=f"source version {version}",
+                    source_text=field_source(UnifiedPlanDraft.from_executable(plan)),
                     expected_revision=0,
                 ),
                 context=_context(f"save-window-{version}"),
@@ -920,5 +942,54 @@ def test_unresolved_review_remains_an_activation_blocker_after_restart(
             )
         assert blocked.value.code is ApiErrorCode.CONFLICT
         await restarted.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("source_kind", ["original_yaml", "unknown_prose"])
+def test_structured_candidate_does_not_make_unregistered_source_reviewable(
+    tmp_path: Path, source_kind: str,
+) -> None:
+    yaml_source = _source()
+    plan = load_plan_yaml(yaml_source)
+    source = (yaml_source if source_kind == "original_yaml" else
+              "Unregistered source instructions require an additional entry condition.")
+    service = PersistentPlanWebLifecycle(
+        database_path=tmp_path / "unregistered-source.sqlite3", clock=lambda: _FIXED_NOW,
+    )
+
+    async def scenario() -> None:
+        await service.start()
+        try:
+            saved = await _save(service, command=_draft(
+                plan_json=dump_plan_json(plan), source_text=source, expected_revision=0,
+            ), context=_context("save-unregistered-source"))
+            coverage = await service.get_source_coverage(version_id=str(saved.id))
+            assert saved.source_text == source
+            assert saved.status.value == "DRAFT" and saved.can_activate is False
+            assert coverage is not None
+            assert coverage.summary.status == "BLOCKED"
+            assert coverage.summary.origin == "HUMAN"
+            assert any(row.kind == "OBLIGATION" and row.obligation.scope == "UNKNOWN"
+                       for row in coverage.items)
+            assert coverage.summary.current_review_bound is False
+            assert coverage.summary.can_confirm_review is False
+            assert coverage.summary.issue_count > 0
+            with pytest.raises(ApiError) as blocked:
+                await service.confirm_plan_review(command=PlanReviewConfirmationCommand(
+                    plan_version_id=saved.id, content_hash=saved.content_hash,
+                    source_hash=saved.source_hash,
+                    review_evidence_hash=saved.review_evidence_hash,
+                    coverage_evidence_hash=coverage.summary.coverage_evidence_hash,
+                    coverage_rules_version=coverage.summary.rules_version,
+                    expected_revision=saved.review_revision,
+                ), context=_context("review-unregistered-source"))
+            assert blocked.value.code is ApiErrorCode.CONFLICT
+            assert blocked.value.details[0].code == "SOURCE_COVERAGE_REQUIRED"
+            restored = await service.get_plan_version(version_id=str(saved.id))
+            assert restored is not None and restored.source_text == source
+            assert restored.review_id is None and restored.can_activate is False
+        finally:
+            await service.stop()
 
     asyncio.run(scenario())
