@@ -148,3 +148,17 @@ LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`）。独立21项�
 当前提取安全／P3／预算单元基线62项通过，2.25秒（`t08-baseline-unit.log`）。集成基线初始15通过／6项setup错误：新补充校验器构造DailyRepository时clock=None（`t08-baseline-integration.log`）。修正一次测试表名误用后，三项定向案例复现真实缺陷（`t08-supplement-clock-red.log`、`t08-supplement-clock-red2.log`）。实际时钟传递及无效／未来登记记录脱敏处理修复后，保存／审核／API相关54项通过，16.62秒（`t08-supplement-clock-green.log`）；提交 `1d7374b`。
 
 剩余旧P3夹具审核缺当前coverage绑定（`t08-p3-fixture-source-red.log`）。默认合成工作流现声明完整策略并绑定实际读取的证明，仅确有缺参时提交Human补充；P2合成证据使用既有准确fixture标注语法。日内链43条及P2链3条原断言全部一致。真实current夹具／P3组合22项通过，7.88秒（`t08-current-daily-fixture-green2.log`）；最终日内／联动／例外／P2／风险／模拟组合60项通过，40.74秒（`t08-current-daily-fixture-final.log`），Ruff通过；提交 `5eceb6c`。中间空补充及不支持合成标注失败均保留。以上确定性结果计数重叠，不关闭T08／C03，也不替代真实验收。供应商0/48，用户迁移0。
+
+## PMA-R18 — 完整替换、漏删复审与T08扩大结果
+
+最终可选删除修复前，完整source-unit选择1189项通过，72.02秒（`t08-source-complete-regression.log`）。独立复审仍找到三个真实完整wire误报COMPLETE：省略holding_scope、core_target_qty及ordinary zone，静默删除旧约束。准确探针及三个合法完整容器对照保存在 `fullreplacement-risk-scope-removal-readonly-agent.log`、`fullreplacement-optional-removal-readonly-agent.log`、`fullreplacement-removal-fix-readonly-agent.log`。新增失败测试复现3项失败；修复对删除路径及全部最终字段均要求独立证明。独立六例复审通过；提交 `e8ab721`。旧8组字节／哈希固定校验保持准确。
+
+最终可选删除相关组合147通过／2项存储工作流失败（`readiness-fullreplacement-optional-final2.log`），均为合成第三来源确实缺少删除condition.price_fen的证明。root补明确完整新条件容器及准确绑定，原快照文件及全部39条旧断言不变。合同RED为3失败／8通过；最终替换／合同／两存储工作流准确组合94项通过，31.45秒（`t08-continuity-removed-field-red.log`、`t08-continuity-removed-field-green.log`）；提交 `cd6d5cd`。容器／ALL／BASE价格归属另聚焦51项通过，12.79秒，无生产修改、不放宽8192／1MiB边界（`risk-table-container-price-agent-final.log`）；提交 `f83b73c`。
+
+扩大preparation／coverage／reuse／submission选择895通过／5失败，283.93秒（`t08-preparation-authority-regression.log`）；其中一项四来源案例已如上修复。剩余4项集中于旧API夹具缺对应raw／当前Human证明或update derivation，正通过合法夹具流程修复。定向修复不等于已重跑广组或任务完成。一次自动审批deadline超时未启动测试，重试一次后成功；中断／partial及错误夹具运行均保留，不作性能证据。T08／C03继续开放，供应商0/48，用户迁移0。
+
+## PMA-R19 — T09私有来源依据与实际模拟栅栏
+
+source-action helper独立79项通过（`t09-risk-owned-final.log`，12.53秒），并通过独立只读审查；提交 `c9e42dd`。真实0027→0028夹具建立原始grant及每页100行keyset成员校验。原始RED发现缺实现、自洽成员篡改、严重风险空证据、未来review／activation／cause日期、缺失／悬空历史FACT归属及LIMIT误分类，均分别保留。测试保留合法SUPERSEDED事实owner、ANY中真实否定或非决定缺失叶、停牌恢复及未来／未知执行等待。此helper不主张原生行情重放。
+
+实际ordinary BUY／SELL模拟最初接受新coverage bundle却无对应准确审核（2失败／4通过，`t09-simulation-source-red.log`）。接入真实writer后修复；写锁及晚期记账案例10项通过，11.03秒（`t09-simulation-source-fence.log`）。root随后发现存储损坏误分类409，两项均失败，现走脱敏500。最终helper／当前模拟／历史风险组合102项通过，22.75秒（`t09-simulation-source-integrity-red.log`、`t09-simulation-source-final.log`）；提交 `2c1154e`。覆盖BUY-only缺项／普通过期下真实原风险SELL、准确300或200报价、排除兄弟分支、不静默改量、旧回执重放和完整回滚。计数重叠。运行时生成、例外及发送前来源检查、公共接口／UI、真实campaign及就绪仍待完成；T09／C03未完成。供应商0/48，用户迁移0。
