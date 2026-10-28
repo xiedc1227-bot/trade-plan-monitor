@@ -613,12 +613,13 @@ def wait_view(client, status=None, phase=_ANY_PHASE):
 
 def test_fake_ai_http_progress_explicit_freeze_source_edit_and_review_replay(tmp_path):
     from fastapi.testclient import TestClient
+    from tests.integration.api_current_fixtures import current_api_ai, current_api_body
     from tests.integration.test_plan_preparation_review import review_command
 
-    ai = FakeAI()
+    ai = current_api_ai()
     app, _ = api_app(tmp_path, ai=ai)
     with TestClient(app, base_url=ORIGIN) as client:
-        created = client.post(BASE, json=extracted_body(), headers={"Idempotency-Key": "create"})
+        created = client.post(BASE, json=current_api_body(), headers={"Idempotency-Key": "create"})
         assert created.status_code == 201
         assert ai.calls == [] and ai.captures == 0
         extracted = client.post(
@@ -866,12 +867,13 @@ def test_unknown_http_outcome_survives_restart_and_requires_explicit_recovery(tm
 
 def test_frozen_http_manifest_and_original_review_receipt_survive_restart(tmp_path):
     from fastapi.testclient import TestClient
+    from tests.integration.api_current_fixtures import current_api_ai, current_api_body
     from tests.integration.test_plan_preparation_review import review_command
 
-    ai = FakeAI()
+    ai = current_api_ai()
     app, _ = api_app(tmp_path, ai=ai)
     with TestClient(app, base_url=ORIGIN) as client:
-        client.post(BASE, json=extracted_body(), headers={"Idempotency-Key": "create"})
+        client.post(BASE, json=current_api_body(), headers={"Idempotency-Key": "create"})
         client.post(
             BASE + "/one/extractions",
             json={"expectedRevision": 1},
@@ -1101,6 +1103,8 @@ def test_loopback_http_cancel_edit_review_and_restart_journey(tmp_path):
 
     import httpx
     import uvicorn
+    from tests.integration.api_current_fixtures import current_api_ai
+    from tests.integration.api_current_fixtures import current_api_body as extracted_body
     from tests.integration.test_plan_preparation_review import review_command
 
     @contextmanager
@@ -1133,7 +1137,7 @@ def test_loopback_http_cancel_edit_review_and_restart_journey(tmp_path):
             listener.close()
             assert not thread.is_alive() and runtime.stopped and ai.stopped
 
-    ai = FakeAI(blocked=True)
+    ai = current_api_ai(blocked=True)
     with serve(ai) as client:
         assert (
             client.post(
@@ -1295,8 +1299,8 @@ def test_collection_service_stops_after_unresolved_first_item_without_dispatchin
 
 
 def test_collection_service_runs_successors_serially_under_one_reservation(tmp_path):
+    from tests.integration.preparation_worker_current_fixtures import recorded_worker_update_result
     from tests.integration.test_plan_preparation_worker import (
-        collection_update_result,
         collection_worker_setup,
     )
     from tests.unit.test_monitor_loop_schedule import at
@@ -1333,7 +1337,7 @@ def test_collection_service_runs_successors_serially_under_one_reservation(tmp_p
         if source.source_id == "third":
             assert current.items[1].candidate.validation == "VALID"
             assert context.base_hash == current.items[1].candidate.candidate_hash
-        return collection_update_result(
+        return recorded_worker_update_result(
             base,
             source,
             second_output if source.source_id == "second" else third_output,
