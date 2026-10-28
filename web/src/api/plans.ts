@@ -15,6 +15,7 @@ import type {
 import { isShanghaiDateTime } from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
 import { resolveApiFetch } from "./context";
+import { createSourceCoverageApi, isSourceCoverageSummary, type SourceCoverageApi } from "./sourceCoverage";
 
 export { ApiClientError };
 
@@ -30,7 +31,7 @@ export interface PlanVersionListRequest {
   readonly symbol?: string;
 }
 
-export interface PlanApi {
+export interface PlanApi extends SourceCoverageApi {
   activatePlan(
     command: PlanActivationCommand,
     idempotencyKey: string,
@@ -69,6 +70,7 @@ export function createPlanApi(
   fetchImplementation: typeof fetch = resolveApiFetch(),
 ): PlanApi {
   return Object.freeze({
+    getSourceCoverage: createSourceCoverageApi(fetchImplementation).getSourceCoverage,
     async listPlanVersions(
       request: PlanVersionListRequest,
       options?: PlanRequestOptions,
@@ -265,12 +267,14 @@ function isPlanVersionSummary(value: unknown): value is PlanVersionSummary {
       "planHash",
       "planId",
       "revision",
+      "sourceCoverage",
       "status",
       "symbol",
       "version",
     ]) &&
     hasRequiredKeys(value, ["canActivate", "createdAt", "id", "planHash", "planId", "revision", "status", "symbol", "version"]) &&
     isOptionalObsoleteReason(value.obsoleteReason) &&
+    sourceMatchesPlan(value) &&
     (value.obsoleteReason == null || value.canActivate === false) &&
     typeof value.canActivate === "boolean" &&
     isShanghaiDateTime(value.createdAt) &&
@@ -281,7 +285,8 @@ function isPlanVersionSummary(value: unknown): value is PlanVersionSummary {
     (value.status === "DRAFT" ||
       value.status === "ACTIVE" ||
       value.status === "SUPERSEDED") &&
-    (value.status !== "ACTIVE" || value.canActivate || value.obsoleteReason != null) &&
+    (value.status !== "ACTIVE" || value.canActivate || value.obsoleteReason != null ||
+      isSourceCoverageSummary(value.sourceCoverage) && !value.sourceCoverage.currentReviewBound) &&
     isShareSymbol(value.symbol) &&
     isPositiveInteger(value.version)
   );
@@ -312,6 +317,7 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
       "revision",
       "sourceText",
       "sourceHash",
+      "sourceCoverage",
       "status",
       "symbol",
       "unresolvedReviewIssues",
@@ -332,6 +338,7 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
       "version",
     ]) ||
     typeof value.canActivate !== "boolean" ||
+    !sourceMatchesPlan(value) ||
     !isOptionalObsoleteReason(value.obsoleteReason) ||
     !(value.dailyMapping === undefined || value.dailyMapping === null || isRecord(value.dailyMapping)) ||
     !(value.dailyIssues === undefined || (Array.isArray(value.dailyIssues) &&
@@ -377,10 +384,13 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
   const canActivate =
     !reviewIssues.some((issue) => issue.resolved !== true) &&
     !validationIssues.some((issue) => issue.activationBlocking);
+  const source = isSourceCoverageSummary(value.sourceCoverage) ? value.sourceCoverage : null;
+  const historicalSourceOnly = source === null || (!source.currentReviewBound && !source.canConfirmReview &&
+    !source.automaticFidelityVerified && source.status !== "COMPLETE");
   const obsoleteIssue = Array.isArray(value.dailyIssues) &&
     value.dailyIssues.some((issue) => isRecord(issue) && issue.code === "DAILY_DRAFT_OBSOLETE");
   if (value.obsoleteReason === "DAILY_DRAFT_OBSOLETE") {
-    return value.canActivate === false && obsoleteIssue;
+    return value.canActivate === false && obsoleteIssue && historicalSourceOnly;
   }
   let document: unknown;
   try {
@@ -389,25 +399,40 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
     document = null;
   }
   if (value.obsoleteReason === "LEGACY_PLANS_REQUIRE_REVIEW") {
-    return value.canActivate === false && isRecord(document) &&
+    return value.canActivate === false && historicalSourceOnly && isRecord(document) &&
       [1, 2, 3, 4].includes(document.schema_version as number) &&
       document.plan_id === value.planId && document.version === value.version && document.symbol === value.symbol &&
       validationIssues.some((issue) => issue.code === "LEGACY_PLANS_REQUIRE_REVIEW" && issue.activationBlocking);
   }
-  if (isRecord(document) && (document.schema_version === 4 || document.schema_version === 5)) {
-    const mode = document.schema_version === 5 ? "CONDITION_PLAN" : "DAILY_CLOSE_PLAN";
-    const executionVersion = document.schema_version === 5 ? "condition-plan-v1" : "daily-close-v1";
+  if (isRecord(document) && isIntegerWithin(document.schema_version, 1, 4) && !historicalSourceOnly) return false;
+  if (isRecord(document) && (document.schema_version === 4 || document.schema_version === 5 ||
+    source !== null && isIntegerWithin(document.schema_version, 6, 9))) {
+    const mode = document.schema_version === 4 ? "DAILY_CLOSE_PLAN" : "CONDITION_PLAN";
+    const executionVersion = document.schema_version === 4 ? "daily-close-v1" :
+      `condition-plan-v${Number(document.schema_version) - 4}`;
     if (document.execution_mode !== mode || document.execution_version !== executionVersion ||
       document.plan_id !== value.planId || document.version !== value.version || document.symbol !== value.symbol ||
       !isRecord(value.dailyMapping) || value.dailyMapping.mapping_version !== "daily-mapping-v1" ||
       value.dailyMapping.candidate_content_hash !== value.contentHash ||
       !isSha256(value.contentHash) || !isSha256(value.sourceHash) || !isSha256(value.reviewEvidenceHash) ||
       !isNonnegativeInteger(value.reviewRevision) || !Array.isArray(value.dailyIssues)) return false;
-    const dailyCanActivate = canActivate && value.dailyIssues.length === 0 && isUuid(value.reviewId);
+    if (source != null && (!isSourceCoverageSummary(source) ||
+      source.sourceHash !== value.sourceHash || source.contentHash !== value.contentHash ||
+      source.originalReviewEvidenceHash !== value.reviewEvidenceHash || source.reviewId !== value.reviewId ||
+      source.reviewRevision !== value.reviewRevision ||
+      source.canConfirmReview && (!canActivate || value.dailyIssues.length !== 0))) return false;
+    const dailyCanActivate = canActivate && value.dailyIssues.length === 0 && isUuid(value.reviewId) &&
+      (source == null || source.currentReviewBound);
     return !obsoleteIssue && value.canActivate === dailyCanActivate &&
-      (value.status !== "ACTIVE" || dailyCanActivate);
+      (value.status !== "ACTIVE" || dailyCanActivate || source != null && !source.currentReviewBound);
   }
   return !obsoleteIssue && value.canActivate === canActivate && (value.status !== "ACTIVE" || canActivate);
+}
+
+function sourceMatchesPlan(value: Record<string, unknown>): boolean {
+  const source = value.sourceCoverage;
+  return source == null || isSourceCoverageSummary(source) && source.candidatePlanHash === value.planHash &&
+    (!source.canConfirmReview || value.status === "DRAFT") && (!value.canActivate || source.currentReviewBound);
 }
 
 function isOptionalObsoleteReason(value: unknown): boolean {
