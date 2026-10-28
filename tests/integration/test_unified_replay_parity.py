@@ -54,7 +54,7 @@ def test_each_event_matches_independent_current_monitor_and_public_simulation(tm
                     "value": "6500",
                     "unit": "FEN",
                     "as_of": "2026-08-20",
-                    "source": "Explicit synthetic comparison",
+                    "source": "fixture",
                 },
             },
         )
