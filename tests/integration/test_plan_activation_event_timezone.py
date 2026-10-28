@@ -30,7 +30,7 @@ def test_reviewed_alert_activation_events_accept_aware_utc_clocks(
             "type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
             "comparator": "LT",
             "reference": {"mode": "FIXED", "value": "2659", "unit": "FEN",
-                          "as_of": "2026-10-15", "source": "Synthetic low"},
+                          "as_of": "2026-10-15", "source": "fixture"},
         },
         "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},
     }]

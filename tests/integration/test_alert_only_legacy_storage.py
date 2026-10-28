@@ -38,7 +38,7 @@ def _price_alert_plan():
                         "value": "4000",
                         "unit": "FEN",
                         "as_of": str(FRIDAY),
-                        "source": "Synthetic fixed daily close threshold",
+                        "source": "fixture",
                     },
                 },
                 "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},
