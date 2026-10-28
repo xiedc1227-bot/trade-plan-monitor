@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from tests.browser.source_coverage_server import MARKUP, PREFIX, TURNOVER, create_fixture_app
 from tests.integration.test_market_linkage_review import source_mapping
 from tests.integration.test_source_treatment_review_api import literal_draft
@@ -458,3 +459,60 @@ def test_loopback_origin_closed_setup_and_safe_shutdown_are_confined_to_owned_te
             assert app.state.source_fixture.snapshot() == before
         assert app.state.source_fixture_lifecycle._engine is None
     assert not root.exists()
+
+
+def test_static_spa_keeps_fixture_json_routes_reachable(tmp_path):
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    index = "<!doctype html><html><body>Isolated source fixture</body></html>"
+    (assets / "index.html").write_text(index, encoding="utf-8")
+    (assets / "monitor-contract.json").write_text(
+        '{"monitorContractVersion":2}\n', encoding="utf-8"
+    )
+    database_root = tmp_path / "database"
+    database_root.mkdir()
+    app = create_fixture_app(database_root, static_directory=assets)
+    with TestClient(
+        app, base_url="http://127.0.0.1:8765", client=("127.0.0.1", 50000)
+    ) as client:
+        for endpoint in ("isolation", "inspect"):
+            result = client.get(PREFIX + "/" + endpoint)
+            assert result.status_code == 200
+            assert result.headers["content-type"].startswith("application/json"), result.text
+            assert isinstance(result.json(), dict)
+        assert client.get("/plans/isolated-spa-route").text == index
+        saved = seed(client)
+        assert coverage(client, saved["id"])["summary"]["canConfirmReview"] is True
+
+
+def test_actual_source_reads_and_restoring_preview_issue_no_sql_writes(workspace):
+    client, state = workspace
+    saved = seed(client)
+    before = state.snapshot()
+    engine = state.lifecycle._engine
+    assert engine is not None
+    writes = []
+
+    def capture(_connection, _cursor, statement, _parameters, context, _many):
+        normalized = " ".join(statement.upper().split())
+        first = normalized.partition(" ")[0]
+        if (
+            context.isinsert or context.isupdate or context.isdelete
+            or first in {"INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "ALTER", "DROP"}
+            or normalized.startswith("BEGIN IMMEDIATE")
+        ):
+            writes.append(first)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        coverage(client, saved["id"])
+        detail = client.get("/api/v1/plan-versions/" + saved["id"])
+        assert detail.status_code == 200
+        post(client, "/api/v1/plan-review-previews", dict(
+            candidateJson=saved["planJson"], sourceText=saved["sourceText"],
+            mapping=saved["dailyMapping"],
+        ))
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    assert writes == []
+    assert state.snapshot() == before

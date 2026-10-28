@@ -28,6 +28,7 @@ from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority
 from trade_plan_monitor.state.source_coverage_store import SourceCoverageStore
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.origin_guard import LocalSpaRoute
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 from trade_plan_monitor.web.routers.ai import AIProviderPage, ConfiguredAIRuntimeView
 from trade_plan_monitor.web.routers.health import RuntimeHealthResponse
@@ -323,6 +324,11 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
             state.shutdown()
         return {"shutdownRequested": state.shutdown is not None}
 
+    # Preserve the production SPA handler, after the fixture's exact JSON routes.
+    for route in tuple(app.router.routes):
+        if isinstance(route, LocalSpaRoute):
+            app.router.routes.remove(route)
+            app.router.routes.append(route)
     return app
 
 
