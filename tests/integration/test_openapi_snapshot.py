@@ -10,6 +10,10 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from tests.contract.test_source_coverage_api_projection import (
+    COVERAGE_PATH,
+    source_coverage_projection,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 GENERATOR_PATH = PROJECT_ROOT / "scripts" / "generate_frontend_types.py"
@@ -163,18 +167,30 @@ def test_openapi_snapshot_is_deterministic_canonical_and_current() -> None:
 
 
 def test_openapi_change_requires_bilingual_spec_approval() -> None:
-    _generator, snapshot, _typescript = _generated_documents()
+    generator, snapshot, typescript = _generated_documents()
     digest = sha256(snapshot.encode("utf-8")).hexdigest()
 
     assert f"OpenAPI snapshot SHA-256: `{digest}`" in LOCAL_WEB_SPEC_PATH.read_text(
         encoding="utf-8"
     )
     assert f"OpenAPI 快照 SHA-256：`{digest}`" in LOCAL_WEB_SPEC_ZH_PATH.read_text(encoding="utf-8")
+    canonical = generator.build_openapi_document(monitor_contract_version=2)
+    canonical_digest = sha256(generator.render_openapi_snapshot(canonical).encode()).hexdigest()
+    type_digests = (sha256(typescript.encode()).hexdigest(), sha256(
+        generator.render_typescript_contracts(canonical, monitor_contract_version=2).encode()
+    ).hexdigest())
+    for path in (LOCAL_WEB_SPEC_PATH, LOCAL_WEB_SPEC_ZH_PATH):
+        # Require this scoped owner, preserving every historical approval above it.
+        owner = path.read_text(encoding="utf-8").split("## U-PMA — ", 1)[1]
+        for value in (digest, canonical_digest, *type_digests):
+            assert f"`{value}`" in owner
 
 
 def test_openapi_contains_only_approved_paths_and_public_error_schemas() -> None:
     generator = _load_generator()
-    document = generator.build_openapi_document()
+    current = generator.build_openapi_document()
+    assert set(current["paths"]) == APPROVED_PATHS | {COVERAGE_PATH}
+    document = source_coverage_projection(current)
 
     assert set(document["paths"]) == APPROVED_PATHS
     schemas = document["components"]["schemas"]
@@ -182,7 +198,7 @@ def test_openapi_contains_only_approved_paths_and_public_error_schemas() -> None
     assert "HTTPValidationError" not in schemas
     assert "ValidationError" not in schemas
 
-    for path_item in document["paths"].values():
+    for path_item in current["paths"].values():
         for method, operation in path_item.items():
             if method not in {"get", "patch", "post"}:
                 continue
@@ -194,7 +210,7 @@ def test_openapi_contains_only_approved_paths_and_public_error_schemas() -> None
 
 
 def test_plan_contract_exposes_server_versioning_and_lightweight_summaries() -> None:
-    document = _load_generator().build_openapi_document()
+    document = source_coverage_projection(_load_generator().build_openapi_document())
     schemas = document["components"]["schemas"]
 
     draft = schemas["PlanDraftCommand"]

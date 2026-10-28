@@ -15,9 +15,9 @@ linked_chain = linkage_fixture.linked_chain
 
 def schema5_projection(document):
     """Remove only the approved additive fields/union variants for legacy comparisons."""
-    from copy import deepcopy
+    from tests.contract.test_source_coverage_api_projection import source_coverage_projection
 
-    result = deepcopy(document)
+    result = source_coverage_projection(document)
     schemas = result["components"]["schemas"]
     additions = {
         "DailyEditorSchemaView": (

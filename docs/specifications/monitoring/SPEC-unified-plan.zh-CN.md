@@ -340,3 +340,21 @@ OpenAPI 快照 SHA-256：`4bd255a77fe39fb647a0475df4368bf5c32ff04c8da2ad8416f45f
 规范监控v2 OpenAPI快照SHA-256：`076ca6e32306c7cbe1fc3b2b2788ded8a36d823fe93d901fdefaa479b9e78c46`
 
 生成TypeScript SHA-256：兼容版`d76bca93615eb6c82c479228404916b5f70e26303cb11eef764f511e303c5ad6`；规范版`24d090d32d7ed32b15c98c7b4efc695f017364b724022acccaad0922f0a49829`。
+
+## U-PMA — 已批准的来源覆盖 API 扩展（2026-10-28）
+
+用户已批准 PMA-D01–D06，以及[plan-monitor-assurance](SPEC-plan-monitor-assurance.zh-CN.md)、[source-condition-coverage](SPEC-source-condition-coverage.zh-CN.md)和[当前契约](CONTRACT-plan-monitor-assurance.zh-CN.md)的实施。本归属记录仅登记已实现的 T10a/T10b API 范围：只新增 `GET /api/v1/plan-versions/{version_id}/source-coverage`。分页与摘要均携带字面值 `authorityGranted=false`。读取校验实际来源／候选／映射及适用审核证据，不调用供应商、不写业务数据、不更新心跳、不迁移、不启用、不投递。
+
+按顺序返回的 `OBLIGATION`、`ISSUE`、`NORMALIZATION_CHANGE` 行流保留准确来源跨度、全局阻断项、与 `serverState` 分离的已保存映射建议、准确登记的人工补参链接，以及当前与保留的历史归一化变化。仅有 `HUMAN` 来源并不确认某行。即使被建议标为背景／上下文，未证实的前向交易条件仍然阻断，处理依据是受支持的有限服务端注册表。供应商原始响应／上下文／派生载体继续私有。分页默认50行、最多100行，完整 UTF-8 页限1MiB；签名游标最多512字符，绑定完整当前证据／修订。整行不得截断，单行超限返回422 `SOURCE_COVERAGE_LIMIT_EXCEEDED`。游标格式／签名无效返回422；签名有效但绑定过期返回409 `SOURCE_COVERAGE_STALE`。新建生命周期实例会重置其内存密钥游标范围，需要重新载入第一页。150000码点分析上限保持不变：超过该范围但符合原生保存校验的来源，仍完整保留来源／映射，以 `BLOCKED` 和全局 `SOURCE_COVERAGE_LIMIT_EXCEEDED` 标记，不保存部分义务清单，也不声称自动忠实性。
+
+两套配置仅向 `PlanVersionSummary`、`PlanVersionView`、`PlanExtractionView` 新增可选可空 `sourceCoverage`，向 `PlanReviewConfirmationCommand` 新增可选可空 `coverageEvidenceHash` / `coverageRulesVersion`。既有必填字段数组保持不变。首次确认的原生证据其他部分匹配时，缺少／传入null的覆盖字段或覆盖被阻断返回409 `SOURCE_COVERAGE_REQUIRED`；格式合法但来源／内容／审核／覆盖哈希或规则过期时返回409 `SOURCE_COVERAGE_STALE`；请求格式错误仍返回422，已存证据损坏仍返回脱敏500。传输状态 `SUCCEEDED` 可以同时具有被阻断的覆盖。`coverageComplete`、`currentReviewBound`、`canConfirmReview`、`canActivate` 相互独立；历史完整的 `ACTIVE` 版本可以不具有当前依据，且 `canActivate=false`。旧保存回执省略不存在的 `sourceCoverage`；来源读取不升级历史回执，也不制造自动忠实性。
+
+十个新增组件严格限定为 `SourceCoverageIssueView`、`SourceCoveragePage`、`SourceCoverageSummaryView`、`SourceHumanSupplementLinkView`、`SourceIssueRow`、`SourceMappingProposalView`、`SourceNormalizationChangeView`、`SourceNormalizationRow`、`SourceObligationRow`、`SourceObligationView`。`test_source_coverage_api_projection.py` 仅剥离这组组件、单条 GET 及上述五个属性新增项，然后在两套配置中精确复原 U-MLP3 的 OpenAPI 和 TypeScript 哈希。较早的 P0–P3 投影检查先组合这层来源专用投影。既有路由、无关模型、资源限制、冻结载荷及历史哈希继续保持原意；上方 U-MLP3 及其哈希保留为历史审批。
+
+四份产物由 `.\.venv\Scripts\python.exe -X utf8 scripts/generate_frontend_types.py` 一起生成；默认 `--check` 仅读验证规范监控v2和兼容监控v1。本次 API 范围记录不代表后续 UI、monitor-readiness、真实提取验收或实际安装就绪检查点已完成，也不增加部署或外部操作授权。
+
+OpenAPI 快照 SHA-256：`c426102e7f9815b549a463a4fb4c38ec3c15c97213cd09864e65147a9a935cd7`
+
+规范监控v2 OpenAPI快照SHA-256：`0361f3b1b69a23399ee8e3ec89cce87ef832c04980e7bcc88aeba72b2c0fd1f9`
+
+生成TypeScript SHA-256：兼容版`7db80baf8b0a53b837795ac1a0ae0bb8362c390af491068d5bbfc2a201d45256`；规范版`8fdce46fec658cacfb7b782bcc91163c1ec0fa4b02d441c5d3c7356d114b5ddc`。
