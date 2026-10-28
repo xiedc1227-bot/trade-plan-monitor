@@ -144,14 +144,14 @@ revision1的COMPOSITION以已登记LINEAGE和全部选中项真实当前审核�
 
 ## PMA-K18 — 完整替换包含明示删除证明
 
-仅完整来源句 `完整替换此前计划。` 注册PLAN/FULL_REPLACEMENT，须对应output.scope、retain_unmentioned=false及准确已映射scope_clause_ids。每个语义后像字段均须独立当前来源证明；产品默认或保留的前驱owner不能替代新的完整快照。仅此已验证替换分支联合范围及字段证据。矛盾的保留／无新增控制、B、引用及未知文字继续阻断。
+仅完整来源句 `完整替换此前计划。` 注册PLAN/FULL_REPLACEMENT，须对应output.scope、retain_unmentioned=false及准确已映射scope_clause_ids。每个语义后像字段均须独立当前来源证明，或daily_contract_bindings已注册的准确有限产品默认；须完整canonical绑定对应，保留PRODUCT_CONTRACT归属，不伪造原文义务。保留的前驱owner不能替代新的完整快照。仅此已验证替换分支联合范围及字段证据。矛盾的保留／无新增控制、B、引用及未知文字继续阻断。
 
-逐项核对实际changed path，含最终语义图已不存在的可选叶。删除必须有准确已映射null、完整所属类型化后像容器且其全部来源义务完整／范围已知，或准确匹配的专用风险控制后像。剩余兄弟叶和范围句不能证明缺席。整条ordinary／alert移除还须明确整条撤销，或准确完整有序根集合证明稳定ID缺席；整条risk撤销始终要求专用ENTIRE_RULE控制。既有不支持的null形式仍阻断，不引入通用背景处理或放宽codec。
+逐项核对实际changed path，含最终语义图已不存在的可选叶。删除必须有准确已映射null、完整所属类型化后像容器且其全部来源义务完整／范围已知，或准确匹配的专用风险控制后像。剩余兄弟叶、产品默认（含空集合）和范围句不能证明缺席。整条ordinary／alert移除还须明确整条撤销，或准确完整有序根集合证明稳定ID缺席；整条risk撤销始终要求专用ENTIRE_RULE控制。既有不支持的null形式仍阻断，不引入通用背景处理或放宽codec。
 
 ## PMA-K19 — 当前操作依据与独立历史风险
 
 私有事务内 `require_source_action_authority` 重读真实plan／review／activation／cause归属。新ordinary BUY／SELL及例外授权，均要求准确当前完整已审核bundle。真实存储的技术风险cause，仅在核对独立安装成员根、准确捕获的原始active／review身份及未改变的策略／来源／启用对应后，才可使用单独HISTORICAL_TECHNICAL_RISK依据。成员根使用每页100行keyset及恒定内存，每次调用仅核一次；不从时间、ID前缀、旧零issue或调用方标志推断legacy许可。STALE／INTEGRITY／UPGRADE／LIMIT不降级。
 
-风险行须唯一匹配实际active稳定分支、价格／比较符／目标／范围及必要确认／执行日期顺序。严重风险条件树保留准确结构／结果／消费ID；REVIEWED_FACT叶还须解析真实历史FACT、原始存储版本／content归属、kind、日期、结果及可用时间。合法SUPERSEDED owner仍可为原始事实owner；不凭未知SIGNAL绑定捏造证据。原生行情证据继续由既有读取器／求值器及执行防护负责；此来源依据不是完整历史行情重放或可执行token。
+风险行须唯一匹配实际active稳定分支、价格／比较符／目标／范围及必要确认／执行日期顺序。已验证行保留计划优先级及同级稳定顺序，数据库创建顺序不能改变cause、批次或数量。严重风险条件树保留准确结构／结果／消费ID；REVIEWED_FACT叶还须解析真实历史FACT、原始存储版本／content归属、kind、日期、结果及可用时间。合法SUPERSEDED owner仍可为原始事实owner；不凭未知SIGNAL绑定捏造证据。原生行情证据继续由既有读取器／求值器及执行防护负责；此来源依据不是完整历史行情重放或可执行token。
 
 模拟交易在既有cause／symbol writer栅栏内核此依据。普通交易不能借风控许可；risk_execution仅消费已验证风险行集合，仍须匹配原完整报价动作／命令数量，不调整数量、不新建窗口或发生次数。准确已完成请求重放仍返回原结果。损坏来源证据走脱敏服务完整性错误；有效但缺失／过期当前证明仍为结构化冲突。既有行情、库存、资金、消费及回滚防护仍必需。运行时生成、例外及发送前检查须各自验收后才关闭C03。

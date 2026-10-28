@@ -162,3 +162,19 @@ LINEAGE存储初步38项通过（`t08-lineage-storage-02.log`）。独立21项�
 source-action helper独立79项通过（`t09-risk-owned-final.log`，12.53秒），并通过独立只读审查；提交 `c9e42dd`。真实0027→0028夹具建立原始grant及每页100行keyset成员校验。原始RED发现缺实现、自洽成员篡改、严重风险空证据、未来review／activation／cause日期、缺失／悬空历史FACT归属及LIMIT误分类，均分别保留。测试保留合法SUPERSEDED事实owner、ANY中真实否定或非决定缺失叶、停牌恢复及未来／未知执行等待。此helper不主张原生行情重放。
 
 实际ordinary BUY／SELL模拟最初接受新coverage bundle却无对应准确审核（2失败／4通过，`t09-simulation-source-red.log`）。接入真实writer后修复；写锁及晚期记账案例10项通过，11.03秒（`t09-simulation-source-fence.log`）。root随后发现存储损坏误分类409，两项均失败，现走脱敏500。最终helper／当前模拟／历史风险组合102项通过，22.75秒（`t09-simulation-source-integrity-red.log`、`t09-simulation-source-final.log`）；提交 `2c1154e`。覆盖BUY-only缺项／普通过期下真实原风险SELL、准确300或200报价、排除兄弟分支、不静默改量、旧回执重放和完整回滚。计数重叠。运行时生成、例外及发送前来源检查、公共接口／UI、真实campaign及就绪仍待完成；T09／C03未完成。供应商0/48，用户迁移0。
+
+## PMA-R20 — T08最终回归与注册默认值校正
+
+四项旧准备API失败现使用完整对应合成来源，以及真实本地raw／normalization／update derivation。定向重跑4项通过，6.49秒；API／worker／review组合217项通过，65.08秒（`readiness-api-current-target2.log`、`readiness-api-current-regression.log`）；提交 `4687609`。原192条断言及四个共享helper源码body保持准确，来源CASES、原用户文字、旧golden及生产防护不变。
+
+规格复审发现工程FULL要求错误地强求原文字面拼写协议默认值。原批准SCC允许有限注册默认，后写K18不能覆盖它。七项真实完整wire案例先失败，现通过daily_contract_bindings准确对应，保留PRODUCT_CONTRACT owner，不伪原文义务。最终相关组合301项通过，56.67秒（`readiness-full-defaults-red.log`、`readiness-full-defaults-final.log`）；提交 `775a716`。独立八组原字节长度／SHA／证据哈希保持EXACT。数量／条件假默认、未知／冲突文字、无证明规则撤销及可选范围删除仍阻断。K18已双语校正，已审SCC／v12合同不变。
+
+准确扩大T08选择现903项通过，272.88秒（`t08-preparation-authority-final.log`；选择文件保存于 `t08-preparation-final-files.json`），对应先前895／5失败组合，含新增三项条件容器案例。T08保存／审核／启用／复用／运行范围已有阶段证据；C03仍待T09生成／例外／发送前及后续公共接口／UI验收。不据此推断全项目／容量或真实语料PASS。供应商0/48，用户迁移0。
+
+## PMA-R21 — T09生成与风险顺序边界
+
+运行时生成初始7失败／2通过：过期bundle仍生成ordinary signal／例外候选，或复用READY快照（`runtime-source-agent-red-01.log`）。普通生成严格门禁、来源绑定target、风险过滤及只读观测边界实现后，新增35项通过，22.64秒（`runtime-source-agent-final-08.log`）；提交 `bfe222f`。独立复审发现去掉原data_blockers重复项会改历史字节，双例RED及修复现完整保留原列表，仅去重新增诊断。server-private REPLAY_OBSERVATION接口已实现，但实际冻结loop适配器仍待接入，不主张冻结回放兼容已验收。
+
+新生成器在旧回执重放后合法刷新观测。root先前新增测试对EVALUATION写入要求过严，现核原回执及全部库存／消费／风险／事实／提醒／投递效果，允许观测刷新；模拟写锁探针区分自身cause与独立runtime检查。12项通过，14.09秒（`t09-simulation-producer-replay-boundary.log`）；提交 `fb1eea9`。一个未经改动的负向历史风险快照，从原隔离运行库只读捕获，固定原payload／源码哈希，仅用于历史不安全报价拒绝；新生成／旧head边界21项通过，7.14秒（`t09-historical-risk-head-boundary.log`）；提交 `0d1c20e`。不从该捕获手写当前预期交易。
+
+真实同级重叠cohort探针发现，DB行序会把原100股批次分配改为200股。helper现按原计划优先级稳定顺序返回已验证行，真实CURRENT／cutover及相邻组合118项通过，41.39秒（`t09-risk-order-probe.log`、`t09-risk-order-current.log`）；提交 `aab25ee`。runtime帧随后另有3失败／1通过：其他已验证分支可进入当前输入帧。限定原帧已确认行及顺序后，相关51项通过，33.41秒（`runtime-frame-agent-red-01.log`、`runtime-frame-agent-green-01.log`）；提交 `754f8c6`。未新增历史限制、截断或改变risk_execution公式。T09／C03仍开放，含真实冻结loop兼容及例外／发送入口。供应商0/48，用户迁移0。
