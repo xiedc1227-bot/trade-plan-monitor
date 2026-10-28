@@ -86,7 +86,7 @@ export function isSourceCoverageSummary(value: unknown): value is SourceCoverage
 
 type CoverageRow = SourceCoveragePage["items"][number];
 
-function isSourceCoveragePage(value: unknown, versionId: string, limit: number, firstPage: boolean): value is SourceCoveragePage {
+export function isSourceCoveragePage(value: unknown, versionId: string, limit: number, firstPage: boolean): value is SourceCoveragePage {
   if (!record(value) || !keys(value, ["authorityGranted", "planVersionId", "summary", "items", "limit",
     "returnedCount", "totalRows", "nextCursor"]) || value.authorityGranted !== false ||
     value.planVersionId !== versionId || value.limit !== limit || !isSourceCoverageSummary(value.summary) ||
