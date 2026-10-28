@@ -124,6 +124,16 @@ def simulate_inventory(
         raise PlanVersionNotFoundError("simulation cause was not found")
     if cause["revision"] != command.expected_cause_revision:
         raise RevisionConflictError(cause["revision"])
+    from trade_plan_monitor.state.source_action_authority import require_source_action_authority
+    from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
+    from trade_plan_monitor.state.source_coverage_store import SourceCoverageIntegrityError
+
+    try:
+        source_basis = require_source_action_authority(work, details.id, cause_id=cause["id"])
+    except SourceCoverageAuthorityError as error:
+        if error.reason == "SOURCE_COVERAGE_INTEGRITY":
+            raise SourceCoverageIntegrityError() from None
+        _reject(error.reason)
     if not accounting.evaluation_current(
         state,
         plan_version_id=details.id,
@@ -215,6 +225,8 @@ def simulate_inventory(
         quantities = {"TACTICAL": quantity}
         signal_id = cause["id"]
     else:
+        risks = tuple({**row["payload"], "revision": row["revision"]}
+                      for row in source_basis.risk_rows)
         action = risk_execution(
             risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable, lots=lots
         )
