@@ -962,7 +962,7 @@ def test_daily_confirmation_with_minute_reset_owns_current_intraday_target(tmp_p
                 "value": "6200",
                 "unit": "FEN",
                 "as_of": "2026-09-11",
-                "source": "Synthetic reviewed daily threshold",
+                "source": "fixture",
             },
         },
         independent_signal={
