@@ -36,6 +36,7 @@ from trade_plan_monitor.ai.review import (
 )
 from trade_plan_monitor.domain.daily_plan_validation import (
     DailyPlanDraft,
+    daily_draft_content_sha256,
     daily_draft_json,
     daily_draft_sha256,
     load_daily_draft_json,
@@ -640,9 +641,15 @@ class PlanExtractionView(ApiValue):
     validation_issues: tuple[ValidationIssue, ...] = Field(default=(), max_length=512)
     usage: AIUsageView | None = None
     diagnostic_status: Literal["RECORDED", "WRITE_FAILED"] | None = None
+    source_coverage: SourceCoverageSummaryView | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def validate_status_payload(self) -> Self:
+        if (self.source_coverage is not None
+                and self.status is not PlanExtractionOperationStatus.SUCCEEDED):
+            raise ValueError("only a completed candidate can expose captured source evidence")
         if self.started_at is not None and self.started_at < self.submitted_at:
             raise ValueError("extraction cannot start before submission")
         if (
@@ -712,6 +719,27 @@ class PlanExtractionView(ApiValue):
             blocking = {(i.code, i.path) for i in self.validation_issues if i.activation_blocking}
             if not required <= blocking:
                 raise ValueError("current extraction cannot discard mandatory review blockers")
+            source = self.source_coverage
+            if source is not None:
+                from trade_plan_monitor.domain.daily_hash import daily_hash
+
+                mapping = self.daily_mapping.model_dump(mode="json")
+                if ((source.source_hash, source.candidate_plan_hash, source.content_hash,
+                     source.original_review_evidence_hash) != (
+                    self.source_text_sha256, daily_draft_sha256(plan),
+                    daily_draft_content_sha256(plan),
+                    daily_hash("daily-plan-review-evidence-v1", mapping),
+                ) or source.mapping_hash is not None and source.mapping_hash != daily_hash(
+                    "source-coverage-mapping-v1", mapping,
+                )):
+                    raise ValueError("extraction source summary differs from its candidate")
+                if (source.current_review_bound or source.can_confirm_review
+                        or source.review_id is not None or source.review_revision != 0
+                        or source.coverage_revision is not None
+                        or source.coverage_bundle_hash is not None
+                        or source.coverage_review_receipt_hash is not None
+                        or source.status == "LEGACY_UNASSESSED"):
+                    raise ValueError("extraction cannot confer a saved source or review receipt")
         elif self.status in {
             PlanExtractionOperationStatus.INVALID_OUTPUT,
             PlanExtractionOperationStatus.PROVIDER_ERROR,

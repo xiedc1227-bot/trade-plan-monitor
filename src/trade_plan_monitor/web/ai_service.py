@@ -61,6 +61,7 @@ from trade_plan_monitor.web.schemas import (
     OperationKind,
     OperationReceipt,
 )
+from trade_plan_monitor.web.source_coverage_schemas import SourceCoverageSummaryView
 
 _SHANGHAI: Final = ZoneInfo("Asia/Shanghai")
 _MAX_RETAINED_OPERATIONS: Final = 1_000
@@ -509,6 +510,7 @@ def _completed_extraction_view(
             validation_issues=result.validation_issues,
             usage=usage,
             diagnostic_status=diagnostic_status,
+            source_coverage=_extraction_source_summary(result),
         )
     return PlanExtractionView(
         id=result.request_id,
@@ -534,6 +536,79 @@ def _completed_extraction_view(
         usage=usage,
         diagnostic_status=diagnostic_status,
     )
+
+
+def _extraction_source_summary(result) -> SourceCoverageSummaryView:
+    """Project captured source evidence without inventing a saved review or preimage.
+
+    The extractor owns the assessment. This display boundary can check its exact
+    correspondence, but has no original source with which to manufacture a proof.
+    """
+    from trade_plan_monitor.ai.source_coverage_models import CoverageAssessment, NormalizationTrace
+    from trade_plan_monitor.domain.daily_hash import daily_hash
+    from trade_plan_monitor.domain.daily_plan_validation import (
+        daily_draft_content_sha256,
+        daily_draft_sha256,
+    )
+
+    mapping = result.daily_mapping.model_dump(mode="json")
+    content_hash = daily_draft_content_sha256(result.draft)
+    mapping_hash = daily_hash("source-coverage-mapping-v1", mapping)
+    assessment, trace, reason = None, None, "SOURCE_COVERAGE_REQUIRED"
+    captured = result.coverage
+    try:
+        # A rejected policy normalization is still observed input. Show its
+        # actual changes independently of whether coverage accepted its meaning.
+        if result.normalization_trace is not None:
+            trace = NormalizationTrace.model_validate_json(
+                result.normalization_trace.model_dump_json())
+            if (trace.source_hash, trace.after_hash) != (
+                result.source_text_sha256, daily_hash("source-normalization-candidate-v1",
+                                                      result.draft.model_dump(mode="json")),
+            ):
+                raise ValueError("captured normalization differs from candidate")
+        if captured is not None:
+            captured = CoverageAssessment.model_validate_json(captured.model_dump_json())
+            if (captured.source_hash, captured.content_hash, captured.mapping_hash) != (
+                result.source_text_sha256, content_hash, mapping_hash,
+            ):
+                raise ValueError("captured source evidence differs from candidate")
+            if captured.normalization_hash is not None:
+                if trace is None:
+                    reason = "SOURCE_COVERAGE_REQUIRED"
+                else:
+                    if trace.evidence_hash != captured.normalization_hash:
+                        raise ValueError("accepted normalization differs from captured input")
+                    assessment = captured
+            else:
+                assessment = captured
+    except (ValueError, TypeError, RecursionError):
+        assessment, trace, reason = None, None, "SOURCE_COVERAGE_STALE"
+    complete = assessment is not None and assessment.coverage_complete
+    if assessment is not None:
+        reason = None if complete else "SOURCE_COVERAGE_REQUIRED"
+    counts = (0 if assessment is None else len(assessment.obligations),
+              0 if assessment is None else len(assessment.issues),
+              0 if trace is None else len(trace.changes))
+    return SourceCoverageSummaryView(
+        status="UNKNOWN" if assessment is None else assessment.status,
+        authority_granted=False, coverage_complete=bool(complete), current_review_bound=False,
+        can_confirm_review=False,
+        review_state="UNCONFIRMED" if complete else "UNKNOWN" if assessment is None
+        else "NEEDS_REVIEW", reason=reason,
+        source_hash=result.source_text_sha256, candidate_plan_hash=daily_draft_sha256(result.draft),
+        content_hash=content_hash, mapping_hash=None if assessment is None else mapping_hash,
+        rules_version=None if assessment is None else assessment.rules_version,
+        coverage_evidence_hash=None if assessment is None else assessment.evidence_hash,
+        coverage_revision=None, coverage_bundle_hash=None,
+        normalization_hash=None if assessment is None else assessment.normalization_hash,
+        original_review_evidence_hash=daily_hash("daily-plan-review-evidence-v1", mapping),
+        review_id=None, review_revision=0, coverage_review_receipt_hash=None,
+        origin=None if assessment is None else assessment.origin,
+        automatic_fidelity_verified=bool(assessment and assessment.automatic_fidelity_verified
+                                        and trace is not None),
+        obligation_count=counts[0], issue_count=counts[1], normalization_change_count=counts[2],
+        total_rows=sum(counts))
 
 
 def _extraction_request_hash(command: PlanExtractionCommand) -> str:
