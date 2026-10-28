@@ -224,3 +224,11 @@ ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21�
 扩大120项组合118通过／2失败，80.25秒（`readiness-delivery-source-final1.log`）：两失败在投递前因泛化分钟来源审核阻断。单helper现提供完整对应来源快照，准确两节点重跑2项9.52秒通过（`current-pipeline-source-agent-audit.log`、`current-pipeline-source-agent-two.log`）；提交 `c067242`。91项调用方组合89通过／2失败，284.16秒（`current-pipeline-source-agent-neighbor.log`），另暴露两个独立未注册文本形式。仅合成固定价格注释改为既有 `fixture`，原105条断言不变，日线／分钟复位节点8.55秒通过（`t09-daily-reference-fixture-green.log`）；提交 `a7f53e0`。真实人工五分钟条件留作独立有限策略修复，不替换为背景。
 
 真实outbox探针独立发现autoflush（2项RED，4.21秒）、缓存许可掩盖SQL HOLD（2项RED，3.54秒）、默认dispatcher漏转新增存储错误类（2项RED，4.03秒）：`readiness-outbox-source-red1.log`、`readiness-outbox-cache-original-red1.log`、`readiness-outbox-default-error-red1.log`。此前四项SQL审计失败仅为允许的deferred BEGIN，不算业务写入漏洞。最终自有54／旧邻接89共143项65.64秒通过（`readiness-outbox-source-final2.log`）；提交 `33aace3`。待保存对象保留、零DML／commit及默认错误边界断言均保留；原current-actionable／active-plan-filter AST及legacy分支准确一致。来源／P3／v12基础64文件单元选择1279项91.03秒通过（`c03-source-unit.log`；准确文件 `c03-source-unit-files.json`）。以上为分阶段且重叠计数，C03最终组合验收仍待完成。供应商0/48，用户迁移0。
+
+## PMA-R28 — C03组合失败与逐字来源对账
+
+完整65文件来源／P3／v12单元选择1295项71.91秒通过（`c03-source-unit-final.log`；`c03-source-unit-final-files.json`），包含 `105e5a9` 中另经测试的准确人工五分钟证据要求。这是阶段单元结果，不是C03验收。随后在 `f03ad3f` 的89选择器／64文件集成组合940通过／54失败，788.65秒，含1条既有Starlette警告（`c03-integration-final.log`；准确选择／哈希 `c03-integration-final-selection.json`）。全部54节点／调用帧保留在 `c03-integration-final-failures.json`：43项冻结LOOP捕获入口失败、8项真实记录响应的当前审核失败、3项逐字当前审核API失败。未证明存在收集污染。T09／C03仍不勾选，等待逐项对账及新的完整组合运行。
+
+三项API失败首先缺少新覆盖绑定字段；独立评估也表明逐字中文策略尚不受支持。完整句式解析器首轮有效RED为1失败／16通过，2.48秒（`literal-sentences-red.log`）。首轮API重跑35通过／1失败，原因是测试误给启用接口加入仅审核接受的字段；启用请求现保留既有请求体。独立审查发现没有终止符的未知文本扫描呈平方增长，以及合法背景可解除新增规则数量限制；两者均已修复，并增加最大150000字符扫描、合法背景正例、准确AND／谓词变异及额外普通／提醒／清仓反例。最初三项清仓探针漏填测试夹具必需的显式null字段；不算生产RED。
+
+最终4文件切片 `0f98094` 的50项7.36秒通过（`literal-sentences-review-final2.log`）；Ruff通过，独立审查认可。此前扩大6文件选择100项10.52秒通过（`literal-sentences-api-green4.log`）；计数重叠，最终新增用例仍待组合回归。原始来源字节、数值真值、完整审核／启用、库存不初始化及存储篡改断言保留。两处过时当前审核422预期按已批准契约有意调整为精确409 SOURCE_COVERAGE_REQUIRED／STALE；这是已记录的行为对齐，不能声称断言完全不变。供应商调用与用户迁移均未发生：0/48及0。

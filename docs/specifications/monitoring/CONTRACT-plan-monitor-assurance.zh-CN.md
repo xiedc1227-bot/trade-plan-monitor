@@ -183,3 +183,9 @@ REJECT使用原native输入resolver，仅在本地诊断副本移除SOURCE_COVER
 原数量、范围、行情、库存、资金、日历、到期及重复投递防护仍必需。runtime-generation保留既有有效UUID存在契约，不新增UUID相等规则。dispatcher在claim后、I/O前重验；不让事务跨channel I/O。重评不重开已送达回执，不调整报价数量。
 
 Daily outbox准入把前置eligibility／active-plan过滤也放入no_autoflush。相关待保存source或metadata既不写入也不丢弃；待保存eligibility作为否决。clean eligibility从SQL重读，缓存ELIGIBLE不能掩盖实际HOLD／SUPPRESS；此类metadata不提供来源许可。旧消息／过滤／窗口行为不变。来源损坏沿原脱敏HTTP完整性路径；私有outbox投递适配器把它转换为原storage-error边界，供默认dispatcher处理，不改独立UI actionability语义或重试策略。
+
+## PMA-K24 — 完整逐字分钟句式与闭合规则图
+
+`ai/source_literal_sentences.py` 独立识别有限完整中文句式：股数上限、已完成分钟价格包含边界区间、可选AND均量条件、固定BUY／SELL数量及低于价格的风险提醒。数字捕获、分转换、周期、边界、方向、数量与关系含义来自完整原句，而非提议binding。准确捕获区间与canonical clause的重叠决定各路径可由哪些原句证明。缺失的人工启用／独立事件参数仍缺失；报告的持仓／可卖陈述不初始化库存，确认收到提醒不登记成交。
+
+该语法描述闭合逐字规则图：准确ALL子项数及ordinary／alert／risk集合数阻止借补参增加谓词或清仓许可，已注册背景不能解除这些约束。混合策略语法需要显式组合适配器；本片不增加混合语法许可。未知、否定、比较符改变或附加条件仍可见且阻断。完整线性扫描保留没有终止符的未知文本，避免反复后缀搜索；来源与既有证明上限不变。既有冻结字节与v12供应商契约未改。
