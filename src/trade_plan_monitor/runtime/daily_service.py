@@ -47,8 +47,7 @@ from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime, T
 from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.notifications.daily_models import DailyAlertPayload, daily_alert_key
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
-from trade_plan_monitor.state.daily_repository import DailyRepository, daily_hash
-from trade_plan_monitor.state.models import ActivePlan, PlanVersion
+from trade_plan_monitor.state.daily_repository import daily_hash
 from trade_plan_monitor.state.repositories import MarketHistoryRepository
 
 
@@ -1327,29 +1326,18 @@ class DailyRuntimeEvaluationService:
 
 def daily_delivery_allowed(session, event, now):
     """Recheck actual active binding, latest quantity, window and risk just before send."""
-    active = session.get(ActivePlan, event.symbol)
-    if (
-        active is None
-        or active.plan_version_id != event.plan_version_id
-        or active.revision != event.activation_revision
-    ):
-        return False
-    version = session.get(PlanVersion, active.plan_version_id)
-    if version is None or version.plan_hash != event.plan_hash:
-        return False
-    from trade_plan_monitor.domain.plan_codec import load_plan_json
-    plan = load_plan_json(version.payload_json)
+    from trade_plan_monitor.runtime.source_delivery_authority import read_delivery_source
+
+    with session.no_autoflush:
+        source = read_delivery_source(session, event, now)
+        return source is not None and _daily_delivery_allowed(session, event, now, source)
+
+
+def _daily_delivery_allowed(session, event, now, source):
+    plan, repo, review = source.plan, source.daily, source.review
     if not isinstance(plan, UnifiedTradePlan):
         return False
-    repo = DailyRepository(session, clock=lambda: now, id_factory=lambda: str(uuid4()))
     if event.signal_type != "REMINDER" and DailyAccounting(repo).legacy_reason(event.symbol):
-        return False
-    review = repo.get("review-" + event.plan_version_id)
-    if (
-        review is None
-        or not review["payload"].get("confirmed")
-        or review["payload"].get("review_id") != event.review_id
-    ):
         return False
     if event.signal_type == "REMINDER":
         if event.alert_kind == "EXCEPTION_REVIEW":
@@ -1451,13 +1439,11 @@ def daily_delivery_allowed(session, event, now):
             return False
         risks = tuple(
             {**r["payload"], "revision": r["revision"]}
-            for r in repo.list(symbol=event.symbol, kind="RISK")
+            for r in source.basis.risk_rows
         )
-        from trade_plan_monitor.domain.plan_codec import load_plan_json
-
         current = risk_execution(
             risks,
-            plan=load_plan_json(version.payload_json),
+            plan=plan,
             inventory=inventory,
             evaluated_at=now,
             tradable=tradable,
@@ -1514,9 +1500,6 @@ def daily_delivery_allowed(session, event, now):
         )
     except ValueError, TypeError:
         return False
-    from trade_plan_monitor.domain.plan_codec import load_plan_json
-
-    plan = load_plan_json(version.payload_json)
     capital_arguments = {}
     if plan.schema_version == 9:
         from trade_plan_monitor.state.p3_current import current_capital_inputs
