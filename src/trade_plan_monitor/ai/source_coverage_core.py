@@ -18,6 +18,7 @@ from trade_plan_monitor.ai.source_coverage_models import (
     CoverageIssue,
     SourceObligation,
 )
+from trade_plan_monitor.ai.source_literal_sentences import literal_sentences
 from trade_plan_monitor.ai.source_native_support import native_support_issues
 from trade_plan_monitor.ai.source_obligations import (
     MISSING,
@@ -146,6 +147,7 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
     values = semantic_values(draft)
     payload = draft.executable_payload()
     metadata = draft.model_dump(mode="json")
+    sentences = literal_sentences(source)
     parsed = declarations(source)
     human_sides = {}
     for declaration in parsed:
@@ -188,6 +190,8 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
             if row.start <= clause.start < clause.end <= row.end), None)
         declaration = next((d for d in parsed
                             if d.start <= clause.start < clause.end <= d.end), None)
+        sentence = next((row for row in sentences
+                         if row.start <= clause.start < clause.end <= row.end), None)
         path, group, meaning, relations = (), None, None, ()
         deadline = deadline_supplement(clause.excerpt, draft, mapping)
         if clause.excluded or clause.limited:
@@ -295,6 +299,27 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
                 issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
                     path=declaration.path, start=clause.start, end=clause.end,
                     message="The complete source declaration differs from the candidate."))
+        elif sentence is not None:
+            matched = sentence.matched(payload, metadata)
+            context = sentence.context is not None
+            scope = sentence.scope
+            kind = "CONTEXT" if context else "PREDICATE"
+            path = sentence.paths_at(clause.start, clause.end)
+            group = sentence.group_id
+            relations = () if context else (group,)
+            state = ("CONTEXT_VERIFIED" if context else "MAPPED") if matched else "CONFLICT"
+            if not context and partition_at(partitions, clause.start) == "B":
+                state = "CONFLICT"
+            meaning = canonical(dict(treatment=sentence.context or "COMPLETE_LITERAL_SENTENCE",
+                                     expected=sentence.expected, group_id=group,
+                                     collection_sizes=sentence.collection_sizes))
+            if state == "MAPPED":
+                for proven in path:
+                    proven_paths.setdefault(proven, set()).add(clause.clause_id)
+            if state == "CONFLICT":
+                issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
+                    path="source." + clause.clause_id, start=clause.start, end=clause.end,
+                    message="The complete literal sentence differs from the candidate policy."))
         elif deadline is not None and partition_at(partitions, clause.start) == "A":
             kind, state = "PREDICATE", "MAPPED_WITH_REGISTERED_SUPPLEMENT"
             scope = source_scope(deadline.path, payload, parsed, human_sides, values)

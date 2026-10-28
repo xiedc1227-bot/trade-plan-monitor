@@ -10,7 +10,8 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from tests.integration.test_current_plan_api import make_app, post, review_payload
+from tests.integration.test_current_plan_api import make_app, post
+from tests.integration.test_current_plan_api import review_payload as old_review_payload
 from tests.unit.test_ai_plan_extraction_v4 import _config, _StaticProvider
 from tests.unit.test_daily_review import reviewed_mapping
 
@@ -21,6 +22,7 @@ from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import PlanReviewProvenance
+from trade_plan_monitor.state.source_coverage_store import SourceCoverageStore
 
 FIXTURE = json.loads(
     (Path(__file__).parents[1] / "fixtures/ai/explicit-plan-literal-source-v3.json").read_text(
@@ -255,8 +257,23 @@ def complete(client, first):
     return result
 
 
+def review_payload(root, saved, **updates):
+    """Bind the real current assessment without waiving its blocking conditions."""
+    engine = create_sqlite_engine(root / "current.sqlite")
+    try:
+        with create_session_factory(engine)() as session:
+            stored = SourceCoverageStore(session).latest(saved["id"])
+            assert stored is not None
+            return old_review_payload(saved, **({
+                "coverageEvidenceHash": stored.assessment.evidence_hash,
+                "coverageRulesVersion": stored.assessment.rules_version,
+            } | updates))
+    finally:
+        engine.dispose()
+
+
 def test_literal_source_completes_current_review_without_initializing_inventory(workspace):
-    client, _, _, first = workspace
+    client, root, _, first = workspace
     assert (
         FIXTURE["literalUserSource"].replace(
             FIXTURE["soleSubstitution"]["from"], FIXTURE["soleSubstitution"]["to"]
@@ -269,7 +286,8 @@ def test_literal_source_completes_current_review_without_initializing_inventory(
     before = client.get(inventory_path).json()
     assert not before["snapshot"]["known"]
     assert before["snapshot"]["coreQty"] is before["snapshot"]["tacticalQty"] is None
-    post(client, "plan-review-confirmations", review_payload(first), expected=422)
+    blocked = post(client, "plan-review-confirmations", review_payload(root, first), expected=409)
+    assert blocked["error"]["details"][0]["code"] == "SOURCE_COVERAGE_REQUIRED"
     assert {i["path"] for i in first["dailyIssues"]} >= {
         "activation",
         "ordinary_rules.0.independent_signal",
@@ -277,18 +295,19 @@ def test_literal_source_completes_current_review_without_initializing_inventory(
     }
     second = complete(client, first)
     assert second["contentHash"] != first["contentHash"]
-    post(
+    stale = post(
         client,
         "plan-review-confirmations",
-        review_payload(first, planVersionId=second["id"]),
-        expected=422,
+        review_payload(root, first, planVersionId=second["id"]),
+        expected=409,
     )
-    review = post(client, "plan-review-confirmations", review_payload(second))
+    assert stale["error"]["details"][0]["code"] == "SOURCE_COVERAGE_STALE"
+    review = post(client, "plan-review-confirmations", review_payload(root, second))
     assert review["canActivate"] and review["reviewId"]
     active = post(
         client,
         "plan-activations",
-        review_payload(
+        old_review_payload(
             second,
             reviewId=review["reviewId"],
             reviewRevision=1,
@@ -341,7 +360,7 @@ def test_forged_source_processing_cannot_be_saved(workspace, attack):
 def test_tampered_stored_processing_or_resolution_fails_closed(workspace, attack):
     client, root, _, first = workspace
     second = complete(client, first)
-    post(client, "plan-review-confirmations", review_payload(second))
+    post(client, "plan-review-confirmations", review_payload(root, second))
     engine = create_sqlite_engine(root / "current.sqlite")
     try:
         with create_session_factory(engine)() as session:
@@ -369,7 +388,7 @@ def test_tampered_stored_processing_or_resolution_fails_closed(workspace, attack
     "attack", ["wrong-path", "supplement", "wrong-resolution", "invented-issue"]
 )
 def test_treatment_confirmation_cannot_be_forged(workspace, attack):
-    client, _, _, first = workspace
+    client, root, _, first = workspace
     second = complete(client, first)
     item = {"issueId": "issue-000000000000000000000000", "resolution": "CONFIRM_SOURCE_TREATMENT"}
     if attack == "wrong-path":
@@ -381,7 +400,7 @@ def test_treatment_confirmation_cannot_be_forged(workspace, attack):
     response = post(
         client,
         "plan-review-confirmations",
-        review_payload(second, resolutions=[item]),
+        review_payload(root, second, resolutions=[item]),
         expected=422,
     )
     assert response["error"]["code"] == "VALIDATION_ERROR"
