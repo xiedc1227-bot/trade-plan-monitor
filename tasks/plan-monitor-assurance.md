@@ -117,7 +117,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 - [ ] Deliver and verify.
 - Depends on: T10.
-- Files/scope: source coverage component, focused composable, plan workbench adapter and `SourceCoverageReview.spec.ts`/workbench regression (5 files).
+- Files/scope: sequential T11a focused read composable, pure source-span/presentation helpers and their two tests (4); T11b small coverage container/row/span components and `SourceCoverageReview.spec.ts` (4); T11c actual workspace/workbench/review owners and a new actual-owner `PlanWorkbenchCoverage.spec.ts` (4); T11d extraction-summary presentation and focused existing/new tests (at most4); T11e isolated real-Chrome server/journey and bounded evidence (2–4). Each child is independently tested and committed before editing a shared owner. Use the T10 typed client, never cast the generic condition-plan request into a coverage page. Keep historical preparation details historical; a preparation ID is not a live plan-version ID. Preserve source code points and CRLF in escaped readonly highlighting. Existing-fixture reconciliation, if needed, is a separate justified at-most5-file child preserving original assertions and raw sources.
 - Acceptance: A01,A03,A11; Verify: V05 unit/type/build. Source spans, partial conditions, AI versus server treatment, human adjustments and no generic waiver; stale contexts discard responses and defaults do not acknowledge blockers.
 
 ### PMA-T12 — Close historical/legacy regression boundaries

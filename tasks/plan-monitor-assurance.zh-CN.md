@@ -117,7 +117,7 @@
 
 - [ ] 交付并验证。
 - 依赖：T10。
-- 文件／范围：覆盖组件、聚焦composable、计划工作台适配及 `SourceCoverageReview.spec.ts`／工作台回归，5文件。
+- 文件／范围：顺序T11a聚焦读取composable、纯来源跨度／展示helper及两个测试（4）；T11b小型覆盖容器／行／跨度组件及 `SourceCoverageReview.spec.ts`（4）；T11c实际workspace／工作台／审核归属及新增真实归属测试 `PlanWorkbenchCoverage.spec.ts`（4）；T11d提取摘要展示及聚焦已有／新增测试（最多4）；T11e隔离真实Chrome服务／旅程及有界证据（2–4）。每子片独立测试、提交后才编辑共享归属。使用T10 typed client，不把通用condition-plan请求强转成覆盖分页。历史preparation详情保持历史含义，preparation ID不是实时plan-version ID。用转义只读高亮保留来源代码点与CRLF。已有夹具若需对账，另拆有依据最多5文件子片，保留原断言和原始来源。
 - 验收：A01、A03、A11；验证：V05单元／类型／构建。原文跨度、部分条件、AI与服务端处理、人工改定及无通用豁免均明确；上下文过期丢响应，不默认确认阻断。
 
 ### PMA-T12 — 关闭历史／legacy回归边界
