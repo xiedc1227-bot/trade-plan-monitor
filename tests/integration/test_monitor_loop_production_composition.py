@@ -28,6 +28,7 @@ from trade_plan_monitor.ai.provider import (
     RawAIResponse,
 )
 from trade_plan_monitor.ai.review import server_source_clauses
+from trade_plan_monitor.ai.source_obligations import declarations
 from trade_plan_monitor.backtest import composition as composition_module
 from trade_plan_monitor.backtest.composition import create_backtest_composition_factory
 from trade_plan_monitor.backtest.jobs.maintenance import BacktestJobMaintenance
@@ -64,6 +65,11 @@ def continuity_sources():
         text = "# Trade plan\n" + ("完整替换此前计划。\n" if sources else "")
         text += "\n".join(f"{path} = {canonical(value)}" for path, value in fields.items())
         text += "\nname = " + canonical(draft.name)
+        if sources:
+            text += "\n" + "\n".join(
+                f"ordinary_rules[{number}].condition = "
+                + canonical(rule.condition.model_dump(mode="json"))
+                for number, rule in enumerate(draft.ordinary_rules))
         if not sources:
             text += "\n实际持仓0股。账户现金余额10000元。账户快照2026-08-20T09:00:00+08:00。\n"
         else:
@@ -82,13 +88,17 @@ def continuity_output(index, text):
     ))
     values = semantic_values(draft)
     clauses = server_source_clauses(text)
+    conditions = [row for row in declarations(text) if row.path.endswith(".condition")
+                  and isinstance(row.value, dict)]
     bindings = []
     for path, value in values.items():
         literal = f"{path} = {canonical(value)}"
         start = text.index(literal)
         end = start + len(literal)
-        selected = [clause.clause_id for clause in clauses if clause.start < end
-                    and clause.end > start]
+        selected = [clause.clause_id for clause in clauses if (
+            clause.start < end and clause.end > start) or any(
+                path.startswith(row.path + ".") or path.startswith(row.path + "[")
+                for row in conditions if row.start <= clause.start < clause.end <= row.end)]
         bindings.append({"path": path, "value": value,
                          "origin": "SOURCE_SEMANTIC" if value is None or type(value) is bool
                          else "SOURCE", "unit": "JSON",

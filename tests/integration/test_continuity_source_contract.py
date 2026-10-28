@@ -31,6 +31,18 @@ def test_current_synthetic_source_declares_every_exact_policy_value(index):
     assert source["text"].count("完整替换此前计划。") == (1 if index else 0)
 
 
+@pytest.mark.parametrize("index", [1, 2, 3])
+def test_replacement_source_explicitly_declares_the_complete_new_condition(index):
+    source = continuity_sources()[index]
+    draft = UnifiedPlanDraft.model_validate_json(json.dumps(
+        CONTINUITY["sources"][index]["snapshot"]))
+    parsed = {row.path: row for row in declarations(source["text"])}
+    for number, rule in enumerate(draft.ordinary_rules):
+        path = f"ordinary_rules[{number}].condition"
+        assert path in parsed
+        assert parsed[path].value == rule.condition.model_dump(mode="json")
+
+
 @pytest.mark.parametrize("index", range(4))
 def test_synthetic_output_maps_actual_current_declarations_without_changing_snapshot(index):
     source = continuity_sources()[index]
