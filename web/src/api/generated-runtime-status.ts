@@ -4685,6 +4685,7 @@ export type PlanExtractionView = {
   model?: (string) | (null);
   promptVersion?: (string) | (null);
   providerId: string;
+  sourceCoverage?: (components["schemas"]["SourceCoverageSummaryView"]) | (null);
   sourceTextSha256?: (string) | (null);
   startedAt?: (string) | (null);
   status: components["schemas"]["PlanExtractionOperationStatus"];
@@ -4705,6 +4706,8 @@ export type PlanMappingView = {
 
 export type PlanReviewConfirmationCommand = {
   contentHash: string;
+  coverageEvidenceHash?: (string) | (null);
+  coverageRulesVersion?: (string) | (null);
   expectedRevision: number;
   planVersionId: string;
   resolutions?: Array<components["schemas"]["PlanReviewResolution"]>;
@@ -4806,6 +4809,7 @@ export type PlanVersionSummary = {
   planHash: string;
   planId: string;
   revision: number;
+  sourceCoverage?: (components["schemas"]["SourceCoverageSummaryView"]) | (null);
   status: components["schemas"]["PlanVersionStatus"];
   symbol: string;
   version: number;
@@ -4831,6 +4835,7 @@ export type PlanVersionView = {
   reviewIssues?: Array<components["schemas"]["DraftReviewIssue"]>;
   reviewRevision?: (number) | (null);
   revision: number;
+  sourceCoverage?: (components["schemas"]["SourceCoverageSummaryView"]) | (null);
   sourceHash?: (string) | (null);
   sourceText: string;
   status: components["schemas"]["PlanVersionStatus"];
@@ -5797,6 +5802,117 @@ export type SourceClauseView = {
   excerpt: string;
   paths?: Array<string>;
   start: number;
+};
+
+export type SourceCoverageIssueView = {
+  code: string;
+  end: (number) | (null);
+  message: string;
+  path: string;
+  start: (number) | (null);
+};
+
+export type SourceCoveragePage = {
+  authorityGranted?: false;
+  items: Array<(components["schemas"]["SourceObligationRow"] & { kind: "OBLIGATION" }) | (components["schemas"]["SourceIssueRow"] & { kind: "ISSUE" }) | (components["schemas"]["SourceNormalizationRow"] & { kind: "NORMALIZATION_CHANGE" })>;
+  limit: number;
+  nextCursor: (string) | (null);
+  planVersionId: string;
+  returnedCount: number;
+  summary: components["schemas"]["SourceCoverageSummaryView"];
+  totalRows: number;
+};
+
+export type SourceCoverageSummaryView = {
+  authorityGranted?: false;
+  automaticFidelityVerified: boolean;
+  canConfirmReview: boolean;
+  candidatePlanHash: string;
+  contentHash: (string) | (null);
+  coverageBundleHash: (string) | (null);
+  coverageComplete: boolean;
+  coverageEvidenceHash: (string) | (null);
+  coverageReviewReceiptHash: (string) | (null);
+  coverageRevision: (number) | (null);
+  currentReviewBound: boolean;
+  issueCount: number;
+  mappingHash: (string) | (null);
+  normalizationChangeCount: number;
+  normalizationHash: (string) | (null);
+  obligationCount: number;
+  origin: ("AI_NEW" | "AI_HISTORICAL" | "HUMAN") | (null);
+  originalReviewEvidenceHash: (string) | (null);
+  reason: ("SOURCE_COVERAGE_REQUIRED" | "SOURCE_COVERAGE_STALE" | "SOURCE_COVERAGE_UPGRADE_REQUIRED" | "SOURCE_COVERAGE_LIMIT_EXCEEDED") | (null);
+  reviewId: (string) | (null);
+  reviewRevision: number;
+  reviewState: "UNCONFIRMED" | "CURRENT" | "NEEDS_REVIEW" | "UNKNOWN";
+  rulesVersion: ("source-coverage-rules-v1") | (null);
+  sourceHash: string;
+  status: "COMPLETE" | "BLOCKED" | "LEGACY_UNASSESSED" | "UNKNOWN";
+  totalRows: number;
+};
+
+export type SourceHumanSupplementLinkView = {
+  candidateContentHash: string;
+  path: string;
+  supplementId: string;
+};
+
+export type SourceIssueRow = {
+  issue: components["schemas"]["SourceCoverageIssueView"];
+  kind?: "ISSUE";
+  rowIndex: number;
+};
+
+export type SourceMappingProposalView = {
+  proposedDisposition: "POLICY" | "INVENTORY_ASSERTION" | "BACKGROUND" | "CONTEXT" | "UNRESOLVED" | "UNSUPPORTED";
+  proposedPaths: Array<string>;
+  reason: string;
+  semanticRole: ("DIRECTIVE" | "HISTORICAL" | "ACCOUNT" | "COMMENTARY" | "AMBIGUOUS") | (null);
+};
+
+export type SourceNormalizationChangeView = {
+  afterHash: string;
+  afterJson: string;
+  beforeHash: string;
+  beforeJson: string;
+  evidenceHash: string;
+  path: string;
+  reason: string;
+  sourceHash: string;
+  traceRole: "CURRENT_ASSESSMENT" | "HISTORICAL_INPUT";
+};
+
+export type SourceNormalizationRow = {
+  change: components["schemas"]["SourceNormalizationChangeView"];
+  kind?: "NORMALIZATION_CHANGE";
+  rowIndex: number;
+};
+
+export type SourceObligationRow = {
+  kind?: "OBLIGATION";
+  obligation: components["schemas"]["SourceObligationView"];
+  rowIndex: number;
+};
+
+export type SourceObligationView = {
+  clauseId: string;
+  end: number;
+  excerpt: string;
+  groupId: (string) | (null);
+  humanSupplements: Array<components["schemas"]["SourceHumanSupplementLinkView"]>;
+  kind: "DECLARATION" | "PREDICATE" | "RELATION" | "CONTEXT" | "SCOPE_EXCLUSION" | "UNKNOWN";
+  mappingProposal: (components["schemas"]["SourceMappingProposalView"]) | (null);
+  obligationId: string;
+  paths: Array<string>;
+  relationIds: Array<string>;
+  rulesVersion: "source-coverage-rules-v1";
+  scope: "PLAN" | "BUY" | "SELL" | "RISK" | "ALERT" | "UNKNOWN";
+  semanticsJson: (string) | (null);
+  serverState: "MAPPED" | "MAPPED_WITH_REGISTERED_SUPPLEMENT" | "CONTEXT_VERIFIED" | "SCOPE_EXCLUDED" | "UNRESOLVED" | "UNSUPPORTED" | "CONFLICT";
+  sourceHash: string;
+  start: number;
+  version: "source-obligation-v1";
 };
 
 export type SourceProcessingView = {
@@ -6972,6 +7088,16 @@ export interface components {
     SourceAlertView: SourceAlertView;
     SourceBoundField: SourceBoundField;
     SourceClauseView: SourceClauseView;
+    SourceCoverageIssueView: SourceCoverageIssueView;
+    SourceCoveragePage: SourceCoveragePage;
+    SourceCoverageSummaryView: SourceCoverageSummaryView;
+    SourceHumanSupplementLinkView: SourceHumanSupplementLinkView;
+    SourceIssueRow: SourceIssueRow;
+    SourceMappingProposalView: SourceMappingProposalView;
+    SourceNormalizationChangeView: SourceNormalizationChangeView;
+    SourceNormalizationRow: SourceNormalizationRow;
+    SourceObligationRow: SourceObligationRow;
+    SourceObligationView: SourceObligationView;
     SourceProcessingView: SourceProcessingView;
     SourceSpanView: SourceSpanView;
     SymbolEventPage: SymbolEventPage;
@@ -12293,6 +12419,84 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PlanVersionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-versions/{version_id}/source-coverage": {
+    get: {
+      parameters: {
+        query?: {
+          cursor?: (string) | (null);
+          limit?: number;
+        };
+        header?: never;
+        path: {
+          version_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["SourceCoveragePage"];
           };
         };
         "400": {

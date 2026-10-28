@@ -33397,6 +33397,16 @@
             "title": "Providerid",
             "type": "string"
           },
+          "sourceCoverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceCoverageSummaryView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "sourceTextSha256": {
             "anyOf": [
               {
@@ -33543,6 +33553,33 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Contenthash",
             "type": "string"
+          },
+          "coverageEvidenceHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverageevidencehash"
+          },
+          "coverageRulesVersion": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coveragerulesversion"
           },
           "expectedRevision": {
             "maximum": 9007199254740991.0,
@@ -34231,6 +34268,16 @@
             "title": "Revision",
             "type": "integer"
           },
+          "sourceCoverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceCoverageSummaryView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/PlanVersionStatus"
           },
@@ -34438,6 +34485,16 @@
             "minimum": 0.0,
             "title": "Revision",
             "type": "integer"
+          },
+          "sourceCoverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceCoverageSummaryView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sourceHash": {
             "anyOf": [
@@ -40373,6 +40430,857 @@
           "disposition"
         ],
         "title": "SourceClauseView",
+        "type": "object"
+      },
+      "SourceCoverageIssueView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 150000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "message": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "maximum": 150000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "required": [
+          "code",
+          "path",
+          "start",
+          "end",
+          "message"
+        ],
+        "title": "SourceCoverageIssueView",
+        "type": "object"
+      },
+      "SourceCoveragePage": {
+        "additionalProperties": false,
+        "properties": {
+          "authorityGranted": {
+            "const": false,
+            "default": false,
+            "title": "Authoritygranted",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ISSUE": "#/components/schemas/SourceIssueRow",
+                  "NORMALIZATION_CHANGE": "#/components/schemas/SourceNormalizationRow",
+                  "OBLIGATION": "#/components/schemas/SourceObligationRow"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SourceObligationRow"
+                },
+                {
+                  "$ref": "#/components/schemas/SourceIssueRow"
+                },
+                {
+                  "$ref": "#/components/schemas/SourceNormalizationRow"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "returnedCount": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Returnedcount",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SourceCoverageSummaryView"
+          },
+          "totalRows": {
+            "maximum": 14288.0,
+            "minimum": 0.0,
+            "title": "Totalrows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "summary",
+          "items",
+          "limit",
+          "returnedCount",
+          "totalRows",
+          "nextCursor"
+        ],
+        "title": "SourceCoveragePage",
+        "type": "object"
+      },
+      "SourceCoverageSummaryView": {
+        "additionalProperties": false,
+        "properties": {
+          "authorityGranted": {
+            "const": false,
+            "default": false,
+            "title": "Authoritygranted",
+            "type": "boolean"
+          },
+          "automaticFidelityVerified": {
+            "title": "Automaticfidelityverified",
+            "type": "boolean"
+          },
+          "canConfirmReview": {
+            "title": "Canconfirmreview",
+            "type": "boolean"
+          },
+          "candidatePlanHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidateplanhash",
+            "type": "string"
+          },
+          "contentHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenthash"
+          },
+          "coverageBundleHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coveragebundlehash"
+          },
+          "coverageComplete": {
+            "title": "Coveragecomplete",
+            "type": "boolean"
+          },
+          "coverageEvidenceHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverageevidencehash"
+          },
+          "coverageReviewReceiptHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coveragereviewreceipthash"
+          },
+          "coverageRevision": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coveragerevision"
+          },
+          "currentReviewBound": {
+            "title": "Currentreviewbound",
+            "type": "boolean"
+          },
+          "issueCount": {
+            "maximum": 8192.0,
+            "minimum": 0.0,
+            "title": "Issuecount",
+            "type": "integer"
+          },
+          "mappingHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mappinghash"
+          },
+          "normalizationChangeCount": {
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Normalizationchangecount",
+            "type": "integer"
+          },
+          "normalizationHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalizationhash"
+          },
+          "obligationCount": {
+            "maximum": 4096.0,
+            "minimum": 0.0,
+            "title": "Obligationcount",
+            "type": "integer"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "AI_NEW",
+                  "AI_HISTORICAL",
+                  "HUMAN"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "originalReviewEvidenceHash": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Originalreviewevidencehash"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SOURCE_COVERAGE_REQUIRED",
+                  "SOURCE_COVERAGE_STALE",
+                  "SOURCE_COVERAGE_UPGRADE_REQUIRED",
+                  "SOURCE_COVERAGE_LIMIT_EXCEEDED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reviewId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewid"
+          },
+          "reviewRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Reviewrevision",
+            "type": "integer"
+          },
+          "reviewState": {
+            "enum": [
+              "UNCONFIRMED",
+              "CURRENT",
+              "NEEDS_REVIEW",
+              "UNKNOWN"
+            ],
+            "title": "Reviewstate",
+            "type": "string"
+          },
+          "rulesVersion": {
+            "anyOf": [
+              {
+                "const": "source-coverage-rules-v1",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rulesversion"
+          },
+          "sourceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "COMPLETE",
+              "BLOCKED",
+              "LEGACY_UNASSESSED",
+              "UNKNOWN"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "totalRows": {
+            "maximum": 14288.0,
+            "minimum": 0.0,
+            "title": "Totalrows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "coverageComplete",
+          "currentReviewBound",
+          "canConfirmReview",
+          "reviewState",
+          "reason",
+          "sourceHash",
+          "candidatePlanHash",
+          "contentHash",
+          "mappingHash",
+          "rulesVersion",
+          "coverageEvidenceHash",
+          "coverageRevision",
+          "coverageBundleHash",
+          "normalizationHash",
+          "originalReviewEvidenceHash",
+          "reviewId",
+          "reviewRevision",
+          "coverageReviewReceiptHash",
+          "origin",
+          "automaticFidelityVerified",
+          "obligationCount",
+          "issueCount",
+          "normalizationChangeCount",
+          "totalRows"
+        ],
+        "title": "SourceCoverageSummaryView",
+        "type": "object"
+      },
+      "SourceHumanSupplementLinkView": {
+        "additionalProperties": false,
+        "properties": {
+          "candidateContentHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidatecontenthash",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "supplementId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Supplementid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "supplementId",
+          "path",
+          "candidateContentHash"
+        ],
+        "title": "SourceHumanSupplementLinkView",
+        "type": "object"
+      },
+      "SourceIssueRow": {
+        "additionalProperties": false,
+        "properties": {
+          "issue": {
+            "$ref": "#/components/schemas/SourceCoverageIssueView"
+          },
+          "kind": {
+            "const": "ISSUE",
+            "default": "ISSUE",
+            "title": "Kind",
+            "type": "string"
+          },
+          "rowIndex": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Rowindex",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rowIndex",
+          "issue"
+        ],
+        "title": "SourceIssueRow",
+        "type": "object"
+      },
+      "SourceMappingProposalView": {
+        "additionalProperties": false,
+        "description": "The saved mapping proposal, separately from the server's treatment.",
+        "properties": {
+          "proposedDisposition": {
+            "enum": [
+              "POLICY",
+              "INVENTORY_ASSERTION",
+              "BACKGROUND",
+              "CONTEXT",
+              "UNRESOLVED",
+              "UNSUPPORTED"
+            ],
+            "title": "Proposeddisposition",
+            "type": "string"
+          },
+          "proposedPaths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 512,
+            "title": "Proposedpaths",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "semanticRole": {
+            "anyOf": [
+              {
+                "enum": [
+                  "DIRECTIVE",
+                  "HISTORICAL",
+                  "ACCOUNT",
+                  "COMMENTARY",
+                  "AMBIGUOUS"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Semanticrole"
+          }
+        },
+        "required": [
+          "proposedDisposition",
+          "semanticRole",
+          "reason",
+          "proposedPaths"
+        ],
+        "title": "SourceMappingProposalView",
+        "type": "object"
+      },
+      "SourceNormalizationChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "afterHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Afterhash",
+            "type": "string"
+          },
+          "afterJson": {
+            "maxLength": 8192,
+            "title": "Afterjson",
+            "type": "string"
+          },
+          "beforeHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Beforehash",
+            "type": "string"
+          },
+          "beforeJson": {
+            "maxLength": 8192,
+            "title": "Beforejson",
+            "type": "string"
+          },
+          "evidenceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidencehash",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "sourceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          },
+          "traceRole": {
+            "enum": [
+              "CURRENT_ASSESSMENT",
+              "HISTORICAL_INPUT"
+            ],
+            "title": "Tracerole",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "beforeJson",
+          "afterJson",
+          "reason",
+          "traceRole",
+          "sourceHash",
+          "beforeHash",
+          "afterHash",
+          "evidenceHash"
+        ],
+        "title": "SourceNormalizationChangeView",
+        "type": "object"
+      },
+      "SourceNormalizationRow": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/SourceNormalizationChangeView"
+          },
+          "kind": {
+            "const": "NORMALIZATION_CHANGE",
+            "default": "NORMALIZATION_CHANGE",
+            "title": "Kind",
+            "type": "string"
+          },
+          "rowIndex": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Rowindex",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rowIndex",
+          "change"
+        ],
+        "title": "SourceNormalizationRow",
+        "type": "object"
+      },
+      "SourceObligationRow": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "OBLIGATION",
+            "default": "OBLIGATION",
+            "title": "Kind",
+            "type": "string"
+          },
+          "obligation": {
+            "$ref": "#/components/schemas/SourceObligationView"
+          },
+          "rowIndex": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Rowindex",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rowIndex",
+          "obligation"
+        ],
+        "title": "SourceObligationRow",
+        "type": "object"
+      },
+      "SourceObligationView": {
+        "additionalProperties": false,
+        "properties": {
+          "clauseId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Clauseid",
+            "type": "string"
+          },
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 150000.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "excerpt": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "groupId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Groupid"
+          },
+          "humanSupplements": {
+            "items": {
+              "$ref": "#/components/schemas/SourceHumanSupplementLinkView"
+            },
+            "maxItems": 2000,
+            "title": "Humansupplements",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "DECLARATION",
+              "PREDICATE",
+              "RELATION",
+              "CONTEXT",
+              "SCOPE_EXCLUSION",
+              "UNKNOWN"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "mappingProposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceMappingProposalView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "obligationId": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Obligationid",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 512,
+            "title": "Paths",
+            "type": "array"
+          },
+          "relationIds": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Relationids",
+            "type": "array"
+          },
+          "rulesVersion": {
+            "const": "source-coverage-rules-v1",
+            "title": "Rulesversion",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "PLAN",
+              "BUY",
+              "SELL",
+              "RISK",
+              "ALERT",
+              "UNKNOWN"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "semanticsJson": {
+            "anyOf": [
+              {
+                "maxLength": 8192,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Semanticsjson"
+          },
+          "serverState": {
+            "enum": [
+              "MAPPED",
+              "MAPPED_WITH_REGISTERED_SUPPLEMENT",
+              "CONTEXT_VERIFIED",
+              "SCOPE_EXCLUDED",
+              "UNRESOLVED",
+              "UNSUPPORTED",
+              "CONFLICT"
+            ],
+            "title": "Serverstate",
+            "type": "string"
+          },
+          "sourceHash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sourcehash",
+            "type": "string"
+          },
+          "start": {
+            "maximum": 150000.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "version": {
+            "const": "source-obligation-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "rulesVersion",
+          "sourceHash",
+          "clauseId",
+          "start",
+          "end",
+          "excerpt",
+          "kind",
+          "scope",
+          "serverState",
+          "semanticsJson",
+          "groupId",
+          "relationIds",
+          "paths",
+          "obligationId",
+          "mappingProposal",
+          "humanSupplements"
+        ],
+        "title": "SourceObligationView",
         "type": "object"
       },
       "SourceProcessingView": {
@@ -57595,6 +58503,180 @@
           }
         },
         "summary": "Get Plan Version",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-versions/{version_id}/source-coverage": {
+      "get": {
+        "operationId": "get_source_coverage_api_v1_plan_versions__version_id__source_coverage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "pattern": "^[\\x00-\\x7f]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCoveragePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Source Coverage",
         "tags": [
           "plans"
         ]
