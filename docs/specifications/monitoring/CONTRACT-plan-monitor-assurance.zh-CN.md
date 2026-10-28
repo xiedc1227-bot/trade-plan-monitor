@@ -254,3 +254,11 @@ GET /api/v1/plan-versions/{version_id}/source-coverage 在分页前核验同sess
 仅已保存的当前Schema5–9文档在原始来源未变、candidate完整JSON结构与native一致、dailyMapping准确一致时提供来源上下文。对象key顺序可不同；数组顺序、缺字段、null及值类型不能改变。绑定native version／hash／review元组及可选准确保存摘要，独立于busy。发送前以imperative方式再次核验上下文及当前服务端canConfirmReview绑定，并在设置busy前捕获。确认通过既有mutation client明确发送coverageEvidenceHash及coverageRulesVersion。409清除旧覆盖，要求显式native重读、第一页读取及另行确认；不增加自动审核、启用或重试。下一页导航仅typed GET。第一页／刷新先重读准确native归属再接受新seed，失败时保留显示中的编辑／受阻草稿。字段导航使用实际daily-.PATH元素ID，不从用户文本构建selector或修改值。
 
 未提交理由／路径／排除片段在同owner、同content重检时保留，content hash或sourceOwnerKey改变时同步清空。空native issues不豁免来源完整性；合法BLOCKED草稿仍可保存。隔离浏览器夹具仅使用新建且归属明确的临时SQLite及生产save／supplement／read／confirmation／activation接口，setup不授审核。外部provider／market／notification能力禁用，调用即失败。准确测试JSON路由先于不变SPA fallback，读取／恢复preview检查产生零SQL DML、DDL或BEGIN IMMEDIATE。这些夹具边界不证明完整Chrome旅程、T12兼容或C04，仍须独立验收。
+
+## PMA-K34 — 新工作台接纳与历史兼容
+
+新工作台运行既要求复制输入前的早期当前来源读取，也要求最终job接纳时真实生命周期的私有current_workbench_run_fence。Fence使用一条新建归属连接、新unit of work及同一实际审核reader逻辑，验证所选完整native reference和当前coverage／review receipt。仅该连接请求BEGIN IMMEDIATE。先取jobs writer再取source writer，来源writer保持至真实jobs提交或回滚。Fence中不执行market／provider工作或monitor DML。Assessment hash未变的新coverage bundle仍可使所选审核失效；早期读取或hash匹配均不足。
+
+缺能力或owner已关闭返回503；语义归属过期返回409；存储完整性损坏返回500；实际busy／locked存储保留503及Retry-After: 1。未知异常仍抛出。普通source／plan GET维持原BEGIN事务，包括pool中的DBAPI连接先前被fence用过的情况。该能力为私有接口，不产生可携带token、就绪权限或调用者自选legacy回退。该fence不改变公共API、表、冻结selection／input codec、formula或hash域。
+
+已完成同键run／selection回执按原冻结响应重放，不重新打开当前source或复制输入。新键要求当前权限；当前plan-review confirmation即使重放也保留另行规定的当前proof复核。Native legacy source／plan／review字节及真实cutover成员保持准确，回填日期的新记录不变成legacy。Legacy点显示仅为描述，不验证全局risk grant；实际独立风险路径仍认证原owner／root，拒绝伪造成员或未知scope。重评、无害新DRAFT、coverage读取及旧回执重放均不能重开已实际消费的BUY／SELL，或改变其给定／模拟数量、库存及原效果。

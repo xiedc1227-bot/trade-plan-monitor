@@ -365,3 +365,29 @@ T11按本隔离工作流及528项来源UI回归（R40）完成。数量有重叠
 独立审查使用真实PersistentPlanWebLifecycle、准确COMPLETE来源／审核回执、实际workbench选择、市场冻结／输入复制及BacktestJobRepository。原输入复制函数返回后，正常SourceCoverageStore.append提交覆盖revision1→2，assessment hash未变。回执仍绑定revision1，真实当前reader此时拒绝；新运行仍因workbench分支未提供最终admission guard而创建QUEUED job及幂等回执，并授权记录型coordinator一次。初次当前读取前先重评的对照则正确拒绝且无job。有效探针1通过／1失败，4.72秒（`workbench-race-agent-red.log`）；初轮outcome序列化AttributeError独立保留在`workbench-race-agent-first.log`，不计为产品RED。
 
 真实SQL证据为`workbench-race-actual-sql-evidence.json`，SHA-256 `311bb1dbc0db9e7778938421910284b598fb244e8844a79739d21e073c823bea`；探针SHA-256为`89606e3398d258eea30e0bb504c05d6c399a8b64addd4988c3cc94a5aa589614`。已完成同键回执保持准确重放，无再次复制／授权；历史重放不是缺陷。新反例不重写冻结C03测试结果，也不声称覆盖selection创建的独立窗口。T12b须以真实来源writer保持到job提交来关闭新运行最终接纳，连同T12a兼容测试通过后才关闭C04。本证据节不声称已修tracked生产代码。仅临时数据库；供应商0/48；用户迁移0。
+
+## PMA-R43 — T12b真实最终接纳修复
+
+转正的实际存储反例首先1失败、1对照通过，3.76秒（`t12b-agent-red.log`）。提交`f4c9396`增加仅作用于私有连接的source writer，将真实审核reader抽到同一新unit of work，并通过既有最终job admission guard进入fence。保留复制前早期拒绝，不增加monitor写入或API／codec／表／formula／hash变化。真实jobs提交能被另一连接读到时，来源writer仍持有，另一engine真实重评append仍BUSY，直至释放。连接归还pool后不改变后续GET的默认BEGIN。
+
+10项新实际用例加12项既有接口用例共22项8.65秒通过（`t12b-agent-matrix-green.log`）。中间21通过／1失败、8.94秒的运行对已序列化status字符串误用Enum.value，是测试错误，保留于`t12b-agent-matrix.log`。六文件实际source／workbench／jobs／prepared／review／storage相邻选择102项39.04秒通过（`t12b-agent-neighbor.log`）。既有接口27个断言AST保持准确，新增1个明确合成fence断言（`t12b-agent-assert-audit.json`）；接口测试不代替新增真实SQL证据。Ruff及diff检查通过。
+
+根完整查看五个文件，独立重跑原样保留的忽略目录两节点探针：2项3.48秒通过（`t12b-root-independent-green.log`）。已覆盖实际过期bundle、review owner变更、已关闭／缺能力、busy存储、完整性错误、jobs回滚及source关闭后的已完成同键重放。数量有重叠，不相加成验收总数。本修复关闭新workbench job接纳，不声称修复selection创建的独立check-to-freeze窗口。C04仍待来源／历史组合回归。供应商0/48；用户迁移0。
+
+## PMA-R44 — T12a历史、消费与真实回放夹具
+
+11项新增cutover／occurrence／frozen兼容用例首轮直接通过，属于特征刻画，不伪造RED（`t12-cutover-characterization1.log`、`t12-occurrence-characterization1.log`、`t12-frozen-characterization1.log`）。覆盖实际0027→0028升级、native字节保持、legacy点诊断与risk-root完整性区分、回填日期新版本、已消费BUY／SELL、无害新草稿、准确旧回执重放及冻结codec严格拒绝额外字段。被拒的新消费意图使用实际当前revision，区分合法DRAFT／REVIEW／EVALUATION写入和交易／库存／消费效果。
+
+未改的旧真实reader成功节点先因REQUIRED而1失败，2.58秒（`t12-unchanged-workbench-root.log`），其成功前置现使用完整FIELD来源、实际保存及准确coverage绑定审核。随后首轮四文件26项选择24通过／2失败，11.67秒（`t12-owned-final1.log`）：两个既有copy／replay模式提供的合成reader缺少新私有fence。现使用实际PersistentPlanWebLifecycle，保留原typed策略、时钟、账户上下文、成交数及loop行为。完整FIELD来源及真实审核提供新的动态native reference；这是成功夹具迁移，不声称source／ref hash字节未变。通用SOURCE不变并明确阻断，global reviewed()、通用payload helper及旧字节golden均未触及。
+
+两种旧模式2项5.21秒通过（`t12-workbench-actual-replay1.log`），完整四文件选择26项13.97秒通过（`t12-final-combined2.log`）。原58个断言AST保留各函数顺序，包括真实reader节点原4个断言及1个异常context（`t12-workbench-assert-audit.json`）。根复核全部四文件，将新增点查询断言加强到实际daily_plan_record表，并重跑全部26项15.00秒通过（`t12a-root-final.log`）。Ruff及diff检查通过，提交`5ed37d7`包含四文件子片。C04及后续提取／就绪／全项目检查仍单独验收。供应商0/48；用户迁移0。
+
+## PMA-R45 — 组合回归通过；条件事实串用使C04继续开放
+
+在起止准确版本`5ed37d7b9f9e28963b461a12ab86f4861502d2e6`，固定18文件来源／历史／接纳选择353项210.57秒通过（进程212.7299973秒），0失败／跳过／xfail／xpass／收集错误。所选文件全程字节相同。Selection SHA-256为`b5ce8f53ee96fd414c6e09306a477d093f26b2f9310724ad88cdd8a359b66138`，log SHA-256为`1e09e32088cacf70540a73fd508882b85e730c5ce48c7353c05f29b9ec3a0d41`，完整argv／证据索引为`c04-final-integration-evidence.json`（SHA-256 `b62d8f6e6090154fb3d2af3a491dd1c1a757e9d2da58b44369a4ed0e1f48e793`）。保留原隔离离线loop worker，不误报零测试worker。未使用用户／default服务、用户数据库、真实provider或外部通知。仅有原Starlette TestClient／httpx警告。这不是全项目或容量验收。
+
+独立于来源提取的另项审查发现实际当前证据串用。真实FIELD计划具有COMPLETE来源、CURRENT审核回执及明确启用，含“成交不异常放大”与“明显下影”的ALL，两者均为VOLUME_OR_CANDLE。真实HTTP事实登记明确仅确认前者、未核验下影；实际runtime两叶仍使用同一持久fact ID变为SATISFIED，产生planned_qty100／executable_qty0的CONFIRMED信号。不声称有交易或交付。仅按kind加日期／signal匹配不能保持这两条独立强制要求，尽管提取／native图包含两者。
+
+实际归属探针3.67秒完成，exit0，新临时数据库已删除。证据`t13-native-fact-http-owner-readiness-20261028-run3.json`的SHA-256为`5b54213c96720ec3794ac5bdc181b9c438c06616bb882f857ad2006a948fb80c`，对应日志为`t13-native-fact-http-owner-readiness-20261028-run3.log`。此前private writer／typed evaluator探针范围更窄；较早actual-owner运行的冗余清理错误保留，不将其当新增产品失败。根查看了真实command、来源／审核proof及两叶结果。这是工程反例，不代表原03／04或语料／provider准确率证据。
+
+因此，即使已有353项检查通过，T12／C04仍未关闭。条件事实绑定修复必须覆盖准确当前target、持久未绑定fact及下游当前consumer，同时保留单一kind行为、独立原技术风险、历史字节／formula及未变的source-coverage proof域。不推断数值交易阈值或新策略。语料冻结、真实调用及就绪验收仍待完成。供应商0/48；用户迁移0。
