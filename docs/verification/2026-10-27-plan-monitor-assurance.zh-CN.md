@@ -267,3 +267,21 @@ T09／C03现已通过本阶段适用来源／存储／审核／启用／复用�
 提交 `50db2f6` 保留逐字来源、原generic／revised未知来源、mock供应商字节及通用review_payload不变。原五个失败节点保留成功路径；formal未知源工作流改为明确阻断反例，其成功生命周期断言移至明确合成的完整FIELD工程用例。此原失败映射不能称为同名节点重跑。只有成功确认补入两个真实完整证明字段，启用保持既有封闭请求体。
 
 3文件测试选择14项7.00秒通过（`t10-api-reconcile-green1.log`），Ruff通过。原71个断言出现中70个AST准确相同；一个幂等断言明确仅把确认payload改为实际来源绑定请求体，仍保留相同key、响应对象及相等比较。新总数92；`t10-old-api-assert-reconciliation.json` 记录准确迁移。这是契约对齐与控制流程工程证据，不是真实供应商语义准确率。供应商0/48；用户迁移0。
+
+## PMA-R33 — T10a完整回归与超长草稿保留
+
+真实200017代码点来源保存失败已独立复现；提交 `270e905` 完整保留来源和native hash，明确给出工作上限阻断，不使用宽泛异常兜底或局部证明。20项新测试加原节点21项5.55秒通过；最终unit／storage相邻组合297项60.43秒通过（`t10-source-budget-regression.log`）。输入错误及512／513 clause边界仍独立拒绝。初始夹具构造错误及过长参数标签不算生产RED。
+
+提交 `8886e79` 仅将两个真实当前成功composition夹具改为完整对应FIELD来源及真实覆盖绑定审核。原YAML来源生成、全部98个旧断言AST、200017来源及原列表／内存限制不变，新增两个明确不支持YAML阻断反例。原两个节点先失败，2.87秒；完整文件15项11.95秒通过（`readiness-composition-fixture-final1.log`）。这是合成工程证据，不算自然语言提取准确率。
+
+T10a3 `abc37a9` 增加实际提取诊断。根审查独立发现三项未接受trace变化计数真实失败，保留于 `t10a3-unaccepted-trace-agent-red.log`；修正后的self-hash损坏探针也独立失败。最终23项提取测试4.77秒通过（`t10a3-extraction-agent-green2.log`）。提交 `0f040d4` 保留旧浏览器夹具SHA-256 `2e9d713b607048f01690db94be61db08553454f1b56b218f4c0bff22da621209`、原84项问题前缀及独立固定的单条第85项诊断。浏览器加提取24项4.78秒通过（`t10a3-browser-contract-agent-green.log`）。初始非法trace夹具构造不算生产RED证据。
+
+最终13文件T10a集成选择在 `0f040d4` 通过299项，109.61秒（`t10a-final.log`），已对账原六项API及扩大组合的三项composition失败。这是可用后端子片联合结果，不代表C04／UI、全项目、容量或真实供应商验收。以上数量有重叠。供应商0/48；用户迁移0。
+
+## PMA-R34 — T10b／T10c准确生成契约与归属
+
+提交 `95f93af` 使用既有生成器生成两套OpenAPI／TypeScript，不手改。两个缺失GET契约探针先失败，8.03秒（`t10b-generated-red.log`）。准确投影及promotion组合29项93.75秒通过（`t10b-contract-green1.log`）；生成器检查及Ruff通过。包含准确旧配置重建、未批准旧／新增项攻击、生成文件一致及TypeScript正反探针。生成的可选authorityGranted?: false允许缺省／false，拒绝true；实际服务端DTO始终序列化false。
+
+新冻结hash为v1 OpenAPI `c426102e7f9815b549a463a4fb4c38ec3c15c97213cd09864e65147a9a935cd7`、v2 OpenAPI `0361f3b1b69a23399ee8e3ec89cce87ef832c04980e7bcc88aeba72b2c0fd1f9`、v1 TypeScript `7db80baf8b0a53b837795ac1a0ae0bb8362c390af491068d5bbfc2a201d45256`、v2 TypeScript `8fdce46fec658cacfb7b782bcc91163c1ec0fa4b02d441c5d3c7356d114b5ddc`。准确批准增量投影后原四个hash归属不变。`t10b-frozen-output-summary.json` 索引证据。
+
+T10c首先有7项真实旧归属／白名单／投影失败，18.87秒（`t10c-owner-red.log`）。提交 `869e765` 追加双语U-PMA范围归属，并仅将准确来源投影组合进旧门禁。旧U-MLP3审批、文档前缀、旧路径／字段集合、公共错误及数值边界保持准确。五文件归属／linkage／backtest／promotion／source-projection回归57项134.85秒通过（`t10c-owner-green1.log`）；措辞澄清后归属hash门禁1项7.60秒通过。两套生成器检查、Ruff、diff及双语token／链接／阈值一致审计通过（`t10c-owner-parity-audit.json`）。前端严格client仍属T10d；T10／C04仍未完成。供应商0/48；用户迁移0。

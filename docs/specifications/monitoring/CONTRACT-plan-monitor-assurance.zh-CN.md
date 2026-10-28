@@ -210,3 +210,15 @@ GET /api/v1/plan-versions/{version_id}/source-coverage 在分页前核验同sess
 计划列表／详情、首次保存及已审核工作台读取使用同一fresh details及来源摘要。列表分页先按原created_at／id倒序读取有界Core身份，再逐个处理完整证明；既不先解码旧ORM归属，也不保留100份私有8MiB输入。既有10000集合／100分页上限及资格筛选窗口／计数语义保持。
 
 完整覆盖、currentReviewBound、canConfirmReview及canActivate互相独立。Typed来源解释允许历史有效ACTIVE版本保持ACTIVE但canActivate=false，不伪造obsolete原因。原生hash／issues／review不改。满512条native问题准确保留；来源阻断留在独立摘要，不追加第513条。已完成保存重放保留原响应；新可选sourceCoverage在缺失／None时省略，不向历史响应追加新null字段。已完成确认继续保留另已实现的当前证明重验。
+
+## PMA-K28 — 合法超长草稿与提取诊断
+
+既有合法草稿／来源存储边界独立于150000代码点的覆盖工作上限。明确超过工作上限的来源仍先通过原有完整daily-review校验，再完整保留原文及native content／mapping hash。其评估为BLOCKED，带全局SOURCE_COVERAGE_LIMIT_EXCEEDED问题且不生成局部obligations；不授已接受normalization hash／fidelity或当前审核权限。此显式分支不捕获其他输入错误、非法span／hash、非法UTF-8、空原文或既有clause／binding超限。初始AI证据及私有derivation保持不变。
+
+当前SUCCEEDED提取传输可以携带有效但不完整的候选。其可选sourceCoverage是实际捕获评估的诊断投影，不是已保存／当前审核receipt。捕获的source／content／mapping／normalization证据缺失或不一致时为UNKNOWN，不伪造COMPLETE或保存绑定。有效但未被接受的normalization trace仍展示实际变化数量，不授已接受normalization hash／fidelity；损坏或source／after不匹配的trace不能提供该计数。非完成任务不携带结果证明；可选字段缺失保留旧响应字节。
+
+## PMA-K29 — 准确增量API与浏览器基线边界
+
+两套生成API仅增加一个source-coverage GET、十个新source DTO组件、三个已批准既有视图的sourceCoverage，以及已有两个来源绑定确认字段。兼容投影逐项校验批准增量，再重建原有四份OpenAPI／TypeScript字节哈希归属。未批准的路由、组件、旧字段改变或新source上限改变仍失败；不得按宽泛SOURCE前缀过滤或重写golden。
+
+旧部分提取浏览器夹具保持字节一致。其原有84项问题保持准确前缀，仅追加source.clause-fc6f7f64a0fc6526处SOURCE_CONTEXT_UNVERIFIED警告，activationBlocking=true，不代表覆盖成功。准确新增sourceCoverage及该独立固定诊断是此响应仅允许的增量。本契约证据不证明自然语言提取准确率或实际监控就绪。
