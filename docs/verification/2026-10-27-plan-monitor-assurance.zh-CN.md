@@ -214,3 +214,13 @@ ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21�
 实际RISK／FACT／历史owner及待保存修改RED另保留于 `t09-live-orm-pending-red.log`（12失败／21未选，5.39秒）。root随后发现缺相关owner误分类REQUIRED，两项真实删除RED固定原native完整性要求（`t09-live-orm-related-red.log`，2.87秒）。最终定向刷新clean owner、完整no_autoflush、待保存修改保留及native分类，101项16.82秒通过（freshness20、unit28、cutover53；`t09-live-orm-final02.log`），另92项60.97秒通过（独立消费者邻接；`t09-live-orm-adjacent-final.log`）；这是两次运行，不是单次193项命令。提交 `de25d25` 仅改reader、其私有helper及独立测试。历史FACT owner保留原内容归属，不要求新增当前来源许可。
 
 15项消费者分片保留2失败／13通过，14.74秒（`t09-live-fence-binding-red.log`）。root增加真实runtime绑定及两条例外路线后，6失败／13通过，17.27秒（`t09-live-consumer-bindings-red.log`）。三条实时消费现均与冻结消费一样，把实际来源version／activation与原native绑定核对。对应10文件组合160通过，90.79秒，含既有Starlette警告（`t09-live-consumer-bindings-green.log`）；独立复审无必改；提交 `63d4e71`。未把缓存变化当策略、未改数量，也未声称历史观测即当前coverage。发送前检查及C03最终回归仍待完成。供应商0/48，用户迁移0。
+
+## PMA-R27 — 发送时消息身份与outbox读取边界
+
+首次delivery27例RED为16失败／11通过，21.51秒（`readiness-delivery-source-red-final.log`），但四项HTTP失败因夹具未挂alert service返回503，不算有效来源RED。挂真实隔离alert service后，用只读AST loader运行 `63d4e71` 原daily投递函数，四项真实HTTP RED7.92秒证明：过期消息仍200／currentActionable=true，损坏proof仍200（`readiness-delivery-http-original-red1.log`）。修正来源／held-owner检查后39项35.71秒通过（`readiness-delivery-source-green2.log`）；计数与后续重叠。
+
+合法重建dedup／render消息，独立复现八项错误方向／rule／非null日期放行，9.75秒，以及三项错误cause角色KeyError，4.77秒（`readiness-delivery-event-cause-original-red2.log`、`readiness-delivery-cause-role-original-red1.log`）。先前要求null日期一律拒绝过严，现对原可选null元数据保留正例。最终自有63项加22项P2／P3／例外邻接85通过，86.75秒（`readiness-delivery-source-final3.log`）；提交 `c17dec9`。覆盖仅memory channel的claim后来源竞态、损坏分类、实际消息／cause角色、BUY专属缺项／普通过期下独立旧风险、UNKNOWN拒绝、排除无归属兄弟风险改量、纯价格提醒及已送达回执不重开。未调用真实channel。
+
+扩大120项组合118通过／2失败，80.25秒（`readiness-delivery-source-final1.log`）：两失败在投递前因泛化分钟来源审核阻断。单helper现提供完整对应来源快照，准确两节点重跑2项9.52秒通过（`current-pipeline-source-agent-audit.log`、`current-pipeline-source-agent-two.log`）；提交 `c067242`。91项调用方组合89通过／2失败，284.16秒（`current-pipeline-source-agent-neighbor.log`），另暴露两个独立未注册文本形式。仅合成固定价格注释改为既有 `fixture`，原105条断言不变，日线／分钟复位节点8.55秒通过（`t09-daily-reference-fixture-green.log`）；提交 `a7f53e0`。真实人工五分钟条件留作独立有限策略修复，不替换为背景。
+
+真实outbox探针独立发现autoflush（2项RED，4.21秒）、缓存许可掩盖SQL HOLD（2项RED，3.54秒）、默认dispatcher漏转新增存储错误类（2项RED，4.03秒）：`readiness-outbox-source-red1.log`、`readiness-outbox-cache-original-red1.log`、`readiness-outbox-default-error-red1.log`。此前四项SQL审计失败仅为允许的deferred BEGIN，不算业务写入漏洞。最终自有54／旧邻接89共143项65.64秒通过（`readiness-outbox-source-final2.log`）；提交 `33aace3`。待保存对象保留、零DML／commit及默认错误边界断言均保留；原current-actionable／active-plan-filter AST及legacy分支准确一致。来源／P3／v12基础64文件单元选择1279项91.03秒通过（`c03-source-unit.log`；准确文件 `c03-source-unit-files.json`）。以上为分阶段且重叠计数，C03最终组合验收仍待完成。供应商0/48，用户迁移0。

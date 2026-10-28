@@ -175,3 +175,11 @@ REJECT使用原native输入resolver，仅在本地诊断副本移除SOURCE_COVER
 实时来源检查定向刷新准确且无待保存修改的SQL归属，含plan／source／review／provenance、activation、相关daily review／cause／risk／fact及历史事实content owner。完整reader在no_autoflush中执行；相关new／dirty／deleted归属阻断但不写入、不丢弃修改，无关待保存数据不受影响。RISK保留既有每页500行、完整证据及原优先级顺序。coverage store的Core Row仍按实际读取；不能忽略相关待保存coverage归属。缺失持久相关owner保留native完整性分类；历史FACT内容owner不要求新增当前来源／补参许可。
 
 自洽当前source reader返回实际启用revision，含合法新revision；缓存历史本身不是拒绝规则。产生效果前，runtime生成、模拟及例外授权须把准确plan_version_id和严格类型activation_revision与原native绑定核对，不能读取旧head／candidate后静默改用新启用版本。冻结reader保留额外REPLAY_OBSERVATION形状限制及相同准确绑定，不放宽行情、数量、机会、风险优先级或已完成回执规则。
+
+## PMA-K23 — 新鲜发送来源与只读outbox过滤
+
+共同daily投递guard在同session读取实际来源归属，不调用provider、不获取writer锁。普通消息要求CURRENT及真实SIGNAL；技术风险消息要求真实RISK及CURRENT或HISTORICAL_TECHNICAL_RISK，且仅用已验证风险行。EXCEPTION_REVIEW要求CURRENT，不把candidate ID当signal。消息／plan／review／activation身份、实际signal方向、已提供rule及已提供确认／执行日期须准确对应，原可选null元数据继续可选。纯价格提醒沿原观测防护，不取得交易许可。
+
+原数量、范围、行情、库存、资金、日历、到期及重复投递防护仍必需。runtime-generation保留既有有效UUID存在契约，不新增UUID相等规则。dispatcher在claim后、I/O前重验；不让事务跨channel I/O。重评不重开已送达回执，不调整报价数量。
+
+Daily outbox准入把前置eligibility／active-plan过滤也放入no_autoflush。相关待保存source或metadata既不写入也不丢弃；待保存eligibility作为否决。clean eligibility从SQL重读，缓存ELIGIBLE不能掩盖实际HOLD／SUPPRESS；此类metadata不提供来源许可。旧消息／过滤／窗口行为不变。来源损坏沿原脱敏HTTP完整性路径；私有outbox投递适配器把它转换为原storage-error边界，供默认dispatcher处理，不改独立UI actionability语义或重试策略。
