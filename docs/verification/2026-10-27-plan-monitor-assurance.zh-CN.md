@@ -345,3 +345,23 @@ T11d首先因匹配的提取摘要未显示而失败（1失败，2.55秒；`t11d
 同源axe在真实CSP下成功加载后，Chrome在原始来源pre暴露serious scrollable-region-focusable问题（`t11e2-csp-axe-green1.log`）；日志名称不表示该旅程已通过。独立聚焦unit RED观察到tabIndex=-1而非0（1失败／36未选中，1.42秒；`t11e2-scroll-focus-root-red.log`）。根窄范围提交 `4783c6e` 增加tabindex=0及可见focus outline。13文件source-UI选择528项6.30秒通过（`t11-source-ui-combined-root-green.log`），新构建1.75秒通过（`t11e2-scroll-focus-root-build.log`）。此回归与前述子片重叠，最终浏览器复验仍待完成。
 
 早期无效collection／TEMP运行及原RED继续保留在R30／R36及其日志中。R37–R40全部数量属于独立且重叠的命令。T12历史／兼容、C04、全项目／容量、真实语料提取及监控就绪／安装审计仍待完成。真实供应商调用0/48；用户迁移0；未获取实时行情或发送真实通知。
+
+## PMA-R41 — T11完整隔离Chrome工作流
+
+最终固定Chrome157.0.8103.6运行8条旅程全部51.0秒通过，每条仅1份结果，0跳过、0非预期、0不稳定（`t11e2-final-eight5.log`、`t11e2-final5-report.json`）。完整类型检查通过（`t11e2-final5-typecheck.log`）。提交`c580d18`保留真实生产接口支撑的保存来源、准确明确审核、独立启用／刷新恢复、强制换手条件误标、真实缺失上限补参／新版本审核、转义XSS／emoji、旧绑定／A-B-A及过期游标恢复流程。这些夹具不执行真实提取或worker。
+
+共享浏览器审计未改。七条旅程要求浏览器console warning／error和失败请求为零，保留原abort规则。唯一故意过期游标负例改为严格要求恰好一条原生Chrome409诊断，URL完整匹配实际version／cursor响应，并验证真实409／SOURCE_COVERAGE_STALE响应体、失败请求（包括abort）为零、未捕获页面异常为零。这是准确断言的预期负例，不是全局409忽略，也不声称八条全无console诊断。JSON reporter保留其真实body附件。固定本地axe从同源在真实且未改CSP下加载；WCAG检查及原生Enter→mark→Shift+Tab→可滚动pre焦点／轮廓通过。根实际查看最终全部五张PNG，包括320／768／1024／1440及准确XSS／emoji mark；所截视口无可见裁切、重叠或横向溢出。
+
+保留原失败全组结果。`t11e2-c1-green1.log`有6通过／2失败，54.5秒，来自禁止的inline axe注入及预期原生409与原零console夹具冲突。`t11e2-final-eight.log`有6通过／2失败，57.6秒，来自过早关闭后端后的dashboard轮询。`t11e2-final-eight2.log`有7通过／1失败，1.1m：reload可丢弃旧document请求记账而不发终结page事件，新增全HTTP drain假设不成立；现改为后端关闭前真实关闭页面归属，未删除console／network检查。`t11e2-final-eight3.log`有7通过／1失败，48.0秒，来自Uvicorn sansio再次关闭已closing的WebSocket。`t11e2-final-eight4.log`有6通过／2失败，1.0m，因为仅等待transport退出仍可能需要强制结束。未将任何失败全组运行重标为验收。
+
+仅夹具提交`56c6169`及`094ec9d`等待异步关闭，只结束归属明确的WebSocket transport，并在请求退出前最多5秒等待实际server连接移除。当前HTTP／未开始请求连接不阻碍该清理，超时仍失败。新增async callback RED为1失败，2.69秒（`t11e1-async-shutdown-root-red.log`）。中间helper命名遮蔽错误导致2失败／13通过，11.55秒（`t11e1-ws-shutdown-root-green.log`）；这是实施错误，不是独立来源政策缺陷。空HTTP scope及未关闭transport探针也保留（`t11e1-empty-http-root-red.log`、`t11e1-close-transport-root-red.log`）。最终完整夹具文件15项12.23秒通过，Ruff通过（`t11e1-close-transport-root-final.log`）。来源spec现即使关闭失败也保留生命周期／日志证据，并要求正常exit0且无termination signal；不压掉失败。
+
+独立final5审计确认8份exit0／signal=null正常退出生命周期、0个关闭后dashboard请求、8份无Traceback／ERROR日志及准确单条409附件。不可变本地证据索引为`t11e2-final5-evidence-index-readiness.json`（SHA-256 `aa28896f0e79cb1938049a42a2ff5c03339581ada8dbe39eb73a5abed3d8e341`）；原附件解码为`t11e2-final5-native409-decoded-readiness.json`（SHA-256 `a124a697cef346b75a6204859f97b5c3f18790b68b54418508744f4e1bfadb8d`）。测试快照为`094ec9d`加随后提交于`c580d18`的准确新spec，运行与提交间无生产代码变更。
+
+T11按本隔离工作流及528项来源UI回归（R40）完成。数量有重叠，不累加。历史兼容及R42另行复现的接纳竞态仍阻止T12／C04关闭。这些结果不代表真实供应商忠实性、就绪、实际安装或全项目／容量验收。供应商0/48；用户迁移0。
+
+## PMA-R42 — 真实工作台最终接纳反例
+
+独立审查使用真实PersistentPlanWebLifecycle、准确COMPLETE来源／审核回执、实际workbench选择、市场冻结／输入复制及BacktestJobRepository。原输入复制函数返回后，正常SourceCoverageStore.append提交覆盖revision1→2，assessment hash未变。回执仍绑定revision1，真实当前reader此时拒绝；新运行仍因workbench分支未提供最终admission guard而创建QUEUED job及幂等回执，并授权记录型coordinator一次。初次当前读取前先重评的对照则正确拒绝且无job。有效探针1通过／1失败，4.72秒（`workbench-race-agent-red.log`）；初轮outcome序列化AttributeError独立保留在`workbench-race-agent-first.log`，不计为产品RED。
+
+真实SQL证据为`workbench-race-actual-sql-evidence.json`，SHA-256 `311bb1dbc0db9e7778938421910284b598fb244e8844a79739d21e073c823bea`；探针SHA-256为`89606e3398d258eea30e0bb504c05d6c399a8b64addd4988c3cc94a5aa589614`。已完成同键回执保持准确重放，无再次复制／授权；历史重放不是缺陷。新反例不重写冻结C03测试结果，也不声称覆盖selection创建的独立窗口。T12b须以真实来源writer保持到job提交来关闭新运行最终接纳，连同T12a兼容测试通过后才关闭C04。本证据节不声称已修tracked生产代码。仅临时数据库；供应商0/48；用户迁移0。
