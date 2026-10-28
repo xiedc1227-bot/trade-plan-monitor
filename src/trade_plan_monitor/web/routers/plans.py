@@ -63,7 +63,10 @@ from trade_plan_monitor.web.schemas import (
     OperationReceipt,
     validate_api_response,
 )
-from trade_plan_monitor.web.source_coverage_schemas import SourceCoveragePage
+from trade_plan_monitor.web.source_coverage_schemas import (
+    SourceCoveragePage,
+    SourceCoverageSummaryView,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["plans"])
 
@@ -172,15 +175,27 @@ class PlanVersionSummary(ApiValue):
     obsolete_reason: Literal["DAILY_DRAFT_OBSOLETE", "LEGACY_PLANS_REQUIRE_REVIEW"] | None = None
     revision: NonNegativeSafeInteger
     created_at: ShanghaiDatetime
+    source_coverage: SourceCoverageSummaryView | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def validate_active_state(self) -> Self:
+        source = self.source_coverage
+        if source is not None:
+            if source.candidate_plan_hash != self.plan_hash:
+                raise ValueError("source summary belongs to another candidate")
+            if source.can_confirm_review and self.status is not PlanVersionStatus.DRAFT:
+                raise ValueError("only an unconfirmed draft can be offered for review")
+            if self.can_activate and not source.current_review_bound:
+                raise ValueError("activation requires a current bound source review")
         if self.obsolete_reason is not None and self.can_activate:
             raise ValueError("obsolete daily version cannot grant activation")
         if (
             self.status is PlanVersionStatus.ACTIVE
             and not self.can_activate
             and self.obsolete_reason is None
+            and (source is None or source.current_review_bound)
         ):
             raise ValueError("an active version cannot contain an activation blocker")
         return self
@@ -274,6 +289,15 @@ class PlanVersionView(PlanVersionSummary):
             if self.daily_mapping is None:
                 raise ValueError("daily candidate requires current source mapping")
             snapshot = build_daily_review(plan, self.daily_mapping, self.source_text)
+            source = self.source_coverage
+            if source is not None and (
+                source.source_hash, source.content_hash, source.original_review_evidence_hash,
+                source.review_id, source.review_revision,
+            ) != (
+                self.source_hash, self.content_hash, self.review_evidence_hash,
+                self.review_id, self.review_revision,
+            ):
+                raise ValueError("source summary differs from the native review identity")
             if (
                 self.plan_json != daily_draft_json(plan)
                 or self.plan_hash != daily_draft_sha256(plan)
@@ -289,6 +313,7 @@ class PlanVersionView(PlanVersionSummary):
                     and not any(issue.activation_blocking for issue in self.validation_issues)
                     and plan.to_executable() is not None
                     and self.review_id is not None
+                    and (source is None or source.current_review_bound)
                 )
             ):
                 raise ValueError("daily current review state is inconsistent")

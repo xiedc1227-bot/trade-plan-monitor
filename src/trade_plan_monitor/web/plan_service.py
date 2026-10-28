@@ -13,7 +13,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from anyio import to_thread
-from sqlalchemy import Engine
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from trade_plan_monitor.ai.models import (
@@ -47,7 +47,7 @@ from trade_plan_monitor.state.database import (
     create_sqlite_engine,
     upgrade_database,
 )
-from trade_plan_monitor.state.models import PlanReviewOrigin, PlanVersionStatus
+from trade_plan_monitor.state.models import PlanReviewOrigin, PlanVersion, PlanVersionStatus
 from trade_plan_monitor.state.repositories import (
     DuplicatePlanVersionError,
     IdempotencyInProgressError,
@@ -63,7 +63,10 @@ from trade_plan_monitor.state.source_coverage_authority import (
     SourceCoverageAuthorityError,
     require_current_coverage,
 )
-from trade_plan_monitor.state.source_coverage_store import SourceCoverageUpgradeRequired
+from trade_plan_monitor.state.source_coverage_store import (
+    SourceCoverageIntegrityError,
+    SourceCoverageUpgradeRequired,
+)
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.idempotency import claim_replay, complete_replay, operation_hash
@@ -89,7 +92,10 @@ from trade_plan_monitor.web.source_coverage_read import (
     read_source_coverage,
     source_coverage_page,
 )
-from trade_plan_monitor.web.source_coverage_schemas import SourceCoveragePage
+from trade_plan_monitor.web.source_coverage_schemas import (
+    SourceCoveragePage,
+    SourceCoverageSummaryView,
+)
 
 DEFAULT_MONITOR_DATABASE = Path("data/monitor.sqlite3")
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -232,11 +238,12 @@ class PersistentPlanWebLifecycle:
         )
         from trade_plan_monitor.domain.plan_hash import plan_sha256
 
-        with self._unit_of_work() as work:
-            details = work.plans.get_version_details(version_id)
-            if details is None:
+        with self._unit_of_work() as work, work.daily.session.no_autoflush:
+            source = read_source_coverage(work, version_id)
+            if source is None:
                 return None
-            coverage_issue = _source_coverage_issue(work, details)
+            details = source.details
+            coverage_issue = source.coverage_reason
             draft, _validation, eligible = _validated_plan_state(details,
                                                                coverage_issue=coverage_issue)
             if not eligible or details.review_confirmed_at is None:
@@ -495,39 +502,37 @@ class PersistentPlanWebLifecycle:
         status: PlanVersionStatus | None,
         can_activate: bool | None,
     ) -> PlanVersionPage:
-        with self._unit_of_work() as work:
+        with self._unit_of_work() as work, work.daily.session.no_autoflush:
             status_value = None if status is None else status.value
             if can_activate is None:
-                records, total = work.plans.list_version_details(
+                identities, total = _source_version_ids(work,
                     offset=offset,
                     limit=limit,
                     symbol=symbol,
                     status=status_value,
                 )
-                items = tuple(_plan_version_summary(record,
-                    coverage_issue=_source_coverage_issue(work, record)) for record in records)
+                items = tuple(_source_version_summary(work, identity) for identity in identities)
             else:
                 window: list[PlanVersionSummary] = []
                 matched_total = 0
                 scan_offset = 0
                 total_unfiltered = 0
                 while scan_offset < _MAX_PLAN_ROWS:
-                    records, total_unfiltered = work.plans.list_version_details(
+                    identities, total_unfiltered = _source_version_ids(work,
                         offset=scan_offset,
                         limit=_FILTER_BATCH_SIZE,
                         symbol=symbol,
                         status=status_value,
                     )
-                    for record in records:
-                        summary = _plan_version_summary(record,
-                            coverage_issue=_source_coverage_issue(work, record))
+                    for identity in identities:
+                        summary = _source_version_summary(work, identity)
                         if summary.can_activate is can_activate:
                             if offset <= matched_total < offset + limit:
                                 window.append(summary)
                             matched_total += 1
                         del summary
-                    scan_offset += len(records)
-                    if not records or scan_offset >= total_unfiltered:
+                    scan_offset += len(identities)
+                    if not identities or scan_offset >= total_unfiltered:
                         break
                 if total_unfiltered > _MAX_PLAN_ROWS:
                     raise RuntimeError("plan version collection exceeds its public bound")
@@ -538,10 +543,10 @@ class PersistentPlanWebLifecycle:
         return PlanVersionPage(items=items, offset=offset, limit=limit, total=total)
 
     def _get_plan_version_sync(self, *, version_id: str) -> PlanVersionView | None:
-        with self._unit_of_work() as work:
-            record = work.plans.get_version_details(version_id)
-            return None if record is None else _plan_version_view(record,
-                coverage_issue=_source_coverage_issue(work, record))
+        with self._unit_of_work() as work, work.daily.session.no_autoflush:
+            source = read_source_coverage(work, version_id)
+            return None if source is None else _plan_version_view(source.details,
+                coverage_issue=source.coverage_reason, source_coverage=source.summary)
 
     def _get_plan_activation_state_sync(self, *, symbol: str) -> ActivePlanView | None:
         with self._unit_of_work() as work:
@@ -614,9 +619,11 @@ class PersistentPlanWebLifecycle:
                     )
                 except ValueError as error:
                     raise PlanSaveBlockedError("Daily source mapping is invalid") from error
-                details = work.plans.get_version_details(identity)
-                result = _plan_version_view(details,
-                    coverage_issue=_source_coverage_issue(work, details))
+                source = read_source_coverage(work, identity)
+                if source is None:
+                    raise SourceCoverageIntegrityError()
+                result = _plan_version_view(source.details,
+                    coverage_issue=source.coverage_reason, source_coverage=source.summary)
                 complete_replay(work, context=context, request_hash=request_hash, response=result)
                 work.commit()
                 return result
@@ -796,21 +803,41 @@ class PersistentPlanWebLifecycle:
         return self._session_factory
 
 
-def _source_coverage_issue(work, details):
-    if details.daily_mapping is None or any(
-        issue.code == "DAILY_DRAFT_OBSOLETE" for issue in details.daily_issues
-    ):
-        return None
-    try:
-        require_current_coverage(work, details, require_review=details.review_id is not None)
-    except SourceCoverageAuthorityError as error:
-        return error.reason
-    except SourceCoverageUpgradeRequired:
-        return "SOURCE_COVERAGE_UPGRADE_REQUIRED"
-    return None
+def _source_version_ids(work, *, offset, limit, symbol, status):
+    """Read only page identities before native decoding can see stale ORM owners.
+
+    Keep the repository's collection bounds, filtering and stable ordering. Full
+    actual source/native decoding follows one identity at a time, so a page does
+    not retain up to100 complete private assurance inputs in memory.
+    """
+    if (type(offset) is not int or not 0 <= offset <= _MAX_PLAN_ROWS
+            or type(limit) is not int or not 1 <= limit <= _FILTER_BATCH_SIZE):
+        raise ValueError("invalid plan version page")
+    filters = []
+    if symbol is not None:
+        filters.append(PlanVersion.symbol == symbol)
+    if status is not None:
+        filters.append(PlanVersion.status == status)
+    session = work.daily.session
+    total = session.scalar(select(func.count()).select_from(PlanVersion).where(*filters))
+    if type(total) is not int or not 0 <= total <= _MAX_PLAN_ROWS:
+        raise RepositoryError("Plan-version collection exceeds its read limit")
+    identities = session.scalars(select(PlanVersion.id).where(*filters)
+        .order_by(PlanVersion.created_at.desc(), PlanVersion.id.desc())
+        .offset(offset).limit(limit)).all()
+    return tuple(identities), total
 
 
-def _plan_version_summary(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIRED"):
+def _source_version_summary(work, identity):
+    source = read_source_coverage(work, identity)
+    if source is None:
+        raise SourceCoverageIntegrityError()
+    return _plan_version_summary(source.details,
+        coverage_issue=source.coverage_reason, source_coverage=source.summary)
+
+
+def _plan_version_summary(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIRED",
+                          source_coverage: SourceCoverageSummaryView | None = None):
     details = cast(_PlanVersionDetails, record)
     _plan, _validation, can_activate = _validated_plan_state(details, coverage_issue=coverage_issue)
     return PlanVersionSummary(
@@ -828,10 +855,12 @@ def _plan_version_summary(record: object, *, coverage_issue="SOURCE_COVERAGE_REQ
         else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
+        source_coverage=source_coverage,
     )
 
 
-def _plan_version_view(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIRED"):
+def _plan_version_view(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIRED",
+                       source_coverage: SourceCoverageSummaryView | None = None):
     details = cast(_PlanVersionDetails, record)
     plan, validation, can_activate = _validated_plan_state(details, coverage_issue=coverage_issue)
     resolved_ids = tuple(item.issue_id for item in details.resolutions)
@@ -878,6 +907,7 @@ def _plan_version_view(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIR
         execution_readiness=("NOT_EVALUATED" if isinstance(plan, ExplicitPlanDraft) else None),
         daily_mapping=details.daily_mapping,
         daily_issues=details.daily_issues,
+        source_coverage=source_coverage,
     )
 
 
@@ -920,7 +950,8 @@ def _validated_plan_state(
             False,
         )
     if isinstance(plan, DailyPlanDraft):
-        coverage_issues = () if coverage_issue is None else (ValidationIssue(
+        coverage_issues = () if coverage_issue is None or len(details.daily_issues) >= 512 else (
+            ValidationIssue(
             code=coverage_issue, path="source", severity=ValidationSeverity.WARNING,
             message="Review all mandatory source conditions. Already confirmed versions need "
                     "a new version before receiving current authority.", activation_blocking=True,
