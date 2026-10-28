@@ -3,6 +3,8 @@
 import json
 from copy import deepcopy
 from datetime import date, timedelta
+from hashlib import sha256
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -82,7 +84,7 @@ def _retained_core_case(legacy):
     return case
 
 
-def _ready(case):
+def _ready(case, *, expected_status="RISK_EXIT"):
     """Initialize real sellable baseline lots and obtain the real persisted offer."""
     with case.work() as work:
         for previous, day in zip((date(2026, 10, 22), *_SESSIONS[:-1]), _SESSIONS, strict=True):
@@ -99,11 +101,35 @@ def _ready(case):
         plan=case.draft.to_executable(), expected_activation_revision=1,
         inputs=DailyRuntimeInputs(evaluated_at=_AT, official_trade_date=None, series=None,
             session_dates=_SESSIONS, suspended_dates=(), quote=quote, data_blockers=()))
-    assert result.snapshot["risk_action"]["status"] == "RISK_EXIT"
+    assert result.snapshot["risk_action"]["status"] == expected_status
     with case.work() as work:
         assert work.daily.get("evaluation-head-" + case.draft.symbol)["payload"] == (
             result.snapshot)
     return result.snapshot["risk_action"]
+
+
+def _restore_captured_legacy_head(case):
+    """Restore untouched old runtime output, never invent a current unsafe offer."""
+    path = Path(__file__).parents[1] / "fixtures/pma_legacy_risk_head.json"
+    fixture = json.loads(path.read_text(encoding="utf-8"))
+    payload = fixture["payload"]
+    assert fixture["evidence_class"] == "SYNTHETIC_RUNTIME_CAPTURE"
+    assert fixture["authority_granted"] is False
+    assert fixture["runtime_source"]["sha256_git_blob"] == (
+        "63668a5c496670ae08ab6d0098a8353d12cb610b5ad6a61c9ae3bb080f3dc58d")
+    assert sha256(canonical(payload).encode("utf-8")).hexdigest() == (
+        fixture["payload_sha256_utf8"]
+    ) == "fd8cda4a23dadc66b8d0218e6ff6a825538493ead9355a9c515f6643beca65ca"
+    with case.work() as work:
+        details = work.plans.get_version_details(case.id)
+        assert (payload["plan_version_id"], payload["plan_hash"], payload["content_hash"]) == (
+            details.id, details.plan_hash, details.content_hash)
+        identity = "evaluation-head-" + case.draft.symbol
+        current = work.daily.get(identity)
+        work.daily.save(identity, kind="EVALUATION", symbol=case.draft.symbol,
+            lineage=current["lineage"], payload=payload, expected_revision=current["revision"])
+        work.commit()
+    return payload["risk_action"]
 
 
 def _command(case, *, cause=None, quantity=None):
@@ -171,7 +197,7 @@ def test_zero_issue_ordinary_sell_without_cutover_grant_cannot_borrow_risk(legac
             member = SourceCoverageStore(work.daily.session).cutover(case.id)
             assert member.legacy_identity["status"] == "DRAFT"
             assert member.legacy_identity["active_revision"] is None
-    _ready(case)
+    _ready(case, expected_status="NONE")
     with case.engine.begin() as connection:
         connection.execute(insert(DailyRecord), _daily("ordinary-sell", "SIGNAL", case.draft,
             _signal(case.draft, case.id, _REVIEW, identity="ordinary-sell", side="SELL")))
@@ -210,7 +236,10 @@ def test_unproved_sibling_head_cannot_be_silently_resized_or_used_as_a_cause(leg
     severe["technical_evidence"], severe["evidence_ids"] = [], []
     with case.engine.begin() as connection:
         connection.execute(insert(DailyRecord), _daily(severe_id, "RISK", case.draft, severe))
-    action = _ready(case)
+    current_action = _ready(case)
+    assert current_action["cause_id"] == case.cause_id
+    assert (current_action["core_qty"], current_action["tactical_qty"]) == (0, 200)
+    action = _restore_captured_legacy_head(case)
     assert action["cause_id"] == severe_id
     assert (action["core_qty"], action["tactical_qty"]) == (100, 200)
     before = _business(case)
