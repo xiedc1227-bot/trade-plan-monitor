@@ -215,25 +215,32 @@ def test_real_workbench_reader_returns_original_inactive_approval(tmp_path):
 
     from fastapi.testclient import TestClient
     from tests.integration.test_current_plan_api import (
+        coverage_review_payload,
         make_app,
         post,
-        review_payload,
-        reviewed_save,
         simple_plan,
     )
+    from tests.integration.test_market_linkage_review import source_mapping
 
+    from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
     from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 
     app = make_app(tmp_path)
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         draft = UnifiedPlanDraft.from_executable(simple_plan())
-        saved = reviewed_save(client, draft)
+        # Complete FIELD engineering source, not natural-language/provider truth.
+        source, mapping = source_mapping(draft)
+        saved = post(client, "plan-drafts", {
+            "planJson": daily_draft_json(draft), "sourceText": source,
+            "dailyMapping": mapping.model_dump(mode="json"), "expectedRevision": 0,
+        })
         service = app.state.plan_operation_service
         from trade_plan_monitor.state.repositories import PlanSaveBlockedError
 
         with pytest.raises(PlanSaveBlockedError):
             client.portal.call(partial(service.get_reviewed_backtest_plan, version_id=saved["id"]))
-        confirmation = post(client, "plan-review-confirmations", review_payload(saved))
+        confirmation = post(client, "plan-review-confirmations",
+                            coverage_review_payload(client, saved))
         frozen = client.portal.call(
             partial(service.get_reviewed_backtest_plan, version_id=saved["id"])
         )
@@ -313,6 +320,8 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
 
     from fastapi.testclient import TestClient
     from tests.integration.test_backtest_market_store import PROFILE
+    from tests.integration.test_current_plan_api import coverage_review_payload, post
+    from tests.integration.test_market_linkage_review import source_mapping
     from tests.integration.test_monitor_loop_cycle import frames
     from tests.integration.test_monitor_loop_production_composition import wait
     from tests.integration.test_web_api import _FakeLifecycle
@@ -324,7 +333,10 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
     from trade_plan_monitor.backtest.jobs.repository import BacktestJobRepository
     from trade_plan_monitor.backtest.loop_input import PositionLimitFunding
     from trade_plan_monitor.backtest.market_store import BacktestMarketStore
+    from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+    from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
     from trade_plan_monitor.web.app import create_app
+    from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 
     now = at(20, 9, 43, 12)
     original = reviewed()
@@ -339,13 +351,6 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
             )
         }
     )
-
-    class Reader:
-        async def get_plan_version(self, **_kwargs):
-            raise AssertionError("no legacy reader")
-
-        async def get_reviewed_backtest_plan(self, **_kwargs):
-            return original
 
     market = BacktestMarketStore(tmp_path / "market.sqlite")
     market.record_trading_days(calendar())
@@ -372,7 +377,9 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
         return result
 
     monkeypatch.setattr(BacktestJobMaintenance, "prune", prune_at_fixture_time)
-    reader = Reader()
+    reader = PersistentPlanWebLifecycle(
+        database_path=tmp_path / "current-workbench.sqlite3", clock=lambda: at(19, 18)
+    )
     factory = module.create_backtest_composition_factory(
         config_path=tmp_path / "absent.yaml",
         plan_snapshot_reader=reader,
@@ -383,15 +390,26 @@ def test_workbench_replay_copies_exact_plan_and_runs_existing_loop(
     )
     app = create_app(
         runtime_factory=lambda: _FakeLifecycle(events=[]),
-        plan_service=reader,
+        plan_lifecycle_factory=lambda: reader,
         backtest_lifecycle_factory=factory,
     )
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        # Keep the original strategy/clock, but acquire genuine current source proof.
+        draft = UnifiedPlanDraft.from_executable(original.version.snapshot)
+        source, mapping = source_mapping(draft)
+        saved = post(client, "plan-drafts", {
+            "planJson": daily_draft_json(draft), "sourceText": source,
+            "dailyMapping": mapping.model_dump(mode="json"), "expectedRevision": 0,
+        })
+        post(client, "plan-review-confirmations", coverage_review_payload(client, saved))
+        original = client.portal.call(partial(reader.get_reviewed_backtest_plan,
+                                              version_id=saved["id"]))
         headers = {"Origin": "http://127.0.0.1:8765", "Idempotency-Key": "selection"}
         body = (
             command()
             .model_copy(
                 update={
+                    "plan": original.reference,
                     "context": context().model_copy(
                         update={
                             "initial_account": account(lots=(), cash=PositionLimitFunding()),
