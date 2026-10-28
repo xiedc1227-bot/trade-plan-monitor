@@ -4,7 +4,11 @@ import json
 import re
 from dataclasses import dataclass
 
-from trade_plan_monitor.ai.daily_review import DailyMapping, semantic_values
+from trade_plan_monitor.ai.daily_review import (
+    DailyMapping,
+    daily_contract_bindings,
+    semantic_values,
+)
 from trade_plan_monitor.ai.plan_update_extraction import (
     PlanUpdateContext,
     PlanUpdateExtractionOutput,
@@ -90,6 +94,14 @@ def _risk_matches(control, change):
         daily_hash("source-operation-value-v1", change.before),
         daily_hash("source-operation-value-v1", change.after)) == (
         control.target, control.rule_id, control.before_hash, control.after_hash)
+
+
+def _registered_product_paths(draft, mapping):
+    """Reuse exact server defaults without inventing source or removal evidence."""
+    registered = {row.path: row for row in daily_contract_bindings(draft)}
+    return {row.path for row in mapping.bindings if row.path in registered
+            and canonical(row.model_dump(mode="json")) == canonical(
+                registered[row.path].model_dump(mode="json"))}
 
 
 def _replacement_absence(change, draft, parsed, obligations):
@@ -247,14 +259,17 @@ def analyze_source_changes(
         if not valid:
             issue("The complete source control was not applied to its exact predecessor target.",
                   control.target, "SOURCE_RELATION_MISMATCH")
-    full_after = set(final) <= analysis.proven_paths.keys()
+    product_paths = (_registered_product_paths(output.draft, analysis.mapping)
+                     if output.scope == "FULL_REPLACEMENT" else set())
+    covered_after = analysis.proven_paths.keys() | product_paths
+    full_after = set(final) <= covered_after
     if output.scope == "FULL_REPLACEMENT":
         if not full_controls:
             issue("Full replacement requires its exact current-source scope control.",
                   "plan", "SOURCE_RELATION_MISMATCH")
-        for path in sorted(set(final) - analysis.proven_paths.keys()):
-            issue("Every replacement after-image field needs independent current-source proof.",
-                  path)
+        for path in sorted(set(final) - covered_after):
+            issue("Every replacement after-image field needs source proof or an exact registered "
+                  "product default.", path)
     replacement_proven = (output.scope == "FULL_REPLACEMENT" and bool(full_controls)
                           and full_after and verified_parent.coverage_complete)
     replacement_ids = {row.obligation_id for control in full_controls
@@ -321,6 +336,8 @@ def analyze_source_changes(
                               path)
                     linked.update(absence)
                     continue
+                if replacement_proven and proposed_path in product_paths:
+                    continue  # Product identity supplies no source obligation or absence proof.
                 clauses = analysis.proven_paths.get(proposed_path, frozenset())
                 if not clauses or not replacement_proven and not clauses & set(change.clause_ids):
                     issue("An actual policy change has no complete current-source derivation.",

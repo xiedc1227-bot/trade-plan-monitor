@@ -36,9 +36,8 @@ def _case(*, parent_case=None, draft=None, phrase="完整替换此前计划。",
         line = next(row for row in native.splitlines() if row.startswith(omit + " = "))
         text = text.replace(line + "\n", "")
         mapping_without = reviewed_mapping(draft, native)
-        # Rebuild the complete original source map while admitting this technical
-        # product contract field under the existing legacy mapping rules. New
-        # full-replacement proof must still demand its own current declaration.
+        # Rebuild the exact source map with this field owned by the existing
+        # product registry. Unregistered policy defaults still fail old review.
         from trade_plan_monitor.ai.daily_review import DailyClause
         from trade_plan_monitor.ai.review import server_source_clauses
         from trade_plan_monitor.ai.source_obligations import declarations
@@ -104,20 +103,101 @@ def test_complete_current_full_wire_after_image_and_exact_scope_get_current_proo
     {"phrase": "如果明天站稳：\n完整替换此前计划。"},
     {"phrase": "“完整替换此前计划。”"},
     {"phrase": "B. 背景说明\n完整替换此前计划。"},
-    {"scope_wrong": True}, {"omit": "schema_version"},
+    {"scope_wrong": True},
     {"output_scope": "EXPLICIT_CHANGES", "retain": True},
 ])
 def test_scope_phrase_never_waives_unknowns_qualifications_headers_or_missing_after_field(changes):
     case = _case(**changes)
-    if changes.get("omit"):
-        assert case[2].review.issues == ()
     proof = _assess(case)
     assert proof.status == "BLOCKED" and proof.source_assessment.issues
     assert proof.source_assessment.raw_delta_verified
     assert proof.authority_granted is False
-    if changes.get("omit"):
-        assert any(row.path == "schema_version" and "after-image" in row.message
-                   for row in proof.source_assessment.issues)
+
+
+@pytest.mark.parametrize("path", [
+    "schema_version", "execution_mode", "execution_version", "trading_rules.settlement",
+    "trading_rules.tick_size_fen", "activation.mode", "ordinary_rules[0].validity.mode",
+])
+def test_registered_product_defaults_need_no_literal_source_spelling_in_full_replacement(path):
+    case = _case(omit=path)
+    assert case[2].review.issues == () and len(case[3].derivation.stages) == 3
+    assert not any(line.startswith(path + " = ") for line in case[0].text.splitlines())
+    proof = _assess(case)
+    assert proof.coverage_complete and proof.source_assessment.coverage_complete
+    owner, = (row for row in proof.owners if row.path == path)
+    assert owner.origin == "PRODUCT_CONTRACT" and owner.obligation_ids == ()
+    assert not any(path in row.paths for row in proof.source_assessment.obligations)
+    assert proof.source_assessment.raw_delta_verified
+    assert proof.source_assessment.provider_full_draft_supplied
+    assert proof.current_automatic_fidelity_verified is False and proof.authority_granted is False
+
+
+@pytest.mark.parametrize("path", [
+    "position.max_qty", "ordinary_rules[0].quantity", "ordinary_rules[0].condition.price_fen",
+])
+def test_quantity_and_condition_omissions_cannot_claim_product_default_ownership(path):
+    with pytest.raises(ValueError, match="product contract"):
+        _case(omit=path)
+
+
+@pytest.mark.parametrize("tail,code", [
+    ("\nschema_version = 4", "SOURCE_RELATION_MISMATCH"),
+    ("\nOnly buy after the blue lantern turns green.", "SOURCE_CONTEXT_UNVERIFIED"),
+])
+def test_registered_default_never_waives_explicit_conflicting_or_unknown_source(tail, code):
+    case = _case(omit="schema_version", tail=tail)
+    assert case[2].review.issues == ()
+    proof = _assess(case)
+    assert proof.status == "BLOCKED"
+    assert any(row.code == code for row in proof.source_assessment.issues)
+
+
+def test_default_evidence_requires_the_exact_registered_binding_shape():
+    case = _case(omit="schema_version")
+    bindings = tuple(row.model_copy(update={"unit": "TEXT"}) if row.path == "schema_version"
+                     else row for row in case[1].bindings)
+    output = case[1].model_copy(update={"bindings": bindings})
+    changed = _assemble(case[5], case[6], case[0], output, case[4])
+    assert changed[2].review.issues == ()
+    proof = _assess(changed)
+    assert proof.status == "BLOCKED"
+    assert any(row.path == "schema_version" for row in proof.source_assessment.issues)
+
+
+@pytest.mark.parametrize("target", ["ordinary_rules", "alert_rules", "risk_branches"])
+def test_empty_product_default_never_supplies_a_whole_rule_withdrawal(target):
+    parent = _variant("risk" if target == "risk_branches" else "alert")
+    after = parent[0].draft.model_copy(update={target: ()})
+    case = _case(parent_case=parent, draft=after, omit=target)
+    assert case[2].review.issues == ()
+    proof = _assess(case)
+    assert proof.status == "BLOCKED"
+    assert any(row.action == "REVOKE" and row.target == target and not row.obligation_ids
+               for row in proof.source_assessment.operations)
+    owner, = (row for row in proof.owners if row.path == target)
+    assert owner.origin == "PRODUCT_CONTRACT" and owner.obligation_ids == ()
+
+
+@pytest.mark.parametrize("target", ["ordinary_rules", "alert_rules", "risk_branches"])
+def test_registered_empty_wire_default_still_needs_separate_exact_withdrawal_evidence(target):
+    parent = _variant("risk" if target == "risk_branches" else "alert")
+    after = parent[0].draft.model_copy(update={target: ()})
+    before = getattr(parent[0].draft, target)
+    if target == "risk_branches":
+        controls = "".join(f"\n对全部新旧持仓一并废止风险规则{risk_identity(row)}，"
+                           "今后不再执行该规则。"
+                           for row in before)
+    else:
+        controls = "".join(f"\noperations[{index}] = " + canonical(dict(
+            target=target, rule_id=row.rule_id, action="REVOKE"))
+                           for index, row in enumerate(before))
+    case = _case(parent_case=parent, draft=after, omit=target, tail=controls)
+    proof = _assess(case)
+    assert case[2].review.issues == () and proof.coverage_complete
+    assert all(row.obligation_ids for row in proof.source_assessment.operations
+               if row.target == target and row.action == "REVOKE")
+    owner, = (row for row in proof.owners if row.path == target)
+    assert owner.origin == "PRODUCT_CONTRACT" and owner.obligation_ids == ()
 
 
 def test_blocked_current_parent_cannot_be_replaced_into_complete_authority():
@@ -233,6 +313,17 @@ def test_full_replacement_cannot_silently_remove_an_optional_policy(kind):
     assert any(own == path or own.startswith(path + ".")
                for own in proof.source_assessment.changed_paths)
     assert proof.status == "BLOCKED" and not proof.coverage_complete
+    assert any(row.path == path or row.path.startswith(path + ".")
+               for row in proof.source_assessment.issues)
+
+
+@pytest.mark.parametrize("kind", ["scope", "core_target", "zone"])
+def test_a_registered_wire_default_cannot_supply_missing_optional_policy_absence(kind):
+    parent, after, path = _optional_removal(kind)
+    case = _case(parent_case=parent, draft=after, omit="schema_version")
+    proof = _assess(case)
+    assert case[2].review.issues == () and proof.status == "BLOCKED"
+    assert not any(row.path == "schema_version" for row in proof.source_assessment.issues)
     assert any(row.path == path or row.path.startswith(path + ".")
                for row in proof.source_assessment.issues)
 
