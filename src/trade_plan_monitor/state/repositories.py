@@ -1101,6 +1101,12 @@ class PlanRepository:
         model = self._session.get(ActivePlan, symbol)
         return None if model is None else _active_plan_record(model)
 
+    def _require_source_review(self, target_id: str) -> None:
+        """Read source authority in the caller's activation transaction."""
+        from trade_plan_monitor.state.source_coverage_authority import require_repository_review
+
+        require_repository_review(self, target_id)
+
     def activate(
         self,
         plan: ExecutableTradePlan,
@@ -1125,11 +1131,7 @@ class PlanRepository:
                     raise PlanVersionNotFoundError("Plan version was not found")
                 self._reject_invalidated_plan_version(target)
                 if plan.schema_version in {5, 6, 7, 8, 9}:
-                    from trade_plan_monitor.state.source_coverage_authority import (
-                        require_repository_review,
-                    )
-
-                    require_repository_review(self, target.id)
+                    self._require_source_review(target.id)
                 unresolved_close = self._session.scalar(
                     select(PendingOfficialClose).where(PendingOfficialClose.symbol == plan.symbol)
                 )
