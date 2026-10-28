@@ -124,7 +124,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 - [ ] Deliver and verify.
 - Depends on: T11.
-- Files/scope: `test_source_coverage_compatibility.py`, focused historical/hash/input tests and only justified adapter repairs (3–5 files).
+- Files/scope: T12a adds `test_source_coverage_compatibility.py`, `test_source_coverage_occurrence_compatibility.py` and `test_source_coverage_frozen_compatibility.py`, plus a separate reconciliation of the original workbench positive fixture (4 files). Preserve its original assertions and retain the generic-source blocking negative. T12b independently closes the reproduced fresh-workbench-run admission race with a real source-owner writer fence, existing final-job admission seam, actual-store race/replay tests and only necessary synthetic seam-fixture alignment (at most5 files); split any further owner repair before editing. The fence rechecks exact current source/review after input copying and remains held through actual job commit. Missing capability fails closed; completed same-key receipts and old frozen codecs remain historical. These independent children may proceed in parallel after T11 because their implementation owners do not overlap; each is tested, reviewed and committed separately before C04. No cross-database atomicity claim follows from an early read or an unchanged hash.
 - Acceptance: A05,A06; Verify: V03 plus historical codecs/replay. Exact legacy reads and old frozen bytes remain; legacy cannot grant current coverage; new-source saves/reads/reuse cannot downgrade policy or rearm consumed signals.
 
 ### PMA-C04 — Reviewed-source workflow checkpoint
