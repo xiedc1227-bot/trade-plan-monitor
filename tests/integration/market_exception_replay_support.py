@@ -7,7 +7,6 @@ from uuid import UUID
 from tests.integration.test_backtest_runner import PROFILE
 from tests.integration.test_daily_plan_chain import FRIDAY, SH, TUESDAY, WEDNESDAY
 from tests.integration.test_market_linkage_review import source_mapping
-from tests.integration.test_plan_preparation_review import review_command
 from tests.unit.test_monitor_loop_extraction import extract
 
 from trade_plan_monitor.backtest.daily_basis import DailyBasisStore, HistoricalAdjustmentFactor
@@ -17,7 +16,10 @@ from trade_plan_monitor.backtest.preparation_models import (
     PreparationSource,
     SinglePlanPreparationInput,
 )
-from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+from trade_plan_monitor.backtest.preparation_review import (
+    PreparationReviewCommand,
+    frozen_preparation,
+)
 from trade_plan_monitor.backtest.preparation_store import PreparationStore
 from trade_plan_monitor.market_data.historical_provider import (
     HistoricalMinuteBatch,
@@ -26,6 +28,7 @@ from trade_plan_monitor.market_data.historical_provider import (
 from trade_plan_monitor.market_data.models import DailyBar, DailyLimit, MinuteBar, TradingDay
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.market_index.models import MarketIndexBar
+from trade_plan_monitor.state.source_coverage_authority import extraction_inputs
 
 
 def market_fixture(directory, plan, route):
@@ -201,9 +204,19 @@ def prepared_fixture(directory, plan, start, account):
         expected_revision=running.revision,
         candidate=extracted.to_preparation_candidate(),
         idempotency_key="finish",
+        inputs=extraction_inputs(extracted),
     )
-    command = review_command(ready, draft=draft, mapping=mapping).model_copy(
-        update={"account": account}
+    command = PreparationReviewCommand(
+        expected_revision=ready.revision,
+        expected_source_revision=ready.source_revision,
+        expected_candidate_revision=ready.candidate_revision,
+        candidate_hash=ready.candidate.candidate_hash,
+        evidence_hash=ready.candidate.evidence_hash,
+        confirmed=True,
+        evidence="Explicit synthetic human review of this source, plan and account.",
+        draft=draft,
+        mapping=mapping,
+        account=account,
     )
     return frozen_preparation(
         store.review_and_freeze(
@@ -260,7 +273,10 @@ def frozen_market_approval(directory, chain, calendar, daily, indices, factors,
                     expected_revision=1,
                     proposed_quantity=300 if chain.route == "BROKEN_STRONG" else None,
                 ),
-                current=lambda c: current_exception_authority(work, c, chain.now),
+                current=lambda c: current_exception_authority(
+                    work, c, chain.now,
+                    _source_authority_reader=session._source_authority_reader,
+                ),
                 now=chain.now,
             )
             receipt = apply_exception_decision(
@@ -275,6 +291,7 @@ def frozen_market_approval(directory, chain, calendar, daily, indices, factors,
                     preview_hash=preview.preview_hash,
                 ),
                 now=chain.now,
+                _source_authority_reader=session._source_authority_reader,
             )
             work.commit()
         from trade_plan_monitor.backtest.p3_replay_input import FrozenCapitalExceptionEvent
