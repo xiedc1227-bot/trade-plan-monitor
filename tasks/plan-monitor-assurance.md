@@ -99,7 +99,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 - [ ] Deliver and verify.
 - Depends on: T08.
-- Files/scope: sequential T09a ordinary simulation fence, T09b exception preview/decision/consume, T09c notification send-time guard; each3–5 files with `test_source_coverage_actions.py` children as needed.
+- Files/scope: sequential T09a action-source reader, ordinary simulation, runtime production/frame, private frozen-loop and research adapters in separately tested children (at most5 files each); T09b1 preview/decision/consume and actual replay callers (5), T09b2 rejection-cleanup tests (1), T09b3 actual P3 source/review fixture (2), T09b4 frozen worker preparation/callers (1); targeted actual-read and consumer-binding repairs remain separate children (at most5 each). Then T09c notification send-time guard, targeting2 production files and2 independent test files. Stage marks remain open until the complete related regression and delivery gates pass.
 - Acceptance: A05,A06; Verify: focused V03, P1/P2/P3 action/race/notification tests. Exact relevant coverage checked in the existing write fence; stale/race/retry/rollback yields one outcome; BUY-only omissions do not veto independent technical-risk SELL. No new occurrence/window/quantity.
 
 ### PMA-C03 — Durable authority checkpoint

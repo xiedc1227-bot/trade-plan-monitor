@@ -163,3 +163,9 @@ revision1的COMPOSITION以已登记LINEAGE和全部选中项真实当前审核�
 此依据仅携带plan_version_id、activation_revision及risk_rows，不含coverage状态、COMPLETE声明或当前coverage hash。实时runtime／simulation默认仍要求当前来源授权；请求字段、缺属性、类名推断或legacy标签均不能选择replay。runtime风险行仍限定当前输入帧；replay simulation保留原归属行序及原生数量校验。普通schedule到期保留单独已授权技术风险的观测／退出。已完成account回执在新来源／执行检查前重放，绝不重建fill。既有冻结输入、公式版本、报告、事件和哈希不改写。
 
 ResearchSession单独重验冻结输入，在全新私库登记SQL manifest／version／activation归属，保留原Daily REVIEW payload及ID。其明确reader绑定该解码输入身份／字节、引擎、实际刷新的SQL归属、虚拟details／active owner、原运行区间及关闭状态，仅返回REPLAY_OBSERVATION；历史daily_mapping投影不构成来源许可。拒绝复用私库且不改其内容。例外／发送消费者仍须各自证据后才能关闭C03。
+
+## PMA-K21 — 新例外授权、清理与原回执
+
+新增例外预览、批准及消费，须在原writer栅栏内要求准确当前来源依据，同时保留原native context、证据、数量、资金和窗口防护。仅明确冻结session reader可用REPLAY_OBSERVATION；冻结预览／批准及后续模拟消费均须传此reader。公共command、Context、preview hash及数量公式均不加入来源标志。来源INTEGRITY保留脱敏服务错误；有效缺失／过期／upgrade／limit仍为结构化冲突。
+
+REJECT使用原native输入resolver，仅在本地诊断副本移除SOURCE_COVERAGE_REQUIRED、SOURCE_COVERAGE_STALE、SOURCE_COVERAGE_INTEGRITY、SOURCE_COVERAGE_UPGRADE_REQUIRED及SOURCE_COVERAGE_LIMIT_EXCEEDED，不调用新增来源授权、不清其他阻断、不改存储快照、不扩大原窗口。真实candidate／head／market／fact损坏不吞掉。既有撤销与终止清理沿原防护可用。取得原writer后，已完成command在任何新来源／context检查前返回原回执；缺失SIGNAL不修复、不重建。请求内容变化保留原冲突。全部报价／批准／消费数量仍按原整笔数量，不调整。
