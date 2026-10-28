@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -43,6 +43,7 @@ from trade_plan_monitor.domain.plan_validation import (
 )
 from trade_plan_monitor.state.daily_review_store import confirm_daily_review, save_daily_draft
 from trade_plan_monitor.state.database import (
+    _SOURCE_ADMISSION_WRITER,
     create_session_factory,
     create_sqlite_engine,
     upgrade_database,
@@ -231,6 +232,40 @@ class PersistentPlanWebLifecycle:
         return await self._run(self._get_reviewed_backtest_plan_sync, version_id=version_id)
 
     def _get_reviewed_backtest_plan_sync(self, *, version_id):
+        with self._unit_of_work() as work, work.daily.session.no_autoflush:
+            return self._reviewed_backtest_plan(work, version_id)
+
+    @contextmanager
+    def current_workbench_run_fence(self, expected_reference):
+        """Hold actual source authority until the caller commits its admitted job.
+
+        The jobs writer is acquired first. No market/provider work or monitor
+        writes belong inside this private final-admission transaction.
+        """
+        from trade_plan_monitor.backtest.workbench_selection import WorkbenchPlanReference
+
+        if not isinstance(expected_reference, WorkbenchPlanReference):
+            raise TypeError("expected_reference must be a workbench plan reference")
+        self._require_session_factory()
+        engine = self._engine
+        if engine is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        with engine.connect().execution_options(**{_SOURCE_ADMISSION_WRITER: True}) as connection:
+            factory = sessionmaker(bind=connection, expire_on_commit=False)
+            with (
+                SqlAlchemyUnitOfWork(factory, clock=self._clock) as work,
+                work.daily.session.no_autoflush,
+            ):
+                current = self._reviewed_backtest_plan(
+                    work, str(expected_reference.plan_version_id))
+                if current is None:
+                    raise PlanVersionNotFoundError(str(expected_reference.plan_version_id))
+                if current.reference != expected_reference:
+                    raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
+                yield current
+
+    @staticmethod
+    def _reviewed_backtest_plan(work, version_id):
         from trade_plan_monitor.backtest.plan_schedule import LoopPlanReview, LoopPlanVersion
         from trade_plan_monitor.backtest.workbench_selection import (
             WorkbenchPlanReference,
@@ -238,48 +273,47 @@ class PersistentPlanWebLifecycle:
         )
         from trade_plan_monitor.domain.plan_hash import plan_sha256
 
-        with self._unit_of_work() as work, work.daily.session.no_autoflush:
-            source = read_source_coverage(work, version_id)
-            if source is None:
-                return None
-            details = source.details
-            coverage_issue = source.coverage_reason
-            draft, _validation, eligible = _validated_plan_state(details,
-                                                               coverage_issue=coverage_issue)
-            if not eligible or details.review_confirmed_at is None:
-                raise PlanSaveBlockedError("Reviewed current workbench plan required")
-            snapshot = draft.to_executable()
-            confirmed_at = details.review_confirmed_at.astimezone(_SHANGHAI)
-            reference = WorkbenchPlanReference(
-                origin="WORKBENCH", plan_version_id=UUID(details.id),
-                plan_hash=details.plan_hash, content_hash=details.content_hash,
-                source_hash=details.source_hash, review_evidence_hash=details.review_evidence_hash,
-                review_id=UUID(details.review_id), review_revision=details.review_revision,
-            )
-            version = LoopPlanVersion(
-                version_id=details.id,
-                snapshot=snapshot,
-                plan_hash=plan_sha256(snapshot),
+        source = read_source_coverage(work, version_id)
+        if source is None:
+            return None
+        details = source.details
+        coverage_issue = source.coverage_reason
+        draft, _validation, eligible = _validated_plan_state(details,
+                                                           coverage_issue=coverage_issue)
+        if not eligible or details.review_confirmed_at is None:
+            raise PlanSaveBlockedError("Reviewed current workbench plan required")
+        snapshot = draft.to_executable()
+        confirmed_at = details.review_confirmed_at.astimezone(_SHANGHAI)
+        reference = WorkbenchPlanReference(
+            origin="WORKBENCH", plan_version_id=UUID(details.id),
+            plan_hash=details.plan_hash, content_hash=details.content_hash,
+            source_hash=details.source_hash, review_evidence_hash=details.review_evidence_hash,
+            review_id=UUID(details.review_id), review_revision=details.review_revision,
+        )
+        version = LoopPlanVersion(
+            version_id=details.id,
+            snapshot=snapshot,
+            plan_hash=plan_sha256(snapshot),
+            source_hashes=(details.source_hash,),
+            evidence_hash=details.review_evidence_hash,
+            available_at=confirmed_at,
+            information_cutoff=confirmed_at,
+            review=LoopPlanReview(
+                content_hash=details.content_hash,
+                reviewed_at=confirmed_at,
+                confirmed=True,
                 source_hashes=(details.source_hash,),
                 evidence_hash=details.review_evidence_hash,
-                available_at=confirmed_at,
-                information_cutoff=confirmed_at,
-                review=LoopPlanReview(
-                    content_hash=details.content_hash,
-                    reviewed_at=confirmed_at,
-                    confirmed=True,
-                    source_hashes=(details.source_hash,),
-                    evidence_hash=details.review_evidence_hash,
-                    evidence="Original workbench review " + details.review_id,
-                ),
-            )
-            return WorkbenchReviewedPlan(
-                reference=reference,
-                version=version,
-                draft_json=details.payload_json,
-                source_text=details.source_text,
-                mapping_json=details.daily_mapping.model_dump_json(),
-            )
+                evidence="Original workbench review " + details.review_id,
+            ),
+        )
+        return WorkbenchReviewedPlan(
+            reference=reference,
+            version=version,
+            draft_json=details.payload_json,
+            source_text=details.source_text,
+            mapping_json=details.daily_mapping.model_dump_json(),
+        )
 
     async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None:
         return await self._run(self._get_plan_activation_state_sync, symbol=symbol)

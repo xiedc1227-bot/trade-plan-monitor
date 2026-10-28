@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 DEFAULT_BUSY_TIMEOUT_MS = 5_000
 MAX_BUSY_TIMEOUT_MS = 60_000
+_SOURCE_ADMISSION_WRITER = "_monitor_source_admission_writer"
 
 
 def create_sqlite_engine(
@@ -36,7 +37,11 @@ def create_sqlite_engine(
 
     @event.listens_for(engine, "begin")
     def begin_sqlite_transaction(connection: Connection) -> None:
-        connection.exec_driver_sql("BEGIN")
+        # Only the owned final-admission connection requests a source writer.
+        # Ordinary reads and all existing unit-of-work transactions keep BEGIN.
+        statement = ("BEGIN IMMEDIATE" if connection.get_execution_options().get(
+            _SOURCE_ADMISSION_WRITER) is True else "BEGIN")
+        connection.exec_driver_sql(statement)
 
     return engine
 

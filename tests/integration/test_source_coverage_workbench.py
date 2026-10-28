@@ -1,6 +1,7 @@
 """A new run rechecks current workbench authority without rewriting old selections."""
 
 import asyncio
+from contextlib import contextmanager, nullcontext
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -33,19 +34,28 @@ class _CurrentReader:
             raise self.error
         return self.value
 
+    @contextmanager
+    def current_workbench_run_fence(self, reference):
+        # This suite isolates the application seam; actual SQL locks are covered
+        # by test_source_coverage_workbench_admission.
+        assert self.value is not None and self.value.reference == reference
+        yield self.value
+
 
 class _Repository:
     def __init__(self):
         self.calls = []
 
-    def finalize_run_submission(self, request, reservation, *, on_admitted):
-        self.calls.append((request, reservation))
-        on_admitted("new-workbench-run")
-        return BacktestJobReceipt(
-            job_id="new-workbench-run", kind=BacktestJobKind.BACKTEST_RUN,
-            status=BacktestJobStatus.QUEUED, run_id=request.input_reference.run_id,
-            dataset_hash=request.input_reference.dataset_hash, submitted_at=reservation.claimed_at,
-        )
+    def finalize_run_submission(self, request, reservation, *, on_admitted, admission_guard=None):
+        with admission_guard() if admission_guard is not None else nullcontext():
+            self.calls.append((request, reservation))
+            on_admitted("new-workbench-run")
+            return BacktestJobReceipt(
+                job_id="new-workbench-run", kind=BacktestJobKind.BACKTEST_RUN,
+                status=BacktestJobStatus.QUEUED, run_id=request.input_reference.run_id,
+                dataset_hash=request.input_reference.dataset_hash,
+                submitted_at=reservation.claimed_at,
+            )
 
 
 class _Service(_ProductionBacktestService):

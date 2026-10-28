@@ -899,6 +899,7 @@ class _ProductionBacktestService:
         admission = {}
         if isinstance(command, WorkbenchBacktestRunCommand):
             prepared = await self._read_selection(command.selection_id, command.selection_hash)
+            admission["admission_guard"] = self._workbench_run_guard(prepared)
             await self._require_current_workbench(prepared)
         else:
             prepared = await self._load_command_preparation(command)
@@ -924,6 +925,42 @@ class _ProductionBacktestService:
                     ApiErrorCode.INTERNAL_ERROR if error.code == "SOURCE_COVERAGE_INTEGRITY" else
                     ApiErrorCode.CONFLICT)
             raise ApiError(code) from None
+        except Exception as error:
+            self._workbench_authority_error(error)
+            raise
+
+    def _workbench_run_guard(self, prepared):
+        fence = getattr(self._plan_snapshot_reader, "current_workbench_run_fence", None)
+        if not callable(fence):
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        return partial(fence, prepared.reviewed.reference)
+
+    @staticmethod
+    def _workbench_authority_error(error):
+        from trade_plan_monitor.state.repositories import (
+            PlanSaveBlockedError,
+            PlanVersionNotFoundError,
+        )
+        from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
+        from trade_plan_monitor.state.source_coverage_store import (
+            SourceCoverageIntegrityError,
+            SourceCoverageUpgradeRequired,
+        )
+
+        if isinstance(error, PlanVersionNotFoundError):
+            raise ApiError(ApiErrorCode.NOT_FOUND) from None
+        if (isinstance(error, SourceCoverageIntegrityError)
+                or isinstance(error, SourceCoverageAuthorityError)
+                and error.reason == "SOURCE_COVERAGE_INTEGRITY"):
+            raise ApiError(ApiErrorCode.INTERNAL_ERROR) from None
+        if isinstance(error, (PlanSaveBlockedError, SourceCoverageAuthorityError,
+                              SourceCoverageUpgradeRequired)):
+            raise ApiError(ApiErrorCode.CONFLICT) from None
+        if isinstance(error, (sqlite3.OperationalError, SQLAlchemyOperationalError)):
+            original = error.orig if isinstance(error, SQLAlchemyOperationalError) else error
+            if getattr(original, "sqlite_errorcode", None) in {
+                    sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+                raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE, retry_after_seconds=1) from None
 
     async def _prepared_run_guard(self, prepared):
         """Resolve the actual local capability before copying; acquire it in finalization."""
@@ -940,17 +977,14 @@ class _ProductionBacktestService:
 
     async def _require_current_workbench(self, prepared):
         """A historical selection receipt cannot authorize a fresh run by itself."""
-        from trade_plan_monitor.state.repositories import PlanSaveBlockedError
-        from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
-        from trade_plan_monitor.state.source_coverage_store import SourceCoverageUpgradeRequired
-
         reader = getattr(self._plan_snapshot_reader, "get_reviewed_backtest_plan", None)
         if not callable(reader):
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
         try:
             current = await reader(version_id=str(prepared.reviewed.reference.plan_version_id))
-        except (PlanSaveBlockedError, SourceCoverageAuthorityError, SourceCoverageUpgradeRequired):
-            raise ApiError(ApiErrorCode.CONFLICT) from None
+        except Exception as error:
+            self._workbench_authority_error(error)
+            raise
         if current is None:
             raise ApiError(ApiErrorCode.NOT_FOUND)
         if current.reference != prepared.reviewed.reference:
