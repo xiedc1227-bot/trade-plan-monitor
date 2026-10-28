@@ -232,3 +232,12 @@ ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21�
 三项API失败首先缺少新覆盖绑定字段；独立评估也表明逐字中文策略尚不受支持。完整句式解析器首轮有效RED为1失败／16通过，2.48秒（`literal-sentences-red.log`）。首轮API重跑35通过／1失败，原因是测试误给启用接口加入仅审核接受的字段；启用请求现保留既有请求体。独立审查发现没有终止符的未知文本扫描呈平方增长，以及合法背景可解除新增规则数量限制；两者均已修复，并增加最大150000字符扫描、合法背景正例、准确AND／谓词变异及额外普通／提醒／清仓反例。最初三项清仓探针漏填测试夹具必需的显式null字段；不算生产RED。
 
 最终4文件切片 `0f98094` 的50项7.36秒通过（`literal-sentences-review-final2.log`）；Ruff通过，独立审查认可。此前扩大6文件选择100项10.52秒通过（`literal-sentences-api-green4.log`）；计数重叠，最终新增用例仍待组合回归。原始来源字节、数值真值、完整审核／启用、库存不初始化及存储篡改断言保留。两处过时当前审核422预期按已批准契约有意调整为精确409 SOURCE_COVERAGE_REQUIRED／STALE；这是已记录的行为对齐，不能声称断言完全不变。供应商调用与用户迁移均未发生：0/48及0。
+
+
+## PMA-R29 — 冻结捕获修复与真实响应当前审核边界
+
+真实LOOP捕获链首先独立在1.57秒失败（`t09-loop-capture-red.log`）：原ReminderCapture在冻结私库调用实时来源reader。显式已颁发能力适配器71项7.99秒通过，随后原43失败节点全部147.69秒通过（`t09-loop-capture-green1.log`、`t09-loop-capture-original43.log`）。真实native候选／拒绝及风险范围变异24项5.28秒通过；此前两个native夹具失败遗漏必需transition receipt，已修正且未削弱存储检查。以上选集重叠。
+
+独立审查发现实例方法替换与offset分页；两项真实RED保留在 `t09-loop-capture-final-red.log`（2.47秒）。类归属分派和keyset500页已修复。完整读取阶段no_autoflush包装强化边界；原Core prior／count查询本身不触发autoflush，因此不声称那里存在autoflush漏洞。最终新增29项加邻接50项，共79项10.26秒通过（`t09-loop-capture-final.log`），Ruff／差异检查及独立审查通过；提交 `1971a49`。新文件须显式加入下轮C03选择。既有冻结golden、策略数量、原43项断言及回执顺序未改；完整历史刷新成本仍待原capacity门槛验收。
+
+八项真实记录响应失败独立在6.50秒复现（`source-confirmation-agent-red.log`）。八个临时库只读审计均发现真实INPUT规范化trace、非identity策略变化、SOURCE_NORMALIZATION_LOSS及未知来源义务，不存在当前完整证明。按已批准A04／A05，这类新建当前审核无论资金已知与否均须拒绝。提交 `0edcefd` 有意修正当前审核预期，保留全部4来源／8响应字节哈希及全部12条原断言AST。原成功账户／冻结／前驱断言原样移到四个明确合成完整来源用例；合成结果不算真实供应商准确率。16项真实记录拒绝、4项合成正例及10项历史summary测试共30项17.04秒通过（`source-confirmation-contract-agent1.log`）；3项当前权限邻接4.23秒通过。SQL checkpoint证明拒绝不改记录或回执。C03仍待新完整组合运行。供应商0/48；用户迁移0。
