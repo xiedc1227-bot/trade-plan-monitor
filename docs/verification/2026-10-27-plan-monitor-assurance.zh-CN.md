@@ -295,3 +295,13 @@ T10d1 `68ccf3d` 先复现两个旧计划解码误拒。独立审查另保留请�
 T10d2 `700afdc` 先有8项有效失败／12通过：三项实际SUCCEEDED来源新增被拒，五种非成功状态泄漏dailyMapping（`t10d2-ai-agent-red1.log`）。最终六文件client／diagnostic／drafting／source／plan／transport组合304项2.36秒通过；类型检查8.10秒通过（`t10d2-ai-agent-final-neighbor.log`、`t10d2-ai-agent-final-typecheck.log`）。根追加三项mapping-header交叉检查首次即通过：既有顶层guard已拒绝，故不重复加生产guard或声称漏洞。首次普通限制环境命令因Vite TEMP rename EPERM收集0项，其日志不算RED。实际定向检查3项通过，最终完整六文件重跑307项1.92秒通过（`t10d2-root-mapping-header-red2.log`、`t10d2-root-final307.log`）。早期类型错误是test-helper／closure收窄错误，不算生产RED，均保留。
 
 原AI测试正文及旧部分提取夹具SHA准确不变。根审查并逐个提交有界子片。T10现具API／后端／生成件／client证据；T11／T12及C04待完成，真实供应商、就绪、全项目及容量验收仍在后续。以上数量有重叠，不合计为一次运行。供应商0/48；用户迁移0。
+
+## PMA-R36 — T11a只读浏览器状态及独立审查
+
+最初两个真实行为RED分别为IDLE而非CURRENT，以及缺少原始emoji／组合符／CRLF来源分段（`t11a-foundation-red2.log`）。之前TEMP-rename导致0项运行，不算RED。中间扩大组合的27项失败来自测试工厂每次读取上下文都创建不同API身份；夹具现持有稳定API，真实API替换仍会使状态失效。中间仅测试类型推导错误也保留，未放宽生产类型。
+
+独立审查复现内部注入不一致：typed fake API接受COMPLETE／canConfirm摘要搭配UNKNOWN／UNRESOLVED行，而真实HTTP解码器拒绝（1失败／1通过，0.863秒；`t11a-review-injected-decoder-probe-valid2.log`）。这是展示／注入契约问题，不是远程HTTP或服务端审核授权绕过。提交 `367cf86` 原样导出现有分页解码器，通过221项原client测试。正式两个注入反例先失败，再由hook复用该解码器，移除重复shape／row校验。
+
+最终T11a `2771191` 有83项新状态／展示测试。五文件source-state／presentation／API／plan／transport组合304项4.61秒通过，类型及diff检查通过（`t11a-injected-page-neighbor1.log`、`t11a-injected-page-typecheck1.log`）。修复后原两项独立探针1.37秒通过（`t11a-review-injected-decoder-probe-readiness-green1.log`）。覆盖A-B-A、晚到hash／success／error／finally、scope释放、准确native／seed／完整摘要／短页遍历、安全错误、人工重试及原始Unicode定位。根读完四文件后提交。探针意外生成的单个根目录Vite结果缓存已核实并清理，后续探针缓存留在ignored项目证据；未删除package或用户文件。
+
+这里只验收只读基础，实际组件、工作台确认、浏览器旅程及T12／C04仍待完成。未访问浏览器、供应商、用户数据库、行情或通知。供应商0/48；用户迁移0。

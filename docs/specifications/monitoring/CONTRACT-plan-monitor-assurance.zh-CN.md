@@ -230,3 +230,11 @@ GET /api/v1/plan-versions/{version_id}/source-coverage 在分页前核验同sess
 计划wire解码仅接受已批准sourceCoverage增量，绑定原生plan／source／content／review归属，并允许有准确解释的非当前ACTIVE观察。带来源摘要的当前Schema5–9必须保留准确execution／mapping身份。历史摘要缺失／null保留旧解码分派和字段省略；历史／obsolete文档不能借用新COMPLETE／current／confirmation标签。浏览器校验结构与peer一致，不核验服务端HMAC、不复刻Python canonical hash或独立交易语义。
 
 提取client复用该解码器处理当前带来源摘要的SUCCEEDED结果，并将source／content与实际提取／mapping peer比较。未保存观察禁止携带已保存bundle／revision／receipt、当前审核、确认及LEGACY_UNASSESSED。失败／运行中／排队任务不能泄漏dailyMapping或sourceCoverage结果。BLOCKED／UNKNOWN候选保持可查看；HUMAN／AI_HISTORICAL不获得自动忠实性。旧v4–v6无此摘要响应保留历史解码。API完成本身不代表T11归属／界面工作流完成。
+
+## PMA-K31 — 上下文绑定的来源读取与准确原文导航
+
+聚焦只读浏览器状态绑定一个已保存归属、原始来源文本／hash、native candidate／content／review元组、owner generation、所选API／limit及可选准确保存摘要。原样计算UTF-8 SHA-256，不trim或归一化换行／Unicode。上下文变化时同步清除旧分页、已验证来源hash及确认字段；abort加单调递增generation丢弃晚到hash、响应、错误及finally结果。正常与内部注入client复用同一个既有完整分页解码器，注入一致性不构成第二语义证明或服务端授权路径。
+
+仅保留一页。实际连续索引、全部摘要字段、准确native peer及opaque cursor循环检查绑定短页链。409／422游标／上下文冲突要求显式重读第一页；不自动重试或读取全页来确认obligations。只有当前匹配且服务端canConfirmReview的观察才提供coverageEvidenceHash／coverageRulesVersion。CURRENT阶段只表示来源视图匹配浏览器归属，不代表监控就绪或执行许可；实际确认仍重验服务端权限。
+
+只读原文导航要求准确已验证hash和Python代码点start／end／excerpt。保留CRLF、emoji、组合符及所选重复出现位置；拒绝孤立代理字符、非法跨度或不匹配，不按子串兜底寻找。返回可转义展示的before／mark／after文本，不编辑原文，也不把textarea归一化偏移当原偏移。HUMAN来源及完整覆盖另行标明审核状态。
