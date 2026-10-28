@@ -84,6 +84,12 @@ from trade_plan_monitor.web.routers.plans import (
     RequiredReviewIssueView,
 )
 from trade_plan_monitor.web.schemas import ErrorDetail, MutationContext, OperationReceipt
+from trade_plan_monitor.web.source_coverage_read import (
+    SourceCoverageCursorCodec,
+    read_source_coverage,
+    source_coverage_page,
+)
+from trade_plan_monitor.web.source_coverage_schemas import SourceCoveragePage
 
 DEFAULT_MONITOR_DATABASE = Path("data/monitor.sqlite3")
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -162,6 +168,7 @@ class PersistentPlanWebLifecycle:
         self._clock = lambda: _shanghai_datetime(source_clock())
         self._engine: Engine | None = None
         self._session_factory: sessionmaker[Session] | None = None
+        self._source_coverage_cursor = SourceCoverageCursorCodec()
 
     @property
     def operation_service(self) -> PersistentPlanWebLifecycle:
@@ -197,6 +204,21 @@ class PersistentPlanWebLifecycle:
 
     async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None:
         return await self._run(self._get_plan_version_sync, version_id=version_id)
+
+    async def get_source_coverage(
+        self, *, version_id: str, limit: int = 50, cursor: str | None = None,
+    ) -> SourceCoveragePage | None:
+        return await self._run(self._get_source_coverage_sync,
+                               version_id=version_id, limit=limit, cursor=cursor)
+
+    def _get_source_coverage_sync(self, *, version_id, limit, cursor):
+        # Read, projection and serialization admission share one actual SQL snapshot.
+        with self._unit_of_work() as work, work.daily.session.no_autoflush:
+            if cursor is not None:
+                self._source_coverage_cursor.decode(cursor, version_id)
+            result = read_source_coverage(work, version_id)
+            return None if result is None else source_coverage_page(
+                result, self._source_coverage_cursor, limit=limit, cursor=cursor)
 
     async def get_reviewed_backtest_plan(self, *, version_id: str):
         """Read approval, source and executable content in one read-only unit of work."""

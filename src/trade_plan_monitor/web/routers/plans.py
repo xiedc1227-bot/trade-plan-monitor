@@ -63,6 +63,7 @@ from trade_plan_monitor.web.schemas import (
     OperationReceipt,
     validate_api_response,
 )
+from trade_plan_monitor.web.source_coverage_schemas import SourceCoveragePage
 
 router = APIRouter(prefix="/api/v1", tags=["plans"])
 
@@ -777,6 +778,10 @@ class PlanOperationService(PlanExtractionService, Protocol):
 
     async def get_plan_version(self, *, version_id: str) -> PlanVersionView | None: ...
 
+    async def get_source_coverage(
+        self, *, version_id: str, limit: int, cursor: str | None,
+    ) -> SourceCoveragePage | None: ...
+
     async def get_plan_activation_state(self, *, symbol: str) -> ActivePlanView | None: ...
 
     async def save_plan_draft(
@@ -896,6 +901,31 @@ async def get_plan_version(
     result = validate_api_response(value, PlanVersionView)
     if result.id != version_id:
         raise RuntimeError("plan service returned a mismatched version")
+    return result
+
+
+def require_source_coverage_query(request: Request) -> None:
+    counts = Counter(name for name, _value in request.query_params.multi_items())
+    if not counts.keys() <= {"limit", "cursor"} or any(n != 1 for n in counts.values()):
+        raise ApiError(ApiErrorCode.VALIDATION_ERROR)
+
+
+@router.get("/plan-versions/{version_id}/source-coverage", response_model=SourceCoveragePage)
+async def get_source_coverage(
+    version_id: ResourceIdPath,
+    service: PlanServiceDependency,
+    _query: Annotated[None, Depends(require_source_coverage_query)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(
+        min_length=1, max_length=512, pattern=r"^[\x00-\x7f]+$")] = None,
+) -> SourceCoveragePage:
+    value = await service.get_source_coverage(
+        version_id=str(version_id), limit=limit, cursor=cursor)
+    if value is None:
+        raise ApiError(ApiErrorCode.NOT_FOUND)
+    result = validate_api_response(value, SourceCoveragePage)
+    if result.plan_version_id != version_id or result.limit != limit:
+        raise RuntimeError("source coverage service returned mismatched pagination")
     return result
 
 
