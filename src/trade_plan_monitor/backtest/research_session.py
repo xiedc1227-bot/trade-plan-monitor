@@ -4,17 +4,26 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
+from pathlib import Path
 from uuid import UUID
 
 from trade_plan_monitor.backtest.p3_replay import CapitalReplayState
 from trade_plan_monitor.backtest.research_report import ResearchOperationOutcome
+from trade_plan_monitor.backtest.run_input import BacktestRunInput
 from trade_plan_monitor.domain.daily_hash import daily_hash
 from trade_plan_monitor.domain.plan_codec import dump_plan_json
 from trade_plan_monitor.runtime.daily_service import DailyRuntimeEvaluationService
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_state_models import DailyInventoryView
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
-from trade_plan_monitor.state.models import Base, TradingCalendar
+from trade_plan_monitor.state.models import (
+    ActivePlan,
+    Base,
+    PlanActivationState,
+    PlanSource,
+    PlanVersion,
+    TradingCalendar,
+)
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -57,11 +66,33 @@ class _ResearchRuntime(DailyRuntimeEvaluationService):
 
 class ResearchSession:
     def __init__(self, directory, run_input, calendar):
-        self.run_input = run_input
-        self.plan = run_input.plan_snapshot
-        self.now = run_input.research_input.started_at
+        self.run_input = BacktestRunInput.model_validate_json(run_input.model_dump_json())
+        if self.run_input.research_input is None:
+            raise ValueError("RESEARCH_INPUT_REQUIRED")
+        self.plan = self.run_input.plan_snapshot
+        self.now = self.run_input.research_input.started_at
+        self._closed = False
         self._counter = 0
-        self.engine = create_sqlite_engine(directory / "runtime.sqlite")
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / "runtime.sqlite"
+        if path.exists():
+            raise ValueError("RESEARCH_SESSION_REQUIRES_FRESH_PRIVATE_DATABASE")
+        self.engine = create_sqlite_engine(path)
+        try:
+            self._initialize(calendar)
+        except BaseException:
+            self._closed = True
+            self.engine.dispose()
+            raise
+
+    def _initialize(self, calendar):
+        from trade_plan_monitor.backtest.research_source_authority import (
+            _issue_research_source_authority,
+            research_manifest,
+        )
+
+        run_input = self.run_input
         Base.metadata.create_all(self.engine)
         self.factory = create_session_factory(self.engine)
         version_id = str(UUID(run_input.authority_id[:32]))
@@ -76,10 +107,25 @@ class ResearchSession:
             dump_plan_json(self.plan),
             review_id,
         )
-        self.runtime = _ResearchRuntime(self.work, clock=lambda: self.now)
         with self.work() as work:
+            session = work.daily.session
+            source_id = str(UUID(sha256(
+                (run_input.authority_id + "manifest").encode()).hexdigest()[:32]))
+            manifest = research_manifest(run_input)
+            session.add(PlanSource(id=source_id, source_text=manifest,
+                source_hash=sha256(manifest.encode()).hexdigest(), created_at=self.now.isoformat()))
+            session.flush()
+            session.add(PlanVersion(id=version_id, plan_id=self.plan.plan_id,
+                version=self.plan.version, symbol=self.plan.symbol, plan_hash=run_input.plan_sha256,
+                status="ACTIVE", payload_json=self.details.payload_json, source_id=source_id,
+                revision=1, created_at=self.now.isoformat()))
+            session.flush()
+            session.add(ActivePlan(symbol=self.plan.symbol, plan_version_id=version_id,
+                activated_at=self.now.isoformat(), revision=1))
+            session.add(PlanActivationState(symbol=self.plan.symbol, plan_version_id=version_id,
+                changed_at=self.now.isoformat(), revision=1))
             for day in calendar:
-                work.daily.session.add(TradingCalendar(**day.model_dump()))
+                session.add(TradingCalendar(**day.model_dump()))
             if run_input.research_input.inventory_known:
                 lots = run_input.initial_lots
                 work.daily.save(
@@ -126,6 +172,9 @@ class ResearchSession:
                 },
             )
             work.commit()
+        self._source_authority_reader = _issue_research_source_authority(self)
+        self.runtime = _ResearchRuntime(self.work, clock=lambda: self.now,
+            _source_authority_reader=self._source_authority_reader)
         self.capital = CapitalReplayState(
             self, getattr(run_input.research_input, "capital_program", None))
         self.capital.apply(self.now, before_order=0)
@@ -250,6 +299,7 @@ class ResearchSession:
         )
 
     def close(self):
+        self._closed = True
         self.engine.dispose()
 
     def apply_operation(self, operation, *, ended):
@@ -302,6 +352,7 @@ class ResearchSession:
                 with self.work() as work:
                     receipt = simulate_inventory(
                         work, command, self.now, identity_factory=lambda: identity,
+                        _source_authority_reader=self._source_authority_reader,
                     )
                     work.commit()
             else:
