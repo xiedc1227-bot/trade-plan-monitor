@@ -494,7 +494,8 @@ class LoopSession:
             self.set_time(at)
         with self.work() as work:
             work.daily.lock_symbol(self.plan.symbol)
-            capture = ReminderCapture(work, limit=self.run_input.limits.max_reminders)
+            capture = ReminderCapture(work, limit=self.run_input.limits.max_reminders,
+                _source_authority_reader=self._source_authority_reader)
             results = []
             for identity in event_ids:
                 try:

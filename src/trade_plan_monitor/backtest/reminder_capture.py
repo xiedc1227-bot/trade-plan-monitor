@@ -42,12 +42,17 @@ class CapturedReminder(ResearchValue):
 class ReminderCapture:
     """Participate in the caller's private transaction without constructing any sink."""
 
-    def __init__(self, work, *, limit):
+    def __init__(self, work, *, limit, _source_authority_reader=None):
         if type(limit) is not int or not 1 <= limit <= MAX_LOOP_RECORDS:
             raise ValueError("invalid reminder limit")
         self.work, self.session, self.limit = work, work.daily.session, limit
+        self._source_authority_reader = _source_authority_reader
 
     def capture(self, event: DailyAlertEvent, now) -> CapturedReminder:
+        with self.session.no_autoflush:
+            return self._capture(event, now)
+
+    def _capture(self, event: DailyAlertEvent, now) -> CapturedReminder:
         prior = self.session.scalar(
             select(CAPTURE_TABLE.c.payload_json).where(
                 CAPTURE_TABLE.c.event_id == str(event.event_id)
@@ -63,24 +68,33 @@ class ReminderCapture:
         count = self.session.scalar(select(func.count()).select_from(CAPTURE_TABLE))
         if count >= self.limit:
             raise ValueError("LOOP_REMINDER_LIMIT_EXCEEDED")
-        allowed = daily_delivery_allowed(self.session, event, now)
-        cause = self.work.daily.get(event.cause_id)
-        position = self.work.daily.get("simulation-position-" + event.symbol)
-        value = CapturedReminder(
-            sequence=count + 1,
-            event=event,
-            captured_at=now,
-            status="CAPTURED" if allowed else "SUPPRESSED",
-            cause_revision=None if cause is None else cause["revision"],
-            inventory_revision=0 if position is None else position["revision"],
-        )
-        self.session.execute(
-            CAPTURE_TABLE.insert().values(
-                sequence=value.sequence,
-                event_id=str(event.event_id),
-                payload_json=value.model_dump_json(),
+        with self.session.no_autoflush:
+            if self._source_authority_reader is None:
+                allowed = daily_delivery_allowed(self.session, event, now)
+            else:
+                from trade_plan_monitor.backtest.loop_source_authority import (
+                    _loop_capture_delivery_allowed,
+                )
+
+                allowed = _loop_capture_delivery_allowed(self._source_authority_reader,
+                    self.work, event, now)
+            cause = self.work.daily.get(event.cause_id)
+            position = self.work.daily.get("simulation-position-" + event.symbol)
+            value = CapturedReminder(
+                sequence=count + 1,
+                event=event,
+                captured_at=now,
+                status="CAPTURED" if allowed else "SUPPRESSED",
+                cause_revision=None if cause is None else cause["revision"],
+                inventory_revision=0 if position is None else position["revision"],
             )
-        )
+            self.session.execute(
+                CAPTURE_TABLE.insert().values(
+                    sequence=value.sequence,
+                    event_id=str(event.event_id),
+                    payload_json=value.model_dump_json(),
+                )
+            )
         return value
 
     def page(self, *, after_sequence=0, limit=100) -> tuple[CapturedReminder, ...]:

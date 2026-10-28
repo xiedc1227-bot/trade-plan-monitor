@@ -224,7 +224,8 @@ def test_capture_overflow_and_late_failure_roll_back_without_partial_receipts(tm
         assert loop.reminders() == ()
         with pytest.raises(RuntimeError, match="injected after capture"):
             with loop.work() as work:
-                capture = ReminderCapture(work, limit=1)
+                capture = ReminderCapture(work, limit=1,
+                    _source_authority_reader=loop._source_authority_reader)
                 from uuid import UUID
 
                 event = work.alerts.get(UUID(result.event_ids[0]))

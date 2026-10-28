@@ -14,10 +14,14 @@ from trade_plan_monitor.backtest.canonical import canonical_json
 from trade_plan_monitor.backtest.loop_input import ScheduledLoopInput
 from trade_plan_monitor.domain.daily_hash import daily_hash
 from trade_plan_monitor.domain.plan_codec import dump_plan_json
+from trade_plan_monitor.notifications.daily_models import DailyAlertEvent
+from trade_plan_monitor.notifications.outbox import OutboxError
 from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.daily_repository import DailyRepository
 from trade_plan_monitor.state.models import ActivePlan, PlanActivationState, PlanSource, PlanVersion
+from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
 from trade_plan_monitor.state.repositories import RepositoryError
+from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
 from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
 
 _ISSUER = object()
@@ -34,7 +38,7 @@ def _guarded(method):
             return method(*args, **kwargs)
         except SourceCoverageAuthorityError:
             raise
-        except (AttributeError, TypeError, ValueError, RecursionError, RepositoryError,
+        except (AttributeError, TypeError, ValueError, RecursionError, RepositoryError, OutboxError,
                 SQLAlchemyError):
             _reject()
     return checked
@@ -120,7 +124,7 @@ class _LoopSourceAuthority:
                         else row.activated_at).isoformat()
         _reject()
 
-    def _version(self, session, selected, *, status, revision):
+    def _version_header(self, session, selected, *, status, revision):
         plan = selected.version.snapshot
         identity, source_id = (self._identity(selected, key) for key in ("version", "manifest"))
         row = session.get(PlanVersion, identity, populate_existing=True)
@@ -139,6 +143,13 @@ class _LoopSourceAuthority:
                 or source.source_text != manifest
                 or source.source_hash != sha256(manifest.encode()).hexdigest()):
             _reject()
+        return row
+
+    def _version(self, session, selected, *, status, revision):
+        row = self._version_header(session, selected, status=status, revision=revision)
+        plan = selected.version.snapshot
+        identity = self._identity(selected, "version")
+        registered_at = self._registration_time(selected)
         repository = DailyRepository(session, clock=lambda: self._owner.now,
                                      id_factory=lambda: "unused-read-only")
         review_row = session.get(DailyRecord, "review-" + identity, populate_existing=True)
@@ -205,6 +216,93 @@ class _LoopSourceAuthority:
         return ReplayObservationBasis(row.id, active.revision, risk_rows)
 
     @_guarded
+    def delivery_allowed(self, work, event, now):
+        """Observe one persisted private reminder, never authorize a live channel."""
+        from trade_plan_monitor.runtime.daily_service import _daily_delivery_allowed
+        from trade_plan_monitor.runtime.source_delivery_authority import DeliverySourceContext
+
+        sql = work.daily.session
+        with sql.no_autoflush:
+            owner = self._owner_binding(sql)
+            if (type(event) is not DailyAlertEvent or now != owner.now
+                    or work.daily.clock() != owner.now):
+                _reject()
+            chain = self._chain(owner.now)
+            selected, current = self._selected(owner, chain)
+            reads = ActionOwnerReader(work)
+            # These precise owners will be refreshed by the existing capability.
+            for model, key, value in (
+                (PlanVersion, "id", self._identity(selected, "version")),
+                (PlanSource, "id", self._identity(selected, "manifest")),
+                (ActivePlan, "symbol", owner.plan.symbol),
+                (PlanActivationState, "symbol", owner.plan.symbol),
+                (AlertEventRow, "id", str(event.event_id)),
+            ):
+                reads._reject_pending(model, **{key: value})
+            reads._reject_pending(DailyRecord, symbol=owner.plan.symbol)
+            # Native delivery reads candidate, evaluation, lot and risk histories.
+            # Refresh in bounded pages without dropping pending target changes.
+            statement = select(DailyRecord.id).where(DailyRecord.symbol == owner.plan.symbol)
+            after = None
+            while True:
+                bounded = statement if after is None else statement.where(DailyRecord.id > after)
+                page = sql.scalars(bounded.order_by(DailyRecord.id).limit(500)).all()
+                for identity in page:
+                    reads._reject_pending(DailyRecord, id=identity)
+                if page:
+                    refreshed = sql.scalars(select(DailyRecord).where(DailyRecord.id.in_(page))
+                        .limit(500).execution_options(populate_existing=True)).all()
+                    if len(refreshed) != len(page):
+                        _reject()
+                if len(page) < 500:
+                    break
+                after = page[-1]
+            stored = reads._row(AlertEventRow, str(event.event_id))
+            if stored is None or work.alerts.get(event.event_id) != event:
+                _reject()
+            version = self._version_header(sql, selected, status="ACTIVE",
+                revision=self._row_revision(selected, chain))
+            active = reads._row(ActivePlan, owner.plan.symbol)
+            review = reads.daily("review-" + version.id)
+            # A genuine old/revoked event remains an inspectable suppression.
+            if (active is None or event.plan_version_id != version.id
+                    or active.plan_version_id != version.id
+                    or event.activation_revision != active.revision
+                    or event.plan_id != owner.plan.plan_id
+                    or event.plan_version != owner.plan.version
+                    or event.symbol != owner.plan.symbol or event.name != owner.plan.name
+                    or event.plan_hash != selected.version.plan_hash
+                    or review is None or not review["payload"].get("confirmed")
+                    or review["payload"].get("review_id") != event.review_id):
+                return False
+            cause_id = None if event.signal_type == "REMINDER" else event.cause_id
+            if cause_id is not None:
+                cause = reads.daily(cause_id)
+                kind = "RISK" if event.signal_type == "RISK_EXIT" else "SIGNAL"
+                if cause is None or cause["kind"] != kind or cause["symbol"] != event.symbol:
+                    return False
+                if kind == "SIGNAL" and (current is None or not owner._authority_available):
+                    return False
+                payload = cause["payload"]
+                execution = "earliest_execution_date" if kind == "RISK" else "execution_date"
+                if (event.confirmed_trade_date is not None and payload.get(
+                    "confirmed_trade_date") != str(event.confirmed_trade_date)
+                    or event.execution_date is not None and payload.get(execution) != str(
+                        event.execution_date)
+                    or kind == "SIGNAL" and (payload.get("side") != event.signal_type
+                        or event.rule_id is not None and payload.get("rule_id") != event.rule_id)):
+                    return False
+            basis = self(work, version.id, cause_id=cause_id)
+            if (basis.basis != "REPLAY_OBSERVATION"
+                    or basis.plan_version_id != event.plan_version_id
+                    or type(basis.activation_revision) is not int
+                    or basis.activation_revision != event.activation_revision):
+                _reject()
+            context = DeliverySourceContext(work.daily, work.plans.get_active(event.symbol),
+                owner.details, owner.plan, review, basis)
+            return _daily_delivery_allowed(sql, event, now, context)
+
+    @_guarded
     def require_activation(self, session, target_id):
         """Validate a staged frozen successor before the shared activation writes."""
         owner = self._owner_binding(session)
@@ -231,3 +329,10 @@ def _issue_loop_source_authority(owner):
             or owner.now != owner.run_input.boundary.started_at):
         _reject()
     return _LoopSourceAuthority(owner, _issuer=_ISSUER)
+
+
+def _loop_capture_delivery_allowed(reader, work, event, now):
+    """The only private capture adapter accepts an actually issued LOOP owner."""
+    if type(reader) is not _LoopSourceAuthority:
+        _reject()
+    return _LoopSourceAuthority.delivery_allowed(reader, work, event, now)
