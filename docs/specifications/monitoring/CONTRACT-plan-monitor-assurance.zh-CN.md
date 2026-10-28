@@ -196,3 +196,17 @@ Daily outbox准入把前置eligibility／active-plan过滤也放入no_autoflush�
 冻结LOOP捕获显式接收既有已颁发会话能力。类归属方法核验准确私有engine／input／生命周期、不可变SQL source／version头、持久事件／消息及原虚拟快照身份；只返回REPLAY_OBSERVATION，绝不返回CURRENT。伪reader、实例方法替换及归属损坏均关闭许可。真实旧／撤销事件为SUPPRESSED；合格当前事件仍经过完整能力与原native候选、数量、范围、库存、行情及窗口检查。默认捕获路径保留实时guard。
 
 完整捕获读取阶段使用no_autoflush并保留待保存对象。已完成捕获回执在新来源检查前返回，不推断新回执或投递。native daily历史以每页500行主键keyset刷新，不截断、不改原风险排序。这是没有通知channel的隔离观测／回执路径。既有资源上限及后续capacity检查点仍须满足。
+
+## PMA-K26 — 只读覆盖资源与分页契约
+
+GET /api/v1/plan-versions/{version_id}/source-coverage 在分页前核验同session实际归属、完整有界评估及适用receipt／shadow。严格camelCase DTO始终携带authorityGranted=false。顺序行流包含OBLIGATION、ISSUE和NORMALIZATION_CHANGE，全局／无span问题可独立遍历。保存映射提议与serverState分开；人工补参链接要求真实ID／path／content／value／binding匹配，HUMAN来源本身不代表逐行已确认。Trace行区分CURRENT_ASSESSMENT与HISTORICAL_INPUT，不公开私有provider raw／context／derivation载体。
+
+默认limit50／最多100，实际最终UTF-8页<=1048576字节、cursor<=512字符，均按完整行计算。单行超页返回422 SOURCE_COVERAGE_LIMIT_EXCEEDED，不截断。实例归属HMAC key在GET外创建，服务实例重建后须重新加载遍历。签名绑定包含完整当前summary／proof／revision／bundle及请求limit。结构／认证／上下文形状错误token返回422；签名有效但证明／遍历已改变返回409。一般计划读取可将来源证明漂移显示为非当前UNKNOWN／STALE诊断；请求其当前证据页返回409。当前评估配旧审核回执仍可查看，currentReviewBound=false。
+
+缺证明／注册证据显示UNKNOWN／required且无当前行；缺存储显示UNKNOWN／upgrade，不迁移。可信cutover点查仅提供LEGACY_UNASSESSED展示，不授风险成员根权限。存储损坏保留脱敏500。完整读取在no_autoflush下保留相关待保存修改，不创建review、receipt、provider获取、heartbeat或通知。
+
+## PMA-K27 — 原生计划摘要与旧响应保留
+
+计划列表／详情、首次保存及已审核工作台读取使用同一fresh details及来源摘要。列表分页先按原created_at／id倒序读取有界Core身份，再逐个处理完整证明；既不先解码旧ORM归属，也不保留100份私有8MiB输入。既有10000集合／100分页上限及资格筛选窗口／计数语义保持。
+
+完整覆盖、currentReviewBound、canConfirmReview及canActivate互相独立。Typed来源解释允许历史有效ACTIVE版本保持ACTIVE但canActivate=false，不伪造obsolete原因。原生hash／issues／review不改。满512条native问题准确保留；来源阻断留在独立摘要，不追加第513条。已完成保存重放保留原响应；新可选sourceCoverage在缺失／None时省略，不向历史响应追加新null字段。已完成确认继续保留另已实现的当前证明重验。

@@ -251,3 +251,19 @@ ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21�
 首轮994项中的54项失败仍保留，并在R28／R29逐项对账。中间集成v2因ignored pytest.main runner未把项目根加入sys.path，收集0项／5个导入错误；标为INVALID_COLLECTION，不算测试通过或生产RED。V3仅修运行器路径，使用新base／log／selection，保留全部原选择器。V3期间tracked revision及干净工作树均未改变。
 
 T09／C03现已通过本阶段适用来源／存储／审核／启用／复用／操作／例外／发送时／历史边界。公开覆盖资源工作流、界面、完整项目／capacity回归、真实提取语料及安装审计仍属后续任务，不推断通过。T10拆为分别测试的读取资源、计划摘要、提取摘要、生成契约、附录及前端client子片。真实供应商调用仍为0/48；用户迁移0；未使用实时行情或真实通知。
+
+## PMA-R31 — T10a1覆盖资源与T10a2原生投影
+
+真实缺失资源先返回404而非200（1项有效RED，2.56秒；`t10a1-red.log`）。5文件资源片 `1606331` 在128项选择中全部61项自有用例通过：122通过／6项旧API失败，62.57秒（`t10a1-combined.log`）。覆盖完整证明／回执及实际REVIEW shadow、三类行流／全局问题、准确人工关联、相关待保存／实际SQL归属、缺存储／注册证据、过期遍历、整行中文UTF-8及准确1MiB／1MiB+1打包。纯超大行DTO探针使用明确BLOCKED／非授权包络，不伪造当前来源许可。新增六项shadow RED（4.10秒）经准确读取修复后3.81秒通过。既有source／store／supplement／migration邻接通过；Ruff及独立只读审查通过。旧API失败在R32单独对账，不从该轮隐去。
+
+3文件原生投影片 `83bbdae` 首先18项有效RED／1通过，10.52秒，随后19项11.28秒通过（`t10a2-root-red.log`、`t10a2-root-green1.log`）。独立测试真实cutover ACTIVE、完整／阻断／未确认／当前审核、同session旧ORM、相关待保存修改、真实512条native问题及旧保存响应准确字节。Agent最初512探针有重复夹具kwargs，不算生产RED；修正后RED达到真实513项投影失败。独立审查及Ruff通过。
+
+扩大7文件原生／资源／工作台／API组合254通过／3失败，89.76秒（`t10a2-root-neighbor1.log`）。失败均在test_plan_production_composition：两项成功夹具缺少受支持当前来源／绑定，200017字符来源另暴露覆盖计算上限处的真实保存兼容缺口。明确留为后续修复，不得缩减原文、列表字节或内存限制。T10／C04仍未完成。供应商0/48；用户迁移0。
+
+## PMA-R32 — 准确旧API契约对账
+
+隔离实际HEAD router／service加载器复现六项旧API失败（6失败／7通过，4.26秒；`t10a1-old-api-head-02.log`），证明早于新增资源方法。其首次ignored runner缺项目导入路径，仅算收集错误。空的缺覆盖审核请求现正确返回409 REQUIRED；原生审核hash不匹配返回409 STALE；非空伪resolutions仍为422。plan-extract-v4／v5／v6参数标签实际验证迁到当前v12请求／结果，不构成授予历史新权限的理由。
+
+提交 `50db2f6` 保留逐字来源、原generic／revised未知来源、mock供应商字节及通用review_payload不变。原五个失败节点保留成功路径；formal未知源工作流改为明确阻断反例，其成功生命周期断言移至明确合成的完整FIELD工程用例。此原失败映射不能称为同名节点重跑。只有成功确认补入两个真实完整证明字段，启用保持既有封闭请求体。
+
+3文件测试选择14项7.00秒通过（`t10-api-reconcile-green1.log`），Ruff通过。原71个断言出现中70个AST准确相同；一个幂等断言明确仅把确认payload改为实际来源绑定请求体，仍保留相同key、响应对象及相等比较。新总数92；`t10-old-api-assert-reconciliation.json` 记录准确迁移。这是契约对齐与控制流程工程证据，不是真实供应商语义准确率。供应商0/48；用户迁移0。
