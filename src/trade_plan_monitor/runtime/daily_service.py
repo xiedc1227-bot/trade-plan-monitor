@@ -248,7 +248,8 @@ def _ordinary_source(work, version_id, *, reader=None, activation_revision=None)
 
 def _risk_sources(work, version_id, rows, *, reader=None, activation_revision=None):
     """Only actual validated causes can contribute to a newly offered risk exit."""
-    validated, generations, blockers = {}, [], []
+    rows = tuple(rows)
+    validated, generations, blockers = set(), [], []
     for row in rows:
         if row["payload"]["status"] != "CONFIRMED" or row["id"] in validated:
             continue
@@ -258,8 +259,9 @@ def _risk_sources(work, version_id, rows, *, reader=None, activation_revision=No
         if basis is None:
             blockers.append({"cause_id": row["id"], "reason": generation["blocker"]})
         else:
-            validated.update((item["id"], item) for item in basis.risk_rows)
-    return tuple(validated.values()), generations, blockers
+            validated.update(item["id"] for item in basis.risk_rows)
+    return tuple(row for row in rows if row["id"] in validated
+                 and row["payload"]["status"] == "CONFIRMED"), generations, blockers
 
 
 class DailyRuntimeEvaluationService:
