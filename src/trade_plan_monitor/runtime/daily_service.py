@@ -192,6 +192,76 @@ def minute_source_current(session, snapshot, now, *, required_history=None):
         return False
 
 
+def _action_source(work, version_id, *, cause_id=None, reader=None, activation_revision=None):
+    """Read a transaction-local basis; a rejected source remains observable."""
+    from trade_plan_monitor.state.source_action_authority import require_source_action_authority
+    from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
+
+    try:
+        basis = (require_source_action_authority(work, version_id, cause_id=cause_id)
+                 if reader is None else reader(work, version_id, cause_id=cause_id))
+    except SourceCoverageAuthorityError as error:
+        return None, {"blocker": error.reason}
+    if reader is not None:
+        if (basis is None or getattr(basis, "basis", None) != "REPLAY_OBSERVATION"
+                or hasattr(basis, "coverage_complete")
+                or hasattr(basis, "status")
+                or getattr(basis, "coverage_evidence_hash", None) is not None
+                or type(getattr(basis, "risk_rows", None)) is not tuple):
+            return None, {"blocker": "SOURCE_COVERAGE_REQUIRED"}
+        if (getattr(basis, "plan_version_id", None) != version_id
+                or type(getattr(basis, "activation_revision", None)) is not int
+                or basis.activation_revision != activation_revision):
+            return None, {"blocker": "SOURCE_COVERAGE_STALE"}
+        return basis, {"basis": "REPLAY_OBSERVATION"}
+    return basis, {
+        "basis": basis.basis,
+        "coverage_evidence_hash": basis.coverage_evidence_hash,
+        "cutover_evidence_hash": basis.cutover_evidence_hash,
+        "risk_revisions": [(row["id"], row["revision"]) for row in basis.risk_rows],
+    }
+
+
+def _ordinary_source(work, version_id, *, reader=None, activation_revision=None):
+    """Include the exact current generation even when the assessment is unchanged."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from trade_plan_monitor.state.repositories import RepositoryError
+    from trade_plan_monitor.state.source_coverage_store import SourceCoverageStore
+
+    basis, generation = _action_source(work, version_id, reader=reader,
+                                       activation_revision=activation_revision)
+    if reader is not None:
+        return basis, generation
+    if generation.get("blocker") not in {
+        "SOURCE_COVERAGE_UPGRADE_REQUIRED", "SOURCE_COVERAGE_INTEGRITY",
+        "SOURCE_COVERAGE_LIMIT_EXCEEDED",
+    }:
+        try:
+            stored = SourceCoverageStore(work.daily.session).latest(version_id)
+        except (RepositoryError, SQLAlchemyError):
+            return None, {"blocker": "SOURCE_COVERAGE_INTEGRITY"}
+        generation["coverage_bundle_hash"] = None if stored is None else stored.evidence_hash
+        generation["coverage_revision"] = None if stored is None else stored.revision
+    return basis, generation
+
+
+def _risk_sources(work, version_id, rows, *, reader=None, activation_revision=None):
+    """Only actual validated causes can contribute to a newly offered risk exit."""
+    validated, generations, blockers = {}, [], []
+    for row in rows:
+        if row["payload"]["status"] != "CONFIRMED" or row["id"] in validated:
+            continue
+        basis, generation = _action_source(work, version_id, cause_id=row["id"], reader=reader,
+                                           activation_revision=activation_revision)
+        generations.append({"cause_id": row["id"], **generation})
+        if basis is None:
+            blockers.append({"cause_id": row["id"], "reason": generation["blocker"]})
+        else:
+            validated.update((item["id"], item) for item in basis.risk_rows)
+    return tuple(validated.values()), generations, blockers
+
+
 class DailyRuntimeEvaluationService:
     def __init__(
         self,
@@ -203,6 +273,7 @@ class DailyRuntimeEvaluationService:
         clock=None,
         commit_admission=None,
         event_id_factory: Callable[[str], UUID] | None = None,
+        _source_authority_reader=None,
     ):
         self._work = unit_of_work_factory
         self._prepare = prepare_inputs
@@ -211,6 +282,7 @@ class DailyRuntimeEvaluationService:
         self._clock = clock
         self._admission = commit_admission
         self._event_id = event_id_factory or (lambda _key: uuid4())
+        self._source_authority_reader = _source_authority_reader
         self._current_inputs = {}
 
     def _binding(self, work, plan):
@@ -480,6 +552,16 @@ class DailyRuntimeEvaluationService:
             eligible_ids = {f["id"] for f in facts}
             risk_rows = (() if _alert_only(plan)
                 else work.daily.list(symbol=plan.symbol, kind="RISK"))
+            ordinary_source, source_generation = (None, {}) if _alert_only(plan) else (
+                _ordinary_source(work, active.plan_version_id,
+                    reader=self._source_authority_reader, activation_revision=active.revision))
+            source_blockers = ([source_generation["blocker"]]
+                if "blocker" in source_generation else [])
+            _, risk_source_generation, risk_source_denied = _risk_sources(work,
+                active.plan_version_id, risk_rows, reader=self._source_authority_reader,
+                activation_revision=active.revision)
+            replay_observation = (self._source_authority_reader is not None
+                and ordinary_source is not None and not risk_source_denied)
             target = {
                 **({"capital_inputs": capital_inputs} if capital_inputs is not None else {}),
                 "plan_hash": plan_sha256(plan),
@@ -499,6 +581,9 @@ class DailyRuntimeEvaluationService:
                 "daily_evidence": None
                 if series is None
                 else daily_hash("daily-series-v1", series.model_dump(mode="json")),
+                **({"source_generation": {"ordinary": source_generation,
+                    "risks": risk_source_generation}}
+                   if not _alert_only(plan) and not replay_observation else {}),
             }
             linked_source_current = True
             if isinstance(plan, MarketLinkedTradePlan):
@@ -798,8 +883,9 @@ class DailyRuntimeEvaluationService:
             previous = synchronize_candidates(work, plan, active, binding, linkage_by_rule,
                 now=now, previous=previous, completed_series=completed_series,
                 facts=facts, risks=risks,
-                source_missing=series is None or inputs.linked_index is None)
-            if not risk_blocked and ordinary_eligible:
+                source_missing=(ordinary_source is None or series is None
+                    or inputs.linked_index is None))
+            if not risk_blocked and ordinary_eligible and ordinary_source is not None:
                 for rule in plan.ordinary_rules:
                     if isinstance(plan, UnifiedTradePlan):
                         daily_rule = rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
@@ -957,6 +1043,11 @@ class DailyRuntimeEvaluationService:
                         "SIMULATED", "INVALIDATED", "EXPIRED"}):
                     checked = {**checked, "executable_qty": 0, "blockers": [
                         *checked["blockers"], "EXCEPTION_CURRENT_EVIDENCE_REQUIRED"]}
+                if ordinary_source is None and checked["state"] != "SIMULATED":
+                    checked = {**checked, "executable_qty": 0,
+                        "state": signal["state"] if checked["state"] == "READY"
+                            else checked["state"],
+                        "blockers": list(dict.fromkeys([*checked["blockers"], *source_blockers]))}
                 if checked != row["payload"]:
                     row = work.daily.save(
                         row["id"],
@@ -972,8 +1063,13 @@ class DailyRuntimeEvaluationService:
                 for s in signals:
                     s["executable_qty"] = 0
                     s["blockers"] = [*s["blockers"], "ORDINARY_CONFLICT_BLOCK_BOTH"]
+            validated_risks, _, risk_source_blockers = _risk_sources(work,
+                active.plan_version_id, (work.daily.get(row["risk_id"]) for row in saved_risks),
+                reader=self._source_authority_reader, activation_revision=active.revision)
             risk_action = risk_execution(
-                saved_risks, plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable,
+                tuple({**row["payload"], "revision": row["revision"]}
+                      for row in validated_risks),
+                plan=plan, inventory=inventory, evaluated_at=now, tradable=tradable,
                 lots=lots,
             )
             alerts = []
@@ -1026,6 +1122,8 @@ class DailyRuntimeEvaluationService:
                             if daily else minute_target.isoformat()),
                         "evidence": [] if evidence is None else [evidence.model_dump(mode="json")],
                     })
+            source_diagnostics = dict.fromkeys([
+                *source_blockers, *(row["reason"] for row in risk_source_blockers)])
             snapshot = {
                 **({"pretrade": [v.model_dump(mode="json") for v in pretrade_by_rule.values()]}
                    if plan.schema_version in {8, 9} else {}),
@@ -1052,7 +1150,8 @@ class DailyRuntimeEvaluationService:
                 "risks": saved_risks,
                 "risk_action": risk_action,
                 "risk_input_known": risk_known,
-                "data_blockers": list(inputs.data_blockers),
+                "data_blockers": [*inputs.data_blockers, *(code for code in source_diagnostics
+                    if code not in inputs.data_blockers)],
                 "daily_evidence": None if series is None else series.model_dump(mode="json"),
                 "runtime_generation": inputs.runtime_generation,
                 "minute_target": None
@@ -1070,7 +1169,7 @@ class DailyRuntimeEvaluationService:
             events = []
             for resource in snapshot.get("exception_candidates", ()):
                 candidate = resource["candidate"]
-                if candidate["state"] == "PENDING":
+                if candidate["state"] == "PENDING" and ordinary_source is not None:
                     events.append(self._enqueue(work, plan, active, binding, now,
                         cause_id=candidate["candidate_id"], side="REMINDER", quantity=None,
                         simulated=0, confirmed=candidate["binding"]["decision_session"],
