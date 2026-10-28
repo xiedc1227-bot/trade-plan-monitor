@@ -167,6 +167,8 @@ def _risk_rows(work, plan, cause):
     by_id = {}
     for branch in plan.risk_branches:
         by_id.setdefault(risk_identity(branch), []).append(branch)
+    plan_order = {risk_identity(branch): index for index, branch in enumerate(
+        sorted(plan.risk_branches, key=lambda branch: branch.priority))}
     rows = []
     instant = work.daily.clock()
     for row in work.daily.list(symbol=plan.symbol, kind="RISK"):
@@ -187,7 +189,8 @@ def _risk_rows(work, plan, cause):
             rows.append(row)
     if cause["id"] not in {row["id"] for row in rows}:
         _reject()
-    return tuple(rows)
+    # Cohort allocation and equal-priority causes retain the evaluator's stable order.
+    return tuple(sorted(rows, key=lambda row: plan_order[risk_identity(row["payload"])]))
 
 
 def _actual_binding(work, version_id):

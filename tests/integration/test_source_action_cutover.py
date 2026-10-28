@@ -18,7 +18,7 @@ from tests.unit.test_source_coverage_baseline import _append_as_context
 from tests.unit.test_source_risk_controls import _parent
 
 from trade_plan_monitor.ai.daily_review import build_daily_review
-from trade_plan_monitor.decision.daily_risk import _condition_evidence_ids
+from trade_plan_monitor.decision.daily_risk import _condition_evidence_ids, risk_execution
 from trade_plan_monitor.decision.unified_conditions import evaluate_unified_condition
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json, daily_draft_sha256
@@ -47,7 +47,7 @@ _CONFIRMED = _NOW + timedelta(minutes=1)
 _ACTIVATED = _NOW + timedelta(minutes=2)
 
 
-def _draft(*, buy_only_failure=False, expired=False, severe_any=False):
+def _draft(*, buy_only_failure=False, expired=False, severe_any=False, parallel_risks=False):
     base, _ = _parent()
     draft = base.draft
     raw = draft.model_dump(mode="json")
@@ -60,6 +60,12 @@ def _draft(*, buy_only_failure=False, expired=False, severe_any=False):
                                    end_date="2026-10-26")
     if severe_any:
         raw["risk_branches"][1]["condition"]["type"] = "ANY"
+    if parallel_risks:
+        first = raw["risk_branches"][0] | dict(rule_id="plan-first", target_tactical_qty=100,
+            holding_scope=dict(mode="BEFORE_TRADE_DATE", trade_date="2026-10-26"))
+        second = first | dict(rule_id="plan-second",
+            holding_scope=dict(mode="FROM_TRADE_DATE", trade_date="2026-10-20"))
+        raw["risk_branches"] = [first, second]
     draft = type(draft).model_validate(raw)
     assert draft.to_executable() is not None
     return draft
@@ -84,6 +90,10 @@ def _risk_payload(draft, index=0):
         payload["evidence_ids"] = [identity
             for child in payload["technical_evidence"][0]["children"]
             for identity in child["fact_ids"]]
+    for name in ("rule_id", "holding_scope"):
+        value = getattr(branch, name, None)
+        if value is not None:
+            payload[name] = value.model_dump(mode="json") if name == "holding_scope" else value
     return identity, payload
 
 
@@ -137,11 +147,12 @@ def legacy(tmp_path):
     def create(*, extra=None, confirmed=True, active=True, upgraded=True,
                buy_only_failure=False, expired=False, extra_members=0,
                clock_at=_NOW + timedelta(minutes=3), historical_fact_owner=False,
-               severe_any=False):
+               severe_any=False, parallel_risks=False):
         engine = create_sqlite_engine(tmp_path / f"action-cutover-{len(engines)}.sqlite3")
         engines.append(engine)
         _upgrade(engine, "0027_simulation_capital")
-        draft = _draft(buy_only_failure=buy_only_failure, expired=expired, severe_any=severe_any)
+        draft = _draft(buy_only_failure=buy_only_failure, expired=expired, severe_any=severe_any,
+                       parallel_risks=parallel_risks)
         source, mapping = source_mapping(draft)
         if extra is not None:
             source, mapping = _append_as_context(source, mapping, extra,
@@ -177,6 +188,11 @@ def legacy(tmp_path):
             connection.execute(insert(DailyRecord), _daily("review-" + _VERSION, "REVIEW", draft,
                                                            review))
             connection.execute(insert(DailyRecord), _daily(cause_id, "RISK", draft, risk))
+            if parallel_risks:
+                second_id, second = _risk_payload(draft, index=1)
+                second_row = _daily(second_id, "RISK", draft, second)
+                second_row["created_at"] = (_NOW - timedelta(minutes=1)).isoformat()
+                connection.execute(insert(DailyRecord), second_row)
             if active:
                 connection.execute(insert(ActivePlan), dict(symbol=draft.symbol,
                     plan_version_id=_VERSION, revision=1, activated_at=_ACTIVATED.isoformat()))
@@ -412,8 +428,8 @@ def test_installation_membership_is_paged_once_per_call_even_with_multiple_risks
     assert all("ORDER BY" in statement and "LIMIT" in statement for statement in statements)
 
 
-def _current_version(state, kind):
-    draft = _draft()
+def _current_version(state, kind, *, draft=None):
+    draft = _draft() if draft is None else draft
     source, mapping = source_mapping(draft)
     with state.work() as work:
         identity = save_daily_draft(work, draft, mapping=mapping, source_text=source,
@@ -612,3 +628,48 @@ def test_severe_any_keeps_a_decisive_real_sat_fact_and_nondecisive_unsat_or_miss
         with case.work() as work, pytest.raises(SourceCoverageAuthorityError,
                                                 match="SOURCE_COVERAGE_REQUIRED"):
             _resolve(work, case.id, identity)
+
+
+@pytest.mark.parametrize("expected_basis", ["CURRENT", "HISTORICAL_TECHNICAL_RISK"])
+def test_verified_same_priority_cohorts_keep_the_original_plan_order_instead_of_database_order(
+    legacy, state, expected_basis,
+):
+    if expected_basis == "HISTORICAL_TECHNICAL_RISK":
+        case = legacy(parallel_risks=True)
+    else:
+        draft = _draft(parallel_risks=True)
+        identity, cause_id = _current_version(state, "RISK", draft=draft)
+        second_id, second = _risk_payload(draft, index=1)
+        second_row = _daily(second_id, "RISK", draft, second)
+        second_row["created_at"] = (_NOW - timedelta(minutes=1)).isoformat()
+        with state.engine.begin() as connection:
+            connection.execute(insert(DailyRecord), second_row)
+        case = SimpleNamespace(id=identity, cause_id=cause_id, draft=draft,
+            work=lambda: SqlAlchemyUnitOfWork(state.sessions,
+                                             clock=lambda: _NOW + timedelta(minutes=3)))
+    plan = case.draft.to_executable()
+    inventory = dict(symbol=plan.symbol, known=True, core_qty=0, tactical_qty=300,
+        total_qty=300, sellable_core=0, sellable_tactical=300)
+    lots = tuple(dict(id=identity, bucket="TACTICAL", quantity=100, sellable_quantity=100,
+                      acquired_trade_date=day) for identity, day in (
+        ("a-old", "2026-10-15"), ("b-overlap", "2026-10-22"), ("c-new", "2026-10-26")))
+    with case.work() as work:
+        stored = work.daily.list(symbol=plan.symbol, kind="RISK")
+        assert [row["payload"]["rule_id"] for row in stored] == ["plan-second", "plan-first"]
+        by_id = {row["payload"]["rule_id"]: row for row in stored}
+        original = tuple(by_id[risk_identity(branch)] for branch in sorted(
+            plan.risk_branches, key=lambda branch: branch.priority))
+        basis = _resolve(work, case.id, case.cause_id)
+        assert basis.basis == expected_basis
+
+        def action(rows):
+            return risk_execution(tuple(row["payload"] | dict(revision=row["revision"])
+                for row in rows), plan=plan, inventory=inventory, evaluated_at=work.daily.clock(),
+                tradable=True, lots=lots)
+
+        expected, actual = action(original), action(basis.risk_rows)
+        assert expected["cause_id"] == case.cause_id and expected["tactical_qty"] == 100
+        assert expected["lot_allocations"] == [
+            dict(id="b-overlap", bucket="TACTICAL", quantity=100)]
+        assert actual == expected, (
+            f"Plan-order action: {expected!r}; helper-order action: {actual!r}")
