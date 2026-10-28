@@ -52,6 +52,20 @@ def _business(chain):
             for table in ("daily_plan_record", "audit_log")}
 
 
+def _execution_effects(chain):
+    """A receipt replay may refresh observations, but cannot repeat a trade effect."""
+    with chain.plans._unit_of_work() as work:
+        statements = {
+            "daily": "SELECT * FROM daily_plan_record WHERE kind!='EVALUATION' ORDER BY id",
+            "audit": ("SELECT * FROM audit_log "
+                      "WHERE action!='DAILY_EVALUATION_RECORDED' ORDER BY id"),
+            "alerts": "SELECT * FROM alert_event ORDER BY id",
+            "deliveries": "SELECT * FROM delivery_attempt ORDER BY id",
+        }
+        return {key: tuple(work.daily.session.execute(text(sql)).all())
+                for key, sql in statements.items()}
+
+
 def _stale(chain):
     with chain.plans._unit_of_work() as work:
         store = SourceCoverageStore(work.daily.session)
@@ -78,10 +92,13 @@ def test_completed_simulation_replay_keeps_its_original_receipt_after_reassessme
     payload = command(chain, signal)
     receipt = chain.post("simulated-trades", payload, key="completed-before-reassessment")
     _stale(chain)
-    before = _business(chain)
+    before = _execution_effects(chain)
     assert chain.post("simulated-trades", payload,
                       key="completed-before-reassessment") == receipt
-    assert _business(chain) == before
+    assert _execution_effects(chain) == before
+    with chain.plans._unit_of_work() as work:
+        current_signal = work.daily.get(signal["signal_id"])["payload"]
+        assert current_signal["state"] == "SIMULATED" and current_signal["simulated_qty"] == 100
 
 
 def test_current_source_proof_does_not_resize_the_offered_ordinary_quantity(current):
@@ -103,6 +120,8 @@ def test_current_source_check_runs_under_the_actual_existing_writer(current, mon
 
     def guarded(work, version_id, **kwargs):
         basis = original(work, version_id, **kwargs)
+        if kwargs.get("cause_id") != signal["signal_id"]:
+            return basis  # The separate runtime refresh is not a second simulation.
         with chain.plans._session_factory() as other:
             other.execute(text("PRAGMA busy_timeout=0"))
             store = SourceCoverageStore(other)
