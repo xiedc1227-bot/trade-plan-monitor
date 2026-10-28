@@ -238,3 +238,19 @@ GET /api/v1/plan-versions/{version_id}/source-coverage 在分页前核验同sess
 仅保留一页。实际连续索引、全部摘要字段、准确native peer及opaque cursor循环检查绑定短页链。409／422游标／上下文冲突要求显式重读第一页；不自动重试或读取全页来确认obligations。只有当前匹配且服务端canConfirmReview的观察才提供coverageEvidenceHash／coverageRulesVersion。CURRENT阶段只表示来源视图匹配浏览器归属，不代表监控就绪或执行许可；实际确认仍重验服务端权限。
 
 只读原文导航要求准确已验证hash和Python代码点start／end／excerpt。保留CRLF、emoji、组合符及所选重复出现位置；拒绝孤立代理字符、非法跨度或不匹配，不按子串兜底寻找。返回可转义展示的before／mark／after文本，不编辑原文，也不把textarea归一化偏移当原偏移。HUMAN来源及完整覆盖另行标明审核状态。
+
+## PMA-K32 — 只读覆盖展示与提取来源
+
+已保存计划的覆盖面板独立于当前页展示完整摘要，包括短页之外的全局阻断。OBLIGATION、ISSUE和NORMALIZATION_CHANGE保持各自含义；保存映射提议、serverState、准确已登记Human链接、CURRENT_ASSESSMENT及HISTORICAL_INPUT不合并为批准标签。重复路径保留独立控件及稳定渲染key。只有CURRENT浏览器观察展示分页；等待、过期、失败及不可用观察提供显式读取／重新开始操作。读取分页或定位字段／原文跨度不改变plan、review、receipt、库存或通知。
+
+未保存提取诊断在展示前要求准确匹配当前原始UTF-8来源SHA-256，以及真实extraction／mapping peer。来源、结果、operation或组件生命周期变化时丢弃晚到hash结果。COMPLETE、BLOCKED和UNKNOWN仍是诊断；缺摘要保留历史展示。当前逐句映射与旧字段证据分别标明。本地问题标记不能解除服务端来源阻断、伪造自动忠实性、确认审核或启用计划。浏览器检查复用服务端DTO及共享解码器，不建立第二套语义／hash授权引擎。
+
+已有reviewId仅表述为留存审核记录；覆盖面板独立描述currentReviewBound。Binding来源将SOURCE标为原文来源、PRODUCT_CONTRACT标为产品固定规则、HUMAN_SUPPLEMENT标为已独立登记人工补充。留存审核ID和HUMAN来源均不能证明当前来源已获审核。组件及合成UI-wire测试不证明自然语言提取准确率或实际监控就绪。
+
+## PMA-K33 — 工作台归属、明确确认与隔离旅程
+
+工作台加载使用独立latest-intent通道，具备abort及单调ownerGeneration。切换route／source／candidate时同步使旧UI归属失效；A-B-A返回A不能复活较早A操作。异步schema／runtime／list／detail／preview／activation读取及mutation结果仅应用于捕获的归属。Payload在await前深快照；组件销毁后不启动新加载。已发送POST即使结果被丢弃，仍可能在服务端完成；浏览器abort／失效不代表服务端取消。稳定mutation幂等语义保持不变。新提取使旧saved／mapping／preview／activation状态失效，不能将留存旧回执显示为新提交。
+
+仅已保存的当前Schema5–9文档在原始来源未变、candidate完整JSON结构与native一致、dailyMapping准确一致时提供来源上下文。对象key顺序可不同；数组顺序、缺字段、null及值类型不能改变。绑定native version／hash／review元组及可选准确保存摘要，独立于busy。发送前以imperative方式再次核验上下文及当前服务端canConfirmReview绑定，并在设置busy前捕获。确认通过既有mutation client明确发送coverageEvidenceHash及coverageRulesVersion。409清除旧覆盖，要求显式native重读、第一页读取及另行确认；不增加自动审核、启用或重试。下一页导航仅typed GET。第一页／刷新先重读准确native归属再接受新seed，失败时保留显示中的编辑／受阻草稿。字段导航使用实际daily-.PATH元素ID，不从用户文本构建selector或修改值。
+
+未提交理由／路径／排除片段在同owner、同content重检时保留，content hash或sourceOwnerKey改变时同步清空。空native issues不豁免来源完整性；合法BLOCKED草稿仍可保存。隔离浏览器夹具仅使用新建且归属明确的临时SQLite及生产save／supplement／read／confirmation／activation接口，setup不授审核。外部provider／market／notification能力禁用，调用即失败。准确测试JSON路由先于不变SPA fallback，读取／恢复preview检查产生零SQL DML、DDL或BEGIN IMMEDIATE。这些夹具边界不证明完整Chrome旅程、T12兼容或C04，仍须独立验收。

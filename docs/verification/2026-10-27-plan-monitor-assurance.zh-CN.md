@@ -305,3 +305,43 @@ T10d2 `700afdc` 先有8项有效失败／12通过：三项实际SUCCEEDED来源�
 最终T11a `2771191` 有83项新状态／展示测试。五文件source-state／presentation／API／plan／transport组合304项4.61秒通过，类型及diff检查通过（`t11a-injected-page-neighbor1.log`、`t11a-injected-page-typecheck1.log`）。修复后原两项独立探针1.37秒通过（`t11a-review-injected-decoder-probe-readiness-green1.log`）。覆盖A-B-A、晚到hash／success／error／finally、scope释放、准确native／seed／完整摘要／短页遍历、安全错误、人工重试及原始Unicode定位。根读完四文件后提交。探针意外生成的单个根目录Vite结果缓存已核实并清理，后续探针缓存留在ignored项目证据；未删除package或用户文件。
 
 这里只验收只读基础，实际组件、工作台确认、浏览器旅程及T12／C04仍待完成。未访问浏览器、供应商、用户数据库、行情或通知。供应商0/48；用户迁移0。
+
+## PMA-R37 — T11b组件及T11d提取阶段诊断
+
+实际T11b渲染首先因缺少整份计划阻断而失败（1失败，1.24秒；`t11b-review-render-red1.log`）。独立审查另复现两项重复路径渲染key失败，34项未选中（1.91秒；`t11b-duplicate-path-render-red1.log`）。提交 `f093e33` 保留重复控件，同时展示保存提议、服务端阻断、准确补参链接、全部三种行、显式短页导航及已验证原始来源高亮。最终四文件component／client／presentation选择259项5.17秒通过，类型检查通过（`t11b-duplicate-path-final1.log`、`t11b-duplicate-path-typecheck1.log`）。此前257项运行与其重叠，不是额外验收总数。
+
+T11d首先因匹配的提取摘要未显示而失败（1失败，2.55秒；`t11d-extraction-summary-red1.log`）。提交 `8ebc350` 将显示绑定到当前原始UTF-8来源及真实extraction／mapping身份，拒绝晚到SHA结果，并区分当前逐句映射与旧字段证据。其32项聚焦矩阵2.91秒通过，五文件extraction／old-panel／AI／source／presentation选择296项3.53秒通过（`t11d-extraction-matrix-green2.log`、`t11d-extraction-summary-final1.log`）；类型检查通过（`t11d-typecheck-final1.log`）。本地问题标记不能确认来源条件或创建审核。
+
+根逐个复核两份四文件子片。数量与早期client／foundation选择重叠；渲染的合成wire数据不是真实供应商真值。这些组件结果不代表实际工作台确认、Chrome旅程、T12或C04完成。供应商0/48；用户迁移0。
+
+## PMA-R38 — T11c0最新意图归属与留存操作
+
+首批挂载归属测试有4项真实失败，898毫秒（`t11c0-concurrency-red.log`）。扩大矩阵独立暴露组件销毁后仍加载（1失败／15通过，1.27秒；`t11c0-concurrency-matrix1.log`），随后暴露load-preview POST未带所属load的abort signal（1失败／22通过，1.83秒；`t11c0-load-preview-abort-red.log`）。独立实际用户流程探针发现B提取失败后留存A保存状态，以及B提交等待时重新显示A旧回执。两项成为正式RED（2失败／23通过，1.49秒；`t11c0-extraction-owner-red.log`），未伪造服务端取消或新poller。
+
+提交 `d8cc770` 使用独立latest-load意图及捕获的mutation快照，丢弃晚到success／error／finally结果，阻止销毁后I/O，并保留原稳定mutation幂等性。实际A-B-A、await间source／candidate改变、旧保存／提取结果、等待中的runtime／list／preview读取、同body重试及停止等待仍受测试。最终六文件组合79项2.63秒通过，其中28项归属测试（`t11c0-extraction-owner-final-neighbors.log`）；类型检查通过（`t11c0-extraction-owner-typecheck.log`）。原独立两探针811毫秒通过（`t11-c0-review-probe-independent-green.log`）。
+
+早期49通过／2失败的相邻运行保留于 `t11c0-neighbors1.log`；两项失败均来自旧dailySupplementBatches不合法wire身份／header。独立仅测试提交 `f82902f` 补足合法UUID及准确native hash／review／list／activation envelope，原candidate／mapping／source不改。全部14个旧断言保留：13个AST完全一致，1个saved-ID literal明确迁为其UUID常量（`t11c0-fixture-preservation.json`）。其六文件对账73项2.49秒通过（`t11c0-root-fixture-neighbor.log`）。不声称每个旧断言字节不变，也不将夹具迁移说成来源语义修复。
+
+以上运行有重叠。浏览器归属是UI一致性，不是服务端策略权限；已发送旧POST仍可能在远端完成。覆盖确认按设计独立属于T11c1子片。供应商0/48；用户迁移0。
+
+## PMA-R39 — T11c1真实父组件确认与来源标签
+
+新测试导入实际plans/PlanWorkbench.vue。最初3项有效RED显示BLOCKED／等待中的观察仍允许确认，COMPLETE确认请求缺少两个来源字段（1.75秒；`t11c1-actual-parent-red.log`）。独立真实字段focus RED指出现有daily-.PATH ID（1失败／21未选中，1.67秒；`t11c1-navigation-red.log`）。提交 `0e5bb7d` 绑定完整native candidate／source／mapping归属，在busy前捕获当前服务端许可，发送前imperative复核，并使用稳定mutation client及准确coverageEvidenceHash／coverageRulesVersion。保留BLOCKED保存、typed下一页GET、显式native重读／新seed恢复及独立启用。
+
+根审查复现同owner／同hash重检清掉未完成表单值（1失败／32未选中，1.45秒；`t11c1-same-owner-form-red.log`）。最小tuple比较现使两值相等时保留理由／路径／排除片段，同content hash换owner仍同步清空。另两项实际父组件RED暴露留存旧review被标为当前批准、PRODUCT_CONTRACT被误标原文（2失败／33未选中，1.72秒；`t11c1-display-provenance-red.log`）。Footer现仅说明留存记录，来源区分产品固定规则、原文及已登记补参；标签不改变授权行为。
+
+最终七文件组合114项4.14秒通过：35项新实际父组件加79项旧相邻测试（`t11c1-display-provenance-final.log`）。覆盖Schema5–9、无需看完全部页即可按短第一页确认、不自动启用／重试、未被响应式观察的嵌套candidate改变、preview／native差异、source／mapping改变、A-B-A、晚到读取／POST结果，以及409后显式重读／重新确认。四项独立挂载探针1.61秒通过（`t11-c1-review-probe-independent-final.log`）。另五文件source／extraction UI选择291项4.19秒通过（`t11c1-stage-ui.log`）。这些选择有重叠；此前111／112项结果保留，不累加。
+
+最新完整类型检查通过（`t11c1-typecheck5.log`），diff检查通过。中间 `t11c1-typecheck4.log` 保留并行e2测试三项类型错误，由其归属作者独立修正，未改C1或放宽类型。根完整复核准确四文件后提交。合成UI-wire测试证明浏览器归属／发送，不证明当前服务端来源或提取准确率；服务端权限另有独立测试。Chrome旅程、T12及C04仍未完成。供应商0/48；用户迁移0。
+
+## PMA-R40 — T11e1隔离生命周期夹具及待完成浏览器验收
+
+实际临时生命周期setup首先返回404（1失败，3.12秒；`t11e1-browser-fixture-agent-red.log`）。后续第二份source reassessment复现command-ID冲突（1失败／9未选中，3.55秒；`t11e1-browser-fixture-agent-command-red.log`），command身份现包含实际version。提交 `de20283` 创建生产接口支撑的完整但未审核HUMAN草稿，以及误标／markup／missing-cap阻断案例，包含真实登记补参、新版本、审核回执、明确启用、过期generation／cursor拒绝及不同source归属。最终20项选择运行16.60秒通过，Ruff通过（`t11e1-browser-fixture-agent-release.log`、`t11e1-browser-fixture-agent-release-ruff.log`）。这是选择运行，不声称20项均为owned夹具用例或代表供应商提取准确率。
+
+实际静态服务暴露SPA catchall先于夹具JSON路由。根保留native失败（1失败，3.06秒；`t11e1-static-route-red-root.log`），在 `4e204be` 仅修夹具路由顺序。当前完整owned夹具文件12项10.59秒通过（`t11e1-static-read-root-green.log`）。Setup后真实SQL trace观察source coverage GET、native detail GET及恢复preview POST均无INSERT／UPDATE／DELETE／REPLACE、DDL或BEGIN IMMEDIATE，准确storage快照保持不变。已测试loopback／origin／closed-body、归属明确临时目录关闭／清理、禁用AI，以及调用即失败的provider／market／notification能力。未打开或迁移用户数据库。
+
+首轮Chrome基线在isolation端点返回SPA HTML（`t11e2-baseline-pane-red1.log`），这是夹具前置失败，不算缺功能RED。路由修复后，稳定pre-C1资源在真实region locator产生缺覆盖面板的有效失败（`t11e2-baseline-pane-red2.log`）。当前C1构建成功本身不授浏览器验收。T11e2完整旅程仍待完成，将在完整结果及复核后另节记录；此处不预报green。
+
+同源axe在真实CSP下成功加载后，Chrome在原始来源pre暴露serious scrollable-region-focusable问题（`t11e2-csp-axe-green1.log`）；日志名称不表示该旅程已通过。独立聚焦unit RED观察到tabIndex=-1而非0（1失败／36未选中，1.42秒；`t11e2-scroll-focus-root-red.log`）。根窄范围提交 `4783c6e` 增加tabindex=0及可见focus outline。13文件source-UI选择528项6.30秒通过（`t11-source-ui-combined-root-green.log`），新构建1.75秒通过（`t11e2-scroll-focus-root-build.log`）。此回归与前述子片重叠，最终浏览器复验仍待完成。
+
+早期无效collection／TEMP运行及原RED继续保留在R30／R36及其日志中。R37–R40全部数量属于独立且重叠的命令。T12历史／兼容、C04、全项目／容量、真实语料提取及监控就绪／安装审计仍待完成。真实供应商调用0/48；用户迁移0；未获取实时行情或发送真实通知。
