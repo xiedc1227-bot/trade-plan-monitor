@@ -196,3 +196,13 @@ source-action helper独立79项通过（`t09-risk-owned-final.log`，12.53秒）
 ResearchSession最初没有实际SQL ActivePlan，独立复现1项失败，3.21秒（`readiness-research-authority-red1.log`）。专用私有来源适配器、全新SQL归属及明确runtime／simulation接入后，24项通过，3.13秒（`readiness-research-authority-green1.log`）；提交 `cd3706f`。覆盖已持有ORM／实际SQL篡改、clone引擎、相等输入克隆、嵌套修改、虚拟归属、运行clock区间、关闭撤销、合法晚于虚拟时间的人工审核、真实执行、不重复执行及默认实时拒绝。root独立复审三个文件。原输入字节／run_id／authority_id及Daily REVIEW语义保持不变。
 
 相邻选择52通过／1失败，116.55秒（`readiness-research-authority-neighbor1.log`）。原ordinary预算与冻结批次引用失败已通过；剩余失败发生在在线对照前置。初步“审核请求缺字段”的判断有误，Chain.activate实际已发送该字段。root只读检查此隔离库，发现ordinary_rules[1].condition.reference.source存在SOURCE_CONTEXT_UNVERIFIED／SOURCE_RELATION_MISMATCH。仅将未注册合成注释改为既有 `fixture`；原17条断言及全部阈值／策略／golden完整保留。两个对照参数随后通过，29.78秒（`readiness-research-parity-annotation1.log`）；提交 `531b9eb`。由此对应修复该单项失败，未放宽来源防护。独立冻结例外消费者仍在T09b验收，不据此推断完整C03或项目通过。供应商0/48，用户迁移0。
+
+## PMA-R25 — 例外来源门禁与准确失败对应
+
+独立例外RED为16失败／16通过，26.21秒（`t09-exception-red-frozen.log`）。root另在真实runtime来源诊断刷新后复现两项REJECT失败（`t09-exception-cleanup-red.log`，3.71秒）。准确当前来源核验、已完成回执先返回及五项诊断本地拒绝清理后，34项通过，27.11秒（`t09-exception-current-green1.log`），覆盖真实writer竞态、两路完整数量、回滚及四项脱敏HTTP完整性案例。独立代码复审未发现必改。授权／回放／消费核心片为 `01194c2`；独立清理测试片为 `db08bfd`。未改变公共Context／hash／数量或添加command标志。
+
+扩大22文件组合235通过／25失败，185.57秒（`t09-exception-neighbor-green1.log`；准确选择 `t09-exception-neighbor-files.json`）。root发现simulation第二次例外检查漏传已有明确冻结reader；补充该处传递后，准确21项replay失败及34项当前检查51通过／4失败，66.17秒（`t09-exception-replay-consume-green1.log`；节点 `t09-exception-replay-rerun-nodes.json`）。即修复17项生产消费者失败；剩余四项为冻结测试helper直接调用，不是另一条实时许可降级。
+
+另四项原失败使用虚拟plan归属及手写review的私有P3 harness。两文件修复现以HUMAN来源／保存／审核／启用经过实际server路径，保留固定version／review身份。原例外／模拟／API调用方及五项新审计24通过，14.27秒（`readiness-p3-private-source-red1.log`、`readiness-p3-private-source-green2.log`）；提交 `1d3d05f`。三个原调用文件49条断言完全保留，不主张AI_NEW／raw fidelity，不伪造COMPLETE；另验过期审核复用被拒。
+
+冻结helper现于预览／批准传真实session reader。首次四节点重跑2通过／2项更后续失败，53.68秒（`t09-replay-helper-agent-green.log`）：准备先按默认计划建mapping，再覆盖真实例外计划，且未保存实际提取输入。按真实draft／mapping／account直接构造同一review字段／evidence，并传 `extraction_inputs(extracted)` 修复前置，不改来源／raw／冻结预期。两项后续失败35.29秒通过；全部四个原worker节点随后73.16秒通过（`t09-replay-helper-agent-two-green.log`、`t09-replay-helper-agent-final.log`）；提交 `2ddc095`。原helper两条断言及全部旧golden保持不变。以上阶段重跑对应修复全部25项失败；独立实际读取／消费者绑定及发送前修复后仍须最终组合回归。T09／C03保持开放。供应商0/48，用户迁移0。
