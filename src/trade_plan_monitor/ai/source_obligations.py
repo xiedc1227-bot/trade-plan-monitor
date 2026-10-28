@@ -14,6 +14,7 @@ from trade_plan_monitor.domain.daily_scope import scope_hash
 _PATH = re.compile(r"[A-Za-z_]\w*(?:(?:\.[A-Za-z_]\w*)|(?:\[\d+\]))*")
 _DECLARATION = re.compile(r"\s*(" + _PATH.pattern + r")\s*=\s*(.+?)\s*\Z")
 MISSING = object()
+MAX_SOURCE_CODEPOINTS = 150_000
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,7 @@ class SourceDeclaration:
 
 
 def bounded_clauses(source):
-    if not isinstance(source, str) or not source.strip() or len(source) > 150_000:
+    if not isinstance(source, str) or not source.strip() or len(source) > MAX_SOURCE_CODEPOINTS:
         raise ValueError("source must be nonblank bounded text")
     clauses = server_source_clauses(source)
     if len(clauses) > 512:
