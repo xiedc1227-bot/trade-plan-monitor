@@ -23,6 +23,7 @@ from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.state.daily_state_models import DailyFactState, DailyRiskState
 from trade_plan_monitor.state.repositories import RepositoryError
+from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
 from trade_plan_monitor.state.source_coverage_authority import (
     SourceCoverageAuthorityError,
     _verify_supplements,
@@ -132,6 +133,7 @@ def _fact_evidence_owned(work, plan, state, instant):
     if state.evidence_ids != consumed:
         return False
     owners = {}
+    reads = ActionOwnerReader(work)
 
     def owned(evidence):
         if evidence.children:
@@ -144,12 +146,12 @@ def _fact_evidence_owned(work, plan, state, instant):
             # The current risk wire has no independent SIGNAL identity carrier.
             return False
         for identity in evidence.fact_ids:
-            row = work.daily.get(identity)
+            row = reads.daily(identity)
             if row is None or row["kind"] != "FACT" or row["symbol"] != plan.symbol:
                 return False
             fact = DailyFactState.model_validate(row["payload"])
             if fact.plan_version_id not in owners:
-                owners[fact.plan_version_id] = work.plans.get_version_details(fact.plan_version_id)
+                owners[fact.plan_version_id] = reads.details(fact.plan_version_id)
             owner = owners[fact.plan_version_id]
             if (owner is None or owner.symbol != plan.symbol
                     or owner.content_hash != fact.content_hash or fact.kind != condition.fact_kind
@@ -171,7 +173,7 @@ def _risk_rows(work, plan, cause):
         sorted(plan.risk_branches, key=lambda branch: branch.priority))}
     rows = []
     instant = work.daily.clock()
-    for row in work.daily.list(symbol=plan.symbol, kind="RISK"):
+    for row in ActionOwnerReader(work).risks(plan.symbol):
         payload = row["payload"]
         try:
             state = DailyRiskState.model_validate(payload)
@@ -194,18 +196,20 @@ def _risk_rows(work, plan, cause):
 
 
 def _actual_binding(work, version_id):
-    details = work.plans.get_version_details(version_id)
+    reads = ActionOwnerReader(work)
+    details = reads.details(version_id)
     if details is None or details.daily_mapping is None:
         _reject()
-    active = work.plans.get_active(details.symbol)
-    activation = work.plans.get_activation_state(details.symbol)
+    reads.coverage(details)
+    active = reads.active(details.symbol)
+    activation = reads.activation(details.symbol)
     if active is None or activation is None:
         _reject()
     if (active.plan_version_id != details.id or details.status != "ACTIVE"
             or activation.plan_version_id != details.id or activation.revision != active.revision
             or activation.changed_at != active.activated_at):
         _reject("SOURCE_COVERAGE_STALE")
-    review = work.daily.get("review-" + details.id)
+    review = reads.daily("review-" + details.id)
     if review is None or not review["payload"].get("confirmed") or details.review_id is None:
         _reject()
     expected = dict(review_id=details.review_id, review_revision=details.review_revision,
@@ -261,6 +265,7 @@ def _same_time(value, actual):
 
 
 def _historical_identity(work, details, active):
+    ActionOwnerReader(work).historical_root()
     store = SourceCoverageStore(work.daily.session)
     _membership_root(store)
     member = store.cutover(details.id)
@@ -311,7 +316,7 @@ def _risk_meaning_known(work, details):
 
 def _require(work, version_id, cause_id):
     details, active, plan = _actual_binding(work, version_id)
-    cause = None if cause_id is None else work.daily.get(cause_id)
+    cause = None if cause_id is None else ActionOwnerReader(work).daily(cause_id)
     if cause_id is not None and (cause is None or cause["symbol"] != details.symbol
                                  or cause["kind"] not in {"SIGNAL", "RISK"}):
         _reject()
@@ -344,7 +349,8 @@ def require_source_action_authority(work, version_id, *, cause_id=None):
     all existing quote/inventory/window/consumption checks still apply afterward.
     """
     try:
-        return _require(work, version_id, cause_id)
+        with work.daily.session.no_autoflush:
+            return _require(work, version_id, cause_id)
     except SourceCoverageAuthorityError:
         raise
     except SourceCoverageUpgradeRequired:
