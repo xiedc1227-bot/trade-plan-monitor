@@ -77,11 +77,22 @@ export interface JsonTransportResponse {
   readonly status: number;
 }
 
+export interface JsonTransportOptions {
+  readonly maxResponseBytes?: number | undefined;
+}
+
 export async function requestJson(
   fetchImplementation: typeof fetch,
   input: RequestInfo | URL,
   init?: RequestInit,
+  options?: JsonTransportOptions,
 ): Promise<JsonTransportResponse> {
+  const requestedLimit = options?.maxResponseBytes;
+  const maxResponseBytes = requestedLimit === undefined ? MAX_RESPONSE_BYTES : requestedLimit;
+  if (!Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 ||
+    maxResponseBytes > MAX_RESPONSE_BYTES) {
+    throw invalidResponse(0);
+  }
   let response: Response;
   try {
     response = await fetchImplementation(input, init);
@@ -89,7 +100,7 @@ export async function requestJson(
     throw networkError();
   }
 
-  const body = await readJson(response, input === "/api/v1/plan-editor-schema");
+  const body = await readJson(response, maxResponseBytes, input === "/api/v1/plan-editor-schema");
   if (!response.ok) {
     throw parseErrorResponse(body, response.status);
   }
@@ -112,12 +123,12 @@ function networkError(): ApiClientError {
   });
 }
 
-async function readJson(response: Response, editorContract = false): Promise<unknown> {
+async function readJson(response: Response, maxResponseBytes: number, editorContract = false): Promise<unknown> {
   const contentLength = response.headers.get("Content-Length");
   if (
     contentLength !== null &&
     /^\d+$/.test(contentLength) &&
-    Number(contentLength) > MAX_RESPONSE_BYTES
+    Number(contentLength) > maxResponseBytes
   ) {
     await response.body?.cancel().catch(() => undefined);
     throw invalidResponse(response.status);
@@ -138,7 +149,7 @@ async function readJson(response: Response, editorContract = false): Promise<unk
         chunks.push(decoder.decode());
         break;
       }
-      if (value.byteLength > MAX_RESPONSE_BYTES - receivedBytes) {
+      if (value.byteLength > maxResponseBytes - receivedBytes) {
         await reader.cancel().catch(() => undefined);
         throw invalidResponse(response.status);
       }

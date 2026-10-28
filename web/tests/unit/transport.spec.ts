@@ -20,6 +20,7 @@ it("permits only the editor's documented occurrence policy, never a credential f
 });
 
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const SOURCE_RESPONSE_BYTES = 1024 * 1024;
 
 function fetchResponse(response: Response): typeof fetch {
   return vi.fn(async () => response);
@@ -259,4 +260,197 @@ describe("shared JSON transport", () => {
     expect(clientSource).toContain('from "./transport"');
     expect(clientSource).not.toMatch(/JSON\.parse|TextDecoder|getReader|safeErrorMessages/);
   });
+});
+
+describe("per-request raw response byte limits", () => {
+  it("accepts exactly 1 MiB and rejects the next raw byte", async () => {
+    for (const extra of [0, 1]) {
+      const body = `"${"a".repeat(SOURCE_RESPONSE_BYTES - 2 + extra)}"`;
+      const result = requestJson(
+        fetchResponse(new Response(body)), "/api/test", undefined,
+        { maxResponseBytes: SOURCE_RESPONSE_BYTES },
+      );
+      if (extra === 0) await expect(result).resolves.toHaveProperty("body", JSON.parse(body));
+      else await expect(result).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+    }
+  });
+
+  it("cancels an excessive declared length without acquiring a reader", async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      cancel,
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("null"));
+        controller.close();
+      },
+    });
+    const getReader = vi.spyOn(stream, "getReader");
+    await expect(requestJson(
+      fetchResponse(new Response(stream, {
+        headers: { "Content-Length": String(SOURCE_RESPONSE_BYTES + 1) },
+      })), "/api/test", undefined, { maxResponseBytes: SOURCE_RESPONSE_BYTES },
+    )).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+    expect(getReader).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(stream.locked).toBe(false);
+  });
+
+  it.each([undefined, "0", "1", "invalid"])(
+    "bounds actual streamed bytes even with Content-Length %s", async (contentLength) => {
+      const body = new TextEncoder().encode(`"${"a".repeat(SOURCE_RESPONSE_BYTES - 1)}"`);
+      const cancel = vi.fn();
+      let index = 0;
+      const chunks = [body.slice(0, SOURCE_RESPONSE_BYTES), body.slice(SOURCE_RESPONSE_BYTES)];
+      const stream = new ReadableStream<Uint8Array>({
+        cancel,
+        pull(controller) {
+          const chunk = chunks[index++];
+          if (chunk === undefined) controller.close();
+          else controller.enqueue(chunk);
+        },
+      }, { highWaterMark: 0 });
+      await expect(requestJson(
+        fetchResponse(new Response(stream, {
+          ...(contentLength === undefined ? {} : { headers: { "Content-Length": contentLength } }),
+        })), "/api/test", undefined, { maxResponseBytes: SOURCE_RESPONSE_BYTES },
+      )).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(index).toBe(2);
+      expect(stream.locked).toBe(false);
+    },
+  );
+
+  it.each([
+    ["whitespace", `null${" ".repeat(SOURCE_RESPONSE_BYTES - 3)}`],
+    ["JSON escapes", `"${"\\u0061".repeat(Math.floor((SOURCE_RESPONSE_BYTES - 2) / 6) + 1)}"`],
+  ])("counts original %s rather than a re-serialized JSON value", async (_name, raw) => {
+    expect(new TextEncoder().encode(raw).byteLength).toBeGreaterThan(SOURCE_RESPONSE_BYTES);
+    expect(new TextEncoder().encode(JSON.stringify(JSON.parse(raw))).byteLength)
+      .toBeLessThan(SOURCE_RESPONSE_BYTES);
+    await expect(requestJson(
+      fetchResponse(new Response(raw)), "/api/test", undefined,
+      { maxResponseBytes: SOURCE_RESPONSE_BYTES },
+    )).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+  });
+
+  it("accepts a byte-exact multibyte response split inside UTF-8 characters", async () => {
+    const value = `${"😀".repeat((SOURCE_RESPONSE_BYTES - 4) / 4)}ab`;
+    const bytes = new TextEncoder().encode(JSON.stringify(value));
+    expect(bytes.byteLength).toBe(SOURCE_RESPONSE_BYTES);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 3));
+        controller.enqueue(bytes.slice(3, SOURCE_RESPONSE_BYTES - 5));
+        controller.enqueue(bytes.slice(SOURCE_RESPONSE_BYTES - 5));
+        controller.close();
+      },
+    });
+    const result = await requestJson(fetchResponse(new Response(stream)), "/api/test", undefined,
+      { maxResponseBytes: SOURCE_RESPONSE_BYTES });
+    expect(result.body).toBe(value);
+    expect(stream.locked).toBe(false);
+  });
+
+  it("rejects multibyte content one byte above the cap despite its smaller UTF-16 length", async () => {
+    const raw = JSON.stringify(`${"😀".repeat((SOURCE_RESPONSE_BYTES - 4) / 4)}abc`);
+    expect(raw.length).toBeLessThan(SOURCE_RESPONSE_BYTES);
+    expect(new TextEncoder().encode(raw).byteLength).toBe(SOURCE_RESPONSE_BYTES + 1);
+    await expect(requestJson(fetchResponse(new Response(raw)), "/api/test", undefined,
+      { maxResponseBytes: SOURCE_RESPONSE_BYTES }))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+  });
+
+  it("still cancels and releases a malformed UTF-8 stream under the smaller cap", async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      cancel,
+      start(controller) {
+        controller.enqueue(new Uint8Array([0x22, 0xc3, 0x28, 0x22]));
+      },
+    });
+    await expect(requestJson(fetchResponse(new Response(stream)), "/api/test", undefined,
+      { maxResponseBytes: SOURCE_RESPONSE_BYTES }))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(stream.locked).toBe(false);
+  });
+
+  it("keeps overflow secret-safe and releases the reader even when cancellation fails", async () => {
+    let sent = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() { throw new Error("cancel-secret"); },
+      pull(controller) {
+        if (sent) controller.close();
+        else {
+          sent = true;
+          controller.enqueue(new TextEncoder().encode('"response-secret"'));
+        }
+      },
+    }, { highWaterMark: 0 });
+    const result = requestJson(fetchResponse(new Response(stream)), "/api/test", undefined,
+      { maxResponseBytes: 4 });
+    await expect(result).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+    await expect(result).rejects.not.toThrow(/secret/);
+    expect(stream.locked).toBe(false);
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY,
+    1.5, MAX_RESPONSE_BYTES + 1, Number.MAX_SAFE_INTEGER + 1, "1024", null])(
+    "rejects invalid cap %s before invoking fetch", async (maxResponseBytes) => {
+      const fetchImplementation = vi.fn(async () => new Response("null"));
+      await expect(requestJson(fetchImplementation, "/api/test", undefined,
+        { maxResponseBytes: maxResponseBytes as number }))
+        .rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 0 });
+      expect(fetchImplementation).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not persist a smaller cap across requests or alter omitted/undefined defaults", async () => {
+    const fetchImplementation = vi.fn(async () => new Response('"1234567"'));
+    await expect(requestJson(fetchImplementation, "/api/test", undefined, { maxResponseBytes: 8 }))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    for (const options of [undefined, {}, { maxResponseBytes: undefined },
+      { maxResponseBytes: MAX_RESPONSE_BYTES }]) {
+      await expect(requestJson(fetchImplementation, "/api/test", undefined, options))
+        .resolves.toHaveProperty("body", "1234567");
+    }
+  });
+
+  it("preserves the exact RequestInit and AbortSignal without leaking transport options", async () => {
+    const controller = new AbortController();
+    const init = { method: "GET", signal: controller.signal, headers: { Accept: "application/json" } };
+    const fetchImplementation = vi.fn<typeof fetch>(async () => new Response('{"ok":[true]}'));
+    const result = await requestJson(fetchImplementation, "/api/test", init,
+      { maxResponseBytes: SOURCE_RESPONSE_BYTES });
+    expect(fetchImplementation).toHaveBeenCalledExactlyOnceWith("/api/test", init);
+    expect(fetchImplementation.mock.calls[0]?.[1]).toBe(init);
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.body)).toBe(true);
+    expect(Object.isFrozen((result.body as { ok: boolean[] }).ok)).toBe(true);
+  });
+
+  it("preserves sanitized network classification for an already aborted request", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImplementation = vi.fn<typeof fetch>(async (_input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      throw new DOMException("abort-secret", "AbortError");
+    });
+    const result = requestJson(fetchImplementation, "/api/test", { signal: controller.signal },
+      { maxResponseBytes: SOURCE_RESPONSE_BYTES });
+    await expect(result).rejects.toMatchObject({ code: "NETWORK_ERROR", status: 0 });
+    await expect(result).rejects.not.toThrow("abort-secret");
+  });
+
+  it.each([[409, "CONFLICT"], [422, "VALIDATION_ERROR"], [500, "INTERNAL_ERROR"]] as const)(
+    "preserves structured API error %s under a smaller cap", async (status, code) => {
+      const response = new Response(JSON.stringify({ error: {
+        code, details: [], message: "provider-secret", requestId: "1".repeat(32),
+      } }), { status });
+      const result = requestJson(fetchResponse(response), "/api/test", undefined,
+        { maxResponseBytes: SOURCE_RESPONSE_BYTES });
+      await expect(result).rejects.toMatchObject({ code, status });
+      await expect(result).rejects.not.toThrow("provider-secret");
+    },
+  );
 });
