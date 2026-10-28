@@ -3,7 +3,8 @@ import { computed, reactive, watch } from "vue";
 import type { DailyMapping, DailyReviewPreview, PlanVersionView } from "../../api/generated";
 import { fieldLabels, type Json } from "./planSchema";
 const props = defineProps<{ preview: DailyReviewPreview | null; saved: PlanVersionView | null;
-  mapping: DailyMapping | null; values: Record<string, Json>; busy: boolean; activeVersionId?: string | null }>();
+  mapping: DailyMapping | null; values: Record<string, Json>; busy: boolean; activeVersionId?: string | null;
+  canConfirmReview?: boolean; sourceOwnerKey?: string | number }>();
 const emit = defineEmits<{ supplement: [items: { path: string; reason: string }[], clauses: { id: string; reason: string; paths: string[] }[]];
   exclude: [clauseId: string, text: string];
   save: []; confirm: []; activate: []; deactivate: [] }>();
@@ -14,12 +15,12 @@ const exclusionTexts = reactive<Record<string, string>>({});
 const missing = computed(() => props.preview?.review.issues.filter(i => i.code === "DAILY_SOURCE_BINDING_REQUIRED") ?? []);
 const issues = computed(() => props.saved?.dailyIssues ?? props.preview?.review.issues ?? []);
 const evidenceMapping = computed(() => props.preview?.review.mapping ?? props.mapping);
-watch(() => evidenceMapping.value?.candidate_content_hash, (current, previous) => {
-  if (current === previous) return;
+watch(() => [evidenceMapping.value?.candidate_content_hash, props.sourceOwnerKey], (current, previous) => {
+  if (current[0] === previous[0] && current[1] === previous[1]) return;
   for (const entries of [reasons, clauseReasons, clausePaths, exclusionTexts]) {
     for (const key of Object.keys(entries)) delete entries[key];
   }
-});
+}, { flush: "sync" });
 const pendingItems = computed(() => missing.value.filter(i => (reasons[i.path] ?? "").trim().length >= 20)
   .map(i => ({ path: i.path, reason: reasons[i.path] ?? "" })));
 const reviewedClauses = computed(() => (props.preview?.review.mapping.clauses ?? [])
@@ -28,7 +29,8 @@ const reviewedClauses = computed(() => (props.preview?.review.mapping.clauses ??
 function register() {
   emit("supplement", pendingItems.value, reviewedClauses.value);
 }
-const canConfirm = computed(() => props.saved?.status === "DRAFT" && (props.saved.dailyIssues?.length ?? 0) === 0 && !props.saved.reviewId);
+const canConfirm = computed(() => props.canConfirmReview === true && props.saved?.status === "DRAFT" &&
+  (props.saved.dailyIssues?.length ?? 0) === 0 && !props.saved.reviewId);
 </script>
 
 <template>
@@ -54,7 +56,7 @@ const canConfirm = computed(() => props.saved?.status === "DRAFT" && (props.save
         </template>
       </div>
       <details><summary>逐项参数来源与人工补充（{{ evidenceMapping.bindings.length }}）</summary>
-        <ul><li v-for="binding in evidenceMapping.bindings" :key="binding.path">{{ binding.path }} = {{ JSON.stringify(binding.value) }} · {{ binding.origin === 'HUMAN_SUPPLEMENT' ? '已独立登记人工补充' : '原文来源' }}</li></ul>
+        <ul><li v-for="binding in evidenceMapping.bindings" :key="binding.path">{{ binding.path }} = {{ JSON.stringify(binding.value) }} · {{ binding.origin === 'HUMAN_SUPPLEMENT' ? '已独立登记人工补充' : binding.origin === 'PRODUCT_CONTRACT' ? '产品固定规则' : '原文来源' }}</li></ul>
       </details>
       <h3 v-if="preview">需要独立人工定义的参数</h3>
       <p v-if="!missing.length">当前参数已有来源或已登记补充。继续核对全部条件与日期。</p>
@@ -77,7 +79,7 @@ const canConfirm = computed(() => props.saved?.status === "DRAFT" && (props.save
       <button type="button" :disabled="busy || saved?.status !== 'DRAFT' || !saved?.canActivate" @click="emit('activate')">启用当前审核绑定</button>
       <button v-if="saved && activeVersionId === saved.id" type="button" :disabled="busy" @click="emit('deactivate')">停用当前计划</button>
     </div>
-    <p v-if="saved">已保存版本 {{ saved.version }} · {{ saved.reviewId ? '当前内容已审核' : '待审核' }}</p>
+    <p v-if="saved">已保存版本 {{ saved.version }} · {{ saved.reviewId ? '已有审核记录，请查看原文核对状态' : '待审核' }}</p>
     <a v-if="saved" :href="`/plans/${encodeURIComponent(saved.id)}`">打开此版本继续审核（可刷新恢复）</a>
   </section>
 </template>

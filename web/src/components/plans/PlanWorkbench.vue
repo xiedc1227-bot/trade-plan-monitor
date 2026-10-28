@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, shallowRef, watch } from "vue";
 import { usePlanWorkspace } from "../../composables/usePlanWorkspace";
 import PlanSourceExtraction from "./PlanSourceExtraction.vue";
 import PlanFieldEditor from "./PlanFieldEditor.vue";
 import PlanSourceReview from "./PlanSourceReview.vue";
+import SourceCoverageReview from "./SourceCoverageReview.vue";
 import PlanSimulationPanel from "./PlanSimulationPanel.vue";
 import P2PolicyReview from "./P2PolicyReview.vue";
 import P3PolicyReview from "./P3PolicyReview.vue";
@@ -11,11 +12,21 @@ import PlanExceptionPermissions from "./PlanExceptionPermissions.vue";
 const props = defineProps<{ planVersionId?: string | undefined }>();
 const work = usePlanWorkspace();
 const { source, provider, providers, extraction, versions, historyOnly, candidate, schema, definitions, preview, saved, activated, mapping, values, busy, error, notice } = work;
+const { phase: coveragePhase, page: coveragePage, safeError: coverageError,
+  verifiedSourceHash: coverageVerifiedSourceHash } = work.sourceCoverage;
+const coverageNotice = shallowRef("");
+function revealField(path: string) {
+  const field = document.getElementById(`daily-.${path}`);
+  if (!(field instanceof HTMLElement)) { coverageNotice.value = "此参数当前没有可定位的编辑字段，请按完整路径核对计划。"; return; }
+  coverageNotice.value = "";
+  field.focus(); field.scrollIntoView?.({ block: "center" });
+}
 const linkedCandidate = computed(() => candidate.value !== null && typeof candidate.value === "object"
   && !Array.isArray(candidate.value) && [6, 7, 8, 9].includes(Number(candidate.value.schema_version)));
 const exceptionCandidate = computed(() => candidate.value !== null && typeof candidate.value === "object"
   && !Array.isArray(candidate.value) && [7, 8, 9].includes(Number(candidate.value.schema_version)));
-watch(() => props.planVersionId, id => work.load(id), { immediate: true });
+watch(() => props.planVersionId, id => work.load(id), { immediate: true, flush: "sync" });
+watch(work.ownerGeneration, () => { coverageNotice.value = ""; }, { flush: "sync" });
 </script>
 
 <template>
@@ -46,8 +57,13 @@ watch(() => props.planVersionId, id => work.load(id), { immediate: true });
       <button type="button" :disabled="busy" @click="work.action(work.refreshPreview)">检查当前参数与来源</button>
     </section>
     <PlanSourceReview v-if="candidate && !historyOnly" :preview="preview" :saved="saved" :mapping="mapping" :values="values" :busy="busy"
+      :can-confirm-review="work.canConfirmSourceReview.value" :source-owner-key="work.ownerGeneration.value"
       :active-version-id="activated?.active ? activated.planVersionId : null"
       @supplement="work.supplement" @exclude="work.exclude" @save="work.save" @confirm="work.confirm" @activate="work.activate" @deactivate="work.deactivate" />
+    <SourceCoverageReview :phase="coveragePhase" :page="coveragePage" :safe-error="coverageError"
+      :source-text="source" :source-hash="saved?.sourceHash ?? null" :verified-source-hash="coverageVerifiedSourceHash" :busy="busy"
+      @refresh="work.refreshSourceCoverage" @first-page="work.refreshSourceCoverage" @next-page="work.sourceCoverage.nextPage" @reveal-field="revealField" />
+    <p v-if="coverageNotice" role="status">{{ coverageNotice }}</p>
     <PlanSimulationPanel v-if="saved && !historyOnly" :key="`${saved.id}:${saved.status}`" :version="saved" :request="work.request" />
   </article>
 </template>

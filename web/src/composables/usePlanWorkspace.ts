@@ -1,12 +1,16 @@
 import { computed, onBeforeUnmount, shallowRef } from "vue";
 import type { ActivePlanView, ConfiguredAIRuntimeView, DailyMapping, DailyReviewPreview, DailySupplement,
-  PlanExtractionCommand, PlanVersionView, PlanVersionSummary, DailyReviewPreviewCommand, DailySupplementCommand } from "../api/generated";
+  PlanExtractionCommand, PlanVersionView, PlanVersionSummary, DailyReviewPreviewCommand, DailySupplementCommand,
+  PlanReviewConfirmationCommand } from "../api/generated";
 import { createConditionPlanApi, isConditionPlanJson } from "../api/conditionPlans";
 import { createAIPlanApi } from "../api/ai";
 import { resolveApiFetch } from "../api/context";
 import { createPlanApi } from "../api/plans";
+import { ApiClientError } from "../api/transport";
 import { usePlanDrafting } from "./usePlanDrafting";
 import { usePlanWorkspaceOwner, type WorkspaceOperation } from "./usePlanWorkspaceOwner";
+import { useSourceCoverage, type SourceCoverageContext } from "./useSourceCoverage";
+import { summaryBinding } from "../components/plans/sourceCoveragePresentation";
 import type { Json, Schema } from "../components/plans/planSchema";
 
 export function semanticValues(value: Json, path = ""): Record<string, Json> {
@@ -21,6 +25,31 @@ export function semanticValues(value: Json, path = ""): Record<string, Json> {
     return result;
   }
   return value === null ? {} : { [path]: value };
+}
+
+/** Compare complete JSON values; this does not recompute a server semantic hash. */
+function sameJson(left: unknown, right: unknown): boolean {
+  const pending: [unknown, unknown][] = [[left, right]];
+  try {
+    while (pending.length) {
+      const [a, b] = pending.pop()!;
+      if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+        if (typeof a === "number" && !Number.isFinite(a) || typeof b === "number" && !Number.isFinite(b) ||
+          !["string", "number", "boolean"].includes(typeof a) && a !== null || !Object.is(a, b)) return false;
+        continue;
+      }
+      if (Array.isArray(a) !== Array.isArray(b)) return false;
+      if (!Array.isArray(a) && ![Object.prototype, null].includes(Object.getPrototypeOf(a)) ||
+        !Array.isArray(b) && ![Object.prototype, null].includes(Object.getPrototypeOf(b))) return false;
+      const keys = Object.keys(a), other = Object.keys(b);
+      if (keys.length !== other.length || Array.isArray(a) && a.length !== (b as unknown[]).length) return false;
+      for (const key of keys) {
+        if (!Object.hasOwn(b, key)) return false;
+        pending.push([(a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]]);
+      }
+    }
+    return true;
+  } catch { return false; }
 }
 
 export function usePlanWorkspace() {
@@ -76,6 +105,54 @@ export function usePlanWorkspace() {
   const api = createConditionPlanApi(fetcher, controller.signal);
   const reads = createPlanApi(fetcher);
   const request = api.request;
+  function coverageContext(): SourceCoverageContext | null {
+    const version = saved.value;
+    if (!version || dirty.value || historyOnly.value || !isConditionPlanJson(version.planJson) ||
+      source.value !== version.sourceText || !version.sourceHash || !version.contentHash ||
+      !version.reviewEvidenceHash || version.reviewRevision == null || !mapping.value ||
+      !sameJson(mapping.value, version.dailyMapping)) return null;
+    try { if (!sameJson(candidate.value, JSON.parse(version.planJson))) return null; }
+    catch { return null; }
+    return { planVersionId: version.id, sourceHash: version.sourceHash, candidatePlanHash: version.planHash,
+      contentHash: version.contentHash, originalReviewEvidenceHash: version.reviewEvidenceHash,
+      reviewId: version.reviewId ?? null, reviewRevision: version.reviewRevision,
+      sourceText: source.value, ownerGeneration: owner.generation.value,
+      ...(version.sourceCoverage ? { expectedSummary: version.sourceCoverage } : {}) };
+  }
+  const sourceCoverage = useSourceCoverage(coverageContext, { api: reads });
+  function confirmationSnapshot() {
+    // Re-read shallow state here: direct nested edits must not borrow a cached proof.
+    const context = coverageContext(), version = saved.value, proof = sourceCoverage.currentConfirmation.value;
+    const summary = sourceCoverage.summary.value;
+    if (!context || !version || version.status !== "DRAFT" || version.reviewId ||
+      (version.dailyIssues?.length ?? 0) !== 0 || !proof || !summary || !summary.canConfirmReview ||
+      sourceCoverage.verifiedSourceHash.value !== context.sourceHash ||
+      summary.sourceHash !== context.sourceHash || summary.candidatePlanHash !== context.candidatePlanHash ||
+      summary.contentHash !== context.contentHash || summary.originalReviewEvidenceHash !== context.originalReviewEvidenceHash ||
+      summary.reviewId !== context.reviewId || summary.reviewRevision !== context.reviewRevision ||
+      context.expectedSummary && summaryBinding(summary) !== summaryBinding(context.expectedSummary)) return null;
+    return { version, proof: { ...proof }, binding: JSON.stringify([context, summaryBinding(summary)]) };
+  }
+  const canConfirmSourceReview = computed(() => confirmationSnapshot() !== null);
+  async function refreshSourceCoverage() {
+    const initial = coverageContext();
+    sourceCoverage.invalidate();
+    if (!initial) { notice.value = "当前内容尚未保存或已变化，请先保存并重新核对来源。"; return; }
+    const expected = JSON.stringify(initial);
+    await action(async operation => {
+      const current = await reads.getPlanVersion(initial.planVersionId, { signal: controller.signal });
+      if (!owner.current(operation)) return;
+      const actual = coverageContext();
+      if (!actual || JSON.stringify(actual) !== expected) return;
+      if (current.sourceText !== source.value || !sameJson(current.dailyMapping, mapping.value) ||
+        !sameJson(JSON.parse(current.planJson), candidate.value)) {
+        notice.value = "保存版本已变化，请重新打开该版本后核对；当前编辑内容已保留。";
+        return;
+      }
+      // A fresh native seed triggers one first-page read, including after a stale cursor.
+      saved.value = current; baseVersion.value = current;
+    });
+  }
   let previewSequence = 0;
   const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
   function snapshot() {
@@ -289,11 +366,24 @@ export function usePlanWorkspace() {
     });
   }
   async function confirm() {
+    const initial = confirmationSnapshot();
+    if (!initial) {
+      sourceCoverage.invalidate(); notice.value = "当前来源证明不可确认，请重新读取并核对当前版本。"; return;
+    }
     await action(async operation => {
-      const version = snapshot().version;
-      if (!version) return;
-      await request("/api/v1/plan-review-confirmations", { planVersionId: version.id, contentHash: version.contentHash,
-        sourceHash: version.sourceHash, reviewEvidenceHash: version.reviewEvidenceHash, expectedRevision: version.reviewRevision, resolutions: [] });
+      const actual = confirmationSnapshot();
+      if (!actual || actual.binding !== initial.binding) { sourceCoverage.invalidate(); return; }
+      const version = initial.version;
+      const body: PlanReviewConfirmationCommand = { planVersionId: version.id, contentHash: version.contentHash!,
+        sourceHash: version.sourceHash!, reviewEvidenceHash: version.reviewEvidenceHash!, expectedRevision: version.reviewRevision!,
+        resolutions: [], ...initial.proof };
+      try { await request("/api/v1/plan-review-confirmations", body); }
+      catch (cause) {
+        if (owner.current(operation) && cause instanceof ApiClientError && cause.status === 409) {
+          sourceCoverage.invalidate(); throw new Error("审核依据已变化，请重新读取来源核对结果，再明确确认。");
+        }
+        throw cause;
+      }
       if (!owner.current(operation)) return;
       const current = await reads.getPlanVersion(version.id);
       if (!owner.current(operation)) return;
@@ -340,5 +430,6 @@ export function usePlanWorkspace() {
     });
   }
   return { extraction, retryExtraction, stopWaiting, versions, providers, historyOnly, dirty, extractionStatus, openVersion, candidate, source, provider, schema, definitions, mapping, preview, saved, activated, busy, error, notice,
-    ownerGeneration: owner.generation, values, request, action, load, extract, edit, editSource, refreshPreview, exclude, supplement, save, confirm, activate, deactivate };
+    ownerGeneration: owner.generation, sourceCoverage, canConfirmSourceReview, refreshSourceCoverage,
+    values, request, action, load, extract, edit, editSource, refreshPreview, exclude, supplement, save, confirm, activate, deactivate };
 }
