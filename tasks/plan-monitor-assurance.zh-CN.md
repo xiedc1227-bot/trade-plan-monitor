@@ -125,6 +125,7 @@
 - [ ] 交付并验证。
 - 依赖：T11。
 - 文件／范围：T12a新增`test_source_coverage_compatibility.py`、`test_source_coverage_occurrence_compatibility.py`及`test_source_coverage_frozen_compatibility.py`，另对账原工作台成功夹具（4文件）。保留其原断言及通用来源阻断负例。T12b独立关闭已复现的新工作台运行接纳竞态，使用真实来源归属writer fence、既有最终job接纳接口、实际存储竞态／回执重放测试及必要的合成接口夹具对账（最多5文件）；其它归属修复先拆片再编辑。Fence在输入复制后重新核对准确当前source／review，并保持到真实job提交完成。缺能力安全拒绝，同键已完成回执及旧冻结codec仍属历史。两子片实现归属不重叠，可在T11后并行推进；各自测试、复核及提交后才关闭C04。早期读取或hash未变均不能证明跨数据库原子性。
+- PMA-R45的真实事实串用反例也阻止C04关闭。T12c0新增唯一的纯当前predicate／fact归属helper、聚焦单测及实际来源碰撞测试（最多3文件）。T12c1用已冻结helper接入当前runtime投影／旧信号维护、source action authority及聚焦实际回归（最多4文件）。T12c2覆盖其余simulation接纳、exception seed／grant／consume、source delivery／人工提醒及实际回归，每个顺序子片最多5文件，不在一次编辑合并更多归属。Legacy未绑定fact只能证明其真实原owner中唯一适用的完整predicate定义。须测试日期／signal scope重叠、不同要求、持久CONFIRMED原因及独立技术风险。不从人工说明猜语义、不合并要求、不从active sibling推归属、不重写已存fact、不改变source-coverage规则／hash域或旧冻结formula。明确历史回放仍属历史，不能捐赠live权限。完整显式target登记／存储／UI是后续单独测试的T13前置；临时歧义保持为可见缺证据，不能算成功正例或遗漏豁免。
 - 验收：A05、A06；验证：V03及历史codec／回放。准确legacy读取和冻结字节保持，legacy不授新覆盖，新来源保存／读取／复用不可降级政策或重开消耗信号。
 
 ### PMA-C04 — 已审核来源工作流检查点
