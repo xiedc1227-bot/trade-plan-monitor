@@ -178,3 +178,9 @@ source-action helper独立79项通过（`t09-risk-owned-final.log`，12.53秒）
 新生成器在旧回执重放后合法刷新观测。root先前新增测试对EVALUATION写入要求过严，现核原回执及全部库存／消费／风险／事实／提醒／投递效果，允许观测刷新；模拟写锁探针区分自身cause与独立runtime检查。12项通过，14.09秒（`t09-simulation-producer-replay-boundary.log`）；提交 `fb1eea9`。一个未经改动的负向历史风险快照，从原隔离运行库只读捕获，固定原payload／源码哈希，仅用于历史不安全报价拒绝；新生成／旧head边界21项通过，7.14秒（`t09-historical-risk-head-boundary.log`）；提交 `0d1c20e`。不从该捕获手写当前预期交易。
 
 真实同级重叠cohort探针发现，DB行序会把原100股批次分配改为200股。helper现按原计划优先级稳定顺序返回已验证行，真实CURRENT／cutover及相邻组合118项通过，41.39秒（`t09-risk-order-probe.log`、`t09-risk-order-current.log`）；提交 `aab25ee`。runtime帧随后另有3失败／1通过：其他已验证分支可进入当前输入帧。限定原帧已确认行及顺序后，相关51项通过，33.41秒（`runtime-frame-agent-red-01.log`、`runtime-frame-agent-green-01.log`）；提交 `754f8c6`。未新增历史限制、截断或改变risk_execution公式。T09／C03仍开放，含真实冻结loop兼容及例外／发送入口。供应商0/48，用户迁移0。
+
+## PMA-R22 — 启用接缝与原提醒夹具
+
+冻结loop调查在适配器实现前独立复现两项失败：原单版本周期丢失两笔fill，schedule启用在runtime reader之前触发实时provenance要求。shared activation现于原writer事务内调用私有 `_require_source_review(target_id)`，默认仍为准确实时 `require_repository_review`。独立拒绝reader测试先因启用忽略它而失败，随后通过且无启用／版本写入（`activation-reader-red.log`）；提交 `de57236`。仅此hook不代表待完成的冻结loop适配器通过验收。
+
+相邻组合最初25项通过、4项时区夹具失败（`activation-reader-green.log`）；旧布局提醒选择另有2失败／1通过（`alert-fixture-red.log`），均在审核时、目标断言前失败。合成固定阈值注释不是已注册来源文字。仅这两处本地夹具注释改用既有准确 `fixture` 形式；原7条时区和29条旧存储断言完全保留，阈值与存储约束不变。准确启用／来源／恢复／时区／旧提醒组合重跑32项通过，13.91秒，含既有Starlette弃用警告（`activation-reader-alert-fixture-green.log`）；提交 `6f0d645`。未扩大来源注册表。供应商0/48，用户迁移0。
