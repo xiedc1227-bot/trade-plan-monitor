@@ -60,6 +60,22 @@ def review_payload(saved, **updates):
     }
 
 
+def coverage_review_payload(client, saved):
+    """Add actual complete coverage only to an intended successful confirmation.
+
+    The general review/activation payload deliberately keeps its old shape so
+    missing-coverage negatives and the closed activation command remain tested.
+    """
+    response = client.get(f"/api/v1/plan-versions/{saved['id']}/source-coverage")
+    assert response.status_code == 200, response.text
+    proof = response.json()["summary"]
+    assert proof["status"] == "COMPLETE" and proof["coverageComplete"]
+    assert proof["contentHash"] == saved["contentHash"]
+    assert proof["sourceHash"] == saved["sourceHash"]
+    return review_payload(saved, coverageEvidenceHash=proof["coverageEvidenceHash"],
+                          coverageRulesVersion=proof["rulesVersion"])
+
+
 def reviewed_save(
     client,
     draft,
@@ -145,7 +161,7 @@ def make_app(tmp_path, *, ai=False):
     )
 
 
-def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
+def test_formal_extraction_unknown_source_cannot_be_waived_by_human_supplements(tmp_path):
     app = make_app(tmp_path, ai=True)
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         provider = client.get("/api/v1/ai-runtime").json()["providerId"]
@@ -183,7 +199,9 @@ def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
             },
         )
         assert not saved_unresolved["canActivate"]
-        post(client, "plan-review-confirmations", review_payload(saved_unresolved), expected=422)
+        blocked = post(client, "plan-review-confirmations", review_payload(saved_unresolved),
+                       expected=409)
+        assert blocked["error"]["details"][0]["code"] == "SOURCE_COVERAGE_REQUIRED"
         post(
             client,
             "plan-activations",
@@ -199,55 +217,37 @@ def test_formal_extraction_edit_review_activate_and_restart_binding(tmp_path):
         draft = UnifiedPlanDraft.model_validate(edited)
         saved = reviewed_save(client, draft, base=saved_unresolved["id"])
         assert saved["version"] == 2 and saved["reviewId"] is None
-        post(
+        stale = post(
             client,
             "plan-review-confirmations",
             review_payload(saved, sourceHash="0" * 64),
-            expected=422,
+            expected=409,
         )
-        review_key = str(uuid4())
-        review = post(client, "plan-review-confirmations", review_payload(saved), key=review_key)
-        assert (
-            post(client, "plan-review-confirmations", review_payload(saved), key=review_key)
-            == review
-        )
-        active_command = review_payload(saved, reviewId=review["reviewId"], reviewRevision=1)
-        active = post(client, "plan-activations", active_command)
-        assert active["active"] and active["revision"] == 1
-        assert client.get("/api/v1/plan-activation-states/601021.SH").json() == active
-
-    # A new lifecycle reads the same SQLite store; review identity and activation survive.
-    with TestClient(make_app(tmp_path), base_url="http://127.0.0.1:8765") as client:
-        restored = client.get("/api/v1/plan-versions/" + saved["id"]).json()
-        assert restored["reviewId"] == review["reviewId"] and restored["canActivate"]
-        assert client.get("/api/v1/plan-activation-states/601021.SH").json()["active"]
+        assert stale["error"]["details"][0]["code"] == "SOURCE_COVERAGE_STALE"
+        # A registered proposed policy cannot turn this unknown source into proof.
+        proof = client.get(f"/api/v1/plan-versions/{saved['id']}/source-coverage").json()
+        assert proof["summary"]["status"] == "BLOCKED"
+        blocked = post(client, "plan-review-confirmations", review_payload(saved,
+            coverageEvidenceHash=proof["summary"]["coverageEvidenceHash"],
+            coverageRulesVersion=proof["summary"]["rulesVersion"]), expected=409)
+        assert blocked["error"]["details"][0]["code"] == "SOURCE_COVERAGE_REQUIRED"
         changed_source = reviewed_save(
             client,
             draft,
             source=SOURCE + " Revised technical scope.",
             base=saved["id"],
-            activation_revision=1,
+            activation_revision=0,
             supplement_revision=1,
         )
         assert changed_source["sourceHash"] != saved["sourceHash"]
         assert changed_source["reviewId"] is None and not changed_source["canActivate"]
-        assert client.get("/api/v1/plan-activation-states/601021.SH").json() == active
-        stale = {**active_command, "planVersionId": changed_source["id"], "expectedRevision": 1}
-        post(client, "plan-activations", stale, expected=409)
-        post(
-            client,
-            "plan-review-confirmations",
-            review_payload(saved, expectedRevision=0),
-            expected=409,
-        )
-        replacement_review = post(
-            client, "plan-review-confirmations", review_payload(changed_source))
-        assert client.get("/api/v1/plan-activation-states/601021.SH").json() == active
-        replacement_active = post(client, "plan-activations", review_payload(
-            changed_source, reviewId=replacement_review["reviewId"], reviewRevision=1,
-            expectedRevision=1))
-        assert replacement_active["revision"] == 2
-        assert replacement_active["planVersionId"] == changed_source["id"]
+        proof = client.get(f"/api/v1/plan-versions/{changed_source['id']}/source-coverage").json()
+        assert proof["summary"]["status"] == "BLOCKED"
+        blocked = post(client, "plan-review-confirmations", review_payload(changed_source,
+            coverageEvidenceHash=proof["summary"]["coverageEvidenceHash"],
+            coverageRulesVersion=proof["summary"]["rulesVersion"]), expected=409)
+        assert blocked["error"]["details"][0]["code"] == "SOURCE_COVERAGE_REQUIRED"
+        assert not client.get("/api/v1/plan-activation-states/601021.SH").json()["active"]
 
 
 @pytest.mark.parametrize("format", ["JSON", "YAML"])

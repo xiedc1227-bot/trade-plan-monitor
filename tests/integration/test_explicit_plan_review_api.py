@@ -6,7 +6,13 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.integration.test_current_plan_api import make_app, post, review_payload, reviewed_save
+from tests.integration.test_current_plan_api import (
+    coverage_review_payload,
+    make_app,
+    post,
+    review_payload,
+    reviewed_save,
+)
 from tests.integration.test_source_treatment_review_api import (
     SOURCE,
     assert_semantic_review,
@@ -97,9 +103,10 @@ def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
         assert first["contentHash"] and first["sourceHash"] and first["reviewEvidenceHash"]
         assert first["reviewRevision"] == 0 and first["reviewId"] is None
         assert first["canActivate"] is False and first["dailyIssues"]
-        post(
-            client, "plan-review-confirmations", review_payload(first, resolutions=[]), expected=422
+        blocked = post(
+            client, "plan-review-confirmations", review_payload(first, resolutions=[]), expected=409
         )
+        assert blocked["error"]["details"][0]["code"] == "SOURCE_COVERAGE_REQUIRED"
         post(
             client,
             "plan-review-confirmations",
@@ -115,17 +122,19 @@ def test_mapping_extraction_save_review_and_public_activation_are_server_bound(
             ),
             expected=422,
         )
-        post(
+        stale = post(
             client,
             "plan-review-confirmations",
             review_payload(first, reviewEvidenceHash="e" * 64),
-            expected=422,
+            expected=409,
         )
+        assert stale["error"]["details"][0]["code"] == "SOURCE_COVERAGE_STALE"
         mapping = literal_mapping(draft)
         register(client, draft, mapping)
         current = save(client, draft, mapping, base=first["id"])
         assert_semantic_review(current)
-        reviewed = post(client, "plan-review-confirmations", review_payload(current))
+        reviewed = post(client, "plan-review-confirmations",
+                        coverage_review_payload(client, current))
         assert reviewed["canActivate"] and reviewed["revision"] == 1 and reviewed["reviewId"]
         post(client, "plan-review-confirmations", review_payload(current), expected=409)
         post(
@@ -170,7 +179,7 @@ def test_partial_draft_persists_and_stale_review_cannot_cross_an_immutable_edit(
         second = reviewed_save(client, edited, source=SOURCE, base=first["id"])
         assert second["version"] == 2 and second["contentHash"] != first["contentHash"]
         assert second["reviewId"] is None
-        post(
+        stale = post(
             client,
             "plan-review-confirmations",
             review_payload(
@@ -179,8 +188,9 @@ def test_partial_draft_persists_and_stale_review_cannot_cross_an_immutable_edit(
                 sourceHash=first["sourceHash"],
                 reviewEvidenceHash=first["reviewEvidenceHash"],
             ),
-            expected=422,
+            expected=409,
         )
+        assert stale["error"]["details"][0]["code"] == "SOURCE_COVERAGE_STALE"
         assert (
             client.get("/api/v1/plan-versions/" + first["id"]).json()["planJson"]
             == restored["planJson"]
@@ -264,7 +274,8 @@ def test_original_source_partial_save_current_edit_and_semantic_review_stay_boun
         assert [c["excerpt"] for c in second["dailyMapping"]["clauses"]] == [
             c.excerpt for c in daily_source_clauses(_ORIGINAL_SOURCE)
         ]
-        post(client, "plan-review-confirmations", review_payload(second), expected=422)
+        blocked = post(client, "plan-review-confirmations", review_payload(second), expected=409)
+        assert blocked["error"]["details"][0]["code"] == "SOURCE_COVERAGE_REQUIRED"
         assert second["canActivate"] is False and second["reviewId"] is None
         body = json.loads(second["planJson"])
         assert body["ordinary_rules"][0]["condition"]["type"] == "ALL"
