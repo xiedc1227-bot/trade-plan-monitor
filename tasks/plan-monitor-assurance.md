@@ -108,7 +108,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T10 — Expose coverage resources and exact review binding
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify (PMA-R31–R35; T11/T12/C04 remain open).
 - Depends on: T09.
 - Files/scope: sequential T10a1 DTO/read composition/GET/service/HTTP tests (5); T10a2 same-fresh-record plan list/detail/save/workbench summaries and narrow ACTIVE DTO handling (3); T10a3 actual extraction summary and focused tests (at most4). Existing exact review-command fields/guards remain unchanged. Then T10b both OpenAPI and TypeScript profiles plus projection test (5); T10c paired API-owner appendix and compatibility tests (at most4); T10d0 optional per-request raw-byte response bound and transport tests (2); T10d1 shared typed coverage decoder/read client, exact existing plan decoder adaptation and focused tests (3); T10d2 exact existing extraction decoder adaptation and focused tests (2). Each child is independently tested and committed before the next shared-owner edit. Preserve the default4MiB transport bound; the new resource uses its stricter1MiB raw-wire bound before JSON parsing. Existing closed response-key lists admit only the approved additions; absent historical fields remain compatible.
 - Acceptance: A05,A06,A10; Verify: focused V03,V07. Exact source-bound pagination, no read writes,409/422/integrity errors, literal false authority, old projection preserved after only approved additions.
