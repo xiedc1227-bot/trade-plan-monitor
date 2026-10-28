@@ -10,6 +10,7 @@ import type {
 } from "./generated";
 import { isShanghaiDateTime } from "./shanghaiTime";
 import { ApiClientError, invalidResponse, requestJson } from "./transport";
+import { isSourceCoverageSummary } from "./sourceCoverage";
 
 export interface AIRequestOptions {
   readonly signal?: AbortSignal;
@@ -219,6 +220,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       "promptVersion",
       "providerId",
       "sourceTextSha256",
+      "sourceCoverage",
       "startedAt",
       "status",
       "submittedAt",
@@ -242,7 +244,8 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
     !isOptionalArray(value.warnings, 256, isExtractionIssue) ||
     !isOptionalArray(value.unmappedText, 256, isUnmappedText) ||
     !isOptionalArray(value.validationIssues, 512, isValidationIssue) ||
-    !isOptionalUsage(value.usage)
+    !isOptionalUsage(value.usage) ||
+    !(value.sourceCoverage == null || isSourceCoverageSummary(value.sourceCoverage))
   ) {
     return false;
   }
@@ -253,6 +256,7 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       isBoundedToken(value.model, 200) &&
       isBoundedToken(value.promptVersion, 64) &&
       isBoundedText(value.draftPlanJson, 4 * 1024 * 1024) &&
+      extractionSourceMatches(value) &&
       Array.isArray(value.evidence) &&
       (["plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"].includes(value.promptVersion)
         ? value.evidence.length === 0 && isRecord(value.dailyMapping) && value.mapping == null
@@ -278,6 +282,8 @@ function hasNoResultPayload(value: Record<string, unknown>): boolean {
   return (
     value.draftPlanJson == null &&
     value.mapping == null &&
+    value.dailyMapping == null &&
+    value.sourceCoverage == null &&
     isAbsentOrEmptyArray(value.evidence) &&
     isAbsentOrEmptyArray(value.assumptions) &&
     isAbsentOrEmptyArray(value.warnings) &&
@@ -287,6 +293,25 @@ function hasNoResultPayload(value: Record<string, unknown>): boolean {
     value.sourceTextSha256 == null &&
     value.usage == null
   );
+}
+
+function extractionSourceMatches(value: Record<string, unknown>): boolean {
+  const source = value.sourceCoverage;
+  if (source == null) return true;
+  if (!isSourceCoverageSummary(source) || typeof value.promptVersion !== "string" ||
+    !["plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"].includes(value.promptVersion) ||
+    !isRecord(value.dailyMapping) || !isSha256(value.dailyMapping.candidate_content_hash) ||
+    !Array.isArray(value.dailyMapping.supplements) || value.dailyMapping.supplements.length !== 0 ||
+    source.sourceHash !== value.sourceTextSha256 || source.contentHash !== value.dailyMapping.candidate_content_hash ||
+    source.currentReviewBound || source.canConfirmReview || source.reviewId !== null || source.reviewRevision !== 0 ||
+    source.coverageRevision !== null || source.coverageBundleHash !== null ||
+    source.coverageReviewReceiptHash !== null || source.status === "LEGACY_UNASSESSED" ||
+    typeof value.draftPlanJson !== "string") return false;
+  let draft: unknown;
+  try { draft = JSON.parse(value.draftPlanJson); } catch { return false; }
+  return isRecord(draft) && typeof draft.schema_version === "number" &&
+    Number.isSafeInteger(draft.schema_version) && draft.schema_version >= 5 && draft.schema_version <= 9 &&
+    draft.execution_mode === "CONDITION_PLAN" && draft.execution_version === `condition-plan-v${draft.schema_version - 4}`;
 }
 
 function isExtractionMapping(value: unknown): boolean {
