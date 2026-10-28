@@ -1,14 +1,22 @@
 """The browser fixture must establish real source state, never synthetic grants."""
 
+import asyncio
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event
-from tests.browser.source_coverage_server import MARKUP, PREFIX, TURNOVER, create_fixture_app
+from tests.browser.source_coverage_server import (
+    MARKUP,
+    PREFIX,
+    TURNOVER,
+    _request_server_shutdown,
+    create_fixture_app,
+)
 from tests.integration.test_market_linkage_review import source_mapping
 from tests.integration.test_source_treatment_review_api import literal_draft
 
@@ -483,6 +491,55 @@ def test_static_spa_keeps_fixture_json_routes_reachable(tmp_path):
         assert client.get("/plans/isolated-spa-route").text == index
         saved = seed(client)
         assert coverage(client, saved["id"])["summary"]["canConfirmReview"] is True
+
+
+def test_shutdown_awaits_the_owned_async_transport_cleanup(workspace):
+    client, state = workspace
+    completed = []
+
+    async def cleanup():
+        await asyncio.sleep(0)
+        completed.append(True)
+
+    state.shutdown = cleanup
+    assert client.post(PREFIX + "/shutdown").json() == {"shutdownRequested": True}
+    assert completed == [True]
+
+
+def test_shutdown_waits_for_websocket_transport_exit_without_waiting_on_its_http_request():
+    class Connection:
+        def __init__(self, kind):
+            self.scope = {"type": kind}
+
+    async def scenario():
+        websocket, http, unstarted_http = (
+            Connection("websocket"), Connection("http"), Connection("http")
+        )
+        unstarted_http.scope = None
+        connections = {websocket, http, unstarted_http}
+        server = SimpleNamespace(
+            should_exit=False, server_state=SimpleNamespace(connections=connections)
+        )
+        cleanup = asyncio.create_task(_request_server_shutdown(server))
+        await asyncio.sleep(0)
+        assert not cleanup.done() and server.should_exit is False
+        connections.remove(websocket)
+        await cleanup
+        assert server.should_exit is True and connections == {http, unstarted_http}
+
+    asyncio.run(scenario())
+
+
+def test_shutdown_reports_an_unclosed_websocket_instead_of_acknowledging_success():
+    async def scenario():
+        server = SimpleNamespace(should_exit=False, server_state=SimpleNamespace(
+            connections=[SimpleNamespace(scope={"type": "websocket"})]
+        ))
+        with pytest.raises(TimeoutError):
+            await _request_server_shutdown(server, timeout_seconds=0.02)
+        assert server.should_exit is False
+
+    asyncio.run(scenario())
 
 
 def test_actual_source_reads_and_restoring_preview_issue_no_sql_writes(workspace):

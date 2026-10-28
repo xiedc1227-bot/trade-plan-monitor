@@ -5,9 +5,11 @@ and activation are production operations; no provider or trading engine exists.
 """
 
 import argparse
+import asyncio
 import json
 from datetime import datetime, timedelta
 from hashlib import sha256
+from inspect import isawaitable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -319,9 +321,11 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
         return {"coverageRevision": newer.revision, "coverageBundleHash": newer.evidence_hash}
 
     @app.post(PREFIX + "/shutdown", dependencies=guards)
-    def shutdown():
+    async def shutdown():
         if state.shutdown is not None:
-            state.shutdown()
+            result = state.shutdown()
+            if isawaitable(result):
+                await result
         return {"shutdownRequested": state.shutdown is not None}
 
     # Preserve the production SPA handler, after the fixture's exact JSON routes.
@@ -330,6 +334,17 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
             app.router.routes.remove(route)
             app.router.routes.append(route)
     return app
+
+
+async def _request_server_shutdown(server, *, timeout_seconds=5.0):
+    """Let this fixture's closed browser transports exit before stopping Uvicorn."""
+    async with asyncio.timeout(timeout_seconds):
+        while any(
+            (getattr(connection, "scope", None) or {}).get("type") == "websocket"
+            for connection in tuple(server.server_state.connections)
+        ):
+            await asyncio.sleep(0.01)
+    server.should_exit = True
 
 
 def main():
@@ -347,7 +362,7 @@ def main():
         server = uvicorn.Server(
             uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
         )
-        app.state.source_fixture.shutdown = lambda: setattr(server, "should_exit", True)
+        app.state.source_fixture.shutdown = lambda: _request_server_shutdown(server)
         server.run()
 
 
