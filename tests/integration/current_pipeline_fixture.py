@@ -71,8 +71,7 @@ def replace_current_plan(tmp_path, *, at=PIPELINE_NOW):
     chain.plan = UnifiedTradePlan.model_validate(raw)
     chain.now = at
     with chain.client:
-        chain.activate(version=2, activation_revision=1,
-            source="Synthetic reviewed successor with changed minute price boundary.")
+        chain.activate(version=2, activation_revision=1)
     return chain.plan
 
 
@@ -99,7 +98,7 @@ def current_pipeline_fixture(tmp_path, monkeypatch, *, current_volume,
                 "symbol": chain.plan.symbol, "coreQty": 0, "tacticalQty": 100,
                 "expectedRevision": 0})
         chain.now = activation_at
-        chain.activate(source="Synthetic reviewed minute BUY, SELL, and risk reminder rules.")
+        chain.activate()
         chain.now = PREPARED_AT
         if seed_tradability:
             chain.post("plan-facts", {
