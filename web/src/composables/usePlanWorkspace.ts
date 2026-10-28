@@ -1,11 +1,12 @@
 import { computed, onBeforeUnmount, shallowRef } from "vue";
 import type { ActivePlanView, ConfiguredAIRuntimeView, DailyMapping, DailyReviewPreview, DailySupplement,
-  PlanExtractionCommand, PlanVersionView, PlanVersionPage, PlanVersionSummary, DailyReviewPreviewCommand, DailySupplementCommand } from "../api/generated";
+  PlanExtractionCommand, PlanVersionView, PlanVersionSummary, DailyReviewPreviewCommand, DailySupplementCommand } from "../api/generated";
 import { createConditionPlanApi, isConditionPlanJson } from "../api/conditionPlans";
-import type { PlanEditorContract } from "../api/conditionPlans";
 import { createAIPlanApi } from "../api/ai";
 import { resolveApiFetch } from "../api/context";
+import { createPlanApi } from "../api/plans";
 import { usePlanDrafting } from "./usePlanDrafting";
+import { usePlanWorkspaceOwner, type WorkspaceOperation } from "./usePlanWorkspaceOwner";
 import type { Json, Schema } from "../components/plans/planSchema";
 
 export function semanticValues(value: Json, path = ""): Record<string, Json> {
@@ -27,8 +28,12 @@ export function usePlanWorkspace() {
   const providers = shallowRef<ConfiguredAIRuntimeView[]>([]);
   const extractionId = shallowRef<string | null>(null);
   const extractionStatus = shallowRef("");
-  const drafting = usePlanDrafting({ api: createAIPlanApi(resolveApiFetch()) });
-  const extraction = drafting.extraction;
+  const owner = usePlanWorkspaceOwner();
+  const extractionGeneration = shallowRef<number | null>(null);
+  const fetcher = resolveApiFetch();
+  const drafting = usePlanDrafting({ api: createAIPlanApi(fetcher) });
+  const extraction = computed(() => extractionGeneration.value === owner.generation.value &&
+    !drafting.submitting.value ? drafting.extraction.value : null);
   const historyOnly = shallowRef(false);
   const dirty = shallowRef(false);
   const candidate = shallowRef<Json>(null);
@@ -49,7 +54,7 @@ export function usePlanWorkspace() {
   const saved = shallowRef<PlanVersionView | null>(null);
   const baseVersion = shallowRef<PlanVersionView | null>(null);
   const activated = shallowRef<ActivePlanView | null>(null);
-  const busy = shallowRef(false);
+  const busy = owner.busy;
   const error = shallowRef("");
   const notice = shallowRef("");
   const controller = new AbortController();
@@ -66,23 +71,54 @@ export function usePlanWorkspace() {
     return result;
   });
   const definitions = computed(() => schema.value.$defs ?? {});
-  onBeforeUnmount(() => controller.abort());
+  onBeforeUnmount(() => { controller.abort(); owner.dispose(); });
 
-  const api = createConditionPlanApi(undefined, controller.signal);
+  const api = createConditionPlanApi(fetcher, controller.signal);
+  const reads = createPlanApi(fetcher);
   const request = api.request;
-  async function refreshVersions() {
-    const page = await request<PlanVersionPage>("/api/v1/plan-versions?offset=0&limit=100");
-    versions.value = page.items ?? [];
+  let previewSequence = 0;
+  const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+  function snapshot() {
+    return { candidateJson: JSON.stringify(candidate.value), sourceText: source.value,
+      mapping: copy(mapping.value), base: copy(baseVersion.value), version: copy(saved.value),
+      extractionId: extractionId.value, historyOnly: historyOnly.value, values: copy(values.value) };
   }
-  async function action(run: () => Promise<void>) {
-    if (busy.value) return;
-    busy.value = true; error.value = ""; notice.value = "";
-    try { await run(); } catch (cause) { error.value = cause instanceof Error ? cause.message : "操作失败，请查看当前状态后重试"; }
-    finally { busy.value = false; }
+  async function refreshVersions(operation: WorkspaceOperation) {
+    const page = await reads.listPlanVersions({ offset: 0, limit: 100 });
+    if (owner.current(operation)) versions.value = page.items ?? [];
+  }
+  async function action(run: (operation: WorkspaceOperation) => Promise<void>) {
+    const operation = owner.beginAction();
+    if (!operation) return;
+    error.value = ""; notice.value = "";
+    try { await run(operation); } catch (cause) {
+      if (owner.current(operation)) error.value = cause instanceof Error ? cause.message : "操作失败，请查看当前状态后重试";
+    } finally { owner.finish(operation); }
   }
   async function load(versionId?: string) {
-    await action(async () => {
-      const contract = await request<PlanEditorContract>("/api/v1/plan-editor-schema");
+    const operation = owner.beginLoad();
+    if (!operation) return;
+    candidate.value = null; source.value = ""; mapping.value = null; preview.value = null;
+    saved.value = null; baseVersion.value = null; activated.value = null;
+    extractionId.value = null; extractionGeneration.value = null;
+    historyOnly.value = false; dirty.value = false;
+    error.value = ""; notice.value = "";
+    try {
+      const loadApi = createConditionPlanApi(fetcher, operation.signal);
+      const contract = await loadApi.getEditor();
+      if (!owner.current(operation)) return;
+      const runtime = await loadApi.getRuntime();
+      if (!owner.current(operation)) return;
+      const page = await reads.listPlanVersions({ offset: 0, limit: 100 }, { signal: operation.signal });
+      if (!owner.current(operation)) return;
+      const version = versionId ? await reads.getPlanVersion(versionId, { signal: operation.signal }) : null;
+      if (!owner.current(operation)) return;
+      const historical = version !== null && !isConditionPlanJson(version.planJson);
+      const checked = version && !historical ? await loadApi.preview({ candidateJson: version.planJson,
+        sourceText: version.sourceText, mapping: version.dailyMapping ?? null }) : null;
+      if (!owner.current(operation)) return;
+      const active = version ? await reads.getPlanActivationState(version.symbol, { signal: operation.signal }) : null;
+      if (!owner.current(operation)) return;
       fixedSchema.value = contract.candidateSchema;
       linkedSchema.value = contract.linkedCandidateSchema ?? {};
       linkedDefinitions.value = contract.linkedPolicyDefinitions ?? {};
@@ -90,172 +126,219 @@ export function usePlanWorkspace() {
       capitalSchema.value = contract.capitalCandidateSchema ?? {};
       exceptionSchema.value = contract.exceptionCandidateSchema ?? {};
       exceptionDefinitions.value = contract.exceptionPolicyDefinitions ?? {};
-      const runtime = await api.getRuntime();
       providers.value = [runtime, ...(runtime.alternativeProviders ?? [])];
       provider.value = providers.value.find(p => p.enabled && p.configured) ?? runtime;
-      await refreshVersions();
-      if (versionId) {
-        const version = await request<PlanVersionView>(`/api/v1/plan-versions/${encodeURIComponent(versionId)}`);
-        candidate.value = JSON.parse(version.planJson) as Json;
+      versions.value = page.items ?? [];
+      if (version) {
+        candidate.value = JSON.parse(checked?.candidateJson ?? version.planJson) as Json;
         source.value = version.sourceText;
-        mapping.value = version.dailyMapping ?? null;
-        historyOnly.value = !isConditionPlanJson(version.planJson);
-        if (!historyOnly.value) await refreshPreview();
-        dirty.value = false;
+        mapping.value = checked?.review.mapping ?? version.dailyMapping ?? null;
+        historyOnly.value = historical; preview.value = checked;
         saved.value = version;
         baseVersion.value = version;
-        activated.value = await request<ActivePlanView>(`/api/v1/plan-activation-states/${encodeURIComponent(version.symbol)}`);
+        activated.value = active;
       }
-    });
+    } catch (cause) {
+      if (owner.current(operation)) error.value = cause instanceof Error ? cause.message : "无法读取当前计划，请重试";
+    } finally { owner.finish(operation); }
   }
   async function openVersion(id: string) {
     if (dirty.value && !window.confirm("当前计划有未保存修改。放弃修改并打开此版本？")) return;
     await load(id);
   }
-  async function refreshPreview() {
-    if (candidate.value === null) return;
-    const body: DailyReviewPreviewCommand = { candidateJson: JSON.stringify(candidate.value), sourceText: source.value, mapping: mapping.value };
-    preview.value = await request<DailyReviewPreview>("/api/v1/plan-review-previews", body);
-    candidate.value = JSON.parse(preview.value.candidateJson) as Json;
-    mapping.value = preview.value.review.mapping;
-    saved.value = null; activated.value = null;
+  function previewSnapshot(body: DailyReviewPreviewCommand) {
+    return request<DailyReviewPreview>("/api/v1/plan-review-previews", body);
+  }
+  function applyPreview(checked: DailyReviewPreview) {
+    preview.value = checked; candidate.value = JSON.parse(checked.candidateJson) as Json;
+    mapping.value = checked.review.mapping; saved.value = null; activated.value = null;
+  }
+  async function refreshPreview(operation?: WorkspaceOperation) {
+    if (candidate.value === null || controller.signal.aborted) return;
+    const generation = owner.generation.value, sequence = ++previewSequence;
+    const body = snapshot();
+    const checked = await previewSnapshot({ candidateJson: body.candidateJson, sourceText: body.sourceText, mapping: body.mapping });
+    if (generation !== owner.generation.value || sequence !== previewSequence || controller.signal.aborted ||
+      operation && !owner.current(operation)) return;
+    applyPreview(checked);
   }
   function stopWaiting(operationId: string) { drafting.stopWaiting(operationId); }
-  async function consumeExtraction() {
-    const result = drafting.extraction.value;
+  async function consumeExtraction(operation: WorkspaceOperation, sourceText: string) {
+    if (!owner.current(operation)) return;
+    const result = copy(drafting.extraction.value);
     if (drafting.errorMessage.value) throw new Error(drafting.errorMessage.value);
     if (result?.status !== "SUCCEEDED") {
       if (drafting.stoppedMessage.value) { notice.value = drafting.stoppedMessage.value; return; }
       throw new Error("提取未通过校验，未创建可执行计划");
     }
     if (!result.draftPlanJson || !result.dailyMapping) throw new Error("未获得有效计划候选");
+    const checked = await previewSnapshot({ candidateJson: result.draftPlanJson, sourceText, mapping: result.dailyMapping });
+    if (!owner.current(operation)) return;
     extractionId.value = result.id;
     extractionStatus.value = result.status;
     historyOnly.value = false;
     baseVersion.value = null;
-    candidate.value = JSON.parse(result.draftPlanJson) as Json;
-    mapping.value = result.dailyMapping;
+    applyPreview(checked);
     dirty.value = true;
-    await refreshPreview();
     notice.value = "已提取候选。可编辑日线、5分钟或混合条件，并逐项核对来源。";
   }
   async function extract(command: PlanExtractionCommand) {
-    await action(async () => {
-      source.value = command.sourceText;
-      await drafting.submitExtraction(command);
-      await consumeExtraction();
+    if (busy.value) return;
+    const submitted = copy(command);
+    owner.invalidate();
+    await action(async operation => {
+      extractionGeneration.value = null; extractionId.value = null; extractionStatus.value = "";
+      source.value = submitted.sourceText; candidate.value = null; mapping.value = null;
+      preview.value = null; saved.value = null; baseVersion.value = null; activated.value = null;
+      historyOnly.value = false; dirty.value = true;
+      const pending = drafting.submitExtraction(submitted);
+      const started = drafting.submitting.value;
+      // The helper retains its previous receipt until the new POST is accepted.
+      if (started) extractionGeneration.value = operation.generation;
+      await pending;
+      if (started) await consumeExtraction(operation, submitted.sourceText);
     });
   }
   async function retryExtraction() {
-    await action(async () => { await drafting.retryExtraction(); await consumeExtraction(); });
+    if (extractionGeneration.value !== owner.generation.value) return;
+    const sourceText = source.value;
+    await action(async operation => { await drafting.retryExtraction(); await consumeExtraction(operation, sourceText); });
   }
-  function edit(value: Json) { dirty.value = true; candidate.value = value; preview.value = null; saved.value = null; activated.value = null; }
+  function edit(value: Json) { owner.invalidate(); dirty.value = true; candidate.value = value; preview.value = null; saved.value = null; activated.value = null; }
   function editSource(value: string) {
     if (value === source.value) return;
+    owner.invalidate();
     dirty.value = true; source.value = value; extractionId.value = null; mapping.value = null; preview.value = null; saved.value = null; activated.value = null;
     notice.value = "原文已修改，请重新检查来源、保存并审核当前内容。";
   }
   async function exclude(clauseId: string, text: string) {
-    await action(async () => {
-      const clause = mapping.value?.clauses.find(c => c.clause_id === clauseId);
+    await action(async operation => {
+      const initial = snapshot();
+      const clause = initial.mapping?.clauses.find(c => c.clause_id === clauseId);
       if (!clause || !clause.excerpt.includes(text)) throw new Error("排除范围必须与此句原文完全一致");
       // API spans count Unicode code points, while JavaScript string offsets count UTF-16 units.
-      const sourcePoints = Array.from(source.value);
-      const localOffset = sourcePoints.slice(clause.start, clause.end).join("").indexOf(text);
+      const sourcePoints = Array.from(initial.sourceText);
       const clauseText = sourcePoints.slice(clause.start, clause.end).join("");
+      const localOffset = clauseText.indexOf(text);
+      if (localOffset < 0 || clauseText !== clause.excerpt) throw new Error("排除范围必须与此句原文完全一致");
       const start = clause.start + Array.from(clauseText.slice(0, localOffset)).length;
-      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source.value));
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(initial.sourceText));
+      if (!owner.current(operation)) return;
       const source_hash = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
-      const body = { candidateJson: JSON.stringify(candidate.value), sourceText: source.value, mapping: mapping.value,
+      const body = { candidateJson: initial.candidateJson, sourceText: initial.sourceText, mapping: initial.mapping,
         scopeSelections: [{ start, end: start + Array.from(text).length, excerpt: text, source_hash,
           origin: "HUMAN_SCOPE_SELECTION", reason: "FUNDAMENTALS_REVIEWED_AT_PLAN_GENERATION" }] };
-      preview.value = await request<DailyReviewPreview>("/api/v1/plan-review-previews", body);
-      mapping.value = preview.value.review.mapping; saved.value = null; activated.value = null;
+      const checked = await request<DailyReviewPreview>("/api/v1/plan-review-previews", body);
+      if (!owner.current(operation)) return;
+      applyPreview(checked);
       notice.value = "已标注非监控背景；技术余文仍需逐项审核。";
     });
   }
   async function supplement(items: { path: string; reason: string }[], reviewedClauses: { id: string; reason: string; paths: string[] }[]) {
-    await action(async () => {
-      await refreshPreview();
-      const current = preview.value;
-      if (!current) return;
-      const additions: DailySupplement[] = items.map(item => ({ supplement_id: `human-${crypto.randomUUID()}`,
-        candidate_content_hash: current.review.content_hash, path: item.path, value: values.value[item.path] ?? null, reason: item.reason }));
+    const requested = copy(items), reviewedItems = copy(reviewedClauses);
+    await action(async operation => {
+      const initial = snapshot();
+      if (initial.candidateJson === "null") return;
+      const current = await previewSnapshot({ candidateJson: initial.candidateJson, sourceText: initial.sourceText, mapping: initial.mapping });
+      if (!owner.current(operation)) return;
+      const currentValues = semanticValues(JSON.parse(current.candidateJson) as Json);
+      for (const [path, value] of Object.entries(initial.values)) {
+        if (path.includes(".market_policy.expanded.")) currentValues[path] = value;
+      }
+      const additions: DailySupplement[] = requested.map(item => ({ supplement_id: `human-${crypto.randomUUID()}`,
+        candidate_content_hash: current.review.content_hash, path: item.path, value: currentValues[item.path] ?? null, reason: item.reason }));
       const replacementPaths = new Set(additions.map(s => s.path));
       const supplements = [...current.review.mapping.supplements.filter(s => !replacementPaths.has(s.path)), ...additions];
       const command: DailySupplementCommand = { candidateJson: current.candidateJson, contentHash: current.review.content_hash,
         expectedRevision: current.supplementRevision, supplements };
       if (additions.length) await request("/api/v1/plan-review-supplements", command);
+      if (!owner.current(operation)) return;
       const clauses = current.review.mapping.clauses.map(c => {
-        const reviewed = reviewedClauses.find(v => v.id === c.clause_id);
+        const reviewed = reviewedItems.find(v => v.id === c.clause_id);
         if (!reviewed || c.disposition === "BACKGROUND") return c;
         return { ...c, disposition: "POLICY" as const, paths: reviewed.paths, reason: reviewed.reason,
           remainders: (c.remainders ?? []).map(r => ({ ...r, disposition: "POLICY" as const, paths: reviewed.paths, reason: reviewed.reason })) };
       });
-      mapping.value = { ...current.review.mapping, clauses };
-      await refreshPreview();
+      const checked = await previewSnapshot({ candidateJson: current.candidateJson, sourceText: initial.sourceText,
+        mapping: { ...current.review.mapping, clauses } });
+      if (!owner.current(operation)) return;
+      applyPreview(checked);
       notice.value = "人工补充已独立登记，请保存候选并查看服务端审核结果。";
     });
   }
   async function save() {
-    await action(async () => {
-      if (historyOnly.value) throw new Error("历史计划只能查看，请从原文重新提取并审核");
-      if (!candidate.value || !mapping.value) throw new Error("先检查候选参数和来源");
-      let raw = candidate.value as Record<string, Json>;
-      const base = baseVersion.value;
+    await action(async operation => {
+      const body = snapshot();
+      if (body.historyOnly) throw new Error("历史计划只能查看，请从原文重新提取并审核");
+      if (body.candidateJson === "null" || !body.mapping) throw new Error("先检查候选参数和来源");
+      let raw = JSON.parse(body.candidateJson) as Record<string, Json>;
+      const base = body.base;
       if (base && raw.plan_id === base.planId && typeof raw.version === "number" && raw.version <= base.version) {
         raw = { ...raw, version: base.version + 1 };
-        candidate.value = raw;
       }
-      const state = await request<ActivePlanView>(`/api/v1/plan-activation-states/${encodeURIComponent(String(raw.symbol))}`);
-      saved.value = await request<PlanVersionView>("/api/v1/plan-drafts", { planJson: JSON.stringify(candidate.value), sourceText: source.value,
-        dailyMapping: mapping.value, expectedRevision: state.revision, extractionId: extractionId.value, basePlanVersionId: base?.id ?? null });
-      baseVersion.value = saved.value;
+      const state = await reads.getPlanActivationState(String(raw.symbol));
+      if (!owner.current(operation)) return;
+      const result = await request<PlanVersionView>("/api/v1/plan-drafts", { planJson: JSON.stringify(raw), sourceText: body.sourceText,
+        dailyMapping: body.mapping, expectedRevision: state.revision, extractionId: body.extractionId, basePlanVersionId: base?.id ?? null });
+      if (!owner.current(operation)) return;
+      candidate.value = JSON.parse(result.planJson) as Json;
+      saved.value = result; baseVersion.value = result;
       dirty.value = false;
-      await refreshVersions();
-      notice.value = "候选已保存。审核与启用是两次独立操作。";
+      await refreshVersions(operation);
+      if (owner.current(operation)) notice.value = "候选已保存。审核与启用是两次独立操作。";
     });
   }
   async function confirm() {
-    await action(async () => {
-      const version = saved.value;
+    await action(async operation => {
+      const version = snapshot().version;
       if (!version) return;
       await request("/api/v1/plan-review-confirmations", { planVersionId: version.id, contentHash: version.contentHash,
         sourceHash: version.sourceHash, reviewEvidenceHash: version.reviewEvidenceHash, expectedRevision: version.reviewRevision, resolutions: [] });
-      saved.value = await request<PlanVersionView>(`/api/v1/plan-versions/${version.id}`);
+      if (!owner.current(operation)) return;
+      const current = await reads.getPlanVersion(version.id);
+      if (!owner.current(operation)) return;
+      saved.value = current;
       notice.value = "当前版本已审核。可另行启用绑定。";
     });
   }
   async function activate() {
-    await action(async () => {
-      const version = saved.value;
-      if (version?.status !== "DRAFT" || !version.canActivate || historyOnly.value || dirty.value) return;
-      const state = await request<ActivePlanView>(`/api/v1/plan-activation-states/${version.symbol}`);
-      activated.value = await request<ActivePlanView>("/api/v1/plan-activations", { planVersionId: version.id,
+    await action(async operation => {
+      const initial = snapshot(), version = initial.version;
+      if (version?.status !== "DRAFT" || !version.canActivate || initial.historyOnly || dirty.value) return;
+      const state = await reads.getPlanActivationState(version.symbol);
+      if (!owner.current(operation)) return;
+      const result = await request<ActivePlanView>("/api/v1/plan-activations", { planVersionId: version.id,
         contentHash: version.contentHash, sourceHash: version.sourceHash, reviewEvidenceHash: version.reviewEvidenceHash,
         reviewRevision: version.reviewRevision, reviewId: version.reviewId, expectedRevision: state.revision });
-      saved.value = await api.getVersion(version.id);
-      await refreshVersions();
-      notice.value = "计划已启用，各规则按审核后的条件、确认方式和窗口监控。";
+      if (!owner.current(operation)) return;
+      const current = await reads.getPlanVersion(version.id);
+      if (!owner.current(operation)) return;
+      activated.value = result; saved.value = current;
+      await refreshVersions(operation);
+      if (owner.current(operation)) notice.value = "计划已启用，各规则按审核后的条件、确认方式和窗口监控。";
     });
   }
   async function deactivate() {
-    await action(async () => {
-      const version = saved.value;
-      if (!version || historyOnly.value) return;
-      const state = await request<ActivePlanView>(`/api/v1/plan-activation-states/${encodeURIComponent(version.symbol)}`);
+    await action(async operation => {
+      const initial = snapshot(), version = initial.version;
+      if (!version || initial.historyOnly) return;
+      const state = await reads.getPlanActivationState(version.symbol);
+      if (!owner.current(operation)) return;
       if (!state.active || state.planVersionId !== version.id) {
         activated.value = state;
         throw new Error("当前版本已不再启用，请刷新版本状态");
       }
-      activated.value = await request<ActivePlanView>("/api/v1/plan-deactivations", {
+      const result = await request<ActivePlanView>("/api/v1/plan-deactivations", {
         symbol: version.symbol, expectedRevision: state.revision,
       });
-      saved.value = await api.getVersion(version.id);
-      await refreshVersions();
-      notice.value = "当前计划已停用，后续提醒和模拟操作不再基于此版本。";
+      if (!owner.current(operation)) return;
+      const current = await reads.getPlanVersion(version.id);
+      if (!owner.current(operation)) return;
+      activated.value = result; saved.value = current;
+      await refreshVersions(operation);
+      if (owner.current(operation)) notice.value = "当前计划已停用，后续提醒和模拟操作不再基于此版本。";
     });
   }
   return { extraction, retryExtraction, stopWaiting, versions, providers, historyOnly, dirty, extractionStatus, openVersion, candidate, source, provider, schema, definitions, mapping, preview, saved, activated, busy, error, notice,
-    values, request, action, load, extract, edit, editSource, refreshPreview, exclude, supplement, save, confirm, activate, deactivate };
+    ownerGeneration: owner.generation, values, request, action, load, extract, edit, editSource, refreshPreview, exclude, supplement, save, confirm, activate, deactivate };
 }
