@@ -196,7 +196,8 @@ def simulate_inventory(
             exception_row = ExceptionRepository(work.daily).get(approval["candidate_id"])
             exception_candidate = ExceptionCandidate.model_validate(exception_row["payload"])
             try:
-                context = current_exception_authority(work, exception_candidate, now)
+                context = current_exception_authority(work, exception_candidate, now,
+                    _source_authority_reader=_source_authority_reader)
             except ExceptionAuthorityError as error:
                 _reject(error.reason)
             if context.blockers:

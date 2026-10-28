@@ -28,7 +28,9 @@ from trade_plan_monitor.state.market_exception_repository import ExceptionReposi
 from trade_plan_monitor.state.market_exception_service import (
     ExceptionAuthorityContext,
     ExceptionAuthorityError,
+    _replay,
     decide_exception,
+    lock_authority,
     terminate_exception,
 )
 from trade_plan_monitor.state.market_linkage_authority import linked_index_current
@@ -131,7 +133,36 @@ def record_candidate(work, plan, active, review, decision, seed, *, sessions, no
     return ExceptionRepository(work.daily).create(candidate)
 
 
-def current_exception_authority(work, candidate, now):
+def current_exception_authority(work, candidate, now, *, _source_authority_reader=None):
+    """New grants require exact current source authority or explicit frozen observation."""
+    from trade_plan_monitor.state.source_action_authority import require_source_action_authority
+    from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
+    from trade_plan_monitor.state.source_coverage_store import SourceCoverageIntegrityError
+
+    context = _current_exception_inputs(work, candidate, now)
+    binding = candidate.binding
+    try:
+        basis = (require_source_action_authority(work, binding.plan_version_id)
+            if _source_authority_reader is None else _source_authority_reader(
+                work, binding.plan_version_id))
+        if _source_authority_reader is not None:
+            if (basis is None or getattr(basis, "basis", None) != "REPLAY_OBSERVATION"
+                    or hasattr(basis, "coverage_complete") or hasattr(basis, "status")
+                    or getattr(basis, "coverage_evidence_hash", None) is not None
+                    or type(getattr(basis, "risk_rows", None)) is not tuple):
+                raise SourceCoverageAuthorityError()
+            if (getattr(basis, "plan_version_id", None) != binding.plan_version_id
+                    or type(getattr(basis, "activation_revision", None)) is not int
+                    or basis.activation_revision != binding.activation_revision):
+                raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
+    except SourceCoverageAuthorityError as error:
+        if error.reason == "SOURCE_COVERAGE_INTEGRITY":
+            raise SourceCoverageIntegrityError() from None
+        raise ExceptionAuthorityError(error.reason) from None
+    return context
+
+
+def _current_exception_inputs(work, candidate, now):
     """Resolve every authority input locally, with no client-supplied market facts."""
     b = candidate.binding
     active = work.plans.get_active(b.symbol)
@@ -228,9 +259,26 @@ def current_exception_authority(work, candidate, now):
     return context
 
 
-def apply_exception_decision(work, command, *, now):
+def _rejection_inputs(work, candidate, now):
+    """A source diagnostic cannot prevent rejection; all native constraints remain."""
+    context = _current_exception_inputs(work, candidate, now)
+    source_diagnostics = {
+        "SOURCE_COVERAGE_REQUIRED", "SOURCE_COVERAGE_STALE", "SOURCE_COVERAGE_INTEGRITY",
+        "SOURCE_COVERAGE_UPGRADE_REQUIRED", "SOURCE_COVERAGE_LIMIT_EXCEEDED",
+    }
+    return context.model_copy(update={"blockers": tuple(
+        code for code in context.blockers if code not in source_diagnostics)})
+
+
+def apply_exception_decision(work, command, *, now, _source_authority_reader=None):
+    lock_authority(work.daily, command.candidate_id)
+    replay, _ = _replay(work.daily, command)
+    if replay is not None:
+        return replay
     result = decide_exception(work.daily, command,
-        current=lambda candidate: current_exception_authority(work, candidate, now), now=now)
+        current=lambda candidate: (_rejection_inputs(work, candidate, now)
+            if command.decision == "REJECT" else current_exception_authority(
+                work, candidate, now, _source_authority_reader=_source_authority_reader)), now=now)
     candidate = result.candidate
     if candidate.state != "APPROVED":
         return result
@@ -239,7 +287,8 @@ def apply_exception_decision(work, command, *, now):
         ExceptionRepository(work.daily).get(candidate.candidate_id)["payload"])
     if live.state != "APPROVED" or work.daily.get(candidate.binding.occurrence_id) is not None:
         return result
-    context = current_exception_authority(work, candidate, now)
+    context = current_exception_authority(work, candidate, now,
+        _source_authority_reader=_source_authority_reader)
     head = work.daily.get("evaluation-head-" + candidate.binding.symbol)["payload"]
     decision = next(parse_linkage_decision(item)
         for item in head["market_linkage"] if item["rule_id"] == candidate.binding.rule_id)

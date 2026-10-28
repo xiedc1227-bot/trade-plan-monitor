@@ -137,7 +137,9 @@ def apply_frozen_exception(session, frozen):
                                     else None
                                 ),
                             ),
-                            current=lambda c: current_exception_authority(work, c, session.now),
+                            current=lambda c: current_exception_authority(work, c, session.now,
+                                _source_authority_reader=getattr(
+                                    session, "_source_authority_reader", None)),
                             now=session.now,
                         )
                         if shown.quantity != event.quantity:
@@ -154,6 +156,7 @@ def apply_frozen_exception(session, frozen):
                             preview_hash=None if shown is None else shown.preview_hash,
                         ),
                         now=session.now,
+                        _source_authority_reader=getattr(session, "_source_authority_reader", None),
                     )
                 private_event = receipt.event.event_id
                 status = "APPLIED"
