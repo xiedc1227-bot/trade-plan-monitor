@@ -31,6 +31,8 @@ def confirm_signal(
     trading_calendar=(),
     linkage=None,
     candidate_only=False,
+    _condition_facts=None,
+    _fact_owner=None,
 ):
     from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule
     from trade_plan_monitor.domain.p2_policy_models import P2Rule
@@ -130,16 +132,27 @@ def confirm_signal(
         rule.validity.start_date <= day <= rule.validity.end_date
     ):
         return None
+    condition_facts, fact_context = facts, {}
+    if _condition_facts is not None or _fact_owner is not None:
+        if (plan.schema_version != 5 or rule.confirmation.kind != "OFFICIAL_DAILY_CLOSE"
+                or candidate_only or linkage is not None
+                or not isinstance(_condition_facts, tuple)
+                or _fact_owner != (plan, plan_version_id, "ORDINARY_RULE", rule.rule_id)
+                or rule not in plan.ordinary_rules):
+            return None
+        condition_facts = _condition_facts
+        fact_context = {"_fact_owner": _fact_owner, "_condition_path": "condition"}
     evidence = evaluate_unified_condition(
         rule.condition,
         series,
-        facts=facts,
+        facts=condition_facts,
         macd_min_observations=500
         if plan.monitoring is None
         else plan.monitoring.macd_min_observations,
         bars=bars,
         target=target,
         trading_calendar=trading_calendar,
+        **fact_context,
     )
     if evidence.outcome != "SATISFIED":
         return None
@@ -164,7 +177,7 @@ def confirm_signal(
                 (
                     f
                     for f in facts
-                    if f.get("kind") == "INDEPENDENT_EVENT"
+                    if "reviewed_fact_target" not in f and f.get("kind") == "INDEPENDENT_EVENT"
                     and f.get("prior_signal_id") == prior["signal_id"]
                     and f.get("trade_date") == str(day)
                     and f.get("verified") is True

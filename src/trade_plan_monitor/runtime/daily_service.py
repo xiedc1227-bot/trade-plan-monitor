@@ -419,6 +419,7 @@ class DailyRuntimeEvaluationService:
                 for r in work.daily.list(symbol=plan.symbol, kind="FACT")
                 if r["payload"]["plan_version_id"] == details.id
                 and r["payload"]["content_hash"] == details.content_hash
+                and "reviewed_fact_target" not in r["payload"]
             )
             suspended = tuple(
                 date.fromisoformat(f["trade_date"])
@@ -562,6 +563,11 @@ class DailyRuntimeEvaluationService:
                 and datetime.fromisoformat(row["payload"]["available_at"]) <= now
             )
             eligible_ids = {f["id"] for f in facts}
+            condition_facts = (facts if self._source_authority_reader is None
+                               and plan.schema_version == 5 else None)
+            # Keep new condition testimony out of every existing flat/control
+            # consumer, including the separate frozen/replay observation path.
+            facts = tuple(f for f in facts if "reviewed_fact_target" not in f)
             if self._source_authority_reader is None:
                 facts = filter_unbound_facts(plan, facts)
             risk_rows = (() if _alert_only(plan)
@@ -946,6 +952,10 @@ class DailyRuntimeEvaluationService:
                             and linkage_by_rule[rule.rule_id].calculation.route is not None)
                         if candidate_only:
                             extra["candidate_only"] = True
+                        if condition_facts is not None and daily_rule:
+                            extra.update(_condition_facts=condition_facts,
+                                _fact_owner=(plan, active.plan_version_id,
+                                             "ORDINARY_RULE", rule.rule_id))
                         signal = (
                             confirm_signal
                             if isinstance(plan, UnifiedTradePlan)

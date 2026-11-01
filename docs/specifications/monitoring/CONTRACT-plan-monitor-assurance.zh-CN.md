@@ -326,3 +326,17 @@ T13-H04b4仅接入既有`state/reviewed_fact_authority.py`存量证据接缝。�
 独立历史技术风险继续读取每个FACT的实际原属SQL版本（包括`SUPERSEDED` owner），不重归属到活动计划。其完整记录根须对应该原属原生风险分支；既有风险evidence-ID、日期、来源／cutover及持仓范围核验仍须满足。为同content活动sibling生成的自洽目标，不能通过替换version-ID字段冒充原目标。复核不改写已存FACT／SIGNAL／RISK payload或audit字节。
 
 测试使用真实临时SQL执行私有普通FACT登记、存量证据复核、pending owner拒绝及既有独立历史风险消费。记录SIGNAL明确是使用已放行纯函数定向求值器证据构造的typed工程产物，不是新runtime生产signal或行动验收。风险目标明确是事先存储的工程fixture，不扩展K38登记范围；不支持原生类型的guard为独立纯解析类型负例。不新增caller、公开API、新signal／reset／提醒／例外生产者、表或迁移。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12前驱归属及语料／资源验收仍未完成；真实提取保持0/48。
+
+## PMA-K40 — 使用隔离条件池生产当前普通正式日线信号
+
+T13-H04b5仅为schema5普通`OFFICIAL_DAILY_CLOSE`确认接入TRADE_DATE目标事实。`runtime/daily_service.py`从既有符合active version／content及非未来条件的SQL FACT行保留私有`condition_facts` tuple。仅既有当前普通source／review gate可将此池及准确原生`(plan, plan_version_id, "ORDINARY_RULE", rule_id)`上下文交给`confirm_signal`；schema6–9联动、reset、风险、提醒及例外路径不收到该上下文。既有writer、实际不可变计划／审核／激活绑定及来源覆盖核验仍须满足。记录signal随后仍接受K39的真实SQL原属重新核验及全部既有执行gate。
+
+`confirm_signal`仅增加私有可选参数`_condition_facts`／`_fact_owner`。默认缺省保留旧无目标／冻结调用行为。提供私有参数时，要求tuple事实池、与所给原生owner／version／rule准确对应、schema5、`OFFICIAL_DAILY_CLOSE`、无linkage且不是candidate-only路径；不完整或不对应的上下文拒绝。仅初始条件求值收到该池及固定原生根`condition`，复用K37既有matcher／递归求值器。独立事件及其它生命周期／控制逻辑继续使用独立的旧`facts`输入。不移除目标标记来借用旧匹配。日线证据完成、官方日期、规则有效期、cutoff、最新适用真假／冲突及缺输入要求保持；数量、occurrence、证据hash及消费公式不变。
+
+`DailyRuntimeEvaluationService`内部既有平铺／控制池均排除出现`reviewed_fact_target`的记录，包括独立选择的replay-observation路径及`reevaluate_version`报价恢复。带目标TRADABILITY记录不能设置恢复报价的核验状态；合法无目标官方控制证据保留既有行为。纯生命周期的独立事件查找也排除该标记。这些是隔离核验，不新增控制权限或改变冻结payload字节。不可用人工操作数不影响独立满足的数值ANY操作数，负事实仅适用于其准确原生叶。Reset及提醒不能仅因fact kind或叶定义相同而借用普通目标。另位于`production.py`／`prepare_daily_inputs`的入口仍建立原始`usable_facts`池，用于FULL_SESSION_SUSPENSION及TRADABILITY报价输入，尚无上述存在性过滤。该既存额外控制边界仅报告，不作为第六文件修改，也不声称这些局部测试已覆盖；完整生产输入控制隔离声明前须另行放行隔离核验。
+
+本片继续阻断分钟目标消费。`SPEC-unified-plan.md`／`.zh-CN.md`的U03要求完整五分钟确认，仅含事实的规则也由明确确认周期决定目标。已核对的获审文字没有明确允许同日跨bar复用。K35绑定原生确认定义；K38登记时检查真实完整head，但现存FACT没有观察实例的`bar_end`。仅TRADE_DATE及验证时间不能闭合该对应关系。不从`verified_at`推算bar，不把日期当作bar实例，也不在本片增加字段／策略。在09:35及独立构造的完整09:40输入上，依赖这些目标的分钟规则均保持缺输入。原合法数值分钟规则及独立数值ANY分支仍走旧过滤池，不整体阻断其路径。观察实例的存储／登记／消费须另行放行。
+
+真实临时SQL runtime测试经K38登记A／B：A存在而B缺失时不产signal；补B后生产真实存储的普通日线signal，叶ID准确且证据通过K39，不手工构造SIGNAL。测试覆盖负叶定位、不同位置的相同叶、错误owner／path／hash、同content继任版本隔离、前一日期排除、当前审核失效、同刻冲突、数值ANY、分钟输入缺失及reset／提醒隔离。报价恢复标记负例明确使用事先安排的形状合法存储FACT，不声称原生TRADABILITY条件获准登记：该工程条件尝试被既有来源gate拒绝。工程固定参考见证的`reference.source`文字也被既有gate拒绝，仍待来源语义复核。该负例仅检查未豁免gate，不是独立真值、PMA-X10／X11验收，也不据此判断真实用户策略应不支持。数值正例采用既有原生`DAILY_PRICE_IN_RANGE`及夹具已声明的价位范围。不放松来源gate或数值门槛来取得见证。
+
+保留首次真实分钟RED及其中间结果，作为后续收窄范围的证据，不作分钟验收。另以未改的已提交基线生产文件运行正式日线真实runtime RED；临时基线验证后逐字节恢复两个文件。最终正向声明仅限正式日线生产及存量证据归属，不包含broker执行或外部发送。不新增公开API、存储字段、迁移、worker、新策略或其它caller。H04／T13、分钟观察实例绑定、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源阻断仍未完成；真实提取保持0/48，用户数据库访问／迁移保持0。
