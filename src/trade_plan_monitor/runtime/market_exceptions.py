@@ -35,6 +35,8 @@ from trade_plan_monitor.state.market_exception_service import (
 )
 from trade_plan_monitor.state.market_linkage_authority import linked_index_current
 from trade_plan_monitor.state.models import TradingCalendar
+from trade_plan_monitor.state.reviewed_fact_authority import fact_evidence_satisfied
+from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
 
 
 def candidate_shadow(candidate):
@@ -155,6 +157,21 @@ def current_exception_authority(work, candidate, now, *, _source_authority_reade
                 or type(getattr(basis, "activation_revision", None)) is not int
                 or basis.activation_revision != binding.activation_revision):
             raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
+        if _source_authority_reader is None:
+            reads = ActionOwnerReader(work)
+            details = reads.details(binding.plan_version_id)
+            plan = load_plan_json(details.payload_json)
+            head = reads.daily("evaluation-head-" + binding.symbol)
+            decision = next(item for item in head["payload"]["market_linkage"]
+                            if item["rule_id"] == binding.rule_id)
+            seed = candidate.signal_seed
+            if seed is None or not fact_evidence_satisfied(work, plan,
+                    [*(root.model_dump(mode="json") for root in seed.evidence),
+                     *decision["confirmation"]],
+                    confirmed_trade_date=binding.decision_session, owner_kind="ORDINARY_RULE",
+                    owner_id=binding.rule_id, signal_id=binding.occurrence_id,
+                    plan_version_id=binding.plan_version_id):
+                raise ExceptionAuthorityError("REVIEWED_FACT_REQUIRED")
     except SourceCoverageAuthorityError as error:
         if error.reason == "SOURCE_COVERAGE_INTEGRITY":
             raise SourceCoverageIntegrityError() from None

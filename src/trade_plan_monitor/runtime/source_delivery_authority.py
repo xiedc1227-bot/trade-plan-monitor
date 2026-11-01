@@ -8,6 +8,7 @@ from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.state.daily_repository import DailyRepository
 from trade_plan_monitor.state.events import MonitorEventLog
 from trade_plan_monitor.state.repositories import PlanRepository, RepositoryError
+from trade_plan_monitor.state.reviewed_fact_authority import fact_evidence_satisfied
 from trade_plan_monitor.state.source_action_authority import require_source_action_authority
 from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
 from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
@@ -66,6 +67,7 @@ def read_delivery_source(session, event, now):
                     or review["payload"].get("review_id") != event.review_id):
                 return None
             basis = None
+            plan = load_plan_json(details.payload_json)
             if event.signal_type != "REMINDER" or event.alert_kind == "EXCEPTION_REVIEW":
                 basis = require_source_action_authority(work, event.plan_version_id,
                     cause_id=None if event.signal_type == "REMINDER" else event.cause_id)
@@ -95,8 +97,38 @@ def read_delivery_source(session, event, now):
                         or event.rule_id is not None and payload.get("rule_id") != event.rule_id
                     ):
                         return None
-            return DeliverySourceContext(work.daily, active, details,
-                load_plan_json(details.payload_json), review, basis)
+            if event.signal_type == "REMINDER":
+                if event.alert_kind == "EXCEPTION_REVIEW":
+                    from trade_plan_monitor.runtime.market_exceptions import (
+                        current_exception_authority,
+                    )
+                    from trade_plan_monitor.state.market_exception_models import ExceptionCandidate
+                    from trade_plan_monitor.state.market_exception_service import (
+                        ExceptionAuthorityError,
+                    )
+
+                    row = reads.daily(event.cause_id)
+                    if row is None:
+                        return None
+                    try:
+                        context = current_exception_authority(work,
+                            ExceptionCandidate.model_validate(row["payload"]), now)
+                    except ExceptionAuthorityError:
+                        return None
+                    if context.blockers:
+                        return None
+                else:
+                    head = reads.daily("evaluation-head-" + event.symbol)
+                    alert = None if head is None else next((item
+                        for item in head["payload"].get("alerts", ())
+                        if item.get("cause_id") == event.cause_id
+                        and item.get("rule_id") == event.rule_id), None)
+                    if alert is None or not fact_evidence_satisfied(work, plan,
+                            alert["evidence"], confirmed_trade_date=event.confirmed_trade_date,
+                            owner_kind="ALERT_RULE", owner_id=event.rule_id,
+                            plan_version_id=event.plan_version_id):
+                        return None
+            return DeliverySourceContext(work.daily, active, details, plan, review, basis)
     except SourceCoverageAuthorityError as error:
         if error.reason == "SOURCE_COVERAGE_INTEGRITY":
             raise SourceCoverageIntegrityError() from None
