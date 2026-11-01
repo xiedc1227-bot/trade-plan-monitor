@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import (
     DailyFieldBinding,
@@ -19,7 +19,7 @@ from trade_plan_monitor.ai.daily_review import (
     normalize_daily_exclusions,
     semantic_values,
 )
-from trade_plan_monitor.domain.daily_plan_models import FactKind
+from trade_plan_monitor.domain.daily_plan_models import FactKind, Identifier
 from trade_plan_monitor.domain.daily_plan_validation import (
     daily_draft_content_sha256,
     daily_draft_json,
@@ -239,6 +239,12 @@ class DailyOfficialEvidence(ApiValue):
     applicable_assertion: str = Field(min_length=20, max_length=2000)
 
 
+class DailyFactConditionSelection(ApiValue):
+    owner_kind: Literal["ORDINARY_RULE", "ALERT_RULE", "RISK_BRANCH"]
+    owner_id: Identifier
+    condition_path: str = Field(min_length=1, max_length=512)
+
+
 class DailyFactCommand(ApiValue):
     plan_version_id: UUID = Field(strict=False)
     content_hash: Sha256Hex
@@ -250,6 +256,17 @@ class DailyFactCommand(ApiValue):
     satisfied: bool = Field(default=True, strict=True)
     official_evidence: DailyOfficialEvidence | None = None
     expected_revision: Qty
+    # An absent internal default must not serialize or advertise a nullable wire field.
+    condition_selection: DailyFactConditionSelection = Field(
+        default_factory=lambda: None, exclude_if=lambda value: value is None)
+
+    @field_validator("condition_selection", mode="before")
+    @classmethod
+    def supplied_selection(cls, value):
+        if value is None:
+            raise ValueError("an explicitly supplied condition selection cannot be null")
+        return (value.model_dump(mode="python")
+                if isinstance(value, DailyFactConditionSelection) else value)
 
     @model_validator(mode="after")
     def official_required(self):

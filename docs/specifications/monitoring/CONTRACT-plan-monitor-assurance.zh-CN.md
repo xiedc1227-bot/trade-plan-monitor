@@ -396,3 +396,15 @@ T13-H04b8b将实际schema5 ORDINARY_RULE／COMPLETED_BAR_CLOSE／TRADE_DATE有�
 真实临时SQL runtime测试先证明一项行为RED：私有准入A/B事实及其持久化行情源均存在，但旧producer不发出SIGNAL。GREEN要求仅A时等待，A+B时生产准确已存SIGNAL，且K43接受其原证据。不同实际bar／源观察须fresh FACT身份；有效新身份随后可以生产，相同内容仅receipt更晚且已可用时无需重新登记。准确重复求值及后续等值receipt保留单一SIGNAL occurrence。独立数值ANY在人工分支缺失／否定／陈旧时仍具决定作用，包括没有本地人工源时；数值归属本身不认证独立行情／动作gate。原分钟阻断用例保留为明确历史缺观察fixture，全部拒绝断言保持。正向源／日历仅在fixture准备阶段使用正常仓储和命令准备；runtime测试阻断网络访问，从不mock K43权限。
 
 测试区分源输入准入和实际已存动作／发送资格。真实runtime READY signal及队列事件仅在当前前置完整时通过既有SQL gate；之后移除分钟／聚合或纠正源，即使SIGNAL／head未变，也使实际动作／发送检查拒绝。同值receipt重读保留有效检查。不执行真实通知或模拟交易。本片不改变公开选择器／DTO／profile／UI，不增加owner／schema／scope，不改变provider操作、表、迁移、策略或阈值。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源阻断仍未完成。真实提取保持0/48；用户数据库访问／迁移、实时采集及真实发送保持0。
+
+## PMA-K45 — 公开普通选择；生成档同步待完成
+
+T13-H04c1新增可选`DailyFactCommand.conditionSelection`，接入既有`POST /api/v1/plan-facts`。闭合选择器仅含`ownerKind`、`ownerId`、`conditionPath`；API别名及原始字段名各自单写仍按既有约定准入，但别名／原名双写（包括相同值）及嵌套额外字段均拒绝。缺省逐字节保留旧命令序列化和请求hash，包括既有`signalId`及`officialEvidence`的null。仅对本新增字段省略缺省内部值。OpenAPI形状为可省略但不可null，且不含null默认值；显式null返回422。客户端提供的目标／源digest及观察对象仍为未支持额外输入；既有contentHash仍为必填，且仅是待核对绑定，不授予权限。
+
+公开事务仅将选择器tuple传给既有私有`_record_fact`。实际原属SQL版本／内容、当前来源／审核、原生目录／路径／用途／kind、完整观察及日期／signal gate仍在既有writer／no-autoflush准入中验证。本公开片仅准入schema5 ORDINARY_RULE／ORDINARY_CONFIRMATION／TRADE_DATE，使用既有正式日线或已完成分钟证据。有效形状的其它owner、reset、SIGNAL scope及schema6–9明确拒绝，不登记后再假称已有consumer。目标及分钟观察由服务端派生，不增加目录endpoint、UI、校验平台或权限开关。存量动作／发送消费仍须通过K43／K44及既有当前SQL gate。
+
+同绑定及观察保留CAS真假修订；缺省不能擦除已绑定FACT。新选择命令不能移动目标、补升已有无目标身份或补齐旧分钟目标的缺失观察。换bar／源须fresh FACT身份；等值更晚receipt不搬移绑定。非空选择器参与`operation_hash`；相同key下改变选择意图沿用既有FACT422拒绝，不新增错误／状态码规则。既有缺省选择器错误行为保持不变。已完成且匹配的旧／新意图即使当前来源／审核改变，也返回原记录回执，不新增FACT或FACT audit。既有提交后重评独立保留，不宣称零evaluation写入；新意图仍须当前准入，所有拒绝变更回滚其claim。
+
+真实临时SQL HTTP测试分别配置monitor v1／v2应用并核对实际应用版本；仅改header不作为profile证据。正常来源／审核／观察归属及既有runtime生产均实际运行，不mock权限。A/B事实绑定同类不同位置；未支持原生schema具有真实已审核SQL owner和完整日线head。旧字面model JSON及独立排序请求前像在生产编辑前已对照未变1938d6c基线。该前像含397个UTF-8字节，固定SHA256为`aa1daa25a90755da03407c0de12d47ed23b506e12ad0ce9e58015097b44115af`；新序列化与这些旧字面对照，不由自身生成预期。网络陷阱保留Windows socket类并拒绝出站连接。
+
+本片是A组件，整体验收等待后续B组件。既有generator只读检查须如实报告`openapi.json`、`openapi.runtime-status.json`、`web/src/api/generated.ts`、`web/src/api/generated-runtime-status.ts`的真实drift；c1不改变这些文件，也不放宽检查。两套生成profile及适用API-owner批准检查同步后才可整体验收；必要文档owner另按成对放行片处理。公开目录／读取UI、其余来源要求的owner／schema／scope单元及T18／T19仍独立待办。不改变策略、阈值、迁移、默认／frozen权限或provider路径。H04／T13、原始03/04、X09、X12及语料／资源阻断保持；真实提取仍为0/48，用户数据库访问／迁移及真实采集／发送仍为0。

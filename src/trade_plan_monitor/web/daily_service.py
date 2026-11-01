@@ -177,7 +177,10 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                 ):
                     _conflict("DAILY_SIMULATION_LEGACY_DATA_UNSUPPORTED")
                 if operation == "FACT":
-                    row = _record_fact(work, details, command, now)
+                    selection = command.condition_selection
+                    row = _record_fact(work, details, command, now,
+                        fact_selection=None if selection is None else (
+                            selection.owner_kind, selection.owner_id, selection.condition_path))
                 elif operation == "REASSESSMENT":
                     if (
                         details.symbol != command.symbol
@@ -458,6 +461,9 @@ def _private_fact_target(work, details, command, now, selection):
         raise ValueError("private fact selection does not identify one native leaf")
     target = matches[0]
     ref = resolve_reviewed_fact_target(plan, target, plan_version_id=actual.id)
+    if command.condition_selection is not None and (
+            plan.schema_version != 5 or ref.validity_scope != "TRADE_DATE"):
+        raise ValueError("public selection requires schema5 ordinary TRADE_DATE confirmation")
     if (ref.fact_kind != command.kind
             or json.loads(ref.observation_context)["purpose"] != "ORDINARY_CONFIRMATION"):
         raise ValueError("private fact kind or observation purpose differs")
