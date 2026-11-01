@@ -358,3 +358,17 @@ OpenAPI 快照 SHA-256：`c426102e7f9815b549a463a4fb4c38ec3c15c97213cd09864e6514
 规范监控v2 OpenAPI快照SHA-256：`0361f3b1b69a23399ee8e3ec89cce87ef832c04980e7bcc88aeba72b2c0fd1f9`
 
 生成TypeScript SHA-256：兼容版`7db80baf8b0a53b837795ac1a0ae0bb8362c390af491068d5bbfc2a201d45256`；规范版`8fdce46fec658cacfb7b782bcc91163c1ec0fa4b02d441c5d3c7356d114b5ddc`。
+
+## U-H04 — 已实施的准确普通事实选择（2026-11-01）
+
+本实施owner记录依据用户在PMA范围内既有H04实施授权，不是新的人类签字、策略批准，也不替换上方历史U-PMA／U-MLP3批准。[PMA-K45](CONTRACT-plan-monitor-assurance.zh-CN.md)拥有既有`POST /api/v1/plan-facts`的准确新增：可选但非null的`DailyFactCommand.conditionSelection`，仅含`ownerKind`、`ownerId`、`conditionPath`，以及唯一闭合`DailyFactConditionSelection`组件。公开仅准入schema5 ORDINARY_RULE／ORDINARY_CONFIRMATION／TRADE_DATE正式日线或已完成分钟事实。其它owner、reset、SIGNAL scope及schema6–9仍拒绝，不增加目录endpoint或UI。
+
+缺省保持旧命令model／JSON／请求hash字节及既有null字段；显式null、别名／原名双写和嵌套额外字段拒绝422。同一幂等key改变选择器沿用既有FACT422拒绝；过期CAS仍为409。绑定由实际服务端原生／SQL／来源／审核／观察校验派生，保护不可变目标／观察并拒绝擦除／补升／移动。既有contentHash仍必填，不授予权限。客户端目标／源digest和观察对象不是可信输入。已完成且匹配的旧／新回执重放不新增FACT／FACT audit；既有重评及独立动作／发送gate保留。独立写出的旧请求前像为397个UTF-8字节，SHA256为`aa1daa25a90755da03407c0de12d47ed23b506e12ad0ce9e58015097b44115af`。
+
+两套profile产物与C1预渲染字节相符。窄测试投影先验证完整可选非null字段及闭合组件的准确字面形状，再仅移除该属性／组件，恢复准确四个历史U-PMA hash。未变的来源专用投影随后恢复准确U-MLP3 hash，较早P0–P3／schema5投影调用者组合相同链路。不替换历史digest／断言，不改变输入document，无关字段／组件／路由／约束仍须失败。本owner记录不关闭PMA、语料提取、原始03/04、X09／X12／资源阻断、UI、monitor-readiness或实际安装，也不授权provider调用、用户数据库变更、采集或真实发送。
+
+OpenAPI 快照 SHA-256：`8821fa8577e72eab4b607bf18306c0ccca4e30b00fa686616c9f84abcdc66563`
+
+规范监控v2 OpenAPI快照SHA-256：`27f111593d3d95d2df5722122f5ec914c068494c69ef0b0ed6986e6c59d72bba`
+
+生成TypeScript SHA-256：兼容版`0e160cf924a1376893b2b463d6aac4970ca22c33caf4d2f13798dad6a985efb8`；规范版`1780d5e3801ddeef0f7105bfcd70ecfc5bd134bc0859ce010a0d9b396f9621f7`。

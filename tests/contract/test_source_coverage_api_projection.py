@@ -22,6 +22,12 @@ LEGACY_HASHES = {
     2: ("076ca6e32306c7cbe1fc3b2b2788ded8a36d823fe93d901fdefaa479b9e78c46",
         "24d090d32d7ed32b15c98c7b4efc695f017364b724022acccaad0922f0a49829"),
 }
+PRIOR_COVERAGE_HASHES = {
+    1: ("c426102e7f9815b549a463a4fb4c38ec3c15c97213cd09864e65147a9a935cd7",
+        "7db80baf8b0a53b837795ac1a0ae0bb8362c390af491068d5bbfc2a201d45256"),
+    2: ("0361f3b1b69a23399ee8e3ec89cce87ef832c04980e7bcc88aeba72b2c0fd1f9",
+        "8fdce46fec658cacfb7b782bcc91163c1ec0fa4b02d441c5d3c7356d114b5ddc"),
+}
 SOURCE_FIELDS = {
     "SourceCoveragePage": "authorityGranted planVersionId summary items limit returnedCount "
         "totalRows nextCursor",
@@ -99,12 +105,44 @@ def _assert_source_surface(document):
         "CURRENT_ASSESSMENT", "HISTORICAL_INPUT"]
 
 
+def condition_selection_projection(document):
+    """Remove only H04's exact selector, preserving every unrelated change."""
+    schemas = document["components"]["schemas"]
+    command = schemas["DailyFactCommand"]
+    assert "conditionSelection" in command["properties"]
+    assert "conditionSelection" not in command["required"]
+    assert command["properties"]["conditionSelection"] == {
+        "$ref": "#/components/schemas/DailyFactConditionSelection"}
+    assert "DailyFactConditionSelection" in schemas
+    # JSON comparison preserves literal types: Python dict equality conflates
+    # True with1, which must not hide an invalid schema-bound mutation.
+    assert json.dumps(schemas["DailyFactConditionSelection"], sort_keys=True) == json.dumps({
+        "additionalProperties": False,
+        "properties": {
+            "ownerKind": {"enum": ["ORDINARY_RULE", "ALERT_RULE", "RISK_BRANCH"],
+                          "title": "Ownerkind", "type": "string"},
+            "ownerId": {"maxLength": 128, "minLength": 1,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                        "title": "Ownerid", "type": "string"},
+            "conditionPath": {"maxLength": 512, "minLength": 1,
+                              "title": "Conditionpath", "type": "string"},
+        },
+        "required": ["ownerKind", "ownerId", "conditionPath"],
+        "title": "DailyFactConditionSelection", "type": "object",
+    }, sort_keys=True)
+    result = deepcopy(document)
+    del result["components"]["schemas"]["DailyFactCommand"]["properties"]["conditionSelection"]
+    del result["components"]["schemas"]["DailyFactConditionSelection"]
+    return result
+
+
 def source_coverage_projection(document):
     """Remove only approved PMA additions for the older historical shape gates.
 
     Call this before the earlier P0–P3/schema5 projection. It does not evaluate a
     plan or create authority. Full old-document hashes are checked separately.
     """
+    document = condition_selection_projection(document)
     _assert_source_surface(document)
     result = deepcopy(document)
     assert set(result["paths"][COVERAGE_PATH]) == {"get"}
@@ -160,6 +198,67 @@ def test_only_approved_additions_restore_exact_old_openapi_and_typescript_hashes
     original = deepcopy(document)
     _assert_old_hashes(document, version)
     assert document == original
+
+
+def test_selector_only_projection_restores_fixed_prior_coverage_hashes_without_mutation(contract):
+    version, document = contract
+    original = deepcopy(document)
+    projected = condition_selection_projection(document)
+    assert document == original
+    assert sha256(generator.render_openapi_snapshot(projected).encode()).hexdigest() == (
+        PRIOR_COVERAGE_HASHES[version][0])
+    assert sha256(generator.render_typescript_contracts(
+        projected, monitor_contract_version=version).encode()).hexdigest() == (
+            PRIOR_COVERAGE_HASHES[version][1])
+    _assert_old_hashes(document, version)
+    assert document == original
+
+
+@pytest.mark.parametrize("attack", ["nullable", "required", "default", "extra-authority",
+    "open-object", "owner-bound", "owner-pattern", "owner-enum", "missing-required",
+    "component-default", "boolean-bound", "unrelated-field", "unrelated-component"])
+def test_selector_projection_rejects_changed_shape_and_unrelated_drift(contract, attack):
+    version, original = contract
+    document = deepcopy(original)
+    schemas = document["components"]["schemas"]
+    command = schemas["DailyFactCommand"]
+    selection = schemas["DailyFactConditionSelection"]
+    if attack == "nullable":
+        command["properties"]["conditionSelection"] = dict(anyOf=[
+            command["properties"]["conditionSelection"], {"type": "null"}])
+    elif attack == "required":
+        command["required"].append("conditionSelection")
+    elif attack == "default":
+        command["properties"]["conditionSelection"]["default"] = None
+    elif attack == "extra-authority":
+        selection["properties"]["sourceHash"] = {"type": "string"}
+    elif attack == "open-object":
+        selection["additionalProperties"] = True
+    elif attack == "owner-bound":
+        selection["properties"]["ownerId"]["maxLength"] = 129
+    elif attack == "owner-pattern":
+        selection["properties"]["ownerId"]["pattern"] = ".*"
+    elif attack == "owner-enum":
+        selection["properties"]["ownerKind"]["enum"].append("CONTROL")
+    elif attack == "missing-required":
+        selection["required"].remove("conditionPath")
+    elif attack == "component-default":
+        selection["default"] = {}
+    elif attack == "boolean-bound":
+        selection["properties"]["ownerId"]["minLength"] = True
+    elif attack == "unrelated-field":
+        command["properties"]["ignoreSelection"] = {"type": "boolean"}
+    else:
+        schemas["DailyFactUnapprovedSelection"] = {"type": "object"}
+    before = deepcopy(document)
+    with pytest.raises(AssertionError):
+        projected = condition_selection_projection(document)
+        assert sha256(generator.render_openapi_snapshot(projected).encode()).hexdigest() == (
+            PRIOR_COVERAGE_HASHES[version][0])
+        assert sha256(generator.render_typescript_contracts(
+            projected, monitor_contract_version=version).encode()).hexdigest() == (
+                PRIOR_COVERAGE_HASHES[version][1])
+    assert document == before
 
 
 @pytest.mark.parametrize("attack", ["old-bound", "old-response", "new-component", "old-field",

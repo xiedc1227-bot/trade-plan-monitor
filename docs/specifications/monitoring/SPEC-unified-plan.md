@@ -358,3 +358,17 @@ OpenAPI snapshot SHA-256: `c426102e7f9815b549a463a4fb4c38ec3c15c97213cd09864e651
 Canonical monitor v2 OpenAPI snapshot SHA-256: `0361f3b1b69a23399ee8e3ec89cce87ef832c04980e7bcc88aeba72b2c0fd1f9`
 
 Generated TypeScript SHA-256: compatibility `7db80baf8b0a53b837795ac1a0ae0bb8362c390af491068d5bbfc2a201d45256`; canonical `8fdce46fec658cacfb7b782bcc91163c1ec0fa4b02d441c5d3c7356d114b5ddc`.
+
+## U-H04 — Implemented accurate ordinary fact selection (2026-11-01)
+
+This implementation-owner record follows the user's existing H04 implementation authorization within PMA; it is not a new human signature, strategy approval or replacement for the historical U-PMA/U-MLP3 approvals above. [PMA-K45](CONTRACT-plan-monitor-assurance.md) owns the narrow addition to existing `POST /api/v1/plan-facts`: optional, nonnullable `DailyFactCommand.conditionSelection`, containing only `ownerKind`, `ownerId`, `conditionPath`, plus the single closed `DailyFactConditionSelection` component. Only schema5 ORDINARY_RULE / ORDINARY_CONFIRMATION / TRADE_DATE official-daily or completed-minute facts are publicly admitted. Other owners, reset, SIGNAL scope and schema6–9 remain rejected; no catalog endpoint or UI is added.
+
+Omission preserves old command model/JSON/request-hash bytes and existing null fields; explicit null, alias/name double writes and nested extras reject422. Changed selector under the same idempotency key retains existing FACT422 rejection; stale CAS remains409. Actual server-side native/SQL/source/review/observation validation derives the binding, protects immutable target/observation and rejects erase/upgrade/move. Existing contentHash remains required but grants no authority. Client target/source digests and observation objects are not trusted inputs. Completed matching old/new receipts replay without an additional FACT/FACT audit; existing reevaluation and separate action/send gates remain. The independently written old request preimage is397 UTF-8 bytes, SHA256 `aa1daa25a90755da03407c0de12d47ed23b506e12ad0ce9e58015097b44115af`.
+
+Both profile artifacts match the C1 pre-rendered bytes. The narrow test projection first verifies the complete optional/nonnullable field and closed component's literal shape, then removes only that property/component to restore the exact four historical U-PMA hashes. The unchanged source-only projection then restores the exact U-MLP3 hashes, and earlier P0–P3/schema5 projection callers compose the same chain. No historical digest/assertion is replaced, no input document is mutated, and unrelated fields/components/routes/constraints still fail. This owner record does not close PMA, corpus extraction, original03/04, X09/X12/resource blockers, UI, monitor-readiness or actual installation, and authorizes no provider call, user-database change, acquisition or real send.
+
+OpenAPI snapshot SHA-256: `8821fa8577e72eab4b607bf18306c0ccca4e30b00fa686616c9f84abcdc66563`
+
+Canonical monitor v2 OpenAPI snapshot SHA-256: `27f111593d3d95d2df5722122f5ec914c068494c69ef0b0ed6986e6c59d72bba`
+
+Generated TypeScript SHA-256: compatibility `0e160cf924a1376893b2b463d6aac4970ca22c33caf4d2f13798dad6a985efb8`; canonical `1780d5e3801ddeef0f7105bfcd70ecfc5bd134bc0859ce010a0d9b396f9621f7`.
