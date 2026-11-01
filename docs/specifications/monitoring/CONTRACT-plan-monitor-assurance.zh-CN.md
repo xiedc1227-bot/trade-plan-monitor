@@ -262,3 +262,17 @@ GET /api/v1/plan-versions/{version_id}/source-coverage 在分页前核验同sess
 缺能力或owner已关闭返回503；语义归属过期返回409；存储完整性损坏返回500；实际busy／locked存储保留503及Retry-After: 1。未知异常仍抛出。普通source／plan GET维持原BEGIN事务，包括pool中的DBAPI连接先前被fence用过的情况。该能力为私有接口，不产生可携带token、就绪权限或调用者自选legacy回退。该fence不改变公共API、表、冻结selection／input codec、formula或hash域。
 
 已完成同键run／selection回执按原冻结响应重放，不重新打开当前source或复制输入。新键要求当前权限；当前plan-review confirmation即使重放也保留另行规定的当前proof复核。Native legacy source／plan／review字节及真实cutover成员保持准确，回填日期的新记录不变成legacy。Legacy点显示仅为描述，不验证全局risk grant；实际独立风险路径仍认证原owner／root，拒绝伪造成员或未知scope。重评、无害新DRAFT、coverage读取及旧回执重放均不能重开已实际消费的BUY／SELL，或改变其给定／模拟数量、库存及原效果。
+
+## PMA-K35 — 私有显式人工事实目标
+
+T13-H04a仅在`domain/reviewed_fact_targets.py`增加纯函数`list_reviewed_fact_targets`／`resolve_reviewed_fact_target`与不可变、严格的`ReviewedFactTarget`。复用既有原生条件目录及其`FactDefinition`／observation context；不建立第二套目录，不按fact kind、证据文字或同义词推断目标。显式目标保留每个实际位置，即使不变的旧`assess_unbound_fact`／`filter_unbound_facts`诊断会折叠相等的完整定义。普通确认、普通reset、提醒确认及严重风险确认保留各自原生上下文、准确owner kind／ID及条件路径。停用普通规则和非条件元数据不提供目标。保留既有深度4／总50叶限制。
+
+`ReviewedFactTarget`恰好包含必填字段`version`、`plan_version_id`、`content_hash`、`owner_kind`、`owner_id`、`condition_path`、`target_hash`。版本为`reviewed-fact-target-v1`；owner kind为ORDINARY_RULE／ALERT_RULE／RISK_BRANCH。两个ID复用原生`Identifier`（1–128字符及其既有pattern）；路径为不trim的准确1–512字符字符串；哈希为64位小写十六进制。严格解析拒绝多余／缺失字段、类型转换和字符串trim，并重新验证model实例。即使目录为空，列举也验证所给身份形状及准确原生content hash。解析必须匹配恰好一个既有目录位置及其完整重算目标；不将路径作为代码执行，也不从人工说明猜测。
+
+`target_hash = daily_hash("reviewed-fact-target-v1", payload)`。Payload包含除`target_hash`之外的六个选择字段，加上`native_plan_hash = plan_sha256(owner_plan)`，以及该位置`FactDefinition`已有的准确规范字符串`definition_json`和`observation_context`。完整类型化叶保留fact kind、全部要求及TRADE_DATE／SIGNAL有效范围；上下文保留目录的确认／有效期／reset／风险证据含义。完整原生计划哈希另行区分既有语义content hash排除的头部。目标不编造或新增运行时日期、signal、真假、核验时间或fact记录。此新增私有哈希域不改变任何旧哈希原像。
+
+哈希原像为UTF-8的`reviewed-fact-target-v1`、一个NUL字节及规范payload JSON：对象key递归排序、`ensure_ascii=False`、`allow_nan=False`、紧凑`,`／`:`分隔符。`definition_json`与`observation_context`保持为JSON**字符串值**，不重新解析为对象。`test_explicit_target_independent_fixed_preimage_and_digest`通过独立标准库SHA256及既有`daily_hash`封装，固定这两个字符串的准确字面序列化、全部九个payload字段及746字节原像。其固定中立`_plan()`／`actual-owner-version`／`ORDINARY_RULE`／`low-buy`／`condition.conditions[0]`的原生plan hash为`88f512a4259038c5e135e69649431600e1cab69444f3c6af114a6d5349fc235c`，content hash为`115602b028d5716a224f7583d49e5e38c017e25e5c6eb52440ec47fd5e114837`，target hash为`8efad0ab16e6f026dbf7c5967ad00420a7b984aab8c865a748139a9beca88513`。预期摘要是独立核对过的固定字面量，不取自待测目标生成器；解析这一独立指定的选择器必须返回上述两个准确规范字符串。
+
+这些helper仅验证所给原生计划与所给预期owner身份；形状合法的ID、content相同或自洽target hash不能认证其SQL对应关系。权威调用者必须重新读取fact实际原属SQL版本，提供其准确原生计划／版本身份／content，并独立执行当前审核、来源权限、日期／signal、已完成观察周期及核验时间要求。同content的active sibling不能替代原owner。解析仅返回原始不可变`FactDefinition`，不返回已满足证据、许可或当前审核权限。
+
+本片不新增登记端点、已存FACT字段、迁移、生成API配置、求值器／消费者或界面接入。旧FACT字节、legacy诊断和冻结公式保持不变。显式登记／存储、原owner消费者及界面须分别经过后续独立测试子片；此私有helper不关闭H04／T13，也不解决原始03/04、X09、X12前驱权限或语料／资源验收。

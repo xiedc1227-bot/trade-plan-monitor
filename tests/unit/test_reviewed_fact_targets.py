@@ -3,6 +3,7 @@
 import json
 from dataclasses import FrozenInstanceError
 from datetime import datetime
+from hashlib import sha256
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -11,13 +12,15 @@ from tests.unit.test_daily_plan import synthetic_plan_payload
 from tests.unit.test_unified_plan_domain import unified_payload
 
 from trade_plan_monitor.decision.unified_conditions import evaluate_unified_condition
-from trade_plan_monitor.domain.daily_hash import canonical
+from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
 from trade_plan_monitor.domain.plan_codec import load_plan_json
-from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
+from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.reviewed_fact_targets import (
     assess_unbound_fact,
     filter_unbound_facts,
+    list_reviewed_fact_targets,
+    resolve_reviewed_fact_target,
 )
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 
@@ -303,3 +306,237 @@ def test_existing_native_fifty_leaf_bound_is_preserved():
     assert result.usable and result.definition_count == 1 and len(result.definitions) == 50
     with pytest.raises(ValidationError, match="fifty"):
         _plan(*(_leaf() for _ in range(51)))
+
+
+OWNER_VERSION = "actual-owner-version"
+
+
+def _targets(plan, version=OWNER_VERSION):
+    return list_reviewed_fact_targets(plan, plan_version_id=version,
+                                     content_hash=daily_plan_content_sha256(plan))
+
+
+def _resolve(plan, target, version=OWNER_VERSION):
+    return resolve_reviewed_fact_target(plan, target, plan_version_id=version)
+
+
+@pytest.mark.parametrize("second", [_leaf(), _leaf("明显下影"), _leaf(scope="SIGNAL")])
+def test_explicit_target_keeps_each_actual_position_even_when_old_definitions_fold(second):
+    plan = _plan(_leaf(), second)
+    before = plan.model_dump_json(), daily_plan_content_sha256(plan)
+    targets = _targets(plan)
+    assert len(targets) == 2
+    assert [t.condition_path for t in targets] == [
+        "condition.conditions[0]", "condition.conditions[1]"]
+    assert len({t.target_hash for t in targets}) == 2
+    assert all(t.plan_version_id == OWNER_VERSION and t.version == "reviewed-fact-target-v1"
+               and t.content_hash == before[1] for t in targets)
+    refs = assess_unbound_fact(plan, _fact(plan, signal_id="existing")).definitions
+    assert tuple(_resolve(plan, t) for t in targets) == refs
+    assert before == (plan.model_dump_json(), daily_plan_content_sha256(plan))
+
+
+def test_explicit_target_distinguishes_rules_with_the_same_complete_requirement():
+    plan = _with_second_rule(_plan())
+    targets = _targets(plan)
+    assert {t.owner_id for t in targets} == {"low-buy", "sell-other"}
+    assert len({t.target_hash for t in targets}) == 2
+    assert assess_unbound_fact(plan, _fact(plan)).definition_count == 1
+
+
+def test_explicit_target_reuses_confirmation_reset_alert_and_risk_catalog_contexts():
+    raw = unified_payload()
+    raw["ordinary_rules"][0]["condition"] = _leaf()
+    raw["ordinary_rules"][0]["independent_signal"] = dict(
+        mode="LATER_CLOSE_RESET_THEN_CONFIRM", reset_condition=_leaf())
+    raw["alert_rules"] = [dict(kind="RISK_ALERT", rule_id="alert-own", condition=_leaf(),
+                               confirmation={"kind": "OFFICIAL_DAILY_CLOSE"})]
+    raw["risk_branches"][1]["rule_id"] = "actual-severe"
+    plan = UnifiedTradePlan.model_validate(raw)
+    targets = _targets(plan)
+    assert len(targets) == 5
+    refs = tuple(_resolve(plan, t) for t in targets)
+    assert {json.loads(r.observation_context)["purpose"] for r in refs} == {
+        "ORDINARY_CONFIRMATION", "RESET", "ALERT_CONFIRMATION", "RISK_CONFIRMATION"}
+    assert {t.owner_kind for t in targets} == {"ORDINARY_RULE", "ALERT_RULE", "RISK_BRANCH"}
+    assert {t.owner_id for t in targets if t.owner_kind == "RISK_BRANCH"} == {"actual-severe"}
+    assert len({t.target_hash for t in targets}) == 5
+    reset = next(t for t in targets if t.condition_path == "independent_signal.reset_condition")
+    moved = {**reset.model_dump(), "condition_path": "condition"}
+    with pytest.raises(ValueError):
+        _resolve(plan, moved)
+
+
+@pytest.mark.parametrize("changes", [
+    {"plan_version_id": "active-sibling"}, {"content_hash": "0" * 64},
+    {"owner_kind": "ALERT_RULE"}, {"owner_id": "sell-other"},
+    {"condition_path": "condition.conditions[1]"}, {"target_hash": "0" * 64},
+])
+def test_explicit_target_rejects_a_changed_coordinate_with_the_original_hash(changes):
+    plan = _with_second_rule(_plan(_leaf(), _leaf()))
+    targets = _targets(plan)
+    assert len(targets) == 4
+    with pytest.raises(ValueError):
+        _resolve(plan, {**targets[0].model_dump(), **changes})
+
+
+@pytest.mark.parametrize("changes", [
+    {"version": "other"}, {"owner_kind": "PLAN"}, {"owner_id": 1},
+    {"condition_path": " condition.conditions[0]"}, {"target_hash": "A" * 64},
+    {"authority_granted": True}, {"evidence": "volume already verified"},
+])
+def test_explicit_target_parser_is_closed_strict_and_never_uses_testimony(changes):
+    plan = _plan()
+    targets = _targets(plan)
+    assert len(targets) == 1
+    with pytest.raises(ValueError):
+        _resolve(plan, {**targets[0].model_dump(), **changes})
+
+
+@pytest.mark.parametrize("field", ["version", "plan_version_id", "content_hash", "target_hash"])
+def test_explicit_target_parser_requires_the_complete_binding(field):
+    plan = _plan()
+    targets = _targets(plan)
+    assert len(targets) == 1
+    value = targets[0].model_dump()
+    del value[field]
+    with pytest.raises(ValueError):
+        _resolve(plan, value)
+
+
+def test_explicit_target_equal_content_does_not_identify_another_sql_owner_or_native_header():
+    plan = _plan()
+    targets = _targets(plan)
+    assert len(targets) == 1
+    target = targets[0]
+    other = _targets(plan, "active-sibling")[0]
+    assert other.content_hash == target.content_hash and other.target_hash != target.target_hash
+    with pytest.raises(ValueError):
+        _resolve(plan, target, "active-sibling")
+    sibling = plan.model_copy(update={"version": plan.version + 1, "name": "Other owner"})
+    assert daily_plan_content_sha256(sibling) == target.content_hash
+    assert _targets(sibling)[0].target_hash != target.target_hash
+    with pytest.raises(ValueError):
+        _resolve(sibling, target)
+
+
+@pytest.mark.parametrize("change", ["definition", "confirmation", "validity"])
+def test_explicit_target_rejects_changed_definition_or_observation_context(change):
+    plan = _plan()
+    targets = _targets(plan)
+    assert len(targets) == 1
+    raw = plan.model_dump(mode="json")
+    rule = raw["ordinary_rules"][0]
+    if change == "definition":
+        rule["condition"]["conditions"][0] = _leaf("明显下影")
+    elif change == "confirmation":
+        rule.update(confirmation={"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+                    execution_window="CURRENT_SESSION")
+    else:
+        rule["validity"] = {"mode": "PLAN_ACTIVE"}
+    changed = UnifiedTradePlan.model_validate(raw)
+    with pytest.raises(ValueError):
+        _resolve(changed, targets[0])
+
+
+def test_explicit_target_schema4_keeps_native_roots_and_ignores_disabled_text():
+    raw = synthetic_plan_payload()
+    raw["ordinary_rules"][0]["prerequisites"] = [_leaf()]
+    raw["ordinary_rules"][0]["independent_signal"] = dict(
+        mode="LATER_CLOSE_RESET_THEN_CONFIRM", reset_condition=_leaf())
+    plan = DailyTradePlan.model_validate(raw)
+    targets = _targets(plan)
+    assert {t.condition_path for t in targets} == {
+        "price_structure", "volume_or_candle", "technical", "prerequisites[0]",
+        "independent_signal.reset_condition"}
+    assert all(t.owner_id == "low-buy" for t in targets)
+    assert all(_resolve(plan, t).condition_path == t.condition_path for t in targets)
+
+
+def test_explicit_target_is_immutable_bounded_and_does_not_become_a_verified_fact():
+    plan = _plan(*(_leaf() for _ in range(50)))
+    targets = _targets(plan)
+    assert len(targets) == len({t.target_hash for t in targets}) == 50
+    assert not any(hasattr(targets[0], key)
+                   for key in ("verified", "satisfied", "authority_granted"))
+    with pytest.raises(ValidationError):
+        targets[0].owner_id = "foreign"
+
+
+@pytest.mark.parametrize("version,content", [("", None), (1, None), ("actual", "0" * 64)])
+def test_explicit_target_empty_catalog_still_validates_supplied_owner_binding(version, content):
+    raw = _plan().model_dump(mode="json")
+    raw["ordinary_rules"][0]["condition"] = dict(
+        type="MINUTE_CLOSE_BELOW", timeframe_minutes=5, price_fen=4000)
+    plan = UnifiedTradePlan.model_validate(raw)
+    assert _targets(plan) == ()
+    with pytest.raises(ValueError):
+        list_reviewed_fact_targets(plan, plan_version_id=version,
+                                   content_hash=content or daily_plan_content_sha256(plan))
+
+
+@pytest.mark.parametrize("schema", [5, 6, 7, 8, 9])
+def test_explicit_target_current_schema_variants_resolve_the_existing_native_leaf(schema):
+    from tests.unit.test_market_exception_contract import exception_payload
+    from tests.unit.test_market_linkage_contract import linked_payload
+    from tests.unit.test_p2_policy_contract import p2_payload
+    from tests.unit.test_p3_policy_contract import p3_payload
+
+    raw = {5: unified_payload, 6: linked_payload, 7: exception_payload,
+           8: p2_payload, 9: p3_payload}[schema]()
+    raw["ordinary_rules"][0]["condition"] = _leaf()
+    plan = load_plan_json(json.dumps(raw))
+    targets = _targets(plan)
+    target = next(t for t in targets if t.owner_kind == "ORDINARY_RULE")
+    ref = _resolve(plan, target)
+    assert ref.definition_json == canonical(_leaf())
+    assert ref.owner_id == raw["ordinary_rules"][0]["rule_id"]
+
+
+@pytest.mark.parametrize("value", [None, [], "kind-only", 1])
+def test_explicit_target_parser_rejects_nonselector_inputs(value):
+    with pytest.raises(ValueError):
+        _resolve(_plan(), value)
+
+
+def test_explicit_target_revalidates_models_and_rejects_nonexistent_native_paths():
+    plan = _plan()
+    target = _targets(plan)[0]
+    forged = type(target).model_construct(**{**target.model_dump(), "target_hash": "invalid"})
+    with pytest.raises(ValueError):
+        _resolve(plan, forged)
+    for path in ("condition", "name", "condition.conditions[999]", "condition.conditions[-1]"):
+        with pytest.raises(ValueError):
+            _resolve(plan, {**target.model_dump(), "condition_path": path})
+
+
+def test_explicit_target_independent_fixed_preimage_and_digest():
+    # Independently specified literals, not an expected value from the target generator.
+    payload = dict(
+        version="reviewed-fact-target-v1", plan_version_id="actual-owner-version",
+        content_hash="115602b028d5716a224f7583d49e5e38c017e25e5c6eb52440ec47fd5e114837",
+        owner_kind="ORDINARY_RULE", owner_id="low-buy", condition_path="condition.conditions[0]",
+        native_plan_hash="88f512a4259038c5e135e69649431600e1cab69444f3c6af114a6d5349fc235c",
+        definition_json=(
+            '{"evidence_requirement":"成交不异常放大","fact_kind":"VOLUME_OR_CANDLE",'
+            '"type":"REVIEWED_FACT","validity_scope":"TRADE_DATE"}'),
+        observation_context=(
+            '{"confirmation":{"kind":"OFFICIAL_DAILY_CLOSE"},"purpose":"ORDINARY_CONFIRMATION",'
+            '"validity":{"end_date":"2026-12-31","mode":"DATE_RANGE","start_date":"2026-09-01"}}'),
+    )
+    expected_hash = "8efad0ab16e6f026dbf7c5967ad00420a7b984aab8c865a748139a9beca88513"
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False,
+                         separators=(",", ":")).encode("utf-8")
+    preimage = b"reviewed-fact-target-v1\x00" + encoded
+    assert len(preimage) == 746 and sha256(preimage).hexdigest() == expected_hash
+    assert daily_hash("reviewed-fact-target-v1", payload) == expected_hash
+    plan = _plan()
+    assert plan_sha256(plan) == payload["native_plan_hash"]
+    assert daily_plan_content_sha256(plan) == payload["content_hash"]
+    expected = {key: value for key, value in payload.items()
+                if key not in {"native_plan_hash", "definition_json", "observation_context"}}
+    expected["target_hash"] = expected_hash
+    assert _targets(plan)[0].model_dump() == expected
+    resolved = _resolve(plan, expected)
+    assert resolved.definition_json == payload["definition_json"]
+    assert resolved.observation_context == payload["observation_context"]

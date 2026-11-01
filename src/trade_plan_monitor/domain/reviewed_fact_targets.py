@@ -9,17 +9,18 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from trade_plan_monitor.domain.daily_hash import canonical
+from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyAll,
     DailyAny,
     DailyResetPolicy,
     DailyTradePlan,
+    Identifier,
     ReviewedDailyFact,
 )
-from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256
+from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedAll,
@@ -189,3 +190,73 @@ def filter_unbound_facts(
     catalog = _catalog(owner_plan)
     return tuple(fact for fact in facts if (result := _assess(*catalog, fact)).usable
                  or result.reason == "CONTROL_FACT")
+
+
+class ReviewedFactTarget(BaseModel):
+    """Private exact selector, never a verified fact, review or authority token."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    version: Literal["reviewed-fact-target-v1"]
+    plan_version_id: Identifier
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    owner_kind: Literal["ORDINARY_RULE", "ALERT_RULE", "RISK_BRANCH"]
+    owner_id: Identifier
+    condition_path: str = Field(min_length=1, max_length=512)
+    target_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+def _bound_definitions(owner_plan, plan_version_id, content_hash):
+    TypeAdapter(Identifier).validate_python(plan_version_id, strict=True)
+    native_content, definitions = _catalog(owner_plan)
+    if (native_content is None or type(content_hash) is not str
+            or content_hash != native_content):
+        raise ValueError("explicit fact target requires the supplied native content")
+    return definitions
+
+
+def _explicit_target(plan_version_id, content_hash, native_plan_hash, definition):
+    selector = dict(version="reviewed-fact-target-v1", plan_version_id=plan_version_id,
+                    content_hash=content_hash, owner_kind=definition.owner_kind,
+                    owner_id=definition.owner_id, condition_path=definition.condition_path)
+    target_hash = daily_hash("reviewed-fact-target-v1", {
+        **selector, "native_plan_hash": native_plan_hash,
+        "definition_json": definition.definition_json,
+        "observation_context": definition.observation_context,
+    })
+    return ReviewedFactTarget(**selector, target_hash=target_hash)
+
+
+def list_reviewed_fact_targets(
+    owner_plan: DailyTradePlan, *, plan_version_id: str, content_hash: str,
+) -> tuple[ReviewedFactTarget, ...]:
+    """Reuse the native catalog without folding repeated explicit positions.
+
+    The caller must reread the actual SQL owner and supply its plan and identity.
+    This pure function cannot authenticate that correspondence or current review.
+    """
+    definitions = _bound_definitions(owner_plan, plan_version_id, content_hash)
+    native_hash = plan_sha256(owner_plan)
+    return tuple(_explicit_target(plan_version_id, content_hash, native_hash, ref)
+                 for ref in definitions)
+
+
+def resolve_reviewed_fact_target(
+    owner_plan: DailyTradePlan, target: Mapping[str, object] | BaseModel,
+    *, plan_version_id: str,
+) -> FactDefinition:
+    """Resolve exactly one native leaf; never infer a target from kind or text.
+
+    Revalidate even a supplied model. Date, signal, completed observation, review
+    and original SQL ownership remain the authoritative caller's responsibility.
+    """
+    selected = ReviewedFactTarget.model_validate(_payload(target))
+    definitions = _bound_definitions(owner_plan, plan_version_id, selected.content_hash)
+    matches = tuple(ref for ref in definitions if (
+        ref.owner_kind, ref.owner_id, ref.condition_path) == (
+            selected.owner_kind, selected.owner_id, selected.condition_path))
+    if len(matches) != 1 or selected != _explicit_target(
+        plan_version_id, selected.content_hash, plan_sha256(owner_plan), matches[0],
+    ):
+        raise ValueError("explicit fact target does not match the supplied native owner")
+    return matches[0]
