@@ -9,8 +9,10 @@ import asyncio
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
+from uuid import UUID
 
 import pytest
+from sqlalchemy import delete, select
 from tests.integration.test_daily_plan_chain import SH, TUESDAY, WEDNESDAY, Chain, official_proof
 from tests.integration.test_reviewed_fact_target_authority import _check, _register
 from tests.integration.test_reviewed_fact_target_registration import (
@@ -19,13 +21,18 @@ from tests.integration.test_reviewed_fact_target_registration import (
     _plan,
     _write,
 )
-from tests.integration.test_unified_runtime import minute_inputs
+from tests.integration.test_unified_runtime import minute_inputs, persist_minute_inputs
 from tests.unit.test_unified_plan_domain import unified_payload
 
 from trade_plan_monitor.decision.unified_lifecycle import confirm_signal
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_data.aggregation import aggregate_five_minute_bar
+from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
+from trade_plan_monitor.state.models import FiveMinuteBar as FiveMinuteRow
+from trade_plan_monitor.state.models import MinuteBar as MinuteRow
 from trade_plan_monitor.state.models import TradingCalendar
+from trade_plan_monitor.state.source_action_authority import require_source_action_authority
+from trade_plan_monitor.state.source_coverage_authority import SourceCoverageAuthorityError
 from trade_plan_monitor.state.source_coverage_store import SourceCoverageStore
 
 
@@ -58,15 +65,15 @@ def test_actual_runtime_waits_for_b_then_produces_exact_registered_ordinary_sign
 
 
 @contextmanager
-def _case(tmp_path, change=None):
-    raw = _plan(daily=True).model_dump(mode="json")
+def _case(tmp_path, change=None, *, daily=True):
+    raw = _plan(daily=daily).model_dump(mode="json")
     if change is not None:
         change(raw)
     chain = Chain(tmp_path)
     chain.plan = UnifiedTradePlan.model_validate(raw)
     with chain.client:
         chain.activate()
-        chain.now = datetime(2026, 9, 22, 16, 35, 12, tzinfo=SH)
+        chain.now = datetime(2026, 9, 22, 16 if daily else 9, 35, 12, tzinfo=SH)
         _run(chain)
         yield chain
 
@@ -219,10 +226,327 @@ def _minute_at_current_clock(chain, inputs):
             "available_at": chain.now, "evaluated_at": chain.now})})
 
 
-def test_minute_targets_stay_blocked_at_original_and_actual_later_bar(tmp_path):
+def _offline_minute_run(chain, inputs, monkeypatch):
+    def forbidden(*args, **kwargs):
+        pytest.fail("minute evaluation attempted network acquisition")
+
+    with monkeypatch.context() as offline:
+        offline.setattr("socket.socket", forbidden)
+        offline.setattr("socket.create_connection", forbidden)
+        return chain.runtime.run_inputs(plan=chain.plan, inputs=inputs)
+
+
+def _minute_position(chain):
+    # Actual calendar prerequisites for the normal inventory command, not a
+    # replacement authority callback or an assumed source-review grant.
+    with chain.plans._unit_of_work() as work:
+        for previous, day in ((TUESDAY - timedelta(days=4), TUESDAY), (TUESDAY, WEDNESDAY)):
+            work.daily.session.add(TradingCalendar(exchange="SSE", cal_date=day,
+                is_open=True, previous_trade_date=previous))
+        work.commit()
+    chain.position()
+
+
+def test_actual_minute_runtime_produces_only_after_both_exact_observed_leaves(
+        tmp_path, monkeypatch):
+    with _current(tmp_path) as chain:
+        inputs = minute_inputs(chain)
+        persist_minute_inputs(chain, inputs)  # Normal source setup, never read-time recovery.
+        a = _register(chain, 0)
+        assert _offline_minute_run(chain, inputs, monkeypatch).snapshot["signals"] == []
+        assert _signals(chain) == ()
+        b = _register(chain, 1)
+        result = _offline_minute_run(chain, inputs, monkeypatch)
+        assert len(result.snapshot["signals"]) == 1
+        (signal,) = result.snapshot["signals"]
+        assert signal["confirmed_at"] == inputs.minute_target.isoformat()
+        assert [child["fact_ids"] for child in signal["evidence"][0]["children"]] == [
+            [a["id"]], [b["id"]]]
+        (stored,) = _signals(chain)
+        assert stored["id"] == signal["signal_id"]
+        assert _check(chain, stored["id"])
+
+
+@pytest.mark.parametrize("change", ["bar", "source"])
+def test_actual_minute_producer_requires_fresh_facts_for_changed_observation(
+        tmp_path, monkeypatch, change):
+    with _current(tmp_path) as chain:
+        original = minute_inputs(chain)
+        persist_minute_inputs(chain, original)
+        old = [_register(chain, i) for i in range(2)]
+        chain.now += timedelta(minutes=5) if change == "bar" else timedelta(seconds=1)
+        current = _minute_at_current_clock(chain, original)
+        if change == "source":
+            minutes = list(current.minute_prefix)
+            minutes[1] = minutes[1].model_copy(update={"close_fen": 3969})
+            current = current.model_copy(update={"minute_prefix": tuple(minutes)})
+            assert current.five_minute_bars == original.five_minute_bars
+        persist_minute_inputs(chain, current)
+        assert _offline_minute_run(chain, current, monkeypatch).snapshot["signals"] == []
+        assert _signals(chain) == ()
+        fresh = [_fact(chain, f"condition.conditions[{i}]", f"new-{change}-{i}")
+                 for i in range(2)]
+        assert all(row["payload"]["reviewed_fact_observation"] != old[i]["payload"][
+            "reviewed_fact_observation"] for i, row in enumerate(fresh))
+        (signal,) = _offline_minute_run(chain, current, monkeypatch).snapshot["signals"]
+        assert signal["confirmed_at"] == current.minute_target.isoformat()
+        assert [child["fact_ids"] for child in signal["evidence"][0]["children"]] == [
+            [row["id"]] for row in fresh]
+        assert _check(chain, signal["signal_id"])
+
+
+def test_equivalent_new_receipts_before_and_after_production_do_not_require_new_facts_or_occurrence(
+        tmp_path, monkeypatch):
+    with _current(tmp_path) as chain:
+        _minute_position(chain)
+        original = minute_inputs(chain)
+        persist_minute_inputs(chain, original)
+        facts = [_register(chain, i) for i in range(2)]
+        chain.now += timedelta(seconds=1)
+        current = _minute_at_current_clock(chain, original)
+        persist_minute_inputs(chain, current)
+        first = _offline_minute_run(chain, current, monkeypatch)
+        (signal,) = first.snapshot["signals"]
+        assert signal["state"] == "READY" and signal["executable_qty"] == 100
+        (event_id,) = first.event_ids
+        duplicate = _offline_minute_run(chain, current, monkeypatch)
+        assert duplicate.duplicate
+        assert duplicate.snapshot["signals"][0]["signal_id"] == signal["signal_id"]
+        chain.now += timedelta(seconds=1)
+        reread = _minute_at_current_clock(chain, original)
+        persist_minute_inputs(chain, reread)
+        later = _offline_minute_run(chain, reread, monkeypatch)
+        assert len(_signals(chain)) == 1
+        assert later.snapshot["signals"][0]["signal_id"] == signal["signal_id"]
+        assert [child["fact_ids"] for child in signal["evidence"][0]["children"]] == [
+            [row["id"]] for row in facts]
+        assert _check(chain, signal["signal_id"])
+        with chain.plans._unit_of_work() as work:
+            event = work.alerts.get(UUID(event_id))
+            assert daily_delivery_allowed(work.daily.session, event, chain.now)
+            assert work.alerts.is_current_actionable(event, market_date=chain.now.date())
+
+
+@pytest.mark.parametrize("missing", ["all", "minute", "aggregate"])
+def test_actual_produced_confirmation_never_grants_action_when_local_sql_source_is_missing(
+        tmp_path, monkeypatch, missing):
+    with _current(tmp_path) as chain:
+        _minute_position(chain)
+        inputs = minute_inputs(chain)
+        if missing != "all":
+            persist_minute_inputs(chain, inputs)
+            with chain.plans._unit_of_work() as work:
+                if missing == "minute":
+                    work.daily.session.execute(delete(MinuteRow).where(
+                        MinuteRow.bar_end == inputs.minute_prefix[0].bar_end.isoformat()))
+                else:
+                    work.daily.session.execute(delete(FiveMinuteRow))
+                work.commit()
+        for i in range(2):
+            _register(chain, i)
+        result = _offline_minute_run(chain, inputs, monkeypatch)
+        (signal,) = result.snapshot["signals"]
+        assert signal["state"] == "CONFIRMED" and signal["executable_qty"] == 0
+        assert "REVIEWED_FACT_REQUIRED" in signal["blockers"]
+        assert result.event_ids == ()
+        assert not _check(chain, signal["signal_id"])
+        with chain.plans._unit_of_work() as work:
+            work.daily.lock_symbol(chain.plan.symbol)
+            with pytest.raises(SourceCoverageAuthorityError):
+                require_source_action_authority(work, chain.version["id"],
+                                                cause_id=signal["signal_id"])
+            if missing == "all":
+                assert work.daily.session.scalar(select(MinuteRow)) is None
+                assert work.daily.session.scalar(select(FiveMinuteRow)) is None
+
+
+@pytest.mark.parametrize("damage", ["minute-missing", "aggregate-missing", "source-correction"])
+def test_actual_ready_minute_action_and_send_recheck_real_sql_after_production(
+        tmp_path, monkeypatch, damage):
+    with _current(tmp_path) as chain:
+        _minute_position(chain)
+        inputs = minute_inputs(chain)
+        persist_minute_inputs(chain, inputs)
+        for i in range(2):
+            _register(chain, i)
+        result = _offline_minute_run(chain, inputs, monkeypatch)
+        (signal,) = result.snapshot["signals"]
+        assert signal["state"] == "READY" and signal["executable_qty"] == 100
+        (event_id,) = result.event_ids
+        with chain.plans._unit_of_work() as work:
+            event = work.alerts.get(UUID(event_id))
+            assert event.cause_id == signal["signal_id"]
+            assert daily_delivery_allowed(work.daily.session, event, chain.now)
+            assert work.alerts.is_current_actionable(event, market_date=chain.now.date())
+            work.daily.lock_symbol(chain.plan.symbol)
+            assert require_source_action_authority(work, chain.version["id"],
+                cause_id=signal["signal_id"]).basis == "CURRENT"
+        chain.now += timedelta(seconds=1)
+        with chain.plans._unit_of_work() as work:
+            if damage == "minute-missing":
+                work.daily.session.execute(delete(MinuteRow))
+            elif damage == "aggregate-missing":
+                work.daily.session.execute(delete(FiveMinuteRow))
+            else:
+                corrected = [m.model_copy(update={"received_at": chain.now})
+                             for m in inputs.minute_prefix]
+                corrected[1] = corrected[1].model_copy(update={"close_fen": 3969})
+                work.history.upsert_minutes(tuple(corrected))
+            work.commit()
+        # The head and actual stored READY SIGNAL are deliberately unchanged.
+        # Only the real local source is removed/corrected; no b8a mock is used.
+        assert not _check(chain, signal["signal_id"])
+        with chain.plans._unit_of_work() as work:
+            assert not daily_delivery_allowed(work.daily.session, event, chain.now)
+            assert not work.alerts.is_current_actionable(event, market_date=chain.now.date())
+            work.daily.lock_symbol(chain.plan.symbol)
+            with pytest.raises(SourceCoverageAuthorityError):
+                require_source_action_authority(work, chain.version["id"],
+                                                cause_id=signal["signal_id"])
+
+
+@pytest.mark.parametrize("manual", ["missing", "negative", "stale"])
+def test_actual_minute_numeric_any_remains_decisive_with_unusable_manual_branch(
+        tmp_path, monkeypatch, manual):
+    def change(raw):
+        a, b = raw["ordinary_rules"][0]["condition"]["conditions"]
+        raw["ordinary_rules"][0]["condition"] = dict(type="ALL", conditions=[a,
+            dict(type="ANY", conditions=[b, dict(type="MINUTE_CLOSE_BELOW",
+                                                 timeframe_minutes=5, price_fen=4000)])])
+
+    with _case(tmp_path, change, daily=False) as chain:
+        inputs = minute_inputs(chain)
+        persist_minute_inputs(chain, inputs)
+        if manual != "missing":
+            _fact(chain, "condition.conditions[1].conditions[0]", "manual-b", satisfied=False)
+        if manual == "stale":
+            chain.now += timedelta(seconds=1)
+            inputs = _minute_at_current_clock(chain, inputs)
+            minutes = list(inputs.minute_prefix)
+            minutes[1] = minutes[1].model_copy(update={"close_fen": 3969})
+            inputs = inputs.model_copy(update={"minute_prefix": tuple(minutes)})
+            persist_minute_inputs(chain, inputs)
+        assert _offline_minute_run(chain, inputs, monkeypatch).snapshot["signals"] == []
+        a = _fact(chain, "condition.conditions[0]", "required-a")
+        (signal,) = _offline_minute_run(chain, inputs, monkeypatch).snapshot["signals"]
+        required, independent = signal["evidence"][0]["children"]
+        assert required["fact_ids"] == [a["id"]]
+        assert [child["outcome"] for child in independent["children"]] == [
+            "UNSATISFIED" if manual == "negative" else "MISSING_INPUT", "SATISFIED"]
+        assert _check(chain, signal["signal_id"])
+
+
+def test_actual_minute_numeric_any_does_not_require_manual_observation_or_local_manual_source(
+        tmp_path, monkeypatch):
+    def change(raw):
+        root = raw["ordinary_rules"][0]["condition"]
+        root["type"] = "ANY"
+        root["conditions"].append(dict(type="MINUTE_CLOSE_BELOW",
+                                       timeframe_minutes=5, price_fen=3970))
+
+    with _case(tmp_path, change, daily=False) as chain:
+        original = minute_inputs(chain)
+        assert _signals(chain) == ()  # Initial numeric leaf is UNSATISFIED.
+        for i in range(2):
+            _register(chain, i)
+        chain.now += timedelta(seconds=1)
+        current = _minute_at_current_clock(chain, original)
+        minutes = list(current.minute_prefix)
+        minutes[-1] = minutes[-1].model_copy(update={"close_fen": 3969})
+        aggregate = aggregate_five_minute_bar(tuple(minutes),
+            bucket_end=current.minute_target, is_open=True)
+        current = current.model_copy(update={"minute_prefix": tuple(minutes),
+                                             "five_minute_bars": (aggregate,)})
+        # No local market rows are prepared: the recorded numeric branch is
+        # independent of both stale manual observations. Action market guards
+        # remain separate; this assertion grants no send/trade permission.
+        (signal,) = _offline_minute_run(chain, current, monkeypatch).snapshot["signals"]
+        assert [child["outcome"] for child in signal["evidence"][0]["children"]] == [
+            "MISSING_INPUT", "MISSING_INPUT", "SATISFIED"]
+        assert _check(chain, signal["signal_id"])
+        with chain.plans._unit_of_work() as work:
+            assert work.daily.session.scalar(select(MinuteRow)) is None
+            assert work.daily.session.scalar(select(FiveMinuteRow)) is None
+
+
+@pytest.mark.parametrize("damage", ["path", "hash", "other-owner", "missing-observation"])
+def test_actual_minute_targets_need_native_owner_path_digest_and_observation(
+        tmp_path, monkeypatch, damage):
+    with _current(tmp_path) as chain:
+        inputs = minute_inputs(chain)
+        persist_minute_inputs(chain, inputs)
+        _register(chain, 1)
+        if damage == "other-owner":
+            _write(chain, _command(chain, factId="other-minute-owner"), fact_selection=(
+                "ORDINARY_RULE", "sell-other", "condition.conditions[0]"))
+        else:
+            a = _register(chain, 0)
+            payload = deepcopy(a["payload"])
+            if damage == "missing-observation":
+                payload.pop("reviewed_fact_observation")
+            else:
+                target = payload["reviewed_fact_target"]
+                target["condition_path" if damage == "path" else "target_hash"] = (
+                    "condition.conditions[1]" if damage == "path" else "0" * 64)
+            # Explicit malformed attribution/historical shape in real storage;
+            # this does not claim the private admission accepts the mutation.
+            with chain.plans._unit_of_work() as work:
+                work.daily.save(a["id"], kind="FACT", symbol=chain.plan.symbol,
+                    lineage=a["lineage"], expected_revision=a["revision"], payload=payload)
+                work.commit()
+        assert _offline_minute_run(chain, inputs, monkeypatch).snapshot["signals"] == []
+        assert _signals(chain) == ()
+
+
+def test_actual_minute_equal_content_successor_needs_its_own_registered_facts(
+        tmp_path, monkeypatch):
+    with _current(tmp_path) as chain:
+        inputs = minute_inputs(chain)
+        persist_minute_inputs(chain, inputs)
+        old = [_register(chain, i) for i in range(2)]
+        old_id, content = chain.version["id"], chain.version["contentHash"]
+        chain.activate(version=2, activation_revision=1, supplement_revision=1)
+        assert chain.version["id"] != old_id and chain.version["contentHash"] == content
+        assert _offline_minute_run(chain, inputs, monkeypatch).snapshot["signals"] == []
+        b = _fact(chain, "condition.conditions[1]", "successor-b")
+        assert _offline_minute_run(chain, inputs, monkeypatch).snapshot["signals"] == []
+        a = _fact(chain, "condition.conditions[0]", "successor-a")
+        (signal,) = _offline_minute_run(chain, inputs, monkeypatch).snapshot["signals"]
+        assert signal["plan_version_id"] == chain.version["id"]
+        assert [child["fact_ids"] for child in signal["evidence"][0]["children"]] == [
+            [a["id"]], [b["id"]]]
+        assert not {row["id"] for row in old}.intersection(
+            child["fact_ids"][0] for child in signal["evidence"][0]["children"])
+        assert _check(chain, signal["signal_id"])
+
+
+def test_default_pure_minute_entry_does_not_gain_target_permission(tmp_path):
+    with _current(tmp_path) as chain:
+        rows = [_register(chain, i) for i in range(2)]
+        inputs = minute_inputs(chain)
+        with chain.plans._unit_of_work() as work:
+            review = work.plans.get_version_details(chain.version["id"]).review_id
+        assert confirm_signal(chain.plan, chain.plan.ordinary_rules[0], series=None,
+            facts=tuple({"id": row["id"], **row["payload"]} for row in rows), previous=(),
+            session_dates=inputs.session_dates, plan_version_id=chain.version["id"],
+            review_id=review,
+            bars=inputs.five_minute_bars, target=inputs.minute_target,
+            trading_calendar=inputs.trading_calendar) is None
+
+
+def test_old_minute_targets_without_observation_stay_blocked_at_original_and_actual_later_bar(
+        tmp_path):
     with _current(tmp_path) as chain:
         for index in range(2):
-            _register(chain, index)
+            row = _register(chain, index)
+            # Readable historical target shape, before observation admission;
+            # not a null bypass or an implicitly upgraded registration.
+            payload = {key: value for key, value in row["payload"].items()
+                       if key != "reviewed_fact_observation"}
+            with chain.plans._unit_of_work() as work:
+                work.daily.save(row["id"], kind="FACT", symbol=chain.plan.symbol,
+                    lineage=row["lineage"], expected_revision=row["revision"], payload=payload)
+                work.commit()
         assert _run(chain).snapshot["signals"] == []
         original = minute_inputs(chain)
         chain.now += timedelta(minutes=5)

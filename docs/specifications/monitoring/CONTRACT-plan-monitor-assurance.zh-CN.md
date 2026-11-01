@@ -384,3 +384,15 @@ T13-H04b8a仅扩展schema5 ORDINARY_RULE／COMPLETED_BAR_CLOSE／TRADE_DATE有�
 真实临时SQL测试将三项行为RED断言（缺观察、错bar、同bar源纠正）与保留的fixture准备失败分开说明。正向已记录SIGNAL为使用实际准入FACT的类型化工程安排，不是新runtime producer验收或正式语料真值。fixture仅在准备阶段持久化本地行情，并使用原生已完成bar而非发出时钟；读取helper从不准备源。检查覆盖等值receipt、后续真实runtime head、缺失／畸形／异证券源、真实同内容兄弟版本、未来可用性、无外层no-autoflush的pending owner、陈旧ORM缓存、既有writer锁之后只读SELECT、业务／audit字节不变及数值ANY决定作用。既有默认／冻结／重放及历史风险回归仍须通过。
 
 本片不改变producer、runtime／lifecycle／API契约、策略、worker、表、迁移或采集路径。依赖目标的分钟signal生产仍是独立未放行gate。K42 hash字节／域及K40／K41边界保持不变。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源阻断仍未完成。真实提取保持0/48；用户数据库访问／迁移、实时采集及真实发送保持0。
+
+## PMA-K44 — 准确观察的实际普通分钟生产
+
+T13-H04b8b将实际schema5 ORDINARY_RULE／COMPLETED_BAR_CLOSE／TRADE_DATE有目标FACT接入既有runtime producer。本片扩展K40私有普通条件上下文，不扩展其公开API或默认纯函数／frozen入口。在既有writer事务内，实际当前版本／内容／审核／来源gate仍须满足。仅初始原生普通条件接收所选池；有目标事实仍从flat facts、reset、失效、独立事件、提醒、风险及报价／控制consumer排除。Schema6–9、其它owner及SIGNAL scope目标消费不新增路径。
+
+使用当前已重新验证的`DailyRuntimeInputs.minute_target`、其准确五条所选`minute_prefix`和对应最后单根`five_minute_bars`聚合。实际输入证券须等于原生计划证券。从该target派生`bar_end`，派生`source_hash`时仅使用K42既有`reviewed_fact_observation_source_hash`；不复制前像或从核验时间推算观察。有目标FACT仅在完整已存观察等于当前值，且既有原生目标resolver证明准确版本、ORDINARY_RULE ID、ORDINARY_CONFIRMATION上下文及TRADE_DATE叶时，才进入本规则条件池。既有求值器继续检查完整原生条件路径、事实身份／内容、日期、可用性、真假／冲突及递归ALL／ANY。缺观察、前一bar、同bar源纠正及错误owner／路径／digest均不能提供该人工叶。旧未绑定完整定义行为仍独立保留。
+
+生成沿既有仓储记录SIGNAL，再由既有存量证据／动作检查消费。仅CONFIRMED不授予执行或发送权限。K43随后重读实际SQL SIGNAL／FACT／原生归属，以及原周期本地五条分钟和单根聚合；缺失或已纠正本地行不能用producer输入或head恢复。输入匹配证词但缺SQL源的依赖目标确认保持不可执行，含REVIEWED_FACT_REQUIRED，且不创建可操作通知。既有`require_source_action_authority`、runtime执行检查、`daily_delivery_allowed`及当前可操作标签检查仍须满足；本片不增加权限旁路或读取时持久化。
+
+真实临时SQL runtime测试先证明一项行为RED：私有准入A/B事实及其持久化行情源均存在，但旧producer不发出SIGNAL。GREEN要求仅A时等待，A+B时生产准确已存SIGNAL，且K43接受其原证据。不同实际bar／源观察须fresh FACT身份；有效新身份随后可以生产，相同内容仅receipt更晚且已可用时无需重新登记。准确重复求值及后续等值receipt保留单一SIGNAL occurrence。独立数值ANY在人工分支缺失／否定／陈旧时仍具决定作用，包括没有本地人工源时；数值归属本身不认证独立行情／动作gate。原分钟阻断用例保留为明确历史缺观察fixture，全部拒绝断言保持。正向源／日历仅在fixture准备阶段使用正常仓储和命令准备；runtime测试阻断网络访问，从不mock K43权限。
+
+测试区分源输入准入和实际已存动作／发送资格。真实runtime READY signal及队列事件仅在当前前置完整时通过既有SQL gate；之后移除分钟／聚合或纠正源，即使SIGNAL／head未变，也使实际动作／发送检查拒绝。同值receipt重读保留有效检查。不执行真实通知或模拟交易。本片不改变公开选择器／DTO／profile／UI，不增加owner／schema／scope，不改变provider操作、表、迁移、策略或阈值。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源阻断仍未完成。真实提取保持0/48；用户数据库访问／迁移、实时采集及真实发送保持0。

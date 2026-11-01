@@ -134,7 +134,8 @@ def confirm_signal(
         return None
     condition_facts, fact_context = facts, {}
     if _condition_facts is not None or _fact_owner is not None:
-        if (plan.schema_version != 5 or rule.confirmation.kind != "OFFICIAL_DAILY_CLOSE"
+        if (plan.schema_version != 5 or rule.confirmation.kind not in {
+                "OFFICIAL_DAILY_CLOSE", "COMPLETED_BAR_CLOSE"}
                 or candidate_only or linkage is not None
                 or not isinstance(_condition_facts, tuple)
                 or _fact_owner != (plan, plan_version_id, "ORDINARY_RULE", rule.rule_id)

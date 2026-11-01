@@ -30,7 +30,10 @@ from trade_plan_monitor.domain.daily_plan_models import (
 )
 from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule, MarketLinkedTradePlan
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
-from trade_plan_monitor.domain.reviewed_fact_targets import filter_unbound_facts
+from trade_plan_monitor.domain.reviewed_fact_targets import (
+    filter_unbound_facts,
+    resolve_reviewed_fact_target,
+)
 from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_fulfilled, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedResetPolicy,
@@ -49,6 +52,7 @@ from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.notifications.daily_models import DailyAlertPayload, daily_alert_key
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_repository import daily_hash
+from trade_plan_monitor.state.daily_state_models import reviewed_fact_observation_source_hash
 from trade_plan_monitor.state.repositories import MarketHistoryRepository
 from trade_plan_monitor.state.reviewed_fact_authority import signal_fact_evidence_satisfied
 
@@ -59,6 +63,32 @@ def _fact_checked_signal(work, plan, signal):
         return {**signal, "executable_qty": 0, "state": "CONFIRMED",
             "blockers": list(dict.fromkeys([*signal["blockers"], "REVIEWED_FACT_REQUIRED"]))}
     return signal
+
+
+def _minute_condition_facts(plan, rule, version_id, inputs, facts):
+    """Select testimony for this input bucket; recorded SQL still gates actions."""
+    selected = [fact for fact in facts if "reviewed_fact_target" not in fact]
+    if (inputs.minute_target is None or not inputs.five_minute_bars
+            or inputs.five_minute_bars[-1].symbol != plan.symbol):
+        return tuple(selected)
+    ends = expected_five_minute_ends(inputs.minute_target)
+    minutes = tuple(value for value in inputs.minute_prefix if value.bar_end in ends)
+    observation = dict(bar_end=inputs.minute_target.isoformat(),
+        source_hash=reviewed_fact_observation_source_hash(minutes, inputs.five_minute_bars[-1]))
+    for fact in facts:
+        if ("reviewed_fact_target" not in fact
+                or fact.get("reviewed_fact_observation") != observation):
+            continue
+        try:
+            ref = resolve_reviewed_fact_target(plan, fact["reviewed_fact_target"],
+                                               plan_version_id=version_id)
+        except (TypeError, ValueError):
+            continue
+        if (ref.owner_kind == "ORDINARY_RULE" and ref.owner_id == rule.rule_id
+                and ref.validity_scope == "TRADE_DATE"
+                and json.loads(ref.observation_context)["purpose"] == "ORDINARY_CONFIRMATION"):
+            selected.append(fact)
+    return tuple(selected)
 
 
 class DailyRuntimeInputs(DailyValue):
@@ -952,8 +982,11 @@ class DailyRuntimeEvaluationService:
                             and linkage_by_rule[rule.rule_id].calculation.route is not None)
                         if candidate_only:
                             extra["candidate_only"] = True
-                        if condition_facts is not None and daily_rule:
-                            extra.update(_condition_facts=condition_facts,
+                        if condition_facts is not None:
+                            scoped_facts = (condition_facts if daily_rule else
+                                _minute_condition_facts(plan, rule, active.plan_version_id,
+                                                        inputs, condition_facts))
+                            extra.update(_condition_facts=scoped_facts,
                                 _fact_owner=(plan, active.plan_version_id,
                                              "ORDINARY_RULE", rule.rule_id))
                         signal = (
