@@ -23,6 +23,10 @@ from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.state.daily_state_models import DailyFactState, DailyRiskState
 from trade_plan_monitor.state.repositories import RepositoryError
+from trade_plan_monitor.state.reviewed_fact_authority import (
+    fact_evidence_satisfied,
+    signal_fact_evidence_satisfied,
+)
 from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
 from trade_plan_monitor.state.source_coverage_authority import (
     SourceCoverageAuthorityError,
@@ -162,7 +166,10 @@ def _fact_evidence_owned(work, plan, state, instant):
                 return False
         return True
 
-    return all(owned(root) for root in roots)
+    return all(owned(root) for root in roots) and fact_evidence_satisfied(work, plan,
+        tuple(root.model_dump(mode="json") for root in roots),
+        confirmed_trade_date=state.confirmed_trade_date, owner_kind="RISK_BRANCH",
+        owner_id=risk_identity(state))
 
 
 def _risk_rows(work, plan, cause):
@@ -326,6 +333,9 @@ def _require(work, version_id, cause_id):
         or cause["payload"].get("review_id") != details.review_id
     ):
         _reject("SOURCE_COVERAGE_STALE")
+    if cause is not None and not technical and not signal_fact_evidence_satisfied(
+            work, plan, cause["payload"]):
+        _reject()
     rows = _risk_rows(work, plan, cause) if technical else ()
     try:
         coverage = require_current_coverage(work, details, require_review=True)

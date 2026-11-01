@@ -30,6 +30,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
 )
 from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule, MarketLinkedTradePlan
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
+from trade_plan_monitor.domain.reviewed_fact_targets import filter_unbound_facts
 from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_fulfilled, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedResetPolicy,
@@ -49,6 +50,15 @@ from trade_plan_monitor.notifications.daily_models import DailyAlertPayload, dai
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_repository import daily_hash
 from trade_plan_monitor.state.repositories import MarketHistoryRepository
+from trade_plan_monitor.state.reviewed_fact_authority import signal_fact_evidence_satisfied
+
+
+def _fact_checked_signal(work, plan, signal):
+    if (signal["state"] not in {"SIMULATED", "EXPIRED", "INVALIDATED"}
+            and not signal_fact_evidence_satisfied(work, plan, signal)):
+        return {**signal, "executable_qty": 0, "state": "CONFIRMED",
+            "blockers": list(dict.fromkeys([*signal["blockers"], "REVIEWED_FACT_REQUIRED"]))}
+    return signal
 
 
 class DailyRuntimeInputs(DailyValue):
@@ -552,6 +562,8 @@ class DailyRuntimeEvaluationService:
                 and datetime.fromisoformat(row["payload"]["available_at"]) <= now
             )
             eligible_ids = {f["id"] for f in facts}
+            if self._source_authority_reader is None:
+                facts = filter_unbound_facts(plan, facts)
             risk_rows = (() if _alert_only(plan)
                 else work.daily.list(symbol=plan.symbol, kind="RISK"))
             ordinary_source, source_generation = (None, {}) if _alert_only(plan) else (
@@ -635,13 +647,21 @@ class DailyRuntimeEvaluationService:
             identity = daily_hash("daily-decision-result-v1", target)
             existing = work.daily.get(identity)
             if existing is not None:
+                snapshot = existing["payload"]
+                if self._source_authority_reader is None:
+                    snapshot = {**snapshot, "signals": [
+                        _fact_checked_signal(work, plan, signal)
+                        for signal in snapshot.get("signals", ())]}
+                    if (snapshot.get("next_action") == "CONFIRM_SIMULATED_TRADE"
+                            and not any(s["executable_qty"] for s in snapshot["signals"])):
+                        snapshot["next_action"] = "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION"
                 return DailyRuntimeCycleResult(
                     symbol=plan.symbol,
                     plan_hash=plan_sha256(plan),
                     activation_revision=active.revision,
                     evaluated_at=now,
                     duplicate=True,
-                    snapshot=existing["payload"],
+                    snapshot=snapshot,
                     event_ids=(),
                 )
             previous_risks = tuple(r["payload"] for r in risk_rows)
@@ -1050,6 +1070,8 @@ class DailyRuntimeEvaluationService:
                         "state": signal["state"] if checked["state"] == "READY"
                             else checked["state"],
                         "blockers": list(dict.fromkeys([*checked["blockers"], *source_blockers]))}
+                if self._source_authority_reader is None:
+                    checked = _fact_checked_signal(work, plan, checked)
                 if checked != row["payload"]:
                     row = work.daily.save(
                         row["id"],
