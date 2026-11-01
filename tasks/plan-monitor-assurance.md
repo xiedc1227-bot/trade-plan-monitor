@@ -139,6 +139,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 - Depends on: T01; execute after C04 in the selected sequential order.
 - Files/scope: source bundle, truth bundle, manifest and `test_extraction_acceptance_corpus.py` (4 files); use further reviewed3–5-file children if original redaction artifacts require them.
 - Also apply PMA-H01/H02/H04 below: inventory which exact source conditions can already be evaluated automatically, preserve unresolved definitions, and complete the existing deferred per-condition manual-evidence binding prerequisite. Prompt wording alone does not close that prerequisite.
+- Prerequisite progress: T13-H04a is delivered in `a94605e` (PMA-R49): exact private targets/parser, existing helper unit test and paired contract,4 files,112 related checks. Registration/storage, consumers and UI remain pending; neither H04 nor T13 closes. Each next child requires its own exact at-most5-file dispatch.
 - Acceptance: A07,A08; Verify: V04,V08.12 cases, origins/minimum original and natural-language counts, exact hashes, positive/blocking expectations and independent atom/relationship truth frozen before responses. Resolve actual intent disputes before calls.
 
 ### PMA-T14 — Implement independent grading and offline replay
