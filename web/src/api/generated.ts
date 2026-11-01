@@ -1792,6 +1792,7 @@ export type DailyExecutionQuote = {
 };
 
 export type DailyFactCommand = {
+  conditionSelection?: components["schemas"]["DailyFactConditionSelection"];
   contentHash: string;
   evidence: string;
   expectedRevision: number;
@@ -1802,6 +1803,12 @@ export type DailyFactCommand = {
   satisfied?: boolean;
   signalId?: (string) | (null);
   tradeDate: string;
+};
+
+export type DailyFactConditionSelection = {
+  conditionPath: string;
+  ownerId: string;
+  ownerKind: "ORDINARY_RULE" | "ALERT_RULE" | "RISK_BRANCH";
 };
 
 export type DailyFactRevision = {
@@ -6513,6 +6520,7 @@ export interface components {
     DailyEvaluationApiView: DailyEvaluationApiView;
     DailyExecutionQuote: DailyExecutionQuote;
     DailyFactCommand: DailyFactCommand;
+    DailyFactConditionSelection: DailyFactConditionSelection;
     DailyFactRevision: DailyFactRevision;
     DailyFieldBinding: DailyFieldBinding;
     DailyIndependentEvent: DailyIndependentEvent;
