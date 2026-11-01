@@ -122,7 +122,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T12 — Close historical/legacy regression boundaries
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify (PMA-R43–R47).
 - Depends on: T11.
 - Files/scope: T12a adds `test_source_coverage_compatibility.py`, `test_source_coverage_occurrence_compatibility.py` and `test_source_coverage_frozen_compatibility.py`, plus a separate reconciliation of the original workbench positive fixture (4 files). Preserve its original assertions and retain the generic-source blocking negative. T12b independently closes the reproduced fresh-workbench-run admission race with a real source-owner writer fence, existing final-job admission seam, actual-store race/replay tests and only necessary synthetic seam-fixture alignment (at most5 files); split any further owner repair before editing. The fence rechecks exact current source/review after input copying and remains held through actual job commit. Missing capability fails closed; completed same-key receipts and old frozen codecs remain historical. These independent children may proceed in parallel after T11 because their implementation owners do not overlap; each is tested, reviewed and committed separately before C04. No cross-database atomicity claim follows from an early read or an unchanged hash.
 - The actual fact-collision counterexample in PMA-R45 additionally gates C04. T12c0 introduces one pure current predicate/fact ownership helper, focused unit tests and actual-source collision tests (at most3 files). T12c1 uses that frozen helper for current runtime projection/old-signal maintenance, source action authority and focused actual regressions (at most4 files). T12c2 covers remaining simulation admission, exception seed/grant/consume, source delivery/manual alerts and actual regressions in sequential children of at most5 files; do not combine more owners in one edit. A legacy unbound fact may attest only a uniquely applicable complete predicate definition in its actual original owner. Date/signal scope overlap, distinct requirements, persisted CONFIRMED causes and independent technical risk must be tested. Do not guess meanings from human testimony, merge requirements, infer ownership from an active sibling, rewrite stored facts or alter source-coverage rules/hash domains or old frozen formulas. Explicit historical replay stays historical and cannot donate live authority. Full explicit-target registration/storage/UI is a later separately tested T13 prerequisite; temporary ambiguity remains visible missing evidence, never a successful positive or an omission waiver.
@@ -130,11 +130,12 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-C04 — Reviewed-source workflow checkpoint
 
-- [ ] Coverage UI/API/current guards and history regression pass. A01–A06 and applicable A10/A11 covered. Real-provider and readiness acceptance still pending.
+- [x] Coverage UI/API/current guards and history regression pass. A01–A06 and applicable A10/A11 covered (PMA-R47:376 combined integration checks). Real-provider and readiness acceptance still pending.
 
 ### PMA-T13 — Freeze corpus, provenance and independent truth
 
 - [ ] Deliver and verify.
+- Current boundary: PMA-R48 records the user's 2026-11-01 decision to keep original03/04 explicitly blocked and its positive acceptance unresolved. Do not add a persistent BUY-cancellation strategy, invent a trigger/recovery rule, reclassify the positive as an accepted negative or freeze a successful full matrix. T14–T24/C05–C08 remain uncompleted; real calls remain0/48. Independent preparation is not corpus signoff.
 - Depends on: T01; execute after C04 in the selected sequential order.
 - Files/scope: source bundle, truth bundle, manifest and `test_extraction_acceptance_corpus.py` (4 files); use further reviewed3–5-file children if original redaction artifacts require them.
 - Acceptance: A07,A08; Verify: V04,V08.12 cases, origins/minimum original and natural-language counts, exact hashes, positive/blocking expectations and independent atom/relationship truth frozen before responses. Resolve actual intent disputes before calls.
@@ -244,4 +245,4 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 | READY inferred from ACTIVE/cached/queue or irrelevant costs | Per-dependency axes, current target/owner binding and read-only side-effect tests |
 | Provider budget or user-state writes expand during “acceptance” | Shared physical-attempt ledger; explicit D05 scope; migration/activation/test sends remain separate |
 
-This is a reviewable implementation proposal, not executed work. No new task may be claimed complete from writing its checkbox.
+Task marks above refer only to the paired recorded evidence. T01–T12/C01–C04 are complete; T13 and later stages remain uncompleted at the explicit PMA-R48 scope boundary. Writing a checkbox never establishes acceptance.
