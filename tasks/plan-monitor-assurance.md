@@ -135,7 +135,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 ### PMA-T13 — Freeze corpus, provenance and independent truth
 
 - [ ] Deliver and verify.
-- Current boundary: PMA-R48 records the user's 2026-11-01 decision to keep original03/04 explicitly blocked and its positive acceptance unresolved. Do not add a persistent BUY-cancellation strategy, invent a trigger/recovery rule, reclassify the positive as an accepted negative or freeze a successful full matrix. T14–T24/C05–C08 remain uncompleted; real calls remain0/48. Independent preparation is not corpus signoff.
+- Current boundary: PMA-R48 keeps original03/04 explicitly blocked and its positive acceptance unresolved. Do not add a persistent BUY-cancellation strategy, invent a trigger/recovery rule, reclassify the positive as an accepted negative or freeze a successful full matrix. T13–T15/C05 and final acceptance remain blocked; P07's later explicit user decision permits independent engineering to proceed. Real calls remain0/48. Independent engineering is not corpus signoff.
 - Depends on: T01; execute after C04 in the selected sequential order.
 - Files/scope: source bundle, truth bundle, manifest and `test_extraction_acceptance_corpus.py` (4 files); use further reviewed3–5-file children if original redaction artifacts require them.
 - Also apply PMA-H01/H02/H04 below: inventory which exact source conditions can already be evaluated automatically, preserve unresolved definitions, and complete the existing deferred per-condition manual-evidence binding prerequisite. Prompt wording alone does not close that prerequisite.
@@ -172,7 +172,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 ### PMA-T16 — Define readiness states and dependency aggregation
 
 - [ ] Deliver and verify.
-- Depends on: C04; execute after C05 in the selected sequential order.
+- Depends on: C04. P07's explicit user-approved reorder permits engineering before C05; C05/final acceptance remain required.
 - Files/scope: `web/plan_readiness_models.py`, pure dependency/summary helper and `test_plan_readiness.py` (3 files).
 - Also apply PMA-H03 below: distinguish waiting for data/confirmation from an undefined rule or genuinely required manual evidence; reuse existing evaluators and collection ownership.
 - Acceptance: A09,A10; Verify: focused V04. Six axes, summary precedence, alert-only/money-mode N/A, FALSE versus missing/first/normal close waiting, and execution state separation are exact.
@@ -212,7 +212,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 ### PMA-T21 — Accept complete browser journeys
 
 - [ ] Deliver and verify.
-- Depends on: T15,T20.
+- Depends on: T20 for independently verifiable engineering journeys under P07; T15 remains required for real-extraction consolidation and full T21 acceptance.
 - Files/scope: `source-coverage.spec.ts`, `plan-readiness.spec.ts`, isolated fixture server and bounded screenshot/evidence assets (3–5 source files).
 - Also apply PMA-H05 below: prove automatic daily evaluation after exact rule review, data-loss/recovery and the remaining explicit manual steps without fabricated confirmations.
 - Acceptance: A01,A05,A09–A11; Verify: V05. Reproduce misclassified mandatory clause and block, repair legitimately and re-review, stale proof rejection, healthy FALSE/close waiting/missing data, independent risk path, notification truth, reload and320/768/1024/1440/accessibility; zero external requests outside the separately authorized extraction campaign.
@@ -224,7 +224,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 ### PMA-T22 — Complete non-live regression and capacity
 
 - [ ] Deliver and verify.
-- Depends on: T21.
+- Depends on: T21's relevant engineering delivery under P07; missing real-extraction/C07 evidence cannot be closed by regression results.
 - Files/scope: justified failures split by root cause into at most5-file repairs, paired verification-report updates.
 - Acceptance: A12; Verify: V06,V07. Reconcile initial failures/exact reruns, exclusions and overlapping counts; run capacity alone. Do not change old goldens, weaken assertions, add skips or increase resource thresholds to pass.
 
@@ -259,7 +259,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 | READY inferred from ACTIVE/cached/queue or irrelevant costs | Per-dependency axes, current target/owner binding and read-only side-effect tests |
 | Provider budget or user-state writes expand during “acceptance” | Shared physical-attempt ledger; explicit D05 scope; migration/activation/test sends remain separate |
 
-Task marks above refer only to the paired recorded evidence. T01–T12/C01–C04 are complete; T13 and later stages remain uncompleted at the explicit PMA-R48 scope boundary. Writing a checkbox never establishes acceptance.
+Task marks above refer only to paired recorded evidence. T01–T12/C01–C04 are complete. P07 permits independent later engineering; original03/04, C05 and final acceptance remain unresolved. Close only individually verified engineering work and retain unmet real/corpus criteria. Writing a checkbox never establishes acceptance.
 
 ## PMA-P05 — Reduce recurring manual verification
 
@@ -289,7 +289,7 @@ Deliver each check within its parent's existing sequential slices of at most5 fi
 ### PMA-H04 — Retain only necessary, precisely bound manual steps
 
 - [ ] Parents: T13's existing binding prerequisite,T18,T19. For conditions that legitimately remain manual, complete exact condition selection and server-side ownership validation through the existing fact registration/records/UI. Split contracts/registration, consumers, generated profiles and UI into separately tested children of at most5 files before editing.
-- Public component A is committed as `71e69ca` (PMA-R61): schema5 ordinary TRADE_DATE selection through the existing POST,343 stable combined cases. Overall acceptance waits for the four generated artifacts and strict API-owner/historical-projection companion. Existing version detail is sufficient for T18's labels/paths; no new catalog endpoint is required for this subset. UI/joint acceptance remains with T18/T19.
+- The ordinary public backend is accepted through `71e69ca`, `3c55545`, `39f4093` (PMA-R61/R62):343 stable combined cases, synchronized profiles and75 companion checks, retaining exact historical hashes/assertions. Existing detail suffices for T18 labels/paths; no new catalog endpoint. H04's UI/joint acceptance remains with T18/T19; this does not close H04/T13.
 - Acceptance: bind evidence to its actual plan version, rule/risk/alert owner and exact condition plus the existing date/signal/confirmation scope. Different same-kind requirements and negative evidence cannot cross-satisfy; ambiguous old facts stay blocked. AI-written text cannot become an assertion that a human verified the fact. Preserve initial plan review, applicable inventory/cost and official-fact confirmations, and explicitly human-approved exception buys; do not replace them with automatic approval.
 - Verify: existing actual fact catalog/current/exception-delivery regressions plus focused new binding tests and V05 UI checks; preserve original-owner independent risk and historical/frozen compatibility.
 
@@ -309,13 +309,13 @@ On2026-11-01 the user ordered one independent session for each remaining main ta
 | PMA-T13 | gpt-6.1-sol | high | C04; only unblocked prerequisites; PMA-R48 remains |
 | PMA-T14 | gpt-6.1-sol | high | T13 |
 | PMA-T15 | gpt-6.1-sol | high | T14,C04; frozen truth/manifest and shared attempt ledger |
-| PMA-T16 | gpt-6.1-sol | high | C04,C05 in the existing selected order |
+| PMA-T16 | gpt-6.1-sol | high | C04; independent engineering before C05 under P07 |
 | PMA-T17 | gpt-6.1-sol | high | T16 |
 | PMA-T18 | gpt-6.1-sol | high | T17 |
 | PMA-T19 | gpt-6.1-sol | high | T18 |
 | PMA-T20 | gpt-6.1-sol | high | T19 |
-| PMA-T21 | gpt-6.1-sol | high | T15,T20 |
-| PMA-T22 | gpt-6.1-sol | high | T21; capacity runs alone |
+| PMA-T21 | gpt-6.1-sol | high | T20 engineering; T15 real consolidation remains required |
+| PMA-T22 | gpt-6.1-sol | high | Relevant T21 engineering; capacity alone; final gates retained |
 | PMA-T23 | gpt-6.1-sol | medium | T22 |
 | PMA-T24 | gpt-6.1-sol | high | T23 |
 
@@ -327,4 +327,12 @@ This is an initial task allocation, informed by [official OpenAI model-selection
 - Keep the actual session IDs and dispatch state in ignored local `.pytest_cache/pma/session-dispatch-20261101.json`; it is coordination metadata, not a corpus, readiness proof, job system or completion receipt. The coordinator reads session results and sends authorized follow-ups; execution sessions need not message other chats.
 - Session creation is not permission to bypass the original03/04 blocker, raise the48-attempt extraction budget, migrate user data, start the default service or send real notifications. Existing P01–P05 boundaries and all unfinished task marks remain in force.
 
-T13 prerequisite progress: R49–R61 record exact-target backend prerequisites, the latest producer `5cb9656`, H01/H02 document preparation `c72b67c` and public registration component `71e69ca` pending its generated/API companions. Source-required remaining cells, UI, corpus/clarification acceptance and all later gates remain pending. These slices do not close H04/T13 or the original03/04 positive-acceptance blocker.
+T13 prerequisite progress: R49–R62 record exact-target backend prerequisites, producer `5cb9656`, H01/H02 document preparation `c72b67c` and the accepted ordinary public C1+B+C backend. Source-required remaining cells, UI and corpus/clarification acceptance remain pending. These slices do not close H04/T13 or original03/04 positive acceptance.
+
+## PMA-P07 — Explicitly approved independent engineering order
+
+On2026-11-01 the user explicitly chose to advance independently verifiable monitor-readiness and subsequent engineering while retaining C05 and final acceptance gates. This supersedes only the earlier selected execution order, not product semantics or acceptance thresholds.
+
+Start T16 after completed C04; T17–T20 retain their engineering dependencies and boundaries. T21 may implement and verify isolated journeys after the relevant T18/T20 engineering, but real-corpus consolidation still depends on T15. T22 may verify delivered non-live engineering after those journeys; record exact revisions and rerun affected checks after later changes. T23 may document actual delivered/blocked capabilities. Full T21/C07 and T24/C08 cannot close without all originally required evidence. Partial engineering is not real-extraction or installation readiness.
+
+T13–T15 truth/corpus/runner gates, the original03/04 decision, the shared48-attempt limit and no-retry rule remain. User-database migration, real plan approval/activation, inventory/cost confirmation, live acquisition and real test sends are not implied. Maintain one execution writer, exact bounded slices, independent task sessions and existing model choices. Do not ask again for this approved reorder.
