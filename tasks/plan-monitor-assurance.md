@@ -286,3 +286,31 @@ Deliver each check within its parent's existing sequential slices of at most5 fi
 - [ ] Parents: T14,T15,T21–T24. Extend existing fixtures/journeys/reports rather than adding telemetry infrastructure or provider runs. Keep the fixed corpus and original failures; needed supplementary automation scenarios are offline.
 - Acceptance: demonstrate that an unchanged, fully defined automatically evaluable rule evaluates repeatedly without new manual technical confirmations, while genuinely required approvals remain required. Report automatic-condition, manual/undefined/unsupported-condition and actual human-step counts separately, with source and data availability. Claim no universal zero-intervention target or success from dropped conditions. Explain each remaining intervention in paired operations/capability documents.
 - Verify: V04/V05/V08, followed by the existing V06/V07 final gates. This addition does not expand existing real-call or user-state authorization and changes no completed task marks.
+
+
+## PMA-P06 — Per-task sessions and coordinator
+
+On2026-11-01 the user ordered one independent session for each remaining main task and designated the originating chat as coordinator, preferring `gpt-6.1-sol`. All12 sessions have been created in the existing local project. They share this repository; separate sessions are not isolated checkouts. H01–H05 remain checks within their parent tasks, not additional independent projects.
+
+| Task | Initial model | Reasoning | Implementation gate |
+| --- | --- | --- | --- |
+| PMA-T13 | gpt-6.1-sol | high | C04; only unblocked prerequisites; PMA-R48 remains |
+| PMA-T14 | gpt-6.1-sol | high | T13 |
+| PMA-T15 | gpt-6.1-sol | high | T14,C04; frozen truth/manifest and shared attempt ledger |
+| PMA-T16 | gpt-6.1-sol | high | C04,C05 in the existing selected order |
+| PMA-T17 | gpt-6.1-sol | high | T16 |
+| PMA-T18 | gpt-6.1-sol | high | T17 |
+| PMA-T19 | gpt-6.1-sol | high | T18 |
+| PMA-T20 | gpt-6.1-sol | high | T19 |
+| PMA-T21 | gpt-6.1-sol | high | T15,T20 |
+| PMA-T22 | gpt-6.1-sol | high | T21; capacity runs alone |
+| PMA-T23 | gpt-6.1-sol | medium | T22 |
+| PMA-T24 | gpt-6.1-sol | high | T23 |
+
+This is an initial task allocation, informed by [official OpenAI model-selection guidance](https://developers.openai.com/api/docs/guides/model-selection) and validated by the local session-creation tool. A model/effort change must be explicit and recorded by the coordinator; preserve the user's preference.
+
+- The coordinator owns dispatch, exact per-slice file scopes, shared task/report updates, acceptance review and the final summary. An execution session owns only its dispatched task/slice. It may not spawn other sessions, change dependencies or close checkpoints itself.
+- Unreleased sessions perform bounded read-only preparation, report their dependency/status and then remain idle. They do not edit, run expensive suites, access user stores or call extraction providers. Preparing a session is not implementation or acceptance.
+- Only one execution session may write this shared repository at a time, after an explicit coordinator release naming the exact at-most5-file slice and required checks. Release the next slice/task only after reviewing its actual diff, failure/pass evidence and compatibility. Commit only dispatched paths under the existing Chinese commit convention; no push.
+- Keep the actual session IDs and dispatch state in ignored local `.pytest_cache/pma/session-dispatch-20261101.json`; it is coordination metadata, not a corpus, readiness proof, job system or completion receipt. The coordinator reads session results and sends authorized follow-ups; execution sessions need not message other chats.
+- Session creation is not permission to bypass the original03/04 blocker, raise the48-attempt extraction budget, migrate user data, start the default service or send real notifications. Existing P01–P05 boundaries and all unfinished task marks remain in force.
