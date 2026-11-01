@@ -1,7 +1,7 @@
 """Daily commands share the normal plan lifecycle, idempotency store and inventory UOW."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from trade_plan_monitor.decision.unified_conditions import requires_daily
 from trade_plan_monitor.domain.daily_hash import daily_hash
@@ -10,9 +10,16 @@ from trade_plan_monitor.domain.daily_plan_validation import (
     load_daily_draft_json,
 )
 from trade_plan_monitor.domain.plan_codec import load_plan_json
+from trade_plan_monitor.domain.plan_hash import plan_sha256
+from trade_plan_monitor.domain.reviewed_fact_targets import (
+    list_reviewed_fact_targets,
+    resolve_reviewed_fact_target,
+)
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+from trade_plan_monitor.market_data.aggregation import aggregate_five_minute_bar
 from trade_plan_monitor.market_data.daily_data import DailySeries
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
+from trade_plan_monitor.state.daily_state_models import DailyEvaluationState
 from trade_plan_monitor.state.repositories import (
     PlanSaveBlockedError,
     PlanVersionNotFoundError,
@@ -23,6 +30,8 @@ from trade_plan_monitor.state.simulation import (
     SimulationCommand,
     simulate_inventory,
 )
+from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
+from trade_plan_monitor.state.source_coverage_authority import require_current_coverage
 from trade_plan_monitor.web.idempotency import claim_replay, complete_replay
 from trade_plan_monitor.web.routers.daily_plans import (
     DailyEvaluationApiView,
@@ -424,8 +433,99 @@ def _conflict(reason):
     )
 
 
-def _record_fact(work, details, command, now, *, evidence_head=None):
+def _private_fact_target(work, details, command, now, selection):
+    """Derive one ordinary confirmation target under the caller's existing writer."""
+    if not isinstance(selection, tuple) or len(selection) != 3 or selection[0] != "ORDINARY_RULE":
+        raise ValueError("private fact selection requires an ordinary confirmation owner")
+    reads = ActionOwnerReader(work)
+    actual = reads.details(str(command.plan_version_id))
+    if (actual.id, actual.symbol, actual.plan_id, actual.content_hash) != (
+            details.id, details.symbol, details.plan_id, command.content_hash):
+        raise ValueError("private fact requires its exact original version and content")
+    reads.coverage(actual)
+    require_current_coverage(work, actual, require_review=True)
+    plan = load_plan_json(actual.payload_json)
+    if not isinstance(plan, UnifiedTradePlan):
+        raise ValueError("private fact requires a current native condition plan")
+    matches = tuple(t for t in list_reviewed_fact_targets(plan, plan_version_id=actual.id,
+                    content_hash=actual.content_hash)
+                    if (t.owner_kind, t.owner_id, t.condition_path) == selection)
+    if len(matches) != 1:
+        raise ValueError("private fact selection does not identify one native leaf")
+    target = matches[0]
+    ref = resolve_reviewed_fact_target(plan, target, plan_version_id=actual.id)
+    if (ref.fact_kind != command.kind
+            or json.loads(ref.observation_context)["purpose"] != "ORDINARY_CONFIRMATION"):
+        raise ValueError("private fact kind or observation purpose differs")
+    rule = next(r for r in plan.ordinary_rules if r.rule_id == ref.owner_id)
+    if rule.validity.mode == "DATE_RANGE" and not (
+            rule.validity.start_date <= command.trade_date <= rule.validity.end_date):
+        raise ValueError("private fact lies outside its rule validity")
+    row = reads.daily("evaluation-head-" + actual.symbol)
+    if row is None or row["kind"] != "EVALUATION" or row["symbol"] != actual.symbol:
+        raise ValueError("private fact requires its actual observation head")
+    head = DailyEvaluationState.model_validate(row["payload"])
+    if (head.symbol, head.plan_version_id, head.content_hash, head.plan_hash, head.review_id) != (
+            actual.symbol, actual.id, actual.content_hash, plan_sha256(plan), actual.review_id
+    ) or head.evaluated_at > now:
+        raise ValueError("private fact observation owner differs")
+    if rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE":
+        series = head.daily_evidence
+        complete = (head.official_trade_date == command.trade_date and series is not None
+                    and series.symbol == actual.symbol
+                    and series.bars[-1].trade_date == command.trade_date and series.cutoff <= now)
+    else:
+        end = head.minute_target
+        complete = (not requires_daily(rule.condition) and end is not None
+                    and end.date() == command.trade_date and end <= now
+                    and bool(head.five_minute_bars) and head.five_minute_bars[-1].bar_end == end
+                    and head.five_minute_bars[-1].symbol == actual.symbol)
+        if complete:
+            prefix = tuple(b for b in head.minute_prefix
+                           if end - timedelta(minutes=5) < b.bar_end <= end)
+            complete = (all(b.received_at <= head.evaluated_at for b in prefix)
+                        and aggregate_five_minute_bar(prefix, bucket_end=end, is_open=True)
+                        == head.five_minute_bars[-1])
+    if not complete:
+        raise ValueError("private fact requires its exact completed confirmation period")
+    if ref.validity_scope == "SIGNAL" and command.signal_id is None:
+        raise ValueError("private fact requires its exact signal")
+    if command.signal_id is not None:
+        signal = reads.daily(command.signal_id)
+        value = {} if signal is None else signal["payload"]
+        if (signal is None or signal["kind"] != "SIGNAL" or signal["symbol"] != actual.symbol
+                or (value.get("signal_id"), value.get("plan_version_id"), value.get("review_id"),
+                    value.get("rule_id"), value.get("side"), value.get("lineage"),
+                    value.get("confirmed_trade_date"), value.get("confirmation_kind")) != (
+                        command.signal_id, actual.id, actual.review_id, rule.rule_id, rule.side,
+                        actual.plan_id, str(command.trade_date), rule.confirmation.kind)
+                or value.get("state") not in {"CONFIRMED", "READY"}
+                or rule.confirmation.kind == "COMPLETED_BAR_CLOSE"
+                and value.get("confirmed_at") != head.minute_target.isoformat()):
+            raise ValueError("private fact signal owner or observation period differs")
+    return target.model_dump(mode="json")
+
+
+def _record_fact(work, details, command, now, *, evidence_head=None, fact_selection=None):
     """Shared scoped fact admission/write; research may provide its frozen current source head."""
+    identity = daily_hash("daily-human-fact-v1",
+                          {"symbol": details.symbol, "fact_id": command.fact_id})
+    target = None
+    with work.daily.session.no_autoflush:
+        old = ActionOwnerReader(work).daily(identity)
+        previous = {} if old is None else old["payload"]
+        if "reviewed_fact_target" in previous and fact_selection is None:
+            raise ValueError("a bound FACT requires the same explicit private selection")
+        if fact_selection is not None:
+            if evidence_head is not None:
+                raise ValueError("private fact selection cannot borrow a replay observation head")
+            target = _private_fact_target(work, details, command, now, fact_selection)
+            if old is not None and (
+                previous.get("reviewed_fact_target") != target
+                or tuple(previous.get(k) for k in ("kind", "trade_date", "signal_id")) != (
+                    command.kind, str(command.trade_date), command.signal_id)
+            ):
+                raise ValueError("an existing FACT cannot erase, move or widen its target binding")
     if command.trade_date > now.date():
         raise ValueError("future evidence is not available")
     official = command.official_evidence
@@ -459,10 +559,6 @@ def _record_fact(work, details, command, now, *, evidence_head=None):
             raise ValueError(
                 "qualitative evidence requires its exact completed confirmation period"
             )
-    identity = daily_hash(
-        "daily-human-fact-v1",
-        {"symbol": details.symbol, "fact_id": command.fact_id},
-    )
     row = work.daily.save(
         identity,
         kind="FACT",
@@ -482,6 +578,7 @@ def _record_fact(work, details, command, now, *, evidence_head=None):
             "verified_at": now.isoformat(),
             "available_at": now.isoformat(),
             "official_evidence": None if official is None else official.model_dump(mode="json"),
+            **({"reviewed_fact_target": target} if target is not None else {}),
         },
     )
     return row

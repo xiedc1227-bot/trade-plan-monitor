@@ -298,3 +298,17 @@ T13-H04b2新增`matches_reviewed_fact_condition`，并为`evaluate_unified_condi
 原日期／SIGNAL匹配仍为必需。只有匹配当前准确叶的事实，才参与既有最新`(available_at, verified_at)`选择及同刻冲突判断；否定断言仅影响匹配的目标。ALL/ANY既有SATISFIED／UNSATISFIED／MISSING_INPUT聚合及独立数字条件的决定性保持不变，非决定分支缺失或无效证据不成为全局否决。此显式选择的unified入口不扩展日线历史／默认求值器或合法冻结输入／wire／formula。
 
 后续生产消费前，调用者必须认证实际原属SQL归属、当前来源／审核、时间可用性、已完成观察周期及行动权限。所给树／上下文和自洽target hash不构成上述认证；纯函数不取得CURRENT许可，也不通过与active sibling相等来验证SQL。本片不接入SQL／API／UI／消费者。后续登记事务必须拒绝旧无目标命令意外擦除或扩大既有目标绑定，该项仍是独立门禁。H04／T13及原始03/04、X09、前驱证明、语料／资源阻断保持未关闭。
+
+## PMA-K38 — 私有普通确认登记与不可变目标绑定
+
+T13-H04b3仅为`_record_fact`增加可选私有参数`fact_selection`，使用tuple `(owner_kind, owner_id, condition_path)`。服务端从准确原生目录及resolver派生完整K35目标，调用者不提供target hash。本片仅支持当前原生条件计划中的ORDINARY_RULE／ORDINARY_CONFIRMATION。Reset、风险、提醒、未知路径及超出本片的日线／分钟混合确认要求保持拒绝。公开`DailyFactCommand`／`POST /api/v1/plan-facts`、生成配置及UI不增加目标输入，不新增worker／表／迁移／策略。
+
+调用者持有既有symbol writer直至提交／回滚。在该事务及`session.no_autoflush`中，`ActionOwnerReader`重新读取命令实际原属SQL版本、既有FACT、求值head及适用signal；相关pending owner须拒绝，不flush或丢弃。准确版本／content必须匹配所给归属，当前来源覆盖及其真实已审核回执须重验，并核对所选完整叶的kind／purpose及原生规则有效期。同content的active sibling不构成原属身份。目标登记不能借用私有历史／研究路径的`evidence_head`；无目标历史行为仍由原契约独立约束。
+
+实际head行及payload必须匹配原属symbol／version／content／完整原生plan hash／review，求值时间不得在未来。OFFICIAL_DAILY_CLOSE还要求命令日期同时等于head官方日期及最后一根认证bar日期，`DailySeries.symbol`等于实际证券，cutoff不晚于登记时点。这不只依赖官方日期标签：既有`CertifiedDailyBar`要求可用时间不早于15:00、收到时间不早于可用时间；`DailySeries`用cutoff限制收到／可用数据；`DailyEvaluationState`要求cutoff不晚于求值时点，并检查series／head证券对应。新增实际证券核验封闭了内部自洽但属于其它证券的head边界。完整五分钟确认使用同日非未来head target、实际证券及最后完整bar，并以`aggregate_five_minute_bar`重新聚合其准确五分钟prefix；数据不完整、不对应或尚未收到均拒绝。不新增行情采集或日历／指标公式。
+
+SIGNAL叶要求真实signal记录。任何附带signal（包括TRADE_DATE事实所带signal）均须匹配实际行／payload身份、证券、原属计划版本／审核、原生rule ID／side／lineage、确认日期／kind及CONFIRMED／READY状态；分钟signal还须匹配准确head确认时间。同证券的其它规则、版本或周期不能提供该归属。这些登记检查保留原官方证明、技术文字、未来日期及事实状态验证，不认证行动资格，也不创建已批准signal。
+
+既有FACT仅能在此私有路径以完全相同的完整目标、kind、交易日期及signal绑定修订。改变owner／path／version／content／scope，或用无目标命令更新已绑定FACT，均须拒绝；旧未绑定记录不静默升级为目标。不同绑定使用新的事实身份。合法同绑定的证据／真假修订保留既有CAS。已完成命令回执在进入此接缝前按原结果重放；换key／新意图不能继承该重放，新的擦除尝试须回滚其claim。旧无目标登记保持原payload字节／hash，不猜测目标。
+
+测试在拒绝前后对比真实已提交FACT／audit／idempotency行，并在真实save后注入失败，证明事务回滚。既有writer锁可执行仅用于加锁的SQL；业务payload／audit／receipt不变，不等于SQL DML为零。新登记目标事实在后续独立接入前仍被旧kind-only消费者隔离；本片不授CURRENT／行动／通知权限。其它消费者范围、公开准入及原始03/04、X09、前驱证明、语料／资源阻断保持未完成。
