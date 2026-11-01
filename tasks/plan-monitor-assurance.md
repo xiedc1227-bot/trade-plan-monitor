@@ -171,9 +171,10 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T16 — Define readiness states and dependency aggregation
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify the pure model/dependency/summary scope (PMA-R65).
 - Depends on: C04. P07's explicit user-approved reorder permits engineering before C05; C05/final acceptance remain required.
 - Files/scope: `web/plan_readiness_models.py`, pure dependency/summary helper and `test_plan_readiness.py` (3 files).
+- Delivered in `2f7aae0`:44 final readiness units pass; the preceding181-case selection includes43 earlier readiness and138 neighboring cases. T17's actual owned-read/API wiring remains separate; no installation/C05 readiness claim.
 - Also apply PMA-H03 below: distinguish waiting for data/confirmation from an undefined rule or genuinely required manual evidence; reuse existing evaluators and collection ownership.
 - Acceptance: A09,A10; Verify: focused V04. Six axes, summary precedence, alert-only/money-mode N/A, FALSE versus missing/first/normal close waiting, and execution state separation are exact.
 
@@ -336,3 +337,13 @@ On2026-11-01 the user explicitly chose to advance independently verifiable monit
 Start T16 after completed C04; T17–T20 retain their engineering dependencies and boundaries. T21 may implement and verify isolated journeys after the relevant T18/T20 engineering, but real-corpus consolidation still depends on T15. T22 may verify delivered non-live engineering after those journeys; record exact revisions and rerun affected checks after later changes. T23 may document actual delivered/blocked capabilities. Full T21/C07 and T24/C08 cannot close without all originally required evidence. Partial engineering is not real-extraction or installation readiness.
 
 T13–T15 truth/corpus/runner gates, the original03/04 decision, the shared48-attempt limit and no-retry rule remain. User-database migration, real plan approval/activation, inventory/cost confirmation, live acquisition and real test sends are not implied. Maintain one execution writer, exact bounded slices, independent task sessions and existing model choices. Do not ask again for this approved reorder.
+
+## PMA-P08 — User shutdown pause and exact resume point
+
+PAUSED at the user's explicit request on2026-11-02, after finishing the current T16 slice, necessary review/testing and local commit. Start no next implementation, provider run, service or automatic wakeup while paused. The user will resume after powering on; the existing P07 authorization remains valid without another approval request.
+
+- Last code: `2f7aae0`; current T16 models/summary are accepted, with evidence in R65 and `.pytest_cache/pma/t16a/evidence.json`. Paired pause/evidence notes are in R66. User database access/migration and real extraction remain0; campaign stays0/48.
+- Next: the coordinator verifies Git status and this handoff, then freezes/releases T17a's exact files using T16's committed models. T17's bounded read-only preparation is complete, implementation is not released. Reuse the current owned read/proof mechanism, at most two snapshots/eight reads/15s lease,1MiB view and zero read-time business writes/acquisition.
+- T17 must validate original risk owner references through existing authoritative paths, independently of the active read context; report missing proof/review/book/current owner as UNKNOWN rather than borrowing an active sibling. Both generated profiles and strict historical/API-owner companions remain separately scoped future slices.
+- Sessions: coordinator `01a169c0-fc84-7f00-992f-20977e2529ea`; T16 `01a1968c-5139-7a83-a068-e7f365e6cf2c` (frozen/idle); T17 `01a1968c-9c50-72d3-9e0d-6b730e5de423` (prepared/idle), both `gpt-6.1-sol/high`. All12 dispatch states are stored in ignored `.pytest_cache/pma/session-dispatch-20261101.json`.
+- T13–T15/C05, original03/04 positive acceptance, X09/X12/corpus/resource issues and R55/T22 old fixtures remain unresolved. T17–T24/C06–C08 and H01–H05 are not closed by this pause. No push/deployment or real installation readiness is claimed.
