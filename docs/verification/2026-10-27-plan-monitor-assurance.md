@@ -533,3 +533,7 @@ B evidence `t13-h04c2-evidence.json` SHA256 `3d95c458dddaf97e46ca8aa1305dd68ab32
 ## PMA-R63 — User-approved engineering reorder
 
 On2026-11-01 the user explicitly selected independent monitor-readiness and subsequent engineering before blocked C05, retaining C05/final gates, the48-call ceiling and no user migration. P07 records the exact engineering-versus-real acceptance boundary; T16's C04 prerequisite is already complete. Its existing independent `gpt-6.1-sol/high` session refreshed the approved specification read-only and proposed the original three-file model/summary/unit slice. No checkbox is closed by this order decision and no corpus expectation, strategy, threshold or original03/04 decision changes. One execution writer and per-slice review remain mandatory.
+
+## PMA-R64 — Current documentation and dispatch handoff
+
+On2026-11-02 the coordinator synchronized the generation supplement/inventory with R62's accepted ordinary public backend (`a2f0501`) and appended K46 to distinguish earlier pending component notes from current backend acceptance. Selection UI and other scopes remain pending. A read-only documentation audit checked10 documents in5 bilingual pairs, matching stable section IDs,102 local links and unchanged original-source/README hashes (`root-public-doc-order-audit.json`). No tests/provider/database operation was run for this documentation refresh. P07's explicit user authorization is the basis for the next T16 engineering release, not completion of C05 or final acceptance.

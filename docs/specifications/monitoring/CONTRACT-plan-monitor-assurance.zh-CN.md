@@ -408,3 +408,7 @@ T13-H04c1新增可选`DailyFactCommand.conditionSelection`，接入既有`POST /
 真实临时SQL HTTP测试分别配置monitor v1／v2应用并核对实际应用版本；仅改header不作为profile证据。正常来源／审核／观察归属及既有runtime生产均实际运行，不mock权限。A/B事实绑定同类不同位置；未支持原生schema具有真实已审核SQL owner和完整日线head。旧字面model JSON及独立排序请求前像在生产编辑前已对照未变1938d6c基线。该前像含397个UTF-8字节，固定SHA256为`aa1daa25a90755da03407c0de12d47ed23b506e12ad0ce9e58015097b44115af`；新序列化与这些旧字面对照，不由自身生成预期。网络陷阱保留Windows socket类并拒绝出站连接。
 
 本片是A组件，整体验收等待后续B组件。既有generator只读检查须如实报告`openapi.json`、`openapi.runtime-status.json`、`web/src/api/generated.ts`、`web/src/api/generated-runtime-status.ts`的真实drift；c1不改变这些文件，也不放宽检查。两套生成profile及适用API-owner批准检查同步后才可整体验收；必要文档owner另按成对放行片处理。公开目录／读取UI、其余来源要求的owner／schema／scope单元及T18／T19仍独立待办。不改变策略、阈值、迁移、默认／frozen权限或provider路径。H04／T13、原始03/04、X09、X12及语料／资源阻断保持；真实提取仍为0/48，用户数据库访问／迁移及真实采集／发送仍为0。
+
+## PMA-K46 — 普通公开后端配套已验收
+
+[PMA-R62](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)整体验收C1 `71e69ca`、B `3c55545`及C `39f4093`，仅对应K45准确范围的普通公开后端。K45中组件待办说明记录其早期阶段，现仅在该后端范围解决。两套生成profile、准确旧U-PMA/U-MLP3 hash及未变旧断言均通过。不据此新增owner/schema/scope或动作权限。既有计划版本详情已提供T18展示所需标签/路径，不需独立目录接口。选择界面及联合验收仍归T18/T19，H04/T13及全部已记录语料/安装边界保持未完成。P07允许独立就绪工程，C05及最终验收仍保留。
