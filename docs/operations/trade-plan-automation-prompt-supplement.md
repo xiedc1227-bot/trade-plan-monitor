@@ -22,8 +22,8 @@ Use this independent source-writing supplement when generating a plan alongside 
 
 ## PGS-03 — Current boundary
 
-This text supplies generation guidance only. Accurate public condition selection/registration is still pending; private engineering paths do not make that UI/API available. Existing initial review, official facts, inventory and per-opportunity approvals remain necessary. Data readiness reads do not acquire data.
+This text supplies generation guidance only. The implemented public backend now supports exact schema5 ordinary TRADE_DATE official-daily/completed-minute selection and server-derived registration; the selection UI remains with T18. Other owners/schemas/scopes are not enabled by that delivery. Existing initial review, official facts, inventory and per-opportunity approvals remain necessary. Data readiness reads do not acquire data.
 
 Do not append this supplement to frozen corpus inputs or extractor instructions to replace the existing baseline. Preserve and score original automatic results separately from clarified/human-assisted results. Guidance for future new plans does not repair or approve the existing corpus.
 
-[PMA-R59](../verification/2026-10-27-plan-monitor-assurance.md) records 505 focused offline checks for the delivered backend, not corpus or real-installation acceptance. Original03/04 persistent no-entry, X09, X12 predecessor/corpus and resource issues remain open; real extraction stays 0/48. README and v12 bytes remain unchanged. Any later change to extraction instructions/schema needs its own version and existing acceptance gates, not a relabelled v12.
+[PMA-R59](../verification/2026-10-27-plan-monitor-assurance.md) records 505 focused offline backend checks; [PMA-R62](../verification/2026-10-27-plan-monitor-assurance.md) accepts the narrow public companion. These are not corpus or real-installation acceptance. Original03/04 persistent no-entry, X09, X12 predecessor/corpus and resource issues remain open; real extraction stays 0/48. README and v12 bytes remain unchanged. Any later change to extraction instructions/schema needs its own version and existing acceptance gates, not a relabelled v12.

@@ -24,7 +24,7 @@ PMA-H01/H02/H04准备 · 2026-11-01 · 代码基线`95dfc7f` · [英文规范版
 - C4：[指数公式](../../../src/trade_plan_monitor/market_index/formulas.py)、[市场状态](../../../src/trade_plan_monitor/decision/market_regime.py)、[相对强弱](../../../src/trade_plan_monitor/decision/relative_strength.py)、[确认选择](../../../src/trade_plan_monitor/decision/confirmation_selection.py)、[大盘联动](../../../src/trade_plan_monitor/decision/market_linkage.py)。数据归属：既有生产指数路径及C3对齐后的个股／日历数据。
 - C5：[P2数量](../../../src/trade_plan_monitor/decision/p2_sizing.py)、[P2费用](../../../src/trade_plan_monitor/decision/p2_economics.py)、[P3金额](../../../src/trade_plan_monitor/decision/p3_capital.py)、[当前金额输入](../../../src/trade_plan_monitor/state/p3_current.py)。数据归属：C3报价／官方申报规则及明确确认的模拟账本／成本声明。
 - C6：[日线风险](../../../src/trade_plan_monitor/decision/daily_risk.py)、[信号生命周期](../../../src/trade_plan_monitor/decision/unified_lifecycle.py)、[日线核算](../../../src/trade_plan_monitor/state/daily_accounting.py)、[动作来源权限](../../../src/trade_plan_monitor/state/source_action_authority.py)。风险归属、持仓及确认窗口独立于条件真假。
-- C7：[原生目标resolver](../../../src/trade_plan_monitor/domain/reviewed_fact_targets.py)、[私有准入](../../../src/trade_plan_monitor/web/daily_service.py)、[实际SQL证据重检](../../../src/trade_plan_monitor/state/reviewed_fact_authority.py)、[公开DailyFactCommand](../../../src/trade_plan_monitor/web/routers/daily_plans.py)。归属：实际原始版本／审核、准确条件及已完成观察；公开准确选择尚未接线。
+- C7：[原生目标resolver](../../../src/trade_plan_monitor/domain/reviewed_fact_targets.py)、[准入](../../../src/trade_plan_monitor/web/daily_service.py)、[实际SQL证据重检](../../../src/trade_plan_monitor/state/reviewed_fact_authority.py)、[公开DailyFactCommand](../../../src/trade_plan_monitor/web/routers/daily_plans.py)。归属：实际原始版本／审核、准确条件及已完成观察。公开后端现仅接入已测schema5普通TRADE_DATE子集，选择界面仍待完成。
 
 ## PAI-S02 — 原提示词中的行情定义
 
@@ -55,11 +55,11 @@ PMA-H01/H02/H04准备 · 2026-11-01 · 代码基线`95dfc7f` · [英文规范版
 | PAI-13 | S04:59–73。首次完整收复25.99，再25.7–26.0回踩／收起为首笔100；进一步站稳26.40并回踩为第二笔100；末笔100保留，上限300。 | 已定义阶段／数量片段可自动；不破／收起／站稳缺定义。 | C2/C6 `AFTER_RULE_COMPLETED`及准确首条逻辑规则身份；C3。 | 首阶段限定不自动成为第二阶段门槛；S04:65“最好”仍是偏好。不产生第三笔或重复第二笔。仍须实际前序／来源／审核证明，原始03不是已审核父版本。 |
 | PAI-14 | S03:51及S04:75。再次跌破24.20创新低后持续空仓；原始03等待新底部结构，不下移25.99。 | 不支持持续入场前取消；恢复定义未决。 | C2/C6具有`RISK_OR_REVIEWED_INVALIDATION`及信号后reset，不承载该持续入场前义务。 | PMA-R48继续约束：不用单个当前bar判断、泛化`REVIEWED_FACT`、新风险线或虚构自动恢复近似。两份原始正例继续阻断，不能标为已验收负例。 |
 
-## PAI-S05 — 已交付证据及下一最小接缝
+## PAI-S05 — 已交付后端及剩余工作
 
 [PMA-R59](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)记录提交`5cb9656`：269项集成＋202项单测＋31项行情＋3项生产邻近＝505项不同聚焦离线检查，与前片有重叠。本次文档未新跑测试。它证明已测schema5普通TRADE_DATE正式日线／分钟目标路径，不证明语料提取、全部schema／owner、实际安装或真实发送。输入匹配本身不授予动作权限；实际本地源复核仍拒绝缺失／纠正观察。
 
-本库存支持的眼前H04接缝，是为已经测试的普通子集公开准确选择／登记，并保留旧无目标字节及服务端派生目标／观察的权限边界。既有`POST /api/v1/plan-facts`及`DailyFactCommand`尚未公开该选择器。契约／代码／测试及四项生成产物须顺序小片同步后才能整体验收。本文件不新增API字段或枚举。
+后续普通公开后端已在[PMA-R62](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)验收：C1+B+C保留旧无目标字节、服务端派生目标／观察权限及两层历史契约。既有`POST /api/v1/plan-facts`现接受可选`conditionSelection`，仅适用于已交付schema5普通TRADE_DATE子集。既有计划版本详情已能提供T18所需标签/路径，无需新目录接口。界面及联合验收仍待完成。本清单本身不定义新API字段或枚举。
 
 PAI-09支持在澄清后证据仍需人工时，核对准确严重风险归属。本清单不证明有必要开放全部提醒／reset／Schema6–9／SIGNAL组合。先从已审核来源确定各必需单元，保留其原生日期／signal及来源／大盘／例外／金额gate。T18负责既有UI选择／就绪展示，T19负责联合边界／风险独立验收，不另建平台。
 
