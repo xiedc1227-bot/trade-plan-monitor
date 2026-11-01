@@ -1,0 +1,29 @@
+# Trade-plan generation: automation supplement
+
+Preparation document · 2026-11-01 · PMA-H01/H02 · [Chinese review copy](trade-plan-automation-prompt-supplement.zh-CN.md).
+
+## PGS-01 — Use
+
+Use this independent source-writing supplement when generating a plan alongside the existing [README prompt](../../README.md#generic-trade-plan-prompt) and the supplied original report. It does not replace either source, change the deployed `plan-extract-v12` prompt, or certify extraction. The [source inventory](../specifications/monitoring/INVENTORY-plan-condition-automation.md) records current capability and unresolved definitions; its categories are documentation, not new API values.
+
+## PGS-02 — Copyable supplement
+
+> Preserve every mandatory source condition and permission/quantity/validity restriction, including polarity, ALL/ANY grouping, rule owner, daily/minute period, and confirmation/execution window. Keep mandatory execution conditions in A; B cannot repair missing A conditions or grant permission. Do not weaken a hard condition, turn a preference into a hard gate, or replace an unsupported rule with a reminder.
+>
+> Prefer existing automatic conditions when the source or an explicitly approved product default supplies the exact definition: price field/comparator/endpoints, fixed or dynamic reference, observation window, volume baseline, candle component/ratio, or indicator parameters. Preserve the original meaning. A supported formula is not permission to invent its threshold; “stabilized”, “unusual volume” and “strong wick” are not complete definitions by themselves.
+>
+> Collect genuinely missing definitions into one clear clarification/review step, tied to the original clauses. Ask only for the unresolved parameters or interpretation. Reuse an unchanged reviewed definition instead of redefining it every day. Changed definition, scope, period or plan binding requires the applicable review again. An answer defines the condition; it never asserts that today's condition is true. Unanswered meanings remain unresolved.
+>
+> Once defined, let existing owned data acquisition and reevaluation calculate supported market conditions. Missing, stale or unfinished bars mean wait for the appropriate data/close, not “false” and not a request for a person to certify an arithmetic result. Preserve a decisive independent ALL/ANY result where the native evaluator permits it, while keeping the missing branch visible; existing action guards still apply.
+>
+> Retain genuinely necessary human steps: initial plan/source review and activation; applicable official-information verification; explicit inventory/cost declarations; and separate approval for each permitted exception opportunity. A plan permission, AI prose, saved draft or preview is not approval or a fill. For any irreducible manual condition, name the exact condition and applicable date/bar/signal; do not substitute a generic same-kind assertion or promise an unimplemented public registration path.
+>
+> Keep unsupported obligations and unanswered definitions visible and block the affected dependent rule. Do not approximate persistent pre-entry no-buy restrictions with a current-price test, a generic manual fact or a fabricated recovery rule. Do not move risk lines, quantities, ownership or expiry to make import succeed. Retain independent risk handling where its own existing evidence and authority permit it. Add no strategy, threshold, automatic approval or output format.
+
+## PGS-03 — Current boundary
+
+This text supplies generation guidance only. Accurate public condition selection/registration is still pending; private engineering paths do not make that UI/API available. Existing initial review, official facts, inventory and per-opportunity approvals remain necessary. Data readiness reads do not acquire data.
+
+Do not append this supplement to frozen corpus inputs or extractor instructions to replace the existing baseline. Preserve and score original automatic results separately from clarified/human-assisted results. Guidance for future new plans does not repair or approve the existing corpus.
+
+[PMA-R59](../verification/2026-10-27-plan-monitor-assurance.md) records 505 focused offline checks for the delivered backend, not corpus or real-installation acceptance. Original03/04 persistent no-entry, X09, X12 predecessor/corpus and resource issues remain open; real extraction stays 0/48. README and v12 bytes remain unchanged. Any later change to extraction instructions/schema needs its own version and existing acceptance gates, not a relabelled v12.
