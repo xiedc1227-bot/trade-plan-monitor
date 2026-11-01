@@ -270,6 +270,7 @@ Deliver each check within its parent's existing sequential slices of at most5 fi
 ### PMA-H01 — Prefer supported automatic conditions
 
 - [ ] Parents: T13,T15. Prepare a separate paired prompt supplement and a source-owned automation inventory. Distinguish already supported quantitative definitions, definitions needing explicit clarification, necessary manual facts and unsupported obligations; these are planning categories, not proposed API enums.
+- Document preparation delivered in `c72b67c` (PMA-R60): [generation supplement](../docs/operations/trade-plan-automation-prompt-supplement.md) and [14-group source inventory](../docs/specifications/monitoring/INVENTORY-plan-condition-automation.md), each with its Chinese peer. This closes only the document preparation slice, not corpus/version acceptance or H01/H02 overall.
 - Acceptance: preserve each condition's full meaning, AND/OR, rule, period and validity. Only source-explicit parameters or already approved exact product defaults may drive automatic mapping. Volume comparisons, candle ratios, relative strength and stabilization/repair use existing supported definitions only; do not invent thresholds or substitute a nearby formula for ambiguous prose. Keep unrepresentable requirements blocking.
 - Verify: V04 corpus and V08 source/prompt audit; any extractor instruction/schema change also follows D04/V09 with a new actual version, frozen v12 baseline and the same campaign budget. Do not overwrite the original trading-plan prompt or relabel assisted corrections as automatic passes.
 
