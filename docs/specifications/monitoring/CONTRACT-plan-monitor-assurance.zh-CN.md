@@ -312,3 +312,17 @@ SIGNAL叶要求真实signal记录。任何附带signal（包括TRADE_DATE事实�
 既有FACT仅能在此私有路径以完全相同的完整目标、kind、交易日期及signal绑定修订。改变owner／path／version／content／scope，或用无目标命令更新已绑定FACT，均须拒绝；旧未绑定记录不静默升级为目标。不同绑定使用新的事实身份。合法同绑定的证据／真假修订保留既有CAS。已完成命令回执在进入此接缝前按原结果重放；换key／新意图不能继承该重放，新的擦除尝试须回滚其claim。旧无目标登记保持原payload字节／hash，不猜测目标。
 
 测试在拒绝前后对比真实已提交FACT／audit／idempotency行，并在真实save后注入失败，证明事务回滚。既有writer锁可执行仅用于加锁的SQL；业务payload／audit／receipt不变，不等于SQL DML为零。新登记目标事实在后续独立接入前仍被旧kind-only消费者隔离；本片不授CURRENT／行动／通知权限。其它消费者范围、公开准入及原始03/04、X09、前驱证明、语料／资源阻断保持未完成。
+
+## PMA-K39 — 按准确原生位置复核存量证据
+
+T13-H04b4仅接入既有`state/reviewed_fact_authority.py`存量证据接缝。在消费者既有事务／writer及`session.no_autoflush`内，`ActionOwnerReader`重新读取每个被引用FACT及其实际原属SQL计划版本。准确行kind／symbol、FACT version／content、消费者要求的版本（如适用）、真假与outcome、确认日期或SIGNAL身份、验证／可用时间仍须满足。原属读取拒绝相关pending变更，不flush或丢弃。Active或同content的sibling不能替代该原属。仓储对损坏或未来存储行的拒绝仍向上传递；本片不把仓储完整性失败转换为可接受事实。
+
+带目标FACT还须调用`matches_reviewed_fact_condition`，不移除标记或回退到未绑定匹配。选根首先要求既有`DailyTradePlan`类型；不支持的原生类型不提供根。按原生owner kind／ID选择准确的启用普通规则、提醒规则或严重技术风险分支，不按fact kind、证言或叶文字查找。统一条件owner仅有`condition`根；旧日线普通schema按顺序使用`price_structure`、`volume_or_candle`、`technical`、`prerequisites[index]`根。在任何目标匹配之前，完整有序的记录根条件集合必须等于实际原属owner的完整原生根集合。子树、改变的根、额外／派生确认根、未知／歧义owner或无法定位的位置，均不提供目标FACT叶。这是对这些既有原生schema的对应核验，不是通用计划协议或新根目录。
+
+每个ALL／ANY的记录children须与其记录父条件的数量及对应子条件一致；缺失children产生`MISSING_INPUT`，不对应的child在该位置产生`MISSING_INPUT`。目标匹配还须满足上文完整根与原生结构的对应关系。沿真实子索引递归追加`.conditions[index]`；原生叶、owner及最终完整path须经K37匹配完整K35目标。相同叶仍是不同位置。其它owner／path的正或负FACT不能提供当前叶，形状合法但错误的目标也不能借用旧唯一完整定义路径。旧无目标完整定义诊断保持不变，包括合并相同定义及合法派生确认根。旧歧义事实仍为缺输入。
+
+仅重新计算既有ALL／ANY三态投影：ALL保留决定性的`UNSATISFIED`，ANY保留决定性的`SATISFIED`，否则缺失操作数仍为`MISSING_INPUT`。特别是，独立满足的数值ANY操作数不受不可用人工叶影响。数值证据保留记录outcome及既有行情数据核验。多个被引用但真假矛盾的事实不能认证一个记录为满足的叶。不新增时效策略、负事实解释、行情公式、冻结证据序列化或hash前像。
+
+独立历史技术风险继续读取每个FACT的实际原属SQL版本（包括`SUPERSEDED` owner），不重归属到活动计划。其完整记录根须对应该原属原生风险分支；既有风险evidence-ID、日期、来源／cutover及持仓范围核验仍须满足。为同content活动sibling生成的自洽目标，不能通过替换version-ID字段冒充原目标。复核不改写已存FACT／SIGNAL／RISK payload或audit字节。
+
+测试使用真实临时SQL执行私有普通FACT登记、存量证据复核、pending owner拒绝及既有独立历史风险消费。记录SIGNAL明确是使用已放行纯函数定向求值器证据构造的typed工程产物，不是新runtime生产signal或行动验收。风险目标明确是事先存储的工程fixture，不扩展K38登记范围；不支持原生类型的guard为独立纯解析类型负例。不新增caller、公开API、新signal／reset／提醒／例外生产者、表或迁移。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12前驱归属及语料／资源验收仍未完成；真实提取保持0/48。
