@@ -276,3 +276,15 @@ T13-H04a仅在`domain/reviewed_fact_targets.py`增加纯函数`list_reviewed_fac
 这些helper仅验证所给原生计划与所给预期owner身份；形状合法的ID、content相同或自洽target hash不能认证其SQL对应关系。权威调用者必须重新读取fact实际原属SQL版本，提供其准确原生计划／版本身份／content，并独立执行当前审核、来源权限、日期／signal、已完成观察周期及核验时间要求。同content的active sibling不能替代原owner。解析仅返回原始不可变`FactDefinition`，不返回已满足证据、许可或当前审核权限。
 
 本片不新增登记端点、已存FACT字段、迁移、生成API配置、求值器／消费者或界面接入。旧FACT字节、legacy诊断和冻结公式保持不变。显式登记／存储、原owner消费者及界面须分别经过后续独立测试子片；此私有helper不关闭H04／T13，也不解决原始03/04、X09、X12前驱权限或语料／资源验收。
+
+## PMA-K36 — 私有可选FACT目标存储与归属边界
+
+T13-H04b1仅增加`DailyFactState.reviewed_fact_target`，作为私有可选`ReviewedFactTarget`，复用K35既有严格形状。字段缺失时内部默认None，模型序列化省略该字段，不给旧FACT新增null。显式提供null须拒绝，包括试图通过model-copy删除目标。嵌套目标model实例先转回字段，再严格重验。目标存在时，其`plan_version_id`与`content_hash`必须等于FACT自身类型化元数据。既有技术文字、真假类别、官方证明、前序signal及核验／可用时点约束仍必须满足；模型不查询数据库或时钟。
+
+沿用既有`DailyRecord`／`DailyRepository`验证与规范JSON存储、审计哈希及修订冲突。不新增表、列、迁移、哈希域或写入接口。测试使用仅含既有`daily_plan_record`与`audit_log`两表的真实临时SQLite，对比存储前后schema定义，并以全新SQL session重读。无目标记录的原model JSON与规范存储UTF-8字节／SHA256保持准确，不新增key或null，旧修订规则继续适用。有目标记录在保存／重读时完整保留目标JSON，不截断。仓库拥有的未来证据拒绝及事务回滚仍独立于纯模型检查。
+
+形状及内部元数据对应关系不能认证实际SQL计划原属、原生叶／路径、fact kind、确认／reset周期、TRADE_DATE／SIGNAL范围、target hash对应关系、当前来源／审核或人工断言真假。因此，形状合法的目标可以存储，但不认证这些含义。后续权威登记／消费必须重新读取准确原属SQL版本与原生计划，核对完整K35目标及适用证据归属，并保留全部既有日期／signal／时间／来源／审核要求。同content的active sibling不能提供原属身份；持久化与自洽哈希不构成许可。
+
+H04b0隔离仍为必需：`reviewed_fact_target`存在时，即使已经真实SQL往返，也不能进入`assess_unbound_fact`／`filter_unbound_facts`或任一旧kind-only求值器。类型化已存记录也保留显式字段身份，以执行该拒绝。本片不新增目标正向匹配或CURRENT权限，不通过legacy或REPLAY回退授权。其它合法旧事实及独立数字条件保留既有行为。不改变旧冻结ResearchFact、wire、formula、receipt或来源／审核绑定。
+
+公开`DailyFactCommand`及`POST /api/v1/plan-facts`仍拒绝`reviewedFactTarget`与`reviewed_fact_target`。两套已发布OpenAPI／前端类型配置通过`scripts/generate_frontend_types.py --check`保持不变；不得借私有存储改动新增或隐藏公开选择器。未来UI仅选择原生owner／path，未来登记由服务端计算目标，分别另行放行实施。本存储检查点不关闭H04／T13，也不解决原始03/04／X12／语料验收阻断。

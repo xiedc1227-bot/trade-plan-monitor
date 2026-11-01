@@ -24,6 +24,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
 )
 from trade_plan_monitor.domain.daily_scope import require_technical_text
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
+from trade_plan_monitor.domain.reviewed_fact_targets import ReviewedFactTarget
 from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
 from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
@@ -62,6 +63,24 @@ class DailyFactState(DailyValue):
     verified_at: ShanghaiDatetime
     available_at: ShanghaiDatetime
     official_evidence: DailyOfficialProof | None
+    reviewed_fact_target: ReviewedFactTarget | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+
+    @field_validator("reviewed_fact_target", mode="before")
+    @classmethod
+    def supplied_target(cls, value):
+        if value is None:
+            raise ValueError("an explicitly supplied reviewed fact target cannot be null")
+        # Revalidate nested instances rather than trusting model_construct output.
+        return value.model_dump(mode="python") if isinstance(value, ReviewedFactTarget) else value
+
+    @model_validator(mode="after")
+    def target_metadata(self):
+        target = self.reviewed_fact_target
+        if target is not None and (target.plan_version_id != self.plan_version_id
+                                   or target.content_hash != self.content_hash):
+            raise ValueError("reviewed fact target metadata differs from its FACT")
+        return self
 
     @model_validator(mode="after")
     def proof(self):
