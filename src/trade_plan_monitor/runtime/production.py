@@ -4422,6 +4422,7 @@ class ProductionMonitorPipeline:
                 row["payload"]
                 for row in daily_facts
                 if active is not None
+                and "reviewed_fact_target" not in row["payload"]
                 and row["payload"]["plan_version_id"] == active.plan_version_id
                 and datetime.fromisoformat(row["payload"]["available_at"]) <= observed
                 and datetime.fromisoformat(row["payload"]["verified_at"]) <= observed
