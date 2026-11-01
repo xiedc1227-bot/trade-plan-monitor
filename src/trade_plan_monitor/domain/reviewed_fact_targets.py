@@ -137,8 +137,11 @@ def _valid_date(value):
 
 
 def _assess(content_hash, definitions, fact):
+    # An explicit target must not disappear through a model's omission rules.
+    if isinstance(fact, BaseModel) and "reviewed_fact_target" in fact.model_fields_set:
+        return UnboundFactDecision("INVALID_FACT")
     value = _payload(fact)
-    if value is None:
+    if value is None or "reviewed_fact_target" in value:
         return UnboundFactDecision("INVALID_FACT")
     kind = value.get("kind")
     if type(kind) is not str:

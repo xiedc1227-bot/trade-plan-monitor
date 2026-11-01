@@ -93,7 +93,8 @@ def evaluate_daily_condition(
         matching = [
             f
             for f in facts
-            if f.get("kind") == condition.fact_kind
+            if "reviewed_fact_target" not in f
+            and f.get("kind") == condition.fact_kind
             and f.get("verified") is True
             and (
                 (

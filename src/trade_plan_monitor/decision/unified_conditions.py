@@ -65,7 +65,8 @@ def evaluate_unified_condition(
     if tag == "REVIEWED_FACT":
         day = target.date() if target is not None else (
             None if series is None else series.bars[-1].trade_date)
-        matching = tuple(f for f in facts if f.get("kind") == condition.fact_kind
+        matching = tuple(f for f in facts if "reviewed_fact_target" not in f
+            and f.get("kind") == condition.fact_kind
             and f.get("verified") is True and (
                 condition.validity_scope == "TRADE_DATE" and day is not None
                 and f.get("trade_date") == str(day)
