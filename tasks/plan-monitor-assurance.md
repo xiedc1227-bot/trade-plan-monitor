@@ -138,6 +138,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 - Current boundary: PMA-R48 records the user's 2026-11-01 decision to keep original03/04 explicitly blocked and its positive acceptance unresolved. Do not add a persistent BUY-cancellation strategy, invent a trigger/recovery rule, reclassify the positive as an accepted negative or freeze a successful full matrix. T14–T24/C05–C08 remain uncompleted; real calls remain0/48. Independent preparation is not corpus signoff.
 - Depends on: T01; execute after C04 in the selected sequential order.
 - Files/scope: source bundle, truth bundle, manifest and `test_extraction_acceptance_corpus.py` (4 files); use further reviewed3–5-file children if original redaction artifacts require them.
+- Also apply PMA-H01/H02/H04 below: inventory which exact source conditions can already be evaluated automatically, preserve unresolved definitions, and complete the existing deferred per-condition manual-evidence binding prerequisite. Prompt wording alone does not close that prerequisite.
 - Acceptance: A07,A08; Verify: V04,V08.12 cases, origins/minimum original and natural-language counts, exact hashes, positive/blocking expectations and independent atom/relationship truth frozen before responses. Resolve actual intent disputes before calls.
 
 ### PMA-T14 — Implement independent grading and offline replay
@@ -163,6 +164,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 - [ ] Deliver and verify.
 - Depends on: C04; execute after C05 in the selected sequential order.
 - Files/scope: `web/plan_readiness_models.py`, pure dependency/summary helper and `test_plan_readiness.py` (3 files).
+- Also apply PMA-H03 below: distinguish waiting for data/confirmation from an undefined rule or genuinely required manual evidence; reuse existing evaluators and collection ownership.
 - Acceptance: A09,A10; Verify: focused V04. Six axes, summary precedence, alert-only/money-mode N/A, FALSE versus missing/first/normal close waiting, and execution state separation are exact.
 
 ### PMA-T17 — Project current readiness through read-only authority
@@ -202,6 +204,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 - [ ] Deliver and verify.
 - Depends on: T15,T20.
 - Files/scope: `source-coverage.spec.ts`, `plan-readiness.spec.ts`, isolated fixture server and bounded screenshot/evidence assets (3–5 source files).
+- Also apply PMA-H05 below: prove automatic daily evaluation after exact rule review, data-loss/recovery and the remaining explicit manual steps without fabricated confirmations.
 - Acceptance: A01,A05,A09–A11; Verify: V05. Reproduce misclassified mandatory clause and block, repair legitimately and re-review, stale proof rejection, healthy FALSE/close waiting/missing data, independent risk path, notification truth, reload and320/768/1024/1440/accessibility; zero external requests outside the separately authorized extraction campaign.
 
 ### PMA-C07 — Integrated purpose checkpoint
@@ -220,6 +223,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 - [ ] Deliver and verify.
 - Depends on: T22.
 - Files/scope: T23a operations/report pair updates (4); T23b README/docs-index pairs (4); T23c capability-map pair (2). Keep stage-specific status and links accurate.
+- Also apply PMA-H05 below: document automatic conditions, once-per-definition clarification, retained human approvals and unsupported blockers separately.
 - Acceptance: A03,A07–A12; Verify: V08. Explain omission blockers, allowed human changes, actual accepted extraction version, finite-corpus limits, legacy status and installation NOT_READY reasons without claiming excluded features.
 
 ### PMA-T24 — Audit all criteria and prepare local delivery
@@ -246,3 +250,39 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 | Provider budget or user-state writes expand during “acceptance” | Shared physical-attempt ledger; explicit D05 scope; migration/activation/test sends remain separate |
 
 Task marks above refer only to the paired recorded evidence. T01–T12/C01–C04 are complete; T13 and later stages remain uncompleted at the explicit PMA-R48 scope boundary. Writing a checkbox never establishes acceptance.
+
+## PMA-P05 — Reduce recurring manual verification
+
+Added at the user's request on2026-11-01. Aim to review an exact rule definition once and then evaluate supported conditions automatically. These five pending checks extend the existing remaining tasks; keep all24 task IDs, eight checkpoints and their dependencies. This is a task-document update only, not implementation, prompt modification or acceptance. PMA-R48's original03/04 blocker, the shared48-attempt ceiling and the prohibition on user-database migration remain unchanged.
+
+Deliver each check within its parent's existing sequential slices of at most5 files. Freeze exact file owners and any paired interface changes before implementation. Reuse existing plan fields, explicit supplements/review, evaluators, data collection and fact records; add no generic questionnaire, configuration registry, evidence platform, new worker or new trading indicator/strategy.
+
+### PMA-H01 — Prefer supported automatic conditions
+
+- [ ] Parents: T13,T15. Prepare a separate paired prompt supplement and a source-owned automation inventory. Distinguish already supported quantitative definitions, definitions needing explicit clarification, necessary manual facts and unsupported obligations; these are planning categories, not proposed API enums.
+- Acceptance: preserve each condition's full meaning, AND/OR, rule, period and validity. Only source-explicit parameters or already approved exact product defaults may drive automatic mapping. Volume comparisons, candle ratios, relative strength and stabilization/repair use existing supported definitions only; do not invent thresholds or substitute a nearby formula for ambiguous prose. Keep unrepresentable requirements blocking.
+- Verify: V04 corpus and V08 source/prompt audit; any extractor instruction/schema change also follows D04/V09 with a new actual version, frozen v12 baseline and the same campaign budget. Do not overwrite the original trading-plan prompt or relabel assisted corrections as automatic passes.
+
+### PMA-H02 — Clarify a definition once through existing review
+
+- [ ] Parents: T13,T14. Group genuinely missing parameters into one explicit source-bound review step using existing clarification/supplement mechanisms. A recorded question is not permission to choose its answer.
+- Acceptance: store the answered definition with its exact source/content/review binding; preserve original raw inputs and score clarified results as assisted. The same unchanged reviewed definition does not require daily redefinition. A changed definition, scope, period or plan binding requires the existing applicable recheck/review. Unanswered meaning stays unresolved; create no satisfied runtime fact from an answer about strategy meaning.
+- Verify: V04 grading mutations for omitted/invented parameters, repeated unchanged definitions and stale review bindings; preserve raw-versus-assisted scores.
+
+### PMA-H03 — Compute daily outcomes and wait for owned data
+
+- [ ] Parents: T16–T19. Reuse existing deterministic evaluators and owned collection/re-evaluation paths for supported conditions. Readiness reads remain read-only and cannot trigger acquisition.
+- Acceptance: distinguish complete TRUE/FALSE, expected close/bar waiting, missing/stale data, undefined rules and required human evidence. Data absence must not become FALSE or a request to manually assert that a market condition is satisfied. Restore evaluation through the existing admitted data path when data returns, preserving occurrence/quantity/consumption and source ownership.
+- Verify: V04 readiness scenarios and V05 UI checks for data loss/recovery, official-close waiting, no duplicate occurrence and zero writes/network calls from reads.
+
+### PMA-H04 — Retain only necessary, precisely bound manual steps
+
+- [ ] Parents: T13's existing binding prerequisite,T18,T19. For conditions that legitimately remain manual, complete exact condition selection and server-side ownership validation through the existing fact registration/records/UI. Split contracts/registration, consumers, generated profiles and UI into separately tested children of at most5 files before editing.
+- Acceptance: bind evidence to its actual plan version, rule/risk/alert owner and exact condition plus the existing date/signal/confirmation scope. Different same-kind requirements and negative evidence cannot cross-satisfy; ambiguous old facts stay blocked. AI-written text cannot become an assertion that a human verified the fact. Preserve initial plan review, applicable inventory/cost and official-fact confirmations, and explicitly human-approved exception buys; do not replace them with automatic approval.
+- Verify: existing actual fact catalog/current/exception-delivery regressions plus focused new binding tests and V05 UI checks; preserve original-owner independent risk and historical/frozen compatibility.
+
+### PMA-H05 — Verify and report the actual reduction
+
+- [ ] Parents: T14,T15,T21–T24. Extend existing fixtures/journeys/reports rather than adding telemetry infrastructure or provider runs. Keep the fixed corpus and original failures; needed supplementary automation scenarios are offline.
+- Acceptance: demonstrate that an unchanged, fully defined automatically evaluable rule evaluates repeatedly without new manual technical confirmations, while genuinely required approvals remain required. Report automatic-condition, manual/undefined/unsupported-condition and actual human-step counts separately, with source and data availability. Claim no universal zero-intervention target or success from dropped conditions. Explain each remaining intervention in paired operations/capability documents.
+- Verify: V04/V05/V08, followed by the existing V06/V07 final gates. This addition does not expand existing real-call or user-state authorization and changes no completed task marks.
