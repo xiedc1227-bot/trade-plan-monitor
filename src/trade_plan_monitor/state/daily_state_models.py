@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import DailySupplement
 from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
@@ -13,6 +13,7 @@ from trade_plan_monitor.decision.p2_economics import EconomicsResult
 from trade_plan_monitor.decision.p3_capital import CapitalAssessment
 from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
+from trade_plan_monitor.domain.daily_hash import daily_hash
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
     FactKind,
@@ -26,13 +27,53 @@ from trade_plan_monitor.domain.daily_scope import require_technical_text
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.domain.reviewed_fact_targets import ReviewedFactTarget
 from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
-from trade_plan_monitor.market_data.aggregation import FiveMinuteBar
+from trade_plan_monitor.market_data.aggregation import (
+    FiveMinuteBar,
+    aggregate_five_minute_bar,
+    expected_five_minute_ends,
+)
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
 from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime
+from trade_plan_monitor.market_index.canonical import canonical_value
 from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.state.market_exception_models import ExceptionCandidateResource
 
 Digest = str
+
+
+class ReviewedFactObservation(DailyValue):
+    """Private shape only; source hash is not SQL ownership or market truth."""
+
+    model_config = ConfigDict(str_strip_whitespace=False, revalidate_instances="always")
+
+    bar_end: ShanghaiDatetime
+    source_hash: str = Field(strict=True, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def completed_boundary(self):
+        expected_five_minute_ends(self.bar_end)
+        return self
+
+
+def reviewed_fact_observation_source_hash(minutes, aggregate):
+    """Hash only one completed bucket's exact content, excluding receipt time.
+
+    Revalidate typed values and reaggregate; availability, actual SQL head and
+    native confirmation scope remain the registration/consumer's responsibility.
+    """
+    if (type(minutes) is not tuple or len(minutes) != 5
+            or any(not isinstance(value, MinuteBar) for value in minutes)
+            or not isinstance(aggregate, FiveMinuteBar)):
+        raise ValueError("observation requires five typed minutes and one aggregate")
+    ordered = tuple(sorted((MinuteBar.model_validate(value.model_dump(mode="python"))
+                            for value in minutes), key=lambda value: value.bar_end))
+    bar = FiveMinuteBar.model_validate(aggregate.model_dump(mode="python"))
+    if aggregate_five_minute_bar(ordered, bucket_end=bar.bar_end, is_open=True) != bar:
+        raise ValueError("observation minutes do not match the completed aggregate")
+    return daily_hash("reviewed-fact-observation-v1", canonical_value({
+        "minutes": [value.model_dump(mode="python", exclude={"received_at"}) for value in ordered],
+        "aggregate": bar.model_dump(mode="python"),
+    }))
 
 
 class DailyOfficialProof(DailyValue):
@@ -65,6 +106,16 @@ class DailyFactState(DailyValue):
     official_evidence: DailyOfficialProof | None
     reviewed_fact_target: ReviewedFactTarget | None = Field(
         default=None, exclude_if=lambda value: value is None)
+    reviewed_fact_observation: ReviewedFactObservation | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+
+    @field_validator("reviewed_fact_observation", mode="before")
+    @classmethod
+    def supplied_observation(cls, value):
+        if value is None:
+            raise ValueError("an explicitly supplied reviewed fact observation cannot be null")
+        return (value.model_dump(mode="python")
+                if isinstance(value, ReviewedFactObservation) else value)
 
     @field_validator("reviewed_fact_target", mode="before")
     @classmethod
@@ -80,6 +131,15 @@ class DailyFactState(DailyValue):
         if target is not None and (target.plan_version_id != self.plan_version_id
                                    or target.content_hash != self.content_hash):
             raise ValueError("reviewed fact target metadata differs from its FACT")
+        return self
+
+    @model_validator(mode="after")
+    def observation_metadata(self):
+        observation = self.reviewed_fact_observation
+        if observation is not None and (
+                self.reviewed_fact_target is None or observation.bar_end.date() != self.trade_date
+                or not observation.bar_end <= self.verified_at <= self.available_at):
+            raise ValueError("reviewed fact observation differs from target/date/availability")
         return self
 
     @model_validator(mode="after")

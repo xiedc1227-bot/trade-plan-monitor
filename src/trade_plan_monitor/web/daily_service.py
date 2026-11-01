@@ -19,7 +19,11 @@ from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.market_data.aggregation import aggregate_five_minute_bar
 from trade_plan_monitor.market_data.daily_data import DailySeries
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
-from trade_plan_monitor.state.daily_state_models import DailyEvaluationState
+from trade_plan_monitor.state.daily_state_models import (
+    DailyEvaluationState,
+    ReviewedFactObservation,
+    reviewed_fact_observation_source_hash,
+)
 from trade_plan_monitor.state.repositories import (
     PlanSaveBlockedError,
     PlanVersionNotFoundError,
@@ -434,7 +438,7 @@ def _conflict(reason):
 
 
 def _private_fact_target(work, details, command, now, selection):
-    """Derive one ordinary confirmation target under the caller's existing writer."""
+    """Derive native target and optional actual observation under the existing writer."""
     if not isinstance(selection, tuple) or len(selection) != 3 or selection[0] != "ORDINARY_RULE":
         raise ValueError("private fact selection requires an ordinary confirmation owner")
     reads = ActionOwnerReader(work)
@@ -469,6 +473,7 @@ def _private_fact_target(work, details, command, now, selection):
             actual.symbol, actual.id, actual.content_hash, plan_sha256(plan), actual.review_id
     ) or head.evaluated_at > now:
         raise ValueError("private fact observation owner differs")
+    observation = None
     if rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE":
         series = head.daily_evidence
         complete = (head.official_trade_date == command.trade_date and series is not None
@@ -488,6 +493,10 @@ def _private_fact_target(work, details, command, now, selection):
                         == head.five_minute_bars[-1])
     if not complete:
         raise ValueError("private fact requires its exact completed confirmation period")
+    if rule.confirmation.kind == "COMPLETED_BAR_CLOSE":
+        observation = ReviewedFactObservation(bar_end=end,
+            source_hash=reviewed_fact_observation_source_hash(prefix, head.five_minute_bars[-1])
+        ).model_dump(mode="json")
     if ref.validity_scope == "SIGNAL" and command.signal_id is None:
         raise ValueError("private fact requires its exact signal")
     if command.signal_id is not None:
@@ -503,14 +512,14 @@ def _private_fact_target(work, details, command, now, selection):
                 or rule.confirmation.kind == "COMPLETED_BAR_CLOSE"
                 and value.get("confirmed_at") != head.minute_target.isoformat()):
             raise ValueError("private fact signal owner or observation period differs")
-    return target.model_dump(mode="json")
+    return target.model_dump(mode="json"), observation
 
 
 def _record_fact(work, details, command, now, *, evidence_head=None, fact_selection=None):
     """Shared scoped fact admission/write; research may provide its frozen current source head."""
     identity = daily_hash("daily-human-fact-v1",
                           {"symbol": details.symbol, "fact_id": command.fact_id})
-    target = None
+    target, observation = None, None
     with work.daily.session.no_autoflush:
         old = ActionOwnerReader(work).daily(identity)
         previous = {} if old is None else old["payload"]
@@ -519,9 +528,10 @@ def _record_fact(work, details, command, now, *, evidence_head=None, fact_select
         if fact_selection is not None:
             if evidence_head is not None:
                 raise ValueError("private fact selection cannot borrow a replay observation head")
-            target = _private_fact_target(work, details, command, now, fact_selection)
+            target, observation = _private_fact_target(work, details, command, now, fact_selection)
             if old is not None and (
                 previous.get("reviewed_fact_target") != target
+                or previous.get("reviewed_fact_observation") != observation
                 or tuple(previous.get(k) for k in ("kind", "trade_date", "signal_id")) != (
                     command.kind, str(command.trade_date), command.signal_id)
             ):
@@ -579,6 +589,7 @@ def _record_fact(work, details, command, now, *, evidence_head=None, fact_select
             "available_at": now.isoformat(),
             "official_evidence": None if official is None else official.model_dump(mode="json"),
             **({"reviewed_fact_target": target} if target is not None else {}),
+            **({"reviewed_fact_observation": observation} if observation is not None else {}),
         },
     )
     return row

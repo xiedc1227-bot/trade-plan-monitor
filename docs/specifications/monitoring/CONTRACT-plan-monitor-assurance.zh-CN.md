@@ -354,3 +354,21 @@ Null、空、损坏或非object目标以及控制否定断言，均须沿既有`
 输入准备测试使用持久化完整分钟prefix及真实本地日历行。持久化分钟缺失仍为缺失，关闭或未知日历日期不能变成开市，合法控制证据不能刷新陈旧报价。既有五分钟报价时效阈值不变。针对性测试中的provider／controller owner对意外访问立即抛出普通provider降级捕获范围以外的异常，不调用SDK或网络；相关既有离线回归保留各自fake-provider边界。新增过滤不改变行情／provider操作，也不改变聚合、日历、复权、指标或完成性公式；输入准备不改写FACT或audit字节。
 
 K40普通schema5正式日线目标生产仍是唯一新接入的确认池。本片不开启依赖目标的分钟确认、reset、风险、提醒、例外或schema6–9联动路径。分钟观察实例存储／登记／消费仍须独立契约／测试及放行，不从`verified_at`推算bar。已修正的外层控制输入边界与该未闭合观察绑定不同。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源验收仍未完成。工程gate夹具不是正式语料真值。真实提取保持0/48；用户数据库访问／迁移、实时采集及真实发送保持0。
+
+## PMA-K42 — 完整分钟观察值的私有存储与服务端准入
+
+T13-H04b7仅新增`DailyFactState.reviewed_fact_observation`，私有可选`ReviewedFactObservation`准确包含`bar_end: ShanghaiDatetime`及`source_hash: str`（64位小写十六进制）。该闭合冻结值不trim字符串并重新验证实例；`bar_end`须是既有完整五分钟边界。字段缺省为None且序列化省略。显式null、损坏值、额外字段及损坏的nested constructed实例均拒绝，包括通过model-copy删除。存在观察值时，必须伴随target、`bar_end.date() == trade_date`且`bar_end <= verified_at <= available_at`。这些仅是形状／内部对应核验，不是实际SQL原属、已完成行情证据、来源真假或当前权限。形状合法的任意digest声明可存储，但不因此获认证。
+
+唯一可复用纯函数`reviewed_fact_observation_source_hash`与该私有状态值一起位于`state/daily_state_models.py`。它重新验证准确五个类型化`MinuteBar`及一个类型化`FiveMinuteBar`，按真实`bar_end`排序，并要求既有`aggregate_five_minute_bar`为该准确完整周期重现所给聚合值。重复、缺失、混入其它证券或不对应的源集合，均不能生成可用观察hash。实际可用性、SQL head原属、审核及确认scope仍由权威调用者负责；纯函数不读数据库或时钟，也不创建权限。
+
+使用独立新域`reviewed-fact-observation-v1`：`daily_hash(domain, canonical_value({"minutes": minutes, "aggregate": aggregate}))`。进入`canonical_value`前，每条有序分钟使用`model_dump(mode="python", exclude={"received_at"})`；所选单根聚合使用完整`model_dump(mode="python")`。分钟字段准确为`symbol`、`bar_end`、`open_fen`、`high_fen`、`low_fen`、`close_fen`、`volume_shares`、`amount_yuan`。聚合具有相同内容字段并额外含`formula_version`，没有receipt字段。复用`market_index.canonical.canonical_value`：精确有限Decimal成为非指数形式字符串，去掉多余小数尾零（零为`"0"`）；已验证上海时区datetime使用六位小数ISO；数组保留规定顺序。`daily_hash`对UTF-8域、一个NUL字节及紧凑递归键排序JSON取hash（`ensure_ascii=False`、`allow_nan=False`、分隔符`,`／`:`）。不改变两个既有canonical helper、target hash v1或任何旧前像。
+
+`test_independent_literal_preimage_and_fixed_sha256`中的独立固定字面前像包含域及NUL共1046字节。其证券为`601021.SH`，2026-09-22的五个分钟结束点为09:31–09:35；每分钟OHLC为10/12/9/11分、成交量100股、金额1元；09:35的单根`ta-v1`聚合OHLC为10/12/9/11、成交量500、金额5。固定字面SHA256为`4879a08e71271a6520b804d53a2b695708afc1874289a124b7ac192b6df8e713`，仅用标准库SHA256对独立写出的字面JSON计算，不从generator取得。测试固定准确字节／digest，并验证receipt变化、Decimal等价精度表示、输入顺序及环境Decimal精度不改变内容hash。
+
+在既有writer／`session.no_autoflush`内，K38实际原属SQL owner、当前来源／审核及真实head检查仍须满足。仅在分钟head通过这些既有gate后，服务端才从其`minute_target`派生`bar_end`，并对准确五条所选源分钟及对应最后单根聚合取hash。不从`verified_at`推算观察，不接受客户端选定时间／digest，不hash整个head，也不包含FACT／账户／求值状态。较早周期／历史、receipt时间及求值时钟均不进入前像。同bar源纠正即使聚合数值未变也改变hash；相同源值仅receipt／时钟不同的重读不要求新绑定。正式日线及无目标登记不制造分钟观察对象。
+
+既有FACT身份仅能在完整target、kind／date／signal及完整观察值均相同时通过私有服务修订。同观察的证据／真假变更保留原CAS。换bar或改变源内容须使用fresh FACT身份；旧有目标但无观察的事实仍可读取，登记时不能静默升级、猜测、擦除或搬移。旧无目标及日线记录保留原model／SQL字节及audit摘要，不新增null。复用既有仓储、schema及事务回滚，不新增表、列或迁移。存储本身不执行原生准入或认证hash，历史读取不回填缺失观察值。
+
+真实临时SQL测试覆盖私有准入／往返、同观察真假修订、CAS／回滚、旧字节、旧无观察拒绝、不完整／未来／不对应head证据、真实runtime head变化、同bar纠正及实际09:40观察的新身份。测试验证仅绑定所选完整周期，较早head历史改变不搬移观察。纯golden／规范化／形状测试与SQL准入测试分开说明。公开`DailyFactCommand`／实际HTTP拒绝`reviewed_fact_observation`和`reviewedFactObservation`两种拼写；canonical monitor v2与compatibility monitor v1生成配置检查须保持不变。
+
+本片仅为私有存储／准入，不改变consumer、求值器、公开DTO、UI、默认／冻结／重放权限、provider采集或策略；K40正式日线范围及K41控制隔离保持。特别是，新观察分钟事实仍不能生产依赖目标的分钟signal，直到独立consumer片证明准确观察匹配及陈旧源拒绝。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源阻断仍未完成；工程fixture不是正式语料真值。真实提取保持0/48；用户数据库访问／迁移、实时采集及真实发送保持0。
