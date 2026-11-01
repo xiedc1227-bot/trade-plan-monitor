@@ -288,3 +288,13 @@ T13-H04b1仅增加`DailyFactState.reviewed_fact_target`，作为私有可选`Rev
 H04b0隔离仍为必需：`reviewed_fact_target`存在时，即使已经真实SQL往返，也不能进入`assess_unbound_fact`／`filter_unbound_facts`或任一旧kind-only求值器。类型化已存记录也保留显式字段身份，以执行该拒绝。本片不新增目标正向匹配或CURRENT权限，不通过legacy或REPLAY回退授权。其它合法旧事实及独立数字条件保留既有行为。不改变旧冻结ResearchFact、wire、formula、receipt或来源／审核绑定。
 
 公开`DailyFactCommand`及`POST /api/v1/plan-facts`仍拒绝`reviewedFactTarget`与`reviewed_fact_target`。两套已发布OpenAPI／前端类型配置通过`scripts/generate_frontend_types.py --check`保持不变；不得借私有存储改动新增或隐藏公开选择器。未来UI仅选择原生owner／path，未来登记由服务端计算目标，分别另行放行实施。本存储检查点不关闭H04／T13，也不解决原始03/04／X12／语料验收阻断。
+
+## PMA-K37 — 带显式私有上下文的纯准确条件匹配
+
+T13-H04b2新增`matches_reviewed_fact_condition`，并为`evaluate_unified_condition`增加可选私有参数`_fact_owner`／`_condition_path`。`_fact_owner`是普通tuple `(native_plan, plan_version_id, owner_kind, owner_id)`；`_condition_path`是实际原生根路径。不新增上下文model、注册表、缓存、哈希域或权限token。调用者提供实际原生树与根，包含普通确认、`independent_signal.reset_condition`、提醒或严重风险归属。ALL/ANY递归求值按实际子位置逐层追加`.conditions[index]`。Helper复用K35的resolver／目录／`FactDefinition`，要求准确owner kind／ID、完整路径及当前叶完整JSON；目标解析同时绑定完整原生plan hash及既有observation context。同kind或证据文字相同均不足，不能移除目标字段来借用kind-only匹配。
+
+纯helper检查FACT版本／content对应关系、kind匹配、字面verified为真以及`satisfied`为bool；这些是输入一致性检查，不是独立人工核验。目标可为JSON字段或既有目标model，均通过同一resolver重验。存在但损坏／null／过期的目标不得回退。显式上下文中的无目标事实仍要求原唯一完整定义诊断及准确目录引用匹配；上下文不能使有歧义的未绑定事实变可用。未提供`_fact_owner`时，既有默认入口保留H04b0对全部有目标事实的拒绝，以及原合法未绑定行为。显式上下文不完整／损坏或路径缺失／错误时，不提供匹配的FACT叶证据。
+
+原日期／SIGNAL匹配仍为必需。只有匹配当前准确叶的事实，才参与既有最新`(available_at, verified_at)`选择及同刻冲突判断；否定断言仅影响匹配的目标。ALL/ANY既有SATISFIED／UNSATISFIED／MISSING_INPUT聚合及独立数字条件的决定性保持不变，非决定分支缺失或无效证据不成为全局否决。此显式选择的unified入口不扩展日线历史／默认求值器或合法冻结输入／wire／formula。
+
+后续生产消费前，调用者必须认证实际原属SQL归属、当前来源／审核、时间可用性、已完成观察周期及行动权限。所给树／上下文和自洽target hash不构成上述认证；纯函数不取得CURRENT许可，也不通过与active sibling相等来验证SQL。本片不接入SQL／API／UI／消费者。后续登记事务必须拒绝旧无目标命令意外擦除或扩大既有目标绑定，该项仍是独立门禁。H04／T13及原始03/04、X09、前驱证明、语料／资源阻断保持未关闭。

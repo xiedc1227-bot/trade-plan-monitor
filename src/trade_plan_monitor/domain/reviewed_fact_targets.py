@@ -263,3 +263,35 @@ def resolve_reviewed_fact_target(
     ):
         raise ValueError("explicit fact target does not match the supplied native owner")
     return matches[0]
+
+
+def matches_reviewed_fact_condition(
+    owner_plan, fact, condition, *, plan_version_id, owner_kind, owner_id, condition_path,
+) -> bool:
+    """Match one supplied native leaf, never SQL ownership, truth or authority.
+
+    The caller supplies the actual root/owner/path. Targeted facts retain their
+    marker; legacy facts still need the original unique-definition diagnostic.
+    """
+    value = _payload(fact)
+    if (not isinstance(owner_plan, DailyTradePlan) or not isinstance(condition, ReviewedDailyFact)
+            or value is None or value.get("plan_version_id") != plan_version_id
+            or value.get("kind") != condition.fact_kind or value.get("verified") is not True
+            or type(value.get("satisfied", True)) is not bool):
+        return False
+    if "reviewed_fact_target" in value:
+        selected = _payload(value["reviewed_fact_target"])
+        try:
+            ref = resolve_reviewed_fact_target(owner_plan, selected,
+                                              plan_version_id=plan_version_id)
+        except (TypeError, ValueError):
+            return False
+        if value.get("content_hash") != selected.get("content_hash"):
+            return False
+        refs = (ref,)
+    else:
+        result = assess_unbound_fact(owner_plan, fact)
+        refs = result.definitions if result.usable else ()
+    expected = canonical(condition.model_dump(mode="json"))
+    return any((ref.owner_kind, ref.owner_id, ref.condition_path, ref.definition_json) == (
+        owner_kind, owner_id, condition_path, expected) for ref in refs)

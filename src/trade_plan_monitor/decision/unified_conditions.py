@@ -10,6 +10,7 @@ from trade_plan_monitor.domain.plan_models import (
     CompletedCloseInRangeCondition,
     VolumeToMeanGteCondition,
 )
+from trade_plan_monitor.domain.reviewed_fact_targets import matches_reviewed_fact_condition
 from trade_plan_monitor.domain.unified_plan_models import UnifiedCondition
 
 
@@ -35,6 +36,8 @@ def evaluate_unified_condition(
     bars=(),
     target=None,
     trading_calendar=(),
+    _fact_owner=None,
+    _condition_path=None,
 ):
     raw = condition.model_dump(mode="json")
     tag = raw["type"]
@@ -49,8 +52,11 @@ def evaluate_unified_condition(
                 bars=bars,
                 target=target,
                 trading_calendar=trading_calendar,
+                _fact_owner=_fact_owner,
+                _condition_path=(None if _condition_path is None else
+                                 f"{_condition_path}.conditions[{index}]"),
             )
-            for c in condition.conditions
+            for index, c in enumerate(condition.conditions)
         )
         statuses = {c.outcome for c in children}
         decisive, otherwise = (
@@ -65,13 +71,17 @@ def evaluate_unified_condition(
     if tag == "REVIEWED_FACT":
         day = target.date() if target is not None else (
             None if series is None else series.bars[-1].trade_date)
-        matching = tuple(f for f in facts if "reviewed_fact_target" not in f
-            and f.get("kind") == condition.fact_kind
+        matching = tuple(f for f in facts if f.get("kind") == condition.fact_kind
             and f.get("verified") is True and (
                 condition.validity_scope == "TRADE_DATE" and day is not None
                 and f.get("trade_date") == str(day)
                 or condition.validity_scope == "SIGNAL" and signal_id is not None
-                and f.get("signal_id") == signal_id))
+                and f.get("signal_id") == signal_id) and (
+                    "reviewed_fact_target" not in f if _fact_owner is None else
+                    isinstance(_fact_owner, tuple) and len(_fact_owner) == 4
+                    and matches_reviewed_fact_condition(_fact_owner[0], f, condition,
+                        plan_version_id=_fact_owner[1], owner_kind=_fact_owner[2],
+                        owner_id=_fact_owner[3], condition_path=_condition_path)))
         latest_at = max((f.get("available_at", ""), f.get("verified_at", ""))
             for f in matching) if matching else None
         current = tuple(f for f in matching if (
