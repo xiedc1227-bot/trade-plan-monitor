@@ -233,6 +233,14 @@ def test_bound_evidence_retains_day_content_conflict_and_availability_guards(tmp
             payload = deepcopy(facts[0]["payload"])
             if damage == "trade-date":
                 payload["trade_date"] = "2026-09-18"
+                if "reviewed_fact_observation" in payload:
+                    # Engineering counterexample: align shape only. source_hash
+                    # still claims the newer source, not a verified old-day observation.
+                    observation = payload["reviewed_fact_observation"]
+                    old_day = datetime.fromisoformat(payload["trade_date"])
+                    bar_end = datetime.fromisoformat(observation["bar_end"])
+                    observation["bar_end"] = bar_end.replace(
+                        year=old_day.year, month=old_day.month, day=old_day.day).isoformat()
             elif damage == "content":
                 payload["content_hash"] = "0" * 64
                 payload["reviewed_fact_target"]["content_hash"] = "0" * 64
