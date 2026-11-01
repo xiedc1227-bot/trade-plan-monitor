@@ -372,3 +372,15 @@ T13-H04b7仅新增`DailyFactState.reviewed_fact_observation`，私有可选`Revi
 真实临时SQL测试覆盖私有准入／往返、同观察真假修订、CAS／回滚、旧字节、旧无观察拒绝、不完整／未来／不对应head证据、真实runtime head变化、同bar纠正及实际09:40观察的新身份。测试验证仅绑定所选完整周期，较早head历史改变不搬移观察。纯golden／规范化／形状测试与SQL准入测试分开说明。公开`DailyFactCommand`／实际HTTP拒绝`reviewed_fact_observation`和`reviewedFactObservation`两种拼写；canonical monitor v2与compatibility monitor v1生成配置检查须保持不变。
 
 本片仅为私有存储／准入，不改变consumer、求值器、公开DTO、UI、默认／冻结／重放权限、provider采集或策略；K40正式日线范围及K41控制隔离保持。特别是，新观察分钟事实仍不能生产依赖目标的分钟signal，直到独立consumer片证明准确观察匹配及陈旧源拒绝。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源阻断仍未完成；工程fixture不是正式语料真值。真实提取保持0/48；用户数据库访问／迁移、实时采集及真实发送保持0。
+
+## PMA-K43 — 已记录普通分钟观察重检
+
+T13-H04b8a仅扩展schema5 ORDINARY_RULE／COMPLETED_BAR_CLOSE／TRADE_DATE有目标FACT的已记录SIGNAL证据重检。在调用方既有writer事务内，`signal_fact_evidence_satisfied`自身以`session.no_autoflush`覆盖所有原始SIGNAL、FACT、原生owner和本地行情读取，包括没有外层保护的调用方。新鲜实际SQL SIGNAL的身份、证券、原属版本／审核、原生规则／side／lineage、确认kind／window／date／time及已记录证据，须与所给投影及原目标owner对应。准确有序原生根和递归条件路径仍须满足；同内容的活跃兄弟版本不能代替原属owner。本helper只重检归属，不授予当前动作权限。
+
+已存观察必须存在，且其`bar_end`须等于实际SIGNAL的已完成、非未来上海时区五分钟bar。仅从本地实际SQL读取原证券／周期的准确五条`MinuteBar`，以及同证券／结束点的单条`FiveMinuteBar`，其`formula_version="ta-v1"`。读取前拒绝相关new、dirty、deleted或移动主键的session owner，不flush或丢弃它们。新鲜列投影绕过陈旧的干净ORM identity-map值。按当前检查时间重新验证已存源类型及receipt可用性，再复用K42唯一`reviewed_fact_observation_source_hash`重新聚合并比较源内容。缺失本地行不能用最新head回退、自报digest、采集源或历史回填代替。
+
+缺观察／源、错误bar／证券／公式、畸形或已纠正源、不匹配聚合、未来receipt或原始SIGNAL元数据不对应，只将受影响人工叶投影为MISSING_INPUT。既有递归ALL／ANY投影保留独立数值证据的决定作用。相同内容以更晚且已可用receipt重读仍有效；后续evaluation head不搬移已记录观察。即使head和聚合不变，源纠正仍使其失效。旧无目标完整定义行为、正式日线范围、SIGNAL scope事实及独立原属历史风险归属保留既有边界，不从本片推断其新权限。
+
+真实临时SQL测试将三项行为RED断言（缺观察、错bar、同bar源纠正）与保留的fixture准备失败分开说明。正向已记录SIGNAL为使用实际准入FACT的类型化工程安排，不是新runtime producer验收或正式语料真值。fixture仅在准备阶段持久化本地行情，并使用原生已完成bar而非发出时钟；读取helper从不准备源。检查覆盖等值receipt、后续真实runtime head、缺失／畸形／异证券源、真实同内容兄弟版本、未来可用性、无外层no-autoflush的pending owner、陈旧ORM缓存、既有writer锁之后只读SELECT、业务／audit字节不变及数值ANY决定作用。既有默认／冻结／重放及历史风险回归仍须通过。
+
+本片不改变producer、runtime／lifecycle／API契约、策略、worker、表、迁移或采集路径。依赖目标的分钟signal生产仍是独立未放行gate。K42 hash字节／域及K40／K41边界保持不变。H04／T13、H01／H02正式双语补充、原始03/04、X09、X12及语料／资源阻断仍未完成。真实提取保持0/48；用户数据库访问／迁移、实时采集及真实发送保持0。

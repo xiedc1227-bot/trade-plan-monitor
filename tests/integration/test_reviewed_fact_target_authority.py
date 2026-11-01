@@ -60,14 +60,19 @@ def _proof(chain, facts, *, signal_id=None):
 
 
 def _save_signal(chain, roots, **changes):
+    inputs = minute_inputs(chain)
     with chain.plans._unit_of_work() as work:
+        # Engineering fixture setup, not read-time recovery: persist real local
+        # source values and use the native completed bar, not the issue clock.
+        work.history.upsert_minutes(inputs.minute_prefix)
+        work.history.upsert_five_minute(**inputs.five_minute_bars[-1].model_dump())
         details = work.plans.get_version_details(chain.version["id"])
         payload = {**signal_payload(), "signal_id": "arranged-exact-evidence",
             "lineage": chain.plan.plan_id, "plan_version_id": details.id,
             "review_id": details.review_id, "state": "CONFIRMED", "executable_qty": 0,
             "confirmed_trade_date": str(chain.now.date()), "execution_date": None,
             "confirmation_kind": "COMPLETED_BAR_CLOSE", "execution_window": "CURRENT_SESSION",
-            "confirmed_at": chain.now.isoformat(), "evidence": roots,
+            "confirmed_at": inputs.minute_target.isoformat(), "evidence": roots,
             "evidence_fingerprint": daily_hash("condition-signal-evidence-v1", roots), **changes}
         work.daily.save(payload["signal_id"], kind="SIGNAL", symbol=details.symbol,
             lineage=details.plan_id, expected_revision=0, payload=payload)

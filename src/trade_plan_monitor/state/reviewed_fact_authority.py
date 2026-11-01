@@ -1,6 +1,9 @@
 """Recheck fact attribution in recorded evidence without rewriting its history."""
 
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+
+from sqlalchemy import select
 
 from trade_plan_monitor.domain.daily_hash import canonical
 from trade_plan_monitor.domain.daily_plan_models import DailyTradePlan
@@ -11,7 +14,14 @@ from trade_plan_monitor.domain.reviewed_fact_targets import (
 )
 from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
-from trade_plan_monitor.state.daily_state_models import DailyFactState
+from trade_plan_monitor.market_data.aggregation import FiveMinuteBar, expected_five_minute_ends
+from trade_plan_monitor.market_data.models import MinuteBar
+from trade_plan_monitor.state.daily_state_models import (
+    DailyFactState,
+    reviewed_fact_observation_source_hash,
+)
+from trade_plan_monitor.state.models import FiveMinuteBar as FiveMinuteRow
+from trade_plan_monitor.state.models import MinuteBar as MinuteRow
 from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
 
 
@@ -57,8 +67,77 @@ def _target_leaf(plan, roots, root_index, positions, owner_kind, owner_id):
     return node, path
 
 
+def _stored_minute_signal(reads, plan, signal):
+    if plan.schema_version != 5 or signal.get("confirmation_kind") != "COMPLETED_BAR_CLOSE":
+        return None
+    row = reads.daily(signal["signal_id"])
+    if row is None or row["kind"] != "SIGNAL" or row["symbol"] != plan.symbol:
+        return None
+    value = row["payload"]
+    immutable = ("signal_id", "plan_version_id", "review_id", "rule_id", "side", "lineage",
+                 "confirmed_trade_date", "confirmation_kind", "execution_window", "confirmed_at",
+                 "evidence")
+    if row["id"] != value["signal_id"] or any(value.get(k) != signal.get(k) for k in immutable):
+        return None
+    return row
+
+
+def _minute_observation_matches(reads, details, original, rule, fact, signal, now):
+    observation = fact.reviewed_fact_observation
+    if observation is None or signal is None:
+        return False
+    value = signal["payload"]
+    if (value["plan_version_id"] != details.id or value["review_id"] != details.review_id
+            or value["rule_id"] != rule.rule_id or value["side"] != rule.side
+            or value["lineage"] != original.plan_id or signal["lineage"] != original.plan_id
+            or value["execution_window"] != rule.execution_window
+            or value["confirmation_kind"] != rule.confirmation.kind):
+        return False
+    try:
+        end = datetime.fromisoformat(value["confirmed_at"])
+        expected = expected_five_minute_ends(end)
+    except (TypeError, ValueError):
+        return False
+    if (end > now or end.date() != fact.trade_date or observation.bar_end != end
+            or value["confirmed_trade_date"] != str(end.date())):
+        return False
+    keys = tuple(point.isoformat() for point in expected)
+    for key in keys:
+        reads._reject_pending(MinuteRow, symbol=original.symbol, bar_end=key)
+    reads._reject_pending(FiveMinuteRow, symbol=original.symbol, bar_end=end.isoformat(),
+                          formula_version="ta-v1")
+    # Column reads bypass stale ORM identity-map values without flushing or
+    # overwriting pending owners. The latest head is deliberately not a source.
+    minutes = reads.session.execute(select(MinuteRow.__table__).where(
+        MinuteRow.symbol == original.symbol, MinuteRow.bar_end.in_(keys))
+        .order_by(MinuteRow.bar_end).limit(6)).mappings().all()
+    bars = reads.session.execute(select(FiveMinuteRow.__table__).where(
+        FiveMinuteRow.symbol == original.symbol, FiveMinuteRow.bar_end == end.isoformat(),
+        FiveMinuteRow.formula_version == "ta-v1").limit(2)).mappings().all()
+    if len(minutes) != 5 or len(bars) != 1:
+        return False
+
+    def typed(row, model):
+        fields = dict(row)
+        fields["bar_end"] = datetime.fromisoformat(fields["bar_end"])
+        fields["amount_yuan"] = Decimal(fields["amount_yuan"])
+        if "received_at" in fields:
+            fields["received_at"] = datetime.fromisoformat(fields["received_at"])
+        return model.model_validate(fields)
+
+    try:
+        sources = tuple(typed(row, MinuteBar) for row in minutes)
+        aggregate = typed(bars[0], FiveMinuteBar)
+        return (tuple(row.bar_end for row in sources) == expected
+                and all(row.received_at <= now for row in sources)
+                and reviewed_fact_observation_source_hash(sources, aggregate)
+                == observation.source_hash)
+    except (TypeError, ValueError, InvalidOperation):
+        return False
+
+
 def fact_evidence_satisfied(work, plan, roots, *, confirmed_trade_date, owner_kind,
-                            owner_id, signal_id=None, plan_version_id=None):
+                            owner_id, signal_id=None, plan_version_id=None, _minute_signal=None):
     """Project ambiguous FACT leaves to MISSING, preserving native ALL/ANY logic.
 
     Other evidence retains its recorded outcome and existing market-data guards.
@@ -100,6 +179,14 @@ def fact_evidence_satisfied(work, plan, roots, *, confirmed_trade_date, owner_ki
                         original, fact, selected[0], plan_version_id=details.id,
                         owner_kind=owner_kind, owner_id=owner_id, condition_path=selected[1]):
                     return False
+                if (owner_kind == "ORDINARY_RULE" and original.schema_version == 5
+                        and condition["validity_scope"] == "TRADE_DATE"):
+                    rule = next(rule for rule in original.ordinary_rules
+                                if rule.rule_id == owner_id)
+                    if (rule.confirmation.kind == "COMPLETED_BAR_CLOSE"
+                            and not _minute_observation_matches(
+                                reads, details, original, rule, fact, _minute_signal, now)):
+                        return False
             else:
                 # Preserve the old complete-definition diagnostic, including
                 # legitimate derived confirmation roots and folded equal refs.
@@ -134,7 +221,11 @@ def fact_evidence_satisfied(work, plan, roots, *, confirmed_trade_date, owner_ki
 
 
 def signal_fact_evidence_satisfied(work, plan, signal):
-    return fact_evidence_satisfied(work, plan, signal["evidence"],
-        confirmed_trade_date=signal["confirmed_trade_date"], owner_kind="ORDINARY_RULE",
-        owner_id=signal["rule_id"], signal_id=signal["signal_id"],
-        plan_version_id=signal["plan_version_id"])
+    # Runtime readers do not all provide an outer no-autoflush scope. Protect
+    # both the original signal read and every downstream owner/source read.
+    with work.daily.session.no_autoflush:
+        return fact_evidence_satisfied(work, plan, signal["evidence"],
+            confirmed_trade_date=signal["confirmed_trade_date"], owner_kind="ORDINARY_RULE",
+            owner_id=signal["rule_id"], signal_id=signal["signal_id"],
+            plan_version_id=signal["plan_version_id"],
+            _minute_signal=_stored_minute_signal(ActionOwnerReader(work), plan, signal))
