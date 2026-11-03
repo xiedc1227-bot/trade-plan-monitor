@@ -135,6 +135,108 @@ def waiting_rule(**changes):
                 expected_confirmation=ExpectedConfirmation(**values))
 
 
+def test_future_owned_wait_retains_nonempty_expected_leaves_and_prior_root():
+    value = waiting_rule().model_copy(update={
+        "root_outcome": "UNSATISFIED",
+        "leaves": (leaf("condition.conditions[0]", "UNKNOWN", "EXPECTED_CONFIRMATION"),
+                   leaf("condition.conditions[1]", "CONDITION_FALSE")),
+    })
+    result = assess(snapshot(rules=(value,)))
+    assert result.rules[0].state == "WAITING_OFFICIAL_CONFIRMATION"
+    assert result.summary == "WAITING_EXPECTED_CONFIRMATION"
+    assert result.rules[0].facts.leaves == value.leaves
+    assert result.rules[0].facts.root_outcome == "UNSATISFIED"
+
+
+@pytest.mark.parametrize("state,reason", [
+    ("UNKNOWN", "DEPENDENCY_UNVERIFIED"),
+    ("MISSING_INPUT", "MISSING_DATA"),
+    ("MISSING_INPUT", "HUMAN_EVIDENCE_REQUIRED"),
+    ("BLOCKED", "UNDEFINED_RULE"),
+])
+def test_future_wait_never_hides_another_incomplete_native_leaf(state, reason):
+    value = waiting_rule().model_copy(update={"leaves": (
+        leaf("condition.conditions[0]", "UNKNOWN", "EXPECTED_CONFIRMATION"),
+        leaf("condition.conditions[1]", state, reason),
+    )})
+    result = assess(snapshot(rules=(value,)))
+    assert result.rules[0].state == state
+    assert result.rules[0].reason == reason
+    assert len(result.rules[0].facts.leaves) == 2
+
+
+@pytest.mark.parametrize("change", ["past", "target", "calendar", "prior", "owner", "event-time"])
+def test_expected_unknown_leaf_needs_the_entire_future_owned_wait(change):
+    wait = waiting_rule().expected_confirmation
+    replacements = {}
+    if change == "past":
+        wait = wait.model_copy(update={"expected_at": NOW})
+    elif change == "target":
+        wait = wait.model_copy(update={"target": rule().evaluated_target})
+    elif change == "calendar":
+        wait = wait.model_copy(update={"calendar_reference": "different-calendar"})
+    elif change == "prior":
+        wait = wait.model_copy(update={"prior_inputs_complete": False})
+    elif change == "event-time":
+        wait = wait.model_copy(update={"expected_at": NOW + timedelta(minutes=30)})
+    else:
+        replacements["RUNTIME_OWNERSHIP"] = axis(
+            "RUNTIME_OWNERSHIP", "UNKNOWN", "AUTHORITY_UNAVAILABLE")
+    value = waiting_rule().model_copy(update={"expected_confirmation": wait, "leaves": (
+        leaf(state="UNKNOWN", reason="EXPECTED_CONFIRMATION"),)})
+    result = assess(snapshot(rules=(value,), replacements=replacements))
+    assert result.rules[0].state == "UNKNOWN"
+    assert result.summary == "UNKNOWN"
+
+
+@pytest.mark.parametrize("leaves", ["empty", "known", "expected"])
+def test_wrong_event_time_never_becomes_wait_even_without_unknown_leaves(leaves):
+    values = {"empty": (), "known": (leaf(),),
+              "expected": (leaf(state="UNKNOWN", reason="EXPECTED_CONFIRMATION"),)}
+    value = waiting_rule(expected_at=NOW + timedelta(minutes=30)).model_copy(
+        update={"leaves": values[leaves]})
+    result = assess(snapshot(rules=(value,)))
+    assert result.rules[0].state == "UNKNOWN"
+    assert result.summary == "UNKNOWN"
+
+
+@pytest.mark.parametrize("state,reason,expected", [
+    ("UNKNOWN", "DEPENDENCY_UNVERIFIED", "AWAITING_FIRST_EVALUATION"),
+    ("UNKNOWN", "AUTHORITY_UNAVAILABLE", "UNKNOWN"),
+    ("MISSING_INPUT", "HUMAN_EVIDENCE_REQUIRED", "MISSING_INPUT"),
+    ("MISSING_INPUT", "MISSING_DATA", "MISSING_INPUT"),
+    ("BLOCKED", "UNDEFINED_RULE", "BLOCKED"),
+])
+def test_first_evaluation_preserves_all_native_leaves_and_real_failure_priority(
+    state, reason, expected,
+):
+    value = rule(evaluated_at=None, evaluated_target=None, root_outcome=None, observation=None,
+                 leaves=(leaf("condition.conditions[0]", state, reason),))
+    result = assess(snapshot(rules=(value,)))
+    assert result.rules[0].state == expected
+    assert result.rules[0].facts.leaves == value.leaves
+
+
+@pytest.mark.parametrize("quote_present", [True, False])
+def test_rule_expiry_keeps_unrelated_buy_quote_out_of_sell(quote_present):
+    from trade_plan_monitor.decision.models import IntradayEvaluationTarget
+    from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
+    from trade_plan_monitor.web.plan_readiness_service import _rule_expiry
+
+    quote = DailyExecutionQuote(symbol="003043.SZ", price_fen=990,
+        quote_at=NOW - timedelta(minutes=4, seconds=55), available_at=NOW,
+        evaluated_at=NOW, tradable=True, special_state_verified=True, liquidity_available=True)
+    inputs = dict(context_expiry=NOW + timedelta(seconds=20),
+        target=IntradayEvaluationTarget(bucket_end=NOW.replace(minute=0)),
+        daily_event=None, daily_required=False, quote=quote if quote_present else None)
+    assert _rule_expiry(NOW, **inputs, quote_required=False) == NOW + timedelta(seconds=20)
+    assert _rule_expiry(NOW, **inputs, quote_required=True) == (
+        NOW + timedelta(seconds=5) if quote_present else None)
+    if quote_present:
+        assert _rule_expiry(NOW + timedelta(seconds=1), **inputs, quote_required=True) == (
+            NOW + timedelta(seconds=5))
+
+
 @pytest.mark.parametrize("root,complete", [
     ("SATISFIED", "CONDITION_TRUE"), ("UNSATISFIED", "CONDITION_FALSE"),
 ])

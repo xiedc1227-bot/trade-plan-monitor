@@ -963,3 +963,40 @@ def condition_status_target(session, *, plan, now, proof=None):
         None,
     )
     return None if official is None else OfficialCloseEvaluationTarget(trade_date=official)
+
+
+def condition_confirmation_inputs(session, *, plan, now):
+    """Bounded calendar events/elapsed partial inputs, never an acquisition schedule.
+
+    The caller must separately verify the actual owner and prior immutable input
+    proof. No grace period, future provider result or predicate is inferred here.
+    Returned fingerprints also fence the second read of these exact inputs.
+    """
+    from datetime import time
+
+    from trade_plan_monitor.market_data.aggregation import expected_five_minute_ends
+    from trade_plan_monitor.market_data.sessions import expected_minute_ends
+    from trade_plan_monitor.state.repositories import (
+        MarketHistoryRepository,
+        MarketReferenceRepository,
+    )
+
+    days = MarketReferenceRepository(session).list_trading_days(
+        plan.market, now.date(), now.date())
+    calendar_ref = _fingerprint("condition-calendar-v1", days)
+    if len(days) != 1 or not days[0].is_open or not expected_minute_ends(
+            now.date(), is_open=days[0].is_open):
+        return None, None, calendar_ref, False, ()
+    close = datetime.combine(now.date(), time(15), now.tzinfo)
+    daily = OfficialCloseEvaluationTarget(trade_date=now.date()) if now < close else None
+    end = next((end for end in expected_minute_ends(now.date(), is_open=True)
+                if end.minute % 5 == 0 and end > now), None)
+    minute = None if end is None else IntradayEvaluationTarget(bucket_end=end)
+    required = () if end is None else tuple(
+        point for point in expected_five_minute_ends(end) if point <= now)
+    rows = () if not required else MarketHistoryRepository(session).list_minutes(
+        plan.symbol, start=required[0], end=required[-1])
+    complete = (tuple(row.bar_end for row in rows) == required
+                and all(row.received_at <= now for row in rows))
+    binding = tuple(row.model_dump_json() for row in rows)
+    return daily, minute, calendar_ref, complete, binding

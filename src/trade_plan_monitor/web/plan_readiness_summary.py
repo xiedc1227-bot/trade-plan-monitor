@@ -1,5 +1,7 @@
 """Pure dependency and readiness projection over already owned observations."""
 
+from datetime import time
+
 from trade_plan_monitor.domain.p3_policy_models import OpenCostCap, P3TradePlan
 from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
@@ -110,9 +112,23 @@ def _rule(rule, snapshot, *, owner_current):
             inventory=rule.requirements.inventory, book=rule.requirements.simulation_book)
         if reason is not None:
             return result("UNKNOWN", reason)
+    event_matches = bool(wait is not None and (
+        wait.expected_at == wait.target.bucket_end if wait.target.kind == "INTRADAY" else
+        wait.expected_at.date() == wait.target.trade_date and wait.expected_at.time() == time(15)))
+    future_owned = bool(wait is not None and event_matches and owner_current
+        and wait.prior_inputs_complete
+        and wait.target == rule.expected_target and wait.expected_at > snapshot.computed_at
+        and wait.observation.calendar_reference == wait.calendar_reference)
     # Preserve all leaves and the original ALL/ANY root, without re-evaluation.
     for state in ("BLOCKED", "MISSING_INPUT", "UNKNOWN"):
-        incomplete = next((leaf for leaf in rule.leaves if leaf.state == state), None)
+        if (state == "UNKNOWN" and wait is None and rule.observation is None
+                and rule.evaluated_at is None and rule.root_outcome is None
+                and rule.leaves and all(leaf.state == "UNKNOWN"
+                    and leaf.reason == "DEPENDENCY_UNVERIFIED" for leaf in rule.leaves)):
+            return result("AWAITING_FIRST_EVALUATION", "AWAITING_FIRST_EVALUATION")
+        incomplete = next((leaf for leaf in rule.leaves if leaf.state == state
+            and not (state == "UNKNOWN" and leaf.reason == "EXPECTED_CONFIRMATION"
+                     and future_owned)), None)
         if incomplete is not None:
             return result(state, incomplete.reason)
     if wait is not None:
@@ -120,8 +136,7 @@ def _rule(rule, snapshot, *, owner_current):
             return result("MISSING_INPUT", "MISSING_DATA")
         if wait.target != rule.expected_target:
             return result("UNKNOWN", "TARGET_MISMATCH")
-        if (not owner_current or wait.expected_at <= snapshot.computed_at
-                or wait.observation.calendar_reference != wait.calendar_reference):
+        if not future_owned:
             return result("UNKNOWN", "AUTHORITY_UNAVAILABLE")
         return result("WAITING_OFFICIAL_CONFIRMATION", "EXPECTED_CONFIRMATION")
     if rule.evaluated_at is None:

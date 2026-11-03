@@ -1,11 +1,11 @@
 """Private read-only projection of existing native records and owner proofs.
 
-Ordinary-rule evaluations are not persisted completely by the current producer.
-Missing roots/leaves stay UNKNOWN. This module never runs a trading evaluator or
+New owned snapshots retain actual ordinary-rule roots and leaves. Legacy or
+unobserved evaluations stay UNKNOWN. This module never runs a trading evaluator or
 rescans historical cutover membership to manufacture a positive observation.
 """
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -14,11 +14,12 @@ from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvide
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_identity
-from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan, condition_leaves
 from trade_plan_monitor.runtime.status_authority import (
     ConditionInputStamp,
     RuntimeReadAuthority,
     condition_completion_matches,
+    condition_confirmation_inputs,
     condition_daily_admission_matches,
     condition_status_target,
 )
@@ -34,6 +35,7 @@ from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
 from trade_plan_monitor.web.plan_readiness_models import (
     AxisReadiness,
     ConditionReadiness,
+    ExpectedConfirmation,
     ReadinessContext,
     ReadinessObservation,
     ReadinessSnapshot,
@@ -46,6 +48,27 @@ from trade_plan_monitor.web.plan_readiness_summary import (
 from trade_plan_monitor.web.source_coverage_read import read_source_coverage
 
 MAX_READINESS_BYTES = 1024 * 1024
+
+
+def _bounded_until(now, required):
+    """Every applicable bound must be known; absence is never an infinite lease."""
+    if not required or any(value is None or value <= now for value in required):
+        return None
+    return min(required)
+
+
+def _rule_expiry(now, *, context_expiry, target, daily_event, daily_required,
+                 quote, quote_required):
+    limits = [context_expiry]
+    if target.kind == "INTRADAY":
+        limits.append(target.bucket_end + timedelta(seconds=90))
+    if daily_required:
+        limits.append(datetime.combine(now.date(), time(15), now.tzinfo)
+            if daily_event is not None else
+            datetime.combine(now.date() + timedelta(days=1), time(), now.tzinfo))
+    if quote_required:
+        limits.append(None if quote is None else quote.quote_at + timedelta(minutes=5))
+    return _bounded_until(now, limits)
 
 
 def _no_write_identity():
@@ -204,19 +227,23 @@ def _load(session, authority, version_id, now):
             plan_version_id=version_id, content_hash=details.content_hash,
             inventory=inventory or {"symbol": plan.symbol, "revision": 0}, now=now,
             require_daily_data=inventory is not None))
+    prior_current = current
     if current and native.minute_target is not None:
         current = native.minute_target <= now < native.minute_target + timedelta(seconds=90)
+    confirmation = (condition_confirmation_inputs(session, plan=plan, now=now)
+                    if bound_active else (None, None, None, False, ()))
     # These are existing values for the second read, not a new proof/hash domain.
     binding = (source.summary.model_dump_json(), details.payload_json, details.revision,
         details.status, details.review_id, details.review_revision, details.review_confirmed_at,
         active, activation, canonical(inventory), None if book is None else book.model_dump_json(),
         None if head is None else (head["id"], head["revision"], canonical(payload)),
-        current, target,
+        current, target, confirmation,
         tuple((identity, None if row is None else (row["revision"], canonical(row["payload"])))
               for identity, row in risks.items()))
     return SimpleNamespace(source=source, details=details, plan=plan, owners=owners,
         requirements=requirements, active=bound_active, inventory=inventory, book=book,
-        native=native, proof=proof, target=target, current=current, binding=binding,
+        native=native, proof=proof, target=target, current=current, prior_current=prior_current,
+        confirmation=confirmation, binding=binding,
         owner_current=owner_current,
         activation_revision=active.revision if bound_active else None, risks=risks)
 
@@ -242,6 +269,9 @@ def read_plan_readiness(session, authority, version_id, now):
             runtime_generation=None if authority is None else authority.generation,
             inventory_revision=None if value.inventory is None else value.inventory["revision"],
             book_revision=None if value.book is None else value.book.revision)
+        day_end = datetime.combine(now.date() + timedelta(days=1), time(), now.tzinfo)
+        owner_expiry = (authority.progress.progress_due_at if value.owner_current else None)
+        context_expiry = _bounded_until(now, (owner_expiry, day_end))
 
         def observation(*refs, availability="CURRENT", expires=None, as_of=None):
             return ReadinessObservation(context=context, availability=availability,
@@ -249,7 +279,8 @@ def read_plan_readiness(session, authority, version_id, now):
                 evidence_refs=tuple(refs))
 
         source_observation = observation("plan:" + version_id,
-            "coverage:" + (summary.coverage_bundle_hash or "unavailable"))
+            "coverage:" + (summary.coverage_bundle_hash or "unavailable"),
+            expires=context_expiry)
         upgrade = summary.reason == "SOURCE_COVERAGE_UPGRADE_REQUIRED"
         source_axis = AxisReadiness(axis="SOURCE_COVERAGE",
             state="UNKNOWN" if upgrade else "PASS" if summary.coverage_complete else "BLOCKED",
@@ -269,8 +300,10 @@ def read_plan_readiness(session, authority, version_id, now):
                 expires=authority.progress.progress_due_at if owner_ok else None))
         evaluated_at = None if value.native is None else value.native.evaluated_at
         availability = "CURRENT" if value.current else "CACHED" if value.native else "UNAVAILABLE"
-        expiry = (value.native.minute_target + timedelta(seconds=90)
-                  if value.current and value.native.minute_target else None)
+        expiry = (_bounded_until(now, (context_expiry,
+            value.native.minute_target + timedelta(seconds=90)))
+            if value.current and value.native.minute_target else context_expiry
+            if value.current else None)
         evaluation_ref = (None if value.proof is None
                           or not isinstance(value.proof.input_stamp, ConditionInputStamp) else
                           value.proof.input_stamp.immutable_record_id)
@@ -289,7 +322,8 @@ def read_plan_readiness(session, authority, version_id, now):
         axes.append(AxisReadiness(axis="INVENTORY_CAPITAL",
             state="NOT_APPLICABLE" if not applicable else "PASS" if inventory_ok else "UNKNOWN",
             reason=None if inventory_ok else "DEPENDENCY_UNVERIFIED",
-            observation=observation("inventory:" + str(context.inventory_revision))))
+            observation=observation("inventory:" + str(context.inventory_revision),
+                                    expires=context_expiry)))
         # Existing global IN_APP counts certify neither a rule's selected channel
         # nor its exact successful receipt/configuration. No test send is attempted.
         axes.append(AxisReadiness(axis="NOTIFICATION_DELIVERY", state="UNKNOWN",
@@ -307,12 +341,12 @@ def read_plan_readiness(session, authority, version_id, now):
                     != (rule_target.kind == "OFFICIAL_CLOSE")):
                 rule_target = None
             if (confirmation is not None and confirmation.kind == "OFFICIAL_DAILY_CLOSE"
-                    and value.current and value.native.daily_evidence is not None):
+                    and value.prior_current and value.native.daily_evidence is not None):
                 # The existing completion proof binds this exact consumed series,
                 # including a daily confirmation inside a mixed intraday cycle.
                 rule_target = OfficialCloseEvaluationTarget(
                     trade_date=value.native.daily_evidence.bars[-1].trade_date)
-            if kind == "ORDINARY_RULE" and value.current and review_ok:
+            if kind == "ORDINARY_RULE" and value.prior_current and review_ok:
                 matching = next((row for row in value.native.ordinary_evaluations or ()
                                  if row.rule_id == identity), None)
                 if matching is not None and matching.target == rule_target:
@@ -321,7 +355,7 @@ def read_plan_readiness(session, authority, version_id, now):
                     if evidence is not None:
                         root = evidence["outcome"]
                         actual_target, actual_time = matching.target, matching.evaluated_at
-            if kind == "ALERT_RULE" and value.current and review_ok:
+            if kind == "ALERT_RULE" and value.prior_current and review_ok:
                 matching = next((alert for alert in value.native.alerts
                                  if alert.rule_id == identity), None)
                 target_matches = bool(matching and rule_target is not None
@@ -347,12 +381,76 @@ def read_plan_readiness(session, authority, version_id, now):
                 # Keep actual target/time as historical observation metadata,
                 # but do not promote its old root/leaves into CURRENT truth.
                 evidence, root = None, None
-            if condition is None or value.native is None:
+            if condition is None:
                 leaves = ()
             else:
                 leaves = _leaves(condition, "condition",
                     evidence, reference=evaluation_ref)
             rule_observation = None if value.native is None else data_observation
+            expected_confirmation = None
+            if actual_target is not None and not daily_unverified:
+                rule_observation = observation(evaluation_ref,
+                    availability="CURRENT" if value.current else "CACHED",
+                    expires=_rule_expiry(now, context_expiry=context_expiry, target=actual_target,
+                        daily_event=value.confirmation[0], daily_required=
+                        _unverified_daily_dependency(value.plan, kind, rule, now),
+                        quote=value.native.quote, quote_required=requirements.quote),
+                    as_of=actual_time)
+                future = (value.confirmation[0] if confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+                          else value.confirmation[1]) if confirmation is not None else None
+                later = bool(future is not None and (
+                    future.trade_date > actual_target.trade_date
+                    if future.kind == actual_target.kind == "OFFICIAL_CLOSE" else
+                    not value.current and future.kind == actual_target.kind == "INTRADAY"
+                    and future.bucket_end > actual_target.bucket_end))
+                # An actual complete FALSE proves this rule reached evaluation.
+                # No occurrence/predecessor/admission early return becomes a wait.
+                simple_inputs = (not any((requirements.quote, requirements.simulation_book,
+                    requirements.cost_basis, requirements.fees, requirements.economics))
+                    and (not requirements.inventory or bool(value.inventory
+                        and value.inventory["known"]
+                        and (not requirements.sellability or all(value.inventory[name] is not None
+                            for name in ("sellable_core", "sellable_tactical"))))))
+                future_day = (None if future is None else future.trade_date
+                              if future.kind == "OFFICIAL_CLOSE" else future.bucket_end.date())
+                validity = getattr(rule, "validity", None)
+                date_valid = bool(validity is None or validity.mode != "DATE_RANGE"
+                    or future_day is not None
+                    and validity.start_date <= future_day <= validity.end_date)
+                simple_gate = (kind == "ALERT_RULE" or kind == "ORDINARY_RULE"
+                    and value.plan.schema_version == 5
+                    and rule.independent_signal.mode == "ONCE_PER_RULE")
+                no_occurrence = not any(signal.rule_id == identity
+                                        for signal in value.native.signals)
+                complete_leaves = bool(leaves and all(leaf.state in {
+                    "CONDITION_TRUE", "CONDITION_FALSE"} for leaf in leaves))
+                no_manual = not any(leaf.type == "REVIEWED_FACT"
+                                    for leaf in condition_leaves(condition))
+                if later and complete_leaves and not (
+                        simple_gate and date_valid and no_occurrence
+                        and no_manual and simple_inputs):
+                    rule_observation = observation(evaluation_ref, availability="CACHED",
+                                                   as_of=actual_time)
+                if (later and date_valid and simple_gate and root == "UNSATISFIED" and simple_inputs
+                        and complete_leaves and no_manual and no_occurrence):
+                    rule_target = future
+                    partial_complete = (future.kind == "OFFICIAL_CLOSE" or value.confirmation[3])
+                    event_at = (datetime.combine(future.trade_date, time(15), now.tzinfo)
+                                if future.kind == "OFFICIAL_CLOSE" else future.bucket_end)
+                    wait_observation = observation(evaluation_ref,
+                        "confirmation-inputs:" + value.confirmation[2], as_of=actual_time,
+                        expires=_bounded_until(now, (context_expiry, event_at)))
+                    rule_observation = wait_observation
+                    leaves = tuple(ConditionReadiness(condition_path=leaf.condition_path,
+                        state="UNKNOWN" if partial_complete else "MISSING_INPUT",
+                        reason="EXPECTED_CONFIRMATION" if partial_complete else "MISSING_DATA",
+                        evidence_refs=leaf.evidence_refs) for leaf in leaves)
+                    if partial_complete:
+                        expected_confirmation = ExpectedConfirmation(target=future,
+                            expected_at=event_at, calendar_reference=value.confirmation[2],
+                            prior_inputs_complete=True,
+                            observation=wait_observation.model_copy(update={
+                                "calendar_reference": value.confirmation[2]}))
             if daily_unverified:
                 rule_observation = observation(evaluation_ref,
                     "current-daily-and-factor-owner-unverified", availability="CACHED",
@@ -365,11 +463,24 @@ def read_plan_readiness(session, authority, version_id, now):
                 evaluated_target=actual_target,
                 evaluated_at=actual_time,
                 observation=rule_observation,
-                root_outcome=root, leaves=leaves))
-        if value.current and any(rule.root_outcome is None for rule in rules):
+                root_outcome=root, leaves=leaves, expected_confirmation=expected_confirmation))
+        if value.current and any(rule.root_outcome is None or rule.observation is None
+                or rule.observation.availability != "CURRENT" for rule in rules):
             axes = [AxisReadiness(axis="DATA_EVALUATION", state="UNKNOWN",
                     reason="DEPENDENCY_UNVERIFIED", observation=data_observation)
                     if axis.axis == "DATA_EVALUATION" else axis for axis in axes]
+        if any(rule.expected_confirmation is not None for rule in rules):
+            only_future = all(rule.expected_confirmation is not None or (
+                    value.current and rule.root_outcome is not None
+                    and rule.observation is not None and rule.observation.availability == "CURRENT")
+                    and all(leaf.state in {"CONDITION_TRUE", "CONDITION_FALSE"}
+                            for leaf in rule.leaves) for rule in rules)
+            axes = [AxisReadiness(axis="DATA_EVALUATION",
+                    state="WAIT" if only_future else "UNKNOWN",
+                    reason="EXPECTED_CONFIRMATION" if only_future else "DEPENDENCY_UNVERIFIED",
+                    observation=observation(
+                        evaluation_ref, expires=context_expiry, as_of=evaluated_at))
+                if axis.axis == "DATA_EVALUATION" else axis for axis in axes]
         alert = any(kind == "ALERT_RULE" for kind, *_ in value.owners)
         trade = any(kind != "ALERT_RULE" for kind, *_ in value.owners)
         result = summarize_readiness(ReadinessSnapshot(computed_at=now, context=context,
