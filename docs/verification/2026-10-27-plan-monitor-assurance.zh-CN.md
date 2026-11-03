@@ -561,3 +561,11 @@ B证据`t13-h04c2-evidence.json` SHA256 `3d95c458dddaf97e46ca8aa1305dd68ab328c8f
 T17a2（`9a7e430`）仅修改`decision/unified_lifecycle.py`及新增聚焦单测文件。可选私有观察口在既有求值后立即接收同一个不可变`UnifiedConditionEvidence`，原返回值、准入顺序及根求值次数不变。TRUE/FALSE/MISSING_INPUT及ALL/ANY缺失叶即使随后被准入拒绝也可保留观察。求值前返回不交付结果；producer持久化及就绪消费仍是独立后续工作。
 
 最终28项新检查以0.75s通过；8项准确邻近检查在此前重叠选择中通过，不是单次最终36项通过。初始13项失败含10项未交付观察的行为失败、3项新增测试安排不合法；后者改为合法单规则夹具，未改变生产准入。只移除观察交付的mutation使既有FALSE节点失败，生产SHA已恢复。Ruff/空白检查通过。生产修改前冻结独立1020字节旧返回，SHA256 `2e071382162ffb8b3e44038eff5de7209d94b06c5af957d81e168d9ada115c6c`；指挥独立匹配该预像及最终源码/测试两个hash。证据`.pytest_cache/pma/t17a2/evidence.json` SHA256 `625132a9bb0df4423bdc45557013565688c94317912fe88475a4c9f4552c6391`及`root-review.json`保留准确命令、失败和重叠，未重复未变测试。未修改producer、公开契约、数据库或provider。T17/C06仍未完成。冻结T17a1证据中的`evaluate_unified_signal`是定位命名笔误，实际链为`confirm_signal` → `evaluate_unified_condition`；原字节/hash保持不变。
+
+## PMA-R69 — 保存普通实际输出并保留来源和公开边界
+
+提交`c141ae8`恰好包含已派发的T17a3纵向五文件。新当前owner生成器评估捕获同一个原条件对象，保留准确rule/version/content/review/activation/target/time，并在既有不可变/head快照保存有界根/叶。就绪读取消费已认证输出而不求值。分钟完整FALSE、MISSING_INPUT及决定性ALL/ANY下的缺失叶继续区分。被跳过/求值前路径保留未知，不重新授予或调整机会数量。旧重复identity不回填或重hash，缺字段序列化时省略。独立2796字节旧状态预像SHA256 `ec8fc2f35c34db4efe2d9b2b4cc85c317e2d7bd2292dc65d3315ff41c6e5acc8`不变，21个旧测试函数/68条断言语义保留。
+
+最终17项以66.19s通过（新15及2个准确邻居）；此前48项以117.17s通过（相同15及a1的33项），两次重叠15，不得相加。原缺输出行为失败、测试回执/日历/来源文本安排及最初过强的混合daily预期保留于证据历史。实际离线采集owner重新接纳官方收盘由5500纠正为3500，旧完成证明仍通过，证实既有当前daily/factor来源缺口：快照身份不等于独立当前源验证。因此直接official/daily、daily reset及当前适用普通risk依赖仍为CACHED/UNKNOWN，独立分钟提醒不被全局降级。仅停用此guard可复现错误CURRENT FALSE，已恢复准确源码SHA。当前factor/provider/basis修复仍为必需，复用原采集owner，不新增表/平台/worker。
+
+五文件Ruff/空白检查通过。生成器`--check`明确保留exit1：两profile四产物受新内部结果字段影响，新增路径为0。下一配套须明确从既有公开daily/monitor序列化排除内部完整证据，并证明契约不变；未修改旧golden或digest。新就绪GET/生成及其余通知/金额/执行/风险/等待投影仍待完成。证据`.pytest_cache/pma/t17a3/evidence.json` SHA256 `fcf2d1ec3c68590ff7feec13799f0fcef70782e3dd6925bae615ff505c788c1b`保留完整历史、命令、hash、重叠及剩余工作。平台额度打断及明确继续后，仅完成未完证据交接，未重复已通过测试。指挥读取全部五文件改动，独立匹配冻结hash及旧预像（`t17a3/root-review.json`），仅提交这些路径。真实调用0/48，用户数据库/迁移0，真实采集/发送0，未push/部署，不宣称完整T17/C06/语料/最终验收。
