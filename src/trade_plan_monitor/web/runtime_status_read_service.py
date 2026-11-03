@@ -179,6 +179,70 @@ class RuntimeStatusReadService:
         except EvidenceUnavailable:
             raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
 
+    async def get_plan_readiness(self, *, version_id):
+        """Private adapter sharing the current read owner's physical-work lease."""
+        try:
+            return await self._read_owner.run(lambda: self._plan_readiness_owned(version_id))
+        except EvidenceUnavailable:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
+
+    async def _plan_readiness_owned(self, version_id):
+        from time import monotonic
+
+        from trade_plan_monitor.state.source_coverage_store import SourceCoverageIntegrityError
+        from trade_plan_monitor.web.plan_readiness_service import (
+            authority_identity,
+            changed_readiness,
+            read_plan_readiness,
+            read_readiness_binding,
+        )
+
+        def authority():
+            try:
+                value = self._authority()
+            except Exception:
+                return None
+            if (type(value) is not RuntimeReadAuthority
+                    or self._stopped_only and value.lifecycle != "STOPPED"):
+                return None
+            return value
+
+        def snapshot(owner, observed, *, binding_only=False):
+            session = self._sessions()
+            require_owned_recovery_session(session, (ActivePlan, PlanVersion, PlanActivationState))
+            with session, session.begin():
+                reader = read_readiness_binding if binding_only else read_plan_readiness
+                return reader(session, owner, version_id, observed)
+
+        def check_lease():
+            lease = current_read_lease.get()
+            if lease is not None and (lease.cancelled.is_set() or monotonic() >= lease.deadline):
+                raise EvidenceUnavailable("Readiness observer cancelled or expired")
+
+        try:
+            for _attempt in range(2):
+                check_lease()
+                before = authority()
+                observed = _observed_at(self._clock())
+                result, binding = await to_thread.run_sync(
+                    lambda before=before, observed=observed: snapshot(before, observed))
+                check_lease()
+                after_binding = await to_thread.run_sync(
+                    lambda before=before, observed=observed: snapshot(
+                        before, observed, binding_only=True))
+                after = authority()
+                check_lease()
+                if (binding == after_binding
+                        and authority_identity(before) == authority_identity(after)):
+                    return result
+            return None if result is None else changed_readiness(result)
+        except SourceCoverageIntegrityError:
+            raise
+        except ApiError:
+            raise
+        except Exception:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE) from None
+
     async def _read_traced(self):
         with read_trace("monitor.read"), observe_loop_lag():
             return await self._read_owned()
