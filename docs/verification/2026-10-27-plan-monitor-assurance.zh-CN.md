@@ -640,3 +640,10 @@ Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节�
 最终两个不重叠批次通过：资金15／110.59s、执行／旧预像7／32.46s，共22项（5个新增参数化case、16个增强既有case、1个未改预像邻居）。此前通过均重叠，不声称重跑完整48／70项或完整回归。原22个测试函数及68条断言全部保留。一次绕过guard的mutation在19.04s产生两条真实行为失败，随后精确恢复。最初daily夹具缺已审核monitoring配置，不算行为RED；其错误、格式失败及15个临时目录setup error均保留。合法补夹具并使用独立workspace临时目录后，才得到最终通过。Ruff、空白及两套generator检查通过，四份H04产物不变。
 
 证据 `.pytest_cache/pma/t17a8/evidence.json` SHA256 `caa503c9d35878ac6889e05d0c067e40e4d607f4e1ed014b16676854517cb6a5` 及 `root-review.json` 保留命令、hash、失败及重叠。调度完整审查diff／audit，独立匹配三份最终源码与四份产物hash，没有重跑已过测试。实际风险观察／原属、有界FACT读取、通知／配置／事件装配及公开／生成／UI仍为独立后续工作；T17/C06及语料／最终门禁未关闭。真实尝试0/48；用户数据库访问／迁移、默认服务、真实采集、真实发送、push及部署均为0。
+## PMA-R78 — 复用金额提前返回之前的真实市场S0证据
+
+提交 `c279a89` 严格包含T17a8b放行的两文件。reader仅增加16行：普通observer缺失时，复用同一不可变原生市场decision的首项confirmation。准确rule／content／官方日期／cutoff及完整原condition须匹配，既有叶、daily-admission、上下文及期限处理不变。不新增求值、重建policy ALL、改变signal／数量、增加查询，也不从金额／无信号推真假。S1／S2额外证明不能代替原S0。
+
+最终8项通过48.51s：3个既有case实际均是3条人工事实叶MISSING_INPUT；2个新增隔离量化case经原save／review／collector／index／pipeline产生完整TRUE／FALSE根；1个真实daily B降级；1个未改a6预像；1个未改普通observer FALSE邻居。此前6／2项均重叠。完整上次官方结果按原复杂未来确认guard保持CACHED／无期限、整体UNKNOWN，并非当前就绪正例。新合成源只是补充工程场景，未替换固定语料或原03/04。原15个测试函数／75条断言全部保留。仅移除fallback即可在9.18s产生真实结果丢失失败，随后精确恢复。Ruff、空白、两套profile及四份H04产物hash检查通过且产物不变。
+
+证据 `.pytest_cache/pma/t17a8b/evidence.json` SHA256 `0afa1a9a5961e11f478983ea0823e29b4e0647648a8236edb81fe2edf4b185ac` 及 `root-review.json` 记录最终冻结、最初3条RED、真实缺失／完整场景和mutation重叠。调度完整审查两文件，独立比对两源码／四产物hash，没有重跑已过测试。原生风险当前／原属观察、复杂确认、有界FACT消费者、通知及公开／生成／UI仍未完成。T17/C06及语料／最终门禁保持开放；真实尝试0/48，用户数据库访问／迁移、默认服务、真实采集、真实发送、push／部署均为0。
