@@ -38,7 +38,7 @@ def inventory_requirements(plan: UnifiedTradePlan, *, owner_kind, owner_id):
     capital = buy and isinstance(plan, P3TradePlan)
     return InventoryRequirements(
         inventory=True, sellability=not buy, quote=capital or has_economics,
-        simulation_book=capital,
+        simulation_book=capital and isinstance(plan.position.limit.capital_policy, OpenCostCap),
         cost_basis=capital and isinstance(plan.position.limit.capital_policy, OpenCostCap),
         fees=has_economics or (
             capital and isinstance(plan.position.limit.capital_policy, OpenCostCap)),

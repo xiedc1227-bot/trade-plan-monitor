@@ -237,6 +237,21 @@ def test_rule_expiry_keeps_unrelated_buy_quote_out_of_sell(quote_present):
             NOW + timedelta(seconds=5))
 
 
+@pytest.mark.parametrize("mode,book", [("MARKET_VALUE_CAP", False), ("OPEN_COST_CAP", True)])
+def test_capital_dependencies_follow_the_actual_native_policy(mode, book):
+    from tests.unit.test_p3_policy_contract import p3_payload
+
+    from trade_plan_monitor.domain.p3_policy_models import P3TradePlan
+    from trade_plan_monitor.web.plan_readiness_summary import inventory_requirements
+
+    plan = P3TradePlan.model_validate(p3_payload(mode))
+    buy = next(rule for rule in plan.ordinary_rules if rule.side == "BUY")
+    requires = inventory_requirements(plan, owner_kind="ORDINARY_RULE", owner_id=buy.rule_id)
+    assert requires.quote and requires.inventory
+    assert requires.simulation_book is book
+    assert requires.cost_basis is book
+
+
 @pytest.mark.parametrize("root,complete", [
     ("SATISFIED", "CONDITION_TRUE"), ("UNSATISFIED", "CONDITION_FALSE"),
 ])
@@ -430,7 +445,8 @@ def test_money_dependencies_come_from_exact_native_policy(mode, cost, fees):
     plan = P3TradePlan.model_validate(p3_payload(mode))
     buy = next(rule for rule in plan.ordinary_rules if rule.side == "BUY")
     required = inventory_requirements(plan, owner_kind="ORDINARY_RULE", owner_id=buy.rule_id)
-    assert required.inventory and required.quote and required.simulation_book
+    assert required.inventory and required.quote
+    assert required.simulation_book is cost
     assert required.cost_basis is cost
     assert required.fees is fees
     assert required.economics is False
