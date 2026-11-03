@@ -597,3 +597,11 @@ Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节�
 最终两个互斥并行批次通过：unit30/1.14s（21新增及9个准确旧例），integration23/118.78s（20新增及3个准确旧例）。共53个不同最终用例，不是单次53例；中间运行有重叠。真实临时库/pipeline/progress验证首次启用、FALSE、日历/owner/来源校正、已完成输入缺失、人工叶、实际once/predecessor早退、reset/过期规则排除、事件/午休/收盘/跨日边界及读取零写入/采集/续期。原23个unit函数/63条断言语义保留。原夹具方法/可选输出假设及Ruff失败单独分类保留。行为RED检出非空等待叶优先级、首次评估叶被隐藏、过期规则等待，以及空叶/完整叶绕过错误事件时间检查。有效日门禁mutation按预期失败，源码SHA精确恢复。Ruff、空白及两套既有公开生成器通过；H04四产物及旧authority定义保持原字节/语义。
 
 证据`.pytest_cache/pma/t17a5/evidence.json` SHA256 `a866dc5b9cc1ce869aa0366119d61d8b6a25440f792d06b96d675cb48d09b4fc`记录命令、原失败、重叠及最终冻结。指挥审查全部改动，要求修复首评叶/日期/事件时间问题，独立匹配五文件hash及四产物（`root-review.json`），未重复通过的测试。金额/执行、原始风险、通知、复杂未来准入及公开/生成/UI后续分别实施；T17/C06、原始03/04/C05及最终门禁继续未完成。真实调用0/48；用户数据库访问/迁移、真实采集/发送、默认服务及push/部署均0。未新增策略、来源绑定存储、求值器或worker。
+
+## PMA-R73 — 原属运行状态保留已注册当前计划族
+
+准备T17a6时，真实P3 pipeline暴露既有精确类型分类缺口：`runtime_status_snapshot`及旧运行读取将已支持的`UnifiedTradePlan`子类视为legacy。已批准U-MLP3/PMA-S04当前Schema5–9 codec、producer及capture原本已使用该原生计划族。提交`22e9e21`仅将这两处门禁改为`isinstance`，另加一个独立定向测试文件。未扩大codec、liveness、来源/capture保护、数量、审批或策略。
+
+最终8项通过45.57s（5个具体计划族及3个准确旧邻居），中间运行有重叠。实际codec/pipeline/progress及dashboard/list/detail验证分类。Schema5保留实际proof身份及generation/configuration/revocation/缺proof拒绝；独立原生seed的legacy/explicit计划及原有缺liveness保护继续拒绝。Schema6–9已有真实完整股票daily接纳，但缺官方指数历史；`linked_index_current`准确不发布completion，公开视图保持CACHED/只读。本片验收仅为分类，不代表完整P3证明/资金正例。初始legacy夹具审核不一致及过强指数完整性预期，均在证据分类保留。仅恢复旧reader门禁后，实际P3用例于8.96s失败，源码SHA精确恢复。Ruff、空白及两套生成器通过，H04四产物不变。
+
+证据`.pytest_cache/pma/t17a6p/evidence.json` SHA256 `66185f09e8ba8ac0e155fbddc210953687a6028765006dcb11cca114b5cea154`保留命令、失败及源码冻结。根审查全部改动，独立匹配三文件hash、四产物及两份暂停T17a6测试hash（`root-review.json`），仅提交三份前置文件。资金RED两文件仍未提交且不变；下一步补齐真实隔离指数输入，恢复原五文件金额/执行子片。未重复通过测试，未访问/迁移用户数据库，未真实调用provider/采集/发送、启动默认服务、push或部署，真实提取0/48。T17/C06及原始03/04/C05/最终门禁继续未完成。
