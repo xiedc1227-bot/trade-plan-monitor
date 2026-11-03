@@ -3,6 +3,7 @@
 import asyncio
 import json
 from copy import deepcopy
+from dataclasses import replace
 from datetime import timedelta
 from hashlib import sha256
 
@@ -10,6 +11,7 @@ import pytest
 from tests.integration.test_runtime_status_projection import _current_status
 
 from trade_plan_monitor.domain.daily_hash import canonical
+from trade_plan_monitor.runtime import status_authority
 from trade_plan_monitor.runtime.status_authority import condition_completion_matches
 from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.daily_state_models import DailyEvaluationState
@@ -264,20 +266,30 @@ def mixed_current(tmp_path, monkeypatch, request):
 
     case = _current_status(tmp_path, monkeypatch, plan=plan, configure_sdk=configure)
     case.daily_source = sources[0]
+    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+
+    def owner():
+        token, configuration, plans = case.pipeline.runtime_status_snapshot()
+        return replace(case.current[0], token=token, configuration_revision=configuration,
+                       plans=plans)
+
+    case.owner = owner
+    case.reader = RuntimeStatusReadService(case.sessions, owner,
+                                         clock=case.pipeline._clock.now)
     try:
         yield case
     finally:
         case.close()
 
 
-def test_mixed_targets_keep_daily_unknown_without_downgrading_pure_minute(mixed_current):
+def test_mixed_targets_match_actual_daily_owner_without_downgrading_pure_minute(mixed_current):
     case = mixed_current
     assert case.current[0].plans[0].completion.target.kind == "INTRADAY"
     result = readiness(case)
     daily = next(r for r in result.rules
                  if r.facts.owner_id == case.plan.ordinary_rules[0].rule_id)
     minute = next(r for r in result.rules if r.facts.owner_kind == "ALERT_RULE")
-    assert daily.state == "UNKNOWN"
+    assert daily.state == "CONDITION_FALSE"
     assert minute.state == "CONDITION_FALSE"
     assert daily.facts.expected_target == daily.facts.evaluated_target
     assert daily.facts.evaluated_target.kind == "OFFICIAL_CLOSE"
@@ -287,7 +299,7 @@ def test_mixed_targets_keep_daily_unknown_without_downgrading_pure_minute(mixed_
     assert row["evidence"]["operands"] == ["5500", "4000"]
 
 
-def test_real_daily_correction_is_not_covered_by_the_existing_proof(mixed_current):
+def test_real_daily_correction_invalidates_only_daily_until_new_evaluation(mixed_current):
     case = mixed_current
     inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
     day = inputs.series.bars[-1].trade_date
@@ -303,23 +315,36 @@ def test_real_daily_correction_is_not_covered_by_the_existing_proof(mixed_curren
     with case.sessions() as session, session.begin():
         assert condition_completion_matches(session, proof=proof,
             snapshot=case.result.snapshot, now=case.now)
-    # This proves an existing gap, not that corrected daily/factor sources are
-    # covered. The consumer must remain UNKNOWN until a separate owner repair.
+    assert not status_authority.condition_daily_admission_matches(
+        proof=proof, snapshot=case.result.snapshot,
+        admission=case.owner().plans[0].daily_admission, now=case.now)
+    assert asyncio.run(case.reader.get_dashboard()).symbols[0].availability == "CACHED"
     daily = next(r for r in readiness(case).rules
                  if r.facts.owner_id == case.plan.ordinary_rules[0].rule_id)
     assert daily.state == "UNKNOWN"
+    assert next(r for r in readiness(case).rules if r.facts.owner_kind == "ALERT_RULE").state == (
+        "CONDITION_FALSE")
+    fresh = case.pipeline.daily_evaluations.run_inputs(
+        plan=case.plan, inputs=corrected, expected_activation_revision=1)
+    assert not fresh.duplicate
+    latest = case.owner().plans[0]
+    assert status_authority.condition_daily_admission_matches(
+        proof=latest.completion, snapshot=fresh.snapshot,
+        admission=latest.daily_admission, now=case.now)
+    assert next(r for r in readiness(case).rules
+                if r.facts.owner_id == daily.facts.owner_id).state == "CONDITION_TRUE"
 
 
 @pytest.mark.parametrize("mixed_current", ["daily-reset", "active-risk"], indirect=True)
-def test_indirect_daily_dependencies_stay_unknown_without_polluting_minute_alerts(mixed_current):
+def test_indirect_daily_dependencies_match_owner_without_polluting_minute_alerts(mixed_current):
     case = mixed_current
     row = case.result.snapshot["ordinary_evaluations"][0]
     assert row["evidence"]["condition"]["type"] == "MINUTE_CLOSE_BELOW"
     assert row["evidence"]["outcome"] == "UNSATISFIED"
     assessed = readiness(case)
     ordinary = next(rule for rule in assessed.rules if rule.facts.owner_id == row["rule_id"])
-    assert ordinary.state == "UNKNOWN"
-    assert ordinary.facts.observation.availability == "CACHED"
+    assert ordinary.state == "CONDITION_FALSE"
+    assert ordinary.facts.observation.availability == "CURRENT"
     assert next(rule for rule in assessed.rules if rule.facts.owner_kind == "ALERT_RULE").state == (
         "CONDITION_FALSE")
 
@@ -366,3 +391,404 @@ def test_readiness_consumes_actual_output_without_calling_any_condition_evaluato
     monkeypatch.setattr(daily_service, "confirm_signal", forbidden)
     assert next(rule for rule in readiness(current).rules
                 if rule.facts.owner_id == "sell-100").state == "CONDITION_FALSE"
+
+
+def prepare_daily(case, *, official=True):
+    inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+    return asyncio.run(case.pipeline.prepare_daily_inputs(case.plan, case.pipeline._clock.now(),
+        inputs.series.bars[-1].trade_date if official else None, inputs.minute_prefix))
+
+
+def assert_daily_unknown(case):
+    assessed = readiness(case)
+    assert assessed.rules[0].state == "UNKNOWN"
+    assert next(r for r in assessed.rules if r.facts.owner_kind == "ALERT_RULE").state == (
+        "CONDITION_FALSE")
+    assert next(a for a in assessed.axes if a.axis == "DATA_EVALUATION").state == "UNKNOWN"
+    assert asyncio.run(case.reader.get_dashboard()).symbols[0].availability == "CACHED"
+
+
+@pytest.mark.parametrize("change", ["historical", "uniform"])
+def test_actual_factor_revisions_invalidate_the_consumed_series(mixed_current, monkeypatch, change):
+    case = mixed_current
+    original = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol].series
+    base = case.sdk.adj_factor
+
+    def corrected(**kwargs):
+        frame = base(**kwargs)
+        mask = (frame["trade_date"] == original.bars[0].trade_date.strftime("%Y%m%d")
+                if change == "historical" else frame.index == frame.index)
+        frame.loc[mask, "adj_factor"] = "2"
+        return frame
+
+    monkeypatch.setattr(case.sdk, "adj_factor", corrected)
+    latest = prepare_daily(case).series
+    assert latest is not None and latest.bars[-1].close == original.bars[-1].close
+    assert (latest.basis_id == original.basis_id) == (change == "historical")
+    assert latest.bars[-1].bar_id != original.bars[-1].bar_id
+    assert_daily_unknown(case)
+
+
+@pytest.mark.parametrize("failure", ["raw", "factor", "missing-factor", "permission"])
+def test_actual_complete_acquisition_failure_revokes_prior_admission(
+    mixed_current, monkeypatch, failure,
+):
+    from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+
+    case = mixed_current
+    assert case.owner().plans[0].daily_admission is not None
+    base = case.sdk.adj_factor
+
+    def failed(**kwargs):
+        if failure == "missing-factor":
+            return base(**kwargs).iloc[:0]
+        if failure == "permission":
+            raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "daily")
+        raise RuntimeError("offline source unavailable")
+
+    monkeypatch.setattr(case.sdk, "daily" if failure in {"raw", "permission"}
+                        else "adj_factor", failed)
+    assert prepare_daily(case).series is None
+    assert case.owner().plans[0].daily_admission is None
+    assert_daily_unknown(case)
+
+
+@pytest.mark.parametrize("path", ["head", "anchor-cache", "duplicate"])
+def test_historical_reuse_never_renews_actual_daily_admission(mixed_current, path):
+    case = mixed_current
+    admitted = case.owner().plans[0].daily_admission
+    assert admitted is not None
+    case.pipeline._clock.current += timedelta(seconds=1)
+    if path == "duplicate":
+        inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+        result = case.pipeline.daily_evaluations.run_inputs(
+            plan=case.plan, inputs=inputs, expected_activation_revision=1)
+        assert result.duplicate
+    else:
+        assert prepare_daily(case, official=False).series is not None
+        if path == "anchor-cache":
+            calls = len(case.daily_source.calls)
+            case.pipeline._clock.current += timedelta(seconds=1)
+            assert prepare_daily(case, official=False).series is not None
+            assert len(case.daily_source.calls) == calls
+    assert case.owner().plans[0].daily_admission == admitted
+
+
+@pytest.mark.parametrize("boundary", ["seconds", "official-close", "midnight"])
+def test_daily_admission_uses_the_actual_sdk_completion_context(
+    mixed_current, monkeypatch, boundary,
+):
+    case = mixed_current
+    assert case.owner().plans[0].daily_admission is not None
+    if boundary != "seconds":
+        case.pipeline._clock.current = case.now.replace(
+            hour=14 if boundary == "official-close" else 23, minute=59, second=59)
+    started = case.pipeline._clock.now()
+    original = case.sdk.adj_factor
+
+    def completes_later(**kwargs):
+        frame = original(**kwargs)
+        case.pipeline._clock.current += timedelta(seconds=3)
+        return frame
+
+    monkeypatch.setattr(case.sdk, "adj_factor", completes_later)
+    inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+    prepared = asyncio.run(case.pipeline.prepare_daily_inputs(case.plan, started,
+        started.date() if boundary == "midnight" else inputs.series.bars[-1].trade_date,
+        inputs.minute_prefix))
+    admission = case.owner().plans[0].daily_admission
+    if boundary == "seconds":
+        assert admission is not None
+        assert admission.accepted_at == case.pipeline._clock.now() > started
+        assert prepared.series.cutoff == admission.accepted_at
+    else:
+        assert admission is None
+        assert readiness(case).rules[0].state == "UNKNOWN"
+        # This deliberately advanced fixture has no new healthy progress/health frame.
+        from trade_plan_monitor.web.errors import ApiError
+
+        with pytest.raises(ApiError, match="SERVICE_UNAVAILABLE"):
+            asyncio.run(case.reader.get_dashboard())
+
+
+def test_real_legacy_capture_keeps_daily_unknown_without_losing_minute(
+    mixed_current, monkeypatch,
+):
+    case = mixed_current
+    original = status_authority.capture_completion_proof
+
+    def legacy_capture(*args, **kwargs):
+        kwargs.pop("daily_admission", None)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(status_authority, "capture_completion_proof", legacy_capture)
+    case.pipeline._clock.current += timedelta(seconds=1)
+    inputs = prepare_daily(case)
+    result = case.pipeline.daily_evaluations.run_inputs(
+        plan=case.plan, inputs=inputs, expected_activation_revision=1)
+    assert not result.duplicate
+    owner = case.owner().plans[0]
+    assert owner.daily_admission is not None
+    assert owner.completion.input_stamp.daily_admission is None
+    assert_daily_unknown(case)
+
+
+def test_daily_owner_get_does_not_acquire_or_write(mixed_current, monkeypatch):
+    from sqlalchemy import event
+
+    case = mixed_current
+    admitted = case.owner().plans[0].daily_admission
+    calls = len(case.daily_source.calls)
+
+    def forbidden(**kwargs):
+        pytest.fail("a GET cannot acquire or renew daily data")
+
+    monkeypatch.setattr(case.sdk, "daily", forbidden)
+    monkeypatch.setattr(case.sdk, "adj_factor", forbidden)
+
+    def read_only(connection, cursor, statement, parameters, context, executemany):
+        assert statement.lstrip().split()[0].upper() not in {
+            "INSERT", "UPDATE", "DELETE", "REPLACE"}
+
+    event.listen(case.engine, "before_cursor_execute", read_only)
+    try:
+        assert readiness(case).rules[0].state == "CONDITION_FALSE"
+        assert asyncio.run(case.reader.get_dashboard()).symbols[0].availability == "CURRENT"
+        assert case.owner().plans[0].daily_admission == admitted
+        assert len(case.daily_source.calls) == calls
+    finally:
+        event.remove(case.engine, "before_cursor_execute", read_only)
+
+
+def test_same_label_client_replacement_is_detected_during_the_read(mixed_current):
+    from sqlalchemy import event
+    from tests.integration.test_s3_missed_close_kill_restart import CurrentCloseSDK
+
+    case = mixed_current
+    replacement = CurrentCloseSDK(case.pipeline._clock, (case.plan.symbol,))
+    switched = []
+
+    def change_source(connection, cursor, statement, parameters, context, executemany):
+        if not switched and "source_coverage" in statement.lower():
+            switched.append(True)
+            case.pipeline.provider._client._client = replacement
+
+    event.listen(case.engine, "before_cursor_execute", change_source)
+    try:
+        assert_daily_unknown(case)
+        assert case.owner().plans[0].daily_admission is None
+        assert switched
+    finally:
+        event.remove(case.engine, "before_cursor_execute", change_source)
+
+
+@pytest.mark.parametrize("late", ["success", "failure", "anchor-failure"])
+def test_actual_late_sdk_request_cannot_replace_or_revoke_new_admission(
+    mixed_current, monkeypatch, late,
+):
+    from threading import Event
+
+    from tests.integration.test_s3_missed_close_kill_restart import CurrentCloseSDK
+
+    from trade_plan_monitor.runtime.request_control import TushareRequestController
+
+    case = mixed_current
+    entered, release = Event(), Event()
+    physical = []
+    original_daily, original_factor = case.sdk.daily, case.sdk.adj_factor
+    replacement = CurrentCloseSDK(case.pipeline._clock, (case.plan.symbol,),
+        official_closes={case.now.date() - timedelta(days=3): "35.00"})
+
+    def blocked(**kwargs):
+        if late == "anchor-failure" and physical:
+            return original_factor(**kwargs)
+        physical.append("old-sdk")
+        entered.set()
+        assert release.wait(8), "bounded real SDK gate"
+        if late != "success":
+            raise RuntimeError("obsolete source failed")
+        return original_daily(**kwargs)
+
+    monkeypatch.setattr(case.sdk, "adj_factor" if late == "anchor-failure" else "daily", blocked)
+    # Isolated engineering race profile; installed production stays at 1/1.
+    controller = TushareRequestController(clock=case.pipeline._clock,
+        executor_workers=2, max_concurrency=2, min_interval=timedelta(0),
+        jitter=timedelta(0), timeout_seconds=6, in_cycle_retries=0)
+    installed = case.pipeline._controller
+    case.pipeline._controller = controller
+    inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+
+    async def run():
+        task = asyncio.create_task(case.pipeline.prepare_daily_inputs(
+            case.plan, case.now, None if late == "anchor-failure"
+                else inputs.series.bars[-1].trade_date, inputs.minute_prefix))
+        try:
+            assert await asyncio.to_thread(entered.wait, 3)
+            if late == "anchor-failure":
+                case.daily_source.official_closes[inputs.series.bars[-1].trade_date] = "35.00"
+            else:
+                case.pipeline.provider._client._client = replacement
+            fresh = await asyncio.wait_for(case.pipeline.prepare_daily_inputs(
+                case.plan, case.now, inputs.series.bars[-1].trade_date, inputs.minute_prefix), 4)
+            assert fresh.series.bars[-1].close == 3500
+            admitted = case.owner().plans[0].daily_admission
+            assert admitted is not None
+            release.set()
+            await asyncio.wait_for(task, 4)
+            assert case.owner().plans[0].daily_admission == admitted
+            assert physical == ["old-sdk"]
+            if late != "anchor-failure":
+                assert [name for name, _ in replacement.calls].count("daily") == 1
+                assert [name for name, _ in replacement.calls].count("adj_factor") >= 1
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+            await controller.aclose()
+
+    try:
+        asyncio.run(run())
+    finally:
+        case.pipeline._controller = installed
+
+
+def test_same_context_keeps_installed_controller_keys_and_physical_policy(
+    mixed_current, monkeypatch,
+):
+    case = mixed_current
+    original = type(case.pipeline._controller).execute
+    keys = []
+
+    async def observed(controller, operation, call, **kwargs):
+        if controller is case.pipeline._controller:
+            keys.append(kwargs["work_key"])
+        return await original(controller, operation, call, **kwargs)
+
+    monkeypatch.setattr(type(case.pipeline._controller), "execute", observed)
+    before = len(case.daily_source.calls)
+    prepare_daily(case)
+    prepare_daily(case)
+    # execute has no shared-result flight: two complete requests are four SDK calls.
+    assert len(case.daily_source.calls) - before == 4
+    assert len(keys) == 4 and keys[:2] == keys[2:]
+
+
+def test_cancelled_actual_acquisition_revokes_admission(mixed_current, monkeypatch):
+    from threading import Event
+
+    case = mixed_current
+    entered, release = Event(), Event()
+    original = case.sdk.daily
+
+    def blocked(**kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(**kwargs)
+
+    monkeypatch.setattr(case.sdk, "daily", blocked)
+    inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+
+    async def run():
+        task = asyncio.create_task(case.pipeline.prepare_daily_inputs(
+            case.plan, case.now, inputs.series.bars[-1].trade_date, inputs.minute_prefix))
+        try:
+            assert await asyncio.to_thread(entered.wait, 3)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert case.owner().plans[0].daily_admission is None
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(run())
+
+
+def test_owner_completion_time_does_not_retime_the_market_cutoff(mixed_current, monkeypatch):
+    from trade_plan_monitor.runtime import production
+
+    case = mixed_current
+    case.pipeline._clock.current += timedelta(seconds=1)
+    original = production.admit_qfq_daily
+
+    def completes_later(**kwargs):
+        actual = original(**kwargs)
+        case.pipeline._clock.current += timedelta(seconds=2)
+        return actual
+
+    monkeypatch.setattr(production, "admit_qfq_daily", completes_later)
+    prepared = prepare_daily(case)
+    admitted = case.owner().plans[0].daily_admission
+    assert admitted.accepted_at == case.pipeline._clock.now()
+    assert prepared.evaluated_at == prepared.series.cutoff < admitted.accepted_at
+    fresh = case.pipeline.daily_evaluations.run_inputs(
+        plan=case.plan, inputs=prepared, expected_activation_revision=1)
+    assert not fresh.duplicate
+    owner = case.owner().plans[0]
+    assert owner.completion.input_stamp.daily_admission == admitted
+    assert status_authority.condition_daily_admission_matches(proof=owner.completion,
+        snapshot=fresh.snapshot, admission=admitted, now=case.pipeline._clock.now())
+
+
+@pytest.mark.parametrize("cache_result", ["success", "failure"])
+def test_cache_during_full_acquisition_cannot_hide_a_new_admission(
+    mixed_current, monkeypatch, cache_result,
+):
+    from threading import Event
+
+    from trade_plan_monitor.runtime.request_control import TushareRequestController
+
+    case = mixed_current
+    if cache_result == "success":
+        prepare_daily(case, official=False)  # Real anchor cache, not a synthetic receipt.
+    entered, release = Event(), Event()
+    original_daily, original_factor = case.sdk.daily, case.sdk.adj_factor
+    inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+    case.daily_source.official_closes[inputs.series.bars[-1].trade_date] = "35.00"
+
+    def full(**kwargs):
+        entered.set()
+        assert release.wait(7)
+        return original_daily(**kwargs)
+
+    def factor(**kwargs):
+        if cache_result == "failure" and not release.is_set():
+            raise RuntimeError("anchor observation failed")
+        return original_factor(**kwargs)
+
+    monkeypatch.setattr(case.sdk, "daily", full)
+    monkeypatch.setattr(case.sdk, "adj_factor", factor)
+    controller = TushareRequestController(clock=case.pipeline._clock,
+        executor_workers=2, max_concurrency=2, min_interval=timedelta(0),
+        jitter=timedelta(0), timeout_seconds=6, in_cycle_retries=0)
+    installed = case.pipeline._controller
+    case.pipeline._controller = controller
+
+    async def run():
+        task = asyncio.create_task(case.pipeline.prepare_daily_inputs(
+            case.plan, case.now, inputs.series.bars[-1].trade_date, inputs.minute_prefix))
+        try:
+            assert await asyncio.to_thread(entered.wait, 3)
+            cached = await case.pipeline.prepare_daily_inputs(
+                case.plan, case.now, None, inputs.minute_prefix)
+            assert (cached.series is not None) == (cache_result == "success")
+            release.set()
+            latest = await asyncio.wait_for(task, 4)
+            assert latest.series.bars[-1].close == 3500
+            admission = case.owner().plans[0].daily_admission
+            if cache_result == "failure":
+                assert admission is None  # A later real revocation fences old A.
+            else:
+                assert admission.series_fingerprint == status_authority._fingerprint(
+                    "condition-daily-source-v1", latest.series)
+                assessed = await case.reader.get_plan_readiness(
+                    version_id=case.result.snapshot["plan_version_id"])
+                assert assessed.rules[0].state == "UNKNOWN"
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+            await controller.aclose()
+
+    try:
+        asyncio.run(run())
+    finally:
+        case.pipeline._controller = installed

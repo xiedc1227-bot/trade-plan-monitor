@@ -19,6 +19,7 @@ from trade_plan_monitor.runtime.status_authority import (
     ConditionInputStamp,
     RuntimeReadAuthority,
     condition_completion_matches,
+    condition_daily_admission_matches,
     condition_status_target,
 )
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
@@ -85,7 +86,7 @@ def _owners(plan):
 
 
 def _unverified_daily_dependency(plan, kind, rule, now):
-    """Existing completion stamps do not revalidate current daily/factor owners.
+    """These native dependencies require independent current daily admission checks.
 
     Match the native acquisition/admission dependencies, not the presence of
     another rule's daily data. Alerts are independent of ordinary risk admission.
@@ -337,7 +338,11 @@ def read_plan_readiness(session, authority, version_id, now):
                         actual_target, actual_time = rule_target, evaluated_at
             condition = getattr(rule, "condition", None)
             daily_unverified = (actual_target is not None
-                                and _unverified_daily_dependency(value.plan, kind, rule, now))
+                and _unverified_daily_dependency(value.plan, kind, rule, now)
+                and not condition_daily_admission_matches(proof=value.proof,
+                    snapshot=value.native.model_dump(mode="json"), now=now,
+                    admission=next((item.daily_admission for item in authority.plans
+                        if item.symbol == value.plan.symbol), None)))
             if daily_unverified:
                 # Keep actual target/time as historical observation metadata,
                 # but do not promote its old root/leaves into CURRENT truth.

@@ -574,6 +574,9 @@ class ProductionMonitorPipeline:
         self._runtime_status_sessions = recovery_session_factory
         self._runtime_status_proofs = {}
         self._runtime_status_revision = 0
+        # Only the current in-memory slot per symbol; no retained source history.
+        self._daily_source_slots = {}
+        self._daily_source_serial = 0
         self._active_recovery_attempts: set[Event] = set()
         self._stock_recovery_schedule = RecoverySchedule()
         self._stock_recovery_demands: dict[str, _StockRecoveryDemand] = {}
@@ -823,11 +826,87 @@ class ProductionMonitorPipeline:
                 proof = capture_completion_proof(session, plan=plan, result=result,
                     runtime_generation=self._runtime_generation,
                     configuration_revision=self._recovery_configuration_revision,
-                    now=self._clock.now(), consumed_inputs=consumed_inputs)
+                    now=self._clock.now(), consumed_inputs=consumed_inputs,
+                    daily_admission=self._daily_source_current(plan, self._clock.now()))
         if (epoch != self._recovery_authority_epoch() or not self._decision_commit_current()):
             proof = None
         self._runtime_status_proofs[plan.symbol] = proof
         self._runtime_status_revision += 1
+
+    def _daily_source_scope(self, plan, now, target):
+        """Exact existing owner/source identities, independent of provider labels."""
+        if (not self._runtime_status_enabled or not isinstance(plan, UnifiedTradePlan)
+                or not self._decision_commit_current()
+                or self._recovery_authority_revoked.is_set()
+                or self._controller.is_permission_blocked(TushareOperation.DAILY_BARS)):
+            return None
+        with self._work() as work:
+            identity = self._recovery_identity(work, plan.symbol, now)
+            days = work.references.list_trading_days(
+                plan.market, now.date() - timedelta(days=366), now.date())
+        latest = next((day.cal_date for day in reversed(days)
+            if day.is_open and datetime.combine(day.cal_date, time(15), now.tzinfo) <= now), None)
+        if (identity is None or identity[3] != plan_sha256(plan)
+                or latest is None or target != latest):
+            return None
+        client = self.provider._client
+        return (identity, self._runtime_generation, self._recovery_configuration_revision,
+            self._recovery_authority_epoch(), id(self._recovery_authority_revoked),
+            id(self.provider), id(client), id(getattr(client, "_client", client)),
+            # Retain the objects so their identity integers cannot be recycled.
+            self.provider, client, getattr(client, "_client", client),
+            self.provider._source_time_label, now.date(), target)
+
+    def _daily_source_begin(self, plan, now, target, *, complete):
+        if not self._runtime_status_enabled:
+            return None
+        scope = self._daily_source_scope(plan, now, target)
+        old = self._daily_source_slots.get(plan.symbol)
+        if scope is None:
+            if old is not None:
+                self._daily_source_slots.pop(plan.symbol)
+                self._runtime_status_revision += 1
+            return None
+        if old is None or old[0] != scope:
+            self._daily_source_serial += 1
+            old = (scope, self._daily_source_serial, 0, None)
+            self._runtime_status_revision += 1
+        # Successful historical reuse cannot supersede an in-flight full admission.
+        slot = (scope, old[1], old[2] + int(complete), old[3])
+        self._daily_source_slots[plan.symbol] = slot
+        return slot[:3]
+
+    def _daily_source_finish(self, plan, captured, series, now):
+        """A late obsolete success or failure cannot replace a newer slot."""
+        if captured is None:
+            return
+        slot = self._daily_source_slots.get(plan.symbol)
+        if slot is None or slot[:3] != captured:
+            return
+        from trade_plan_monitor.decision.models import OfficialCloseEvaluationTarget
+        from trade_plan_monitor.runtime.status_authority import DailySourceAdmission, _fingerprint
+
+        current = self._daily_source_scope(plan, now, captured[0][-1]) == captured[0]
+        admission = None
+        if (current and series is not None and series.adjustment_as_of == now.date()
+                and series.cutoff <= now and series.bars[-1].trade_date == captured[0][-1]):
+            admission = DailySourceAdmission(_fingerprint("condition-daily-source-v1", series),
+                now, OfficialCloseEvaluationTarget(trade_date=series.bars[-1].trade_date))
+        if admission is None or slot[3] != admission:
+            # A real revocation also fences earlier full work, even if already unknown.
+            self._daily_source_slots[plan.symbol] = (
+                *slot[:2], slot[2] + int(admission is None), admission)
+            self._runtime_status_revision += 1
+
+    def _daily_source_current(self, plan, now):
+        slot = self._daily_source_slots.get(plan.symbol)
+        if slot is None:
+            return None
+        if self._daily_source_scope(plan, now, slot[0][-1]) != slot[0]:
+            self._daily_source_slots.pop(plan.symbol)
+            self._runtime_status_revision += 1
+            return None
+        return slot[3]
 
     @contextmanager
     def _status_progress_unit(self, *, timeout_seconds: float):
@@ -888,6 +967,9 @@ class ProductionMonitorPipeline:
             rows = session.scalars(select(ActivePlan).order_by(ActivePlan.symbol).limit(11)).all()
             if len(rows) > 10:
                 raise RuntimeError("Too many active plans for runtime status")
+            for symbol in self._daily_source_slots.keys() - {row.symbol for row in rows}:
+                self._daily_source_slots.pop(symbol)
+                self._runtime_status_revision += 1
             for row in rows:
                 version = session.get(PlanVersion, row.plan_version_id)
                 if version is None:
@@ -924,6 +1006,7 @@ class ProductionMonitorPipeline:
                     plan_version_id=row.plan_version_id, plan_hash=version.plan_hash,
                     activation_revision=row.revision, plan_family="CONDITION_PLAN",
                     target=target, completion=proof if valid else None,
+                    daily_admission=self._daily_source_current(plan, now),
                     blocked=reason != "AWAITING_FIRST_EVALUATION", pending_reason=reason))
                 continue
                 explicit = type(plan) is ExplicitTradePlan
@@ -4456,6 +4539,12 @@ class ProductionMonitorPipeline:
             and series.bars[-1].trade_date == official_trade_date
             and series.cutoff <= observed
         )
+        captured = (self._daily_source_begin(plan, observed, official_trade_date,
+                        complete=official_trade_date is not None and not stored_current)
+                    if needs_daily else None)
+        provider = self.provider
+        # Preserve same-context admission/backoff keys; isolate different source contexts.
+        source_key = "" if captured is None else f":owner-{captured[1]}"
         if needs_daily and official_trade_date is not None and not stored_current:
             try:
                 historical_sessions = tuple(
@@ -4494,19 +4583,19 @@ class ProductionMonitorPipeline:
                 raw = tuple(
                     await self._controller.execute(
                         TushareOperation.DAILY_BARS,
-                        lambda: self.provider.historical_daily_bars(
+                        lambda: provider.historical_daily_bars(
                             plan.symbol, start, official_trade_date
                         ),
-                        work_key=f"daily-qfq-bars:{plan.symbol}:{official_trade_date}",
+                        work_key=f"daily-qfq-bars:{plan.symbol}:{official_trade_date}{source_key}",
                         priority=RequestPriority.MARKET_DEADLINE,
                     )
                 )[-_DAILY_HISTORY_LIMIT:]
                 factors, receipt = await self._controller.execute(
                     TushareOperation.DAILY_BARS,
-                    lambda: self.provider.daily_adjustment_factors(
+                    lambda: provider.daily_adjustment_factors(
                         plan.symbol, start, observed.date()
                     ),
-                    work_key=f"daily-qfq-factors:{plan.symbol}:{official_trade_date}",
+                    work_key=f"daily-qfq-factors:{plan.symbol}:{official_trade_date}{source_key}",
                     priority=RequestPriority.MARKET_DEADLINE,
                 )
                 observed = max(observed, receipt, self._clock.now())
@@ -4526,12 +4615,18 @@ class ProductionMonitorPipeline:
                     ),
                     cutoff=observed,
                 )
+                self._daily_source_finish(plan, captured, series, self._clock.now())
+            except asyncio.CancelledError:
+                self._daily_source_finish(plan, captured, None, self._clock.now())
+                raise
             except DailyAdmissionError as error:
                 blockers.append(error.code)
                 series = None
+                self._daily_source_finish(plan, captured, None, self._clock.now())
             except Exception:
                 blockers.append("DAILY_QFQ_PROVIDER_UNAVAILABLE")
                 series = None
+                self._daily_source_finish(plan, captured, None, self._clock.now())
         elif series is not None:
             key = (plan.symbol, observed.date())
             try:
@@ -4539,10 +4634,10 @@ class ProductionMonitorPipeline:
                 if cached is None:
                     cached = await self._controller.execute(
                         TushareOperation.DAILY_BARS,
-                        lambda: self.provider.daily_adjustment_factors(
+                        lambda: provider.daily_adjustment_factors(
                             plan.symbol, series.adjustment_as_of, observed.date()
                         ),
-                        work_key=f"daily-quote-basis:{plan.symbol}:{observed.date()}",
+                        work_key=f"daily-quote-basis:{plan.symbol}:{observed.date()}{source_key}",
                         priority=RequestPriority.MARKET_DEADLINE,
                     )
                     self._daily_basis_cache[key] = cached
@@ -4553,9 +4648,14 @@ class ProductionMonitorPipeline:
                 ) != factors.get(series.adjustment_as_of):
                     series = None
                     blockers.append("CURRENT_QUOTE_BASIS_UNVERIFIED")
+                    self._daily_source_finish(plan, captured, None, self._clock.now())
+            except asyncio.CancelledError:
+                self._daily_source_finish(plan, captured, None, self._clock.now())
+                raise
             except Exception:
                 series = None
                 blockers.append("CURRENT_QUOTE_BASIS_UNVERIFIED")
+                self._daily_source_finish(plan, captured, None, self._clock.now())
         elif needs_daily:
             blockers.append("PRICE_BASIS_UNVERIFIED")
         quote = None

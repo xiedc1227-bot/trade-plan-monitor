@@ -40,6 +40,15 @@ class LegacyInputStamp:
 
 
 @dataclass(frozen=True, slots=True)
+class DailySourceAdmission:
+    """The owning production adapter's latest complete QFQ admission."""
+
+    series_fingerprint: str
+    accepted_at: datetime
+    official_target: OfficialCloseEvaluationTarget
+
+
+@dataclass(frozen=True, slots=True)
 class ConditionInputStamp:
     immutable_record_id: str
     calendar_start: date
@@ -48,6 +57,7 @@ class ConditionInputStamp:
     minute_fingerprint: str
     five_minute_fingerprint: str
     state_fingerprint: str
+    daily_admission: DailySourceAdmission | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +91,7 @@ class PlanReadAuthority:
     recovery_pending: bool = False
     blocked: bool = False
     next_retry_at: datetime | None = None
+    daily_admission: DailySourceAdmission | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -449,7 +460,8 @@ def _legacy_input_stamp(session, plan, result, now, history, references, positio
 
 
 def capture_completion_proof(
-    session, *, plan, result, runtime_generation, configuration_revision, now, consumed_inputs=None
+    session, *, plan, result, runtime_generation, configuration_revision, now, consumed_inputs=None,
+    daily_admission=None,
 ):
     """Owner-only factory after a real COMMITTED unit; never called by a GET."""
     from trade_plan_monitor.domain.plan_hash import plan_sha256
@@ -468,6 +480,7 @@ def capture_completion_proof(
             configuration_revision=configuration_revision,
             now=now,
             consumed_inputs=consumed_inputs,
+            daily_admission=daily_admission,
         )
     active = session.get(ActivePlan, plan.symbol)
     state = session.get(PlanActivationState, plan.symbol)
@@ -712,7 +725,7 @@ def _condition_sources(session, snapshot, start, end):
 
 
 def condition_completion_matches(session, *, proof, snapshot, now):
-    """Revalidate the committed current source proof in a read-only SQLite snapshot."""
+    """Validate the immutable result and existing non-daily source/state proof."""
     import json
 
     from trade_plan_monitor.state.daily_models import DailyRecord
@@ -753,8 +766,36 @@ def condition_completion_matches(session, *, proof, snapshot, now):
     )
 
 
+def condition_daily_admission_matches(*, proof, snapshot, admission, now):
+    """Compare real consumed data with the latest frozen owner admission, without I/O."""
+    if (proof is None or not isinstance(proof.input_stamp, ConditionInputStamp)
+            or type(admission) is not DailySourceAdmission
+            or proof.input_stamp.daily_admission != admission):
+        return False
+    series = snapshot.get("daily_evidence")
+    if not series or not series.get("bars"):
+        return False
+    return bool(
+        admission.series_fingerprint == _fingerprint("condition-daily-source-v1", series)
+        and str(admission.official_target.trade_date) == series["bars"][-1]["trade_date"]
+        and series["adjustment_as_of"] == str(now.date())
+        and datetime.fromisoformat(series["cutoff"]) <= admission.accepted_at <= now
+        and datetime.fromisoformat(series["cutoff"])
+        <= datetime.fromisoformat(snapshot["evaluated_at"]) <= now)
+
+
+def condition_plan_completion_matches(session, *, plan, proof, snapshot, admission, now):
+    """The old plan-level monitor requires every native source dependency."""
+    from trade_plan_monitor.runtime.production import _unified_daily_required
+
+    return bool(condition_completion_matches(session, proof=proof, snapshot=snapshot, now=now)
+        and (not _unified_daily_required(plan) or condition_daily_admission_matches(
+            proof=proof, snapshot=snapshot, admission=admission, now=now)))
+
+
 def capture_condition_completion_proof(
-    session, *, plan, result, runtime_generation, configuration_revision, now, consumed_inputs
+    session, *, plan, result, runtime_generation, configuration_revision, now, consumed_inputs,
+    daily_admission=None,
 ):
     """Only a new committed current evaluation with exact sources installs proof."""
     import json
@@ -843,6 +884,15 @@ def capture_condition_completion_proof(
         _fingerprint("condition-minute-v1", minutes),
         _fingerprint("condition-five-v1", bars),
         _fingerprint("condition-state-v1", _condition_state(session, plan.symbol)),
+        daily_admission if (type(daily_admission) is DailySourceAdmission
+            and consumed_inputs.series is not None
+            and daily_admission.series_fingerprint
+            == _fingerprint("condition-daily-source-v1", consumed_inputs.series)
+            and daily_admission.official_target.trade_date
+            == consumed_inputs.series.bars[-1].trade_date
+            and consumed_inputs.series.cutoff <= daily_admission.accepted_at <= now
+            and consumed_inputs.series.cutoff
+            <= datetime.fromisoformat(snapshot["evaluated_at"]) <= now) else None,
     )
     return PlanCompletionProof(
         runtime_generation,

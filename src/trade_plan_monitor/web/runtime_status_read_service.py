@@ -899,7 +899,7 @@ def _condition_entry(session, authority, evidence, plan, detail, pointer, observ
         )
     )
     from trade_plan_monitor.runtime.status_authority import (
-        condition_completion_matches,
+        condition_plan_completion_matches,
         condition_status_target,
     )
 
@@ -919,7 +919,8 @@ def _condition_entry(session, authority, evidence, plan, detail, pointer, observ
         and desired is not None
         and authority.lifecycle == "RUNNING"
         and authority.block_reason is None
-        and condition_completion_matches(session, proof=proof, snapshot=snapshot, now=observed)
+        and condition_plan_completion_matches(session, plan=plan, proof=proof, snapshot=snapshot,
+            admission=evidence.daily_admission, now=observed)
     )
     alert_only = bool(plan.alert_rules) and not plan.ordinary_rules and not plan.risk_branches
     inventory = (
