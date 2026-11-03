@@ -40,6 +40,7 @@ from trade_plan_monitor.web.plan_readiness_models import (
     ExpectedConfirmation,
     ReadinessContext,
     ReadinessExecutionState,
+    ReadinessMoneyFacts,
     ReadinessObservation,
     ReadinessSnapshot,
     RuleReadinessFacts,
@@ -153,7 +154,13 @@ def _current_quote(value, now):
         return None
 
 
-def _money_inputs_ready(value, requirements, rule, now):
+def _rule_sources_current(value, kind, rule, now):
+    return bool(value.current and value.source.summary.current_review_bound and (
+        not _unverified_daily_dependency(value.plan, kind, rule, now)
+        or value.daily_current))
+
+
+def _money_inputs_ready(value, requirements, rule, now, *, kind):
     """Input availability is independent of a native monetary predicate's verdict."""
     if not requirements.required:
         return True
@@ -163,7 +170,8 @@ def _money_inputs_ready(value, requirements, rule, now):
     if requirements.sellability and any(inventory[name] is None
             for name in ("sellable_core", "sellable_tactical")):
         return False
-    if requirements.quote and _current_quote(value, now) is None:
+    if requirements.quote and (not _rule_sources_current(value, kind, rule, now)
+                              or _current_quote(value, now) is None):
         return False
     if requirements.cost_basis and value.capital_inputs["retained_basis_fen"] is None:
         return False
@@ -186,7 +194,75 @@ def _money_inputs_ready(value, requirements, rule, now):
                for schedule in schedules)
 
 
-def _execution(value, kind, identity, side, rule, now, *, inputs_ready):
+def _money_results(value, kind, rule, requirements, execution, now):
+    """Copy only native results whose exact phase inputs still match this read."""
+    policy = getattr(rule, "pretrade_policy", None)
+    if (kind != "ORDINARY_RULE" or rule.side != "BUY" or policy is None
+            or not _rule_sources_current(value, kind, rule, now)
+            or _current_quote(value, now) is None):
+        return None, None
+    native = value.native
+    if execution.signal_id is not None:
+        signal = next((item for item in native.signals
+                       if item.signal_id == execution.signal_id), None)
+        if signal is None or signal.revision != execution.signal_revision:
+            return None, None
+        frozen, capital, economics = (signal.pretrade, signal.capital_execution,
+                                      signal.pretrade_execution)
+        phase, day, quantity, price = (
+            "EXECUTION", now.date(), signal.planned_qty, native.quote.price_fen)
+        original_day = signal.confirmed_trade_date
+    else:
+        decisions = tuple(item for item in native.market_linkage or ()
+                          if item.rule_id == rule.rule_id)
+        prepared = tuple(item for item in native.pretrade or () if item.rule_id == rule.rule_id)
+        if len(decisions) != 1 or len(prepared) != 1 or native.daily_evidence is None:
+            return None, None
+        decision, frozen = decisions[0], prepared[0]
+        day = native.daily_evidence.bars[-1].trade_date
+        if (decision.content_hash != value.details.content_hash or decision.decision_session != day
+                or decision.evidence_cutoff != native.evaluated_at
+                or frozen.cutoff != native.evaluated_at):
+            return None, None
+        phase, original_day = "CONFIRMATION", day
+        quantity, price = (decision.calculation.candidate_quantity,
+                           native.daily_evidence.bars[-1].close)
+        capital, economics = getattr(decision.calculation, "capital", None), frozen.economics
+    if (frozen is None or frozen.rule_id != rule.rule_id
+            or frozen.content_hash != value.details.content_hash or frozen.policy != policy
+            or frozen.decision_session != original_day or frozen.cutoff > native.evaluated_at):
+        return None, None
+    schedules = ([value.plan.position.limit.capital_policy.buy_cost_schedule]
+                 if requirements.cost_basis else [])
+    if requirements.economics:
+        schedules.append(policy.economics.fee_schedule)
+    if any(value.plan.symbol not in schedule.symbols
+           or not schedule.effective_from <= day <= schedule.effective_through
+           or not schedule.effective_from <= now.date() <= schedule.effective_through
+           for schedule in schedules):
+        return None, None
+    if capital is not None and (
+            capital.phase != phase or capital.quantity != (quantity or None)
+            or capital.price_fen != price
+            or capital.mode != value.plan.position.limit.capital_policy.mode
+            or capital.policy_hash != daily_hash("capital-policy-v1",
+                value.plan.position.limit.model_dump(mode="json"))
+            or capital.total_qty != (
+                value.inventory["total_qty"] if value.inventory["known"] else None)
+            or capital.inventory_revision != value.inventory["revision"]
+            or requirements.cost_basis and (
+                capital.book_revision != value.capital_inputs["book_revision"]
+                or capital.outcome in {"PASS", "FAIL"}
+                and capital.before_fen != value.capital_inputs["retained_basis_fen"])):
+        capital = None
+    if economics is not None and (
+            (economics.outcome == "NONE") != (policy.economics.mode == "NONE")
+            or economics.quantity is not None and economics.quantity != quantity):
+        economics = None
+    return capital, economics
+
+
+def _execution(value, kind, identity, side, rule, now, *, inputs_ready, observe, context_expiry):
     """Copy one exact original occurrence; old executable quantity grants nothing."""
     unknown = ReadinessExecutionState()
     if (kind != "ORDINARY_RULE" or not value.active or not value.owner_current
@@ -226,7 +302,7 @@ def _execution(value, kind, identity, side, rule, now, *, inputs_ready):
         eligible, reason = False, signal.state
     elif window == "CLOSED":
         eligible, reason = False, "OUTSIDE_EXECUTION_SESSION"
-    elif (window == "OPEN" and value.current and inputs_ready
+    elif (window == "OPEN" and _rule_sources_current(value, kind, rule, now) and inputs_ready
             and _current_quote(value, now) is not None and signal == original):
         complete = True
         if side == "BUY" and value.plan.schema_version == 9:
@@ -252,9 +328,19 @@ def _execution(value, kind, identity, side, rule, now, *, inputs_ready):
             eligible = bool(signal.state == "READY" and not signal.blockers
                             and signal.executable_qty == signal.planned_qty)
             reason = None if eligible else next(iter(signal.blockers), "DEPENDENCY_UNVERIFIED")
+    current = bool(_rule_sources_current(value, kind, rule, now) and signal == original
+                   and eligible is not None)
+    expiry = (_rule_expiry(now, context_expiry=context_expiry, target=value.target,
+        daily_event=value.confirmation[0],
+        daily_required=_unverified_daily_dependency(value.plan, kind, rule, now),
+        quote=value.native.quote, quote_required=True) if current else None)
     return ReadinessExecutionState(approved_quantity=signal.planned_qty, consumed=consumed,
         execution_window=signal.execution_window, window_state=window,
-        eligible=eligible, reason=reason)
+        eligible=eligible, reason=reason,
+        signal_id=signal.signal_id, signal_revision=row["revision"],
+        execution_date=signal.execution_date, blockers=signal.blockers,
+        observation=observe(row["id"], availability="CURRENT" if current else "CACHED",
+                            as_of=datetime.fromisoformat(row["updated_at"]), expires=expiry))
 
 
 def _leaves(condition, path, evidence=None, *, reason="DEPENDENCY_UNVERIFIED", reference=None):
@@ -368,6 +454,9 @@ def _load(session, authority, version_id, now):
             inventory=inventory or {"symbol": plan.symbol, "revision": 0}, now=now,
             require_daily_data=inventory is not None))
     prior_current = current
+    daily_current = bool(native and native.daily_evidence is not None
+        and condition_daily_admission_matches(proof=proof, snapshot=payload, now=now,
+            admission=None if evidence is None else evidence.daily_admission))
     if current and native.minute_target is not None:
         current = native.minute_target <= now < native.minute_target + timedelta(seconds=90)
     confirmation = (condition_confirmation_inputs(session, plan=plan, now=now)
@@ -389,6 +478,7 @@ def _load(session, authority, version_id, now):
         native=native, proof=proof, target=target, current=current, prior_current=prior_current,
         confirmation=confirmation, binding=binding,
         owner_current=owner_current,
+        daily_current=daily_current,
         activation_revision=active.revision if bound_active else None, risks=risks)
 
 
@@ -459,8 +549,8 @@ def read_plan_readiness(session, authority, version_id, now):
             reason=None if value.current else "AUTHORITY_UNAVAILABLE",
             observation=data_observation)]
         applicable = any(req.required for req in value.requirements)
-        money_ready = tuple(_money_inputs_ready(value, req, rule, now)
-            for (*_, rule), req in zip(value.owners, value.requirements, strict=True))
+        money_ready = tuple(_money_inputs_ready(value, req, rule, now, kind=kind)
+            for (kind, _, _, rule), req in zip(value.owners, value.requirements, strict=True))
         inventory_ok = all(money_ready)
         money_expiry = _bounded_until(now, (context_expiry, *(
             (None if value.native is None or value.native.quote is None else
@@ -520,10 +610,7 @@ def read_plan_readiness(session, authority, version_id, now):
             condition = getattr(rule, "condition", None)
             daily_unverified = (actual_target is not None
                 and _unverified_daily_dependency(value.plan, kind, rule, now)
-                and not condition_daily_admission_matches(proof=value.proof,
-                    snapshot=value.native.model_dump(mode="json"), now=now,
-                    admission=next((item.daily_admission for item in authority.plans
-                        if item.symbol == value.plan.symbol), None)))
+                and not value.daily_current)
             if daily_unverified:
                 # Keep actual target/time as historical observation metadata,
                 # but do not promote its old root/leaves into CURRENT truth.
@@ -605,14 +692,33 @@ def read_plan_readiness(session, authority, version_id, now):
             if kind == "RISK_BRANCH" and value.risks.get(identity) is not None:
                 row = value.risks[identity]
                 rule_observation = observation("risk:" + row["id"], availability="CACHED")
+            execution = _execution(value, kind, identity, side, rule, now,
+                inputs_ready=inputs_ready, observe=observation, context_expiry=context_expiry)
+            capital, economics = _money_results(value, kind, rule, requirements, execution, now)
+            money_current = not requirements.quote or (
+                _rule_sources_current(value, kind, rule, now)
+                and _current_quote(value, now) is not None)
+            input_observation = (None if not requirements.required else observation(
+                "inventory:" + str(context.inventory_revision),
+                availability=("CURRENT" if money_current else
+                              "CACHED" if value.native else "UNAVAILABLE"),
+                as_of=evaluated_at if requirements.quote else None,
+                expires=_bounded_until(now, (context_expiry, *(
+                    (None if value.native is None or value.native.quote is None else
+                     value.native.quote.quote_at + timedelta(minutes=5),)
+                    if requirements.quote else ()))) if money_current else None))
+            money = ReadinessMoneyFacts(inputs=AxisReadiness(axis="INVENTORY_CAPITAL",
+                state="NOT_APPLICABLE" if not requirements.required else
+                    "PASS" if inputs_ready else "UNKNOWN",
+                reason=None if inputs_ready else "DEPENDENCY_UNVERIFIED",
+                observation=input_observation), capital=capital, economics=economics)
             rules.append(RuleReadinessFacts(owner_kind=kind, owner_id=identity, side=side,
                 requirements=requirements, expected_target=rule_target,
                 evaluated_target=actual_target,
                 evaluated_at=actual_time,
                 observation=rule_observation,
                 root_outcome=root, leaves=leaves, expected_confirmation=expected_confirmation,
-                execution=_execution(value, kind, identity, side, rule, now,
-                                     inputs_ready=inputs_ready)))
+                execution=execution, money=money))
         if value.current and any(rule.root_outcome is None or rule.observation is None
                 or rule.observation.availability != "CURRENT" for rule in rules):
             axes = [AxisReadiness(axis="DATA_EVALUATION", state="UNKNOWN",
@@ -646,6 +752,10 @@ def changed_readiness(result):
                  for axis in result.snapshot.axes)
     rules = tuple(rule.model_copy(update={"observation": None, "root_outcome": None,
         "execution": ReadinessExecutionState(),
+        "money": None if rule.money is None else ReadinessMoneyFacts(inputs=AxisReadiness(
+            axis="INVENTORY_CAPITAL", state="UNKNOWN" if rule.requirements.required
+                else "NOT_APPLICABLE",
+            reason="CONTEXT_CHANGED" if rule.requirements.required else None)),
         "leaves": tuple(leaf.model_copy(update={"state": "UNKNOWN", "reason": "CONTEXT_CHANGED",
                                               "evidence_refs": ()}) for leaf in rule.leaves)})
         for rule in result.snapshot.rules)

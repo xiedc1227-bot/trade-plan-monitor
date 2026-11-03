@@ -145,6 +145,8 @@ def capital_case(tmp_path, monkeypatch, request):
     dates(raw)
     if options.get("cap_fail"):
         raw["position"]["limit"]["capital_policy"]["cap_fen"] = 1
+    if options.get("cap_pass"):
+        raw["position"]["limit"]["capital_policy"]["cap_fen"] = 10000000
     if options.get("expired_fees"):
         raw["position"]["limit"]["capital_policy"]["buy_cost_schedule"]["effective_through"] = (
             "2026-09-12"
@@ -164,6 +166,7 @@ def capital_case(tmp_path, monkeypatch, request):
     trackers = []
     native_pipeline = production.ProductionMonitorPipeline
     native_coordinator = production.MarketIndexSnapshotCoordinator
+    sources = []
 
     def build(**kwargs):
         if options.get("empty"):
@@ -212,6 +215,7 @@ def capital_case(tmp_path, monkeypatch, request):
 
     def configure(sdk, clock, current):
         source = CurrentCloseSDK(clock, (current.symbol,))
+        sources.append(source)
 
         def daily(**kwargs):
             frame = source.daily(**kwargs)
@@ -236,6 +240,7 @@ def capital_case(tmp_path, monkeypatch, request):
 
         case.owner = owner
         case.options = options
+        case.daily_source = sources[0]
         case.reader = RuntimeStatusReadService(case.sessions, owner, clock=case.pipeline._clock.now)
         assert owner().plans[0].completion is not None
         assert owner().plans[0].daily_admission is not None
@@ -248,6 +253,67 @@ def read_money(case):
     return asyncio.run(
         case.reader.get_plan_readiness(version_id=case.result.snapshot["plan_version_id"])
     )
+
+
+@pytest.mark.parametrize(
+    "capital_case",
+    [
+        {"cap_pass": True},
+        {"cap_fail": True},
+        {"mode": "OPEN_COST_CAP"},
+    ],
+    indirect=True,
+)
+def test_native_money_projection_preserves_actual_phase_and_verdict(capital_case):
+    from trade_plan_monitor.web.plan_readiness_models import ReadinessAssessment
+
+    case = capital_case
+    assessed = read_money(case)
+    buy = next(rule.facts for rule in assessed.rules if rule.facts.side == "BUY")
+    expected = case.result.snapshot["market_linkage"][0]["calculation"]["capital"]
+    assert expected["outcome"] == (
+        "PASS"
+        if case.options.get("cap_pass")
+        else "FAIL"
+        if case.options.get("cap_fail")
+        else "UNKNOWN"
+    )
+    assert buy.money is not None
+    assert buy.money.capital.model_dump(mode="json") == expected
+    assert buy.money.inputs.state == ("UNKNOWN" if expected["outcome"] == "UNKNOWN" else "PASS")
+    assert buy.money.capital.phase == "CONFIRMATION"
+    assert (
+        buy.money.economics.model_dump(mode="json")
+        == case.result.snapshot["pretrade"][0]["economics"]
+    )
+    assert buy.execution.approved_quantity is None
+    assert buy.money.inputs.observation.as_of == datetime.fromisoformat(
+        case.result.snapshot["evaluated_at"]
+    )
+    assert (
+        ReadinessAssessment.model_validate_json(assessed.model_dump_json(by_alias=True)) == assessed
+    )
+
+
+@pytest.mark.parametrize("capital_case", [{"cap_pass": True}], indirect=True)
+def test_new_daily_admission_cannot_certify_the_old_native_money(capital_case):
+    case = capital_case
+    before = read_money(case)
+    inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+    day = inputs.series.bars[-1].trade_date
+    old_admission = case.owner().plans[0].daily_admission
+    case.daily_source.official_closes[day] = "65.00"
+    corrected = asyncio.run(
+        case.pipeline.prepare_daily_inputs(case.plan, case.now, day, inputs.minute_prefix)
+    )
+    assert corrected.series is not None and corrected.series.bars[-1].close == 6500
+    assert case.owner().plans[0].daily_admission != old_admission
+    assessed = read_money(case)
+    buy = next(rule.facts for rule in assessed.rules if rule.facts.side == "BUY")
+    assert buy.money is not None and buy.money.inputs.state == "UNKNOWN"
+    assert buy.money.inputs.observation.availability == "CACHED"
+    assert buy.money.capital is None and buy.money.economics is None
+    assert buy.execution.approved_quantity == before.rules[0].facts.execution.approved_quantity
 
 
 def test_market_value_inputs_do_not_require_or_create_a_cost_book(capital_case):
@@ -276,6 +342,9 @@ def test_known_empty_open_cost_is_zero_without_creating_a_book(capital_case):
     assessed = read_money(case)
     assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == "PASS"
     assert assessed.snapshot.context.book_revision == 0
+    money = next(rule.facts.money for rule in assessed.rules if rule.facts.side == "BUY")
+    assert money.inputs.state == "PASS" and money.capital.book_revision == 0
+    assert money.capital.before_fen == 0
     with case.sessions() as session:
         assert CapitalRepository(session).get(case.plan.symbol) is None
 
@@ -309,6 +378,12 @@ def test_existing_economics_fail_is_complete_but_unknown_inputs_are_not(capital_
     assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == (
         "PASS" if outcome == "FAIL" else "UNKNOWN"
     )
+    money = next(rule.facts.money for rule in assessed.rules if rule.facts.side == "BUY")
+    assert (
+        money.economics.model_dump(mode="json") == case.result.snapshot["pretrade"][0]["economics"]
+    )
+    assert money.economics.outcome == outcome
+    assert money.inputs.state == ("PASS" if outcome == "FAIL" else "UNKNOWN")
 
 
 @pytest.mark.parametrize(
@@ -317,6 +392,9 @@ def test_existing_economics_fail_is_complete_but_unknown_inputs_are_not(capital_
 def test_expired_native_fee_schedule_is_not_available(capital_case):
     assessed = read_money(capital_case)
     assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == "UNKNOWN"
+    money = next(rule.facts.money for rule in assessed.rules if rule.facts.side == "BUY")
+    assert money.inputs.state == "UNKNOWN"
+    assert money.capital is None and money.economics is None
 
 
 @pytest.mark.parametrize("capital_case", ["OPEN_COST_CAP"], indirect=True)
@@ -371,6 +449,9 @@ def test_expired_quote_is_unknown_and_get_never_renews_its_time(capital_case):
     assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == "UNKNOWN"
     assert case.result.snapshot["quote"] == prior
     assert assessed.fresh_until is None
+    money = next(rule.facts.money for rule in assessed.rules if rule.facts.side == "BUY")
+    assert money.inputs.state == "UNKNOWN" and money.inputs.observation.availability == "CACHED"
+    assert money.capital is None and money.economics is None
 
 
 @pytest.mark.parametrize(
@@ -387,6 +468,10 @@ def test_independent_sell_keeps_its_result_when_buy_cost_is_unavailable(capital_
     assert sell.facts.requirements.quote is False
     assert sell.facts.requirements.simulation_book is False
     assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == "UNKNOWN"
+    assert sell.facts.money.inputs.state == "PASS"
+    assert sell.facts.money.capital is None and sell.facts.money.economics is None
+    buy = next(rule.facts for rule in assessed.rules if rule.facts.side == "BUY")
+    assert buy.money.inputs.state == "UNKNOWN" and buy.money.capital.outcome == "UNKNOWN"
 
 
 def test_money_get_has_no_business_writes_or_recalculation(capital_case, monkeypatch):
@@ -414,6 +499,7 @@ def test_money_get_has_no_business_writes_or_recalculation(capital_case, monkeyp
     try:
         assessed = read_money(case)
         assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == "PASS"
+        assert next(rule.facts.money for rule in assessed.rules if rule.facts.side == "BUY").capital
         assert writes == []
     finally:
         event.remove(case.engine, "before_cursor_execute", record)
@@ -478,13 +564,18 @@ def test_actual_book_changes_are_fenced_only_for_the_relevant_policy(
     if case.options["mode"] == "MARKET_VALUE_CAP":
         assert len(calls) == 1 and assessed.snapshot.context.book_revision is None
         assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == "PASS"
+        assert next(rule.facts.money for rule in assessed.rules if rule.facts.side == "BUY").capital
     else:
         assert len(calls) == 2
         if repeated:
             assert all(a.reason == "CONTEXT_CHANGED" for a in assessed.axes)
+            assert all(rule.facts.money.inputs.state == "UNKNOWN" for rule in assessed.rules)
+            assert all(rule.facts.money.capital is None for rule in assessed.rules)
         else:
             assert assessed.snapshot.context.book_revision == 2
             assert next(a for a in assessed.axes if a.axis == "INVENTORY_CAPITAL").state == "PASS"
+            money = next(rule.facts.money for rule in assessed.rules if rule.facts.side == "BUY")
+            assert money.inputs.state == "PASS" and money.capital is None
 
 
 def test_actual_quote_loss_between_reads_cannot_reuse_the_old_quote(capital_case, monkeypatch):
