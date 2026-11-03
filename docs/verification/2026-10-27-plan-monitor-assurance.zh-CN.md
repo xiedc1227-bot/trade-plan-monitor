@@ -605,3 +605,9 @@ Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节�
 最终8项通过45.57s（5个具体计划族及3个准确旧邻居），中间运行有重叠。实际codec/pipeline/progress及dashboard/list/detail验证分类。Schema5保留实际proof身份及generation/configuration/revocation/缺proof拒绝；独立原生seed的legacy/explicit计划及原有缺liveness保护继续拒绝。Schema6–9已有真实完整股票daily接纳，但缺官方指数历史；`linked_index_current`准确不发布completion，公开视图保持CACHED/只读。本片验收仅为分类，不代表完整P3证明/资金正例。初始legacy夹具审核不一致及过强指数完整性预期，均在证据分类保留。仅恢复旧reader门禁后，实际P3用例于8.96s失败，源码SHA精确恢复。Ruff、空白及两套生成器通过，H04四产物不变。
 
 证据`.pytest_cache/pma/t17a6p/evidence.json` SHA256 `66185f09e8ba8ac0e155fbddc210953687a6028765006dcb11cca114b5cea154`保留命令、失败及源码冻结。根审查全部改动，独立匹配三文件hash、四产物及两份暂停T17a6测试hash（`root-review.json`），仅提交三份前置文件。资金RED两文件仍未提交且不变；下一步补齐真实隔离指数输入，恢复原五文件金额/执行子片。未重复通过测试，未访问/迁移用户数据库，未真实调用provider/采集/发送、启动默认服务、push或部署，真实提取0/48。T17/C06及原始03/04/C05/最终门禁继续未完成。
+
+## PMA-R74 — 相关账本测试保留原有保护
+
+提交`7370cc2`仅修改`test_plan_readiness_reads.py`。原相关账本竞态使用默认MARKET_VALUE_CAP，但该政策不要求留存成本；正确依赖选择使旧假设暴露为一次读取次数断言失败（1而非2，2.75s）。现独立OPEN_COST_CAP夹具沿原路径生成准确source/mapping、保存、确认当前覆盖并启用。原竞态主体/断言、repeated参数/selector及另外24个旧定义不变，默认saved夹具仍使用MARKET_VALUE_CAP。该配套未改产品逻辑、旧golden或阈值。
+
+4个已有用例通过4.14s，包括两种相关账本变化及两个默认夹具邻居。执行时a6五份未完成文件保持冻结，这不是未改基线重跑或新增资金验收。证据`.pytest_cache/pma/t17a6f/evidence.json` SHA256 `efc40134f3f145cd812b9feaac8ed7500faee63a85330bc241d2de2c9fa80e01`保留上下文及命令。Ruff/空白通过。根审查完整单文件diff，独立匹配其SHA及五份暂存文件hash（`root-review.json`），未重复测试，仅提交夹具文件。继续a6剩余检查/mutation/最终冻结；主T17/C06及真实/语料/最终门禁继续未完成。真实调用0/48；未访问/迁移用户数据库，未真实采集/发送、启动默认服务、push或部署。
