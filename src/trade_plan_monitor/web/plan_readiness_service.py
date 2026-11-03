@@ -592,6 +592,22 @@ def read_plan_readiness(session, authority, version_id, now):
                     if evidence is not None:
                         root = evidence["outcome"]
                         actual_target, actual_time = matching.target, matching.evaluated_at
+                elif (matching is None and rule_target is not None
+                        and rule_target.kind == "OFFICIAL_CLOSE"):
+                    # Market admission can record S0 before a monetary early return.
+                    decisions = tuple(row for row in value.native.market_linkage or ()
+                                      if row.rule_id == identity)
+                    if len(decisions) == 1:
+                        decision = decisions[0]
+                        if (decision.content_hash == value.details.content_hash
+                                and decision.decision_session == rule_target.trade_date
+                                and decision.evidence_cutoff == value.native.evaluated_at
+                                and decision.confirmation):
+                            evidence = _validated_evidence(rule.condition,
+                                decision.confirmation[0].model_dump(mode="json"))
+                            if evidence is not None:
+                                root = evidence["outcome"]
+                                actual_target, actual_time = rule_target, decision.evidence_cutoff
             if kind == "ALERT_RULE" and value.prior_current and review_ok:
                 matching = next((alert for alert in value.native.alerts
                                  if alert.rule_id == identity), None)
