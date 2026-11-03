@@ -33,7 +33,13 @@ def confirm_signal(
     candidate_only=False,
     _condition_facts=None,
     _fact_owner=None,
+    _evaluation_observer=None,
 ):
+    """Optionally observe the actual frozen root without changing admission.
+
+    Pre-evaluation returns produce no observation. A delivered root says nothing
+    about later zone, occurrence or execution eligibility.
+    """
     from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule
     from trade_plan_monitor.domain.p2_policy_models import P2Rule
 
@@ -155,6 +161,8 @@ def confirm_signal(
         trading_calendar=trading_calendar,
         **fact_context,
     )
+    if _evaluation_observer is not None:
+        _evaluation_observer(evidence)
     if evidence.outcome != "SATISFIED":
         return None
     if rule.zone is not None:
