@@ -977,7 +977,7 @@ class ProductionMonitorPipeline:
                 if obsolete_daily_document(version.payload_json):
                     continue
                 plan = _load_active_plan(version.payload_json)
-                if type(plan) is not UnifiedTradePlan:
+                if not isinstance(plan, UnifiedTradePlan):
                     scopes.append(PlanReadAuthority(symbol=row.symbol,
                         plan_version_id=row.plan_version_id, plan_hash=version.plan_hash,
                         activation_revision=row.revision,

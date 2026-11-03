@@ -337,7 +337,7 @@ class RuntimeStatusReadService:
                     or evidence.activation_revision != pointer.revision
                 ):
                     raise ProjectionError("Plan authority crossed activation identity")
-                if type(plan) is not UnifiedTradePlan:
+                if not isinstance(plan, UnifiedTradePlan):
                     family = (
                         "EXPLICIT_RULES" if type(plan) is ExplicitTradePlan else "LEGACY_LOW_BUY"
                     )
