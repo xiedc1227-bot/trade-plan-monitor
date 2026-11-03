@@ -569,3 +569,11 @@ T17a2（`9a7e430`）仅修改`decision/unified_lifecycle.py`及新增聚焦单�
 最终17项以66.19s通过（新15及2个准确邻居）；此前48项以117.17s通过（相同15及a1的33项），两次重叠15，不得相加。原缺输出行为失败、测试回执/日历/来源文本安排及最初过强的混合daily预期保留于证据历史。实际离线采集owner重新接纳官方收盘由5500纠正为3500，旧完成证明仍通过，证实既有当前daily/factor来源缺口：快照身份不等于独立当前源验证。因此直接official/daily、daily reset及当前适用普通risk依赖仍为CACHED/UNKNOWN，独立分钟提醒不被全局降级。仅停用此guard可复现错误CURRENT FALSE，已恢复准确源码SHA。当前factor/provider/basis修复仍为必需，复用原采集owner，不新增表/平台/worker。
 
 五文件Ruff/空白检查通过。生成器`--check`明确保留exit1：两profile四产物受新内部结果字段影响，新增路径为0。下一配套须明确从既有公开daily/monitor序列化排除内部完整证据，并证明契约不变；未修改旧golden或digest。新就绪GET/生成及其余通知/金额/执行/风险/等待投影仍待完成。证据`.pytest_cache/pma/t17a3/evidence.json` SHA256 `fcf2d1ec3c68590ff7feec13799f0fcef70782e3dd6925bae615ff505c788c1b`保留完整历史、命令、hash、重叠及剩余工作。平台额度打断及明确继续后，仅完成未完证据交接，未重复已通过测试。指挥读取全部五文件改动，独立匹配冻结hash及旧预像（`t17a3/root-review.json`），仅提交这些路径。真实调用0/48，用户数据库/迁移0，真实采集/发送0，未push/部署，不宣称完整T17/C06/语料/最终验收。
+
+## PMA-R70 — 保留内部输出并恢复旧公开契约
+
+提交`4ea8119`仅修改`web/routers/daily_plans.py`及聚焦API兼容测试。公开API子模型明确排除完整普通证据，同时保留准确原生类型、数量边界及父校验。单个Python3.14私有type别名阻止本地FastAPI收集器将被排除注解注册为孤立组件，未改框架、依赖、schema-pruning工具或生成器。内部head/不可变字节、proof、完整证据及实际就绪FALSE保持。公开validation-schema的表示不构成业务输入或授权，serialization/HTTP及OpenAPI界面不变。
+
+最终10项以25.66s通过：4项实际配置v1/v2 API及6项准确历史契约。此前4项21.00s通过有重叠。真实daily HTTP及canonical v2 dashboard/list/detail父响应不含两种字段拼写，内部值和非法owner/空/重复/超限保护仍验证。初始生命周期夹具错误、实际HTTP/schema泄漏、新测试集合键错误及plain-exclude孤立组件失败保留于证据。只把`exclude=True`改为False使真实canonical-v2 HTTP节点失败，已准确恢复源码SHA。两个profile生成器`--check`现均通过，指挥独立匹配全部四个H04已验收产物的字节/hash，未修改生成文件、历史投影、golden或审批digest。R69早前exit1仍是历史证据，本配套完成修复而非改写结果。
+
+证据`.pytest_cache/pma/t17a3b/evidence.json` SHA256 `f903845dfae3ff0e4f7b99e062efeb4310ad7ed96c47bf6feda9e70cecb1c31c`及`root-review.json`记录最终hash、命令及重叠。指挥完整审查两文件，匹配源码/测试/证据及四产物hash，未重复已通过测试，仅提交派发路径。Ruff/空白通过，未新增GET、完成标记、provider/用户数据库/迁移/采集/发送或push/部署。当前daily/factor owner缺口及其它未实现就绪能力仍是必需后续，T17/C06及真实/语料/最终门禁保留未完成。
