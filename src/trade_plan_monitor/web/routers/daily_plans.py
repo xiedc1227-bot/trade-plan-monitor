@@ -32,6 +32,7 @@ from trade_plan_monitor.state.daily_state_models import (
     DailyEvaluationState,
     DailyInventoryView,
     DailyObsoleteRisk,
+    DailyOrdinaryEvaluation,
     DailyRiskAction,
     DailyRiskState,
     DailySignalState,
@@ -352,7 +353,14 @@ class DailyRiskActionApiView(DailyRiskAction, ApiValue):
     pass
 
 
+# A named alias avoids FastAPI registering this excluded field's models as orphans.
+type _OrdinaryEvaluations = tuple[DailyOrdinaryEvaluation, ...] | None
+
+
 class DailyEvaluationApiView(DailyEvaluationState, ApiValue):
+    # Complete ordinary evidence is retained internally for the readiness view.
+    ordinary_evaluations: _OrdinaryEvaluations = Field(
+        default=None, min_length=1, max_length=2, exclude=True)
     inventory: DailyInventoryApiView
     signals: tuple[DailySignalApiView, ...]
     risks: tuple[DailyRiskApiView, ...]
