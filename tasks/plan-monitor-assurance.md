@@ -183,6 +183,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 - [ ] Deliver and verify.
 - Depends on: T16.
 - Files/scope: T17a service/GET/router and `test_plan_readiness_api.py` (at most5); T17b both generated profiles and projection test (5); T17c paired API-owner appendix and contract regression (at most4).
+- T17a1 private adapter accepted in `6557855` (R67), three files only. Full T17 stays open: complete ordinary output, independent targets/normal waits, bounded original-risk provenance, money/execution/notification projections and public/generated companions still need their separately frozen slices.
 - Acceptance: A05,A09,A10; Verify: V04,V07. Coherent current generation/activation/target/freshness; zero provider/business writes/heartbeats; explicit upgrade/cached/unknown states, no READY token or current-book/research inference.
 
 ### PMA-T18 — Present per-rule readiness and delivery truth
@@ -347,3 +348,9 @@ PAUSED at the user's explicit request on2026-11-02, after finishing the current 
 - T17 must validate original risk owner references through existing authoritative paths, independently of the active read context; report missing proof/review/book/current owner as UNKNOWN rather than borrowing an active sibling. Both generated profiles and strict historical/API-owner companions remain separately scoped future slices.
 - Sessions: coordinator `01a169c0-fc84-7f00-992f-20977e2529ea`; T16 `01a1968c-5139-7a83-a068-e7f365e6cf2c` (frozen/idle); T17 `01a1968c-9c50-72d3-9e0d-6b730e5de423` (prepared/idle), both `gpt-6.1-sol/high`. All12 dispatch states are stored in ignored `.pytest_cache/pma/session-dispatch-20261101.json`.
 - T13–T15/C05, original03/04 positive acceptance, X09/X12/corpus/resource issues and R55/T22 old fixtures remain unresolved. T17–T24/C06–C08 and H01–H05 are not closed by this pause. No push/deployment or real installation readiness is claimed.
+
+## PMA-P09 — Explicit continuation and bounded T17 progress
+
+The user explicitly resumed on2026-11-03 with “继续任务”. P08 records the historical shutdown pause; dispatch is now resumed under unchanged P07 authorization and all retained gates. The coordinator verified clean HEAD `406179f`, reused the existing T17 `gpt-6.1-sol/high` chat and released only its three-file private adapter. R67 records local commit `6557855`; no public endpoint or full T17 acceptance follows from it.
+
+Next, freeze the smallest existing-producer output slice before public wiring. Missing ordinary roots/leaves and per-rule timestamps cannot be invented from a plan head or absence of a signal. Preserve complete FALSE versus missing/first evaluation, accurate owner-relative paths and independent risk. Reuse the actual evaluator and its existing immutable-result proof; no read-time evaluator, generic evidence platform or new worker. One writer, at most5 exact files and per-slice review remain mandatory. Real calls remain0/48; no user database access/migration, real acquisition/send, push or deployment occurred in this resumption slice.
