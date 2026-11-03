@@ -214,11 +214,45 @@ def test_actual_review_change_between_snapshots_is_reloaded(state, monkeypatch):
     assert result.snapshot.context.review_receipt_hash == receipts[0]
 
 
+@pytest.fixture
+def saved_open_cost(state):
+    """A retained-cost policy owns book changes; market value has no such dependency."""
+    from tests.integration.test_market_linkage_review import source_mapping
+    from tests.unit.test_p3_policy_contract import p3_payload
+
+    from trade_plan_monitor.ai.daily_review import build_daily_review
+    from trade_plan_monitor.domain.p3_validation import P3PlanDraft
+    from trade_plan_monitor.domain.plan_validation import PlanValidationResult
+    from trade_plan_monitor.state.daily_review_store import save_daily_draft
+    from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
+    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+
+    draft = P3PlanDraft.model_validate(p3_payload("OPEN_COST_CAP"))
+    source, mapping = source_mapping(draft)
+    assert build_daily_review(draft, mapping, source).issues == ()
+    with state.work() as work:
+        identity = save_daily_draft(work, draft, mapping=mapping, source_text=source,
+                                    clock=lambda: _NOW)
+        work.commit()
+    _confirm(state, identity)
+    now = _NOW + timedelta(minutes=3)
+    with SqlAlchemyUnitOfWork(state.sessions, clock=lambda: now) as work:
+        work.plans.activate(draft.to_executable(), expected_revision=0,
+                            validation=PlanValidationResult(issues=()))
+        work.commit()
+    return SimpleNamespace(**vars(state), identity=identity, draft=draft, now=now,
+        reader=RuntimeStatusReadService(state.sessions, lambda: None, clock=lambda: now))
+
+
 @pytest.mark.parametrize("repeated", [False, True])
-def test_relevant_real_book_revision_is_reread_and_churn_is_unknown(saved, monkeypatch, repeated):
+def test_relevant_real_book_revision_is_reread_and_churn_is_unknown(
+    saved_open_cost, monkeypatch, repeated,
+):
     from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
     from trade_plan_monitor.state.p3_models import CapitalBook
     from trade_plan_monitor.web import plan_readiness_service as projection
+
+    saved = saved_open_cost
 
     def advance():
         with saved.sessions() as session, session.begin():
