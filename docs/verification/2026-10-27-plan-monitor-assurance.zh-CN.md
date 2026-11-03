@@ -555,3 +555,9 @@ B证据`t13-h04c2-evidence.json` SHA256 `3d95c458dddaf97e46ca8aa1305dd68ab328c8f
 最终33项新检查以57.91s通过；此前35项运行包含这33项及2项未变邻近检查（60.24s），早于最后逐规则时间收紧。计数有重叠。原始启动环境、缺接口、测试安排及新增测试预期错误分别保留分类。实际行为失败复现错误计划归属（3项）、未类型化异常证据（4项）及虚构普通评估时间/目标（1项），修复后通过。绑定相等守卫mutation检出旧审核混用，源码逐字节恢复。最终Ruff/空白检查通过。未删除旧测试/断言/golden，未放宽阈值。
 
 证据`.pytest_cache/pma/t17a1/evidence.json` SHA256 `45aab3acc1aece3d3a98d54d7fda6a432942be8d12cbc922964c307875ab75d5`保留命令、失败、重叠及最终文件hash。指挥审查实际改动/测试并独立匹配三个hash（`t17a1/root-review.json`），未重复未变测试。当前提醒FALSE使用实际已校验证据及原生路径。普通根/叶缺失时保留UNKNOWN，评估时间/目标为null；未验证原始风险引用保留CACHED/UNKNOWN，不扫描历史membership、不借兄弟版本。缺通知证据仍为DELIVERY_UNVERIFIED。普通完整输出、混合目标/正常等待、有界风险证明及完整金额/执行/通知投影明确留作后续子片。T17/C06及真实/语料/最终门禁均不关闭。实际读取陷阱验证零SQL业务写/网络/求值；真实提取0/48，用户数据库访问/迁移0，真实采集/发送0，push/部署0。
+
+## PMA-R68 — 不改变准入的实际条件观察
+
+T17a2（`9a7e430`）仅修改`decision/unified_lifecycle.py`及新增聚焦单测文件。可选私有观察口在既有求值后立即接收同一个不可变`UnifiedConditionEvidence`，原返回值、准入顺序及根求值次数不变。TRUE/FALSE/MISSING_INPUT及ALL/ANY缺失叶即使随后被准入拒绝也可保留观察。求值前返回不交付结果；producer持久化及就绪消费仍是独立后续工作。
+
+最终28项新检查以0.75s通过；8项准确邻近检查在此前重叠选择中通过，不是单次最终36项通过。初始13项失败含10项未交付观察的行为失败、3项新增测试安排不合法；后者改为合法单规则夹具，未改变生产准入。只移除观察交付的mutation使既有FALSE节点失败，生产SHA已恢复。Ruff/空白检查通过。生产修改前冻结独立1020字节旧返回，SHA256 `2e071382162ffb8b3e44038eff5de7209d94b06c5af957d81e168d9ada115c6c`；指挥独立匹配该预像及最终源码/测试两个hash。证据`.pytest_cache/pma/t17a2/evidence.json` SHA256 `625132a9bb0df4423bdc45557013565688c94317912fe88475a4c9f4552c6391`及`root-review.json`保留准确命令、失败和重叠，未重复未变测试。未修改producer、公开契约、数据库或provider。T17/C06仍未完成。冻结T17a1证据中的`evaluate_unified_signal`是定位命名笔误，实际链为`confirm_signal` → `evaluate_unified_condition`；原字节/hash保持不变。
