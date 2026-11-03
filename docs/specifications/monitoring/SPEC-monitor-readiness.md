@@ -68,3 +68,62 @@ A positive real-readiness claim needs the actual prerequisites and authorized ob
 Acceptance: PMA-A05/A06,A09–A12. Required scenarios include: healthy alert-only with unknown inventory; market-value cap without cost book; cost-cap BUY missing basis with independent technical-risk SELL unaffected; complete FALSE; expected current-day close waiting; missing previous official data; first evaluation; stale quote/provider/calendar/proof; changed activation/runtime generation; CACHED/UNAVAILABLE; pending/retrying/delivered/suppressed notification; expired/consumed signal; missing upgrade; and concurrent reads with zero side effects.
 
 Reuse `web/runtime_status_models.py`, `runtime/health.py`, current monitor-read/proof services, `runtime/daily_service.py` and dispatcher projections. Suggested new focused seams are `web/plan_readiness_models.py` and `web/plan_readiness_service.py`, with existing plan routes/workbench adapters. Do not loosen current runtime health to obtain a green badge. The task list owns the future test/API/generated/UI slices; this draft changes no runtime or frontend code.
+
+## MRD-S08 — Typed fact field appendix
+
+### MRD-S08.1 — Additive shape and ownership
+
+This appendix defines fact shapes only. It adds no read assembly, eligibility evaluator, dispatch, queue, storage, approval token or automatic test send. `RuleReadinessFacts.money` and `RuleReadinessFacts.notification` default to null and are omitted when null. The five new nullable execution fields below follow the same omission rule. Existing a6 fields, including their existing null keys, retain their serialization. An actual a6 readiness JSON preimage must round-trip byte-for-byte when the additions are absent.
+
+New projections inherit the existing closed, frozen, strict `ApiValue` contract and camelCase aliases; embedded native capital/economics results keep their original field names and validation. Preserve exactly six axes, at most76 owners, at most50 complete native condition leaves, literal `authorityGranted=false`, and existing all-null freshness/summary precedence. Merely supplying facts does not promote any axis or derive trading/delivery eligibility.
+
+Reuse the parent rule's owner and admitted read context, plus existing `ReadinessObservation` where listed. Do not add duplicate owner/hash/provenance wrappers. Context equality cannot prove an original risk cause; a later reader must independently verify the exact original sources and their applicable freshness. No unique original signal/event or no trusted result means nullable/absent facts, not a guessed approval, failure, pending state or native `NONE`/`PASS` verdict.
+
+### MRD-S08.2 — Money
+
+`ReadinessMoneyFacts` has these fields:
+
+| Field | Type / nullability | Meaning |
+| --- | --- | --- |
+| `inputs` | Required `AxisReadiness`; `axis` must be `INVENTORY_CAPITAL` | Per-rule input availability, existing reason and `ReadinessObservation`; retain the original axis constraints |
+| `capital` | `CapitalAssessment` or null; omit null | Copy the exact native frozen capital result, including phase, policy hash, quantity, revisions, blockers and evidence hash |
+| `economics` | `EconomicsResult` or null; omit null | Copy the exact native `NONE`/`PASS`/`FAIL`/`UNKNOWN` result; absence is not `NONE` |
+
+Validate native values without calculating fees, economics, capital or quantity again. Preserve strict Python validation and the native JSON-reading path so serialized tuple arrays round-trip; this does not allow bool/string coercion into numeric fields. Native `FAIL` can coexist with `inputs.state=PASS`: a known whole-trade failure is not a monitoring input fault. `capital.quantity` and `economics.quantity` are checked quantities, not approved quantities; they cannot populate `execution.approvedQuantity`. Null results do not claim a trusted verdict. Native result values and nested snake_case names remain unchanged.
+
+### MRD-S08.3 — Original execution facts
+
+Extend the existing `ReadinessExecutionState`; retain `approvedQuantity`, `consumed`, `executionWindow`, `windowState`, `eligible` and `reason` unchanged.
+
+| New JSON field (Python field) | Type / nullability | Meaning |
+| --- | --- | --- |
+| `signalId` (`signal_id`) | Bounded existing `Reference` or null | Exact original signal; supplied together with its revision |
+| `signalRevision` (`signal_revision`) | Existing `Revision` or null | Paired with `signalId`; integer0–9007199254740991, never a bool |
+| `executionDate` (`execution_date`) | Date or null | Original known execution date; no calendar inference |
+| `observation` | `ReadinessObservation` or null | Exact observed execution facts and their original times/references |
+| `blockers` | Complete tuple of existing `Reference`, at most128, or null | Null means no trusted list; an empty list does not prove eligibility; never truncate |
+
+Both signal reference fields are null/absent or both supplied. Their presence does not validate source ownership by itself. Do not require old valid a6 callers to supply the additions retroactively. Preserve `consumed` and `eligible` as independent true/false/null facts; no combination derives permission. The original approved quantity comes only from the verified original signal's final quantity. `q0`, candidate quantity, static rule quantity and risk target are not substitutes. Each `Reference` remains1–256 characters; no new execution framework is created.
+
+### MRD-S08.4 — Exact event and channel facts
+
+`ReadinessNotificationFacts` carries nullable `eventId` (`event_id`, UUID), `causeId` (`cause_id`, `Reference`), `target` (existing `EvaluationTarget`), `createdAt` (`created_at`, original Shanghai timestamp), and `observation` (`ReadinessObservation`); omit those null fields. `channels` is a tuple of at most3 `ReadinessNotificationChannel` values, unique by the existing `DeliveryChannel` enum: `IN_APP`, `CONSOLE`, `WEBHOOK`. An empty tuple means no channel facts were supplied, not that channels are disabled. Event metadata, historical classifications and attempts require their exact original `eventId`; configuration can be observed without an event.
+
+| Channel JSON field (Python field) | Type / nullability | Meaning |
+| --- | --- | --- |
+| `channel` | Required existing `DeliveryChannel` | Exact channel, not another channel's success |
+| `configured`, `enabled` | Strict bool or null; omit null | Independently verified configuration/enabled state; unverified does not mean false |
+| `eligible` | Strict bool or null; omit null | Copied current eligibility only; false does not create historical `SUPPRESS` |
+| `historicalStatus` (`historical_status`) | Existing `RecoveryDeliveryStatus` or null | Original `ELIGIBLE`/`HOLD`/`SUPPRESS` classification, separate from current eligibility |
+| `historicalUpdatedAt` (`historical_updated_at`) | Shanghai timestamp or null | Original classification update time; supplied together with `historicalStatus` |
+| `latestAttempt` (`latest_attempt`) | `ReadinessDeliveryAttempt` or null; omit null | Exact latest trusted event/channel attempt; no attempt means no such record |
+
+Configuration, current eligibility, historical classification and attempt history can change independently; do not infer one from another. `IN_APP` delivery establishes only that channel's actual receipt and cannot verify `WEBHOOK`. No event/attempt is not automatically failed, queued or pending. The DTO does not recalculate send-time eligibility or change any terminal suppression policy.
+
+### MRD-S08.5 — Secret-free attempt and temporal validation
+
+`ReadinessDeliveryAttempt` is a closed equivalent projection of the existing secret-free `DeliveryAttemptRecord`. Its exact fields are `id` (`Reference`), `eventId` (`event_id`, UUID), `channel` (`DeliveryChannel`), `attempt` (strict integer1–9007199254740991), `status` (`DeliveryAttemptStatus`), `responseCode` (`response_code`, null or strict integer100–599), `nextRetryAt` (`next_retry_at`, nullable Shanghai timestamp), `deliveredAt` (`delivered_at`, nullable Shanghai timestamp), and `errorCode` (`error_code`, nullable existing `ChannelErrorCode`). Nullable attempt-record fields retain native nulls. Reuse `CLAIMED`, `DELIVERED`, `RETRY_PENDING`, `FAILED` and the original closed safe error enum; introduce no parallel verdict/dispatch enum or raw error text.
+
+A nested attempt must match both the notification's exact `eventId` and its containing `channel`. Only `status=DELIVERED` has a non-null `deliveredAt`; it also has no error or retry deadline. `CLAIMED`, retrying, queued intentions and read acknowledgement cannot express delivery. Where original creation/observation times are known, event creation/target, historical update and delivery times must be ordered within them; in particular `createdAt <= historicalUpdatedAt <= observation.observedAt`. All supplied timestamps are timezone-aware Shanghai values. Unknown times stay null, and DTO validation never samples a clock or renews them. These shape checks are necessary, not proof of an actual successful send: the later reader must resolve the original dispatcher receipt.
+
+Forbid unregistered fields, endpoints, tokens, approval tokens and raw errors. Validation must not copy unsafe error strings into `errorCode`. Do not serialize channel secrets or infer a positive delivery/readiness claim from these optional facts. Acceptance covers old-byte omission compatibility, native result identity/no recalculation, strict/null/immutable boundaries, paired signal references, original owner/leaf limits, duplicate channels, wrong event/channel binding, illegal delivery times, safe error enums and absent-event/attempt semantics.

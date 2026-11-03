@@ -68,3 +68,62 @@
 对应 PMA-A05/A06、A09–A12。必需情形：健康纯提醒但库存未知、市值上限无成本账、成本上限BUY缺成本而独立技术风险SELL不受影响、完整FALSE、当天收盘正常等待、旧官方数据缺失、首次未评估、报价／供应商／日历／证明过时、启用／runtime generation变化、CACHED/UNAVAILABLE、待发／重试／已送达／被抑制、过期／已消耗信号、缺升级、并发读取零副作用。
 
 复用 `web/runtime_status_models.py`、`runtime/health.py`、当前monitor读取／证明服务、`runtime/daily_service.py`和dispatcher投影。建议聚焦接缝为 `web/plan_readiness_models.py`、`web/plan_readiness_service.py`及原计划路由／工作台适配。不为绿色标记放宽当前运行健康。未来测试／API／生成／界面切片由任务表定义，本草案不改运行或前端代码。
+
+## MRD-S08 — 类型化事实字段附录
+
+### MRD-S08.1 — 增量形状与所有权
+
+本附录只定义事实形状，不增加读取装配、资格求值器、dispatch、队列、存储、批准token或自动测试发送。`RuleReadinessFacts.money` 和 `RuleReadinessFacts.notification` 缺省为null，null时省略。下列五个新增可空执行字段遵循相同省略规则。a6既有字段及其既有null键保持序列化不变；新增字段缺省时，真实a6 readiness JSON预像须逐字节往返一致。
+
+新投影继承既有闭合、冻结、严格的 `ApiValue` 契约与camelCase别名；嵌入的原生capital/economics结果保留原字段名和验证。准确保留六个轴、最多76个owner、最多50个完整原生条件叶、字面值 `authorityGranted=false`，以及既有全null新鲜度／摘要优先级。仅提供事实不会提升任何轴，也不推导交易／发送资格。
+
+复用父规则owner、已准入读取上下文及下列既有 `ReadinessObservation`，不增加重复owner/hash/provenance包装。上下文相等不能证明原风险cause；后继reader仍须独立验证准确原属来源及其适用新鲜度。无唯一原属signal/event或无可信结果时保持null／省略，不猜测批准、失败、pending或原生 `NONE`／`PASS` 结果。
+
+### MRD-S08.2 — 金额
+
+`ReadinessMoneyFacts` 包含下列字段：
+
+| 字段 | 类型／可空性 | 含义 |
+| --- | --- | --- |
+| `inputs` | 必需 `AxisReadiness`；`axis` 必须为 `INVENTORY_CAPITAL` | 逐规则输入可用性、既有原因及 `ReadinessObservation`；保留原轴约束 |
+| `capital` | `CapitalAssessment` 或null；null省略 | 复制准确原生冻结资本结果，包括phase、policy hash、quantity、版本、blockers及evidence hash |
+| `economics` | `EconomicsResult` 或null；null省略 | 复制准确原生 `NONE`／`PASS`／`FAIL`／`UNKNOWN` 结果；缺失不是 `NONE` |
+
+验证原生值，不重新计算费用、经济性、资本或数量。保留Python严格验证及原生JSON读取入口，使序列化tuple数组可以往返；这不允许将bool／字符串强转为数值字段。原生 `FAIL` 可与 `inputs.state=PASS` 并存：已知整笔交易不满足，不是监控输入故障。`capital.quantity` 和 `economics.quantity` 是被检查量，不是获批量，不能填入 `execution.approvedQuantity`。null结果不声称已有可信判定；原生结果值及嵌套snake_case字段名保持不变。
+
+### MRD-S08.3 — 原属执行事实
+
+扩展既有 `ReadinessExecutionState`，保留 `approvedQuantity`、`consumed`、`executionWindow`、`windowState`、`eligible` 和 `reason` 不变。
+
+| 新JSON字段（Python字段） | 类型／可空性 | 含义 |
+| --- | --- | --- |
+| `signalId` (`signal_id`) | 既有有界 `Reference` 或null | 准确原属signal，与其revision一起提供 |
+| `signalRevision` (`signal_revision`) | 既有 `Revision` 或null | 与 `signalId` 配对；整数0–9007199254740991，不能为bool |
+| `executionDate` (`execution_date`) | 日期或null | 原属已知执行日期，不推断日历 |
+| `observation` | `ReadinessObservation` 或null | 准确观察的执行事实及其原始时间／引用 |
+| `blockers` | 完整既有 `Reference` tuple，最多128项，或null | null表示没有可信列表；空列表不证明符合资格；不能截断 |
+
+两个signal引用字段须同时null／省略，或同时提供；仅有引用本身不验证来源所有权。不要求旧a6合法调用者追补新增引用。`consumed` 与 `eligible` 保持独立true／false／null事实，不从字段组合推导许可。原获批量只取已验证原signal的最终数量，不能用 `q0`、candidate quantity、静态rule quantity或risk target替代。每个 `Reference` 仍为1–256字符，不另建执行框架。
+
+### MRD-S08.4 — 准确事件与渠道事实
+
+`ReadinessNotificationFacts` 提供可空 `eventId` (`event_id`，UUID)、`causeId` (`cause_id`，`Reference`)、`target`（既有 `EvaluationTarget`）、`createdAt` (`created_at`，原始上海时间戳)和 `observation` (`ReadinessObservation`)，这些null字段省略。`channels` 为最多3项的 `ReadinessNotificationChannel` tuple，按既有 `DeliveryChannel` 枚举唯一：`IN_APP`、`CONSOLE`、`WEBHOOK`。空tuple表示未提供渠道事实，不表示渠道关闭。事件元数据、历史资格分类与attempt须绑定准确原始 `eventId`；没有事件时仍可观察配置。
+
+| 渠道JSON字段（Python字段） | 类型／可空性 | 含义 |
+| --- | --- | --- |
+| `channel` | 必需既有 `DeliveryChannel` | 准确渠道，不能借用其他渠道成功 |
+| `configured`、`enabled` | 严格bool或null；null省略 | 独立验证的配置／启用状态；未验证不等于false |
+| `eligible` | 严格bool或null；null省略 | 仅复制当前资格；false不能制造历史 `SUPPRESS` |
+| `historicalStatus` (`historical_status`) | 既有 `RecoveryDeliveryStatus` 或null | 原属 `ELIGIBLE`／`HOLD`／`SUPPRESS` 分类，与当前资格分开 |
+| `historicalUpdatedAt` (`historical_updated_at`) | 上海时间戳或null | 原分类更新时间，与 `historicalStatus` 一起提供 |
+| `latestAttempt` (`latest_attempt`) | `ReadinessDeliveryAttempt` 或null；null省略 | 准确最新可信event/channel attempt；无attempt表示没有该记录 |
+
+配置、当前资格、历史分类和attempt历史可独立变化，不能互相推导。`IN_APP` 送达仅证明该渠道实际回执，不能验证 `WEBHOOK`。无event／attempt不自动表示失败、排队或pending。DTO不重新计算发送时资格，也不改变任何终态抑制策略。
+
+### MRD-S08.5 — 无秘密attempt及时间形状验证
+
+`ReadinessDeliveryAttempt` 是既有无秘密 `DeliveryAttemptRecord` 的闭合等价投影。准确字段为 `id` (`Reference`)、`eventId` (`event_id`，UUID)、`channel` (`DeliveryChannel`)、`attempt`（严格整数1–9007199254740991）、`status` (`DeliveryAttemptStatus`)、`responseCode` (`response_code`，null或严格整数100–599)、`nextRetryAt` (`next_retry_at`，可空上海时间戳)、`deliveredAt` (`delivered_at`，可空上海时间戳)和 `errorCode` (`error_code`，可空既有 `ChannelErrorCode`)。attempt记录的可空字段保留原生null。复用 `CLAIMED`、`DELIVERED`、`RETRY_PENDING`、`FAILED` 和原有闭合安全错误枚举，不另建判定／dispatch枚举或原始错误文本。
+
+嵌套attempt须同时匹配通知的准确 `eventId` 和所在 `channel`。仅 `status=DELIVERED` 可携带非null `deliveredAt`，且不能带error或retry deadline。`CLAIMED`、重试、排队意图和已读确认不能表示送达。原创建／观察时间已知时，事件创建／target、历史更新和送达时间须在其中正确排序，具体须满足 `createdAt <= historicalUpdatedAt <= observation.observedAt`。提供的全部时间戳须为带时区的上海值。未知时间保持null，DTO验证不读取时钟或续期。这些形状检查只是必要条件，不能证明真实发送成功，后继reader仍须解析原dispatcher回执。
+
+禁止未注册字段、endpoint、token、approval token及原始错误，验证不得把不安全错误字符串复制到 `errorCode`。不序列化渠道秘密，也不从这些可选事实推导正向交付／就绪声明。验收覆盖旧字节省略兼容、原生结果身份／无重算、严格／null／不可变边界、成对signal引用、原owner／条件叶上限、重复渠道、错误event／channel绑定、非法送达时间、安全错误枚举及event／attempt缺失语义。

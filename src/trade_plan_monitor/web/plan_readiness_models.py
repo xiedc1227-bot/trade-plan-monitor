@@ -4,13 +4,20 @@ The read owner supplies observations and its own expiry policies. Nothing here
 reads storage, samples a clock, evaluates a predicate or verifies a human fact.
 """
 
+from datetime import date
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from trade_plan_monitor.decision.models import EvaluationTarget
+from trade_plan_monitor.decision.p2_economics import EconomicsResult
+from trade_plan_monitor.decision.p3_capital import CapitalAssessment
+from trade_plan_monitor.domain.daily_hash import canonical
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
+from trade_plan_monitor.notifications.channels import ChannelErrorCode, DeliveryChannel
+from trade_plan_monitor.notifications.dispatcher import DeliveryAttemptStatus
+from trade_plan_monitor.notifications.recovery_eligibility import RecoveryDeliveryStatus
 from trade_plan_monitor.web.schemas import ApiValue
 
 Reference = Annotated[str, Field(min_length=1, max_length=256)]
@@ -124,6 +131,133 @@ class InventoryRequirements(ApiValue):
         return any(self.model_dump().values())
 
 
+class ReadinessMoneyFacts(ApiValue):
+    """Available inputs and unchanged native verdicts are separate facts."""
+
+    inputs: AxisReadiness
+    capital: CapitalAssessment | None = Field(default=None, exclude_if=lambda value: value is None)
+    economics: EconomicsResult | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @field_validator("capital", mode="before")
+    @classmethod
+    def native_capital(cls, value, info: ValidationInfo):
+        if value is None:
+            return None
+        if info.mode == "json":
+            return CapitalAssessment.model_validate_json(canonical(value), strict=True)
+        return CapitalAssessment.model_validate(value, strict=True)
+
+    @field_validator("economics", mode="before")
+    @classmethod
+    def native_economics(cls, value, info: ValidationInfo):
+        if value is None:
+            return None
+        if info.mode == "json":
+            return EconomicsResult.model_validate_json(canonical(value), strict=True)
+        return EconomicsResult.model_validate(value, strict=True)
+
+    @model_validator(mode="after")
+    def inventory_axis_only(self) -> Self:
+        if self.inputs.axis != "INVENTORY_CAPITAL":
+            raise ValueError("money facts require the inventory/capital input axis")
+        return self
+
+
+class ReadinessDeliveryAttempt(ApiValue):
+    """Closed projection of the dispatcher's secret-free DeliveryAttemptRecord."""
+
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    id: Reference
+    event_id: UUID
+    channel: DeliveryChannel
+    attempt: Annotated[int, Field(ge=1, le=2**53 - 1)]
+    status: DeliveryAttemptStatus
+    response_code: Annotated[int, Field(ge=100, le=599)] | None = None
+    next_retry_at: ShanghaiDatetime | None = None
+    delivered_at: ShanghaiDatetime | None = None
+    error_code: ChannelErrorCode | None = None
+
+    @model_validator(mode="after")
+    def actual_delivery_shape(self) -> Self:
+        if (self.status is DeliveryAttemptStatus.DELIVERED) != (self.delivered_at is not None):
+            raise ValueError("only a delivered attempt has an actual delivery timestamp")
+        if self.status is DeliveryAttemptStatus.DELIVERED and (
+                self.error_code is not None or self.next_retry_at is not None):
+            raise ValueError("a delivered attempt cannot carry an error or retry deadline")
+        return self
+
+
+class ReadinessNotificationChannel(ApiValue):
+    """Current configuration/eligibility never rewrites a historical receipt."""
+
+    channel: DeliveryChannel
+    configured: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    enabled: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    eligible: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    historical_status: RecoveryDeliveryStatus | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    historical_updated_at: ShanghaiDatetime | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    latest_attempt: ReadinessDeliveryAttempt | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def exact_channel_and_history(self) -> Self:
+        if (self.historical_status is None) != (self.historical_updated_at is None):
+            raise ValueError("historical classification requires its original update time")
+        if self.latest_attempt is not None and self.latest_attempt.channel is not self.channel:
+            raise ValueError("delivery attempt belongs to another channel")
+        return self
+
+
+class ReadinessNotificationFacts(ApiValue):
+    """One exact original event, with independently observed channel facts."""
+
+    event_id: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
+    cause_id: Reference | None = Field(default=None, exclude_if=lambda value: value is None)
+    target: EvaluationTarget | None = Field(default=None, exclude_if=lambda value: value is None)
+    created_at: ShanghaiDatetime | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    observation: ReadinessObservation | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    channels: tuple[ReadinessNotificationChannel, ...] = Field(default=(), max_length=3)
+
+    @model_validator(mode="after")
+    def original_event_bindings(self) -> Self:
+        if len({item.channel for item in self.channels}) != len(self.channels):
+            raise ValueError("notification channels must be unique")
+        if self.event_id is None and (
+                self.cause_id is not None or self.target is not None or self.created_at is not None
+                or any(item.latest_attempt is not None or item.historical_status is not None
+                       for item in self.channels)):
+            raise ValueError("event metadata and receipts require an exact original event")
+        observed = None if self.observation is None else self.observation.observed_at
+        if self.created_at is not None:
+            if observed is not None and self.created_at > observed:
+                raise ValueError("event creation is later than its observation")
+            if self.target is not None and (
+                    self.target.bucket_end > self.created_at if self.target.kind == "INTRADAY"
+                    else self.target.trade_date > self.created_at.date()):
+                raise ValueError("event target is later than its creation")
+        for item in self.channels:
+            if item.historical_updated_at is not None and (
+                    self.created_at is not None and item.historical_updated_at < self.created_at
+                    or observed is not None and item.historical_updated_at > observed):
+                raise ValueError("historical classification is outside its event/observation")
+            attempt = item.latest_attempt
+            if attempt is None:
+                continue
+            if attempt.event_id != self.event_id:
+                raise ValueError("delivery attempt belongs to another event")
+            delivered = attempt.delivered_at
+            if delivered is not None and (
+                    self.created_at is not None and delivered < self.created_at
+                    or observed is not None and delivered > observed):
+                raise ValueError("delivery time is outside its original event/observation")
+        return self
+
+
 class ConditionReadiness(ApiValue):
     condition_path: Annotated[str, Field(min_length=1, max_length=512)]
     state: Literal["CONDITION_TRUE", "CONDITION_FALSE", "MISSING_INPUT", "BLOCKED", "UNKNOWN"]
@@ -159,6 +293,19 @@ class ReadinessExecutionState(ApiValue):
     window_state: Literal["OPEN", "CLOSED", "UNKNOWN"] = "UNKNOWN"
     eligible: bool | None = None
     reason: Reference | None = None
+    signal_id: Reference | None = Field(default=None, exclude_if=lambda value: value is None)
+    signal_revision: Revision | None = Field(default=None, exclude_if=lambda value: value is None)
+    execution_date: date | None = Field(default=None, exclude_if=lambda value: value is None)
+    observation: ReadinessObservation | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    blockers: tuple[Reference, ...] | None = Field(
+        default=None, max_length=128, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def paired_original_signal(self) -> Self:
+        if (self.signal_id is None) != (self.signal_revision is None):
+            raise ValueError("signal identity and revision must be provided together")
+        return self
 
 
 class RuleReadinessFacts(ApiValue):
@@ -174,6 +321,9 @@ class RuleReadinessFacts(ApiValue):
     leaves: tuple[ConditionReadiness, ...] = Field(max_length=50)
     expected_confirmation: ExpectedConfirmation | None = None
     execution: ReadinessExecutionState = Field(default_factory=ReadinessExecutionState)
+    money: ReadinessMoneyFacts | None = Field(default=None, exclude_if=lambda value: value is None)
+    notification: ReadinessNotificationFacts | None = Field(
+        default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def exact_owner_and_leaves(self) -> Self:
