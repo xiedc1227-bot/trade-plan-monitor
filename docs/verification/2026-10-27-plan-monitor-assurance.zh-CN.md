@@ -577,3 +577,13 @@ T17a2（`9a7e430`）仅修改`decision/unified_lifecycle.py`及新增聚焦单�
 最终10项以25.66s通过：4项实际配置v1/v2 API及6项准确历史契约。此前4项21.00s通过有重叠。真实daily HTTP及canonical v2 dashboard/list/detail父响应不含两种字段拼写，内部值和非法owner/空/重复/超限保护仍验证。初始生命周期夹具错误、实际HTTP/schema泄漏、新测试集合键错误及plain-exclude孤立组件失败保留于证据。只把`exclude=True`改为False使真实canonical-v2 HTTP节点失败，已准确恢复源码SHA。两个profile生成器`--check`现均通过，指挥独立匹配全部四个H04已验收产物的字节/hash，未修改生成文件、历史投影、golden或审批digest。R69早前exit1仍是历史证据，本配套完成修复而非改写结果。
 
 证据`.pytest_cache/pma/t17a3b/evidence.json` SHA256 `f903845dfae3ff0e4f7b99e062efeb4310ad7ed96c47bf6feda9e70cecb1c31c`及`root-review.json`记录最终hash、命令及重叠。指挥完整审查两文件，匹配源码/测试/证据及四产物hash，未重复已通过测试，仅提交派发路径。Ruff/空白通过，未新增GET、完成标记、provider/用户数据库/迁移/采集/发送或push/部署。当前daily/factor owner缺口及其它未实现就绪能力仍是必需后续，T17/C06及真实/语料/最终门禁保留未完成。
+
+## PMA-R71 — 原采集owner的最新完整daily接纳
+
+提交`5b41ef8`恰含已派发T17a4五文件。单个内部frozen `DailySourceAdmission`绑定完整`DailySeries`来源、实际接纳时间和official target。只有原采集owner的完整raw/factor QFQ准入才发布，准确version/hash/activation/generation/configuration/source/permission/date上下文及请求顺序围栏控制发布/撤销。cache/head/anchor-only/duplicate/GET不续证。成功cache不能淘汰在途完整修订，后发有效撤销阻断旧工作，过时成功/失败不能替换或撤销新数据。只保留当前symbol槽位，未新增表、worker、指标、策略、数量或controller政策。
+
+既有不可变/calendar/minute/five-minute/state基础证明主体及签名除说明docstring外不变。独立小型canonical比较增加daily准入及整plan所需验证，无bypass参数。capture不为旧/缺来源捏造daily段，也不丢minute基础。旧mixed monitor在所需daily未验证时为CACHED，逐规则就绪保留独立分钟证明；必需部分未验证时总体data轴仍未知。实际新求值匹配后恢复daily TRUE/FALSE。真实完成时间与原market cutoff独立。覆盖SDK时钟推进、收盘/午夜边界、anchor不变的历史factor修订、因子同比缩放、同标签client替换、失败/权限/取消和真实迟到SDK/cache交错。已过期夹具的旧monitor正确返回503，未捏造健康progress强求CACHED。
+
+最终三批互斥通过：source13项/103.34s、read11项/58.31s、race7项/52.58s，共本片28项及旧邻居3项，不是单次31项运行或容量结果，中间通过有重叠。ticket guard mutation按预期失败并准确恢复。原缺能力失败、1个slotted夹具错误、本片引入的cutoff重定时失败及成功cache吞掉修订失败均保留分类。installed controller为1 worker/1 concurrency，没有按work-key共享结果flight；同context两次完整获取仍按既有政策发生4次物理SDK调用。竞态仅在隔离工程夹具使用其支持的2/2/no-retry配置，生产并发/重试/限流未变。此前关于合流的猜测在此纠正，不改写历史记录。
+
+Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节不变。原证据`.pytest_cache/pma/t17a4/evidence.json` SHA256 `b3620e8e504c3246427b5305eb084048fe1a722258a127253e9d2feddfd4f2d0`保留最终测试/冻结hash。根复核后仅要求两处文案修正：去除错误合流声称、准确描述daily依赖。`post-review-comments.json` SHA256 `901f5d571feca0155c632818ef57967b484c8b7955f8e465770852a18c68f428`记录两文件最终hash、其余文件不变及去docstring AST相同，静态检查通过，未重复行为测试。指挥审查全部源码/测试并独立匹配两组hash（`root-review.json`）后本地提交。范围仅为owner实际观察的最新完整接纳，不声称发现未观察供应商变化或绕过该owner的本地`daily_bar`修改。等待/期限、原始风险、金额/执行、通知、公开API/UI及完整T17/C06仍未验收。真实提取0/48，用户数据库/迁移、真实网络/发送、默认服务、push/部署均0。原始03/04、C05及最终门禁继续未完成。
