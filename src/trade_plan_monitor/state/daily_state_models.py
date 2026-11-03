@@ -9,15 +9,17 @@ from trade_plan_monitor.ai.daily_review import DailySupplement
 from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
 from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
+from trade_plan_monitor.decision.models import EvaluationTarget
 from trade_plan_monitor.decision.p2_economics import EconomicsResult
 from trade_plan_monitor.decision.p3_capital import CapitalAssessment
 from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
-from trade_plan_monitor.domain.daily_hash import daily_hash
+from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyValue,
     FactKind,
     Fen,
+    Identifier,
     PositiveWholeQty,
     Qty,
     RiskKind,
@@ -27,6 +29,7 @@ from trade_plan_monitor.domain.daily_scope import require_technical_text
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.domain.reviewed_fact_targets import ReviewedFactTarget
 from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
+from trade_plan_monitor.domain.unified_plan_models import condition_leaves
 from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
     aggregate_five_minute_bar,
@@ -539,7 +542,22 @@ class DailyRuleReminderState(DailyValue):
     evidence: tuple[dict, ...] = Field(max_length=1)
 
 
+class DailyOrdinaryEvaluation(DailyValue):
+    """One actual existing confirmation evaluation, not an execution permission."""
+
+    plan_version_id: Identifier
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_id: Identifier
+    activation_revision: int = Field(strict=True, gt=0, le=2**53 - 1)
+    rule_id: Identifier
+    target: EvaluationTarget
+    evaluated_at: ShanghaiDatetime
+    evidence: UnifiedConditionEvidence
+
+
 class DailyEvaluationState(DailyValue):
+    ordinary_evaluations: tuple[DailyOrdinaryEvaluation, ...] | None = Field(
+        default=None, min_length=1, max_length=2, exclude_if=lambda v: v is None)
     pretrade: tuple[FrozenPretrade, ...] | None = Field(
         default=None, max_length=2, exclude_if=lambda v: v is None)
     exception_candidates: tuple[ExceptionCandidateResource, ...] | None = Field(
@@ -588,6 +606,14 @@ class DailyEvaluationState(DailyValue):
         "REVIEW_RISK_EXIT", "CONFIRM_SIMULATED_TRADE", "WAIT_FOR_VERIFIED_INPUT_OR_NEXT_SESSION"
     ]
 
+    @field_validator("ordinary_evaluations", mode="before")
+    @classmethod
+    def ordinary_evaluations_json(cls, value):
+        if value is None or not isinstance(value, tuple | list):
+            return value
+        return tuple(DailyOrdinaryEvaluation.model_validate_json(canonical(item))
+                     if isinstance(item, dict) else item for item in value)
+
     @field_validator("minute_prefix", "five_minute_bars", mode="before")
     @classmethod
     def market_json(cls, value, info):
@@ -600,6 +626,24 @@ class DailyEvaluationState(DailyValue):
 
     @model_validator(mode="after")
     def availability(self):
+        rows = self.ordinary_evaluations or ()
+        if len({row.rule_id for row in rows}) != len(rows):
+            raise ValueError("ordinary observations require unique native owners")
+        if sum(len(tuple(condition_leaves(row.evidence.condition))) for row in rows) > 50:
+            raise ValueError("ordinary observations exceed the native condition leaf bound")
+        for row in rows:
+            if (row.plan_version_id, row.content_hash, row.review_id, row.activation_revision,
+                row.evaluated_at) != (self.plan_version_id, self.content_hash, self.review_id,
+                                      self.activation_revision, self.evaluated_at):
+                raise ValueError("ordinary observation crosses its actual evaluation owner")
+            if row.target.kind == "INTRADAY":
+                if (row.target.bucket_end != self.minute_target
+                        or row.target.bucket_end > self.evaluated_at):
+                    raise ValueError("ordinary minute observation crosses its actual target")
+            elif (self.daily_evidence is None
+                  or row.target.trade_date != self.daily_evidence.bars[-1].trade_date
+                  or row.target.trade_date > self.evaluated_at.date()):
+                raise ValueError("ordinary official observation crosses its actual target")
         if self.inventory.symbol != self.symbol:
             raise ValueError("evaluation inventory symbol mismatch")
         if self.daily_evidence is not None and (

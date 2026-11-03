@@ -16,6 +16,10 @@ from trade_plan_monitor.decision.daily_lifecycle import (
 )
 from trade_plan_monitor.decision.daily_risk import advance_daily_risks, risk_execution
 from trade_plan_monitor.decision.market_linkage import evaluate_market_linkage
+from trade_plan_monitor.decision.models import (
+    IntradayEvaluationTarget,
+    OfficialCloseEvaluationTarget,
+)
 from trade_plan_monitor.decision.unified_conditions import (
     evaluate_unified_condition,
     requires_daily,
@@ -52,7 +56,10 @@ from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.notifications.daily_models import DailyAlertPayload, daily_alert_key
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_repository import daily_hash
-from trade_plan_monitor.state.daily_state_models import reviewed_fact_observation_source_hash
+from trade_plan_monitor.state.daily_state_models import (
+    DailyOrdinaryEvaluation,
+    reviewed_fact_observation_source_hash,
+)
 from trade_plan_monitor.state.repositories import MarketHistoryRepository
 from trade_plan_monitor.state.reviewed_fact_authority import signal_fact_evidence_satisfied
 
@@ -943,6 +950,9 @@ class DailyRuntimeEvaluationService:
                 facts=facts, risks=risks,
                 source_missing=(ordinary_source is None or series is None
                     or inputs.linked_index is None))
+            ordinary_evaluations = {}
+            capture_ordinary = (self._observe is not None and inputs.runtime_generation is not None
+                                and self._source_authority_reader is None)
             if not risk_blocked and ordinary_eligible and ordinary_source is not None:
                 for rule in plan.ordinary_rules:
                     if isinstance(plan, UnifiedTradePlan):
@@ -989,6 +999,9 @@ class DailyRuntimeEvaluationService:
                             extra.update(_condition_facts=scoped_facts,
                                 _fact_owner=(plan, active.plan_version_id,
                                              "ORDINARY_RULE", rule.rule_id))
+                        observed = []
+                        if capture_ordinary and isinstance(plan, UnifiedTradePlan):
+                            extra["_evaluation_observer"] = observed.append
                         signal = (
                             confirm_signal
                             if isinstance(plan, UnifiedTradePlan)
@@ -1006,6 +1019,22 @@ class DailyRuntimeEvaluationService:
                                if isinstance(rule, MarketLinkedRule) else {}),
                             **extra,
                         )
+                        if observed and (not daily_rule
+                                or completed is not None and series is not None
+                                and completed.bars[-1].trade_date == series.bars[-1].trade_date):
+                            if len(observed) != 1:
+                                raise ValueError("confirmation must observe its single actual root")
+                            actual_target = (
+                                OfficialCloseEvaluationTarget(
+                                    trade_date=completed.bars[-1].trade_date) if daily_rule
+                                else IntradayEvaluationTarget(bucket_end=inputs.minute_target))
+                            ordinary_evaluations[rule.rule_id] = DailyOrdinaryEvaluation(
+                                plan_version_id=active.plan_version_id,
+                                content_hash=binding["content_hash"],
+                                review_id=binding["review_id"],
+                                activation_revision=active.revision, rule_id=rule.rule_id,
+                                target=actual_target, evaluated_at=now, evidence=observed[0],
+                            ).model_dump(mode="json")
                         if signal is not None and candidate_only:
                             row = record_candidate(work, plan, active, binding,
                                 linkage_by_rule[rule.rule_id], signal,
@@ -1192,6 +1221,8 @@ class DailyRuntimeEvaluationService:
             source_diagnostics = dict.fromkeys([
                 *source_blockers, *(row["reason"] for row in risk_source_blockers)])
             snapshot = {
+                **({"ordinary_evaluations": list(ordinary_evaluations.values())}
+                   if ordinary_evaluations else {}),
                 **({"pretrade": [v.model_dump(mode="json") for v in pretrade_by_rule.values()]}
                    if plan.schema_version in {8, 9} else {}),
                 **({"exception_candidates": [

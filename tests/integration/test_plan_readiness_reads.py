@@ -32,12 +32,32 @@ def current(tmp_path, monkeypatch):
         case.close()
 
 
+@pytest.fixture
+def legacy_current(tmp_path, monkeypatch):
+    """Run the real producer with its old omission of the private observation sink."""
+    from trade_plan_monitor.runtime import daily_service
+
+    original = daily_service.confirm_signal
+
+    def old_confirmation(*args, **kwargs):
+        kwargs.pop("_evaluation_observer", None)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(daily_service, "confirm_signal", old_confirmation)
+    case = _current_status(tmp_path, monkeypatch)
+    try:
+        yield case
+    finally:
+        case.close()
+
+
 def read(case, version_id=None):
     return asyncio.run(case.reader.get_plan_readiness(
         version_id=version_id or case.result.snapshot["plan_version_id"]))
 
 
-def test_missing_ordinary_output_is_unknown_not_false_or_an_invented_evaluation(current):
+def test_missing_ordinary_output_is_unknown_not_false_or_an_invented_evaluation(legacy_current):
+    current = legacy_current
     result = read(current)
     assert result.authority_granted is False
     assert {axis.axis for axis in result.axes} == AXES

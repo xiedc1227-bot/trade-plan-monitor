@@ -9,10 +9,11 @@ from datetime import timedelta
 from types import SimpleNamespace
 from uuid import UUID
 
-from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
+from trade_plan_monitor.decision.models import OfficialCloseEvaluationTarget
+from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence, requires_daily
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.plan_codec import load_plan_json
-from trade_plan_monitor.domain.risk_scope import risk_identity
+from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.runtime.status_authority import (
     ConditionInputStamp,
@@ -81,6 +82,23 @@ def _owners(plan):
         *(("ALERT_RULE", rule.rule_id, None, rule) for rule in plan.alert_rules),
         *(("RISK_BRANCH", risk_identity(rule), "SELL", rule) for rule in plan.risk_branches),
     )
+
+
+def _unverified_daily_dependency(plan, kind, rule, now):
+    """Existing completion stamps do not revalidate current daily/factor owners.
+
+    Match the native acquisition/admission dependencies, not the presence of
+    another rule's daily data. Alerts are independent of ordinary risk admission.
+    """
+    confirmation = getattr(rule, "confirmation", None)
+    condition = getattr(rule, "condition", None)
+    reset = getattr(getattr(rule, "independent_signal", None), "reset_condition", None)
+    return bool(confirmation and confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+        or condition is not None and requires_daily(condition)
+        or reset is not None and requires_daily(reset)
+        or kind == "ORDINARY_RULE" and any(blocks_new_entry({
+            "status": "PENDING", "holding_scope": branch.holding_scope}, now.date())
+            for branch in plan.risk_branches))
 
 
 def _validated_evidence(condition, evidence):
@@ -279,6 +297,7 @@ def read_plan_readiness(session, authority, version_id, now):
         for (kind, identity, side, rule), requirements in zip(
                 value.owners, value.requirements, strict=True):
             evidence, root = None, None
+            actual_target, actual_time = None, None
             matching = None
             rule_target = value.target
             confirmation = getattr(rule, "confirmation", None)
@@ -286,6 +305,21 @@ def read_plan_readiness(session, authority, version_id, now):
                     and (confirmation.kind == "OFFICIAL_DAILY_CLOSE")
                     != (rule_target.kind == "OFFICIAL_CLOSE")):
                 rule_target = None
+            if (confirmation is not None and confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+                    and value.current and value.native.daily_evidence is not None):
+                # The existing completion proof binds this exact consumed series,
+                # including a daily confirmation inside a mixed intraday cycle.
+                rule_target = OfficialCloseEvaluationTarget(
+                    trade_date=value.native.daily_evidence.bars[-1].trade_date)
+            if kind == "ORDINARY_RULE" and value.current and review_ok:
+                matching = next((row for row in value.native.ordinary_evaluations or ()
+                                 if row.rule_id == identity), None)
+                if matching is not None and matching.target == rule_target:
+                    evidence = _validated_evidence(
+                        rule.condition, matching.evidence.model_dump(mode="json"))
+                    if evidence is not None:
+                        root = evidence["outcome"]
+                        actual_target, actual_time = matching.target, matching.evaluated_at
             if kind == "ALERT_RULE" and value.current and review_ok:
                 matching = next((alert for alert in value.native.alerts
                                  if alert.rule_id == identity), None)
@@ -300,20 +334,31 @@ def read_plan_readiness(session, authority, version_id, now):
                     proposed = _validated_evidence(rule.condition, matching.evidence[0])
                     if proposed is not None and proposed["outcome"] == matching.outcome:
                         evidence, root = proposed, matching.outcome
+                        actual_target, actual_time = rule_target, evaluated_at
             condition = getattr(rule, "condition", None)
+            daily_unverified = (actual_target is not None
+                                and _unverified_daily_dependency(value.plan, kind, rule, now))
+            if daily_unverified:
+                # Keep actual target/time as historical observation metadata,
+                # but do not promote its old root/leaves into CURRENT truth.
+                evidence, root = None, None
             if condition is None or value.native is None:
                 leaves = ()
             else:
                 leaves = _leaves(condition, "condition",
                     evidence, reference=evaluation_ref)
             rule_observation = None if value.native is None else data_observation
+            if daily_unverified:
+                rule_observation = observation(evaluation_ref,
+                    "current-daily-and-factor-owner-unverified", availability="CACHED",
+                    as_of=actual_time)
             if kind == "RISK_BRANCH" and value.risks.get(identity) is not None:
                 row = value.risks[identity]
                 rule_observation = observation("risk:" + row["id"], availability="CACHED")
             rules.append(RuleReadinessFacts(owner_kind=kind, owner_id=identity, side=side,
                 requirements=requirements, expected_target=rule_target,
-                evaluated_target=None if root is None else value.proof.target,
-                evaluated_at=None if root is None else evaluated_at,
+                evaluated_target=actual_target,
+                evaluated_at=actual_time,
                 observation=rule_observation,
                 root_outcome=root, leaves=leaves))
         if value.current and any(rule.root_outcome is None for rule in rules):
