@@ -673,3 +673,11 @@ Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节�
 47个新增节点均按记录批次逐项验收，不是单次47／64项执行；此前尝试重叠。最新36项批次通过240.18s，17项未改定向邻居通过2.93s。其他已过正例／FACT／补充／履行节点另行记录，早期批次的夹具失败均保留。新适配器的时间格式及RISK symbol-lineage与EVALUATION plan-lineage差异已修复。原生obligation对象、已登记证据描述及实际完成周期修正了新夹具，没有弱化coverage。真实FACT／birth先在当时激活版本下产生，再合法激活后继版本，保留实际producer的版本边界。唯一执行的误用latest代替原回执mutation失败9.83s，字节精确恢复。纯policy提取之外的原动作检查及新增准确revision方法之外的原store行为保持不变；旧测试／断言未改。Ruff、空白及两套profile检查通过，四份H04产物hash不变。
 
 证据 `.pytest_cache/pma/t17a11/evidence.json` SHA256 `fb82f93088bc2f446f04930f55cde5d1befb0129cdf3d7c39d5312bdcde086af` 及 `root-review.json` 保留冻结、失败、逐节点计数与范围。根完整审查五文件，独立比对五源码／四产物hash，没有重跑已过测试。本片尚未接通风险就绪消费或公开接口。两处既有轮询历史扫描、复杂确认、通知／公开／UI和语料／最终门禁仍未完成，T17/C06未关闭。真实尝试0/48；未访问／迁移用户数据库，未启动默认服务、真实采集／发送或push／部署。
+
+## PMA-R82 — 原生FACT索引候选接缝，仅临时库迁移
+
+提交 `fef25b8` 恰含T17a12放行的五文件。单个FACT部分表达式索引及专用TRADE_DATE读取按准确原生owner／content／kind／date／target／observation分组seek。固定微秒available键确保可用时间准确，仍以原始 `(available_at, verified_at)` 排序选择，包括混合精度。适用targeted／unbound组合并全部最新ties，不过滤否定断言。不支持的时间／target／legacy形态、SIGNAL范围、异常候选、缺失／错误索引及超预算并集均UNKNOWN；已知空仅指所请求候选并集。复用512行及1MiB输出预算，以第513行作超限哨兵，不静默截断。来源／审核及真实分钟观察并集完整性仍由消费者负责，候选不等于条件真值、就绪或许可。
+
+`0029_native_fact_lookup` 在 `0028_source_coverage` 上仅增删索引，metadata与冻结migration表达式一致。带既有数据的临时库升级／重复／降级测试保留所有业务／coverage／receipt值，仅变更预期alembic revision。最终34项通过8.83s：31项新例＋3项未改模型／迁移邻居，此前执行重叠。九条捕获查询均索引SEARCH，没有历史表扫描或临时排序。相同预热后增加3000条无关历史，SQLite VM步数相同；初次冷1379对热1035失败仍保留，准确相等断言未改。四条表达式索引反射警告未屏蔽，另以实际SQLite DDL独立比较定义。移除额外哨兵产生真实截断完整性失败1.99s，源码字节精确恢复。Ruff、空白及两套profile通过，四份H04产物不变。
+
+证据 `.pytest_cache/pma/t17a12/evidence.json` SHA256 `ff41d545346098dca4da9cab9571001d3290811981b0f51c5fa9a9d68da6feb8` 及 `root-review.json` 保留冻结、失败及重叠。T19有界只读原型预审未发现确定的选择／索引前缀缺陷；根复读最终head预算／局部缓存实现及完整五文件，独立比对五源码／四产物hash与实际查询计划产物，没有重跑测试。这只是前置接缝，不关闭MRD-S04：两处既有轮询历史扫描、风险就绪／通知／复杂确认／公开／UI消费及语料／最终门禁仍未完成，T17/C06未勾选。迁移仅在临时测试库执行，用户数据库访问／迁移、默认服务、真实采集／发送及push／部署仍为0，真实提取0/48。
