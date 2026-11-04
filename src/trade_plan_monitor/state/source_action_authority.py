@@ -79,8 +79,8 @@ def _condition_evidence_matches(condition, evidence):
     return evidence.outcome == outcome
 
 
-def _risk_policy_matches(plan, branch, payload):
-    """Compare the original policy, not dynamic status, an ID prefix or SELL text."""
+def _risk_policy_values_match(plan, branch, payload):
+    """Compare only the native identity, quantities, scope and confirmation policy."""
     if risk_identity(branch) != risk_identity(payload):
         return False
     for key in ("kind", "priority", "target_core_qty", "target_tactical_qty", "involves_core",
@@ -103,6 +103,15 @@ def _risk_policy_matches(plan, branch, payload):
         return line is not None and comparator is not None and all(
             key in payload and canonical(payload[key]) == canonical(value)
             for key, value in expected.items())
+    return True
+
+
+def _risk_policy_matches(plan, branch, payload):
+    """Compare the original policy, not dynamic status, an ID prefix or SELL text."""
+    if not _risk_policy_values_match(plan, branch, payload):
+        return False
+    if branch.kind == "ORDINARY_TECHNICAL":
+        return True
     evidence = payload.get("technical_evidence", ())
     if not evidence:
         return False

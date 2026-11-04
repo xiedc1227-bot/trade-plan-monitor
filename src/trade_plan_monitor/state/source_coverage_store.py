@@ -151,6 +151,14 @@ class SourceCoverageStore:
             CoverageAssessmentRow.plan_version_id == version_id,
         ).order_by(CoverageAssessmentRow.revision.desc()).limit(1)).one_or_none())
 
+    def at_revision(self, version_id, revision):
+        """Read the receipt's exact assessment and its direct predecessor only."""
+        self.installation()
+        return self._record(self.session.execute(select(CoverageAssessmentRow.__table__).where(
+            CoverageAssessmentRow.plan_version_id == version_id,
+            CoverageAssessmentRow.revision == revision,
+        )).one_or_none())
+
     def command(self, command_id):
         self.installation()
         return self._record(self.session.execute(select(CoverageAssessmentRow.__table__).where(
