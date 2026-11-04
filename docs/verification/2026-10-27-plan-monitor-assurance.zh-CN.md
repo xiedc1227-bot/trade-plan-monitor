@@ -681,3 +681,11 @@ Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节�
 `0029_native_fact_lookup` 在 `0028_source_coverage` 上仅增删索引，metadata与冻结migration表达式一致。带既有数据的临时库升级／重复／降级测试保留所有业务／coverage／receipt值，仅变更预期alembic revision。最终34项通过8.83s：31项新例＋3项未改模型／迁移邻居，此前执行重叠。九条捕获查询均索引SEARCH，没有历史表扫描或临时排序。相同预热后增加3000条无关历史，SQLite VM步数相同；初次冷1379对热1035失败仍保留，准确相等断言未改。四条表达式索引反射警告未屏蔽，另以实际SQLite DDL独立比较定义。移除额外哨兵产生真实截断完整性失败1.99s，源码字节精确恢复。Ruff、空白及两套profile通过，四份H04产物不变。
 
 证据 `.pytest_cache/pma/t17a12/evidence.json` SHA256 `ff41d545346098dca4da9cab9571001d3290811981b0f51c5fa9a9d68da6feb8` 及 `root-review.json` 保留冻结、失败及重叠。T19有界只读原型预审未发现确定的选择／索引前缀缺陷；根复读最终head预算／局部缓存实现及完整五文件，独立比对五源码／四产物hash与实际查询计划产物，没有重跑测试。这只是前置接缝，不关闭MRD-S04：两处既有轮询历史扫描、风险就绪／通知／复杂确认／公开／UI消费及语料／最终门禁仍未完成，T17/C06未勾选。迁移仅在临时测试库执行，用户数据库访问／迁移、默认服务、真实采集／发送及push／部署仍为0，真实提取0/48。
+
+## PMA-R83 — 共享市场验证且保留原状态守卫
+
+提交 `ac977e5` 仅含T17a13放行的两文件。`condition_market_completion_matches` 按原顺序及查询范围保留不可变结果／hash／行、linked-index、分钟、cutoff及日历／分钟／五分钟三个fingerprint检查。`condition_completion_matches` 短路调用它后，仍通过 `_condition_state` 比较完整业务状态fingerprint；计划级daily admission组合及其他调用方不变。市场对应关系不能单独证明激活、来源审核、人工事实、业务状态或交易许可，也不提供条件真值。
+
+最终30项通过93.99s：26项新例＋4项未改邻居，此前执行重叠。实际schema-5生产owner／不可变证明验证完整FALSE、缺失FACT仍为MISSING_INPUT、来源／结果／时间拒绝及无关FACT／POSITION／SIGNAL／RISK变化后的市场对应关系不变。旧wrapper拒绝这些业务变化。新路径读取不采集／写入，也不调用全量state；窗口外来源不相关。Index／minute spy仅验证守卫顺序，不宣称新增P3来源正例。既有linkage修订、两条例外candidate revision及持仓来源拒绝邻居均通过。新夹具误认为窗口外分钟已存在，现以添加合法窗口外副本修正，保留原守卫／范围／断言。移除旧状态守卫产生预期失败5.70s，源码字节精确恢复。Ruff、空白、两套profile及四份H04产物hash均通过且不变。
+
+证据 `.pytest_cache/pma/t17a13/evidence.json` SHA256 `4210cf8f71648dc53cf541eaf18a6d620508b702754ceed8cb76a47ff4866923` 及 `root-review.json` 保留冻结、失败和重叠。根完整审查两文件，独立比对两源码／四产物hash，没有重跑测试。尚未接readiness消费者，两处原轮询历史接缝仍未关闭；后续消费片须结合market proof、latest daily admission、实际适用FACT／来源／业务归属和既有一致性读取围栏。T17/C06及语料／最终门禁仍未完成。真实提取0/48，用户数据库访问／迁移、默认服务、真实采集／发送及push／部署均为0。
