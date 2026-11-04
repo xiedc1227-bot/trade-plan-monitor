@@ -23,19 +23,31 @@ from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.p3_capital import CapitalAssessment
 from trade_plan_monitor.decision.p3_composition import CapitalMarketDecision
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence
+from trade_plan_monitor.domain.daily_plan_models import Identifier
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.state.daily_state_models import (
     DailyInventoryView,
     DailyRiskAction,
-    DailyRiskState,
     DailyRuleReminderState,
     DailySignalState,
 )
+from trade_plan_monitor.state.daily_state_models import DailyRiskState as _StoredDailyRiskState
 
 
 class ResearchConditionEvidence(UnifiedConditionEvidence):
     session_dates: tuple[date, ...] = ()
     children: tuple[ResearchConditionEvidence, ...] = ()
+
+
+class DailyRiskState(_StoredDailyRiskState):
+    origin_evaluation_id: Identifier | None = Field(default=None, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def stored_risk(cls, value):
+        return (value.model_dump(mode="python")
+                if isinstance(value, _StoredDailyRiskState) and not isinstance(value, cls)
+                else value)
 
 
 class ResearchRuleEvidence(ResearchValue):

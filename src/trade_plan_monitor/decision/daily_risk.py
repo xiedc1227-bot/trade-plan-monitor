@@ -1,11 +1,71 @@
 """Daily risk obligations latch independently from ordinary windows and indicators."""
 
+from collections.abc import Callable
 from datetime import date, datetime, time
 from decimal import Decimal
+from typing import Literal
+
+from pydantic import Field, model_validator
 
 from trade_plan_monitor.decision.daily_conditions import compare
 from trade_plan_monitor.decision.daily_lifecycle import next_session
+from trade_plan_monitor.domain.daily_plan_models import (
+    DailyValue,
+    Fen,
+    Identifier,
+    Number,
+    RiskKind,
+)
 from trade_plan_monitor.domain.risk_scope import risk_identity, scope_contains, scoped_inventory
+
+
+class OrdinaryRiskCloseObservation(DailyValue):
+    """One actual comparison; a first or early close is not a completed pair."""
+
+    risk_identity: Identifier
+    kind: Literal["ORDINARY_TECHNICAL"]
+    status_before: Literal["CLEAR", "PENDING", "OBSERVATION"]
+    status_after: Literal["CLEAR", "PENDING", "OBSERVATION", "CONFIRMED"]
+    close_date: date
+    close_fen: Number = Field(gt=0)
+    risk_line_fen: Fen
+    risk_comparison: Literal["LT", "LTE"]
+    current_basis_id: str | None
+    latched_basis_id: str | None
+    below: bool = Field(strict=True)
+    expected_second_close_date: date | None
+    breach_trade_date_before: date | None
+    second_close_date_before: date | None
+    breach_trade_date_after: date | None
+    second_close_date_after: date | None
+    confirmation_close_used: bool = Field(strict=True)
+    blockers: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def actual_confirmation_close(self):
+        if self.confirmation_close_used and (
+                self.status_before != "PENDING" or self.expected_second_close_date is None
+                or self.close_date < self.expected_second_close_date
+                or self.latched_basis_id != self.current_basis_id):
+            raise ValueError("confirmation close requires the pending compatible-basis branch")
+        return self
+
+
+class DailyRiskBirth(DailyValue):
+    """The real start of one cause, independent of later current observations."""
+
+    risk_identity: Identifier
+    kind: RiskKind
+    status_before: Literal["CLEAR"]
+    status_after: Literal["PENDING", "CONFIRMED"]
+    close_date: date
+
+    @model_validator(mode="after")
+    def actual_start(self):
+        expected = "PENDING" if self.kind == "ORDINARY_TECHNICAL" else "CONFIRMED"
+        if self.status_after != expected:
+            raise ValueError("birth must use the native new-cause branch")
+        return self
 
 
 def _condition_evidence_ids(evidence):
@@ -30,6 +90,8 @@ def advance_daily_risks(
     effective_start_date=None,
     allow_new_causes=True,
     severe_evidence=None,
+    _evaluation_observer: Callable[[OrdinaryRiskCloseObservation], None] | None = None,
+    _birth_observer: Callable[[DailyRiskBirth], None] | None = None,
 ):
     results = []
     by_kind = {risk_identity(r): r for r in previous}
@@ -105,6 +167,7 @@ def advance_daily_risks(
                     state["blockers"] = []
             results.append(state)
             continue
+        status_before = state["status"]
         if branch.kind == "SEVERE_TECHNICAL" and close_date is not None:
             found = [
                 next(
@@ -138,6 +201,10 @@ def advance_daily_risks(
                 )
                 if execution is None:
                     state["blockers"] = ["TRADING_CALENDAR_MISSING"]
+                if status_before == "CLEAR" and _birth_observer is not None:
+                    _birth_observer(DailyRiskBirth(risk_identity=risk_identity(branch),
+                        kind=branch.kind, status_before=status_before,
+                        status_after=state["status"], close_date=close_date))
         elif (
             branch.kind == "ORDINARY_TECHNICAL" and close_date is not None and close_fen is not None
         ):
@@ -145,6 +212,10 @@ def advance_daily_risks(
                 or plan.levels.risk_line_fen)
             op = state.get("risk_comparison", getattr(branch, "risk_comparison", None)
                 or plan.levels.risk_comparison)
+            latched_basis = state.get("basis_id")
+            breach_before = state.get("breach_trade_date")
+            second_before = expected_second = state.get("second_close_date")
+            confirmation_close_used = False
             below = compare(Decimal(close_fen), op, Decimal(line))
             if state.get("basis_id", basis_id) != basis_id:
                 state["blockers"] = ["PERSISTED_RISK_BASIS_EQUIVALENCE_REQUIRED"]
@@ -156,6 +227,7 @@ def advance_daily_risks(
                     )
                     expected = None if day is None else str(day)
                     state["second_close_date"] = expected
+                expected_second = expected
                 suspended_between = tuple(
                     d
                     for d in suspended_dates
@@ -173,6 +245,7 @@ def advance_daily_risks(
                     )
                 )
                 if adjacent or resumed:
+                    confirmation_close_used = True
                     if not below:
                         state["status"] = "OBSERVATION"
                     elif (
@@ -204,6 +277,23 @@ def advance_daily_risks(
                     basis_id=basis_id,
                     suspension_confirmation_policy=branch.suspension_confirmation_policy,
                 )
+                if status_before == "CLEAR" and _birth_observer is not None:
+                    _birth_observer(DailyRiskBirth(risk_identity=risk_identity(branch),
+                        kind=branch.kind, status_before=status_before,
+                        status_after=state["status"], close_date=close_date))
+            if _evaluation_observer is not None:
+                _evaluation_observer(OrdinaryRiskCloseObservation(
+                    risk_identity=risk_identity(branch), kind=branch.kind,
+                    status_before=status_before, status_after=state["status"],
+                    close_date=close_date, close_fen=close_fen,
+                    risk_line_fen=line, risk_comparison=op, current_basis_id=basis_id,
+                    latched_basis_id=latched_basis, below=below,
+                    expected_second_close_date=expected_second,
+                    breach_trade_date_before=breach_before, second_close_date_before=second_before,
+                    breach_trade_date_after=state.get("breach_trade_date"),
+                    second_close_date_after=state.get("second_close_date"),
+                    confirmation_close_used=confirmation_close_used,
+                    blockers=tuple(state["blockers"])))
         results.append(state)
     return tuple(results)
 

@@ -1,12 +1,13 @@
 """Closed persistent daily state graphs; quantities and provenance survive validation."""
 
-from datetime import date
+from datetime import date, datetime, time
 from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.daily_review import DailySupplement
 from trade_plan_monitor.decision.daily_conditions import DailyConditionEvidence
+from trade_plan_monitor.decision.daily_risk import DailyRiskBirth, OrdinaryRiskCloseObservation
 from trade_plan_monitor.decision.market_exception_decision import MarketExceptionDecision
 from trade_plan_monitor.decision.market_linkage import MarketLinkageDecision
 from trade_plan_monitor.decision.models import EvaluationTarget
@@ -28,7 +29,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
 from trade_plan_monitor.domain.daily_scope import require_technical_text
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.domain.reviewed_fact_targets import ReviewedFactTarget
-from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
+from trade_plan_monitor.domain.risk_scope import RiskHoldingScope, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import condition_leaves
 from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
@@ -261,6 +262,8 @@ class DailySignalState(DailyValue):
 
 
 class DailyRiskState(DailyValue):
+    origin_evaluation_id: Identifier | None = Field(
+        default=None, exclude_if=lambda v: v is None)
     kind: RiskKind
     status: Literal["CLEAR", "PENDING", "OBSERVATION", "CONFIRMED", "FULFILLED"]
     priority: int = Field(strict=True, ge=1, le=3)
@@ -555,7 +558,47 @@ class DailyOrdinaryEvaluation(DailyValue):
     evidence: UnifiedConditionEvidence
 
 
+class DailyRiskEvaluation(DailyValue):
+    """One actual risk observation; it neither creates nor reassigns a cause."""
+
+    plan_version_id: Identifier
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_id: Identifier
+    activation_revision: int = Field(strict=True, gt=0, le=2**53 - 1)
+    risk_identity: Identifier
+    kind: RiskKind
+    target: EvaluationTarget | None
+    evaluated_at: ShanghaiDatetime
+    evidence: UnifiedConditionEvidence | None
+    ordinary_close: OrdinaryRiskCloseObservation | None
+
+    @model_validator(mode="after")
+    def actual_kind_and_target(self):
+        if self.kind == "ORDINARY_TECHNICAL":
+            if (self.evidence is not None or self.ordinary_close is None
+                    or self.ordinary_close.risk_identity != self.risk_identity
+                    or self.target is None or self.target.kind != "OFFICIAL_CLOSE"
+                    or self.target.trade_date != self.ordinary_close.close_date):
+                raise ValueError("ordinary risk requires its exact actual close observation")
+        elif self.evidence is None or self.ordinary_close is not None:
+            raise ValueError("severe risk requires its original condition evidence")
+        if self.target is None:
+            if self.evidence is None or self.evidence.outcome != "MISSING_INPUT":
+                raise ValueError("a missing risk target cannot certify a complete condition")
+        elif self.target.kind == "INTRADAY":
+            if self.target.bucket_end > self.evaluated_at:
+                raise ValueError("risk minute observation follows evaluation")
+        elif (datetime.combine(self.target.trade_date, time(15), self.evaluated_at.tzinfo)
+                > self.evaluated_at):
+            raise ValueError("risk observation precedes its official close")
+        return self
+
+
 class DailyEvaluationState(DailyValue):
+    risk_evaluations: tuple[DailyRiskEvaluation, ...] | None = Field(
+        default=None, min_length=1, max_length=64, exclude_if=lambda v: v is None)
+    risk_births: tuple[DailyRiskBirth, ...] | None = Field(
+        default=None, min_length=1, max_length=64, exclude_if=lambda v: v is None)
     ordinary_evaluations: tuple[DailyOrdinaryEvaluation, ...] | None = Field(
         default=None, min_length=1, max_length=2, exclude_if=lambda v: v is None)
     pretrade: tuple[FrozenPretrade, ...] | None = Field(
@@ -614,6 +657,15 @@ class DailyEvaluationState(DailyValue):
         return tuple(DailyOrdinaryEvaluation.model_validate_json(canonical(item))
                      if isinstance(item, dict) else item for item in value)
 
+    @field_validator("risk_evaluations", "risk_births", mode="before")
+    @classmethod
+    def risk_facts_json(cls, value, info):
+        if value is None or not isinstance(value, tuple | list):
+            return value
+        model = DailyRiskEvaluation if info.field_name == "risk_evaluations" else DailyRiskBirth
+        return tuple(model.model_validate_json(canonical(item))
+                     if isinstance(item, dict) else item for item in value)
+
     @field_validator("minute_prefix", "five_minute_bars", mode="before")
     @classmethod
     def market_json(cls, value, info):
@@ -626,11 +678,45 @@ class DailyEvaluationState(DailyValue):
 
     @model_validator(mode="after")
     def availability(self):
+        risk_rows, births = self.risk_evaluations or (), self.risk_births or ()
+        for observations in (risk_rows, births):
+            if len({row.risk_identity for row in observations}) != len(observations):
+                raise ValueError("risk facts require unique native owners")
+            for row in observations:
+                if sum(risk_identity(risk) == row.risk_identity and risk.kind == row.kind
+                       for risk in self.risks) != 1:
+                    raise ValueError("risk fact crosses its native risk owner")
+        for row in risk_rows:
+            if (row.plan_version_id, row.content_hash, row.review_id, row.activation_revision,
+                row.evaluated_at) != (self.plan_version_id, self.content_hash, self.review_id,
+                                      self.activation_revision, self.evaluated_at):
+                raise ValueError("risk observation crosses its actual evaluation owner")
+            if row.target is not None:
+                if row.target.kind == "INTRADAY":
+                    if row.target.bucket_end != self.minute_target:
+                        raise ValueError("risk minute observation crosses its actual target")
+                elif (self.daily_evidence is None
+                      or row.target.trade_date != self.daily_evidence.bars[-1].trade_date):
+                    raise ValueError("risk official observation crosses its actual target")
+            if row.ordinary_close is not None and (
+                    row.ordinary_close.close_fen != self.daily_evidence.bars[-1].close
+                    or row.ordinary_close.current_basis_id != self.daily_evidence.basis_id):
+                raise ValueError("risk comparison differs from its actual daily input")
+        birth_dates = ({bar.trade_date for bar in self.daily_evidence.bars}
+                       if births and self.daily_evidence is not None else set())
+        for birth in births:
+            if (birth.close_date not in birth_dates
+                    or datetime.combine(birth.close_date, time(15), self.evaluated_at.tzinfo)
+                    > self.evaluated_at):
+                raise ValueError("risk birth lacks its actual consumed daily close")
         rows = self.ordinary_evaluations or ()
         if len({row.rule_id for row in rows}) != len(rows):
             raise ValueError("ordinary observations require unique native owners")
         if sum(len(tuple(condition_leaves(row.evidence.condition))) for row in rows) > 50:
             raise ValueError("ordinary observations exceed the native condition leaf bound")
+        if sum(len(tuple(condition_leaves(row.evidence.condition)))
+               for row in (*rows, *risk_rows) if row.evidence is not None) > 50:
+            raise ValueError("risk observations exceed the native condition leaf bound")
         for row in rows:
             if (row.plan_version_id, row.content_hash, row.review_id, row.activation_revision,
                 row.evaluated_at) != (self.plan_version_id, self.content_hash, self.review_id,

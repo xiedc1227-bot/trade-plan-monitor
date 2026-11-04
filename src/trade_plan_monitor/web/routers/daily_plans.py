@@ -19,6 +19,7 @@ from trade_plan_monitor.ai.daily_review import (
     normalize_daily_exclusions,
     semantic_values,
 )
+from trade_plan_monitor.decision.daily_risk import DailyRiskBirth
 from trade_plan_monitor.domain.daily_plan_models import FactKind, Identifier
 from trade_plan_monitor.domain.daily_plan_validation import (
     daily_draft_content_sha256,
@@ -34,6 +35,7 @@ from trade_plan_monitor.state.daily_state_models import (
     DailyObsoleteRisk,
     DailyOrdinaryEvaluation,
     DailyRiskAction,
+    DailyRiskEvaluation,
     DailyRiskState,
     DailySignalState,
 )
@@ -346,7 +348,7 @@ class DailySignalApiView(DailySignalState, ApiValue):
 
 
 class DailyRiskApiView(DailyRiskState, ApiValue):
-    pass
+    origin_evaluation_id: Identifier | None = Field(default=None, exclude=True)
 
 
 class DailyRiskActionApiView(DailyRiskAction, ApiValue):
@@ -355,12 +357,17 @@ class DailyRiskActionApiView(DailyRiskAction, ApiValue):
 
 # A named alias avoids FastAPI registering this excluded field's models as orphans.
 type _OrdinaryEvaluations = tuple[DailyOrdinaryEvaluation, ...] | None
+type _RiskEvaluations = tuple[DailyRiskEvaluation, ...] | None
+type _RiskBirths = tuple[DailyRiskBirth, ...] | None
 
 
 class DailyEvaluationApiView(DailyEvaluationState, ApiValue):
     # Complete ordinary evidence is retained internally for the readiness view.
     ordinary_evaluations: _OrdinaryEvaluations = Field(
         default=None, min_length=1, max_length=2, exclude=True)
+    risk_evaluations: _RiskEvaluations = Field(
+        default=None, min_length=1, max_length=64, exclude=True)
+    risk_births: _RiskBirths = Field(default=None, min_length=1, max_length=64, exclude=True)
     inventory: DailyInventoryApiView
     signals: tuple[DailySignalApiView, ...]
     risks: tuple[DailyRiskApiView, ...]
