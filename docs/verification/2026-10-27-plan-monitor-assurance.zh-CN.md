@@ -647,3 +647,12 @@ Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节�
 最终8项通过48.51s：3个既有case实际均是3条人工事实叶MISSING_INPUT；2个新增隔离量化case经原save／review／collector／index／pipeline产生完整TRUE／FALSE根；1个真实daily B降级；1个未改a6预像；1个未改普通observer FALSE邻居。此前6／2项均重叠。完整上次官方结果按原复杂未来确认guard保持CACHED／无期限、整体UNKNOWN，并非当前就绪正例。新合成源只是补充工程场景，未替换固定语料或原03/04。原15个测试函数／75条断言全部保留。仅移除fallback即可在9.18s产生真实结果丢失失败，随后精确恢复。Ruff、空白、两套profile及四份H04产物hash检查通过且产物不变。
 
 证据 `.pytest_cache/pma/t17a8b/evidence.json` SHA256 `0afa1a9a5961e11f478983ea0823e29b4e0647648a8236edb81fe2edf4b185ac` 及 `root-review.json` 记录最终冻结、最初3条RED、真实缺失／完整场景和mutation重叠。调度完整审查两文件，独立比对两源码／四产物hash，没有重跑已过测试。原生风险当前／原属观察、复杂确认、有界FACT消费者、通知及公开／生成／UI仍未完成。T17/C06及语料／最终门禁保持开放；真实尝试0/48，用户数据库访问／迁移、默认服务、真实采集、真实发送、push／部署均为0。
+## PMA-R79 — 真实风险事实载体与公开报告兼容恢复
+
+提交 `7cc1b93` 原子包含两个分别放行的有界片段：T17a9的5份原生文件先冻结，再实施T17a9b的3份报告文件，前5份始终不动。原生决策仅在原比较及实际访问分支之后提供可选冻结普通收盘观察；前后status、日期、basis、blockers及真实确认收盘使用标志区分首次／提前收盘与完整双收盘。独立birth回调只记录原CLEAR进入PENDING／CONFIRMED的真实开始，包括既有规则允许的fulfilled cutover重置；观察／重入／继承不会创造新birth。原决策、比较／日历调用次数和返回字节均不变。闭合私有风险求值／birth数组及可选原EVALUATION引用保留准确owner／target／time／basis和原生64-owner／50-leaf边界。birth日期必须属于实际消费的日线bar，允许恢复循环中真实较早bar，缺失／未来／未访问输入不能构造birth声明。旧缺字段继续省略。
+
+首次generator确实失败，原因是loop／research报告直接引用原生risk类型，既有daily API排除无法遮住那里新增的origin字段。最小报告子类保留旧 `DailyRiskState` 组件名、原验证和原生实例输入，只从真实报告JSON及序列化schema排除该字段；两类报告父模型复用它，内部原生类型仍序列化／持久化非空origin。没有schema mask／filter、改写生成器、刷新产物、新表、worker、求值器或策略。最初四产物stale日志仍保留为历史证据；现两套profile检查通过，四份H04产物字节／hash完全不变。
+
+最终三个不重叠批次通过：原生57／9.25s（55项新例＋2项既有真实API）、旧决策2／0.64s、报告25／5.24s（23项新例＋2项报告持久化／codec邻居）。不是单次84项或完整回归，此前执行均重叠。确认标志mutation产生两项失败并精确恢复，报告排除mutation产生三个真实非空origin泄漏并精确恢复。根发现的birth父series成员约束已在原生片内修复。两条新原始schema测试比较修正为FastAPI同一标准null默认编码，没有弱化旧断言或改生产schema。旧内部2796字节、公开2694字节和risk739字节预像保持完全一致，Ruff与空白检查通过。
+
+原生证据 `.pytest_cache/pma/t17a9/evidence.json` SHA256 `210b1502005238e1d70a5f5a595b7dfc7f0eb4039deed3b49f2bbf501bd89dbf`、报告证据 `.pytest_cache/pma/t17a9b/evidence.json` SHA256 `4d90851a4d6c44040e36214f690ad36430117bf88f55188ae64b20bd5ee33ae5` 及两份 `root-review.json` 保留失败、准确冻结与重叠。调度完整审查8文件，独立比对8源码／四产物hash，没有重跑已过测试。本次仅验收载体／回调与公开兼容；实际producer、origin赋值／读取验证及风险就绪投影尚未接通。T17/C06、复杂确认、有界FACT、通知／公开／UI和语料／最终门禁仍未完成。真实尝试0/48；用户数据库访问／迁移、默认服务、真实采集、真实发送、push／部署均为0。
