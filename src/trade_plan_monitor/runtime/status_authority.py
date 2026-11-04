@@ -724,8 +724,12 @@ def _condition_sources(session, snapshot, start, end):
     return calendar, minutes, bars
 
 
-def condition_completion_matches(session, *, proof, snapshot, now):
-    """Validate the immutable result and existing non-daily source/state proof."""
+def condition_market_completion_matches(session, *, proof, snapshot, now):
+    """Validate the original immutable result and consumed non-daily market sources.
+
+    This does not prove business state, human facts, activation, daily admission
+    or action permission. Callers retain those original dependency checks.
+    """
     import json
 
     from trade_plan_monitor.state.daily_models import DailyRecord
@@ -761,7 +765,14 @@ def condition_completion_matches(session, *, proof, snapshot, now):
         stamp.calendar_fingerprint == _fingerprint("condition-calendar-v1", calendar)
         and stamp.minute_fingerprint == _fingerprint("condition-minute-v1", minutes)
         and stamp.five_minute_fingerprint == _fingerprint("condition-five-v1", bars)
-        and stamp.state_fingerprint
+    )
+
+
+def condition_completion_matches(session, *, proof, snapshot, now):
+    """Keep the original non-daily market and complete business-state proof."""
+    return (
+        condition_market_completion_matches(session, proof=proof, snapshot=snapshot, now=now)
+        and proof.input_stamp.state_fingerprint
         == _fingerprint("condition-state-v1", _condition_state(session, proof.symbol))
     )
 
