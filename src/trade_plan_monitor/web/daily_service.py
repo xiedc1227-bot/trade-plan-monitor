@@ -200,9 +200,13 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                     if risk["revision"] != command.expected_revision:
                         raise RevisionConflictError(risk["revision"])
                     plan = load_daily_draft_json(details.payload_json).to_executable()
-                    branch = next(
-                        b for b in plan.risk_branches if b.kind == risk["payload"]["kind"]
-                    )
+                    rule_id = risk["payload"].get("rule_id")
+                    branches = [b for b in plan.risk_branches
+                        if b.kind == risk["payload"]["kind"] and (
+                            rule_id is None or getattr(b, "rule_id", None) == rule_id)]
+                    if len(branches) != 1:
+                        raise ValueError("risk reassessment requires one exact reviewed branch")
+                    branch = branches[0]
                     if (
                         branch.target_core_qty,
                         branch.target_tactical_qty,
@@ -232,6 +236,7 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                             "removal_evidence": official,
                         },
                     )
+                    # CLEAR has no cause origin; the complete prior reference stays in the audit.
                     work.daily.save(
                         risk["id"],
                         kind="RISK",
@@ -239,6 +244,10 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                         lineage=risk["lineage"],
                         expected_revision=risk["revision"],
                         payload={
+                            **({"rule_id": branch.rule_id}
+                               if getattr(branch, "rule_id", None) is not None else {}),
+                            **({"holding_scope": branch.holding_scope.model_dump(mode="json")}
+                               if getattr(branch, "holding_scope", None) is not None else {}),
                             "kind": branch.kind,
                             "status": "CLEAR",
                             "priority": branch.priority,

@@ -58,6 +58,7 @@ from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_repository import daily_hash
 from trade_plan_monitor.state.daily_state_models import (
     DailyOrdinaryEvaluation,
+    DailyRiskEvaluation,
     reviewed_fact_observation_source_hash,
 )
 from trade_plan_monitor.state.repositories import MarketHistoryRepository
@@ -719,7 +720,11 @@ class DailyRuntimeEvaluationService:
                 else ()
             )
             risks = previous_risks
+            capture_risks = (isinstance(plan, UnifiedTradePlan) and self._observe is not None
+                and inputs.runtime_generation is not None and self._source_authority_reader is None)
+            risk_births = {}
             for completed in completed_series or (None,):
+                close_observations, new_births = [], []
                 severe_branches = [b for b in plan.risk_branches if b.kind == "SEVERE_TECHNICAL"]
                 severe_minute_target = (inputs.minute_target
                     if completed is not None and inputs.minute_target is not None
@@ -747,7 +752,36 @@ class DailyRuntimeEvaluationService:
                     effective_start_date=effective_start,
                     allow_new_causes=ordinary_eligible,
                     severe_evidence=severe_evidence,
+                    **({"_evaluation_observer": close_observations.append,
+                        "_birth_observer": new_births.append} if capture_risks else {}),
                 )
+                if new_births:
+                    born = {birth.risk_identity for birth in new_births}
+                    for birth in new_births:
+                        if birth.risk_identity in risk_births:
+                            raise ValueError("risk cause must start at most once per evaluation")
+                        risk_births[birth.risk_identity] = birth.model_dump(mode="json")
+                    risks = tuple({**risk, "origin_evaluation_id": identity}
+                        if risk_identity(risk) in born else risk for risk in risks)
+            risk_evaluations = []
+            if capture_risks:
+                owner = dict(plan_version_id=active.plan_version_id,
+                    content_hash=binding["content_hash"], review_id=binding["review_id"],
+                    activation_revision=active.revision, evaluated_at=now)
+                for severe in severe_branches:
+                    actual_target = (IntradayEvaluationTarget(bucket_end=severe_minute_target)
+                        if severe_minute_target is not None and requires_minutes(severe.condition)
+                        else OfficialCloseEvaluationTarget(trade_date=completed.bars[-1].trade_date)
+                        if completed is not None else None)
+                    risk_evaluations.append(DailyRiskEvaluation(**owner,
+                        risk_identity=risk_identity(severe), kind=severe.kind,
+                        target=actual_target, evidence=severe_evidence[risk_identity(severe)],
+                        ordinary_close=None).model_dump(mode="json"))
+                for observation in close_observations:
+                    risk_evaluations.append(DailyRiskEvaluation(**owner,
+                        risk_identity=observation.risk_identity, kind=observation.kind,
+                        target=OfficialCloseEvaluationTarget(trade_date=observation.close_date),
+                        evidence=None, ordinary_close=observation).model_dump(mode="json"))
             fulfilled = []
             for risk in risks:
                 if (
@@ -1221,6 +1255,8 @@ class DailyRuntimeEvaluationService:
             source_diagnostics = dict.fromkeys([
                 *source_blockers, *(row["reason"] for row in risk_source_blockers)])
             snapshot = {
+                **({"risk_evaluations": risk_evaluations} if risk_evaluations else {}),
+                **({"risk_births": list(risk_births.values())} if risk_births else {}),
                 **({"ordinary_evaluations": list(ordinary_evaluations.values())}
                    if ordinary_evaluations else {}),
                 **({"pretrade": [v.model_dump(mode="json") for v in pretrade_by_rule.values()]}
