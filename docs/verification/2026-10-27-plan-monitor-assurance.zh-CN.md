@@ -665,3 +665,11 @@ Ruff、空白及两套生成器检查通过，H04四产物及先前证据字节�
 最终20项批次通过164.49s：18项新例＋2项未改历史邻居。此前定向执行均重叠，不是完整回归或提取验收。覆盖真实来源审核／激活、生产owner、双收盘恢复、同kind反串拒绝、旧歧义、实际HTTP模拟及后续birth。跨日履行需要当日临时SDK输入及既有 `recover_startup` 补齐缺失分钟前缀，没有续发证书、修改TTL或绕过guard。新夹具错误假设及真实CLEAR失败均保留日志。重复测试加强为读取实际非空不可变EVALUATION；回滚比较完整初始行，不再假定激活未创建记录。唯一执行的mutation丢弃累计早期birth，恢复测试失败7.33s，源码字节精确恢复。此前CRLF脚本前置检查在修改／测试前失败，另行记录。Ruff、空白及两套generator检查通过，四份H04产物字节不变。
 
 证据 `.pytest_cache/pma/t17a10/evidence.json` SHA256 `5352651f87517203452f9f8db7d10d10806ada674275347e987bb70afec98f67` 及 `root-review.json` 保留准确冻结、失败与重叠。调度完整审查四文件，独立比对四源码／四产物hash，没有重跑已过测试。原属来源验证及风险就绪消费仍属后续子片；T17/C06、复杂确认、有界FACT、通知／公开／UI和语料／最终门禁仍未完成。真实尝试0/48；用户数据库访问／迁移、默认服务、真实采集、真实发送及push／部署均为0。
+
+## PMA-R81 — 有界准确原属风险诊断
+
+提交 `3b08ecc` 包含T17a11放行的五文件。`read_risk_origin` 解析准确当前RISK ID／symbol、唯一实际birth、非head不可变EVALUATION及原始自引用。验证原版本／content／review／shadow及回执绑定的assessment revision，只检查直接前驱。已被替换的原版本仍可诊断；当前BUY的coverage／book失败既不提供也不否决原证据。复用原生policy、严重风险证据／FACT归属及时间约束。实际FACT revision与验证时间仍锁定原求值，已登记补充记录经刷新后由既有验证器检查。支持四种原生状态。旧缺origin／birth、变化的policy／scope／basis及未证明的转移保持UNKNOWN。原始比较binding包含实际消费的来源owner，调用者仍须在既有有界重试中比较binding。这不是SELL许可、数量或当前条件真值。
+
+47个新增节点均按记录批次逐项验收，不是单次47／64项执行；此前尝试重叠。最新36项批次通过240.18s，17项未改定向邻居通过2.93s。其他已过正例／FACT／补充／履行节点另行记录，早期批次的夹具失败均保留。新适配器的时间格式及RISK symbol-lineage与EVALUATION plan-lineage差异已修复。原生obligation对象、已登记证据描述及实际完成周期修正了新夹具，没有弱化coverage。真实FACT／birth先在当时激活版本下产生，再合法激活后继版本，保留实际producer的版本边界。唯一执行的误用latest代替原回执mutation失败9.83s，字节精确恢复。纯policy提取之外的原动作检查及新增准确revision方法之外的原store行为保持不变；旧测试／断言未改。Ruff、空白及两套profile检查通过，四份H04产物hash不变。
+
+证据 `.pytest_cache/pma/t17a11/evidence.json` SHA256 `fb82f93088bc2f446f04930f55cde5d1befb0129cdf3d7c39d5312bdcde086af` 及 `root-review.json` 保留冻结、失败、逐节点计数与范围。根完整审查五文件，独立比对五源码／四产物hash，没有重跑已过测试。本片尚未接通风险就绪消费或公开接口。两处既有轮询历史扫描、复杂确认、通知／公开／UI和语料／最终门禁仍未完成，T17/C06未关闭。真实尝试0/48；未访问／迁移用户数据库，未启动默认服务、真实采集／发送或push／部署。
