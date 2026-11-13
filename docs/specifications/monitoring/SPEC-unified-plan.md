@@ -392,3 +392,5 @@ Candidate compatibility OpenAPI snapshot SHA-256: `4b606849eb334bfb19888319ac40b
 Candidate canonical monitor v2 OpenAPI snapshot SHA-256: `57985edb074683be169ea674a8b4c503402fad7a6b55917b839dff566c181464`
 
 Candidate generated TypeScript SHA-256: compatibility `bc2d5f7e0315490d47d98593843110ce5fab62e4f0c815df6ab1bddeacee8f4b`; canonical `622ead01cea642615080d4e0df75e3567498d2b807fb82fa60ef706d4e1a88a2`.
+
+T17a25 materialization update: `76031b3` writes all four candidate outputs above byte-for-byte and registers only the new pre-projection path. Both generator checks and35 unique actual-artifact/historical-contract checks pass (13 overlap with T17a24; do not sum as unique). The previously pending generated/path gate is closed. UI, joint scenarios, installation and corpus/final acceptance remain separate; the authority and capability limits above are unchanged.
