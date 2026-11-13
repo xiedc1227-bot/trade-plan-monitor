@@ -5,6 +5,7 @@ unobserved evaluations stay UNKNOWN. This module never runs a trading evaluator 
 rescans historical cutover membership to manufacture a positive observation.
 """
 
+from dataclasses import asdict
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from uuid import UUID
@@ -48,6 +49,7 @@ from trade_plan_monitor.state.readiness_fact_inputs import (
     recorded_quote_controls_current,
     recorded_signal_facts_current,
 )
+from trade_plan_monitor.state.readiness_notification_reads import read_owned_notifications
 from trade_plan_monitor.state.repositories import MarketReferenceRepository, PlanRepository
 from trade_plan_monitor.state.risk_origin_reads import read_risk_origin
 from trade_plan_monitor.state.source_action_authority import _condition_evidence_matches
@@ -57,8 +59,11 @@ from trade_plan_monitor.web.plan_readiness_models import (
     ConditionReadiness,
     ExpectedConfirmation,
     ReadinessContext,
+    ReadinessDeliveryAttempt,
     ReadinessExecutionState,
     ReadinessMoneyFacts,
+    ReadinessNotificationChannel,
+    ReadinessNotificationFacts,
     ReadinessObservation,
     ReadinessRiskFacts,
     ReadinessRiskObligation,
@@ -611,12 +616,13 @@ def _load(session, authority, version_id, now):
               for identity, origin in risk_origins.items()),
         tuple((identity, None if row is None else (row["revision"], canonical(row["payload"])))
               for identity, row in risks.items()))
-    return SimpleNamespace(source=source, details=details, plan=plan, owners=owners,
+    value = SimpleNamespace(source=source, details=details, plan=plan, owners=owners,
         requirements=requirements, active=bound_active, inventory=inventory, book=book,
         capital_inputs=capital_inputs,
         signals=signals,
         calendar_open=calendar_open,
-        native=native, proof=proof, target=target, current=current, prior_current=prior_current,
+        native=native, payload=payload, proof=proof, target=target,
+        current=current, prior_current=prior_current,
         confirmation=confirmation, binding=binding,
         owner_current=owner_current,
         fact_current=fact_current, quote_controls_current=quote_controls_current,
@@ -625,6 +631,50 @@ def _load(session, authority, version_id, now):
         daily_current=daily_current,
         activation_revision=active.revision if bound_active else None, risks=risks,
         risk_origins=risk_origins)
+    value.notifications, notification_binding = read_owned_notifications(
+        work, value=value, authority=authority, now=now)
+    value.binding = (*binding, notification_binding)
+    return value
+
+
+def _notification(value, authority, kind, identity, *, observe):
+    """Current configuration and exact historical receipts are independent facts."""
+    from trade_plan_monitor.notifications.channels import DeliveryChannel
+
+    configuration = None if authority is None else authority.notification_configuration
+    configured = {} if configuration is None else {
+        item.channel: item for item in configuration.channels}
+    original = value.notifications.get((kind, identity))
+    event = None if original is None else original.event
+    classification = None if original is None else original.classification
+    attempts = {}
+    for item in (() if original is None else original.attempts):
+        try:
+            attempts[item.channel] = ReadinessDeliveryAttempt(**asdict(item))
+        except TypeError, ValueError:
+            continue
+    channels = tuple(ReadinessNotificationChannel(channel=channel,
+        configured=None if configuration is None else channel in configured,
+        enabled=None if channel not in configured else configured[channel].enabled,
+        historical_status=None if classification is None else classification.status,
+        historical_updated_at=None if classification is None else classification.updated_at,
+        latest_attempt=attempts.get(channel)) for channel in DeliveryChannel
+        if configuration is not None or classification is not None or channel in attempts)
+    if event is None:
+        return None if not channels else ReadinessNotificationFacts(channels=channels,
+            observation=observe("runtime:" + str(authority.generation),
+                availability="PERSISTED_ONLY"))
+    try:
+        return ReadinessNotificationFacts(event_id=event.event_id, cause_id=event.cause_id,
+            target=original.target, created_at=event.created_at, channels=channels,
+            observation=observe(str(event.event_id), availability="PERSISTED_ONLY",
+                as_of=event.created_at))
+    except ValueError:
+        return None if configuration is None else ReadinessNotificationFacts(
+            observation=observe("runtime:" + str(authority.generation),
+                availability="PERSISTED_ONLY"), channels=tuple(item.model_copy(update={
+                    "historical_status": None, "historical_updated_at": None,
+                    "latest_attempt": None}) for item in channels))
 
 
 def _risk_facts(value, identity, rule, now, *, observe, context_expiry, review_ok):
@@ -1005,7 +1055,8 @@ def read_plan_readiness(session, authority, version_id, now):
                 evaluated_at=actual_time,
                 observation=rule_observation,
                 root_outcome=root, leaves=leaves, expected_confirmation=expected_confirmation,
-                execution=execution, money=money, risk=risk))
+                execution=execution, money=money, risk=risk,
+                notification=_notification(value, authority, kind, identity, observe=observation)))
         if value.current and any(
                 rule.risk.maintenance.state != "PASS" if rule.risk is not None else
                 rule.root_outcome is None or rule.observation is None
@@ -1049,6 +1100,8 @@ def changed_readiness(result):
             "maintenance": AxisReadiness(axis="DATA_EVALUATION", state="UNKNOWN",
                                          reason="CONTEXT_CHANGED")}),
         "execution": ReadinessExecutionState(),
+        # Exhausted retries no longer establish this event's owner/context.
+        "notification": None,
         "money": None if rule.money is None else ReadinessMoneyFacts(inputs=AxisReadiness(
             axis="INVENTORY_CAPITAL", state="UNKNOWN" if rule.requirements.required
                 else "NOT_APPLICABLE",
