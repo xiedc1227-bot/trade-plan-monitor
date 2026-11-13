@@ -703,3 +703,12 @@ The user explicitly requested a shutdown pause after recording progress. All tas
 
 
 Resume update (2026-11-13): the user explicitly requested continuation. Frozen hashes were verified and the exact five-file commit `fb692c8` completed. The pause paragraph above records the earlier shutdown state; remaining independent engineering is authorized under P07. No passed tests were repeated and no acceptance boundary was relaxed.
+
+
+## PMA-R85 — Minimal risk fact contract and native-history compatibility
+
+Commit `0c7d5aa` contains the four released T17a15 files: readiness models, focused new units and the paired MRD appendix. Optional omitted `risk` separates actual native comparison, current obligation, verified original cause and actual maintenance. It adds no duplicate observation, evaluator, storage or permission. Historical fulfillment retained by a genuine new cause remains representable; absent comparisons retain unknown definition leaves. Embedded risk trees share the existing 50-leaf bound. Original source ownership and current comparison context remain distinct. The appendix fixes later ordinary two-close mapping and the narrowly proven maintenance-skip rule; those consumer/summary behaviors are not implemented by this slice.
+
+Final focused batch: **190 passed in 2.77s**, comprising 53 new risk-model cases and 137 unchanged neighbors. Earlier runs overlap. The two genuine missing-model RED cases, an incorrect native class fixture, a wrongly chosen negative date and formatting corrections are retained. Actual native risk advancement proves old fulfillment remains with new CLEAR/PENDING/CONFIRMED. Old a6 (19942 bytes) and rich a7 (4456 bytes) JSON round-trip unchanged; strict ownership/time/fields, missing origins, diagnostic leaves and native names are covered. Ruff, whitespace and both generated profiles pass; four H04 artifacts are unchanged. No a14 integration batch was repeated.
+
+Evidence `.pytest_cache/pma/t17a15/evidence.json`, SHA256 `1d7d2edf1f4527596ba95607e8e5f3d39ce2dc3afd5584dc9ef977584c38279d`; `root-review.json` independently checks four frozen file hashes, four protected hashes and all 190 successful JUnit cases. Root reviewed the complete source/tests and bilingual semantics, including the three corrected draft constraints. Next is the actual risk reader/summary and production/race verification. T17/C06 and the corpus/final gates remain open. Real extraction0/48; no user database access/migration, default service, live acquisition/send, push or deployment.
