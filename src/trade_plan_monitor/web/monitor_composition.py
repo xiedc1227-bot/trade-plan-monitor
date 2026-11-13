@@ -32,7 +32,10 @@ from trade_plan_monitor.market_data.sessions import SourceTimeLabel
 from trade_plan_monitor.notifications.channels import InAppChannel
 from trade_plan_monitor.notifications.current_delivery import CurrentDeliveryAdmission
 from trade_plan_monitor.notifications.delivery_eligibility import DeliveryMetadataError
-from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
+from trade_plan_monitor.notifications.dispatcher import (
+    NotificationConfigurationSnapshot,
+    NotificationDispatcher,
+)
 from trade_plan_monitor.runtime.clock import Clock, SystemClock
 from trade_plan_monitor.runtime.health import (
     DatabaseHealthSnapshot,
@@ -694,6 +697,16 @@ class _ProductionRuntimeState:
         self._liveness_revision: int | None = None
         self._alert_sweep_cursor = 0
         self._alert_sweep_target = 0
+
+    def notification_configuration_snapshot(self) -> NotificationConfigurationSnapshot | None:
+        """Proxy the retained real dispatcher; unavailable facts stay unknown."""
+        if self._dispatcher is None:
+            return None
+        try:
+            snapshot = self._dispatcher.configuration_snapshot()
+            return snapshot if type(snapshot) is NotificationConfigurationSnapshot else None
+        except Exception:
+            return None
 
     def next_index_recovery_at(self) -> datetime | None:
         if self._pipeline is None:
@@ -1474,6 +1487,10 @@ def create_monitor_composition(
             configuration_revision=revision or "",
             plans=plans,
             dependencies=dependencies,
+            notification_configuration=(
+                state.notification_configuration_snapshot()
+                if owner.runtime_generation == progress.runtime_generation else None
+            ),
             block_reason=block_reason,
             standby_reason=_runtime_standby_reason(
                 plans=plans,

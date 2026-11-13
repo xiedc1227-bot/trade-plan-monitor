@@ -107,6 +107,7 @@ def authority_identity(authority):
     return (authority.token, authority.generation, authority.configuration_revision,
             authority.lifecycle, authority.block_reason, authority.standby_reason,
             authority.owner_absent, authority.plans, authority.dependencies,
+            authority.notification_configuration,
             None if authority.progress is None else (
                 authority.progress.state, authority.progress.last_progress_at,
                 authority.progress.progress_due_at, authority.progress.next_wake_at))

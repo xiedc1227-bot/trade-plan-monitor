@@ -79,6 +79,41 @@ class DeliveryAttemptRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class NotificationChannelConfiguration:
+    """Actual adapter configuration and dispatcher-observed closure, without secrets."""
+
+    channel: DeliveryChannel
+    enabled: bool
+    closed: bool
+
+    def __post_init__(self) -> None:
+        if type(self.channel) is not DeliveryChannel:
+            raise TypeError("configuration channel must use the native channel enum")
+        if type(self.enabled) is not bool or type(self.closed) is not bool:
+            raise TypeError("configuration flags must be strict booleans")
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationConfigurationSnapshot:
+    """Retained instance facts; configured/enabled never establishes eligibility."""
+
+    channels: tuple[NotificationChannelConfiguration, ...]
+    admission_stopped: bool
+
+    def __post_init__(self) -> None:
+        if type(self.channels) is not tuple or any(
+            type(item) is not NotificationChannelConfiguration for item in self.channels
+        ):
+            raise TypeError("configuration channels must be a frozen tuple of native facts")
+        if len(self.channels) > 3 or len({item.channel for item in self.channels}) != len(
+            self.channels
+        ):
+            raise ValueError("configuration channels must be unique and bounded to three")
+        if type(self.admission_stopped) is not bool:
+            raise TypeError("dispatcher admission state must be a strict boolean")
+
+
+@dataclass(frozen=True, slots=True)
 class _AttemptPlan:
     attempt: int
     existing_id: str | None = None
@@ -161,6 +196,22 @@ class NotificationDispatcher:
             by_name[channel_name] = channel
         self._channels = tuple(
             sorted(by_name.values(), key=lambda item: _CHANNEL_ORDER[item.channel])
+        )
+
+    def configuration_snapshot(self) -> NotificationConfigurationSnapshot:
+        """Observe only the actual constructed adapters and completed close operations."""
+        channels = []
+        for adapter in self._channels:
+            channel = adapter.channel
+            channels.append(
+                NotificationChannelConfiguration(
+                    channel=channel,
+                    enabled=adapter.enabled,
+                    closed=channel in self._closed_channels,
+                )
+            )
+        return NotificationConfigurationSnapshot(
+            channels=tuple(channels), admission_stopped=self._closed
         )
 
     async def dispatch_pending(

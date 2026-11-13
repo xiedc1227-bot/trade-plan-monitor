@@ -12,6 +12,7 @@ from trade_plan_monitor.decision.models import (
     IntradayEvaluationTarget,
     OfficialCloseEvaluationTarget,
 )
+from trade_plan_monitor.notifications.dispatcher import NotificationConfigurationSnapshot
 from trade_plan_monitor.runtime.progress import ProgressSnapshot
 
 
@@ -124,6 +125,7 @@ class RuntimeReadAuthority:
     owner_absent: bool = False
     standby_reason: str = "NO_ACTIVE_PLANS"
     block_reason: str | None = None
+    notification_configuration: NotificationConfigurationSnapshot | None = None
 
     @property
     def generation(self) -> UUID | None:
@@ -136,6 +138,11 @@ class RuntimeReadAuthority:
             raise ValueError("Owner absence cannot retain ownership")
         if len({plan.symbol for plan in self.plans}) != len(self.plans):
             raise ValueError("Duplicate plan authority")
+        if self.notification_configuration is not None:
+            if type(self.notification_configuration) is not NotificationConfigurationSnapshot:
+                raise TypeError("notification configuration requires native frozen instance facts")
+            if self.owner_absent:
+                raise ValueError("an absent owner cannot supply dispatcher configuration")
 
 
 def _fingerprint(domain, values):
