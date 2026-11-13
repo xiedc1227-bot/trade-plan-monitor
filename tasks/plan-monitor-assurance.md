@@ -395,3 +395,5 @@ T17a24 exact projection and paired API-owner records accepted as `9fd55c4` (R94)
 T17 engineering handoff accepted in R95: `76031b3` materializes exact contracts,35 unique passes (13 overlap witha24); `0680a57` records paired API acceptance. Owned read/API/contracts are delivered with declared UNKNOWN limits. Next T18 UI then T19 joint scenarios; C06 and original03/04/C05/final remain open,0/48 unchanged.
 
 T18a workbench foundation accepted as `eb04136` (R96):133 unique passes across132 focused and20 final checks with19 overlap; type/build pass. Next H04 exact leaf selector and remaining target/detail presentation, then T19/T21 joint/browser acceptance. T18/C06 stay open; original03/04/C05/final and0/48 unchanged.
+
+T18b exact manual leaf UI accepted as `cdebd59` (R97):111 unique checks (107+33 with29 overlap); no added confirmation step. Late refresh failure review finding fixed and tested. Next T18 target/provenance/required-input detail, then T19/T21 native/public/browser combination. Full H04/T13/T18/C06 and corpus/final gates remain open;0/48 unchanged.
