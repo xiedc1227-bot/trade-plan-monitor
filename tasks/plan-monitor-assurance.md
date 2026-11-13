@@ -206,7 +206,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T19 — Prove readiness edge cases and risk independence
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify the engineering scenarios and existing-evidence map (R99); installation/browser/corpus gates remain separate.
 - Depends on: T18.
 - Files/scope: `test_plan_readiness_scenarios.py`, pure summary tests, scoped current notification/risk regressions and justified repairs only (3–5 files).
 - Acceptance: A05,A06,A09,A10; Verify: V04 plus existing runtime-read ownership, official-close and P3 risk tests. Cover every MRD-S07 case, stale-response/context races, read-only side effects and quote/book changes without new occurrences.
