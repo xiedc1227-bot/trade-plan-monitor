@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from "vue";
+import { computed, shallowRef, useTemplateRef, watch } from "vue";
 import { usePlanWorkspace } from "../../composables/usePlanWorkspace";
+import type { ReadinessContext } from "../../api/planReadiness";
 import PlanSourceExtraction from "./PlanSourceExtraction.vue";
 import PlanFieldEditor from "./PlanFieldEditor.vue";
 import PlanSourceReview from "./PlanSourceReview.vue";
 import SourceCoverageReview from "./SourceCoverageReview.vue";
+import PlanReadiness from "./PlanReadiness.vue";
 import PlanSimulationPanel from "./PlanSimulationPanel.vue";
 import P2PolicyReview from "./P2PolicyReview.vue";
 import P3PolicyReview from "./P3PolicyReview.vue";
@@ -15,10 +17,65 @@ const { source, provider, providers, extraction, versions, historyOnly, candidat
 const { phase: coveragePhase, page: coveragePage, safeError: coverageError,
   verifiedSourceHash: coverageVerifiedSourceHash } = work.sourceCoverage;
 const coverageNotice = shallowRef("");
+const sourceCoveragePane = useTemplateRef<InstanceType<typeof SourceCoverageReview>>("sourceCoveragePane");
+const readinessContext = shallowRef<ReadinessContext | null>(null);
+let readinessSavedKey = "";
+watch(() => [saved.value, busy.value, work.dirty.value, historyOnly.value, source.value,
+  work.ownerGeneration.value, coveragePhase.value, work.sourceCoverage.summary.value], () => {
+  const version = saved.value, summary = work.sourceCoverage.summary.value;
+  if (busy.value || work.dirty.value || historyOnly.value || !version || !version.contentHash ||
+      !version.sourceHash || source.value !== version.sourceText) {
+    readinessContext.value = null; readinessSavedKey = ""; return;
+  }
+  const savedKey = JSON.stringify([version.id, version.planHash, version.contentHash, version.sourceHash,
+    version.reviewId, version.reviewRevision, version.reviewEvidenceHash, work.ownerGeneration.value]);
+  // A same-owner coverage page fetch does not change the accepted readiness binding.
+  if (coveragePhase.value === "LOADING" && readinessSavedKey === savedKey && readinessContext.value) return;
+  if (coveragePhase.value !== "CURRENT" || !summary ||
+      summary.sourceHash !== version.sourceHash || summary.contentHash !== version.contentHash ||
+      summary.candidatePlanHash !== version.planHash || summary.reviewId !== (version.reviewId ?? null) ||
+      summary.reviewRevision !== version.reviewRevision) {
+    readinessContext.value = null; readinessSavedKey = ""; return;
+  }
+  readinessSavedKey = savedKey;
+  readinessContext.value = { planVersionId: version.id, contentHash: version.contentHash, sourceHash: version.sourceHash,
+    coverageHash: summary.coverageEvidenceHash, reviewReceiptHash: summary.coverageReviewReceiptHash,
+    ownerGeneration: work.ownerGeneration.value };
+}, { immediate: true, flush: "sync" });
+const readinessLocations = computed<Readonly<Record<string, string>>>(() => {
+  const locations: Record<string, string> = {};
+  const ambiguous = new Set<string>();
+  if (!readinessContext.value || !saved.value) return locations;
+  try {
+    const plan = JSON.parse(saved.value.planJson);
+    for (const [field, kind] of [["ordinary_rules", "ORDINARY_RULE"], ["alert_rules", "ALERT_RULE"], ["risk_branches", "RISK_BRANCH"]] as const) {
+      if (!Array.isArray(plan[field])) continue;
+      for (const [index, rule] of plan[field].entries()) {
+        if (!rule || typeof rule !== "object") continue;
+        const id = typeof rule.rule_id === "string" ? rule.rule_id : kind === "RISK_BRANCH" &&
+          !rule.holding_scope && plan[field].filter((peer: { kind: unknown }) => peer.kind === rule.kind).length === 1 ? rule.kind : null;
+        // Object fieldsets have no DOM id; the exact owner's scalar field does.
+        if (typeof id === "string") {
+          const key = `${kind}:${id}`;
+          if (Object.hasOwn(locations, key)) { delete locations[key]; ambiguous.add(key); }
+          else if (!ambiguous.has(key)) locations[key] = `${field}[${index}].${typeof rule.rule_id === "string" ? "rule_id" : "kind"}`;
+        }
+      }
+    }
+  } catch { /* An unreadable saved document has no safe field location. */ }
+  return locations;
+});
+function revealReadinessSource() {
+  const pane = sourceCoveragePane.value?.$el;
+  if (!(pane instanceof HTMLElement)) return;
+  pane.tabIndex = -1; pane.focus(); pane.scrollIntoView?.({ block: "center" });
+  coverageNotice.value = "请在原文条件核对中查看准确映射；当前规则没有可唯一定位的字段。";
+}
 function revealField(path: string) {
   const field = document.getElementById(`daily-.${path}`);
   if (!(field instanceof HTMLElement)) { coverageNotice.value = "此参数当前没有可定位的编辑字段，请按完整路径核对计划。"; return; }
   coverageNotice.value = "";
+  if (field.tabIndex < 0) field.tabIndex = -1;
   field.focus(); field.scrollIntoView?.({ block: "center" });
 }
 const linkedCandidate = computed(() => candidate.value !== null && typeof candidate.value === "object"
@@ -60,10 +117,12 @@ watch(work.ownerGeneration, () => { coverageNotice.value = ""; }, { flush: "sync
       :can-confirm-review="work.canConfirmSourceReview.value" :source-owner-key="work.ownerGeneration.value"
       :active-version-id="activated?.active ? activated.planVersionId : null"
       @supplement="work.supplement" @exclude="work.exclude" @save="work.save" @confirm="work.confirm" @activate="work.activate" @deactivate="work.deactivate" />
-    <SourceCoverageReview :phase="coveragePhase" :page="coveragePage" :safe-error="coverageError"
+    <SourceCoverageReview ref="sourceCoveragePane" :phase="coveragePhase" :page="coveragePage" :safe-error="coverageError"
       :source-text="source" :source-hash="saved?.sourceHash ?? null" :verified-source-hash="coverageVerifiedSourceHash" :busy="busy"
       @refresh="work.refreshSourceCoverage" @first-page="work.refreshSourceCoverage" @next-page="work.sourceCoverage.nextPage" @reveal-field="revealField" />
     <p v-if="coverageNotice" role="status">{{ coverageNotice }}</p>
+    <PlanReadiness :context="readinessContext" :locations="readinessLocations"
+      @reveal-field="revealField" @reveal-source="revealReadinessSource" />
     <PlanSimulationPanel v-if="saved && !historyOnly" :key="`${saved.id}:${saved.status}`" :version="saved" :request="work.request" />
   </article>
 </template>
