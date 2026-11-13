@@ -164,4 +164,7 @@
 
 这收窄适用性，保持摘要优先级不变。来源缺失／过期、RISK／origin变化、未记录原生风险事实的旧快照、新birth、实际比较缺证仍为UNKNOWN／失败；真实 `MISSING_INPUT` 保持原优先级。未知通知／交付仍适用。`changed_readiness()` 须清除新增当前／维护声明并保留诊断叶；DATA_EVALUATION与摘要都只能消费已验证维护及其过期时间。这需要后续窄范围consumer／摘要实现和真实production／竞态测试；本模型片不实现或验收这些行为。
 
-后续消费普通风险 `ordinary_close` 时，仅按MRD-S03映射实际原生分支，不补造条件根／叶：完整 `CLEAR`／`OBSERVATION` 且 `below=False`、无输入缺口，包括实际第二收盘 `below=False` 转入 `OBSERVATION`，可展示 `CONDITION_FALSE`；实际 `confirmation_close_used` 且转入 `CONFIRMED` 可展示 `CONDITION_TRUE`。首跌、早到收盘或重启相邻对的 `PENDING`，不能凭 `below=True` 声称双收盘成立。只有准确第二收盘日期（`expected_second_close_date`）、官方日历、owner调度及必需先前输入完整，且该事件仍在未来，才可建立 `WAIT`；否则保持 `UNKNOWN`。真实缺数保持原 `MISSING_INPUT` 优先级。这一原生字段映射由后续consumer验收，本模型片不实现。
+后续消费普通风险 `ordinary_close` 时，仅按MRD-S03映射实际原生分支，不补造条件根／叶：完整 `CLEAR`／`OBSERVATION` 且 `below=False`、无输入缺口，包括实际第二收盘 `below=False` 转入 `OBSERVATION`，可展示 `CONDITION_FALSE`；实际 `confirmation_close_used` 且转入 `CONFIRMED` 可展示 `CONDITION_TRUE`。首跌、早到收盘或重启相邻对的 `PENDING`，不能凭 `below=True` 声称双收盘成立。只有实际更新后的第二收盘日期（`second_close_date_after`，并保留 `expected_second_close_date` 作为先前比较上下文）、官方日历、owner调度及必需先前输入完整，且该事件仍在未来，才可建立 `WAIT`；否则保持 `UNKNOWN`。真实缺数保持原 `MISSING_INPUT` 优先级。这一原生字段映射由后续consumer验收，本模型片不实现。
+
+
+有界消费者已在 `7c4404c` 交付，验证和运行限制见 [PMA-R86](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r86--实际风险读取与严格证明的维护)。默认盘中复用旧日线时，在建立完整当前接纳前仍为 UNKNOWN；本次不增加 producer 刷新或调度行为。
