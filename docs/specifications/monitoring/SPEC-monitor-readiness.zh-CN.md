@@ -73,7 +73,7 @@
 
 ### MRD-S08.1 — 增量形状与所有权
 
-本附录只定义事实形状，不增加读取装配、资格求值器、dispatch、队列、存储、批准token或自动测试发送。`RuleReadinessFacts.money` 和 `RuleReadinessFacts.notification` 缺省为null，null时省略。下列五个新增可空执行字段遵循相同省略规则。a6既有字段及其既有null键保持序列化不变；新增字段缺省时，真实a6 readiness JSON预像须逐字节往返一致。
+本附录只定义事实形状，不增加读取装配、资格求值器、dispatch、队列、存储、批准token或自动测试发送。`RuleReadinessFacts.money`、`RuleReadinessFacts.notification` 和 `RuleReadinessFacts.risk` 缺省为null，null时省略。下列五个新增可空执行字段遵循相同省略规则。a6/a7既有字段及其既有null键保持序列化不变；新增字段缺省时，真实readiness JSON预像须逐字节往返一致。
 
 新投影继承既有闭合、冻结、严格的 `ApiValue` 契约与camelCase别名；嵌入的原生capital/economics结果保留原字段名和验证。准确保留六个轴、最多76个owner、最多50个完整原生条件叶、字面值 `authorityGranted=false`，以及既有全null新鲜度／摘要优先级。仅提供事实不会提升任何轴，也不推导交易／发送资格。
 
@@ -127,3 +127,41 @@
 嵌套attempt须同时匹配通知的准确 `eventId` 和所在 `channel`。仅 `status=DELIVERED` 可携带非null `deliveredAt`，且不能带error或retry deadline。`CLAIMED`、重试、排队意图和已读确认不能表示送达。原创建／观察时间已知时，事件创建／target、历史更新和送达时间须在其中正确排序，具体须满足 `createdAt <= historicalUpdatedAt <= observation.observedAt`。提供的全部时间戳须为带时区的上海值。未知时间保持null，DTO验证不读取时钟或续期。这些形状检查只是必要条件，不能证明真实发送成功，后继reader仍须解析原dispatcher回执。
 
 禁止未注册字段、endpoint、token、approval token及原始错误，验证不得把不安全错误字符串复制到 `errorCode`。不序列化渠道秘密，也不从这些可选事实推导正向交付／就绪声明。验收覆盖旧字节省略兼容、原生结果身份／无重算、严格／null／不可变边界、成对signal引用、原owner／条件叶上限、重复渠道、错误event／channel绑定、非法送达时间、安全错误枚举及event／attempt缺失语义。
+
+### MRD-S08.6 — 风险比较、义务、原属与维护
+
+可空、缺省省略的 `RuleReadinessFacts.risk` 包含闭合、冻结、严格的 `ReadinessRiskFacts`，仅属于准确的 `RISK_BRANCH` owner，且 `side=SELL`：
+
+| 字段 | 类型／可空性 | 含义 |
+| --- | --- | --- |
+| `current` | 原生 `DailyRiskEvaluation` 或null；null省略 | 复制本次实际severe条件证据或普通风险 `ordinary_close`，保留原生snake_case字段名、owner、target和时间。缺失不等于FALSE。 |
+| `obligation` | `ReadinessRiskObligation` 或null；null省略 | 实际当前RISK的 `riskId`、`revision`、`kind`、`status`、`confirmedTradeDate`、`earliestExecutionDate`、`fulfilledAt`、`blockers`；不含数量或许可。 |
+| `origin` | `ReadinessRiskOrigin` 或null；null省略 | 原属不可变 `evaluationId`、`planVersionId`、`contentHash`、`reviewId`、`activationRevision`、`evaluatedAt`，及 `birth` 中的原生 `DailyRiskBirth`；仅在 `read_risk_origin()` 验证后提供。 |
+| `maintenance` | 必需既有 `AxisReadiness`；`axis=DATA_EVALUATION` | 实际维护状态及自身的 `ReadinessObservation`，与是否发生新比较分开。 |
+
+使用唯一组件 `ReadinessRiskObligation`，不复用／修改旧公开 `DailyRiskState`，不导入report/backtest模型。投影字段使用既有 `ApiValue` 的camelCase别名；`current` 与 `birth` 保留原生字段名和原生Python/JSON验证。原属ID和blockers使用 `Reference`（1–256字符）；revision为严格整数0–9007199254740991，activation revision为1–9007199254740991，blockers保留最多128项完整tuple。义务的三个可空日期／时间字段保留null，不推断缺失值。
+
+`fulfilledAt` 可以属于先前cause：原生新起因重置会保留旧履行／cutover历史，当前status可成为 `CLEAR`、`PENDING` 或 `CONFIRMED`，新 `confirmedTradeDate` 可为null或晚于旧时间戳。保留这一真实组合。旧时间戳既不代表新cause已履行，也不能证明skip。只有普通风险支持 `PENDING`；`CONFIRMED`／`FULFILLED` 保留非null实际确认日期。
+
+既有父级 `RuleReadinessFacts.observation` 描述当前比较，`maintenance.observation` 描述实际维护。不增加第三份重复观察。origin可属于不同的原版本／审核／启用，不能重绑到活动 `ReadinessContext`；相同context／ID本身既不能验证cause，也不能验证维护。
+
+### MRD-S08.7 — 风险形状一致性与边界
+
+当前比较、义务及birth保留同一risk kind；current／birth的 `risk_identity` 匹配父owner。提供的父级比较时间／target及完整根须匹配原生 `current`。普通风险 `ordinary_close` 不转换为条件根／树。当前severe FALSE可与旧 `CONFIRMED` 并存，互不改写，也不解除义务。缺origin可与独立有效的当前比较及持久义务并存，原属／维护保持未验证。旧 `technical_evidence` 不能填入 `current`。
+
+`current=null` 时不提供完整TRUE／FALSE根／叶、比较时间或已评估target。适用时保留定义派生的 `UNKNOWN`／`MISSING_INPUT` 诊断叶；无条件的普通风险自然没有这些叶子。`maintenance=PASS` 要求 `CURRENT` 观察、已知 `asOf`、准确义务，以及非 `CLEAR` 义务的origin。没有 `current` 时，仅普通 `CONFIRMED`／`FULFILLED` 符合设计内skip形状。这些检查不能证明producer行为、来源身份、原属所有权或读取一致性。origin须标识birth收盘后的不可变评估，不能为evaluation-head指针；提供的历史不能晚于已知维护观察。父级 `CURRENT` 比较匹配准入plan／content／activation；比较与维护观察不能混用context。
+
+保留六轴、76 owners、50叶、1MiB、既有新鲜度政策和字面值 `authorityGranted=false`。嵌入的原生风险树也计入50叶：每owner取父级诊断叶与原生current条件叶的较大值，不重复计算同一投影。本形状片不实现装配、`changed_readiness()`、摘要适用性或READY。
+
+### MRD-S08.8 — 后继consumer的窄范围普通风险设计内skip规则
+
+后继consumer仅可把已证明的普通 `CONFIRMED`／`FULFILLED` 设计内skip，从表示适用权威缺失的UNKNOWN规则中排除。必须全部验证：
+
+1. 当前owned immutable EVAL、准确target、generation/configuration、新鲜度及维护路径全部必需来源。缺观察字段本身不能证明skip，不需要新增producer标记。
+2. 当前SQL RISK完整payload/revision与该EVAL中唯一准确RISK一致，包括 `origin_evaluation_id`；`read_risk_origin()` 验证原始cause。所有原属来源绑定参加第二次读取。
+3. 实际原生skip成立，且无新birth、待处理新cause、要求比较的cutover或适用新比较。`FULFILLED` 后的新cause不能借旧履行／origin或相同risk ID取得豁免。
+4. 实际 `maintenance=PASS` 及既有过期时间，不补造 `current`、完整根／叶或比较时间。其他规则与六轴照常参与。
+
+这收窄适用性，保持摘要优先级不变。来源缺失／过期、RISK／origin变化、未记录原生风险事实的旧快照、新birth、实际比较缺证仍为UNKNOWN／失败；真实 `MISSING_INPUT` 保持原优先级。未知通知／交付仍适用。`changed_readiness()` 须清除新增当前／维护声明并保留诊断叶；DATA_EVALUATION与摘要都只能消费已验证维护及其过期时间。这需要后续窄范围consumer／摘要实现和真实production／竞态测试；本模型片不实现或验收这些行为。
+
+后续消费普通风险 `ordinary_close` 时，仅按MRD-S03映射实际原生分支，不补造条件根／叶：完整 `CLEAR`／`OBSERVATION` 且 `below=False`、无输入缺口，包括实际第二收盘 `below=False` 转入 `OBSERVATION`，可展示 `CONDITION_FALSE`；实际 `confirmation_close_used` 且转入 `CONFIRMED` 可展示 `CONDITION_TRUE`。首跌、早到收盘或重启相邻对的 `PENDING`，不能凭 `below=True` 声称双收盘成立。只有准确第二收盘日期（`expected_second_close_date`）、官方日历、owner调度及必需先前输入完整，且该事件仍在未来，才可建立 `WAIT`；否则保持 `UNKNOWN`。真实缺数保持原 `MISSING_INPUT` 优先级。这一原生字段映射由后续consumer验收，本模型片不实现。

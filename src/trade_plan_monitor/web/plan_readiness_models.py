@@ -4,20 +4,24 @@ The read owner supplies observations and its own expiry policies. Nothing here
 reads storage, samples a clock, evaluates a predicate or verifies a human fact.
 """
 
-from datetime import date
+from datetime import date, datetime, time
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
+from trade_plan_monitor.decision.daily_risk import DailyRiskBirth
 from trade_plan_monitor.decision.models import EvaluationTarget
 from trade_plan_monitor.decision.p2_economics import EconomicsResult
 from trade_plan_monitor.decision.p3_capital import CapitalAssessment
 from trade_plan_monitor.domain.daily_hash import canonical
+from trade_plan_monitor.domain.daily_plan_models import RiskKind
+from trade_plan_monitor.domain.unified_plan_models import condition_leaves
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.notifications.channels import ChannelErrorCode, DeliveryChannel
 from trade_plan_monitor.notifications.dispatcher import DeliveryAttemptStatus
 from trade_plan_monitor.notifications.recovery_eligibility import RecoveryDeliveryStatus
+from trade_plan_monitor.state.daily_state_models import DailyRiskEvaluation
 from trade_plan_monitor.web.schemas import ApiValue
 
 Reference = Annotated[str, Field(min_length=1, max_length=256)]
@@ -308,6 +312,102 @@ class ReadinessExecutionState(ApiValue):
         return self
 
 
+class ReadinessRiskObligation(ApiValue):
+    """Persisted obligation facts, separate from the latest condition comparison."""
+
+    risk_id: Reference
+    revision: Revision
+    kind: RiskKind
+    status: Literal["CLEAR", "PENDING", "OBSERVATION", "CONFIRMED", "FULFILLED"]
+    confirmed_trade_date: date | None
+    earliest_execution_date: date | None
+    fulfilled_at: ShanghaiDatetime | None
+    blockers: tuple[Reference, ...] = Field(max_length=128)
+
+    @model_validator(mode="after")
+    def obligation_dates(self) -> Self:
+        if self.status == "PENDING" and self.kind != "ORDINARY_TECHNICAL":
+            raise ValueError("only ordinary technical risk has a pending close confirmation")
+        if self.status in {"CONFIRMED", "FULFILLED"} and self.confirmed_trade_date is None:
+            raise ValueError("a confirmed obligation requires its actual confirmation date")
+        return self
+
+
+class ReadinessRiskOrigin(ApiValue):
+    """Exact original metadata supplied only after the native origin reader verifies it."""
+
+    evaluation_id: Reference
+    plan_version_id: Reference
+    content_hash: Digest
+    review_id: Reference
+    activation_revision: Annotated[int, Field(ge=1, le=2**53 - 1)]
+    evaluated_at: ShanghaiDatetime
+    birth: DailyRiskBirth
+
+    @field_validator("birth", mode="before")
+    @classmethod
+    def native_birth(cls, value, info: ValidationInfo):
+        if info.mode == "json":
+            return DailyRiskBirth.model_validate_json(canonical(value), strict=True)
+        return DailyRiskBirth.model_validate(value, strict=True)
+
+    @model_validator(mode="after")
+    def original_birth_time(self) -> Self:
+        if (self.evaluation_id.startswith("evaluation-head-")
+                or datetime.combine(self.birth.close_date, time(15), self.evaluated_at.tzinfo)
+                > self.evaluated_at):
+            raise ValueError("origin requires an immutable evaluation after its actual birth close")
+        return self
+
+
+class ReadinessRiskFacts(ApiValue):
+    """Shape checks do not verify storage or establish current maintenance authority."""
+
+    current: DailyRiskEvaluation | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    obligation: ReadinessRiskObligation | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    origin: ReadinessRiskOrigin | None = Field(default=None, exclude_if=lambda value: value is None)
+    maintenance: AxisReadiness
+
+    @field_validator("current", mode="before")
+    @classmethod
+    def native_current(cls, value, info: ValidationInfo):
+        if value is None:
+            return None
+        if info.mode == "json":
+            return DailyRiskEvaluation.model_validate_json(canonical(value), strict=True)
+        return DailyRiskEvaluation.model_validate(value, strict=True)
+
+    @model_validator(mode="after")
+    def separate_risk_facts(self) -> Self:
+        if self.maintenance.axis != "DATA_EVALUATION":
+            raise ValueError("risk maintenance requires the data/evaluation axis")
+        kinds = [value.kind for value in (self.current, self.obligation) if value is not None]
+        if self.origin is not None:
+            if self.obligation is None:
+                raise ValueError("an original cause requires its exact obligation")
+            kinds.append(self.origin.birth.kind)
+        if len(set(kinds)) > 1:
+            raise ValueError("risk facts must belong to the same native risk kind")
+        maintenance = self.maintenance.observation
+        if maintenance is not None and (
+                self.origin is not None and self.origin.evaluated_at > maintenance.observed_at
+                or self.obligation is not None and self.obligation.fulfilled_at is not None
+                and self.obligation.fulfilled_at > maintenance.observed_at):
+            raise ValueError("risk history cannot follow its actual maintenance observation")
+        if self.maintenance.state == "PASS":
+            if (self.obligation is None or maintenance.availability != "CURRENT"
+                    or maintenance.as_of is None
+                    or self.obligation.status != "CLEAR" and self.origin is None):
+                raise ValueError("passing maintenance needs current observation and verified cause")
+            if self.current is None and not (
+                    self.obligation.kind == "ORDINARY_TECHNICAL"
+                    and self.obligation.status in {"CONFIRMED", "FULFILLED"}):
+                raise ValueError("only a latched ordinary obligation can skip its new comparison")
+        return self
+
+
 class RuleReadinessFacts(ApiValue):
     owner_kind: OwnerKind
     owner_id: Annotated[str, Field(min_length=1, max_length=128)]
@@ -324,6 +424,7 @@ class RuleReadinessFacts(ApiValue):
     money: ReadinessMoneyFacts | None = Field(default=None, exclude_if=lambda value: value is None)
     notification: ReadinessNotificationFacts | None = Field(
         default=None, exclude_if=lambda value: value is None)
+    risk: ReadinessRiskFacts | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def exact_owner_and_leaves(self) -> Self:
@@ -336,6 +437,40 @@ class RuleReadinessFacts(ApiValue):
         paths = tuple(leaf.condition_path for leaf in self.leaves)
         if len(paths) != len(set(paths)):
             raise ValueError("condition paths must be unique within their actual rule")
+        if self.risk is not None:
+            if self.owner_kind != "RISK_BRANCH":
+                raise ValueError("risk facts require the exact risk branch owner")
+            current, origin = self.risk.current, self.risk.origin
+            if (current is not None and current.risk_identity != self.owner_id
+                    or origin is not None and origin.birth.risk_identity != self.owner_id):
+                raise ValueError("risk facts belong to another branch")
+            if current is None and (self.root_outcome in {"SATISFIED", "UNSATISFIED"}
+                    or any(leaf.state in {"CONDITION_TRUE", "CONDITION_FALSE"}
+                           for leaf in self.leaves)
+                    or self.evaluated_at is not None or self.evaluated_target is not None):
+                raise ValueError(
+                    "absent comparison cannot supply completed truth or comparison time")
+            if current is not None and self.observation is not None:
+                if current.evaluated_at > self.observation.observed_at:
+                    raise ValueError("the actual comparison cannot follow its observation")
+                if self.observation.availability == "CURRENT" and (
+                        current.plan_version_id != str(self.observation.context.plan_version_id)
+                        or current.content_hash != self.observation.context.content_hash
+                        or current.activation_revision
+                        != self.observation.context.activation_revision):
+                    raise ValueError("a current comparison must match its admitted plan context")
+            maintenance = self.risk.maintenance.observation
+            if (maintenance is not None and self.observation is not None
+                    and maintenance.context != self.observation.context):
+                raise ValueError("current comparison and maintenance must share the read context")
+            if current is not None and (
+                    self.evaluated_at is not None and self.evaluated_at != current.evaluated_at
+                    or self.evaluated_target is not None and self.evaluated_target != current.target
+                    or current.ordinary_close is not None and (self.root_outcome is not None
+                                                               or self.leaves)
+                    or self.root_outcome is not None and current.evidence is not None
+                    and self.root_outcome != current.evidence.outcome):
+                raise ValueError("the risk rule must retain its actual native comparison")
         return self
 
 
@@ -358,7 +493,9 @@ class ReadinessSnapshot(ApiValue):
         scope = "MIXED" if alerts and trades else "ALERT_ONLY" if alerts else "TRADE_RULES"
         if self.scope != scope:
             raise ValueError("declared scope must match the actual included rule owners")
-        if sum(len(rule.leaves) for rule in self.rules) > 50:
+        if sum(max(len(rule.leaves), len(condition_leaves(rule.risk.current.evidence.condition))
+                   if rule.risk is not None and rule.risk.current is not None
+                   and rule.risk.current.evidence is not None else 0) for rule in self.rules) > 50:
             raise ValueError("current native condition leaf limit is fifty")
         return self
 
