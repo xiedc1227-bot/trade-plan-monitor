@@ -954,6 +954,80 @@
         "title": "AuthoritativeDecisionView",
         "type": "object"
       },
+      "AxisReadiness": {
+        "additionalProperties": false,
+        "properties": {
+          "axis": {
+            "enum": [
+              "SOURCE_COVERAGE",
+              "REVIEW_ACTIVATION",
+              "RUNTIME_OWNERSHIP",
+              "DATA_EVALUATION",
+              "INVENTORY_CAPITAL",
+              "NOTIFICATION_DELIVERY"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "observation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SOURCE_REVIEW_REQUIRED",
+                  "SAFETY_BLOCKED",
+                  "CONFIGURATION_BLOCKED",
+                  "MISSING_DATA",
+                  "STALE_DATA",
+                  "UNDEFINED_RULE",
+                  "HUMAN_EVIDENCE_REQUIRED",
+                  "EXPECTED_CONFIRMATION",
+                  "SERVICE_PENDING",
+                  "AWAITING_FIRST_EVALUATION",
+                  "AUTHORITY_UNAVAILABLE",
+                  "CONTEXT_CHANGED",
+                  "TARGET_MISMATCH",
+                  "EVIDENCE_EXPIRED",
+                  "DELIVERY_UNVERIFIED",
+                  "UPGRADE_REQUIRED",
+                  "DEPENDENCY_UNVERIFIED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "enum": [
+              "PASS",
+              "WAIT",
+              "BLOCKED",
+              "UNKNOWN",
+              "NOT_APPLICABLE"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "axis",
+          "state"
+        ],
+        "title": "AxisReadiness",
+        "type": "object"
+      },
       "BacktestAssumptionsView": {
         "additionalProperties": false,
         "properties": {
@@ -8920,6 +8994,21 @@
         "title": "CertifiedDailyBar",
         "type": "object"
       },
+      "ChannelErrorCode": {
+        "description": "Stable redacted channel outcomes suitable for durable health state.",
+        "enum": [
+          "WEBHOOK_DISABLED",
+          "CONSOLE_WRITE_FAILED",
+          "WEBHOOK_TIMEOUT",
+          "WEBHOOK_TRANSPORT",
+          "UNSAFE_REDIRECT",
+          "WEBHOOK_REJECTED",
+          "WEBHOOK_TRANSIENT",
+          "CHANNEL_FAILURE"
+        ],
+        "title": "ChannelErrorCode",
+        "type": "string"
+      },
       "ClauseDisposition": {
         "enum": [
           "MAPPED",
@@ -10413,6 +10502,75 @@
           "planRuntime"
         ],
         "title": "ConditionPlanEntryView",
+        "type": "object"
+      },
+      "ConditionReadiness": {
+        "additionalProperties": false,
+        "properties": {
+          "conditionPath": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Conditionpath",
+            "type": "string"
+          },
+          "evidenceRefs": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "title": "Evidencerefs",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SOURCE_REVIEW_REQUIRED",
+                  "SAFETY_BLOCKED",
+                  "CONFIGURATION_BLOCKED",
+                  "MISSING_DATA",
+                  "STALE_DATA",
+                  "UNDEFINED_RULE",
+                  "HUMAN_EVIDENCE_REQUIRED",
+                  "EXPECTED_CONFIRMATION",
+                  "SERVICE_PENDING",
+                  "AWAITING_FIRST_EVALUATION",
+                  "AUTHORITY_UNAVAILABLE",
+                  "CONTEXT_CHANGED",
+                  "TARGET_MISMATCH",
+                  "EVIDENCE_EXPIRED",
+                  "DELIVERY_UNVERIFIED",
+                  "UPGRADE_REQUIRED",
+                  "DEPENDENCY_UNVERIFIED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "enum": [
+              "CONDITION_TRUE",
+              "CONDITION_FALSE",
+              "MISSING_INPUT",
+              "BLOCKED",
+              "UNKNOWN"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conditionPath",
+          "state"
+        ],
+        "title": "ConditionReadiness",
         "type": "object"
       },
       "ConfiguredAIProviderRuntimeView": {
@@ -14224,6 +14382,164 @@
         "title": "DailyRiskApiView",
         "type": "object"
       },
+      "DailyRiskBirth": {
+        "additionalProperties": false,
+        "description": "The real start of one cause, independent of later current observations.",
+        "properties": {
+          "close_date": {
+            "format": "date",
+            "title": "Close Date",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "ORDINARY_TECHNICAL",
+              "SEVERE_TECHNICAL"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "risk_identity": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Risk Identity",
+            "type": "string"
+          },
+          "status_after": {
+            "enum": [
+              "PENDING",
+              "CONFIRMED"
+            ],
+            "title": "Status After",
+            "type": "string"
+          },
+          "status_before": {
+            "const": "CLEAR",
+            "title": "Status Before",
+            "type": "string"
+          }
+        },
+        "required": [
+          "risk_identity",
+          "kind",
+          "status_before",
+          "status_after",
+          "close_date"
+        ],
+        "title": "DailyRiskBirth",
+        "type": "object"
+      },
+      "DailyRiskEvaluation": {
+        "additionalProperties": false,
+        "description": "One actual risk observation; it neither creates nor reassigns a cause.",
+        "properties": {
+          "activation_revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Activation Revision",
+            "type": "integer"
+          },
+          "content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnifiedConditionEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "ORDINARY_TECHNICAL",
+              "SEVERE_TECHNICAL"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "ordinary_close": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrdinaryRiskCloseObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_version_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Plan Version Id",
+            "type": "string"
+          },
+          "review_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Review Id",
+            "type": "string"
+          },
+          "risk_identity": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Risk Identity",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "INTRADAY": "#/components/schemas/IntradayEvaluationTarget",
+                    "OFFICIAL_CLOSE": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/IntradayEvaluationTarget"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "plan_version_id",
+          "content_hash",
+          "review_id",
+          "activation_revision",
+          "risk_identity",
+          "kind",
+          "target",
+          "evaluated_at",
+          "evidence",
+          "ordinary_close"
+        ],
+        "title": "DailyRiskEvaluation",
+        "type": "object"
+      },
       "DailyRiskReassessmentCommand": {
         "additionalProperties": false,
         "properties": {
@@ -16077,6 +16393,27 @@
           "UNKNOWN"
         ],
         "title": "DecisionZone",
+        "type": "string"
+      },
+      "DeliveryAttemptStatus": {
+        "description": "Closed durable state machine for one channel attempt.",
+        "enum": [
+          "CLAIMED",
+          "DELIVERED",
+          "RETRY_PENDING",
+          "FAILED"
+        ],
+        "title": "DeliveryAttemptStatus",
+        "type": "string"
+      },
+      "DeliveryChannel": {
+        "description": "Closed channel vocabulary persisted with each delivery attempt.",
+        "enum": [
+          "IN_APP",
+          "CONSOLE",
+          "WEBHOOK"
+        ],
+        "title": "DeliveryChannel",
         "type": "string"
       },
       "DeliveryHealthView": {
@@ -20846,6 +21183,57 @@
         "title": "ExecutorHealthView",
         "type": "object"
       },
+      "ExpectedConfirmation": {
+        "additionalProperties": false,
+        "description": "A current owner's calendar schedule, never inferred from a wait string.",
+        "properties": {
+          "calendarReference": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Calendarreference",
+            "type": "string"
+          },
+          "expectedAt": {
+            "format": "date-time",
+            "title": "Expectedat",
+            "type": "string"
+          },
+          "observation": {
+            "$ref": "#/components/schemas/ReadinessObservation"
+          },
+          "priorInputsComplete": {
+            "title": "Priorinputscomplete",
+            "type": "boolean"
+          },
+          "target": {
+            "discriminator": {
+              "mapping": {
+                "INTRADAY": "#/components/schemas/IntradayEvaluationTarget",
+                "OFFICIAL_CLOSE": "#/components/schemas/OfficialCloseEvaluationTarget"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IntradayEvaluationTarget"
+              },
+              {
+                "$ref": "#/components/schemas/OfficialCloseEvaluationTarget"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "target",
+          "expectedAt",
+          "calendarReference",
+          "priorInputsComplete",
+          "observation"
+        ],
+        "title": "ExpectedConfirmation",
+        "type": "object"
+      },
       "ExplicitAlertView": {
         "additionalProperties": false,
         "description": "Queryable explicit reminder without legacy bucket or fill semantics.",
@@ -22909,6 +23297,28 @@
         "title": "IntradayDiagnosticIdentityView",
         "type": "object"
       },
+      "IntradayEvaluationTarget": {
+        "additionalProperties": false,
+        "description": "One complete five-minute bucket selected for evaluation.",
+        "properties": {
+          "bucket_end": {
+            "format": "date-time",
+            "title": "Bucket End",
+            "type": "string"
+          },
+          "kind": {
+            "const": "INTRADAY",
+            "default": "INTRADAY",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucket_end"
+        ],
+        "title": "IntradayEvaluationTarget",
+        "type": "object"
+      },
       "IntradayTargetView": {
         "additionalProperties": false,
         "properties": {
@@ -22928,6 +23338,49 @@
           "targetEnd"
         ],
         "title": "IntradayTargetView",
+        "type": "object"
+      },
+      "InventoryRequirements": {
+        "additionalProperties": false,
+        "description": "Exact rule dependencies, independent of whether a money predicate passes.",
+        "properties": {
+          "costBasis": {
+            "default": false,
+            "title": "Costbasis",
+            "type": "boolean"
+          },
+          "economics": {
+            "default": false,
+            "title": "Economics",
+            "type": "boolean"
+          },
+          "fees": {
+            "default": false,
+            "title": "Fees",
+            "type": "boolean"
+          },
+          "inventory": {
+            "default": false,
+            "title": "Inventory",
+            "type": "boolean"
+          },
+          "quote": {
+            "default": false,
+            "title": "Quote",
+            "type": "boolean"
+          },
+          "sellability": {
+            "default": false,
+            "title": "Sellability",
+            "type": "boolean"
+          },
+          "simulationBook": {
+            "default": false,
+            "title": "Simulationbook",
+            "type": "boolean"
+          }
+        },
+        "title": "InventoryRequirements",
         "type": "object"
       },
       "InventorySourceTreatmentView": {
@@ -31010,6 +31463,28 @@
         "title": "OfficialCloseDiagnosticIdentityView",
         "type": "object"
       },
+      "OfficialCloseEvaluationTarget": {
+        "additionalProperties": false,
+        "description": "One official trade date selected for close-risk evaluation.",
+        "properties": {
+          "kind": {
+            "const": "OFFICIAL_CLOSE",
+            "default": "OFFICIAL_CLOSE",
+            "title": "Kind",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trade_date"
+        ],
+        "title": "OfficialCloseEvaluationTarget",
+        "type": "object"
+      },
       "OfficialCloseTargetView": {
         "additionalProperties": false,
         "properties": {
@@ -31537,6 +32012,185 @@
           "submittedAt"
         ],
         "title": "OperationReceipt",
+        "type": "object"
+      },
+      "OrdinaryRiskCloseObservation": {
+        "additionalProperties": false,
+        "description": "One actual comparison; a first or early close is not a completed pair.",
+        "properties": {
+          "below": {
+            "title": "Below",
+            "type": "boolean"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "breach_trade_date_after": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breach Trade Date After"
+          },
+          "breach_trade_date_before": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breach Trade Date Before"
+          },
+          "close_date": {
+            "format": "date",
+            "title": "Close Date",
+            "type": "string"
+          },
+          "close_fen": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Close Fen",
+            "type": "string"
+          },
+          "confirmation_close_used": {
+            "title": "Confirmation Close Used",
+            "type": "boolean"
+          },
+          "current_basis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Basis Id"
+          },
+          "expected_second_close_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Second Close Date"
+          },
+          "kind": {
+            "const": "ORDINARY_TECHNICAL",
+            "title": "Kind",
+            "type": "string"
+          },
+          "latched_basis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latched Basis Id"
+          },
+          "risk_comparison": {
+            "enum": [
+              "LT",
+              "LTE"
+            ],
+            "title": "Risk Comparison",
+            "type": "string"
+          },
+          "risk_identity": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Risk Identity",
+            "type": "string"
+          },
+          "risk_line_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Risk Line Fen",
+            "type": "integer"
+          },
+          "second_close_date_after": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Close Date After"
+          },
+          "second_close_date_before": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Close Date Before"
+          },
+          "status_after": {
+            "enum": [
+              "CLEAR",
+              "PENDING",
+              "OBSERVATION",
+              "CONFIRMED"
+            ],
+            "title": "Status After",
+            "type": "string"
+          },
+          "status_before": {
+            "enum": [
+              "CLEAR",
+              "PENDING",
+              "OBSERVATION"
+            ],
+            "title": "Status Before",
+            "type": "string"
+          }
+        },
+        "required": [
+          "risk_identity",
+          "kind",
+          "status_before",
+          "status_after",
+          "close_date",
+          "close_fen",
+          "risk_line_fen",
+          "risk_comparison",
+          "current_basis_id",
+          "latched_basis_id",
+          "below",
+          "expected_second_close_date",
+          "breach_trade_date_before",
+          "second_close_date_before",
+          "breach_trade_date_after",
+          "second_close_date_after",
+          "confirmation_close_used",
+          "blockers"
+        ],
+        "title": "OrdinaryRiskCloseObservation",
         "type": "object"
       },
       "P2DraftRule": {
@@ -37501,6 +38155,996 @@
         "title": "QuantityPolicy",
         "type": "object"
       },
+      "ReadinessAssessment": {
+        "additionalProperties": false,
+        "properties": {
+          "authorityGranted": {
+            "const": false,
+            "default": false,
+            "title": "Authoritygranted",
+            "type": "boolean"
+          },
+          "axes": {
+            "items": {
+              "$ref": "#/components/schemas/AxisReadiness"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "title": "Axes",
+            "type": "array"
+          },
+          "contractVersion": {
+            "const": "plan-monitor-readiness-v1",
+            "default": "plan-monitor-readiness-v1",
+            "title": "Contractversion",
+            "type": "string"
+          },
+          "freshUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freshuntil"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleReadiness"
+            },
+            "maxItems": 76,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ReadinessSnapshot"
+          },
+          "summary": {
+            "enum": [
+              "READY_FOR_MONITORING",
+              "WAITING_EXPECTED_CONFIRMATION",
+              "WAITING_REQUIRED_SERVICE",
+              "NEEDS_REVIEW",
+              "BLOCKED",
+              "UNKNOWN"
+            ],
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshot",
+          "axes",
+          "rules",
+          "summary",
+          "freshUntil"
+        ],
+        "title": "ReadinessAssessment",
+        "type": "object"
+      },
+      "ReadinessContext": {
+        "additionalProperties": false,
+        "description": "Admitted read context, not every referenced evidence's original plan owner.\n\nExisting binding values confer no permission. Original risk ownership can\ndiffer from this read's active version and remains in the evidence references.",
+        "properties": {
+          "activationRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activationrevision"
+          },
+          "bookRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bookrevision"
+          },
+          "contentHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "coverageHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coveragehash"
+          },
+          "inventoryRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inventoryrevision"
+          },
+          "planVersionId": {
+            "format": "uuid",
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "reviewReceiptHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewreceipthash"
+          },
+          "runtimeGeneration": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimegeneration"
+          },
+          "sourceHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcehash"
+          }
+        },
+        "required": [
+          "planVersionId",
+          "contentHash",
+          "sourceHash",
+          "coverageHash",
+          "reviewReceiptHash",
+          "activationRevision",
+          "runtimeGeneration"
+        ],
+        "title": "ReadinessContext",
+        "type": "object"
+      },
+      "ReadinessDeliveryAttempt": {
+        "additionalProperties": false,
+        "description": "Closed projection of the dispatcher's secret-free DeliveryAttemptRecord.",
+        "properties": {
+          "attempt": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/DeliveryChannel"
+          },
+          "deliveredAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliveredat"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelErrorCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eventId": {
+            "format": "uuid",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "nextRetryAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextretryat"
+          },
+          "responseCode": {
+            "anyOf": [
+              {
+                "maximum": 599.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsecode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeliveryAttemptStatus"
+          }
+        },
+        "required": [
+          "id",
+          "eventId",
+          "channel",
+          "attempt",
+          "status"
+        ],
+        "title": "ReadinessDeliveryAttempt",
+        "type": "object"
+      },
+      "ReadinessExecutionState": {
+        "additionalProperties": false,
+        "description": "Preserve existing execution facts without calculating or granting eligibility.",
+        "properties": {
+          "approvedQuantity": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approvedquantity"
+          },
+          "blockers": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 128,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blockers"
+          },
+          "consumed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed"
+          },
+          "eligible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eligible"
+          },
+          "executionDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executiondate"
+          },
+          "executionWindow": {
+            "anyOf": [
+              {
+                "enum": [
+                  "CURRENT_SESSION",
+                  "NEXT_EXCHANGE_SESSION_ONLY"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executionwindow"
+          },
+          "observation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "signalId": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signalid"
+          },
+          "signalRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signalrevision"
+          },
+          "windowState": {
+            "default": "UNKNOWN",
+            "enum": [
+              "OPEN",
+              "CLOSED",
+              "UNKNOWN"
+            ],
+            "title": "Windowstate",
+            "type": "string"
+          }
+        },
+        "title": "ReadinessExecutionState",
+        "type": "object"
+      },
+      "ReadinessMoneyFacts": {
+        "additionalProperties": false,
+        "description": "Available inputs and unchanged native verdicts are separate facts.",
+        "properties": {
+          "capital": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "economics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/AxisReadiness"
+          }
+        },
+        "required": [
+          "inputs"
+        ],
+        "title": "ReadinessMoneyFacts",
+        "type": "object"
+      },
+      "ReadinessNotificationChannel": {
+        "additionalProperties": false,
+        "description": "Current configuration/eligibility never rewrites a historical receipt.",
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/DeliveryChannel"
+          },
+          "configured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configured"
+          },
+          "eligible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eligible"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "historicalStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecoveryDeliveryStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "historicalUpdatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Historicalupdatedat"
+          },
+          "latestAttempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessDeliveryAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ReadinessNotificationChannel",
+        "type": "object"
+      },
+      "ReadinessNotificationFacts": {
+        "additionalProperties": false,
+        "description": "One exact original event, with independently observed channel facts.",
+        "properties": {
+          "causeId": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causeid"
+          },
+          "channels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReadinessNotificationChannel"
+            },
+            "maxItems": 3,
+            "title": "Channels",
+            "type": "array"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          },
+          "eventId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventid"
+          },
+          "observation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "INTRADAY": "#/components/schemas/IntradayEvaluationTarget",
+                    "OFFICIAL_CLOSE": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/IntradayEvaluationTarget"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "title": "ReadinessNotificationFacts",
+        "type": "object"
+      },
+      "ReadinessObservation": {
+        "additionalProperties": false,
+        "description": "An observation made in context, with references retaining original owners.\n\nEvidence references may identify an original PlanVersion and its persisted\nrisk/evaluation records. T17's existing owned read/proof paths resolve and\nverify those originals; context equality only prevents mixing read snapshots.",
+        "properties": {
+          "asOf": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          },
+          "availability": {
+            "enum": [
+              "CURRENT",
+              "CACHED",
+              "UNAVAILABLE",
+              "PERSISTED_ONLY"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "calendarReference": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calendarreference"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ReadinessContext"
+          },
+          "evidenceRefs": {
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "minItems": 1,
+            "title": "Evidencerefs",
+            "type": "array"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiresat"
+          },
+          "formulaVersion": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formulaversion"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "title": "Observedat",
+            "type": "string"
+          },
+          "priceBasis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricebasis"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "required": [
+          "context",
+          "availability",
+          "observedAt",
+          "asOf",
+          "expiresAt",
+          "evidenceRefs"
+        ],
+        "title": "ReadinessObservation",
+        "type": "object"
+      },
+      "ReadinessRiskFacts": {
+        "additionalProperties": false,
+        "description": "Shape checks do not verify storage or establish current maintenance authority.",
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyRiskEvaluation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maintenance": {
+            "$ref": "#/components/schemas/AxisReadiness"
+          },
+          "obligation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessRiskObligation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessRiskOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "maintenance"
+        ],
+        "title": "ReadinessRiskFacts",
+        "type": "object"
+      },
+      "ReadinessRiskObligation": {
+        "additionalProperties": false,
+        "description": "Persisted obligation facts, separate from the latest condition comparison.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "title": "Blockers",
+            "type": "array"
+          },
+          "confirmedTradeDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedtradedate"
+          },
+          "earliestExecutionDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliestexecutiondate"
+          },
+          "fulfilledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fulfilledat"
+          },
+          "kind": {
+            "enum": [
+              "ORDINARY_TECHNICAL",
+              "SEVERE_TECHNICAL"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "riskId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Riskid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "CLEAR",
+              "PENDING",
+              "OBSERVATION",
+              "CONFIRMED",
+              "FULFILLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "riskId",
+          "revision",
+          "kind",
+          "status",
+          "confirmedTradeDate",
+          "earliestExecutionDate",
+          "fulfilledAt",
+          "blockers"
+        ],
+        "title": "ReadinessRiskObligation",
+        "type": "object"
+      },
+      "ReadinessRiskOrigin": {
+        "additionalProperties": false,
+        "description": "Exact original metadata supplied only after the native origin reader verifies it.",
+        "properties": {
+          "activationRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Activationrevision",
+            "type": "integer"
+          },
+          "birth": {
+            "$ref": "#/components/schemas/DailyRiskBirth"
+          },
+          "contentHash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "evaluatedAt": {
+            "format": "date-time",
+            "title": "Evaluatedat",
+            "type": "string"
+          },
+          "evaluationId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Evaluationid",
+            "type": "string"
+          },
+          "planVersionId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Planversionid",
+            "type": "string"
+          },
+          "reviewId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Reviewid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evaluationId",
+          "planVersionId",
+          "contentHash",
+          "reviewId",
+          "activationRevision",
+          "evaluatedAt",
+          "birth"
+        ],
+        "title": "ReadinessRiskOrigin",
+        "type": "object"
+      },
+      "ReadinessSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "axes": {
+            "items": {
+              "$ref": "#/components/schemas/AxisReadiness"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "title": "Axes",
+            "type": "array"
+          },
+          "computedAt": {
+            "format": "date-time",
+            "title": "Computedat",
+            "type": "string"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ReadinessContext"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleReadinessFacts"
+            },
+            "maxItems": 76,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "scope": {
+            "enum": [
+              "ALERT_ONLY",
+              "TRADE_RULES",
+              "MIXED"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "computedAt",
+          "context",
+          "scope",
+          "axes",
+          "rules"
+        ],
+        "title": "ReadinessSnapshot",
+        "type": "object"
+      },
+      "RecoveryDeliveryStatus": {
+        "enum": [
+          "ELIGIBLE",
+          "HOLD",
+          "SUPPRESS"
+        ],
+        "title": "RecoveryDeliveryStatus",
+        "type": "string"
+      },
       "ReferenceMarketBinding": {
         "additionalProperties": false,
         "description": "The exact immutable reference-market fields persisted in Schema v2.",
@@ -40409,6 +42053,254 @@
           "sourceAlert"
         ],
         "title": "RuleEligibilityView",
+        "type": "object"
+      },
+      "RuleReadiness": {
+        "additionalProperties": false,
+        "properties": {
+          "facts": {
+            "$ref": "#/components/schemas/RuleReadinessFacts"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SOURCE_REVIEW_REQUIRED",
+                  "SAFETY_BLOCKED",
+                  "CONFIGURATION_BLOCKED",
+                  "MISSING_DATA",
+                  "STALE_DATA",
+                  "UNDEFINED_RULE",
+                  "HUMAN_EVIDENCE_REQUIRED",
+                  "EXPECTED_CONFIRMATION",
+                  "SERVICE_PENDING",
+                  "AWAITING_FIRST_EVALUATION",
+                  "AUTHORITY_UNAVAILABLE",
+                  "CONTEXT_CHANGED",
+                  "TARGET_MISMATCH",
+                  "EVIDENCE_EXPIRED",
+                  "DELIVERY_UNVERIFIED",
+                  "UPGRADE_REQUIRED",
+                  "DEPENDENCY_UNVERIFIED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "enum": [
+              "CONDITION_TRUE",
+              "CONDITION_FALSE",
+              "WAITING_OFFICIAL_CONFIRMATION",
+              "AWAITING_FIRST_EVALUATION",
+              "MISSING_INPUT",
+              "BLOCKED",
+              "UNKNOWN"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "facts",
+          "state"
+        ],
+        "title": "RuleReadiness",
+        "type": "object"
+      },
+      "RuleReadinessFacts": {
+        "additionalProperties": false,
+        "properties": {
+          "evaluatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluatedat"
+          },
+          "evaluatedTarget": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "INTRADAY": "#/components/schemas/IntradayEvaluationTarget",
+                    "OFFICIAL_CLOSE": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/IntradayEvaluationTarget"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluatedtarget"
+          },
+          "execution": {
+            "$ref": "#/components/schemas/ReadinessExecutionState"
+          },
+          "expectedConfirmation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExpectedConfirmation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expectedTarget": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "INTRADAY": "#/components/schemas/IntradayEvaluationTarget",
+                    "OFFICIAL_CLOSE": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/IntradayEvaluationTarget"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OfficialCloseEvaluationTarget"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedtarget"
+          },
+          "leaves": {
+            "items": {
+              "$ref": "#/components/schemas/ConditionReadiness"
+            },
+            "maxItems": 50,
+            "title": "Leaves",
+            "type": "array"
+          },
+          "money": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessMoneyFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessNotificationFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownerId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Ownerid",
+            "type": "string"
+          },
+          "ownerKind": {
+            "enum": [
+              "ORDINARY_RULE",
+              "ALERT_RULE",
+              "RISK_BRANCH"
+            ],
+            "title": "Ownerkind",
+            "type": "string"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/InventoryRequirements"
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessRiskFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rootOutcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SATISFIED",
+                  "UNSATISFIED",
+                  "MISSING_INPUT"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rootoutcome"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "enum": [
+                  "BUY",
+                  "SELL"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          }
+        },
+        "required": [
+          "ownerKind",
+          "ownerId",
+          "side",
+          "requirements",
+          "expectedTarget",
+          "evaluatedTarget",
+          "evaluatedAt",
+          "observation",
+          "rootOutcome",
+          "leaves"
+        ],
+        "title": "RuleReadinessFacts",
         "type": "object"
       },
       "RuntimeDashboardResponse": {
@@ -61236,6 +63128,149 @@
           }
         },
         "summary": "Get Plan Version",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/v1/plan-versions/{version_id}/monitor-readiness": {
+      "get": {
+        "operationId": "get_plan_readiness_api_v1_plan_versions__version_id__monitor_readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessAssessment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method Not Allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Plan Readiness",
         "tags": [
           "plans"
         ]

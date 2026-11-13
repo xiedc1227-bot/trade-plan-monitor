@@ -144,6 +144,13 @@ export type AuthoritativeDecisionView = {
   zone: components["schemas"]["DecisionZone"];
 };
 
+export type AxisReadiness = {
+  axis: "SOURCE_COVERAGE" | "REVIEW_ACTIVATION" | "RUNTIME_OWNERSHIP" | "DATA_EVALUATION" | "INVENTORY_CAPITAL" | "NOTIFICATION_DELIVERY";
+  observation?: (components["schemas"]["ReadinessObservation"]) | (null);
+  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED") | (null);
+  state: "PASS" | "WAIT" | "BLOCKED" | "UNKNOWN" | "NOT_APPLICABLE";
+};
+
 export type BacktestAssumptionsView = {
   eventRiskAssumption: "NO_EVENT_RISK" | "MANUAL_EVENT_RISK";
   executionConfig: components["schemas"]["BacktestExecutionConfigView"];
@@ -1346,6 +1353,8 @@ export type CertifiedDailyBar = {
   volume_shares: number;
 };
 
+export type ChannelErrorCode = "WEBHOOK_DISABLED" | "CONSOLE_WRITE_FAILED" | "WEBHOOK_TIMEOUT" | "WEBHOOK_TRANSPORT" | "UNSAFE_REDIRECT" | "WEBHOOK_REJECTED" | "WEBHOOK_TRANSIENT" | "CHANNEL_FAILURE";
+
 export type ClauseDisposition = "MAPPED" | "UNRESOLVED" | "UNSUPPORTED";
 
 export type CollectionAttemptView = {
@@ -1552,6 +1561,13 @@ export type ConditionPlanEntryView = {
   planVersionId: string;
   scope: components["schemas"]["PlanScopeView"];
   symbol: string;
+};
+
+export type ConditionReadiness = {
+  conditionPath: string;
+  evidenceRefs?: Array<string>;
+  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED") | (null);
+  state: "CONDITION_TRUE" | "CONDITION_FALSE" | "MISSING_INPUT" | "BLOCKED" | "UNKNOWN";
 };
 
 export type ConfiguredAIProviderRuntimeView = {
@@ -2085,6 +2101,27 @@ export type DailyRiskApiView = {
   verifiedAt?: (string) | (null);
 };
 
+export type DailyRiskBirth = {
+  close_date: string;
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  risk_identity: string;
+  status_after: "PENDING" | "CONFIRMED";
+  status_before: "CLEAR";
+};
+
+export type DailyRiskEvaluation = {
+  activation_revision: number;
+  content_hash: string;
+  evaluated_at: string;
+  evidence: (components["schemas"]["UnifiedConditionEvidence"]) | (null);
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  ordinary_close: (components["schemas"]["OrdinaryRiskCloseObservation"]) | (null);
+  plan_version_id: string;
+  review_id: string;
+  risk_identity: string;
+  target: ((components["schemas"]["IntradayEvaluationTarget"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseEvaluationTarget"] & { kind: "OFFICIAL_CLOSE" })) | (null);
+};
+
 export type DailyRiskReassessmentCommand = {
   contentHash: string;
   expectedRevision: number;
@@ -2351,6 +2388,10 @@ export type DecisionEvidenceView = {
 };
 
 export type DecisionZone = "LOW_BUY" | "OBSERVATION" | "PRESSURE" | "BELOW_RISK" | "OUTSIDE" | "UNKNOWN";
+
+export type DeliveryAttemptStatus = "CLAIMED" | "DELIVERED" | "RETRY_PENDING" | "FAILED";
+
+export type DeliveryChannel = "IN_APP" | "CONSOLE" | "WEBHOOK";
 
 export type DeliveryHealthView = {
   errorCode: (string) | (null);
@@ -2951,6 +2992,14 @@ export type ExecutorHealthView = {
   waitingCount: number;
 };
 
+export type ExpectedConfirmation = {
+  calendarReference: string;
+  expectedAt: string;
+  observation: components["schemas"]["ReadinessObservation"];
+  priorInputsComplete: boolean;
+  target: (components["schemas"]["IntradayEvaluationTarget"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseEvaluationTarget"] & { kind: "OFFICIAL_CLOSE" });
+};
+
 export type ExplicitAlertView = {
   acknowledgedAt?: (string) | (null);
   activationRevision: number;
@@ -3264,9 +3313,24 @@ export type IntradayDiagnosticIdentityView = {
   symbol: string;
 };
 
+export type IntradayEvaluationTarget = {
+  bucket_end: string;
+  kind?: "INTRADAY";
+};
+
 export type IntradayTargetView = {
   kind: "INTRADAY";
   targetEnd: string;
+};
+
+export type InventoryRequirements = {
+  costBasis?: boolean;
+  economics?: boolean;
+  fees?: boolean;
+  inventory?: boolean;
+  quote?: boolean;
+  sellability?: boolean;
+  simulationBook?: boolean;
 };
 
 export type InventorySourceTreatmentView = {
@@ -4304,6 +4368,11 @@ export type OfficialCloseDiagnosticIdentityView = {
   symbol: string;
 };
 
+export type OfficialCloseEvaluationTarget = {
+  kind?: "OFFICIAL_CLOSE";
+  trade_date: string;
+};
+
 export type OfficialCloseTargetView = {
   kind: "OFFICIAL_CLOSE";
   tradeDate: string;
@@ -4404,6 +4473,27 @@ export type OperationReceipt = {
   operationId: string;
   status: "QUEUED";
   submittedAt: string;
+};
+
+export type OrdinaryRiskCloseObservation = {
+  below: boolean;
+  blockers: Array<string>;
+  breach_trade_date_after: (string) | (null);
+  breach_trade_date_before: (string) | (null);
+  close_date: string;
+  close_fen: string;
+  confirmation_close_used: boolean;
+  current_basis_id: (string) | (null);
+  expected_second_close_date: (string) | (null);
+  kind: "ORDINARY_TECHNICAL";
+  latched_basis_id: (string) | (null);
+  risk_comparison: "LT" | "LTE";
+  risk_identity: string;
+  risk_line_fen: number;
+  second_close_date_after: (string) | (null);
+  second_close_date_before: (string) | (null);
+  status_after: "CLEAR" | "PENDING" | "OBSERVATION" | "CONFIRMED";
+  status_before: "CLEAR" | "PENDING" | "OBSERVATION";
 };
 
 export type P2DraftRule = {
@@ -5152,6 +5242,130 @@ export type QuantityPolicy = {
   weak_factor: "0.5";
 };
 
+export type ReadinessAssessment = {
+  authorityGranted?: false;
+  axes: Array<components["schemas"]["AxisReadiness"]>;
+  contractVersion?: "plan-monitor-readiness-v1";
+  freshUntil: (string) | (null);
+  rules: Array<components["schemas"]["RuleReadiness"]>;
+  snapshot: components["schemas"]["ReadinessSnapshot"];
+  summary: "READY_FOR_MONITORING" | "WAITING_EXPECTED_CONFIRMATION" | "WAITING_REQUIRED_SERVICE" | "NEEDS_REVIEW" | "BLOCKED" | "UNKNOWN";
+};
+
+export type ReadinessContext = {
+  activationRevision: (number) | (null);
+  bookRevision?: (number) | (null);
+  contentHash: string;
+  coverageHash: (string) | (null);
+  inventoryRevision?: (number) | (null);
+  planVersionId: string;
+  reviewReceiptHash: (string) | (null);
+  runtimeGeneration: (string) | (null);
+  sourceHash: (string) | (null);
+};
+
+export type ReadinessDeliveryAttempt = {
+  attempt: number;
+  channel: components["schemas"]["DeliveryChannel"];
+  deliveredAt?: (string) | (null);
+  errorCode?: (components["schemas"]["ChannelErrorCode"]) | (null);
+  eventId: string;
+  id: string;
+  nextRetryAt?: (string) | (null);
+  responseCode?: (number) | (null);
+  status: components["schemas"]["DeliveryAttemptStatus"];
+};
+
+export type ReadinessExecutionState = {
+  approvedQuantity?: (number) | (null);
+  blockers?: (Array<string>) | (null);
+  consumed?: (boolean) | (null);
+  eligible?: (boolean) | (null);
+  executionDate?: (string) | (null);
+  executionWindow?: ("CURRENT_SESSION" | "NEXT_EXCHANGE_SESSION_ONLY") | (null);
+  observation?: (components["schemas"]["ReadinessObservation"]) | (null);
+  reason?: (string) | (null);
+  signalId?: (string) | (null);
+  signalRevision?: (number) | (null);
+  windowState?: "OPEN" | "CLOSED" | "UNKNOWN";
+};
+
+export type ReadinessMoneyFacts = {
+  capital?: (components["schemas"]["CapitalAssessment"]) | (null);
+  economics?: (components["schemas"]["EconomicsResult"]) | (null);
+  inputs: components["schemas"]["AxisReadiness"];
+};
+
+export type ReadinessNotificationChannel = {
+  channel: components["schemas"]["DeliveryChannel"];
+  configured?: (boolean) | (null);
+  eligible?: (boolean) | (null);
+  enabled?: (boolean) | (null);
+  historicalStatus?: (components["schemas"]["RecoveryDeliveryStatus"]) | (null);
+  historicalUpdatedAt?: (string) | (null);
+  latestAttempt?: (components["schemas"]["ReadinessDeliveryAttempt"]) | (null);
+};
+
+export type ReadinessNotificationFacts = {
+  causeId?: (string) | (null);
+  channels?: Array<components["schemas"]["ReadinessNotificationChannel"]>;
+  createdAt?: (string) | (null);
+  eventId?: (string) | (null);
+  observation?: (components["schemas"]["ReadinessObservation"]) | (null);
+  target?: ((components["schemas"]["IntradayEvaluationTarget"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseEvaluationTarget"] & { kind: "OFFICIAL_CLOSE" })) | (null);
+};
+
+export type ReadinessObservation = {
+  asOf: (string) | (null);
+  availability: "CURRENT" | "CACHED" | "UNAVAILABLE" | "PERSISTED_ONLY";
+  calendarReference?: (string) | (null);
+  context: components["schemas"]["ReadinessContext"];
+  evidenceRefs: Array<string>;
+  expiresAt: (string) | (null);
+  formulaVersion?: (string) | (null);
+  observedAt: string;
+  priceBasis?: (string) | (null);
+  provider?: (string) | (null);
+};
+
+export type ReadinessRiskFacts = {
+  current?: (components["schemas"]["DailyRiskEvaluation"]) | (null);
+  maintenance: components["schemas"]["AxisReadiness"];
+  obligation?: (components["schemas"]["ReadinessRiskObligation"]) | (null);
+  origin?: (components["schemas"]["ReadinessRiskOrigin"]) | (null);
+};
+
+export type ReadinessRiskObligation = {
+  blockers: Array<string>;
+  confirmedTradeDate: (string) | (null);
+  earliestExecutionDate: (string) | (null);
+  fulfilledAt: (string) | (null);
+  kind: "ORDINARY_TECHNICAL" | "SEVERE_TECHNICAL";
+  revision: number;
+  riskId: string;
+  status: "CLEAR" | "PENDING" | "OBSERVATION" | "CONFIRMED" | "FULFILLED";
+};
+
+export type ReadinessRiskOrigin = {
+  activationRevision: number;
+  birth: components["schemas"]["DailyRiskBirth"];
+  contentHash: string;
+  evaluatedAt: string;
+  evaluationId: string;
+  planVersionId: string;
+  reviewId: string;
+};
+
+export type ReadinessSnapshot = {
+  axes: Array<components["schemas"]["AxisReadiness"]>;
+  computedAt: string;
+  context: components["schemas"]["ReadinessContext"];
+  rules: Array<components["schemas"]["RuleReadinessFacts"]>;
+  scope: "ALERT_ONLY" | "TRADE_RULES" | "MIXED";
+};
+
+export type RecoveryDeliveryStatus = "ELIGIBLE" | "HOLD" | "SUPPRESS";
+
 export type ReferenceMarketBinding = {
   index_code: components["schemas"]["MarketIndexCode"];
   mapping_version?: "board-index-map-v1";
@@ -5549,6 +5763,30 @@ export type RuleEligibilityView = {
   reasonCode: ("NO_CURRENT_SIGNAL" | "INTRADAY_EXPIRED" | "RECOVERY_HOLD" | "RISK_NO_LONGER_VALID" | "CURRENT_STATE_UNVERIFIED" | "CACHED_RESULT") | (null);
   ruleId: string;
   sourceAlert: (components["schemas"]["SourceAlertView"]) | (null);
+};
+
+export type RuleReadiness = {
+  facts: components["schemas"]["RuleReadinessFacts"];
+  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED") | (null);
+  state: "CONDITION_TRUE" | "CONDITION_FALSE" | "WAITING_OFFICIAL_CONFIRMATION" | "AWAITING_FIRST_EVALUATION" | "MISSING_INPUT" | "BLOCKED" | "UNKNOWN";
+};
+
+export type RuleReadinessFacts = {
+  evaluatedAt: (string) | (null);
+  evaluatedTarget: ((components["schemas"]["IntradayEvaluationTarget"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseEvaluationTarget"] & { kind: "OFFICIAL_CLOSE" })) | (null);
+  execution?: components["schemas"]["ReadinessExecutionState"];
+  expectedConfirmation?: (components["schemas"]["ExpectedConfirmation"]) | (null);
+  expectedTarget: ((components["schemas"]["IntradayEvaluationTarget"] & { kind: "INTRADAY" }) | (components["schemas"]["OfficialCloseEvaluationTarget"] & { kind: "OFFICIAL_CLOSE" })) | (null);
+  leaves: Array<components["schemas"]["ConditionReadiness"]>;
+  money?: (components["schemas"]["ReadinessMoneyFacts"]) | (null);
+  notification?: (components["schemas"]["ReadinessNotificationFacts"]) | (null);
+  observation: (components["schemas"]["ReadinessObservation"]) | (null);
+  ownerId: string;
+  ownerKind: "ORDINARY_RULE" | "ALERT_RULE" | "RISK_BRANCH";
+  requirements: components["schemas"]["InventoryRequirements"];
+  risk?: (components["schemas"]["ReadinessRiskFacts"]) | (null);
+  rootOutcome: ("SATISFIED" | "UNSATISFIED" | "MISSING_INPUT") | (null);
+  side: ("BUY" | "SELL") | (null);
 };
 
 export type RuntimeDashboardResponse = {
@@ -6529,6 +6767,7 @@ export interface components {
     AlertView: AlertView;
     ApiErrorCode: ApiErrorCode;
     AuthoritativeDecisionView: AuthoritativeDecisionView;
+    AxisReadiness: AxisReadiness;
     BacktestAssumptionsView: BacktestAssumptionsView;
     BacktestAuthoritativeDecisionView: BacktestAuthoritativeDecisionView;
     BacktestDataHealthView: BacktestDataHealthView;
@@ -6648,6 +6887,7 @@ export interface components {
     CapitalSignalReference: CapitalSignalReference;
     CapturedReminder: CapturedReminder;
     CertifiedDailyBar: CertifiedDailyBar;
+    ChannelErrorCode: ChannelErrorCode;
     ClauseDisposition: ClauseDisposition;
     CollectionAttemptView: CollectionAttemptView;
     CollectionCandidateView: CollectionCandidateView;
@@ -6671,6 +6911,7 @@ export interface components {
     CompletedMinuteConfirmation: CompletedMinuteConfirmation;
     ConditionOutcome: ConditionOutcome;
     ConditionPlanEntryView: ConditionPlanEntryView;
+    ConditionReadiness: ConditionReadiness;
     ConfiguredAIProviderRuntimeView: ConfiguredAIProviderRuntimeView;
     ConfiguredAIRuntimeView: ConfiguredAIRuntimeView;
     ConfirmationSelection: ConfirmationSelection;
@@ -6719,6 +6960,8 @@ export interface components {
     DailyRiskAction: DailyRiskAction;
     DailyRiskActionApiView: DailyRiskActionApiView;
     DailyRiskApiView: DailyRiskApiView;
+    DailyRiskBirth: DailyRiskBirth;
+    DailyRiskEvaluation: DailyRiskEvaluation;
     DailyRiskReassessmentCommand: DailyRiskReassessmentCommand;
     DailyRiskState: DailyRiskState;
     DailyRuleReminderState: DailyRuleReminderState;
@@ -6743,6 +6986,8 @@ export interface components {
     DatabaseHealthView: DatabaseHealthView;
     DecisionEvidenceView: DecisionEvidenceView;
     DecisionZone: DecisionZone;
+    DeliveryAttemptStatus: DeliveryAttemptStatus;
+    DeliveryChannel: DeliveryChannel;
     DeliveryHealthView: DeliveryHealthView;
     DerivedQuantityPolicy: DerivedQuantityPolicy;
     DiagnosticEvaluationCommand: DiagnosticEvaluationCommand;
@@ -6815,6 +7060,7 @@ export interface components {
     ExceptionSignalSeedInput: ExceptionSignalSeedInput;
     ExecutionStatus: ExecutionStatus;
     ExecutorHealthView: ExecutorHealthView;
+    ExpectedConfirmation: ExpectedConfirmation;
     ExplicitAlertView: ExplicitAlertView;
     ExplicitConditionEvidenceView: ExplicitConditionEvidenceView;
     ExplicitPlanCapabilityView: ExplicitPlanCapabilityView;
@@ -6842,7 +7088,9 @@ export interface components {
     IndexConditionProgressView: IndexConditionProgressView;
     IndexScopeView: IndexScopeView;
     IntradayDiagnosticIdentityView: IntradayDiagnosticIdentityView;
+    IntradayEvaluationTarget: IntradayEvaluationTarget;
     IntradayTargetView: IntradayTargetView;
+    InventoryRequirements: InventoryRequirements;
     InventorySourceTreatmentView: InventorySourceTreatmentView;
     JsonValue: JsonValue;
     KnownLoopCash: KnownLoopCash;
@@ -6940,6 +7188,7 @@ export interface components {
     NoEconomics: NoEconomics;
     ObsoleteDailyAlertView: ObsoleteDailyAlertView;
     OfficialCloseDiagnosticIdentityView: OfficialCloseDiagnosticIdentityView;
+    OfficialCloseEvaluationTarget: OfficialCloseEvaluationTarget;
     OfficialCloseTargetView: OfficialCloseTargetView;
     OfficialDailyConfirmation: OfficialDailyConfirmation;
     OncePerRule: OncePerRule;
@@ -6956,6 +7205,7 @@ export interface components {
     OpeningLotReference: OpeningLotReference;
     OperationKind: OperationKind;
     OperationReceipt: OperationReceipt;
+    OrdinaryRiskCloseObservation: OrdinaryRiskCloseObservation;
     P2DraftRule: P2DraftRule;
     P2DraftRuleInput: P2DraftRuleInput;
     P2EconomicsContext: P2EconomicsContext;
@@ -7025,6 +7275,19 @@ export interface components {
     ProviderScopeView: ProviderScopeView;
     QuantityCalculation: QuantityCalculation;
     QuantityPolicy: QuantityPolicy;
+    ReadinessAssessment: ReadinessAssessment;
+    ReadinessContext: ReadinessContext;
+    ReadinessDeliveryAttempt: ReadinessDeliveryAttempt;
+    ReadinessExecutionState: ReadinessExecutionState;
+    ReadinessMoneyFacts: ReadinessMoneyFacts;
+    ReadinessNotificationChannel: ReadinessNotificationChannel;
+    ReadinessNotificationFacts: ReadinessNotificationFacts;
+    ReadinessObservation: ReadinessObservation;
+    ReadinessRiskFacts: ReadinessRiskFacts;
+    ReadinessRiskObligation: ReadinessRiskObligation;
+    ReadinessRiskOrigin: ReadinessRiskOrigin;
+    ReadinessSnapshot: ReadinessSnapshot;
+    RecoveryDeliveryStatus: RecoveryDeliveryStatus;
     ReferenceMarketBinding: ReferenceMarketBinding;
     RelativeStrengthEvidence: RelativeStrengthEvidence;
     RelativeStrengthEvidenceInput: RelativeStrengthEvidenceInput;
@@ -7064,6 +7327,8 @@ export interface components {
     RiskLotAllocation: RiskLotAllocation;
     RiskStatus: RiskStatus;
     RuleEligibilityView: RuleEligibilityView;
+    RuleReadiness: RuleReadiness;
+    RuleReadinessFacts: RuleReadinessFacts;
     RuntimeDashboardResponse: RuntimeDashboardResponse;
     RuntimeGapView: RuntimeGapView;
     RuntimeHealthV2Response: RuntimeHealthV2Response;
@@ -12427,6 +12692,81 @@ export interface paths {
         "200": {
           content: {
             "application/json": components["schemas"]["PlanVersionView"];
+          };
+        };
+        "400": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "401": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "403": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "404": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "405": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "409": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "413": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "422": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "429": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "500": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+        "503": {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/plan-versions/{version_id}/monitor-readiness": {
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          version_id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        "200": {
+          content: {
+            "application/json": components["schemas"]["ReadinessAssessment"];
           };
         };
         "400": {

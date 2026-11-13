@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from tests.contract.test_plan_readiness_api_projection import READINESS_PATH
 from tests.contract.test_source_coverage_api_projection import (
     COVERAGE_PATH,
     source_coverage_projection,
@@ -189,7 +190,7 @@ def test_openapi_change_requires_bilingual_spec_approval() -> None:
 def test_openapi_contains_only_approved_paths_and_public_error_schemas() -> None:
     generator = _load_generator()
     current = generator.build_openapi_document()
-    assert set(current["paths"]) == APPROVED_PATHS | {COVERAGE_PATH}
+    assert set(current["paths"]) == APPROVED_PATHS | {COVERAGE_PATH, READINESS_PATH}
     document = source_coverage_projection(current)
 
     assert set(document["paths"]) == APPROVED_PATHS
