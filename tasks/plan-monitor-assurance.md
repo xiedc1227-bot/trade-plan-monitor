@@ -373,3 +373,6 @@ On 2026-11-13 the user explicitly resumed. The coordinator matched the frozen so
 T17a15 risk fact shape and paired field appendix are accepted as `0c7d5aa` (R85), with 190 focused checks. Actual risk consumer/summary and production/race acceptance remain next; no T17/C06 closure.
 
 T17a16 actual risk consumer/summary is accepted as `7c4404c` (R86): 48 disjoint focused checks; default prior-day reuse and other unobserved owners remain UNKNOWN. Next are notification configuration/event facts, supported future confirmation and public/generated/UI work. T17/C06 remain open.
+
+
+T17a17 actual notification configuration is accepted as `c32ec2b` (R87):44 focused checks, no public/eligibility/delivery projection yet. Next wire bounded exact native events and channel receipts, then supported future confirmation and public/generated/UI work. Configured/enabled and historical STOPPED facts never establish current sending eligibility. T17/C06 remain open.
