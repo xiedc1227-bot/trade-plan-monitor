@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, shallowRef } from "vue";
+import { computed, onMounted, shallowRef, watch } from "vue";
 import type { DailyStateView, DailyInventoryResource, PlanVersionView, DailySimulationReceipt, DailyRuleReminderState } from "../../api/generated";
 import PlanOperationForm from "./PlanOperationForm.vue";
+import ReviewedFactSelection from "./ReviewedFactSelection.vue";
+import { reviewedFactChoices } from "./reviewedFactSelection";
 import P2RuntimeEvidence from "./P2RuntimeEvidence.vue";
 import MarketLinkageEvidence from "./MarketLinkageEvidence.vue";
 import PlanExceptionApproval from "./PlanExceptionApproval.vue";
@@ -17,11 +19,29 @@ const schemas = shallowRef<Record<string, Schema>>({});
 const selected = shallowRef("FACT");
 const riskKind = shallowRef("SEVERE_TECHNICAL");
 const factSignalId = shallowRef("");
+const factSelectionKey = shallowRef("");
+const factChoices = computed(() => reviewedFactChoices(props.version));
+const selectedFact = computed(() => factChoices.value.find(choice => choice.key === factSelectionKey.value) ?? null);
 const busy = shallowRef(false);
 const error = shallowRef("");
 const notice = shallowRef("");
 const commandNonce = shallowRef(crypto.randomUUID());
 const simulationKeys = new Map<string, string>();
+const versionKey = () => JSON.stringify([props.version.id, props.version.contentHash, props.version.planJson]);
+let refreshSequence = 0, mounted = false;
+watch(versionKey, () => {
+  factSelectionKey.value = ""; factSignalId.value = ""; commandNonce.value = crypto.randomUUID();
+  inventory.value = null; runtime.value = null; error.value = ""; notice.value = "";
+  if (mounted) {
+    const expected = versionKey(), pending = refresh(), sequence = refreshSequence;
+    void pending.catch(() => {
+      if (expected === versionKey() && sequence === refreshSequence) error.value = "当前状态不可用，请重新读取。";
+    });
+  }
+}, { flush: "sync" });
+watch(factSelectionKey, () => { commandNonce.value = crypto.randomUUID(); }, { flush: "sync" });
+watch(factSignalId, () => { factSelectionKey.value = ""; commandNonce.value = crypto.randomUUID(); }, { flush: "sync" });
+watch(selected, () => { factSelectionKey.value = ""; commandNonce.value = crypto.randomUUID(); }, { flush: "sync" });
 const actions = [
   { kind: "FACT", title: "人工核验证据", path: "/plan-facts", description: "逐日技术条件、严重技术结构及量价恶化、当前可交易或全日停牌。可交易与停牌的官方资料需发布时间、核验时间和具体事实；提交后立即重新评估，各规则遵循已审核的确认方式与执行窗口。" },
   { kind: "POSITION", title: "期初模拟仓位", path: "/simulation-position-confirmations", description: "分别填写期初CORE与TACTICAL，均为0或100股的整数倍。期初库存按已结算处理，后续模拟买入由系统按下一交易日计算可卖数量。已有模拟交易后不能覆盖期初库存。" },
@@ -42,17 +62,20 @@ const reminderDraftState = computed(() => reminderOnly.value && props.version.st
   ? props.version.reviewId ? "仅提醒草稿：已审核，尚未启用" : "仅提醒草稿：待审核，尚未启用"
   : null);
 const reassessedRisk = computed(() => runtime.value?.snapshot?.risks.find(r => r.kind === riskKind.value));
-const hiddenFields = computed(() => selected.value === "POSITION" ? ["symbol", "expectedRevision"] : selected.value === "REASSESSMENT" ? ["symbol", "riskId", "planVersionId", "contentHash", "expectedRevision"] : ["planVersionId", "contentHash", "expectedRevision", "factId", "signalId"]);
+const hiddenFields = computed(() => selected.value === "POSITION" ? ["symbol", "expectedRevision"] : selected.value === "REASSESSMENT" ? ["symbol", "riskId", "planVersionId", "contentHash", "expectedRevision"] : ["planVersionId", "contentHash", "expectedRevision", "factId", "signalId", "conditionSelection", ...(selectedFact.value ? ["kind"] : [])]);
 const stateLabels: Record<string, string> = { CURRENT: "当前评估", AWAITING_EVALUATION: "等待首次评估", INACTIVE: "未启用", UNSUPPORTED: "历史数据不支持模拟", CONFIRMED: "已确认", READY: "可以模拟交易", SIMULATED: "已完成模拟", EXPIRED: "本次权限已过期", INVALIDATED: "信号已失效", CLEAR: "未触发", PENDING: "等待下一收盘确认", OBSERVATION: "继续观察，停止新增", FULFILLED: "风险退出已完成" };
 const day = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const binding = computed<Record<string, Json>>(() => selected.value === "FACT" ? {
   planVersionId: props.version.id, contentHash: props.version.contentHash ?? null, expectedRevision: 0,
   factId: `fact-${commandNonce.value}`, signalId: factSignalId.value || null,
+  ...(selectedFact.value ? { kind: selectedFact.value.kind, conditionSelection: { ...selectedFact.value.selection } } : {}),
 } : selected.value === "POSITION" ? { symbol: props.version.symbol,
   expectedRevision: inventory.value?.snapshot?.revision ?? 0,
 } : { symbol: props.version.symbol, planVersionId: props.version.id, contentHash: props.version.contentHash ?? null,
   riskId: reassessedRisk.value?.riskId ?? null, expectedRevision: reassessedRisk.value?.revision ?? 0 });
-const formBlocked = computed(() => runtime.value?.status === "UNSUPPORTED" || inventory.value === null || (selected.value === "REASSESSMENT" && !reassessedRisk.value));
+const formBlocked = computed(() => runtime.value?.status === "UNSUPPORTED" || inventory.value === null ||
+  (selected.value === "FACT" && (!!factSelectionKey.value && !selectedFact.value || !!selectedFact.value && !!factSignalId.value)) ||
+  (selected.value === "REASSESSMENT" && !reassessedRisk.value));
 const riskAction = computed(() => runtime.value?.snapshot?.riskAction);
 const reminders = computed<readonly DailyRuleReminderState[]>(() => runtime.value?.snapshot?.alerts ?? []);
 const riskQuantity = computed(() => (riskAction.value?.coreQty ?? 0) + (riskAction.value?.tacticalQty ?? 0));
@@ -65,10 +88,12 @@ const capitalPolicy = computed(() => {
 });
 function wholeQuantity(quantity: number) { return Number.isSafeInteger(quantity) && quantity > 0 && quantity % 100 === 0; }
 async function refresh() {
+  const expected = versionKey(), sequence = ++refreshSequence, symbol = props.version.symbol;
   const [actual, state] = await Promise.all([
-    props.request<DailyInventoryResource>(`/api/v1/simulation-position-inventory?symbol=${props.version.symbol}&asOfTradeDate=${day()}`),
-    props.request<DailyStateView>(`/api/v1/plan-runtime/${props.version.symbol}`),
+    props.request<DailyInventoryResource>(`/api/v1/simulation-position-inventory?symbol=${symbol}&asOfTradeDate=${day()}`),
+    props.request<DailyStateView>(`/api/v1/plan-runtime/${symbol}`),
   ]);
+  if (expected !== versionKey() || sequence !== refreshSequence) return;
   inventory.value = actual; runtime.value = state;
   authorityRevision.value++;
 }
@@ -81,9 +106,25 @@ async function refreshCurrent() {
 }
 async function submit(value: Json) {
   if (value === null || typeof value !== "object" || Array.isArray(value) || busy.value || formBlocked.value) return;
+  const expected = versionKey(), nonce = commandNonce.value, operation = current.value;
+  if (selected.value === "FACT") {
+    const expectedSelection = selectedFact.value?.selection;
+    if (value.planVersionId !== props.version.id || value.contentHash !== props.version.contentHash ||
+        value.factId !== `fact-${nonce}` || (expectedSelection
+          ? JSON.stringify(value.conditionSelection) !== JSON.stringify(expectedSelection) || value.kind !== selectedFact.value?.kind
+          : value.conditionSelection !== undefined)) {
+      error.value = "核验证据与当前条件绑定不一致，请重新选择并填写。"; return;
+    }
+  }
   busy.value = true; error.value = ""; notice.value = "";
-  try { await props.request(`/api/v1${current.value.path}`, value, `daily-${selected.value}-${commandNonce.value}`); await refresh(); commandNonce.value = crypto.randomUUID(); notice.value = "已记录并更新当前状态。"; }
-  catch (cause) { error.value = cause instanceof Error ? cause.message : "登记失败"; }
+  try {
+    await props.request(`/api/v1${operation.path}`, value, `daily-${selected.value}-${nonce}`);
+    if (expected !== versionKey() || nonce !== commandNonce.value) return;
+    await refresh();
+    if (expected !== versionKey() || nonce !== commandNonce.value) return;
+    commandNonce.value = crypto.randomUUID(); notice.value = "已记录并更新当前状态。";
+  }
+  catch (cause) { if (expected === versionKey() && nonce === commandNonce.value) error.value = cause instanceof Error ? cause.message : "登记失败"; }
   finally { busy.value = false; }
 }
 async function simulate(causeId: string | null | undefined, revision: number | null | undefined, quantity: number) {
@@ -102,6 +143,7 @@ async function simulate(causeId: string | null | undefined, revision: number | n
   finally { busy.value = false; }
 }
 onMounted(async () => {
+  mounted = true;
   try { const contract = await props.request<{ operationSchemas: Record<string, Schema> }>("/api/v1/plan-editor-schema"); schemas.value = contract.operationSchemas; await refresh(); }
   catch (cause) { error.value = cause instanceof Error ? cause.message : "当前状态不可用"; }
 });
@@ -188,13 +230,15 @@ onMounted(async () => {
         <option v-for="signal in runtime.snapshot.signals" :key="signal.signalId" :value="signal.signalId">{{ signal.side === 'BUY' ? '计划买入' : '计划卖出' }} · {{ signal.confirmedTradeDate }}确认 · {{ stateLabels[signal.state] ?? signal.state }}</option>
       </select>
     </template>
+    <ReviewedFactSelection v-if="selected === 'FACT'" v-model="factSelectionKey" :choices="factChoices" :disabled="busy || !!factSignalId" />
     <template v-if="selected === 'REASSESSMENT'">
       <label for="daily-reassessment-risk">重评技术风险</label><select id="daily-reassessment-risk" v-model="riskKind">
         <option v-for="risk in runtime?.snapshot?.risks ?? []" :key="risk.kind" :value="risk.kind">{{ risk.kind === 'ORDINARY_TECHNICAL' ? '普通技术风险' : '严重技术风险' }}</option>
       </select>
     </template>
-    <PlanOperationForm v-if="schemas[selected]" :key="selected" :schema="schemas[selected] ?? {}" :binding="binding"
-      :title="current.title" :description="current.description" :busy="busy" :operation="selected" :initial-values="selected === 'FACT' ? { tradeDate: day() } : {}" :hidden-fields="hiddenFields" :blocked="formBlocked" @submit="submit" />
+    <PlanOperationForm v-if="schemas[selected]" :key="selected === 'FACT' ? `${selected}:${commandNonce}` : selected" :schema="schemas[selected] ?? {}" :binding="binding"
+      :title="current.title" :description="current.description" :busy="busy" :operation="selected"
+      :initial-values="selected === 'FACT' ? { tradeDate: day() } : {}" :hidden-fields="hiddenFields" :blocked="formBlocked" @submit="submit" />
   </section>
 </template>
 <style scoped>
