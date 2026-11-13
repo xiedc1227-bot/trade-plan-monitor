@@ -111,8 +111,28 @@ def test_configured_serialization_schema_keeps_the_old_public_surface(installed_
     properties = schemas["DailyEvaluationApiView"]["properties"]
     assert "ordinaryEvaluations" not in properties
     assert "ordinary_evaluations" not in properties
-    assert {"DailyOrdinaryEvaluation", "IntradayEvaluationTarget",
-            "OfficialCloseEvaluationTarget"}.isdisjoint(schemas)
+    assert "DailyOrdinaryEvaluation" not in schemas
+    readiness = installed_api.app.openapi()["paths"][
+        "/api/v1/plan-versions/{version_id}/monitor-readiness"]["get"]
+    assert readiness["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ReadinessAssessment"}
+    assert schemas["ReadinessAssessment"]["properties"]["snapshot"] == {
+        "$ref": "#/components/schemas/ReadinessSnapshot"}
+    assert schemas["ReadinessSnapshot"]["properties"]["rules"]["items"] == {
+        "$ref": "#/components/schemas/RuleReadinessFacts"}
+
+    def references(value):
+        if isinstance(value, dict):
+            return {value["$ref"]} if "$ref" in value else set().union(
+                *(references(child) for child in value.values()))
+        if isinstance(value, list):
+            return set().union(*(references(child) for child in value))
+        return set()
+
+    for name in ("expectedTarget", "evaluatedTarget"):
+        assert references(schemas["RuleReadinessFacts"]["properties"][name]) == {
+            "#/components/schemas/IntradayEvaluationTarget",
+            "#/components/schemas/OfficialCloseEvaluationTarget"}
     # Exclusion belongs only to the public serialization boundary.
     validation = DailyEvaluationApiView.model_json_schema(mode="validation", by_alias=True)
     assert "ordinaryEvaluations" in validation["properties"]

@@ -55,6 +55,7 @@ from trade_plan_monitor.domain.plan_validation import DraftReviewIssue, Validati
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.state.models import PlanVersionStatus
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
+from trade_plan_monitor.web.plan_readiness_models import ReadinessAssessment
 from trade_plan_monitor.web.routers.alerts import ExplicitConditionEvidenceView
 from trade_plan_monitor.web.schemas import (
     ApiValue,
@@ -816,6 +817,22 @@ class PlanExtractionService(Protocol):
     async def get_plan_extraction(self, *, operation_id: str) -> PlanExtractionView | None: ...
 
 
+class PlanReadinessService(Protocol):
+    """The installed monitor's bounded read-only readiness capability."""
+
+    async def get_plan_readiness(self, *, version_id: str) -> ReadinessAssessment | None: ...
+
+
+def get_plan_readiness_service(request: Request) -> PlanReadinessService:
+    service = getattr(request.app.state, "monitor_read_service", None)
+    if not callable(getattr(service, "get_plan_readiness", None)):
+        raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+    return service
+
+
+PlanReadinessDependency = Annotated[PlanReadinessService, Depends(get_plan_readiness_service)]
+
+
 class PlanOperationService(PlanExtractionService, Protocol):
     """Application-service contract for atomic idempotency, revision, and audit work."""
 
@@ -954,6 +971,20 @@ async def get_plan_version(
     result = validate_api_response(value, PlanVersionView)
     if result.id != version_id:
         raise RuntimeError("plan service returned a mismatched version")
+    return result
+
+
+@router.get("/plan-versions/{version_id}/monitor-readiness", response_model=ReadinessAssessment)
+async def get_plan_readiness(
+    version_id: ResourceIdPath,
+    service: PlanReadinessDependency,
+) -> ReadinessAssessment:
+    value = await service.get_plan_readiness(version_id=str(version_id))
+    if value is None:
+        raise ApiError(ApiErrorCode.NOT_FOUND)
+    result = validate_api_response(value, ReadinessAssessment)
+    if result.snapshot.context.plan_version_id != version_id:
+        raise RuntimeError("readiness service returned a mismatched version")
     return result
 
 
