@@ -12,7 +12,10 @@ from trade_plan_monitor.decision.models import (
     IntradayEvaluationTarget,
     OfficialCloseEvaluationTarget,
 )
-from trade_plan_monitor.notifications.dispatcher import NotificationConfigurationSnapshot
+from trade_plan_monitor.notifications.dispatcher import (
+    InAppStorageCheck,
+    NotificationConfigurationSnapshot,
+)
 from trade_plan_monitor.runtime.progress import ProgressSnapshot
 
 
@@ -112,6 +115,28 @@ class DependencyReadAuthority:
 
 
 @dataclass(frozen=True, slots=True)
+class InAppServiceAuthority:
+    """Actual check bound once to native completions and their original deadlines."""
+
+    storage: InAppStorageCheck
+    runtime_generation: UUID
+    configuration_revision: str
+    completions: tuple[PlanCompletionProof, ...]
+    progress_due_at: datetime
+    valid_until: datetime
+
+    def __post_init__(self):
+        if (type(self.storage) is not InAppStorageCheck or type(self.completions) is not tuple
+                or not 1 <= len(self.completions) <= 10
+                or any(type(item) is not PlanCompletionProof for item in self.completions)
+                or len({item.symbol for item in self.completions}) != len(self.completions)):
+            raise ValueError("service checks require bounded native completion contexts")
+        if (self.storage.completed_at >= self.valid_until
+                or self.valid_until > self.progress_due_at):
+            raise ValueError("service checks cannot extend original progress bounds")
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeReadAuthority:
     """A missing value is unavailable authority, not authoritative owner absence."""
 
@@ -126,6 +151,7 @@ class RuntimeReadAuthority:
     standby_reason: str = "NO_ACTIVE_PLANS"
     block_reason: str | None = None
     notification_configuration: NotificationConfigurationSnapshot | None = None
+    notification_service: InAppServiceAuthority | None = None
 
     @property
     def generation(self) -> UUID | None:
@@ -143,6 +169,9 @@ class RuntimeReadAuthority:
                 raise TypeError("notification configuration requires native frozen instance facts")
             if self.owner_absent:
                 raise ValueError("an absent owner cannot supply dispatcher configuration")
+        if self.notification_service is not None:
+            if type(self.notification_service) is not InAppServiceAuthority or self.owner_absent:
+                raise ValueError("service checks require a retained native owner")
 
 
 def _fingerprint(domain, values):

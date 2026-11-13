@@ -114,6 +114,22 @@ class NotificationConfigurationSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class InAppStorageCheck:
+    """One actual native storage check, never queue coverage or send permission."""
+
+    instance: object
+    check: object
+    configuration: NotificationConfigurationSnapshot
+    started_at: datetime
+    completed_at: datetime
+    cursor_start: int
+    cursor_end: int
+    selected_count: int
+    considered_count: int
+    limit: int
+
+
+@dataclass(frozen=True, slots=True)
 class _AttemptPlan:
     attempt: int
     existing_id: str | None = None
@@ -173,6 +189,11 @@ class NotificationDispatcher:
         self._active_deliveries: set[asyncio.Task[DeliveryAttemptRecord | None]] = set()
         self._delivery_drain_failed = False
         self._closed_channels: set[DeliveryChannel] = set()
+        self._service_instance = object()
+        self._service_epoch = object()
+        self._service_check: InAppStorageCheck | None = None
+        self._service_adapter: InAppChannel | None = None
+        self._service_scan: tuple[int, int, int] | None = None
 
         configured = (
             (InAppChannel(), ConsoleChannel()) if channels is None else _bounded_channels(channels)
@@ -214,6 +235,36 @@ class NotificationDispatcher:
             channels=tuple(channels), admission_stopped=self._closed
         )
 
+    def _native_in_app(self) -> InAppChannel | None:
+        if (not self._closed and not self._delivery_drain_failed and not self._active_deliveries
+                and len(self._channels) == 1
+                and type(self._channels[0]) is InAppChannel
+                and self._channels[0].enabled is True
+                and DeliveryChannel.IN_APP not in self._closed_channels):
+            return self._channels[0]
+        return None
+
+    def _revoke_service_check(self) -> None:
+        self._service_check = None
+        self._service_epoch = object()
+        self._service_scan = None
+
+    def in_app_service_check(self) -> InAppStorageCheck | None:
+        """Inspect retained actual work without clock, storage, admission or send."""
+        check = self._service_check
+        if check is None:
+            return None
+        if self._native_in_app() is not self._service_adapter:
+            self._revoke_service_check()
+            return None
+        try:
+            if self.configuration_snapshot() == check.configuration:
+                return check
+        except Exception:
+            pass
+        self._revoke_service_check()
+        return None
+
     async def dispatch_pending(
         self,
         *,
@@ -221,25 +272,44 @@ class NotificationDispatcher:
     ) -> tuple[DeliveryAttemptRecord, ...]:
         """Attempt at most ``limit`` due event/channel pairs in stable order."""
 
+        self._revoke_service_check()
+        epoch = self._service_epoch
         _validate_dispatch_limit(limit)
         if self._closed:
             return ()
         now = self._now()
-        pending: list[tuple[NotificationEvent, NotificationChannel]] = []
-        for channel in self._enabled_channels():
-            pending.extend((event, channel) for event in self._pending_events(channel, now, limit))
-        pending.sort(key=lambda item: (item[0].sequence, _CHANNEL_ORDER[item[1].channel]))
-
-        attempts: list[DeliveryAttemptRecord] = []
-        for event, channel in pending[:limit]:
-            attempt = await self._dispatch_if_due(event, channel)
-            if attempt is not None:
-                attempts.append(attempt)
-        return tuple(attempts)
+        adapter = self._native_in_app()
+        configuration = self.configuration_snapshot() if adapter is not None else None
+        try:
+            pending: list[tuple[NotificationEvent, NotificationChannel]] = []
+            for channel in self._enabled_channels():
+                pending.extend(
+                    (event, channel) for event in self._pending_events(channel, now, limit)
+                )
+            scan = self._service_scan
+            pending.sort(key=lambda item: (item[0].sequence, _CHANNEL_ORDER[item[1].channel]))
+            attempts: list[DeliveryAttemptRecord] = []
+            for event, channel in pending[:limit]:
+                attempt = await self._dispatch_if_due(event, channel)
+                if attempt is not None:
+                    attempts.append(attempt)
+            if (adapter is not None and self._native_in_app() is adapter and scan is not None
+                    and self._service_epoch is epoch
+                    and self.configuration_snapshot() == configuration):
+                completed = self._now()
+                if completed >= now:
+                    self._service_adapter = adapter
+                    self._service_check = InAppStorageCheck(self._service_instance, epoch,
+                        configuration, now, completed, *scan, len(pending[:limit]), limit)
+            return tuple(attempts)
+        except BaseException:
+            self._revoke_service_check()
+            raise
 
     async def dispatch_event(self, event_id: UUID) -> tuple[DeliveryAttemptRecord, ...]:
         """Attempt every due enabled channel for one committed event."""
 
+        self._revoke_service_check()
         if self._closed:
             return ()
         normalized_id = _event_id(event_id)
@@ -283,11 +353,13 @@ class NotificationDispatcher:
         """Synchronously revoke every new send before shutdown yields."""
 
         self._closed = True
+        self._revoke_service_check()
 
     def _observe_delivery(self, task: asyncio.Task[DeliveryAttemptRecord | None]) -> None:
         self._active_deliveries.discard(task)
         if task.cancelled() or task.exception() is not None:
             self._delivery_drain_failed = True
+            self._revoke_service_check()
 
     def _enabled_channels(self) -> tuple[NotificationChannel, ...]:
         return tuple(channel for channel in self._channels if channel.enabled)
@@ -364,6 +436,7 @@ class NotificationDispatcher:
         now: datetime,
         limit: int,
     ) -> tuple[NotificationEvent, ...]:
+        cursor_start = self._scan_after.get(channel.channel, 0)
         latest_number = (
             select(func.max(DeliveryAttemptRow.attempt))
             .where(
@@ -454,6 +527,8 @@ class NotificationDispatcher:
             pass
         if loaded is None:
             raise DeliveryStorageError("Pending alert delivery state is invalid")
+        if type(channel) is InAppChannel:
+            self._service_scan = (cursor_start, self._scan_after.get(channel.channel, 0), len(rows))
         return loaded
 
     def _load_event(self, event_id: UUID) -> NotificationEvent:

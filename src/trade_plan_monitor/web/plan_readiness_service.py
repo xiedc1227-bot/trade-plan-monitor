@@ -113,6 +113,7 @@ def authority_identity(authority):
             authority.lifecycle, authority.block_reason, authority.standby_reason,
             authority.owner_absent, authority.plans, authority.dependencies,
             authority.notification_configuration,
+            authority.notification_service,
             None if authority.progress is None else (
                 authority.progress.state, authority.progress.last_progress_at,
                 authority.progress.progress_due_at, authority.progress.next_wake_at))
@@ -677,6 +678,41 @@ def _notification(value, authority, kind, identity, *, observe):
                     "latest_attempt": None}) for item in channels))
 
 
+def _notification_service_axis(value, authority, result, now, *, observe, expiry):
+    """Only native alert-only complete FALSE establishes no current obligation."""
+    from trade_plan_monitor.runtime.daily_service import _alert_only
+
+    service = None if authority is None else authority.notification_service
+    native = value.native
+    if (service is None or not value.current or not value.owner_current
+            or native is None or not _alert_only(value.plan)
+            or service.runtime_generation != authority.generation
+            or service.configuration_revision != authority.configuration_revision
+            or service.storage.configuration != authority.notification_configuration
+            or value.proof not in service.completions
+            or not native.evaluated_at <= service.storage.started_at <= (
+                service.storage.completed_at) <= now < service.valid_until
+            or native.signals or native.risks or native.exception_candidates
+            or native.risk_action.status != "NONE"
+            or any(getattr(native.risk_action, field) is not None
+                   for field in ("branch", "cause_id", "cause_revision"))
+            or len(native.alerts) != len(value.plan.alert_rules)
+            or len({alert.rule_id for alert in native.alerts}) != len(native.alerts)
+            or {alert.rule_id for alert in native.alerts} != {
+                rule.rule_id for rule in value.plan.alert_rules}
+            or any(alert.outcome != "UNSATISFIED" for alert in native.alerts)
+            or not result.rules or any(rule.state != "CONDITION_FALSE" for rule in result.rules)
+            or any(axis.state not in {"PASS", "NOT_APPLICABLE"} for axis in result.axes
+                   if axis.axis != "NOTIFICATION_DELIVERY")):
+        return None
+    bound = _bounded_until(now, (expiry, service.valid_until, service.progress_due_at))
+    if bound is None:
+        return None
+    return AxisReadiness(axis="NOTIFICATION_DELIVERY", state="PASS",
+        observation=observe("runtime:" + str(authority.generation),
+            as_of=service.storage.completed_at, expires=bound))
+
+
 def _risk_facts(value, identity, rule, now, *, observe, context_expiry, review_ok):
     """Copy exact native observations; maintenance also needs the current cause fence."""
     row = value.risks.get(identity)
@@ -1082,6 +1118,12 @@ def read_plan_readiness(session, authority, version_id, now):
         result = summarize_readiness(ReadinessSnapshot(computed_at=now, context=context,
             scope="MIXED" if alert and trade else "ALERT_ONLY" if alert else "TRADE_RULES",
             axes=tuple(axes), rules=tuple(rules)))
+        notification_service = _notification_service_axis(
+            value, authority, result, now, observe=observation, expiry=expiry)
+        if notification_service is not None:
+            result = summarize_readiness(result.snapshot.model_copy(update={"axes": tuple(
+                notification_service if axis.axis == "NOTIFICATION_DELIVERY" else axis
+                for axis in result.snapshot.axes)}))
         if len(result.model_dump_json(by_alias=True).encode("utf-8")) > MAX_READINESS_BYTES:
             raise ValueError("Readiness exceeds the complete 1MiB view bound")
         return result, value.binding

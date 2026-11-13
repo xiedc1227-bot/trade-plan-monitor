@@ -10,7 +10,8 @@ import time as monotonic_time
 from collections.abc import Awaitable, Callable
 from contextlib import closing
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from datetime import time as wall_time
 from pathlib import Path
 from threading import Event, RLock
 from typing import Protocol
@@ -70,6 +71,7 @@ from trade_plan_monitor.runtime.scheduler import (
     MarketSessionScheduler,
 )
 from trade_plan_monitor.runtime.service import RuntimeLifecycleService
+from trade_plan_monitor.runtime.status_authority import InAppServiceAuthority
 from trade_plan_monitor.state.alert_invalidation_sweep import (
     MAX_SWEEP_BATCH,
     latest_alert_sequence,
@@ -692,6 +694,9 @@ class _ProductionRuntimeState:
         self._stage_errors: dict[str, str] = {}
         self._stage_retry_at: dict[str, datetime] = {}
         self._dispatcher = dispatcher
+        self._notification_service: InAppServiceAuthority | None = None
+        self._notification_pipeline = None
+        self._notification_owner = None
         self._on_reference_failure = on_reference_failure
         self._liveness = RuntimeLivenessRepository(session_factory)
         self._liveness_revision: int | None = None
@@ -707,6 +712,71 @@ class _ProductionRuntimeState:
             return snapshot if type(snapshot) is NotificationConfigurationSnapshot else None
         except Exception:
             return None
+
+    def notification_service_snapshot(self, *, runtime_generation, configuration_revision, plans):
+        """Proxy retained work with already captured owner inputs; never refresh it."""
+        retained = self._notification_service
+        if retained is None or self._dispatcher is None or self._progress_owner is None:
+            return None
+        try:
+            current = self._dispatcher.in_app_service_check()
+            if (
+                self._pipeline is self._notification_pipeline
+                and self._progress_owner() is self._notification_owner
+                and retained.storage == current
+                and retained.runtime_generation == runtime_generation
+                and retained.configuration_revision == configuration_revision
+                and retained.completions == tuple(plan.completion for plan in plans)
+            ):
+                return retained
+        except Exception:
+            pass
+        self._notification_service = None
+        return None
+
+    def _notification_context(self):
+        if (self._monitor_contract_version != 2 or self._pipeline is None
+                or self._runtime_generation is None or self._progress_owner is None):
+            return None
+        try:
+            owner = self._progress_owner()
+            progress = owner.progress_snapshot()
+            _token, revision, plans = self._pipeline.runtime_status_snapshot()
+            generation = self._runtime_generation()
+            proofs = tuple(plan.completion for plan in plans)
+            if (progress is None or progress.runtime_generation != generation
+                    or progress.state not in {"WORKING", "SCHEDULED"}
+                    or progress.last_progress_at is None or progress.progress_due_at is None
+                    or not 1 <= len(proofs) <= 10 or any(proof is None or (
+                        proof.runtime_generation != generation
+                        or proof.configuration_revision != revision) for proof in proofs)):
+                return None
+            return owner, progress, generation, revision, proofs
+        except Exception:
+            return None
+
+    def _bind_notification_check(self, before):
+        after = self._notification_context()
+        if before is None or after is None or self._dispatcher is None:
+            return
+        owner, progress, generation, revision, proofs = before
+        if owner is not after[0] or before[2:] != after[2:]:
+            return
+        check = self._dispatcher.in_app_service_check()
+        if (check is None or not progress.observed_at <= check.started_at <= check.completed_at
+                or check.completed_at >= progress.progress_due_at):
+            return
+        # These are the existing context-day, original progress and target bounds.
+        bounds = [progress.progress_due_at, datetime.combine(
+            check.started_at.date() + timedelta(days=1), wall_time(), check.started_at.tzinfo)]
+        bounds.extend(proof.target.bucket_end + timedelta(seconds=90)
+                      for proof in proofs if proof.target.kind == "INTRADAY")
+        expiry = min(bounds)
+        if check.completed_at >= expiry:
+            return
+        self._notification_service = InAppServiceAuthority(
+            check, generation, revision, proofs, progress.progress_due_at, expiry)
+        self._notification_pipeline, self._notification_owner = self._pipeline, owner
 
     def next_index_recovery_at(self) -> datetime | None:
         if self._pipeline is None:
@@ -1105,6 +1175,7 @@ class _ProductionRuntimeState:
                     self._stage_retry_at.pop(stage, None)
 
     async def recover_startup(self, trade_date: date) -> None:
+        self._notification_service = None
         if self._pipeline is not None and self._pipeline._stock_semantics is None:
             self._pipeline.restore_index_recoveries()
         elif self._pipeline is not None:
@@ -1128,6 +1199,7 @@ class _ProductionRuntimeState:
         return rows[0].is_open
 
     async def run_deadline(self, deadline: MarketDeadline) -> object:
+        self._notification_service = None
         if self._pipeline is None:
             raise RuntimeError("live monitor requires a certified production pipeline")
         if self.configuration_restart_required():
@@ -1148,7 +1220,15 @@ class _ProductionRuntimeState:
             and self._dispatcher is not None
             and self.stock_delivery_admission_open()
         ):
-            await self._dispatcher.dispatch_pending()
+            context = self._notification_context()
+            dispatcher = self._dispatcher
+            await dispatcher.dispatch_pending()
+            if self._dispatcher is dispatcher:
+                try:
+                    self._bind_notification_check(context)
+                except Exception:
+                    # Missing context cannot turn completed native work into a permit.
+                    self._notification_service = None
         return result
 
     async def checkpoint_wal(self) -> None:
@@ -1491,6 +1571,10 @@ def create_monitor_composition(
                 state.notification_configuration_snapshot()
                 if owner.runtime_generation == progress.runtime_generation else None
             ),
+            notification_service=(state.notification_service_snapshot(
+                runtime_generation=progress.runtime_generation,
+                configuration_revision=revision or "", plans=plans)
+                if owner.runtime_generation == progress.runtime_generation else None),
             block_reason=block_reason,
             standby_reason=_runtime_standby_reason(
                 plans=plans,
