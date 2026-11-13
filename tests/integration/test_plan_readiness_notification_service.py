@@ -343,14 +343,14 @@ def test_real_storage_failure_revokes_previous_pass(service_case):
 
 
 @pytest.mark.parametrize("service_case", [{"true": True}], indirect=True)
-def test_actual_delivery_receipt_does_not_create_current_eligibility_or_false_subset_pass(
+def test_actual_delivered_alert_fulfills_duty_without_current_eligibility(
     service_case,
 ):
     case = service_case
     check(case)
     assert case.owner().notification_service is not None
     result = read(case)
-    assert notification_axis(result).state == "UNKNOWN"
+    assert notification_axis(result).state == "PASS"
     assert any(
         channel.latest_attempt is not None and channel.latest_attempt.status == "DELIVERED"
         for rule in result.rules
@@ -508,7 +508,7 @@ def test_pending_getter_error_revokes_bound_proof(service_case, monkeypatch):
 
 
 @pytest.mark.parametrize("service_case", [{"mixed": True, "all_false": True}], indirect=True)
-def test_actual_mixed_all_false_is_outside_proved_no_duty_subset(service_case):
+def test_actual_schema5_mixed_all_false_establishes_no_duty(service_case):
     case = service_case
     check(case)
     result = read(case)
@@ -520,7 +520,7 @@ def test_actual_mixed_all_false_is_outside_proved_no_duty_subset(service_case):
         for axis in result.axes
         if axis.axis != "NOTIFICATION_DELIVERY"
     )
-    assert notification_axis(result).state == "UNKNOWN"
+    assert notification_axis(result).state == "PASS"
 
 
 @pytest.mark.parametrize("seconds,state", [(-1, "PASS"), (0, "UNKNOWN")])

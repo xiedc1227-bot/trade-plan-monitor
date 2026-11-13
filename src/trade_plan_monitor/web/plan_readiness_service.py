@@ -678,14 +678,33 @@ def _notification(value, authority, kind, identity, *, observe):
                     "latest_attempt": None}) for item in channels))
 
 
+def _alert_notification_fulfilled(value, rule, alert):
+    """An exact latest native receipt fulfills this obligation, never a new send."""
+    from trade_plan_monitor.notifications.channels import DeliveryChannel
+    from trade_plan_monitor.notifications.dispatcher import DeliveryAttemptStatus
+
+    original = value.notifications.get(("ALERT_RULE", alert.rule_id))
+    if (original is None or original.event is None or original.target is None
+            or original.target != rule.facts.evaluated_target
+            or original.target != rule.facts.expected_target
+            or original.event.cause_id != alert.cause_id
+            or original.event.rule_id != alert.rule_id):
+        return False
+    attempts = tuple(item for item in original.attempts if item.channel is DeliveryChannel.IN_APP)
+    return bool(len(attempts) == 1 and attempts[0].event_id == original.event.event_id
+        and attempts[0].status is DeliveryAttemptStatus.DELIVERED
+        and attempts[0].delivered_at is not None and attempts[0].error_code is None
+        and attempts[0].next_retry_at is None)
+
+
 def _notification_service_axis(value, authority, result, now, *, observe, expiry):
-    """Only native alert-only complete FALSE establishes no current obligation."""
+    """Prove only exact alert fulfillment or native Schema5 empty-signal FALSE."""
     from trade_plan_monitor.runtime.daily_service import _alert_only
 
     service = None if authority is None else authority.notification_service
     native = value.native
     if (service is None or not value.current or not value.owner_current
-            or native is None or not _alert_only(value.plan)
+            or native is None
             or service.runtime_generation != authority.generation
             or service.configuration_revision != authority.configuration_revision
             or service.storage.configuration != authority.notification_configuration
@@ -700,10 +719,25 @@ def _notification_service_axis(value, authority, result, now, *, observe, expiry
             or len({alert.rule_id for alert in native.alerts}) != len(native.alerts)
             or {alert.rule_id for alert in native.alerts} != {
                 rule.rule_id for rule in value.plan.alert_rules}
-            or any(alert.outcome != "UNSATISFIED" for alert in native.alerts)
-            or not result.rules or any(rule.state != "CONDITION_FALSE" for rule in result.rules)
+            or not result.rules
             or any(axis.state not in {"PASS", "NOT_APPLICABLE"} for axis in result.axes
                    if axis.axis != "NOTIFICATION_DELIVERY")):
+        return None
+    if _alert_only(value.plan):
+        rules = {rule.facts.owner_id: rule for rule in result.rules}
+        for alert in native.alerts:
+            rule = rules.get(alert.rule_id)
+            if rule is None or rule.facts.owner_kind != "ALERT_RULE":
+                return None
+            if alert.outcome == "UNSATISFIED" and rule.state == "CONDITION_FALSE":
+                continue
+            if (alert.outcome != "SATISFIED" or rule.state != "CONDITION_TRUE"
+                    or not _alert_notification_fulfilled(value, rule, alert)):
+                return None
+    elif (value.plan.schema_version != 5 or not value.plan.ordinary_rules
+            or value.plan.risk_branches
+            or any(rule.state != "CONDITION_FALSE" for rule in result.rules)
+            or any(alert.outcome != "UNSATISFIED" for alert in native.alerts)):
         return None
     bound = _bounded_until(now, (expiry, service.valid_until, service.progress_due_at))
     if bound is None:

@@ -181,3 +181,12 @@
 对于实际唯一原生 IN_APP 配置，当前检查成功，加上独立验证的完整当前 FALSE 评估及不存在适用投递义务，可以在无事件时证明通知服务 PASS。无义务须来自准确原生评估及适用的原始 SIGNAL/RISK/candidate 事实，不能来自空 event IDs、有界扫描或 FALSE 单一事实；义务不确定时仍为 UNKNOWN。准确 IN_APP 事件已有 DELIVERED 回执，且当前服务验证及归属成立时，可表达该条义务已完成；这不使当前 eligible 变为 true，也不许可再次发送。首片可仅验收可证明子集，但必须明确列出剩余 UNKNOWN 场景。
 
 不得把零事件证明推广到 WEBHOOK、CONSOLE 或枚举名相同的自定义通道。扫描游标/limit 可能跳过既有事件，检查过存储不等于队列为空或覆盖全部事件。当前 WAIT/资格需要另有真实调度/依赖事实证明，历史 CLAIMED/RETRY_PENDING 或较早的 allowed 判断不充分。验证缺失或不确定时保留 UNKNOWN/DELIVERY_UNVERIFIED，保留准确历史事实，不得为了变绿制造信号。验收要求实际生产者/dispatcher 工作、当前完整 FALSE/无义务成功、潜在义务、错误/缺失/过期上下文、失败/关闭/替换实例、GET 无副作用及历史/API 边界不变。
+
+### MRD-S09.1 — 准确验收的消费者子集
+
+以下两个子集均保留相同的实际唯一原生 IN_APP 服务检查、准确当前 owner/completion/configuration、原始期限、撤销及两次读取门禁。其他适用轴必须为 PASS/NOT_APPLICABLE；两个子集均不产生发送许可，也不改变 summary 优先级。
+
+1. **纯 ALERT_ONLY 义务履行。** 原生 alerts 与计划规则一一对应，不得缺失或重复 owner。每条当前规则都是真正完整的 CONDITION_TRUE 或 CONDITION_FALSE，并与其原生 SATISFIED/UNSATISFIED 结果一致。每条 SATISFIED 规则都须独立具有既有准确 `NotificationRead`、原始 cause/rule/生产 version/hash/review/activation/evidence 和实际确认 target，以及该准确 event 最新的 IN_APP DELIVERED 回执。通知 target 必须等于规则实际 evaluated 及 expected target。其他 owner、target、event 或 channel 不能替代履行。每条 FALSE 规则保留完整无义务校验。signals、risks 和 exception candidates 仍须为空，`risk_action` 必须是准确的原生无动作状态。全部义务都须已履行；一条已送达提醒不能满足两条 TRUE 规则。
+2. **Schema5 无信号且完整 FALSE。** `schema_version` 必须恰好为5，至少存在一条 ordinary rule，且不接纳 risk branch 或例外机制。每条 ordinary rule 及可选 alert rule 都必须是真正完整的当前 FALSE。原生 `signals`、`risks` 和 `exception_candidates` 必须完全为空，`risk_action` 为准确无动作且无 cause。数量为零及 terminal signal 不等于为空；更高 schema 的 ordinary rule 不在本子集内。这依赖已核查 Schema5 producer 对 READY/SIGNAL、不可变 EVAL 及 head 的原子提交闭包，不声称能覆盖任意外部数据库写入。不增加历史扫描、生命周期重算或新事实 producer。
+
+准确原生 dedup key 复用可以为同一义务保留更早的 event 和 delivery 时间；不得要求 event 评估时间等于最新 EVAL，也不得刷新原始 `createdAt`/回执时间。义务履行仍使 `eligible` 保持 null/省略，历史通知 observation 保持 PERSISTED_ONLY，绝不许可再次发送。回执缺失、歧义、channel/target 错误或未履行时仍为 UNKNOWN。当前 WAIT/资格、更广的 ordinary/risk/candidate 履行及其他 channel 仍不在这两个子集内。验收使用实际生产、原生发送 guard 和 IN_APP 回执，涵盖 TRUE+FALSE、两条 TRUE 仅一条送达、同键复用、准确绑定/竞态失败及 GET 零副作用。
