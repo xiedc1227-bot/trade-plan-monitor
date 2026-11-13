@@ -196,6 +196,42 @@ def _inventory_matches(value):
         and value.native.inventory.model_dump(mode="json") == value.inventory)
 
 
+def _completed_predecessor(value, rule, target, evaluated_at):
+    """Verify the predecessor consumed by this FALSE using existing point reads."""
+    prior_id = rule.independent_signal.prior_rule_id
+    prior_rules = tuple(prior for prior in value.plan.ordinary_rules
+                        if prior.rule_id == prior_id)
+    candidates = tuple(signal for signal in value.native.signals
+                       if signal.rule_id == prior_id)
+    if (len(prior_rules) != 1 or len(candidates) != 1
+            or prior_rules[0].independent_signal.mode != "ONCE_PER_RULE"):
+        return False
+    prior, observed = prior_rules[0], candidates[0]
+    row = value.signals.get(observed.signal_id)
+    if (row is None or row["id"] != observed.signal_id or row["kind"] != "SIGNAL"
+            or row["symbol"] != value.plan.symbol or row["lineage"] != value.plan.plan_id
+            or observed.lineage != value.plan.plan_id or observed.side != prior.side
+            or observed.plan_version_id != value.details.id
+            or observed.review_id != value.details.review_id
+            or observed.occurrence_mode != "ONCE_PER_RULE"
+            or datetime.fromisoformat(row["updated_at"]) > evaluated_at):
+        return False
+    try:
+        current = DailySignalState.model_validate_json(canonical({**row["payload"],
+                                                                "revision": row["revision"]}))
+    except ValueError:
+        return False
+    if (current != observed or current.state != "SIMULATED"
+            or not current.simulated_qty == current.planned_qty > 0
+            or current.executable_qty != 0 or current.execution_date is None):
+        return False
+    day = target.trade_date if target.kind == "OFFICIAL_CLOSE" else target.bucket_end.date()
+    # SIGNAL has no simulated_at. updated_at only fences later changes; it cannot
+    # prove the native same-day minute completion-time requirement.
+    return day >= current.execution_date and (
+        target.kind == "OFFICIAL_CLOSE" or day > current.execution_date)
+
+
 def _risk_inputs_match(value):
     for identity, row in value.risks.items():
         if row is None:
@@ -1035,7 +1071,9 @@ def read_plan_readiness(session, authority, version_id, now):
                     and validity.start_date <= future_day <= validity.end_date)
                 simple_gate = (kind == "ALERT_RULE" or kind == "ORDINARY_RULE"
                     and value.plan.schema_version == 5
-                    and rule.independent_signal.mode == "ONCE_PER_RULE")
+                    and (rule.independent_signal.mode == "ONCE_PER_RULE"
+                        or rule.independent_signal.mode == "AFTER_RULE_COMPLETED"
+                        and _completed_predecessor(value, rule, actual_target, actual_time)))
                 no_occurrence = not any(signal.rule_id == identity
                                         for signal in value.native.signals)
                 complete_leaves = bool(leaves and all(leaf.state in {

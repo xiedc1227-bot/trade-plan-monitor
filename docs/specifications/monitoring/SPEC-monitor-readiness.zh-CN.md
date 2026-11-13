@@ -190,3 +190,15 @@
 2. **Schema5 无信号且完整 FALSE。** `schema_version` 必须恰好为5，至少存在一条 ordinary rule，且不接纳 risk branch 或例外机制。每条 ordinary rule 及可选 alert rule 都必须是真正完整的当前 FALSE。原生 `signals`、`risks` 和 `exception_candidates` 必须完全为空，`risk_action` 为准确无动作且无 cause。数量为零及 terminal signal 不等于为空；更高 schema 的 ordinary rule 不在本子集内。这依赖已核查 Schema5 producer 对 READY/SIGNAL、不可变 EVAL 及 head 的原子提交闭包，不声称能覆盖任意外部数据库写入。不增加历史扫描、生命周期重算或新事实 producer。
 
 准确原生 dedup key 复用可以为同一义务保留更早的 event 和 delivery 时间；不得要求 event 评估时间等于最新 EVAL，也不得刷新原始 `createdAt`/回执时间。义务履行仍使 `eligible` 保持 null/省略，历史通知 observation 保持 PERSISTED_ONLY，绝不许可再次发送。回执缺失、歧义、channel/target 错误或未履行时仍为 UNKNOWN。当前 WAIT/资格、更广的 ordinary/risk/candidate 履行及其他 channel 仍不在这两个子集内。验收使用实际生产、原生发送 guard 和 IN_APP 回执，涵盖 TRUE+FALSE、两条 TRUE 仅一条送达、同键复用、准确绑定/竞态失败及 GET 零副作用。
+
+## MRD-S10 — 已验证分段规则的确认等待
+
+仅将既有 Schema5 简单确认等待门禁扩展到具有已验证完成前驱的 `AFTER_RULE_COMPLETED`。后继必须已有真实完整的原生 FALSE 根及完整叶子，且自身没有 occurrence。保留既有当前 owner/来源/审核、日期有效性、无人工输入、简单资金输入、官方日历、部分分钟完整性及过期限制。原生跳过评估、缺历史或不支持的动态准入不能变成等待。
+
+按 `prior_rule_id` 选择唯一前驱，并匹配计划中唯一的 `ONCE_PER_RULE` 普通规则。仅使用该原生 owner 已准确点读的 SIGNAL：核对原始 ID/kind/symbol/lineage、rule/side、plan version/review、occurrence mode、完整 evidence/basis 及 revision。其完整原生值须与产生后继 FALSE 时消费的前驱快照一致，并满足 `state=SIMULATED`、`simulated_qty == planned_qty > 0`、`executable_qty=0` 及已知 `execution_date`。原始行的 `updated_at` 不得晚于该 FALSE 的评估时间；之后才发生的模拟或变更不能倒补准入。原始记录缺失、歧义或不匹配时不准许等待。复用这些记录既有的两次读取绑定；变化会撤销声明或消耗既有有界重试。
+
+后继实际确认日期不得早于前驱的 `execution_date`。支持该日的官方收盘比较；分钟比较必须在之后的日期。同日分钟准入原生要求 `simulated_at`，而 SIGNAL 未保留这一字段。不得以 `updated_at` 替代、查询 SIMULATION/历史、补造比较，或修改 producer 来提供成功事实。缺少该实际根时保留 UNKNOWN。
+
+验收使用公开整笔模拟、真实 producer 随后的 FALSE，以及尚未到达的未来确认。验证官方收盘及之后日期的分钟等待、准确原始记录不匹配、不完整/较晚消费、真实原生日期/时间提前返回、后继已有 occurrence、部分历史缺失、日期限制及两次读取变化。保留原 FALSE 时间/target/evidence 及既有新鲜度边界。这只是逐后继 WAIT：已消费且没有新比较的前驱、未验证的通知服务仍为 UNKNOWN。不增加维护/通知 WAIT 或整体 READY。不修改模型、摘要、查询、表/索引、策略、采集或公开契约。
+
+既有人工输入排除回归为 `tests/integration/test_plan_readiness_confirmation.py::test_real_missing_human_leaf_is_not_relabelled_as_future_wait`：真实接纳的 `ONCE_PER_RULE` 规则具有原生 FALSE 根及缺失人工叶，保持 `MISSING_INPUT` 且不产生未来等待。它覆盖未改动的共用人工输入门禁，不代表端到端 `AFTER_RULE_COMPLETED` 人工来源场景。本片未验收此类已获来源接纳的人工场景；依赖人工的等待仍被保守排除。不得补造来源审批来扩大这一验收声明。
