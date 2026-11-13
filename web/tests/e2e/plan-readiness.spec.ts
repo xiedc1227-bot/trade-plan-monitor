@@ -1,10 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, Page, Request, Response } from "@playwright/test";
 import type { ReadinessAssessment } from "../../src/api/generated-runtime-status";
+import type { PlanReviewConfirmationCommand, PlanVersionView } from "../../src/api/generated";
 import { expect, test as auditedTest } from "./fixtures";
 
 const repo = resolve(process.cwd(), "..");
@@ -257,4 +259,209 @@ test("the original public expiry removes current readiness without renewing back
     serverComputedAt: actual.snapshot.computedAt, originalFreshUntil: actual.freshUntil,
     browserAdvancedMilliseconds: budget + 1, serverEvidenceUnchanged: true,
   }, null, 2) });
+});
+
+interface SourceCase {
+  versionIds: string[]; repairPath: string; clauseId: string; requirement: string;
+}
+async function command(request: APIRequestContext, fixture: Fixture, path: string, body: unknown) {
+  return request.post(fixture.base + path, { data: body, headers: {
+    "Idempotency-Key": randomUUID(), "X-Monitor-Contract-Version": "2",
+  } });
+}
+async function sourceCase(request: APIRequestContext, fixture: Fixture, scenario: "repair" | "contexts"): Promise<SourceCase> {
+  const response = await command(request, fixture, prefix + "/source-case", { scenario });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
+async function version(request: APIRequestContext, fixture: Fixture, id: string): Promise<PlanVersionView> {
+  const response = await request.get(`${fixture.base}/api/v1/plan-versions/${id}`);
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
+function reviewBody(saved: PlanVersionView): PlanReviewConfirmationCommand {
+  return { planVersionId: saved.id, sourceHash: saved.sourceHash!, contentHash: saved.contentHash!,
+    reviewEvidenceHash: saved.reviewEvidenceHash!, expectedRevision: saved.reviewRevision!,
+    coverageEvidenceHash: saved.sourceCoverage!.coverageEvidenceHash!,
+    coverageRulesVersion: saved.sourceCoverage!.rulesVersion! };
+}
+function activationBody(saved: PlanVersionView, expectedRevision: number) {
+  return { planVersionId: saved.id, sourceHash: saved.sourceHash, contentHash: saved.contentHash,
+    reviewEvidenceHash: saved.reviewEvidenceHash, reviewId: saved.reviewId,
+    reviewRevision: saved.reviewRevision, expectedRevision };
+}
+async function deniedWithoutWrites(request: APIRequestContext, fixture: Fixture, path: string, body: unknown) {
+  const before = (await fixture.inspect()).storage;
+  const response = await command(request, fixture, path, body);
+  expect(response.status(), await response.text()).toBe(409);
+  const error = await response.json();
+  expect(error.error.details).not.toContainEqual(expect.objectContaining({ code: "MONITOR_CONTRACT_MISMATCH" }));
+  expect((await fixture.inspect()).storage).toEqual(before);
+  return error;
+}
+const coveragePane = (page: Page) => page.getByRole("region", { name: "原文条件核对", exact: true });
+
+test("source repair preserves a mislabelled mandatory condition and explicitly re-reviews the exact saved version", async ({ page, request, readinessFixture: fixture }, testInfo) => {
+  const setup = await sourceCase(request, fixture, "repair");
+  const saved = await version(request, fixture, setup.versionIds[0]!);
+  const originalReview = await version(request, fixture, fixture.initial.planVersionId);
+  expect(saved.sourceCoverage?.coverageComplete).toBe(false);
+  expect(saved.sourceText).toContain(setup.requirement);
+  const rejected = [
+    await deniedWithoutWrites(request, fixture, "/api/v1/plan-review-confirmations", reviewBody(saved)),
+    await deniedWithoutWrites(request, fixture, "/api/v1/plan-activations", activationBody(saved, 1)),
+  ];
+  await page.goto(`${fixture.base}/plans/${saved.id}`);
+  await expect(coveragePane(page)).toContainText("原文条件仍有待解决项");
+  await expect(page.getByRole("button", { name: "确认当前完整审核", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "启用当前审核绑定", exact: true })).toBeDisabled();
+  const row = page.locator(".daily-review__row").filter({ has: page.locator("blockquote").filter({ hasText: setup.requirement }) });
+  await expect(row).toContainText("CONTEXT");
+  await row.scrollIntoViewIfNeeded();
+  const blockedImage = testInfo.outputPath("source-repair-blocked-clause.png");
+  await row.screenshot({ path: blockedImage });
+  await testInfo.attach("source-repair-blocked-clause", { path: blockedImage, contentType: "image/png" });
+  const reason = "Explicitly retain the original 4000-fen condition and its exact alert owner; no requirement or permission is waived.";
+  await page.locator(`[id="paths-${setup.clauseId}"]`).fill(setup.repairPath);
+  await page.locator(`[id="clause-${setup.clauseId}"]`).fill(reason);
+  await page.locator(`[id="reason-${setup.repairPath}"]`).fill(reason);
+  const registration = page.waitForResponse(result => result.url().endsWith("/plan-review-supplements") && result.request().method() === "POST");
+  const policyCheck = page.waitForResponse(result => {
+    if (!result.url().endsWith("/plan-review-previews") || result.request().method() !== "POST") return false;
+    const mapping = result.request().postDataJSON().mapping;
+    return mapping?.clauses.some((clause: { clause_id: string; disposition: string }) => clause.clause_id === setup.clauseId && clause.disposition === "POLICY");
+  });
+  await page.getByRole("button", { name: "单独登记上述人工补充", exact: true }).click();
+  const registered = await registration;
+  expect(registered.status(), await registered.text()).toBe(200);
+  expect(registered.request().postDataJSON().supplements).toEqual([expect.objectContaining({ path: setup.repairPath, value: 4000, reason })]);
+  const checked = await policyCheck;
+  expect(checked.status(), await checked.text()).toBe(200);
+  const saving = page.waitForResponse(result => result.url().endsWith("/plan-drafts") && result.request().method() === "POST");
+  await page.getByRole("button", { name: "保存待审核版本", exact: true }).click();
+  const saveResponse = await saving;
+  expect(saveResponse.status(), await saveResponse.text()).toBe(200);
+  const repaired: PlanVersionView = await saveResponse.json();
+  expect(repaired.id).not.toBe(saved.id);
+  expect(repaired.sourceText).toBe(saved.sourceText);
+  expect(repaired.sourceHash).toBe(saved.sourceHash);
+  expect(JSON.parse(repaired.planJson!).alert_rules[0].condition.price_fen).toBe(4000);
+  expect(repaired.sourceCoverage?.coverageComplete).toBe(true);
+  expect(repaired.sourceCoverage?.currentReviewBound).toBe(false);
+  expect(repaired.sourceCoverage?.automaticFidelityVerified).toBe(false);
+  await expect(page.getByRole("button", { name: "确认当前完整审核", exact: true })).toBeEnabled();
+  const reviewing = page.waitForResponse(result => result.url().endsWith("/plan-review-confirmations") && result.request().method() === "POST");
+  await page.getByRole("button", { name: "确认当前完整审核", exact: true }).click();
+  const reviewed = await reviewing;
+  expect(reviewed.status(), await reviewed.text()).toBe(200);
+  expect(reviewed.request().postDataJSON()).toMatchObject(reviewBody(repaired));
+  await expect(coveragePane(page)).toContainText("本次证明已完成审核");
+  const current = await version(request, fixture, repaired.id);
+  expect(current.sourceCoverage?.coverageReviewReceiptHash).not.toBeNull();
+  expect(current.sourceCoverage?.currentReviewBound).toBe(true);
+  rejected.push(
+    await deniedWithoutWrites(request, fixture, "/api/v1/plan-review-confirmations", { ...reviewBody(repaired), sourceHash: "0".repeat(64) }),
+    await deniedWithoutWrites(request, fixture, "/api/v1/plan-review-confirmations", { ...reviewBody(repaired), planVersionId: saved.id }),
+    await deniedWithoutWrites(request, fixture, "/api/v1/plan-activations", { ...activationBody(current, 1), reviewId: originalReview.reviewId, reviewRevision: originalReview.reviewRevision }),
+  );
+  const old = await version(request, fixture, saved.id);
+  expect(old.sourceText).toBe(saved.sourceText);
+  expect(old.sourceCoverage?.coverageComplete).toBe(false);
+  expect(old.reviewId).toBeNull();
+  await expect(row).toContainText("POLICY");
+  const completeImage = testInfo.outputPath("source-repair-complete-review.png");
+  await coveragePane(page).getByRole("heading", { name: "原文条件核对", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: completeImage });
+  await testInfo.attach("source-repair-complete-review", { path: completeImage, contentType: "image/png" });
+  await testInfo.attach("actual-assisted-source-repair", { contentType: "application/json", body: JSON.stringify({
+    setup, saved, repaired, current, originalBlockedVersion: old, rejected,
+    scope: "explicit assisted source binding/classification repair; not raw automatic extraction acceptance",
+  }, null, 2) });
+});
+
+test("real A-B-A delayed GET cannot replace the new exact review and activation context", async ({ page, request, readinessFixture: fixture }, testInfo) => {
+  const setup = await sourceCase(request, fixture, "contexts");
+  const a = await version(request, fixture, setup.versionIds[0]!);
+  const b = await version(request, fixture, setup.versionIds[1]!);
+  expect(a.sourceHash).not.toBe(b.sourceHash);
+  let captured = false, oldBody: ReadinessAssessment | null = null, oldHash = "";
+  let oldRaw: Buffer | null = null;
+  const transport = { fulfillCallReturned: false, requestFailure: null as string | null,
+    browserResponseObserved: false };
+  let delayedRequest: Request | null = null;
+  const observeOriginal = (response: Response) => {
+    if (response.request() === delayedRequest) transport.browserResponseObserved = true;
+  };
+  page.on("response", observeOriginal);
+  let release!: () => void, completed!: () => void;
+  const released = new Promise<void>(done => { release = done; });
+  const finished = new Promise<void>(done => { completed = done; });
+  const aPath = `/api/v1/plan-versions/${a.id}/monitor-readiness`;
+  await page.route(`**${aPath}`, async route => {
+    if (captured) { await route.continue(); return; }
+    captured = true;
+    delayedRequest = route.request();
+    const actual = await route.fetch();
+    expect(actual.status(), await actual.text()).toBe(200);
+    oldRaw = await actual.body();
+    oldHash = createHash("sha256").update(oldRaw).digest("hex");
+    oldBody = await actual.json();
+    await released;
+    try { await route.fulfill({ response: actual }); transport.fulfillCallReturned = true; }
+    catch (error) {
+      if (route.request().failure()?.errorText !== "net::ERR_ABORTED") throw error;
+    }
+    finally { transport.requestFailure = route.request().failure()?.errorText ?? null; completed(); }
+  });
+  try {
+    await page.goto(`${fixture.base}/plans/${a.id}`);
+    await expect.poll(() => oldBody !== null).toBe(true);
+    expect(oldBody).toMatchObject({ summary: "NEEDS_REVIEW", snapshot: { context: { planVersionId: a.id, reviewReceiptHash: null } } });
+    const navigation = page.getByRole("navigation", { name: "计划版本", exact: true });
+    const bRead = page.waitForResponse(response => response.url().endsWith(`/plan-versions/${b.id}/monitor-readiness`));
+    await navigation.getByRole("button", { name: new RegExp(`^v${b.version} ·`) }).click();
+    expect((await (await bRead).json()).snapshot.context.planVersionId).toBe(b.id);
+    await expect(coveragePane(page)).toContainText(b.sourceHash!);
+    const reviewed = await command(request, fixture, "/api/v1/plan-review-confirmations", reviewBody(a));
+    expect(reviewed.status(), await reviewed.text()).toBe(200);
+    const current = await version(request, fixture, a.id);
+    const activated = await command(request, fixture, "/api/v1/plan-activations", activationBody(current, 1));
+    expect(activated.status(), await activated.text()).toBe(200);
+    const aRead = page.waitForResponse(response => response.url().endsWith(aPath));
+    await navigation.getByRole("button", { name: new RegExp(`^v${a.version} ·`) }).click();
+    const fresh: ReadinessAssessment = await (await aRead).json();
+    expect(fresh.summary).toBe("UNKNOWN");
+    expect(fresh.snapshot.context.reviewReceiptHash).toBe(current.sourceCoverage!.coverageReviewReceiptHash);
+    expect(fresh.axes.find(axis => axis.axis === "REVIEW_ACTIVATION")?.state).toBe("PASS");
+    await expect(pane(page)).toContainText("尚未确定");
+    await expect(pane(page)).toContainText("审核与启用：通过");
+    await expect(coveragePane(page)).toContainText("本次证明已完成审核");
+    const frozen = (await fixture.inspect()).storage;
+    release(); await finished;
+    await page.clock.runFor(64);
+    await expect(pane(page)).toContainText("尚未确定");
+    await expect(pane(page)).toContainText("审核与启用：通过");
+    await expect(pane(page).getByRole("alert")).toHaveCount(0);
+    await expect(pane(page)).not.toContainText("需要核对来源与审核");
+    expect((await fixture.inspect()).storage).toEqual(frozen);
+    const path = testInfo.outputPath("aba-new-reviewed-context.png");
+    // Fit this single-rule evidence region without the locator screenshot's
+    // temporary viewport expansion painting the fixed site header mid-image.
+    await page.setViewportSize({ width: 1280, height: 2600 });
+    await page.clock.runFor(64);
+    const heading = pane(page).getByRole("heading", { name: "逐规则监控就绪", exact: true });
+    await heading.click();
+    await heading.evaluate(element => { element.scrollIntoView({ block: "start" }); window.scrollBy(0, -96); });
+    await page.clock.runFor(64);
+    await pane(page).screenshot({ path });
+    await testInfo.attach("aba-new-reviewed-context", { path, contentType: "image/png" });
+    await testInfo.attach("original-delayed-response-bytes", { contentType: "application/json", body: oldRaw! });
+    await testInfo.attach("actual-delayed-readiness-response", { contentType: "application/json", body: JSON.stringify({
+      oldBody, originalResponseSha256: oldHash, fresh, reviewedVersion: current,
+      transport: { ...transport, originalRequestOutcome: transport.requestFailure === "net::ERR_ABORTED" ? "CANCELLED"
+          : transport.browserResponseObserved ? "BROWSER_RESPONSE_OBSERVED" : "FULFILL_ATTEMPT_ONLY" },
+      release: "route.fulfill attempted with the original fetched response; returning does not establish page delivery",
+      scope: "new exact review/activation context; missing native evaluation remains UNKNOWN",
+    }, null, 2) });
+  } finally { release(); page.off("response", observeOriginal); }
 });

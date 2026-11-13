@@ -1,9 +1,12 @@
 """The browser adapter must expose actual owned work, never manufactured readiness."""
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from datetime import timedelta
 from importlib import import_module
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -31,6 +34,10 @@ async def request(transport, path, *, method="GET", body=None):
             method,
             "http://127.0.0.1:8765" + path,
             json=body,
+            headers={
+                "X-Monitor-Contract-Version": "2",
+                **({"Idempotency-Key": uuid4().hex} if method == "POST" else {}),
+            },
         )
     )
     await response.aread()
@@ -163,5 +170,225 @@ def test_fixture_rejects_nonlocal_controls_extra_fields_and_third_cycle(tmp_path
             assert (
                 await request(transport, state.prefix + "/next-target", method="POST", body={})
             ).status_code == 409
+
+    asyncio.run(scenario())
+
+
+def confirmation(saved):
+    return {
+        "planVersionId": saved["id"],
+        "contentHash": saved["contentHash"],
+        "sourceHash": saved["sourceHash"],
+        "reviewEvidenceHash": saved["reviewEvidenceHash"],
+        "expectedRevision": saved["reviewRevision"],
+        "coverageEvidenceHash": saved["sourceCoverage"]["coverageEvidenceHash"],
+        "coverageRulesVersion": saved["sourceCoverage"]["rulesVersion"],
+    }
+
+
+def activation(saved, *, expected_revision):
+    return {
+        "planVersionId": saved["id"],
+        "contentHash": saved["contentHash"],
+        "sourceHash": saved["sourceHash"],
+        "reviewEvidenceHash": saved["reviewEvidenceHash"],
+        "reviewId": saved["reviewId"],
+        "reviewRevision": saved["reviewRevision"],
+        "expectedRevision": expected_revision,
+    }
+
+
+def test_context_repair_retains_original_requirement_and_rejects_stale_authority(tmp_path):
+    async def scenario():
+        async with workspace(tmp_path) as (state, transport):
+            initial = state.inspect()["storage"]
+            invalid = await request(
+                transport,
+                state.prefix + "/source-case",
+                method="POST",
+                body={"scenario": "repair", "proof": "not accepted"},
+            )
+            assert invalid.status_code == 422
+            assert state.inspect()["storage"] == initial
+            setup = await request(
+                transport, state.prefix + "/source-case", method="POST", body={"scenario": "repair"}
+            )
+            assert setup.status_code == 200, setup.text
+            data = setup.json()
+            saved = (
+                await request(transport, "/api/v1/plan-versions/" + data["versionIds"][0])
+            ).json()
+            assert saved["sourceCoverage"]["coverageComplete"] is False
+            assert saved["sourceCoverage"]["canConfirmReview"] is False
+            assert data["requirement"] in saved["sourceText"]
+            before = state.inspect()["storage"]
+            blocked = await request(
+                transport,
+                "/api/v1/plan-review-confirmations",
+                method="POST",
+                body=confirmation(saved),
+            )
+            assert blocked.status_code == 409, blocked.text
+            blocked = await request(
+                transport,
+                "/api/v1/plan-activations",
+                method="POST",
+                body=activation(saved, expected_revision=1),
+            )
+            assert blocked.status_code == 409, blocked.text
+            assert state.inspect()["storage"] == before
+
+            # Mirror the existing explicit UI workflow: registered exact value,
+            # correct clause classification/path, then save and explicitly review.
+            candidate = saved["planJson"]
+            mapping = deepcopy(saved["dailyMapping"])
+            path = data["repairPath"]
+            result = await request(
+                transport,
+                "/api/v1/plan-review-supplements",
+                method="POST",
+                body={
+                    "candidateJson": candidate,
+                    "contentHash": saved["contentHash"],
+                    "expectedRevision": 0,
+                    "supplements": [
+                        {
+                            "supplement_id": "explicit-source-match",
+                            "candidate_content_hash": saved["contentHash"],
+                            "path": path,
+                            "value": 4000,
+                            "reason": (
+                                "Explicitly retain the original 4000-fen requirement; "
+                                "no condition is waived."
+                            ),
+                        }
+                    ],
+                },
+            )
+            assert result.status_code == 200, result.text
+            clause = next(row for row in mapping["clauses"] if row["clause_id"] == data["clauseId"])
+            clause.update(
+                disposition="POLICY",
+                paths=[path],
+                reason="Exact original requirement and field match.",
+            )
+            checked = await request(
+                transport,
+                "/api/v1/plan-review-previews",
+                method="POST",
+                body={
+                    "candidateJson": candidate,
+                    "sourceText": saved["sourceText"],
+                    "mapping": mapping,
+                },
+            )
+            assert checked.status_code == 200, checked.text
+            preview = checked.json()
+            raw = json.loads(preview["candidateJson"])
+            raw["version"] = 3
+            repaired = await request(
+                transport,
+                "/api/v1/plan-drafts",
+                method="POST",
+                body={
+                    "planJson": json.dumps(raw),
+                    "sourceText": saved["sourceText"],
+                    "dailyMapping": preview["review"]["mapping"],
+                    "expectedRevision": 1,
+                    "basePlanVersionId": saved["id"],
+                },
+            )
+            assert repaired.status_code == 200, repaired.text
+            repaired = repaired.json()
+            assert repaired["sourceText"] == saved["sourceText"]
+            assert repaired["sourceCoverage"]["coverageComplete"] is True
+            assert repaired["sourceCoverage"]["currentReviewBound"] is False
+            result = await request(
+                transport,
+                "/api/v1/plan-review-confirmations",
+                method="POST",
+                body=confirmation(repaired),
+            )
+            assert result.status_code == 200, result.text
+            current = (await request(transport, "/api/v1/plan-versions/" + repaired["id"])).json()
+            assert current["sourceCoverage"]["currentReviewBound"] is True
+            assert current["sourceCoverage"]["coverageReviewReceiptHash"] is not None
+            frozen = state.inspect()["storage"]
+            rejected = await request(
+                transport,
+                "/api/v1/plan-activations",
+                method="POST",
+                body=activation(repaired, expected_revision=1),
+            )
+            assert rejected.status_code == 409, rejected.text
+            assert state.inspect()["storage"] == frozen
+            for command in (
+                {**confirmation(repaired), "sourceHash": "0" * 64},
+                {**confirmation(repaired), "planVersionId": saved["id"]},
+            ):
+                rejected = await request(
+                    transport, "/api/v1/plan-review-confirmations", method="POST", body=command
+                )
+                assert rejected.status_code == 409, rejected.text
+                assert state.inspect()["storage"] == frozen
+
+    asyncio.run(scenario())
+
+
+def test_real_review_activation_changes_context_without_borrowing_old_native_proof(tmp_path):
+    async def scenario():
+        async with workspace(tmp_path) as (state, transport):
+            setup = await request(
+                transport,
+                state.prefix + "/source-case",
+                method="POST",
+                body={"scenario": "contexts"},
+            )
+            assert setup.status_code == 200, setup.text
+            a, b = setup.json()["versionIds"]
+            old = (await request(transport, f"/api/v1/plan-versions/{a}/monitor-readiness")).json()
+            assert old["summary"] == "NEEDS_REVIEW"
+            assert old["snapshot"]["context"]["reviewReceiptHash"] is None
+            saved = (await request(transport, f"/api/v1/plan-versions/{a}")).json()
+            assert (
+                await request(
+                    transport,
+                    "/api/v1/plan-review-confirmations",
+                    method="POST",
+                    body=confirmation(saved),
+                )
+            ).status_code == 200
+            current = (await request(transport, f"/api/v1/plan-versions/{a}")).json()
+            activated = await request(
+                transport,
+                "/api/v1/plan-activations",
+                method="POST",
+                body=activation(current, expected_revision=1),
+            )
+            assert activated.status_code == 200, activated.text
+            fresh = (
+                await request(transport, f"/api/v1/plan-versions/{a}/monitor-readiness")
+            ).json()
+            assert fresh["summary"] == "UNKNOWN"
+            assert fresh["snapshot"]["context"]["reviewReceiptHash"] is not None
+            assert (
+                next(axis for axis in fresh["axes"] if axis["axis"] == "REVIEW_ACTIVATION")["state"]
+                == "PASS"
+            )
+            assert (
+                await request(transport, f"/api/v1/plan-versions/{b}/monitor-readiness")
+            ).json()["snapshot"]["context"]["planVersionId"] == b
+            frozen = state.inspect()["storage"]
+            rejected = await request(
+                transport,
+                "/api/v1/plan-activations",
+                method="POST",
+                body={
+                    **activation(current, expected_revision=2),
+                    "planVersionId": b,
+                },
+            )
+            assert rejected.status_code == 409, rejected.text
+            assert state.inspect()["storage"] == frozen
 
     asyncio.run(scenario())

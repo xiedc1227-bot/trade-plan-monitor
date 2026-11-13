@@ -11,6 +11,7 @@ import socket
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from fastapi import Depends
@@ -20,12 +21,15 @@ from tests.browser.source_coverage_server import (
     _loopback,
     _request_server_shutdown,
 )
+from tests.integration.test_market_linkage_review import source_mapping
 
+from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json, load_daily_draft_json
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.origin_guard import LocalSpaRoute
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
-from trade_plan_monitor.web.schemas import ApiValue
+from trade_plan_monitor.web.routers.plans import PlanDraftCommand
+from trade_plan_monitor.web.schemas import ApiValue, MutationContextDependency
 
 PREFIX = "/_test/plan-readiness"
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -33,6 +37,10 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 
 class NextTarget(ApiValue):
     """No caller-selected time, proof, source, result or configuration."""
+
+
+class SourceCase(ApiValue):
+    scenario: Literal["repair", "contexts"]
 
 
 class ReadinessFixture:
@@ -49,6 +57,7 @@ class ReadinessFixture:
         self.app = None
         self.case = None
         self.lifecycle = None
+        self.source_cases = {}
 
     def guard_connections(self):
         def guard(native):
@@ -154,6 +163,61 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
                 await state.case.clock.drive(state.case.clock.now() + timedelta(minutes=5))
             state.cycles = 2
             return state.inspect()
+
+        @app.post(PREFIX + "/source-case", dependencies=guards)
+        async def source_case(command: SourceCase, context: MutationContextDependency):
+            if command.scenario in state.source_cases:
+                return state.source_cases[command.scenario]
+            path = "alert_rules[0].condition.price_fen"
+            result = {"versionIds": [], "repairPath": path, "clauseId": None, "requirement": None}
+            for index in range(1 if command.scenario == "repair" else 2):
+                raw = state.case.plan.model_dump(mode="json")
+                raw["version"] = 2 + index
+                if index:
+                    raw["alert_rules"][0]["condition"]["price_fen"] = 4500
+                draft = load_daily_draft_json(json.dumps(raw))
+                source, mapping = source_mapping(draft)
+                clause = next(row for row in mapping.clauses if path in row.paths)
+                if command.scenario == "repair":
+                    mapping = mapping.model_copy(
+                        update={
+                            "clauses": tuple(
+                                row.model_copy(
+                                    update={
+                                        "disposition": "CONTEXT",
+                                        "paths": (),
+                                        "semantic_role": "COMMENTARY",
+                                        "reason": "Untrusted commentary proposal.",
+                                    }
+                                )
+                                if row.clause_id == clause.clause_id
+                                else row
+                                for row in mapping.clauses
+                            ),
+                            "bindings": tuple(
+                                binding for binding in mapping.bindings if binding.path != path
+                            ),
+                        }
+                    )
+                active = await state.lifecycle.get_plan_activation_state(symbol=draft.symbol)
+                saved = await state.lifecycle.save_plan_draft(
+                    command=PlanDraftCommand(
+                        plan_json=daily_draft_json(draft),
+                        source_text=source,
+                        daily_mapping=mapping,
+                        expected_revision=active.revision,
+                    ),
+                    context=context.model_copy(
+                        update={
+                            "idempotency_key": f"fixture-source-{command.scenario}-{index}",
+                        }
+                    ),
+                )
+                result["versionIds"].append(str(saved.id))
+                if not index:
+                    result.update(clauseId=clause.clause_id, requirement=clause.excerpt)
+            state.source_cases[command.scenario] = result
+            return result
 
         @app.post(PREFIX + "/shutdown", dependencies=guards)
         async def shutdown():
