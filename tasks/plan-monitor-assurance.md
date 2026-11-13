@@ -213,7 +213,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T20 — Audit the actual installation read-only
 
-- [ ] Deliver and verify.
+- [ ] Complete actual installation fact collection. Auditor engineering passes (R100,16 tests); the authorized attempt stopped before SQLite because WAL companions were unavailable. Actual schema/plan/evaluation/channel evidence remains uncollected. Independent T21 engineering may proceed under P07.
 - Depends on: T19.
 - Files/scope: explicit `scripts/audit_plan_readiness.py`, offline audit test, paired installation report (4 files).
 - Acceptance: A09,A10; Verify: V10,V08. Record actual schema/plans/scope/review/activation/runtime/evaluation/channel facts with timestamps; missing prerequisites remain NOT_READY. Never launch/migrate/activate/send/fetch to manufacture success. Positive real readiness, if absent, is an explicitly unfulfilled operational result, not an engineering PASS claim.
