@@ -5,7 +5,7 @@ import PlanReadiness from "../../src/components/plans/PlanReadiness.vue";
 import PlanWorkbench from "../../src/components/plans/PlanWorkbench.vue";
 import { apiFetchKey } from "../../src/api/context";
 import { createPlanReadinessApi, type ReadinessContext } from "../../src/api/planReadiness";
-import type { AxisReadiness, ReadinessAssessment, RuleReadiness } from "../../src/api/generated-runtime-status";
+import type { AxisReadiness, ReadinessAssessment, ReadinessObservation, RuleReadiness } from "../../src/api/generated-runtime-status";
 import type { usePlanWorkspace } from "../../src/composables/usePlanWorkspace";
 import type { PlanVersionView, SourceCoverageSummaryView } from "../../src/api/generated";
 
@@ -35,6 +35,10 @@ function assessment(planVersionId = A): ReadinessAssessment {
         reviewReceiptHash: RECEIPT, activationRevision: 1, runtimeGeneration: A,
       },
     } };
+}
+function observation(availability: ReadinessObservation["availability"] = "CURRENT"): ReadinessObservation {
+  return { availability, asOf: stamp(-60_000), observedAt: stamp(-1000), expiresAt: stamp(30_000),
+    context: assessment().snapshot.context, evidenceRefs: [] };
 }
 function response(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
@@ -86,6 +90,103 @@ describe("readiness wire and actual presentation", () => {
     expect(wrapper.text()).toContain("条件未成立（已完成检查）");
     await wrapper.get('[data-action="source"]').trigger("click");
     expect(wrapper.emitted("revealField")?.[0]).toEqual(["ordinary_rules[0]"]);
+  });
+
+  it("shows native expected/evaluated targets, original windows and a separate historical notification target", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(NOW);
+    const value = assessment(), facts = value.rules[0]!.facts; value.summary = "UNKNOWN"; value.freshUntil = null;
+    facts.expectedTarget = { kind: "INTRADAY", bucket_end: "2026-11-14T10:05:00+08:00" };
+    facts.evaluatedTarget = { kind: "OFFICIAL_CLOSE", trade_date: "2026-11-13" };
+    facts.execution = { executionWindow: "NEXT_EXCHANGE_SESSION_ONLY", executionDate: "2026-11-16",
+      windowState: "CLOSED", eligible: false, approvedQuantity: 100, observation: observation("PERSISTED_ONLY") };
+    facts.notification = { target: { kind: "OFFICIAL_CLOSE", trade_date: "2026-11-12" }, createdAt: stamp(-600_000),
+      observation: observation("CACHED"), channels: [{ channel: "IN_APP", eligible: false,
+        historicalStatus: "SUPPRESS", historicalUpdatedAt: stamp(-500_000) }] };
+    const wrapper = mountReadiness(vi.fn<typeof fetch>().mockResolvedValue(response(value))); await flushPromises();
+    expect(wrapper.text()).toContain("预期目标：5分钟确认 · 分段结束 2026-11-14 10:05:00+08:00");
+    expect(wrapper.text()).toContain("实际已评估目标：官方收盘 · 交易日期 2026-11-13");
+    expect(wrapper.text()).toContain("原执行窗口：仅下一交易日"); expect(wrapper.text()).toContain("原执行日期：2026-11-16");
+    expect(wrapper.text()).toContain("历史通知目标：官方收盘 · 交易日期 2026-11-12");
+    expect(wrapper.text()).toContain("历史分类更新时间：2026-11-14 01:51:40.000Z");
+    expect(wrapper.text()).toContain("当前发送资格：不符合"); expect(wrapper.text()).toContain("执行观察来源：仅有持久化记录");
+  });
+
+  it.each([ ["CURRENT", "当前读取"], ["CACHED", "缓存记录"], ["UNAVAILABLE", "当前不可用"],
+    ["PERSISTED_ONLY", "仅有持久化记录"] ] as const)("shows %s provenance and original times without promoting it", async (availability, description) => {
+    const value = assessment(); value.summary = "UNKNOWN"; value.freshUntil = null;
+    value.axes[0]!.observation = observation(availability);
+    value.rules[0]!.facts.observation = observation(availability);
+    const wrapper = mountReadiness(vi.fn<typeof fetch>().mockResolvedValue(response(value))); await flushPromises();
+    expect(wrapper.text()).toContain(`规则观察来源：${description}`);
+    expect(wrapper.get('[aria-label="监控依赖"]').text()).toContain(`观察来源：${description}`);
+    expect(wrapper.text()).toContain("数据截至：2026-11-14 01:59:00.000Z");
+    expect(wrapper.text()).toContain("观察时间：2026-11-14 01:59:59.000Z");
+    expect(wrapper.text()).toContain("原有效期至：2026-11-14 02:00:30.000Z");
+    expect(wrapper.text()).not.toContain("监控已就绪");
+  });
+
+  it("lists only required inventory and money inputs, including when no money verdict exists, and explains missing targets", async () => {
+    const value = assessment(), facts = value.rules[0]!.facts; value.summary = "UNKNOWN"; value.freshUntil = null;
+    facts.requirements = { inventory: true, sellability: true, quote: true, simulationBook: true,
+      costBasis: true, fees: true, economics: true };
+    value.rules[0]!.state = "MISSING_INPUT"; value.rules[0]!.reason = "MISSING_DATA";
+    const other = rule("CONDITION_FALSE", "no-inputs"); other.facts.requirements = { inventory: false };
+    value.rules.push(other);
+    const wrapper = mountReadiness(vi.fn<typeof fetch>().mockResolvedValue(response(value))); await flushPromises();
+    const rows = wrapper.get('[aria-label="逐规则监控结果"]').findAll(":scope > li");
+    expect(rows[0]!.text()).toContain("所需输入：模拟库存、可卖数量、行情报价、模拟账本、持仓成本、费用、收益测算");
+    expect(rows[0]!.text()).toContain("预期目标：未提供"); expect(rows[0]!.text()).toContain("实际已评估目标：未提供");
+    expect(rows[0]!.text()).toContain("下一步：查看所需输入的数据状态，等待缺失数据补齐后重新读取。");
+    expect(rows[1]!.text()).toContain("所需输入：未要求库存或金额输入");
+    expect(rows[1]!.text()).not.toContain("下一步");
+  });
+
+  it("keeps absent observation expiry explicitly unverified and shows existing evidence/review actions", async () => {
+    const value = assessment(), facts = value.rules[0]!.facts; value.summary = "UNKNOWN"; value.freshUntil = null;
+    facts.observation = { ...observation("PERSISTED_ONLY"), asOf: null, expiresAt: null };
+    value.rules[0]!.reason = "HUMAN_EVIDENCE_REQUIRED";
+    value.rules[0]!.facts.leaves = [{ conditionPath: "conditions[0]", state: "UNKNOWN", reason: "SOURCE_REVIEW_REQUIRED" }];
+    const wrapper = mountReadiness(vi.fn<typeof fetch>().mockResolvedValue(response(value))); await flushPromises();
+    expect(wrapper.text()).toContain("原有效期：未提供，不表示长期有效");
+    expect(wrapper.text()).toContain("在现有人工事实录入中填写核验证据与实际结论");
+    expect(wrapper.text()).toContain("查看原文核对区及对应来源字段");
+  });
+
+  it("keeps confirmation calendar, money inputs and maintenance observations attached to their own facts", async () => {
+    const value = assessment(); value.summary = "WAITING_EXPECTED_CONFIRMATION"; value.freshUntil = null;
+    const facts = value.rules[0]!.facts; value.rules[0]!.state = "WAITING_OFFICIAL_CONFIRMATION";
+    facts.expectedTarget = { kind: "OFFICIAL_CLOSE", trade_date: "2026-11-16" };
+    facts.expectedConfirmation = { target: facts.expectedTarget, expectedAt: "2026-11-16T15:00:00+08:00",
+      observation: observation(), calendarReference: "calendar-1", priorInputsComplete: true };
+    facts.money = { inputs: { axis: "INVENTORY_CAPITAL", state: "UNKNOWN", observation: observation("UNAVAILABLE") } };
+    const risk = rule("UNKNOWN", "maintenance-only"); risk.facts.ownerKind = "RISK_BRANCH";
+    risk.facts.evaluatedAt = null;
+    risk.facts.risk = { current: null, maintenance: { axis: "DATA_EVALUATION", state: "PASS", observation: observation("CACHED") } };
+    value.rules.push(risk);
+    const wrapper = mountReadiness(vi.fn<typeof fetch>().mockResolvedValue(response(value))); await flushPromises();
+    expect(wrapper.text()).toContain("预计确认：2026-11-16 15:00:00+08:00 · 待确认目标：官方收盘 · 交易日期 2026-11-16");
+    expect(wrapper.text()).toContain("确认日历观察来源：当前读取");
+    expect(wrapper.text()).toContain("金额输入观察来源：当前不可用");
+    expect(wrapper.text()).toContain("风险维护观察来源：缓存记录");
+    expect(wrapper.text()).toContain("本轮义务维护通过，未作新的条件比较");
+    expect(wrapper.text()).not.toContain("监控已就绪");
+  });
+
+  it.each(["target-kind", "intraday-time", "close-date", "observation", "observation-time", "requirement",
+    "window", "execution-date", "notification-target", "history-time"])("rejects malformed consumed %s details", async mutation => {
+    const value = assessment(), facts = value.rules[0]!.facts;
+    if (mutation === "target-kind") Object.assign(facts, { expectedTarget: { kind: "UNKNOWN" } });
+    if (mutation === "intraday-time") Object.assign(facts, { evaluatedTarget: { kind: "INTRADAY", bucket_end: "10:05" } });
+    if (mutation === "close-date") Object.assign(facts, { evaluatedTarget: { kind: "OFFICIAL_CLOSE", trade_date: "2026-02-30" } });
+    if (mutation === "observation") Object.assign(value.axes[0]!, { observation: { ...observation(), availability: "READY" } });
+    if (mutation === "observation-time") Object.assign(facts, { observation: { ...observation(), observedAt: "yesterday" } });
+    if (mutation === "requirement") Object.assign(facts, { requirements: { inventory: "true" } });
+    if (mutation === "window") Object.assign(facts, { execution: { executionWindow: "FOREVER" } });
+    if (mutation === "execution-date") Object.assign(facts, { execution: { executionDate: "2026-13-01" } });
+    if (mutation === "notification-target") Object.assign(facts, { notification: { target: { kind: "INTRADAY", bucket_end: "later" } } });
+    if (mutation === "history-time") Object.assign(facts, { notification: { channels: [{ channel: "IN_APP", historicalUpdatedAt: "earlier" }] } });
+    await expect(createPlanReadinessApi(vi.fn<typeof fetch>().mockResolvedValue(response(value))).get(A))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
 
   it("aborts and discards old A→B→A responses even if fetch ignores abort", async () => {
@@ -227,7 +328,8 @@ describe("actual workbench readiness integration", () => {
     }
     const records = new Map([A, B].map(id => [id, version(id)]));
     const calls: string[] = [], old = deferred<Response>();
-    let hold = false;
+    let hold = false, coverageFail = false;
+    let coverageWait: Promise<void> | null = null;
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input); calls.push(url);
       const id = url.split("/")[4]!, saved = records.get(id);
@@ -236,11 +338,15 @@ describe("actual workbench readiness integration", () => {
         const value = assessment(id); value.snapshot.context.sourceHash = saved!.sourceHash!;
         return response(value);
       }
-      if (url.includes("/source-coverage?")) return response({ authorityGranted: false, planVersionId: id,
+      if (url.includes("/source-coverage?")) {
+        if (coverageWait) await coverageWait;
+        if (coverageFail) return response({ code: "READ_FAILED" }, 503);
+        return response({ authorityGranted: false, planVersionId: id,
         summary: saved!.sourceCoverage, limit: 50, returnedCount: 1, totalRows: 1, nextCursor: null, items: [{ kind: "OBLIGATION", rowIndex: 0,
           obligation: { version: "source-obligation-v1", rulesVersion: "source-coverage-rules-v1", sourceHash: saved!.sourceHash,
             clauseId: "c1", start: 0, end: Array.from(source).length, excerpt: source, kind: "PREDICATE", scope: "PLAN", serverState: "MAPPED",
             semanticsJson: null, groupId: null, relationIds: [], paths: ["position.max_qty"], obligationId: HASH, mappingProposal: null, humanSupplements: [] } }] });
+      }
       if (url.endsWith("/plan-editor-schema")) return response({ candidateSchema: { type: "object", properties: {
         position: { type: "object", properties: { max_qty: { type: "integer" } } },
         ordinary_rules: { type: "array", items: { type: "object", properties: { rule_id: { type: "string" } } } },
@@ -269,6 +375,18 @@ describe("actual workbench readiness integration", () => {
     expect(calls.filter(url => url.endsWith("/monitor-readiness"))).toHaveLength(1);
     await wrapper.findComponent(PlanReadiness).get('[data-action="source"]').trigger("click");
     expect(document.activeElement).toBe(wrapper.get('[id="daily-.ordinary_rules[0].rule_id"]').element);
+    work.sourceCoverage.invalidate(); await flushPromises();
+    expect(wrapper.findComponent(PlanReadiness).text()).toContain("已保存版本的来源覆盖依据已失效");
+    expect(wrapper.findComponent(PlanReadiness).text()).not.toContain("请先保存");
+    const coverageGate = deferred<void>(); coverageWait = coverageGate.promise;
+    const coverageRead = work.sourceCoverage.refresh(); await flushPromises();
+    expect(wrapper.findComponent(PlanReadiness).text()).toContain("已保存，正在读取匹配的来源覆盖依据");
+    expect(calls.filter(url => url.endsWith("/monitor-readiness"))).toHaveLength(1);
+    coverageFail = true; coverageGate.resolve(); await coverageRead; await flushPromises();
+    expect(wrapper.findComponent(PlanReadiness).text()).toContain("已保存版本的来源覆盖依据读取失败");
+    expect(wrapper.findComponent(PlanReadiness).text()).not.toContain("请先保存");
+    coverageFail = false; coverageWait = null; await work.sourceCoverage.refresh(); await flushPromises();
+    expect(wrapper.findComponent(PlanReadiness).text()).toContain("监控已就绪");
     work.editSource(source + "修改"); await flushPromises();
     expect(wrapper.findComponent(PlanReadiness).text()).not.toContain("监控已就绪");
     await wrapper.setProps({ planVersionId: B });

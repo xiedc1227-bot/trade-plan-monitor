@@ -30,21 +30,37 @@ const instant = (value: unknown) => typeof value === "string" && /(Z|[+-]\d\d:\d
 const optionalInstant = (value: unknown) => value == null || instant(value);
 const optionalBoolean = (value: unknown) => value == null || typeof value === "boolean";
 const optionalQuantity = (value: unknown) => value == null || typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+const date = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+function target(value: unknown): boolean {
+  return value == null || record(value) && (value.kind === "INTRADAY" && instant(value.bucket_end) ||
+    value.kind === "OFFICIAL_CLOSE" && date(value.trade_date));
+}
+function observation(value: unknown): boolean {
+  return value == null || record(value) && ["CURRENT", "CACHED", "UNAVAILABLE", "PERSISTED_ONLY"].includes(String(value.availability)) &&
+    instant(value.observedAt) && (value.asOf === null || instant(value.asOf)) && (value.expiresAt === null || instant(value.expiresAt));
+}
 
 function axis(value: unknown): boolean {
   return record(value) && axes.includes(value.axis as AxisReadiness["axis"]) &&
-    axisStates.includes(String(value.state)) && optionalText(value.reason);
+    axisStates.includes(String(value.state)) && optionalText(value.reason) && observation(value.observation);
 }
 function rule(value: unknown): boolean {
   if (!record(value) || !ruleStates.includes(value.state as RuleReadiness["state"]) || !optionalText(value.reason) || !record(value.facts)) return false;
-  const f = value.facts;
+  const f = value.facts, requirements = f.requirements;
   if (!["ORDINARY_RULE", "ALERT_RULE", "RISK_BRANCH"].includes(String(f.ownerKind)) || !text(f.ownerId) ||
       !(f.side === null || f.side === "BUY" || f.side === "SELL") || !optionalInstant(f.evaluatedAt) ||
+      !target(f.expectedTarget) || !target(f.evaluatedTarget) || !observation(f.observation) || !record(requirements) ||
+      !["inventory", "sellability", "quote", "simulationBook", "costBasis", "fees", "economics"].every(key =>
+        requirements[key] === undefined || typeof requirements[key] === "boolean") ||
       !Array.isArray(f.leaves) || f.leaves.length > 50 || !f.leaves.every(leaf => record(leaf) &&
         text(leaf.conditionPath) && ruleStates.includes(leaf.state as RuleReadiness["state"]) && optionalText(leaf.reason))) return false;
-  if (f.expectedConfirmation != null && (!record(f.expectedConfirmation) || !instant(f.expectedConfirmation.expectedAt))) return false;
+  if (f.expectedConfirmation != null && (!record(f.expectedConfirmation) || !instant(f.expectedConfirmation.expectedAt) ||
+      !target(f.expectedConfirmation.target) || !observation(f.expectedConfirmation.observation))) return false;
   if (f.execution != null && (!record(f.execution) || !optionalQuantity(f.execution.approvedQuantity) ||
       !optionalBoolean(f.execution.consumed) || !optionalBoolean(f.execution.eligible) ||
+      !(f.execution.executionDate == null || date(f.execution.executionDate)) || !observation(f.execution.observation) ||
+      ![undefined, null, "CURRENT_SESSION", "NEXT_EXCHANGE_SESSION_ONLY"].includes(f.execution.executionWindow as string | null | undefined) ||
       ![undefined, "OPEN", "CLOSED", "UNKNOWN"].includes(f.execution.windowState as string | undefined))) return false;
   if (f.risk != null) {
     if (!record(f.risk) || !axis(f.risk.maintenance)) return false;
@@ -64,10 +80,10 @@ function rule(value: unknown): boolean {
   }
   if (f.notification != null) {
     const n = f.notification;
-    if (!record(n) || !optionalInstant(n.createdAt) || !optionalText(n.eventId) ||
+    if (!record(n) || !optionalInstant(n.createdAt) || !optionalText(n.eventId) || !target(n.target) || !observation(n.observation) ||
         !(n.channels === undefined || Array.isArray(n.channels) && n.channels.length <= 3 && n.channels.every(channel => {
           if (!record(channel) || !["IN_APP", "CONSOLE", "WEBHOOK"].includes(String(channel.channel)) ||
-              ![channel.configured, channel.enabled, channel.eligible].every(optionalBoolean) ||
+              ![channel.configured, channel.enabled, channel.eligible].every(optionalBoolean) || !optionalInstant(channel.historicalUpdatedAt) ||
               ![undefined, null, "HOLD", "ELIGIBLE", "SUPPRESS"].includes(channel.historicalStatus as string | null | undefined)) return false;
           const attempt = channel.latestAttempt;
           return attempt == null || record(attempt) && ["CLAIMED", "DELIVERED", "RETRY_PENDING", "FAILED"].includes(String(attempt.status)) &&

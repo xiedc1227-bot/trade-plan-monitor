@@ -42,6 +42,17 @@ watch(() => [saved.value, busy.value, work.dirty.value, historyOnly.value, sourc
     coverageHash: summary.coverageEvidenceHash, reviewReceiptHash: summary.coverageReviewReceiptHash,
     ownerGeneration: work.ownerGeneration.value };
 }, { immediate: true, flush: "sync" });
+const readinessUnavailableReason = computed(() => {
+  if (busy.value) return "正在处理当前计划，请等待操作完成后读取监控依据。";
+  if (historyOnly.value) return "此历史版本仅供查看，无法读取当前条件计划的监控依据。";
+  if (!saved.value) return "请先保存当前编辑，或打开已保存的计划版本。";
+  if (work.dirty.value || source.value !== saved.value.sourceText) return "当前编辑尚未保存，请保存后读取匹配版本的监控依据。";
+  if (!saved.value.contentHash || !saved.value.sourceHash) return "已保存版本缺少绑定所需的内容或来源依据，请查看原文核对区。";
+  if (coveragePhase.value === "LOADING") return "已保存，正在读取匹配的来源覆盖依据，请等待。";
+  if (coveragePhase.value === "ERROR") return "已保存版本的来源覆盖依据读取失败，请在原文核对区重新读取。";
+  if (coveragePhase.value === "STALE") return "已保存版本的来源覆盖依据已失效，请在原文核对区重新读取。";
+  return "已保存版本尚无匹配的来源覆盖依据，请查看原文核对区。";
+});
 const readinessLocations = computed<Readonly<Record<string, string>>>(() => {
   const locations: Record<string, string> = {};
   const ambiguous = new Set<string>();
@@ -121,7 +132,7 @@ watch(work.ownerGeneration, () => { coverageNotice.value = ""; }, { flush: "sync
       :source-text="source" :source-hash="saved?.sourceHash ?? null" :verified-source-hash="coverageVerifiedSourceHash" :busy="busy"
       @refresh="work.refreshSourceCoverage" @first-page="work.refreshSourceCoverage" @next-page="work.sourceCoverage.nextPage" @reveal-field="revealField" />
     <p v-if="coverageNotice" role="status">{{ coverageNotice }}</p>
-    <PlanReadiness :context="readinessContext" :locations="readinessLocations"
+    <PlanReadiness :context="readinessContext" :locations="readinessLocations" :unavailable-reason="readinessUnavailableReason"
       @reveal-field="revealField" @reveal-source="revealReadinessSource" />
     <PlanSimulationPanel v-if="saved && !historyOnly" :key="`${saved.id}:${saved.status}`" :version="saved" :request="work.request" />
   </article>
