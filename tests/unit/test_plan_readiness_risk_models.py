@@ -172,9 +172,8 @@ def test_ordinary_design_skip_can_describe_maintenance_without_a_new_comparison(
     from trade_plan_monitor.web.plan_readiness_summary import summarize_readiness
 
     assessed = summarize_readiness(snapshot(rules=(value,)))
-    assert (
-        assessed.summary == "UNKNOWN"
-    )  # The later consumer/summary slice is not implemented here.
+    # Verified designed skip is not missing applicable authority.
+    assert assessed.summary == "READY_FOR_MONITORING"
     assert assessed.authority_granted is False
 
 

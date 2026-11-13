@@ -100,10 +100,25 @@ def _axis(axis, snapshot):
     return axis
 
 
+def _maintained_ordinary_skip(rule, snapshot, *, owner_current):
+    risk = rule.risk
+    return bool(owner_current and risk is not None and risk.current is None
+        and risk.obligation is not None and risk.origin is not None
+        and risk.obligation.kind == "ORDINARY_TECHNICAL"
+        and risk.obligation.status in {"CONFIRMED", "FULFILLED"}
+        and risk.maintenance.state == "PASS" and rule.expected_confirmation is None
+        and rule.root_outcome is None and not rule.leaves
+        and _observation_reason(risk.maintenance.observation, snapshot.context,
+            snapshot.computed_at, inventory=rule.requirements.inventory,
+            book=rule.requirements.simulation_book) is None)
+
+
 def _rule(rule, snapshot, *, owner_current):
     def result(state, reason=None):
         return RuleReadiness(facts=rule, state=state, reason=reason)
 
+    if _maintained_ordinary_skip(rule, snapshot, owner_current=owner_current):
+        return result("UNKNOWN")  # Actual maintenance, without a new comparison.
     wait = rule.expected_confirmation
     observed = wait.observation if wait is not None else rule.observation
     if observed is not None:
@@ -146,6 +161,18 @@ def _rule(rule, snapshot, *, owner_current):
         return result("UNKNOWN", "AUTHORITY_UNAVAILABLE")
     if rule.expected_target is None or rule.evaluated_target != rule.expected_target:
         return result("UNKNOWN", "TARGET_MISMATCH")
+    if rule.risk is not None and rule.risk.current is not None:
+        actual = rule.risk.current.ordinary_close
+        if actual is not None:
+            if actual.blockers:
+                return result("MISSING_INPUT", "MISSING_DATA") if any(code in {
+                    "NEXT_OFFICIAL_CLOSE_UNVERIFIED", "TRADING_CALENDAR_MISSING"}
+                    for code in actual.blockers) else result("UNKNOWN", "DEPENDENCY_UNVERIFIED")
+            if actual.status_after in {"CLEAR", "OBSERVATION"} and not actual.below:
+                return result("CONDITION_FALSE")
+            if actual.confirmation_close_used and actual.status_after == "CONFIRMED":
+                return result("CONDITION_TRUE")
+            return result("UNKNOWN", "DEPENDENCY_UNVERIFIED")
     if not rule.leaves or rule.root_outcome is None:
         return result("UNKNOWN", "DEPENDENCY_UNVERIFIED")
     if rule.root_outcome == "MISSING_INPUT":
@@ -165,8 +192,10 @@ def summarize_readiness(snapshot: ReadinessSnapshot) -> ReadinessAssessment:
         for rule in rules)
     review = any(axis.reason == "SOURCE_REVIEW_REQUIRED" for axis in axes) or any(
         rule.reason == "SOURCE_REVIEW_REQUIRED" for rule in rules)
-    unknown = any(axis.state == "UNKNOWN" for axis in axes) or bool(
-        states & {"UNKNOWN", "AWAITING_FIRST_EVALUATION"})
+    unknown = any(axis.state == "UNKNOWN" for axis in axes) or any(
+        result.state in {"UNKNOWN", "AWAITING_FIRST_EVALUATION"}
+        and not _maintained_ordinary_skip(result.facts, snapshot, owner_current=owner_current)
+        for result in rules)
     service_wait = any(axis.state == "WAIT" and axis.reason == "SERVICE_PENDING" for axis in axes)
     confirmation_wait = "WAITING_OFFICIAL_CONFIRMATION" in states
     if any(axis.state == "WAIT" and axis.reason == "EXPECTED_CONFIRMATION" for axis in axes):
@@ -179,7 +208,10 @@ def summarize_readiness(snapshot: ReadinessSnapshot) -> ReadinessAssessment:
     observations = tuple(
         axis.observation for axis in axes if axis.state != "NOT_APPLICABLE") + tuple(
         rule.expected_confirmation.observation if rule.expected_confirmation is not None
-        else rule.observation for rule in snapshot.rules)
+        else rule.risk.maintenance.observation if rule.risk is not None
+        and rule.risk.current is None else rule.observation for rule in snapshot.rules) + tuple(
+        rule.risk.maintenance.observation for rule in snapshot.rules
+        if rule.risk is not None and rule.risk.current is not None)
     fresh_until = None
     if observations and all(
         item is not None and item.expires_at is not None
