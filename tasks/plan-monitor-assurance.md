@@ -371,3 +371,5 @@ The user requested recording progress and then pausing for shutdown. T17a14's ex
 On 2026-11-13 the user explicitly resumed. The coordinator matched the frozen source/evidence hashes and committed the five accepted files as `fb692c8`; the shutdown description above is historical. Independent engineering resumes under P07, without repeating the passed 44-case batch. Remaining gates and protected files are unchanged.
 
 T17a15 risk fact shape and paired field appendix are accepted as `0c7d5aa` (R85), with 190 focused checks. Actual risk consumer/summary and production/race acceptance remain next; no T17/C06 closure.
+
+T17a16 actual risk consumer/summary is accepted as `7c4404c` (R86): 48 disjoint focused checks; default prior-day reuse and other unobserved owners remain UNKNOWN. Next are notification configuration/event facts, supported future confirmation and public/generated/UI work. T17/C06 remain open.
