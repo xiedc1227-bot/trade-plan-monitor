@@ -168,3 +168,16 @@
 
 
 有界消费者已在 `7c4404c` 交付，验证和运行限制见 [PMA-R86](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r86--实际风险读取与严格证明的维护)。默认盘中复用旧日线时，在建立完整当前接纳前仍为 UNKNOWN；本次不增加 producer 刷新或调度行为。
+
+
+## MRD-S09 — 限定范围的当前 IN_APP 服务验证
+
+本节落实 MRD-S02/03/05 对监控服务、发送资格及成功送达的区分，不增加策略、自动测试发送或新审批流程。R87/R88 提供实际配置和准确历史回执，二者本身不构成当前服务 PASS。
+
+当前服务检查只能由既有真实 dispatcher/生产 deadline 路径记录。仅保留一份有界、最近的不可变检查，绑定实际唯一原生 `InAppChannel` 实例、既有 runtime generation/configuration 及准确的既有 completion 上下文（最多10个计划）。记录原始开始/完成时间、确实成功检查 IN_APP 存储的证据，以及原始适用 owner/target 期限。已关闭/禁用 dispatcher 返回空元组不算检查成功。缺少已证明评估上下文的启动恢复不能认证计划。getter 和 readiness GET 不执行工作，也不刷新时间。
+
+新检查开始、未完成/失败/取消、存储异常、实例替换、关闭、配置/代次变化或相关 completion 上下文改变，均撤销上一份当前检查。之后无关进度或重复 GET 不能延长其已记录期限。复用既有一致性读取和最早时效限制，不增加通用 TTL、逐事件缓存、worker 或历史扫描。
+
+对于实际唯一原生 IN_APP 配置，当前检查成功，加上独立验证的完整当前 FALSE 评估及不存在适用投递义务，可以在无事件时证明通知服务 PASS。无义务须来自准确原生评估及适用的原始 SIGNAL/RISK/candidate 事实，不能来自空 event IDs、有界扫描或 FALSE 单一事实；义务不确定时仍为 UNKNOWN。准确 IN_APP 事件已有 DELIVERED 回执，且当前服务验证及归属成立时，可表达该条义务已完成；这不使当前 eligible 变为 true，也不许可再次发送。首片可仅验收可证明子集，但必须明确列出剩余 UNKNOWN 场景。
+
+不得把零事件证明推广到 WEBHOOK、CONSOLE 或枚举名相同的自定义通道。扫描游标/limit 可能跳过既有事件，检查过存储不等于队列为空或覆盖全部事件。当前 WAIT/资格需要另有真实调度/依赖事实证明，历史 CLAIMED/RETRY_PENDING 或较早的 allowed 判断不充分。验证缺失或不确定时保留 UNKNOWN/DELIVERY_UNVERIFIED，保留准确历史事实，不得为了变绿制造信号。验收要求实际生产者/dispatcher 工作、当前完整 FALSE/无义务成功、潜在义务、错误/缺失/过期上下文、失败/关闭/替换实例、GET 无副作用及历史/API 边界不变。
