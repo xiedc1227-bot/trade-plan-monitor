@@ -376,3 +376,6 @@ T17a16 actual risk consumer/summary is accepted as `7c4404c` (R86): 48 disjoint 
 
 
 T17a17 actual notification configuration is accepted as `c32ec2b` (R87):44 focused checks, no public/eligibility/delivery projection yet. Next wire bounded exact native events and channel receipts, then supported future confirmation and public/generated/UI work. Configured/enabled and historical STOPPED facts never establish current sending eligibility. T17/C06 remain open.
+
+
+T17a18 exact native notification history is accepted as `d31cb36` (R88):71 unique checks, bounded event/classification/receipt reads and coherent retries. Notification axis/eligible remain UNKNOWN/null; native exception reader positives do not establish complete owned exception readiness. Next add narrowly supported actual IN_APP service verification, then supported future confirmation and public/generated/UI work; T17/C06 remain open.
