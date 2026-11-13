@@ -379,3 +379,5 @@ T17a17 actual notification configuration is accepted as `c32ec2b` (R87):44 focus
 
 
 T17a18 exact native notification history is accepted as `d31cb36` (R88):71 unique checks, bounded event/classification/receipt reads and coherent retries. Notification axis/eligible remain UNKNOWN/null; native exception reader positives do not establish complete owned exception readiness. Next add narrowly supported actual IN_APP service verification, then supported future confirmation and public/generated/UI work; T17/C06 remain open.
+
+T17a19 actual IN_APP service verification is accepted as `b6f3113` (R89):33 unique checks, with original expiry and instance/cancellation/read-race fencing. Only pure ALERT_ONLY complete FALSE with no applicable obligations can reach READY_FOR_MONITORING. Broader supported notification consumers, future confirmation and public/generated/UI work remain next; no eligibility, full T17/C06 or installation claim follows. All P07/C05/final gates and0/48 remain unchanged.
