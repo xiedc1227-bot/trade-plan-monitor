@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from inspect import isawaitable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 from anyio import to_thread
@@ -95,6 +95,9 @@ from trade_plan_monitor.web.routers.symbols import (
     SymbolPage,
 )
 
+if TYPE_CHECKING:
+    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 HealthProvider = Callable[[], object]
 Clock = Callable[[], datetime]
@@ -114,6 +117,7 @@ class PersistentMonitorReadService:
         health_provider: HealthProvider,
         *,
         clock: Clock,
+        readiness_service: RuntimeStatusReadService | None = None,
     ) -> None:
         if not callable(unit_of_work_factory):
             raise TypeError("unit_of_work_factory must be callable")
@@ -124,6 +128,37 @@ class PersistentMonitorReadService:
         self._unit_of_work_factory = unit_of_work_factory
         self._health_provider = health_provider
         self._clock = clock
+        self._readiness_service = readiness_service
+
+    async def get_plan_readiness(self, *, version_id):
+        """Use the injected owned reader; legacy projections keep their existing path."""
+        if self._readiness_service is None:
+            raise ApiError(ApiErrorCode.SERVICE_UNAVAILABLE)
+        return await self._readiness_service.get_plan_readiness(version_id=version_id)
+
+    @property
+    def outstanding_work(self):
+        return 0 if self._readiness_service is None else self._readiness_service.outstanding_work
+
+    def begin_shutdown(self):
+        if self._readiness_service is not None:
+            self._readiness_service.begin_shutdown()
+
+    async def stop(self, *, timeout=15):
+        if self._readiness_service is not None:
+            await self._readiness_service.stop(timeout=timeout)
+
+    async def suspend_for_storage(self, owner, *, timeout=15):
+        if self._readiness_service is not None:
+            await self._readiness_service.suspend_for_storage(owner, timeout=timeout)
+
+    def resume_after_storage(self, owner):
+        if self._readiness_service is not None:
+            self._readiness_service.resume_after_storage(owner)
+
+    def allow_stopped_health(self):
+        if self._readiness_service is not None:
+            self._readiness_service.allow_stopped_health()
 
     async def get_dashboard(self) -> DashboardProjectionResponse:
         return await to_thread.run_sync(

@@ -735,7 +735,7 @@ class _ProductionRuntimeState:
         return None
 
     def _notification_context(self):
-        if (self._monitor_contract_version != 2 or self._pipeline is None
+        if (self._pipeline is None
                 or self._runtime_generation is None or self._progress_owner is None):
             return None
         try:
@@ -1131,7 +1131,7 @@ class _ProductionRuntimeState:
                         "enable_runtime_status": True,
                         "progress_owner": self._progress_owner(),
                     }
-                    if self._monitor_contract_version == 2
+                    if self._progress_owner is not None
                     else {}
                 ),
             )
@@ -1583,20 +1583,20 @@ def create_monitor_composition(
             ),
         )
 
+    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+
+    owned_read_service = RuntimeStatusReadService(
+        session_factory,
+        read_authority,
+        clock=clock.now,
+        legacy_read_service=PersistentMonitorReadService(
+            unit_of_work_factory, health_binding, clock=clock.now,
+        ) if monitor_contract_version == 2 else None,
+    )
     if monitor_contract_version == 2:
-        from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
         from trade_plan_monitor.web.runtime_status_websocket import RuntimeStatusEventStream
 
-        read_service = RuntimeStatusReadService(
-            session_factory,
-            read_authority,
-            clock=clock.now,
-            legacy_read_service=PersistentMonitorReadService(
-                unit_of_work_factory,
-                health_binding,
-                clock=clock.now,
-            ),
-        )
+        read_service = owned_read_service
         stream = RuntimeStatusEventStream(
             unit_of_work_factory=unit_of_work_factory,
             read_service=read_service,
@@ -1606,6 +1606,7 @@ def create_monitor_composition(
             unit_of_work_factory,
             health_binding,
             clock=clock.now,
+            readiness_service=owned_read_service,
         )
         stream = CommittedMonitorEventStream(
             unit_of_work_factory=unit_of_work_factory,
@@ -1665,25 +1666,19 @@ def create_monitor_composition(
         state.bind_permission_scheduler(scheduler)
 
         def local_operation(operation):
-            if monitor_contract_version == 1:
-                return operation
-
             async def observed(*args):
                 return await lifecycle.run_local_progress_unit(operation, *args)
 
             return observed
 
         async def checkpoint_wal():
-            if monitor_contract_version == 2:
-                await read_service.suspend_for_storage(lifecycle.runtime_generation)
+            await read_service.suspend_for_storage(lifecycle.runtime_generation)
             await state.checkpoint_wal()
 
         async def close_database():
-            if monitor_contract_version == 2:
-                await read_service.suspend_for_storage(lifecycle.runtime_generation)
+            await read_service.suspend_for_storage(lifecycle.runtime_generation)
             await state.close_database()
-            if monitor_contract_version == 2:
-                read_service.resume_after_storage(lifecycle.runtime_generation)
+            read_service.resume_after_storage(lifecycle.runtime_generation)
 
         lifecycle = RuntimeLifecycleService(
             clock=clock,
@@ -1705,7 +1700,7 @@ def create_monitor_composition(
             close_database=close_database,
             health_details=state.health_details,
             liveness_owner=state,
-            progress_monotonic=progress_monotonic if monitor_contract_version == 2 else None,
+            progress_monotonic=progress_monotonic,
         )
         runtime_states[lifecycle.runtime_generation] = state
         return lifecycle
