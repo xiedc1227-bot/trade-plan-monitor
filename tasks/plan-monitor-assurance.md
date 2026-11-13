@@ -195,14 +195,14 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T18 — Present per-rule readiness and delivery truth
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify the component/engineering scope (R98); real browser journeys remain T21.
 - Depends on: T17.
 - Files/scope: readiness component/composable, workbench adapter, `PlanReadiness.spec.ts` and focused existing detail regression (5 files).
 - Acceptance: A09–A11; Verify: V05 unit/type/build. Six axes, actual scope, official-close waiting, first evaluation, stale/unknown, queue/retry/delivered distinction and source links; no one-click automatic repair/activation.
 
 ### PMA-C06 — Readiness projection checkpoint
 
-- [ ] V04/V05/V07 focused checks pass for A09/A10 and applicable A11; no read path acquires data or grants authority. This does not mark the user's installation ready.
+- [x] V04/V05/V07 focused checks pass for A09/A10 and applicable A11; no read path acquires data or grants authority. This does not mark the user's installation ready.
 
 ### PMA-T19 — Prove readiness edge cases and risk independence
 
@@ -397,3 +397,5 @@ T17 engineering handoff accepted in R95: `76031b3` materializes exact contracts,
 T18a workbench foundation accepted as `eb04136` (R96):133 unique passes across132 focused and20 final checks with19 overlap; type/build pass. Next H04 exact leaf selector and remaining target/detail presentation, then T19/T21 joint/browser acceptance. T18/C06 stay open; original03/04/C05/final and0/48 unchanged.
 
 T18b exact manual leaf UI accepted as `cdebd59` (R97):111 unique checks (107+33 with29 overlap); no added confirmation step. Late refresh failure review finding fixed and tested. Next T18 target/provenance/required-input detail, then T19/T21 native/public/browser combination. Full H04/T13/T18/C06 and corpus/final gates remain open;0/48 unchanged.
+
+T18 component engineering and C06 focused checkpoint accepted in R98 (`4dd617f`):173 unique checks including38 readiness, type/build pass. T19 native/public combinations and T21 real browser journeys remain separate; no actual installation readiness is claimed. H04/T13, original03/04/C05/corpus/final and0/48 unchanged.
