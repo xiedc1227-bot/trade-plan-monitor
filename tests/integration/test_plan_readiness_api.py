@@ -5,7 +5,6 @@ import json
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
-from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -293,11 +292,14 @@ def test_http_unsupported_historical_plan_stays_unavailable(tmp_path, profile):
 @pytest.mark.parametrize("profile", [1, 2])
 def test_actual_openapi_adds_only_the_exact_readiness_surface(profile):
     from scripts.generate_frontend_types import build_openapi_document
+    from tests.contract.test_plan_readiness_api_projection import (
+        assert_h04_hashes,
+        readiness_projection,
+    )
 
-    root = Path(__file__).resolve().parents[2]
-    previous = json.loads((root / ("openapi.json" if profile == 1 else
-                                  "openapi.runtime-status.json")).read_text(encoding="utf-8"))
     actual = build_openapi_document(monitor_contract_version=profile)
+    previous = readiness_projection(actual)
+    assert_h04_hashes(previous, profile)
     path = "/api/v1/plan-versions/{version_id}/monitor-readiness"
     expected = {
         "AxisReadiness", "ChannelErrorCode", "ConditionReadiness", "DailyRiskBirth",

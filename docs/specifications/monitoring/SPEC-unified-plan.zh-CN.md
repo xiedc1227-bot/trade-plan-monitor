@@ -372,3 +372,23 @@ OpenAPI 快照 SHA-256：`8821fa8577e72eab4b607bf18306c0ccca4e30b00fa686616c9f84
 规范监控v2 OpenAPI快照SHA-256：`27f111593d3d95d2df5722122f5ec914c068494c69ef0b0ed6986e6c59d72bba`
 
 生成TypeScript SHA-256：兼容版`0e160cf924a1376893b2b463d6aac4970ca22c33caf4d2f13798dad6a985efb8`；规范版`1780d5e3801ddeef0f7105bfcd70ecfc5bd134bc0859ce010a0d9b396f9621f7`。
+
+## U-PMA-readiness — 已实施的监控就绪读取契约（2026-11-14）
+
+本实施owner记录依据既有PMA及[monitor-readiness](SPEC-monitor-readiness.zh-CN.md) MRD-S01–MRD-S10授权，登记 `5b35edd` 中的实际双配置owner/生命周期连接及 `0dbdd07` 中的共有公开路由；下列固定实施指纹是回归夹具，不是新的人类签字、策略批准，也不替换U-H04/U-PMA/U-MLP3历史审批。仅增加 `GET /api/v1/plan-versions/{version_id}/monitor-readiness`，只有一个必填UUID路径参数，没有请求体或新全局header规则，沿用既有公开错误封套。
+
+闭合的 `ReadinessAssessment` 携带字面值 `contractVersion=plan-monitor-readiness-v1`、`authorityGranted=false`、实际准入context、六轴、完整规则事实/状态、摘要及可空原始 `freshUntil`。来源/审核、runtime、数据、库存/资金及通知事实保持独立；批准数量/消费、当前比较、持久风险义务/原属/维护、channel配置及准确历史交付均不产生交易或发送权限。原生风险/target字段保留snake_case，其他readiness投影保留既有camelCase别名。缺观察不能转成FALSE或未来WAIT。MRD的窄范围确认及通知子集保持不变。
+
+两套配置复用所选composition唯一保留的物理 `MonitorReadOwner`、真实生命周期进度和冻结proof，边界为8次读取/15s/2次尝试、10个活动symbol、76个owner、总计50个条件叶及1MiB。schema表达六轴及逐数组边界；owner唯一性、总叶数、时间/context/来源绑定和字节边界也继续执行runtime校验。v1桥仅委托readiness及其适用生命周期hook，旧v1直接线程投影未新增此租约保护。GET不采集供应商、不评估、不续心跳、不写业务数据、不迁移、不启用、不通知。缺少/不可调用的能力返回503，准确不存在的版本返回404，UUID格式错误返回422，服务输出无效或版本错误返回脱敏500。合法reader缺当前runtime事实时仍为UNKNOWN。受支持已保存计划缺保证存储时保留UNKNOWN/UPGRADE_REQUIRED；不支持的历史计划沿用503，不补造就绪规则。存储暂停和已停止读取准入拒绝503。既有过期及两次读取撤销不能续期证据。
+
+严格准入27个新增组件：`AxisReadiness`、`ChannelErrorCode`、`ConditionReadiness`、`DailyRiskBirth`、`DailyRiskEvaluation`、`DeliveryAttemptStatus`、`DeliveryChannel`、`ExpectedConfirmation`、`IntradayEvaluationTarget`、`InventoryRequirements`、`OfficialCloseEvaluationTarget`、`OrdinaryRiskCloseObservation`、`ReadinessAssessment`、`ReadinessContext`、`ReadinessDeliveryAttempt`、`ReadinessExecutionState`、`ReadinessMoneyFacts`、`ReadinessNotificationChannel`、`ReadinessNotificationFacts`、`ReadinessObservation`、`ReadinessRiskFacts`、`ReadinessRiskObligation`、`ReadinessRiskOrigin`、`ReadinessSnapshot`、`RecoveryDeliveryStatus`、`RuleReadiness`、`RuleReadinessFacts`。其完整属性、必填字段、引用、闭合枚举、缺省值、可空性和嵌套边界已逐项对照MRD既有模型，作为明确canonical JSON SHA-256值冻结在 `test_plan_readiness_api_projection.py` 中。`DailyOrdinaryEvaluation` 仍为私有，不出现在公开components；被排除的普通证据继续在全部旧daily/monitor响应中隐藏。两个target组件仅通过readiness的准确target字段公开。
+
+严格投影先验证唯一完整GET及上述27个完整组件形状，随后仅剥离该路径/组件集合，复原全部四个固定U-H04 OpenAPI/TypeScript哈希。它位于 `condition_selection_projection()` 之前，覆盖独立prior-coverage调用者。未改动的H04及来源专用投影随后复原U-PMA与U-MLP3历史字节，较早P0–P3/schema5调用者保持同一链。不得修改输入、替换历史digest，无关路径/组件/字段/边界仍保留给固定哈希拒绝。canonical JSON指纹区分bool和数值，不依赖Python的 `false == 0` 或 `true == 1`。增量集成检查使用此准确投影基线及固定H04哈希，因此更新生成产物不会使它退化为与自身比较。
+
+下列候选字节在T17a24中仅渲染到忽略的验证证据；本片四份受跟踪U-H04产物保持未改。下一生成产物配套片必须写出逐字节一致的结果，并通过实际产物/生成器检查。`test_openapi_snapshot.py::test_openapi_contains_only_approved_paths_and_public_error_schemas` 中旧的投影前路径清单断言，也需要在未改动的投影后旧路径断言之前准确登记新路径；它仍为明确待补门禁。本owner不宣称生成/历史契约整链、完整T17、UI、实际用户安装、原03/04、C05或真实提取验收完成。真实提取保持0/48，不授权供应商调用、用户数据库变更、真实发送、push或部署。
+
+候选兼容版OpenAPI 快照 SHA-256：`4b606849eb334bfb19888319ac40ba955d8eae61dd3a7e2204ac52ea76e5e301`
+
+候选规范监控v2 OpenAPI 快照 SHA-256：`57985edb074683be169ea674a8b4c503402fad7a6b55917b839dff566c181464`
+
+候选生成TypeScript SHA-256：兼容版`bc2d5f7e0315490d47d98593843110ce5fab62e4f0c815df6ab1bddeacee8f4b`；规范版`622ead01cea642615080d4e0df75e3567498d2b807fb82fa60ef706d4e1a88a2`。

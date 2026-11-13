@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from scripts import generate_frontend_types as generator
+from tests.contract.test_plan_readiness_api_projection import readiness_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 COVERAGE_PATH = "/api/v1/plan-versions/{version_id}/source-coverage"
@@ -107,6 +108,7 @@ def _assert_source_surface(document):
 
 def condition_selection_projection(document):
     """Remove only H04's exact selector, preserving every unrelated change."""
+    document = readiness_projection(document)
     schemas = document["components"]["schemas"]
     command = schemas["DailyFactCommand"]
     assert "conditionSelection" in command["properties"]
