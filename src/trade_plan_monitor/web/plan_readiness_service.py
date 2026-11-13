@@ -9,28 +9,41 @@ from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from uuid import UUID
 
-from trade_plan_monitor.decision.models import OfficialCloseEvaluationTarget
+from trade_plan_monitor.decision.models import (
+    IntradayEvaluationTarget,
+    OfficialCloseEvaluationTarget,
+)
 from trade_plan_monitor.decision.unified_conditions import UnifiedConditionEvidence, requires_daily
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.plan_codec import load_plan_json
+from trade_plan_monitor.domain.plan_models import activation_is_eligible_on
 from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan, condition_leaves
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
 from trade_plan_monitor.runtime.status_authority import (
     ConditionInputStamp,
     RuntimeReadAuthority,
-    condition_completion_matches,
     condition_confirmation_inputs,
     condition_daily_admission_matches,
+    condition_market_completion_matches,
     condition_status_target,
 )
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
 from trade_plan_monitor.state.daily_repository import DailyRepository
-from trade_plan_monitor.state.daily_state_models import DailyEvaluationState, DailySignalState
+from trade_plan_monitor.state.daily_state_models import (
+    DailyEvaluationState,
+    DailyRiskState,
+    DailySignalState,
+)
 from trade_plan_monitor.state.events import MonitorEventLog
 from trade_plan_monitor.state.p3_accounting import capital_storage_ready
 from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
 from trade_plan_monitor.state.p3_current import current_capital_inputs
+from trade_plan_monitor.state.readiness_fact_inputs import (
+    recorded_fact_inputs_current,
+    recorded_quote_controls_current,
+    recorded_signal_facts_current,
+)
 from trade_plan_monitor.state.repositories import MarketReferenceRepository, PlanRepository
 from trade_plan_monitor.state.source_action_authority import _condition_evidence_matches
 from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
@@ -143,7 +156,8 @@ def _validated_evidence(condition, evidence):
 
 def _current_quote(value, now):
     """Validate the already admitted quote's original times, without extending them."""
-    if not value.current or not value.owner_current or value.native.quote is None:
+    if (not value.current or not value.owner_current or value.native.quote is None
+            or not value.quote_controls_current):
         return None
     quote = value.native.quote
     if quote.symbol != value.plan.symbol or quote.quote_at.date() != now.date():
@@ -157,7 +171,32 @@ def _current_quote(value, now):
 def _rule_sources_current(value, kind, rule, now):
     return bool(value.current and value.source.summary.current_review_bound and (
         not _unverified_daily_dependency(value.plan, kind, rule, now)
-        or value.daily_current))
+        or value.daily_current) and value.fact_current.get((kind,
+            risk_identity(rule) if kind == "RISK_BRANCH" else rule.rule_id), False))
+
+
+def _inventory_matches(value):
+    return bool(value.native is not None and value.inventory is not None
+        and value.native.inventory.model_dump(mode="json") == value.inventory)
+
+
+def _risk_inputs_match(value):
+    for identity, row in value.risks.items():
+        if row is None:
+            return False
+        original = [risk for risk in value.native.risks if risk_identity(risk) == identity]
+        if len(original) != 1:
+            return False
+        current = DailyRiskState.model_validate_json(canonical({**row["payload"],
+                                                                "revision": row["revision"]}))
+        if current != original[0]:
+            return False
+        branch = next(rule for kind, key, _, rule in value.owners
+            if kind == "RISK_BRANCH" and key == identity)
+        if (getattr(branch, "condition", None) is not None
+                and not value.fact_current.get(("RISK_BRANCH", identity), False)):
+            return False
+    return not value.risks or value.native.risk_input_known is True
 
 
 def _money_inputs_ready(value, requirements, rule, now, *, kind):
@@ -199,6 +238,7 @@ def _money_results(value, kind, rule, requirements, execution, now):
     policy = getattr(rule, "pretrade_policy", None)
     if (kind != "ORDINARY_RULE" or rule.side != "BUY" or policy is None
             or not _rule_sources_current(value, kind, rule, now)
+            or requirements.inventory and not _inventory_matches(value)
             or _current_quote(value, now) is None):
         return None, None
     native = value.native
@@ -303,7 +343,10 @@ def _execution(value, kind, identity, side, rule, now, *, inputs_ready, observe,
     elif window == "CLOSED":
         eligible, reason = False, "OUTSIDE_EXECUTION_SESSION"
     elif (window == "OPEN" and _rule_sources_current(value, kind, rule, now) and inputs_ready
-            and _current_quote(value, now) is not None and signal == original):
+            and _current_quote(value, now) is not None and signal == original
+            and _inventory_matches(value) and _risk_inputs_match(value)
+            and value.signal_fact_current.get(signal.signal_id, False)
+            and value.exception_current.get(signal.signal_id, False)):
         complete = True
         if side == "BUY" and value.plan.schema_version == 9:
             capital = signal.capital_execution
@@ -367,6 +410,77 @@ def _leaves(condition, path, evidence=None, *, reason="DEPENDENCY_UNVERIFIED", r
         evidence_refs=(reference,)),)
 
 
+def _recorded_fact_sources(work, details, plan, owners, native, now):
+    current, bindings = {}, []
+    for kind, identity, _, rule in owners:
+        root, target = None, None
+        if kind == "ORDINARY_RULE":
+            rows = [row for row in native.ordinary_evaluations or () if row.rule_id == identity]
+            if len(rows) == 1:
+                root, target = rows[0].evidence, rows[0].target
+            elif not rows:
+                decisions = [row for row in native.market_linkage or () if row.rule_id == identity]
+                if len(decisions) == 1:
+                    decision = decisions[0]
+                    if (decision.confirmation
+                            and decision.content_hash == details.content_hash
+                            and decision.evidence_cutoff == native.evaluated_at
+                            and rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE"
+                            and native.daily_evidence is not None
+                            and decision.decision_session
+                            == native.daily_evidence.bars[-1].trade_date):
+                        root = decision.confirmation[0]
+                        target = OfficialCloseEvaluationTarget(trade_date=decision.decision_session)
+        elif kind == "ALERT_RULE":
+            rows = [row for row in native.alerts if row.rule_id == identity]
+            if len(rows) == 1 and len(rows[0].evidence) == 1:
+                root = UnifiedConditionEvidence.model_validate_json(canonical(rows[0].evidence[0]))
+                target = (OfficialCloseEvaluationTarget(trade_date=rows[0].confirmed_trade_date)
+                    if rule.confirmation.kind == "OFFICIAL_DAILY_CLOSE" else
+                    IntradayEvaluationTarget(bucket_end=rows[0].confirmed_at))
+        elif kind == "RISK_BRANCH" and rule.kind == "SEVERE_TECHNICAL":
+            rows = [row for row in native.risk_evaluations or ()
+                if row.risk_identity == identity and row.kind == rule.kind]
+            if len(rows) == 1:
+                root, target = rows[0].evidence, rows[0].target
+        condition = getattr(rule, "condition", None)
+        has_reviewed_fact = bool(condition is not None and any(
+            node.type == "REVIEWED_FACT" for node in condition_leaves(condition)))
+        # Staged native rules may skip confirmation once their signal exists.
+        # An absent root cannot create a current condition observation, but a
+        # pure market rule has no manual inputs to invalidate that signal.
+        valid, binding = ((True, ()) if condition is not None and not has_reviewed_fact else
+            (False, ()) if condition is None or root is None else
+            recorded_fact_inputs_current(work, details=details, owner_kind=kind,
+                owner_id=identity, condition=condition, evidence=root, snapshot=native,
+                target=target, now=now))
+        current[(kind, identity)] = valid
+        bindings.append((kind, identity, valid, binding))
+    return current, tuple(bindings)
+
+
+def _exception_sources(work, reads, signals, now):
+    from trade_plan_monitor.runtime.market_exceptions import exception_signal_current
+
+    current, bindings = {}, []
+    for identity, row in signals.items():
+        if row is None:
+            current[identity] = False
+            continue
+        payload = row["payload"]
+        calculation = (payload.get("market_linkage") or {}).get("calculation", {})
+        approval = calculation.get("approval")
+        refs = ()
+        if approval is not None:
+            if not approval.get("candidate_id") or not approval.get("event_id"):
+                current[identity] = False
+                continue
+            refs = tuple(reads.daily(approval[key]) for key in ("candidate_id", "event_id"))
+        current[identity] = exception_signal_current(work.daily, payload, now)
+        bindings.append((identity, current[identity], canonical(refs)))
+    return current, tuple(bindings)
+
+
 def _load(session, authority, version_id, now):
     work = SimpleNamespace(
         daily=DailyRepository(session, clock=lambda: now, id_factory=_no_write_identity),
@@ -411,7 +525,9 @@ def _load(session, authority, version_id, now):
         and evidence.activation_revision == active.revision
         and evidence.plan_family == "CONDITION_PLAN")
     proof = None if evidence is None else evidence.completion
-    target = condition_status_target(session, plan=plan, now=now, proof=proof)
+    # The expired locked-risk extension has no bounded readiness proof in this slice.
+    target = (condition_status_target(session, plan=plan, now=now, proof=proof)
+              if activation_is_eligible_on(plan.activation, now.date()) else None)
     bound_head = bool(bound_active and payload and payload["plan_version_id"] == version_id
         and payload["plan_hash"] == details.plan_hash
         and payload["content_hash"] == details.content_hash
@@ -448,12 +564,20 @@ def _load(session, authority, version_id, now):
         and native.runtime_generation == str(authority.generation)
         and proof.configuration_revision == authority.configuration_revision
         and target is not None and proof.target == evidence.target == target
-        and condition_completion_matches(session, proof=proof, snapshot=payload, now=now)
-        and DailyAccounting(work.daily).evaluation_current(payload,
-            plan_version_id=version_id, content_hash=details.content_hash,
-            inventory=inventory or {"symbol": plan.symbol, "revision": 0}, now=now,
-            require_daily_data=inventory is not None))
+        and condition_market_completion_matches(session, proof=proof, snapshot=payload, now=now))
     prior_current = current
+    fact_current, fact_binding = (_recorded_fact_sources(work, details, plan, owners, native, now)
+        if current else ({}, ()))
+    quote_controls_current, quote_binding = (recorded_quote_controls_current(work,
+        details=details, snapshot=native, now=now) if current and (
+            native.signals or any(req.quote for req in requirements)) else (False, ()))
+    exception_current, exception_binding = _exception_sources(work, reads, signals, now)
+    signal_fact_current, signal_fact_binding = {}, []
+    for identity, row in signals.items():
+        valid, binding = ((False, ()) if row is None or native is None else
+            recorded_signal_facts_current(work, plan=plan, signal=row["payload"], snapshot=native))
+        signal_fact_current[identity] = valid
+        signal_fact_binding.append((identity, valid, binding))
     daily_current = bool(native and native.daily_evidence is not None
         and condition_daily_admission_matches(proof=proof, snapshot=payload, now=now,
             admission=None if evidence is None else evidence.daily_admission))
@@ -467,7 +591,8 @@ def _load(session, authority, version_id, now):
         active, activation, canonical(inventory), None if book is None else book.model_dump_json(),
         None if head is None else (head["id"], head["revision"], canonical(payload)),
         current, target, confirmation, canonical(capital_inputs), canonical(signals),
-        calendar_open,
+        canonical(signal_fact_binding),
+        calendar_open, fact_binding, quote_binding, exception_binding,
         tuple((identity, None if row is None else (row["revision"], canonical(row["payload"])))
               for identity, row in risks.items()))
     return SimpleNamespace(source=source, details=details, plan=plan, owners=owners,
@@ -478,6 +603,9 @@ def _load(session, authority, version_id, now):
         native=native, proof=proof, target=target, current=current, prior_current=prior_current,
         confirmation=confirmation, binding=binding,
         owner_current=owner_current,
+        fact_current=fact_current, quote_controls_current=quote_controls_current,
+        exception_current=exception_current,
+        signal_fact_current=signal_fact_current,
         daily_current=daily_current,
         activation_revision=active.revision if bound_active else None, risks=risks)
 
@@ -627,7 +755,9 @@ def read_plan_readiness(session, authority, version_id, now):
             daily_unverified = (actual_target is not None
                 and _unverified_daily_dependency(value.plan, kind, rule, now)
                 and not value.daily_current)
-            if daily_unverified:
+            fact_unverified = (actual_target is not None
+                and not value.fact_current.get((kind, identity), False))
+            if daily_unverified or fact_unverified:
                 # Keep actual target/time as historical observation metadata,
                 # but do not promote its old root/leaves into CURRENT truth.
                 evidence, root = None, None
@@ -638,7 +768,7 @@ def read_plan_readiness(session, authority, version_id, now):
                     evidence, reference=evaluation_ref)
             rule_observation = None if value.native is None else data_observation
             expected_confirmation = None
-            if actual_target is not None and not daily_unverified:
+            if actual_target is not None and not daily_unverified and not fact_unverified:
                 rule_observation = observation(evaluation_ref,
                     availability="CURRENT" if value.current else "CACHED",
                     expires=_rule_expiry(now, context_expiry=context_expiry, target=actual_target,
@@ -705,6 +835,9 @@ def read_plan_readiness(session, authority, version_id, now):
                 rule_observation = observation(evaluation_ref,
                     "current-daily-and-factor-owner-unverified", availability="CACHED",
                     as_of=actual_time)
+            elif fact_unverified:
+                rule_observation = observation(evaluation_ref,
+                    "recorded-fact-inputs-unverified", availability="CACHED", as_of=actual_time)
             if kind == "RISK_BRANCH" and value.risks.get(identity) is not None:
                 row = value.risks[identity]
                 rule_observation = observation("risk:" + row["id"], availability="CACHED")

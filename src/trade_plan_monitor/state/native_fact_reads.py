@@ -110,7 +110,7 @@ def _candidate(reads, identity, *, plan, target, condition, day, now, observatio
     return row
 
 
-def _read(work, target, day, now, observation):
+def _read(work, target, day, now, observation, require_complete_observation_union):
     reads = ActionOwnerReader(work)
     if not _index_matches(reads.session):
         return None
@@ -180,6 +180,11 @@ def _read(work, target, day, now, observation):
             reads.session, group, missing_time=True
         ):
             return None
+        if require_complete_observation_union:
+            where, params = _where(group[:7])
+            where += f" AND ({NATIVE_FACT_GROUP_SQL[7]})>''"
+            if _select(reads.session, "1", where, params, "LIMIT 1").first() is not None:
+                return None
         where, params = _where(group)
         where += f" AND ({NATIVE_FACT_AVAILABLE_SQL})<=:now_key"
         params["now_key"] = now.isoformat(timespec="microseconds")
@@ -245,6 +250,7 @@ def read_native_trade_date_fact_candidates(
     trade_date: date,
     now: datetime,
     observation: ReviewedFactObservation | None = None,
+    require_complete_observation_union: bool = False,
 ) -> tuple[dict, ...] | None:
     """Read latest ties from the exact targeted and applicable legacy native groups.
 
@@ -254,17 +260,22 @@ def read_native_trade_date_fact_candidates(
     proof that the supplied observation is actual and the selected union complete.
     Other observation groups are outside this requested candidate union. SIGNAL
     leaves and legacy applicability that depends on signal presence are unsupported.
+    With no requested observation, require_complete_observation_union additionally
+    proves by exact index-prefix range that no other observation group exists.
     """
     try:
         target = ReviewedFactTarget.model_validate_json(target.model_dump_json())
         if type(trade_date) is not date or now.utcoffset() != timedelta(hours=8):
+            return None
+        if require_complete_observation_union and observation is not None:
             return None
         if observation is not None:
             observation = ReviewedFactObservation.model_validate_json(observation.model_dump_json())
             if observation.bar_end.date() != trade_date or observation.bar_end > now:
                 return None
         with work.daily.session.no_autoflush:
-            return _read(work, target, trade_date, now, observation)
+            return _read(work, target, trade_date, now, observation,
+                         require_complete_observation_union)
     except (
         SourceCoverageAuthorityError,
         RepositoryError,
