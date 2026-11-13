@@ -180,7 +180,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T17 — Project current readiness through read-only authority
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify.
 - Depends on: T16.
 - Files/scope: T17a service/GET/router and `test_plan_readiness_api.py` (at most5); T17b both generated profiles and projection test (5); T17c paired API-owner appendix and contract regression (at most4).
 - T17a1 private adapter accepted in `6557855` (R67), three files only. Full T17 stays open: complete ordinary output, independent targets/normal waits, bounded original-risk provenance, money/execution/notification projections and public/generated companions still need their separately frozen slices.
@@ -391,3 +391,5 @@ T17a22 actual dual-profile owner/lifetime wiring is accepted as `5b35edd` (R92):
 T17a23 public exact-version GET is locally accepted as `0dbdd07` (R93):26 unique passes. Generator check remains pending/exit1 with four H04 artifacts unchanged. Next add exact readiness projection ahead of unchanged historical checks, adapt the integration baseline to fixed H04 projection, synchronize paired API-owner records and generate all four outputs. T17/C06 remains unchecked; original03/04/C05/final and0/48 stay unchanged.
 
 T17a24 exact projection and paired API-owner records accepted as `9fd55c4` (R94):69 unique passes. Next T17a25 writes four candidate artifacts plus narrow pre-projection path registration, then actual generated-contract checks. T17/C06 and original03/04/C05/final gates remain open;0/48 unchanged.
+
+T17 engineering handoff accepted in R95: `76031b3` materializes exact contracts,35 unique passes (13 overlap witha24); `0680a57` records paired API acceptance. Owned read/API/contracts are delivered with declared UNKNOWN limits. Next T18 UI then T19 joint scenarios; C06 and original03/04/C05/final remain open,0/48 unchanged.
