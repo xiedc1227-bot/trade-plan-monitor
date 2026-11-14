@@ -28,6 +28,7 @@ from trade_plan_monitor.runtime.request_control import (
     RequestControlErrorCode,
     TushareOperation,
 )
+from trade_plan_monitor.runtime.scheduler import DeadlineKind
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import RuntimeLiveness, TradingCalendar
 from trade_plan_monitor.state.runtime_recovery import ProviderRecoveryRepository, RecoveryCheckpoint
@@ -103,31 +104,64 @@ def _run_process(root: str, phase: int, later_429: bool, outcomes) -> None:
     production.create_tushare_client = lambda _config: sdk
 
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         initial_checkpoints = _checkpoint_rows(database)
         initial_business = _business_rows(database)
         composition = monitor_composition.create_monitor_composition(
             config_path=base / "config/app.yaml", database_path=database,
         )
+        native_runtime = composition._runtime
+        original_execute = native_runtime._execute_deadline
+        automatic_entered = asyncio.Event()
+        selected_automatic, delegated_units = [], []
+
+        async def isolate_automatic_unit(deadline):
+            task = asyncio.current_task()
+            from_runner = task is native_runtime._schedule_owner
+            if from_runner:
+                assert task is composition._runner_task
+                assert composition._runtime is native_runtime
+                selected_automatic.append(deadline)
+                automatic_entered.set()
+                await native_runtime._heartbeat_stop.wait()
+                assert native_runtime._stopping
+                return None
+            delegated_units.append((from_runner, deadline))
+            return await original_execute(deadline)
+
+        native_runtime._execute_deadline = isolate_automatic_unit
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime, runner = composition._runtime, composition._runner_task
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             control = runtime._request_controller
             generation = composition.health().runtime_generation
             assert pipeline is not None and pipeline._stock_semantics is None
             assert pipeline._index_semantics is not None and control.repository_bound
-            # The real owner reaches its actual scheduler wait, but this test
-            # releases zero automatic duties. R18 covers automatic eight-scope wakes.
+            # Persistence acceptance isolates an already-selected native unit;
+            # natural automatic dispatch is covered by the separate running tests.
             async with asyncio.timeout(3):
-                while not clock.sleep_calls:
-                    assert runner is not None and not runner.done()
-                    await asyncio.sleep(0.005)
+                if phase == 1:
+                    await automatic_entered.wait()
+                    assert len(selected_automatic) == 1
+                    assert selected_automatic[0].kind is DeadlineKind.INDEX_PERMISSION
+                    assert selected_automatic[0].due_at == NOW
+                else:
+                    while not clock.sleep_calls:
+                        assert runner is not None and not runner.done()
+                        await asyncio.sleep(0.005)
+                    assert not automatic_entered.is_set()
+            assert sum(from_runner for from_runner, _ in delegated_units) == 0
             assert clock.released_sleeps == 0
             assert sdk.calls == []
             assert _checkpoint_rows(database) == initial_checkpoints
             assert _business_rows(database) == initial_business
             before = initial_business
+            common_work = _named_permission_work(
+                runtime, pipeline.run_permission_maintenance_unit,
+            )
             reservations, units = [], []
             original_factory = pipeline._permission_probe_reservation_callback
 
@@ -161,6 +195,8 @@ def _run_process(root: str, phase: int, later_429: bool, outcomes) -> None:
                 assert not composition._runner_failed and not composition._restart_pending
                 assert not runtime.unexpected_run_exit and not runner.done()
                 assert not runtime._work_tasks
+                assert sum(from_runner for from_runner, _ in delegated_units) == 0
+                assert clock.released_sleeps == 0
                 assert control.active_count == control.waiting_count == 0
                 assert _business_rows(database) == before
 
@@ -168,7 +204,7 @@ def _run_process(root: str, phase: int, later_429: bool, outcomes) -> None:
                 assert at >= clock.now()
                 clock.current = at
                 prior_calls, prior_reservations = len(sdk.calls), len(reservations)
-                assert await pipeline.run_permission_maintenance_unit() is expected_result
+                assert await common_work() is expected_result
                 sdk_delta = len(sdk.calls) - prior_calls
                 ack_delta = len(reservations) - prior_reservations
                 assert sdk_delta == ack_delta == expected_calls <= 1
@@ -245,6 +281,8 @@ def _run_process(root: str, phase: int, later_429: bool, outcomes) -> None:
             }
             await composition.stop()
             assert runner.done() and composition._runner_task is None
+            assert sum(from_runner for from_runner, _ in delegated_units) == 0
+            assert len(selected_automatic) == int(phase == 1)
             assert composition._runtime is runtime and not runtime._work_tasks
             assert not composition._runner_failed and not composition._restart_pending
             assert not runtime.unexpected_run_exit and not runtime.cleanup_failed

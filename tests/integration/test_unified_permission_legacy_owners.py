@@ -59,9 +59,10 @@ async def _case(tmp_path, monkeypatch, operation, *, winner=None, checkpoint_fai
         persisted_calendar=True,
     )
     try:
-        assert (await composition.start()).status.value == "RUNNING"
+        assert (await composition._runtime.start()).status.value == "RUNNING"
+        assert composition._runner_task is None
         runtime = composition._runtime
-        pipeline = runtime._probe_capabilities.__self__._pipeline
+        pipeline = runtime._liveness_owner._pipeline
         control = runtime._request_controller
         _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
         if winner is not None:
@@ -88,10 +89,15 @@ def test_named_nonwinner_cannot_reserve_or_probe(tmp_path, monkeypatch, operatio
         )
         async with _case(tmp_path, monkeypatch, operation, winner=winner) as case:
             _, pipe, control, sdk = case
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             assert pipe.select_due_permission_probe().operation is winner
             raw = control.raw_permission_retry_at(operation)
             calls, rotation = tuple(sdk.calls), pipe._permission_rotation_state
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.SKIPPED
+            assert await permission_work() is PermissionMaintenanceResult.SKIPPED
             assert control.raw_permission_retry_at(operation) == raw
             assert tuple(sdk.calls) == calls
             assert pipe._permission_rotation_state is rotation
@@ -108,6 +114,11 @@ def test_checkpoint_save_failure_propagates_without_ack(tmp_path, monkeypatch, o
             operation,
             checkpoint_failure=True,
         ) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             failure = RecoveryCheckpointError("offline checkpoint failure")
             calls, rotation = tuple(sdk.calls), pipe._permission_rotation_state
 
@@ -117,7 +128,7 @@ def test_checkpoint_save_failure_propagates_without_ack(tmp_path, monkeypatch, o
             with monkeypatch.context() as local:
                 local.setattr(ProviderRecoveryRepository, "save", fail)
                 with pytest.raises(RecoveryCheckpointError) as caught:
-                    await getattr(pipe, name)()
+                    await permission_work()
             assert caught.value is failure
             assert pipe._permission_rotation_state is rotation
             assert tuple(sdk.calls) == calls
@@ -130,6 +141,11 @@ def test_calendar_preserves_original_work_key_backoff(tmp_path, monkeypatch):
     async def scenario():
         operation, name = OWNERS[0]
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             control._backoff = (timedelta(seconds=300),)
 
             def late_failure():
@@ -148,7 +164,7 @@ def test_calendar_preserves_original_work_key_backoff(tmp_path, monkeypatch):
             assert floor == raw + timedelta(seconds=1)
             pipe._clock.current = raw
             calls = len(sdk.calls)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.FAILED
+            assert await permission_work() is PermissionMaintenanceResult.FAILED
             assert len(sdk.calls) == calls
             assert control.is_permission_blocked(operation)
             assert control.backoff_until("permission:trade_cal:SSE") == floor
@@ -157,7 +173,7 @@ def test_calendar_preserves_original_work_key_backoff(tmp_path, monkeypatch):
             assert next_due >= floor
             assert pipe._permission_rotation_state.last_operation is operation
             pipe._clock.current = next_due
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.PROBED
+            assert await permission_work() is PermissionMaintenanceResult.PROBED
             assert len(sdk.calls) == calls + 1
             assert not control.is_permission_blocked(operation)
 
@@ -168,10 +184,15 @@ def test_calendar_preserves_original_work_key_backoff(tmp_path, monkeypatch):
 def test_missing_market_window_defers_without_reservation(tmp_path, monkeypatch, operation, name):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             pipe._permission_market_window = None
             calls, raw = tuple(sdk.calls), control.raw_permission_retry_at(operation)
             expected = pipe._clock.now() + timedelta(seconds=30)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.DEFERRED
+            assert await permission_work() is PermissionMaintenanceResult.DEFERRED
             assert control.raw_permission_retry_at(operation) == raw
             assert tuple(sdk.calls) == calls
             assert pipe.next_permission_probe_due_at() == expected
@@ -179,7 +200,7 @@ def test_missing_market_window_defers_without_reservation(tmp_path, monkeypatch,
                 assert pipe.next_historical_index_permission_due_at() == expected
             elif operation is TushareOperation.INDEX_REALTIME_MINUTES:
                 assert pipe.next_realtime_index_permission_due_at() == expected
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.SKIPPED
+            assert await permission_work() is PermissionMaintenanceResult.SKIPPED
             assert pipe.next_permission_probe_due_at() == expected
 
     asyncio.run(scenario())
@@ -196,6 +217,11 @@ def test_actual_wrapper_final_boundary_rejects_after_resolver(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             calls = tuple(sdk.calls)
             provider = (
                 pipe.provider
@@ -217,7 +243,7 @@ def test_actual_wrapper_final_boundary_rejects_after_resolver(
                 return resolved
 
             monkeypatch.setattr(_CertifiedTushareClient, "prepare_permission_endpoint", prepare)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.DEFERRED
+            assert await permission_work() is PermissionMaintenanceResult.DEFERRED
             assert tuple(sdk.calls) == calls
             assert control.is_permission_blocked(operation)
             assert control.raw_permission_retry_at(operation) > pipe._clock.now()
@@ -237,6 +263,11 @@ def test_fatal_controller_errors_keep_original_identity(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, _control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             calls = tuple(sdk.calls)
             failure = RequestControlError(RequestControlErrorCode(code), operation, attempts=2)
             cause = ValueError("offline original cause")
@@ -247,7 +278,7 @@ def test_fatal_controller_errors_keep_original_identity(
 
             monkeypatch.setattr(TushareRequestController, "recheck_permission", fail)
             with pytest.raises(RequestControlError) as caught:
-                await getattr(pipe, name)()
+                await permission_work()
             assert caught.value is failure
             assert caught.value.attempts == 2 and caught.value.__cause__ is cause
             assert tuple(sdk.calls) == calls
@@ -266,7 +297,12 @@ def test_real_final_entry_accepts_equality_and_never_reads_worker_sql(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (composition, pipe, control, sdk):
-            state = composition._runtime._probe_capabilities.__self__
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
+            state = composition._runtime._liveness_owner
             attribute, valid = _valid_sdk_response(sdk, operation)
             monkeypatch.setattr(sdk, attribute, valid)
             calls = len(sdk.calls)
@@ -291,7 +327,7 @@ def test_real_final_entry_accepts_equality_and_never_reads_worker_sql(
 
             monkeypatch.setattr(asyncio, "current_task", current_task)
             try:
-                assert await getattr(pipe, name)() is PermissionMaintenanceResult.PROBED
+                assert await permission_work() is PermissionMaintenanceResult.PROBED
             finally:
                 event.remove(state._engine, "before_cursor_execute", sql_owner)
             assert len(sdk.calls) == calls + 1
@@ -312,6 +348,11 @@ def test_market_reserve_equality_precedes_permission_reservation(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             captured = pipe._clock.now()
             pipe._permission_market_window = lambda _now, _horizon: (
                 (captured + timedelta(seconds=offset), True),
@@ -320,7 +361,7 @@ def test_market_reserve_equality_precedes_permission_reservation(
             monkeypatch.setattr(sdk, attribute, valid)
             raw, calls = control.raw_permission_retry_at(operation), len(sdk.calls)
             admitted = offset > 31.25
-            assert await getattr(pipe, name)() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.PROBED
                 if admitted
                 else PermissionMaintenanceResult.DEFERRED
@@ -345,6 +386,11 @@ def test_final_authority_io_precedes_single_sample_and_actual_sdk(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             resolved, final_io, entered = Event(), Event(), Event()
             samples = []
             authority_name = (
@@ -387,7 +433,7 @@ def test_final_authority_io_precedes_single_sample_and_actual_sdk(
             monkeypatch.setattr(type(pipe._clock), "now", now)
             monkeypatch.setattr(sdk, attribute, response)
             calls = len(sdk.calls)
-            assert await getattr(pipe, name)() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.DEFERRED if late else PermissionMaintenanceResult.PROBED
             )
             assert final_io.is_set() and entered.is_set() is not late
@@ -406,6 +452,11 @@ def test_real_resolver_consumes_reserve_before_final_sdk_entry(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             captured = pipe._clock.now()
             market = captured + timedelta(seconds=32)
             pipe._permission_market_window = lambda _now, _horizon: ((market, True),)
@@ -418,7 +469,7 @@ def test_real_resolver_consumes_reserve_before_final_sdk_entry(
                 return resolved
 
             monkeypatch.setattr(_CertifiedTushareClient, "prepare_permission_endpoint", prepare)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.DEFERRED
+            assert await permission_work() is PermissionMaintenanceResult.DEFERRED
             assert tuple(sdk.calls) == calls
             assert control.raw_permission_retry_at(operation) > raw
             assert pipe._permission_rotation_state.last_operation is operation
@@ -439,11 +490,16 @@ def test_revoked_calendar_token_is_replaced_only_after_fresh_evidence(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             old = pipe._calendar_revoked
             old.set()
             attribute, valid = _valid_sdk_response(sdk, operation)
             monkeypatch.setattr(sdk, attribute, valid)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.PROBED
+            assert await permission_work() is PermissionMaintenanceResult.PROBED
             assert old.is_set()
             assert pipe._calendar_revoked is not old
             assert not pipe._calendar_revoked.is_set()
@@ -461,7 +517,12 @@ def test_response_sql_failure_propagates_without_permission_clear(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (composition, pipe, control, sdk):
-            engine = composition._runtime._probe_capabilities.__self__._engine
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
+            engine = composition._runtime._liveness_owner._engine
             attribute, valid = _valid_sdk_response(sdk, operation)
             returned = Event()
             failure = RuntimeError("offline response SQL failure")
@@ -479,7 +540,7 @@ def test_response_sql_failure_propagates_without_permission_clear(
             event.listen(engine, "before_cursor_execute", fail_sql)
             try:
                 with pytest.raises(RuntimeError) as caught:
-                    await getattr(pipe, name)()
+                    await permission_work()
                 assert caught.value is failure
                 assert control.is_permission_blocked(operation)
                 assert pipe._permission_rotation_state.last_operation is operation
@@ -498,6 +559,11 @@ def test_response_exact_original_anchor_cannot_be_replaced_by_another_valid_day(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             candidate = pipe.select_due_permission_probe()
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR - timedelta(days=3))
             attribute, valid = _valid_sdk_response(sdk, operation)
@@ -509,7 +575,7 @@ def test_response_exact_original_anchor_cannot_be_replaced_by_another_valid_day(
                 return valid(kwargs)
 
             monkeypatch.setattr(sdk, attribute, held)
-            task = asyncio.create_task(getattr(pipe, name)())
+            task = asyncio.create_task(permission_work())
             try:
                 assert await asyncio.to_thread(entered.wait, 5)
                 with pipe._permission_session_factory.begin() as session:
@@ -542,6 +608,11 @@ def test_calendar_token_changed_during_evidence_read_cannot_rearm(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             old = pipe._calendar_revoked
             old.set()
             original = pipe._permission_probe_state
@@ -556,7 +627,7 @@ def test_calendar_token_changed_during_evidence_read_cannot_rearm(
                 return result
 
             monkeypatch.setattr(pipe, "_permission_probe_state", read)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.DEFERRED
+            assert await permission_work() is PermissionMaintenanceResult.DEFERRED
             assert old.is_set()
             assert tuple(sdk.calls) == calls
             assert control.raw_permission_retry_at(operation) == raw
@@ -575,6 +646,11 @@ def test_cancelled_sdk_late_success_keeps_block_and_physical_slot(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             attribute, valid = _valid_sdk_response(sdk, operation)
             entered, release = Event(), Event()
 
@@ -601,7 +677,7 @@ def test_cancelled_sdk_late_success_keeps_block_and_physical_slot(
                     "prepare_permission_endpoint",
                     held_resolver,
                 )
-            task = asyncio.create_task(getattr(pipe, name)())
+            task = asyncio.create_task(permission_work())
             try:
                 assert await asyncio.to_thread(entered.wait, 5)
                 task.cancel()
@@ -643,6 +719,11 @@ def test_real_known_provider_failure_is_scoped_without_business_writes(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             factory = pipe._permission_session_factory
 
             def rows():
@@ -668,7 +749,7 @@ def test_real_known_provider_failure_is_scoped_without_business_writes(
 
             monkeypatch.setattr(sdk, attribute, fail)
             count = len(sdk.calls)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.FAILED
+            assert await permission_work() is PermissionMaintenanceResult.FAILED
             assert len(sdk.calls) == count + 1
             assert control.is_permission_blocked(operation)
             assert control.permission_retry_at(operation) >= pipe._clock.now() + timedelta(
@@ -686,6 +767,11 @@ def test_callback_failure_retains_reservation_and_propagates(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             raw, calls = control.raw_permission_retry_at(operation), tuple(sdk.calls)
 
             def callback(_candidate):
@@ -698,7 +784,7 @@ def test_callback_failure_retains_reservation_and_propagates(
 
             monkeypatch.setattr(pipe, "_permission_probe_reservation_callback", callback)
             with pytest.raises(PermissionReservationCallbackError):
-                await getattr(pipe, name)()
+                await permission_work()
             assert control.raw_permission_retry_at(operation) > raw
             assert tuple(sdk.calls) == calls
             assert pipe._permission_rotation_state.last_operation is None
@@ -715,7 +801,12 @@ def test_requested_cancellation_during_response_snapshot_cannot_clear(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (composition, pipe, control, sdk):
-            engine = composition._runtime._probe_capabilities.__self__._engine
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
+            engine = composition._runtime._liveness_owner._engine
             attribute, valid = _valid_sdk_response(sdk, operation)
             returned = Event()
             owner = None
@@ -733,7 +824,7 @@ def test_requested_cancellation_during_response_snapshot_cannot_clear(
             monkeypatch.setattr(sdk, attribute, response)
             event.listen(engine, "after_cursor_execute", after_sql)
             try:
-                owner = asyncio.create_task(getattr(pipe, name)())
+                owner = asyncio.create_task(permission_work())
                 with pytest.raises(asyncio.CancelledError):
                     await owner
                 assert control.is_permission_blocked(operation)
@@ -752,7 +843,12 @@ def test_requested_cancellation_in_final_authority_io_cannot_clear(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (composition, pipe, control, sdk):
-            engine = composition._runtime._probe_capabilities.__self__._engine
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
+            engine = composition._runtime._liveness_owner._engine
             attribute, valid = _valid_sdk_response(sdk, operation)
             returned, anchor_read, cancelled = Event(), Event(), Event()
             authority_name = (
@@ -786,7 +882,7 @@ def test_requested_cancellation_in_final_authority_io_cannot_clear(
             monkeypatch.setattr(pipe, authority_name, authority)
             event.listen(engine, "after_cursor_execute", after_sql)
             try:
-                owner = asyncio.create_task(getattr(pipe, name)())
+                owner = asyncio.create_task(permission_work())
                 with pytest.raises(asyncio.CancelledError):
                     await owner
                 assert cancelled.is_set()
@@ -810,6 +906,11 @@ def test_response_borrowed_session_is_not_closed_or_rolled_back(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             original = pipe._permission_session_factory
             attribute, valid = _valid_sdk_response(sdk, operation)
             returned = Event()
@@ -827,7 +928,7 @@ def test_response_borrowed_session_is_not_closed_or_rolled_back(
                     borrowed if returned.is_set() else original()
                 )
                 with pytest.raises(ValueError, match="fresh session"):
-                    await getattr(pipe, name)()
+                    await permission_work()
                 assert borrowed.get_transaction() is transaction
                 assert borrowed.scalar(text("SELECT 1")) == 1
                 assert control.is_permission_blocked(operation)
@@ -839,7 +940,12 @@ def test_response_borrowed_session_is_not_closed_or_rolled_back(
 def test_response_uses_one_new_explicit_begin_snapshot(tmp_path, monkeypatch, operation, name):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (composition, pipe, _control, sdk):
-            engine = composition._runtime._probe_capabilities.__self__._engine
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
+            engine = composition._runtime._liveness_owner._engine
             attribute, valid = _valid_sdk_response(sdk, operation)
             returned, statements = Event(), []
 
@@ -855,7 +961,7 @@ def test_response_uses_one_new_explicit_begin_snapshot(tmp_path, monkeypatch, op
             monkeypatch.setattr(sdk, attribute, response)
             event.listen(engine, "before_cursor_execute", record)
             try:
-                assert await getattr(pipe, name)() is PermissionMaintenanceResult.PROBED
+                assert await permission_work() is PermissionMaintenanceResult.PROBED
             finally:
                 event.remove(engine, "before_cursor_execute", record)
             anchor_queries = [
@@ -876,11 +982,16 @@ def test_calendar_closed_anchor_is_not_an_open_history_anchor(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             with pipe._permission_session_factory.begin() as session:
                 session.execute(delete(TradingCalendar).where(TradingCalendar.cal_date != ANCHOR))
                 session.execute(update(TradingCalendar).values(is_open=False))
             calls = len(sdk.calls)
-            result = await getattr(pipe, name)()
+            result = await permission_work()
             calendar = operation is TushareOperation.TRADING_CALENDAR
             assert result is (
                 PermissionMaintenanceResult.PROBED
@@ -914,7 +1025,23 @@ def test_concurrent_named_owners_serialize_real_reservations_and_keep_other_curs
             attribute, valid = _valid_sdk_response(sdk, OWNERS[1][0])
             monkeypatch.setattr(sdk, attribute, valid)
             start = len(sdk.calls)
-            results = await asyncio.gather(*(getattr(pipe, name)() for _, name in OWNERS))
+            from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
+
+            runtime = pipe._status_progress_owner
+            methods = tuple(getattr(pipe, name) for _, name in OWNERS)
+            now = pipe._clock.now()
+            units = tuple(MarketDeadline(
+                kind=DeadlineKind.INDEX_PERMISSION, trade_date=now.date(), due_at=now,
+            ) for _ in methods)
+
+            async def permission_unit(deadline):
+                for unit, method in zip(units, methods, strict=True):
+                    if deadline is unit:
+                        return await method()
+                raise AssertionError("unexpected concurrent permission unit")
+
+            runtime._run_deadline = permission_unit
+            results = await asyncio.gather(*(runtime._execute_deadline(unit) for unit in units))
             assert results == [PermissionMaintenanceResult.PROBED] * 3
             assert [name for name, _ in sdk.calls[start:]] == [
                 "trade_cal",
@@ -937,10 +1064,19 @@ def test_named_owner_waits_for_shared_lock_before_any_reservation(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             raw, calls = control.raw_permission_retry_at(operation), tuple(sdk.calls)
             async with pipe._permission_maintenance_lock:
-                task = asyncio.create_task(getattr(pipe, name)())
-                await asyncio.sleep(0)
+                task = asyncio.create_task(permission_work())
+                for _ in range(12):
+                    await asyncio.sleep(0)
+                    if task.done() or pipe._permission_maintenance_lock._waiters:
+                        break
+                assert len(pipe._permission_maintenance_lock._waiters) == 1
                 assert not task.done()
                 assert control.raw_permission_retry_at(operation) == raw
                 assert tuple(sdk.calls) == calls
@@ -960,6 +1096,11 @@ def test_durable_queue_veto_acknowledges_once_without_moving_other_cursors(
 ):
     async def scenario():
         async with _case(tmp_path, monkeypatch, operation) as (_, pipe, control, sdk):
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                pipe._status_progress_owner, getattr(pipe, name),
+            )
             prior = pipe._permission_rotation_state
             calls = tuple(sdk.calls)
             raw = control.raw_permission_retry_at(operation)
@@ -979,7 +1120,7 @@ def test_durable_queue_veto_acknowledges_once_without_moving_other_cursors(
                 return await original(controller, op, function, **kwargs)
 
             monkeypatch.setattr(TushareRequestController, "recheck_permission", queue_veto)
-            assert await getattr(pipe, name)() is PermissionMaintenanceResult.DEFERRED
+            assert await permission_work() is PermissionMaintenanceResult.DEFERRED
             assert acknowledgements == [operation]
             current = pipe._permission_rotation_state
             assert current.last_operation is operation

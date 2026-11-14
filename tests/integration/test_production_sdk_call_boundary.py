@@ -43,14 +43,17 @@ SCOPES = {
 
 @asynccontextmanager
 async def boundary_case(tmp_path, monkeypatch, scope):
+    from test_production_daily_limits_permission_maintenance import _named_permission_work
+
     composition, sdk, _ = _composition(
         tmp_path, monkeypatch, active_plan=True, include_index=True, persisted_calendar=True,
         plan=current_mixed_plan(),
     )
     try:
-        await composition.start()
+        await composition._runtime.start()
+        assert composition._runner_task is None
         runtime = composition._runtime
-        pipeline = runtime._probe_capabilities.__self__._pipeline
+        pipeline = runtime._liveness_owner._pipeline
         control = runtime._request_controller
         _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
         await _block(control, scope)
@@ -64,7 +67,8 @@ async def boundary_case(tmp_path, monkeypatch, scope):
         yield SimpleNamespace(
             pipeline=pipeline, control=control, clock=runtime._clock, sdk=sdk, provider=provider,
             database=tmp_path / "monitor.sqlite3", captured=runtime._clock.now(),
-            invoke=getattr(pipeline, SCOPES[scope][1]), original_client=provider._client,
+            invoke=_named_permission_work(runtime, getattr(pipeline, SCOPES[scope][1])),
+            original_client=provider._client,
         )
     finally:
         await composition.stop()
@@ -93,12 +97,18 @@ def test_current_plan_never_opens_retired_daily_limits_sdk_boundary(
             persisted_calendar=True, plan=plan,
         )
         try:
-            await composition.start()
+            await composition._runtime.start()
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             operation = TushareOperation.DAILY_LIMITS
+            from test_production_daily_limits_permission_maintenance import _named_permission_work
+
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_limits_permission,
+            )
             await _block(control, operation)
             runtime._clock.current += timedelta(seconds=301)
             raw = control.raw_permission_retry_at(operation)
@@ -111,7 +121,7 @@ def test_current_plan_never_opens_retired_daily_limits_sdk_boundary(
             monkeypatch.setattr(pipeline, "_permission_probe_reservation_callback", forbidden)
             assert not any(candidate.operation is operation
                 for candidate in pipeline.permission_probe_candidates())
-            assert await pipeline._maybe_recheck_daily_limits_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.DEFERRED
             )
             assert control.raw_permission_retry_at(operation) == raw

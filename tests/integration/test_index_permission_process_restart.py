@@ -25,6 +25,7 @@ from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
 from trade_plan_monitor.runtime.production import PermissionMaintenanceResult
 from trade_plan_monitor.runtime.request_control import TushareOperation
+from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import (
     AlertEvent,
@@ -87,9 +88,10 @@ def _run_installed_process(
             database_path=base / "monitor.sqlite3",
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
             control = runtime._request_controller
@@ -98,10 +100,32 @@ def _run_installed_process(
             first = TushareOperation(first_scope)
             second = REALTIME if first is HISTORICAL else HISTORICAL
 
+            methods = {
+                HISTORICAL: pipeline._maybe_recheck_historical_index_permission,
+                REALTIME: pipeline._maybe_recheck_realtime_index_permission,
+                None: pipeline.run_permission_maintenance_unit,
+            }
+            units = {}
+
+            async def permission_unit(deadline):
+                for scope, unit in units.items():
+                    if deadline is unit:
+                        return await methods[scope]()
+                raise AssertionError("unexpected index permission unit")
+
+            runtime._run_deadline = permission_unit
+
+            async def invoke(scope):
+                assert not runtime._work_tasks
+                now = clock.now()
+                unit = MarketDeadline(
+                    kind=DeadlineKind.INDEX_PERMISSION, trade_date=now.date(), due_at=now,
+                )
+                units[scope] = unit
+                return await runtime._execute_deadline(unit)
+
             async def probe(scope):
-                if scope is HISTORICAL:
-                    return await pipeline._maybe_recheck_historical_index_permission()
-                return await pipeline._maybe_recheck_realtime_index_permission()
+                return await invoke(scope)
 
             if phase == 1:
                 assert control.is_permission_blocked(HISTORICAL)
@@ -127,7 +151,7 @@ def _run_installed_process(
                     )
                     expected = (PermissionMaintenanceResult.PROBED if operation is first
                                 else PermissionMaintenanceResult.FAILED)
-                    assert await pipeline.run_permission_maintenance_unit() is expected
+                    assert await invoke(None) is expected
                     assert [name for name, _ in sdk.calls[before:]] == [ENDPOINTS[operation]]
                     assert control.is_permission_blocked(operation) is (operation is second)
                     assert (
@@ -227,6 +251,9 @@ def test_migrated_index_permissions_recheck_independently_across_processes(
                 "identity": _provider_recovery_identity("https://example.test"),
                 "retry": (NOW - timedelta(seconds=1)).isoformat(),
             })
+        with engine.connect() as connection:
+            starting_version = connection.execute(text("SELECT version_num FROM alembic_version"))
+            assert starting_version.scalar_one() == "0022_runtime_liveness"
     finally:
         engine.dispose()
     _write_configuration_and_evidence(tmp_path, observed_at=NOW, include_index=True)
@@ -241,7 +268,7 @@ def test_migrated_index_permissions_recheck_independently_across_processes(
     try:
         with engine.connect() as connection:
             version = connection.execute(text("SELECT version_num FROM alembic_version"))
-            assert version.scalar_one() == "0027_simulation_capital"
+            assert version.scalar_one() == "0029_native_fact_lookup"
             assert connection.execute(text(
                 "SELECT scope_key, retry_at FROM provider_recovery_checkpoint "
                 "WHERE kind='permission'"
