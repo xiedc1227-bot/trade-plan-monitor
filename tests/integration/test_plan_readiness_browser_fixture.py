@@ -861,3 +861,134 @@ def test_fixed_notification_controls_are_loopback_one_shot_and_accept_no_selecte
             assert state.inspect() == before
 
     asyncio.run(scenario())
+
+
+def test_official_wait_preflight_uses_actual_composition_and_original_completion(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from tests.integration.test_plan_readiness_scenarios import observation_only
+
+    async def scenario():
+        async with workspace(tmp_path, scenario="official-wait") as (state, transport):
+            case = state.case
+            pipeline = case.composition._runtime._liveness_owner._pipeline
+            _, _, plans = pipeline.runtime_status_snapshot()
+            proof = plans[0].completion
+            assert proof is not None
+            owner = case.composition._runtime._liveness_owner
+            guard = SimpleNamespace(
+                pipeline=pipeline, engine=owner._engine, sdk=case.sdk, dispatcher=owner._dispatcher
+            )
+            before_get = state.inspect()
+            with observation_only(guard, monkeypatch):
+                response = await request(transport, state.readiness_path)
+            assert state.inspect() == before_get
+            assert response.status_code == 200, response.text
+            from trade_plan_monitor.web.plan_readiness_models import ReadinessAssessment
+
+            observed = ReadinessAssessment.model_validate_json(response.content)
+            with case.composition._runtime._liveness_owner.unit_of_work_factory() as work:
+                original = work.daily.get(proof.input_stamp.immutable_record_id)
+            data = {
+                "readiness": observed.model_dump(mode="json", by_alias=True),
+                "nativeRecord": original,
+                "nativeProofTarget": proof.target.model_dump(mode="json"),
+                "nativeCompletionId": proof.input_stamp.immutable_record_id,
+                "sdkCalls": case.sdk.calls,
+            }
+            (tmp_path / "official-owner-preflight.json").write_text(
+                json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+            )
+            rule = next(row for row in observed.rules if row.facts.owner_kind == "ORDINARY_RULE")
+            assert rule.state == "WAITING_OFFICIAL_CONFIRMATION", data
+            assert rule.facts.expected_confirmation.target.trade_date == case.clock.now().date()
+            assert rule.facts.evaluated_target.trade_date < case.clock.now().date()
+            assert rule.facts.root_outcome == "UNSATISFIED"
+            assert rule.facts.leaves[0].evidence_refs == (proof.input_stamp.immutable_record_id,)
+
+    asyncio.run(scenario())
+
+
+def test_missing_required_prior_official_input_never_becomes_future_wait(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from tests.integration.test_plan_readiness_scenarios import observation_only
+
+    async def scenario():
+        async with workspace(tmp_path, scenario="official-wait") as (state, transport):
+            owner = state.case.composition._runtime._liveness_owner
+            guard = SimpleNamespace(
+                pipeline=owner._pipeline,
+                engine=owner._engine,
+                sdk=state.case.sdk,
+                dispatcher=owner._dispatcher,
+            )
+            initial = (await request(transport, state.readiness_path)).json()
+            assert initial["rules"][0]["state"] == "WAITING_OFFICIAL_CONFIRMATION"
+            before = state.inspect()
+            invalid = await request(
+                transport,
+                state.prefix + "/official-history-loss",
+                method="POST",
+                body={"tradeDate": "2026-09-04"},
+            )
+            assert invalid.status_code == 422
+            async with httpx.ASGITransport(state.app, client=("192.0.2.1", 50000)) as foreign:
+                assert (
+                    await request(
+                        foreign, state.prefix + "/official-history-loss", method="POST", body={}
+                    )
+                ).status_code == 403
+            assert state.inspect() == before
+            loss = await request(
+                transport, state.prefix + "/official-history-loss", method="POST", body={}
+            )
+            assert loss.status_code == 200, loss.text
+            missing = loss.json()
+            assert (
+                missing["removedTradeDate"] == missing["preparedOfficialTradeDate"] == "2026-09-07"
+            )
+            assert missing["providerRows"]["request"]["end_date"] == "20260907"
+            assert missing["providerRows"]["request"]["ts_code"] == state.case.plan.symbol
+            assert missing["providerRows"]["before"] - missing["providerRows"]["after"] == 1
+            assert missing["preparedSeriesLastDate"] == "2026-09-04"
+            assert missing["nativeDailyAdmissionPresent"] is False
+            # Native denial is a target/last-row mismatch, not an invented error code.
+            assert missing["blockers"] == []
+            after_loss = state.inspect()
+            with observation_only(guard, monkeypatch):
+                response = await request(transport, state.readiness_path)
+                repeated = await request(transport, state.readiness_path)
+            assert response.status_code == repeated.status_code == 200
+            lost = response.json()
+            assert lost == repeated.json()
+            assert state.inspect() == after_loss
+            assert lost["rules"][0]["state"] == "UNKNOWN"
+            assert lost["rules"][0]["reason"] == "AUTHORITY_UNAVAILABLE"
+            assert lost["rules"][0]["facts"].get("expectedConfirmation") is None
+            assert lost["summary"] not in {"READY_FOR_MONITORING", "WAITING_EXPECTED_CONFIRMATION"}
+            assert after_loss["completionRecordId"] == before["completionRecordId"]
+            assert after_loss["storage"] == before["storage"]
+            assert (
+                await request(
+                    transport, state.prefix + "/official-history-loss", method="POST", body={}
+                )
+            ).status_code == 409
+            (tmp_path / "official-missing-evidence.json").write_text(
+                json.dumps(
+                    {
+                        "initial": initial,
+                        "before": before,
+                        "loss": loss.json(),
+                        "lost": lost,
+                        "after": after_loss,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+    asyncio.run(scenario())

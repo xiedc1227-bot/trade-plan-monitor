@@ -48,10 +48,11 @@ async function stop(server: ChildProcess, request: APIRequestContext, base: stri
   expect(server.signalCode, "no forced termination").toBeNull();
 }
 
-const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean; notificationJourney: boolean }>({
+const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean; notificationJourney: boolean; officialJourney: boolean }>({
   manualLeaves: [false, { option: true }],
   notificationJourney: [false, { option: true }],
-  readinessFixture: async ({ page, context, request, manualLeaves, notificationJourney }, use, testInfo) => {
+  officialJourney: [false, { option: true }],
+  readinessFixture: async ({ page, context, request, manualLeaves, notificationJourney, officialJourney }, use, testInfo) => {
     const port = await freePort(), base = `http://127.0.0.1:${port}`;
     // Playwright's normal outputDir is OS temp. SQLite stays in an independently
     // fresh project-local directory regardless of reporter/output overrides.
@@ -60,7 +61,7 @@ const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boole
     const root = await mkdtemp(join(databaseParent, "case-"));
     const server = spawn(join(repo, ".venv/Scripts/python.exe"), ["-X", "utf8", "-m",
       "tests.browser.plan_readiness_server", "--port", String(port), "--root", root,
-      ...(manualLeaves ? ["--scenario", "manual-leaves"] : notificationJourney ? ["--scenario", "notifications"] : [])],
+      ...(manualLeaves ? ["--scenario", "manual-leaves"] : notificationJourney ? ["--scenario", "notifications"] : officialJourney ? ["--scenario", "official-wait"] : [])],
     { cwd: repo, windowsHide: true, env: { ...process.env, PYTHONUTF8: "1" } });
     let log = "", phase = "RUNNING";
     const record = (value: unknown) => { log = (log + String(value)).slice(-65536); };
@@ -545,6 +546,80 @@ for (const loss of ["closed", "expired"] as const) {
     }
   });
 }
+
+const officialTest = recoveryTest.extend({ officialJourney: true });
+officialTest("native official-close waiting preserves prior proof and rejects missing prior input", async ({ page, request, readinessFixture: fixture, calendarTransition }, testInfo) => {
+  const snapshots: Record<string, unknown> = {};
+  const daily = (value: ReadinessAssessment) => value.rules.find(row => row.facts.ownerKind === "ORDINARY_RULE")!;
+  const refresh = async () => {
+    const response = page.waitForResponse(result => result.url().endsWith("/monitor-readiness"));
+    await pane(page).getByRole("button", { name: "重新读取监控就绪状态", exact: true }).click();
+    const actual = await response;
+    expect(actual.status(), await actual.text()).toBe(200);
+    return await actual.json() as ReadinessAssessment;
+  };
+  const screenshot = async (label: string) => {
+    await page.setViewportSize({ width: 1280, height: 2800 });
+    await pane(page).getByRole("heading", { name: "逐规则监控就绪", exact: true }).scrollIntoViewIfNeeded();
+    await page.clock.runFor(64);
+    const image = testInfo.outputPath(`official-${label}.png`);
+    await pane(page).screenshot({ path: image });
+    await testInfo.attach(`official-${label}`, { path: image, contentType: "image/png" });
+  };
+  try {
+    const initialRead = page.waitForResponse(result => result.url().endsWith("/monitor-readiness"));
+    await page.goto(fixture.base + fixture.initial.planUrl);
+    const initialResponse = await initialRead;
+    expect(initialResponse.status()).toBe(200);
+    const initial: ReadinessAssessment = await initialResponse.json(); snapshots.initial = initial;
+    const row = daily(initial), facts = row.facts;
+    expect(row.state).toBe("WAITING_OFFICIAL_CONFIRMATION");
+    expect(facts.rootOutcome).toBe("UNSATISFIED");
+    expect(facts.evaluatedTarget).toEqual({ kind: "OFFICIAL_CLOSE", trade_date: "2026-09-07" });
+    expect(facts.expectedTarget).toEqual({ kind: "OFFICIAL_CLOSE", trade_date: "2026-09-08" });
+    expect(facts.expectedConfirmation).toMatchObject({
+      target: facts.expectedTarget, expectedAt: "2026-09-08T15:00:00+08:00", priorInputsComplete: true,
+    });
+    expect(facts.leaves[0]!.evidenceRefs).toEqual([fixture.initial.completionRecordId]);
+    expect(initial.authorityGranted).toBe(false);
+    const rendered = pane(page).getByRole("heading", { name: `普通规则 · ${facts.ownerId}`, exact: true }).locator("..");
+    const originalPane = await pane(page).elementHandle();
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    await expect(rendered).toContainText("正常等待官方确认");
+    await expect(rendered).toContainText("预期目标：官方收盘 · 交易日期 2026-09-08");
+    await expect(rendered).toContainText("实际已评估目标：官方收盘 · 交易日期 2026-09-07");
+    await expect(rendered).toContainText("2026-09-08 15:00:00+08:00");
+    expect(await refresh()).toEqual(initial);
+    expect(await fixture.inspect()).toEqual(fixture.initial);
+    await screenshot("waiting");
+    calendarTransition.open = true;
+    const loss = await command(request, fixture, prefix + "/official-history-loss", {});
+    expect(loss.status(), await loss.text()).toBe(200);
+    const missing = await loss.json(); snapshots.loss = missing;
+    expect(missing).toMatchObject({ removedTradeDate: "2026-09-07", preparedOfficialTradeDate: "2026-09-07",
+      preparedSeriesLastDate: "2026-09-04", nativeDailyAdmissionPresent: false, blockers: [],
+      providerRows: { request: { ts_code: "003043.SZ", end_date: "20260907" } } });
+    expect(missing.providerRows.before - missing.providerRows.after).toBe(1);
+    const lost = await refresh(); snapshots.lost = lost;
+    expect(daily(lost).state).toBe("UNKNOWN");
+    expect(daily(lost).reason).toBe("AUTHORITY_UNAVAILABLE");
+    expect(daily(lost).facts.expectedConfirmation).toBeNull();
+    expect(lost.rules.find(row => row.facts.ownerKind === "ALERT_RULE")!.state).toBe("CONDITION_FALSE");
+    expect(lost.summary).not.toBe("READY_FOR_MONITORING");
+    await expect(rendered).not.toContainText("正常等待官方确认");
+    await expect(rendered).toContainText("尚未确定");
+    expect(await refresh()).toEqual(lost);
+    const after = await fixture.inspect(); snapshots.after = after;
+    expect(after.completionRecordId).toBe(fixture.initial.completionRecordId);
+    expect(after.storage).toEqual(fixture.initial.storage);
+    await page.clock.runFor(2000); calendarTransition.open = false;
+    expect(await originalPane!.evaluate(element => element.isConnected)).toBe(true);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    await screenshot("missing-history");
+  } finally {
+    await testInfo.attach("native-official-wait-evidence", { contentType: "application/json", body: JSON.stringify({ initialInspection: fixture.initial, snapshots }, null, 2) });
+  }
+});
 
 test("readiness fits four widths and exposes native keyboard focus and local WCAG evidence", async ({ page, readinessFixture: fixture }, testInfo) => {
   await open(page, fixture);

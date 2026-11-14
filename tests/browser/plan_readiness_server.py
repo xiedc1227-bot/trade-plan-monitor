@@ -47,6 +47,42 @@ class SourceCase(ApiValue):
     scenario: Literal["repair", "contexts"]
 
 
+def official_wait_plan():
+    """Accepted mixed-current seam: daily comparison plus independent minute alert."""
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    raw = current_sample_plan().model_dump(mode="json")
+    minute = raw["ordinary_rules"][0]["condition"]
+    raw["ordinary_rules"][0].update(
+        independent_signal={"mode": "ONCE_PER_RULE"},
+        confirmation={"kind": "OFFICIAL_DAILY_CLOSE"},
+        execution_window="NEXT_EXCHANGE_SESSION_ONLY",
+        condition={
+            "type": "DAILY_PRICE_COMPARE",
+            "field": "close",
+            "offset": 0,
+            "comparator": "LT",
+            "reference": {
+                "mode": "FIXED",
+                "value": "4000",
+                "unit": "FEN",
+                "as_of": "2026-09-07",
+                "source": "fixture",
+            },
+        },
+    )
+    raw["alert_rules"] = [
+        {
+            "kind": "RISK_ALERT",
+            "rule_id": "minute-alert",
+            "condition": minute,
+            "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+        }
+    ]
+    raw["monitoring"] = unified_payload()["monitoring"]
+    return UnifiedTradePlan.model_validate(raw)
+
+
 class ReadinessFixture:
     prefix = PREFIX
 
@@ -68,6 +104,7 @@ class ReadinessFixture:
         self.calendar_restored = False
         self.notification_checks = 0
         self.notification_closed = False
+        self.official_input_missing = False
 
     def guard_connections(self):
         def guard(native):
@@ -113,7 +150,7 @@ class ReadinessFixture:
 
 
 def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario="automatic"):
-    if scenario not in {"automatic", "manual-leaves", "notifications"}:
+    if scenario not in {"automatic", "manual-leaves", "notifications", "official-wait"}:
         raise ValueError("Unknown fixed browser scenario")
     root = root.resolve()
     if not root.is_relative_to(REPOSITORY / ".pytest_cache"):
@@ -164,7 +201,20 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
             ]
             raw["ordinary_rules"] = []
             plan = UnifiedTradePlan.model_validate(raw)
-        state.case = installed(root, state.patch, 2, plan=plan)
+        if scenario == "official-wait":
+            from tests.integration.test_live_pipeline_acceptance import NOW
+            from tests.integration.test_s3_missed_close_kill_restart import CurrentCloseSDK
+
+            state.case = installed(
+                root,
+                state.patch,
+                2,
+                plan=official_wait_plan(),
+                sdk_factory=CurrentCloseSDK,
+                activation_at=NOW.replace(day=7, hour=9, minute=0, second=0),
+            )
+        else:
+            state.case = installed(root, state.patch, 2, plan=plan)
         if scenario == "notifications":
             dispatcher = state.case.composition._runtime._liveness_owner._dispatcher
             native_dispatch = dispatcher.dispatch_pending
@@ -261,6 +311,29 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                                 if response.status_code != 200:
                                     raise AssertionError(response.text)
                                 state.manual_inputs.append(response.json())
+                    if scenario == "official-wait":
+                        async with httpx.ASGITransport(
+                            app, client=("127.0.0.1", 50000)
+                        ) as transport:
+                            response = await transport.handle_async_request(
+                                httpx.Request(
+                                    "POST",
+                                    f"http://127.0.0.1:{port}/api/v1/simulation-position-confirmations",
+                                    json={
+                                        "symbol": state.case.plan.symbol,
+                                        "coreQty": 0,
+                                        "tacticalQty": 0,
+                                        "expectedRevision": 0,
+                                    },
+                                    headers={
+                                        "X-Monitor-Contract-Version": "2",
+                                        "Idempotency-Key": "official-wait-zero-position",
+                                    },
+                                )
+                            )
+                            await response.aread()
+                            if response.status_code != 200:
+                                raise AssertionError(response.text)
                     async with asyncio.timeout(30):
                         state.version = await start_current(state.case)
                         # Let the next native minute duty perform its real
@@ -322,6 +395,41 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                 await state.case.clock.drive(state.case.clock.now() + timedelta(minutes=1))
             state.notification_checks = 1
             return state.inspect()
+
+        @app.post(PREFIX + "/official-history-loss", dependencies=guards)
+        async def official_history_loss(command: NextTarget):
+            if scenario != "official-wait" or state.official_input_missing:
+                raise ApiError(ApiErrorCode.CONFLICT)
+            pipeline = state.case.composition._runtime._liveness_owner._pipeline
+            inputs = pipeline.daily_evaluations._current_inputs[state.case.plan.symbol]
+            day = inputs.series.bars[-1].trade_date
+            native_daily = state.case.sdk.daily
+            counts = {}
+
+            def missing_prior(**kwargs):
+                frame = native_daily(**kwargs)
+                kept = frame.loc[frame["trade_date"].astype(str) != day.strftime("%Y%m%d")]
+                counts.update(before=len(frame), after=len(kept), request=dict(kwargs))
+                return kept.reset_index(drop=True)
+
+            state.patch.setattr(state.case.sdk, "daily", missing_prior)
+            prepared = await pipeline.prepare_daily_inputs(
+                state.case.plan, state.case.clock.now(), day, inputs.minute_prefix
+            )
+            state.official_input_missing = True
+            return {
+                "removedTradeDate": day,
+                "providerRows": counts,
+                "preparedOfficialTradeDate": prepared.official_trade_date,
+                "preparedSeriesLastDate": None
+                if prepared.series is None
+                else prepared.series.bars[-1].trade_date,
+                "nativeDailyAdmissionPresent": pipeline._daily_source_current(
+                    state.case.plan, state.case.clock.now()
+                )
+                is not None,
+                "blockers": prepared.data_blockers,
+            }
 
         @app.post(PREFIX + "/notification-close", dependencies=guards)
         async def notification_close(command: NextTarget):
@@ -509,7 +617,9 @@ def main():
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument(
-        "--scenario", choices=("automatic", "manual-leaves", "notifications"), default="automatic"
+        "--scenario",
+        choices=("automatic", "manual-leaves", "notifications", "official-wait"),
+        default="automatic",
     )
     args = parser.parse_args()
     app = create_fixture_app(

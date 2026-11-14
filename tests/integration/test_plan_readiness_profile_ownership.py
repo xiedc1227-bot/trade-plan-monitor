@@ -53,7 +53,7 @@ async def start_current(case):
     return plans[0].plan_version_id
 
 
-def installed(tmp_path, monkeypatch, profile, *, plan=None):
+def installed(tmp_path, monkeypatch, profile, *, plan=None, sdk_factory=None, activation_at=None):
     clock = _DeadlineClock(NOW.replace(minute=4, second=0))
     if plan is None:
         raw = current_sample_plan().model_dump(mode="json")
@@ -64,7 +64,8 @@ def installed(tmp_path, monkeypatch, profile, *, plan=None):
         }]
         raw["ordinary_rules"] = []
         plan = UnifiedTradePlan.model_validate(raw)
-    seed_current(tmp_path, clock=ControlledClock(NOW.replace(hour=9, minute=0, second=0)),
+    seed_current(tmp_path, clock=ControlledClock(
+        NOW.replace(hour=9, minute=0, second=0) if activation_at is None else activation_at),
                  plan=plan)
     engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
     try:
@@ -75,7 +76,10 @@ def installed(tmp_path, monkeypatch, profile, *, plan=None):
         engine.dispose()
     config = _write_configuration_and_evidence(tmp_path, observed_at=clock.now(),
                                               include_index=False)
-    sdk = OfflineSDK(clock, (plan.symbol,))
+    if sdk_factory is None:
+        sdk = OfflineSDK(clock, (plan.symbol,))
+    else:
+        sdk = sdk_factory(clock, (plan.symbol,))
     make_controller = composition_module.create_live_tushare_request_controller
 
     def controller_factory(*, clock, require_repository_binding=False):
