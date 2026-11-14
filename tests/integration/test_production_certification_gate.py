@@ -215,7 +215,8 @@ def test_production_index_runs_without_stock_semantics_or_certification(
             persisted_calendar=True,
         )
         try:
-            startup = await composition.start()
+            runtime = composition._runtime
+            startup = await runtime.start()
             state = composition._runtime._liveness_owner
             assert state._pipeline is not None
             assert startup.status is RuntimeServiceStatus.RUNNING
@@ -229,7 +230,7 @@ def test_production_index_runs_without_stock_semantics_or_certification(
                 due_at=NOW,
                 bar_end=NOW.replace(second=0),
             )
-            await state.run_deadline(deadline)
+            await runtime._execute_deadline(deadline)
             assert any(name in {"idx_mins", "rt_idx_min_daily"} for name, _ in sdk.calls)
             assert not any(
                 name in {"trade_cal", "stk_limit", "daily", "rt_min", "stk_mins"}
@@ -310,14 +311,15 @@ def test_index_only_deadline_never_delivers_old_stock_alert(tmp_path, monkeypatc
                 )
 
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._liveness_owner
             with state.unit_of_work_factory() as work:
                 work.alerts.enqueue_recoverable(_payload(992))
                 work.commit()
             state._dispatcher._channels = (Channel(),)
             monkeypatch.setattr(CurrentDeliveryAdmission, "__call__", lambda *_: True)
-            await state.run_deadline(
+            await runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=NOW.date(),
@@ -405,9 +407,10 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
         sdk.rt_idx_min_daily = fail_index
         sdk.index_daily = fail_index
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._liveness_owner
-            await state.run_deadline(
+            await runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=NOW.date(),
@@ -432,18 +435,17 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
             database_path=tmp_path / "monitor.sqlite3",
         )
         try:
-            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = replacement._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             state = replacement._runtime._liveness_owner
             assert state.next_index_recovery_at() == expected_due
             sdk.clock.current = expected_due
             before = len(sdk.calls)
-            await state.run_deadline(
-                MarketDeadline(
-                    kind=DeadlineKind.INDEX_RECOVERY,
-                    trade_date=NOW.date(),
-                    due_at=expected_due,
-                )
-            )
+            deadline = runtime._scheduler.next_deadline()
+            assert deadline is not None
+            assert deadline.kind is DeadlineKind.INDEX_RECOVERY
+            assert deadline.due_at == expected_due
+            await runtime.run_once()
             assert state.next_index_recovery_at() != expected_due
             assert len(sdk.calls) > before
             assert all(
@@ -473,7 +475,8 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
             persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             control = composition._runtime._request_controller
             for operation in (
                 TushareOperation.CURRENT_DAY_MINUTES,
@@ -525,7 +528,8 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
                 )
 
         try:
-            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = replacement._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             state = replacement._runtime._liveness_owner
             providers = state.health_details().providers
             assert all(
@@ -538,7 +542,7 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
                 work.commit()
             state._dispatcher._channels = (Channel(),)
             monkeypatch.setattr(CurrentDeliveryAdmission, "__call__", lambda *_: True)
-            await state.run_deadline(
+            await runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=NOW.date(),
@@ -608,15 +612,16 @@ def test_cold_reference_cache_does_not_repeat_a_committed_deadline(tmp_path, mon
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._run_deadline.__self__
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            state = runtime._liveness_owner
             deadline = MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
                 trade_date=NOW.date(),
                 due_at=NOW,
                 bar_end=NOW.replace(second=0),
             )
-            results = await state.run_deadline(deadline)
+            results = await runtime._execute_deadline(deadline)
             assert len(results) == 1 and not results[0].duplicate
             assert results[0].snapshot["minute_target"] == deadline.bar_end.isoformat()
             assert results[0].snapshot["activation_revision"] == 1
@@ -627,7 +632,7 @@ def test_cold_reference_cache_does_not_repeat_a_committed_deadline(tmp_path, mon
                     session.scalar(select(func.count()).select_from(AlertEvent)),
                 )
             state._pipeline._reference_key = None
-            duplicate = await state.run_deadline(deadline)
+            duplicate = await runtime._execute_deadline(deadline)
             assert len(duplicate) == 1 and duplicate[0].duplicate
             assert duplicate[0].snapshot == results[0].snapshot
             assert sum(name == "rt_min" for name, _ in sdk.calls) == sum(
