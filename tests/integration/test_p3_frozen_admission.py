@@ -19,6 +19,8 @@ from trade_plan_monitor.backtest.p3_replay_input import (
     CapitalReplayProgram,
 )
 from trade_plan_monitor.backtest.pagination import HmacCursorSigner
+from trade_plan_monitor.backtest.preparation_service import PreparationService
+from trade_plan_monitor.backtest.preparation_store import PreparationStore
 from trade_plan_monitor.backtest.result_service import BacktestResultService
 from trade_plan_monitor.backtest.results import BacktestResultStore
 from trade_plan_monitor.web.backtest_pagination import BacktestApiCursorSigner
@@ -33,9 +35,12 @@ def test_real_prepared_http_admission_freezes_missing_cost_unknown_and_replays_s
     market, _, _, _, _, _ = market_fixture(tmp_path, chain.plan, chain.route)
     opening = frozen_opening(chain)
     run = capital_loop_input(chain, openings=(opening,))
-    prepared = prepared_fixture(tmp_path, chain.plan, chain.now, run.initial_account)
+    preparation_now = chain.now
+    prepared = prepared_fixture(tmp_path, chain.plan, preparation_now, run.initial_account)
     jobs = BacktestJobRepository(tmp_path / "admission-results.sqlite",
         clock=lambda: datetime.combine(TUESDAY, time(10, 0, 12), SH))
+    preparations = PreparationService(
+        PreparationStore(tmp_path / "preparation.sqlite", clock=lambda: preparation_now), jobs)
     results = BacktestResultStore(jobs.database_path)
     coordinator = Coordinator()
     signer = HmacCursorSigner(b"x"*32)
@@ -44,12 +49,16 @@ def test_real_prepared_http_admission_freezes_missing_cost_unknown_and_replays_s
         assert identity == prepared.preparation_id
         return prepared
 
+    async def read_preparation_service():
+        return preparations
+
     service = _ProductionBacktestService(plan_snapshot_reader=None, market_store=market,
         repository=jobs, result_store=results,
         dataset_service=BacktestDatasetService(store=market, cursor_signer=signer),
         result_service=BacktestResultService(store=results, cursor_signer=signer),
         coordinator=coordinator, result_cursor_signer=signer,
-        job_cursor_signer=BacktestApiCursorSigner(b"x"*32), prepared_plan_reader=read_prepared)
+        job_cursor_signer=BacktestApiCursorSigner(b"x"*32), prepared_plan_reader=read_prepared,
+        preparation_service_reader=read_preparation_service)
     client = _client(operation_service=service)
     try:
         values = payload(prepared, **(dict(
@@ -87,5 +96,13 @@ def test_real_prepared_http_admission_freezes_missing_cost_unknown_and_replays_s
                 chain.plan.symbol).retained_basis_fen == 20000
             assert work.daily.list(symbol=chain.plan.symbol, kind="SIMULATION") == ()
     finally:
-        client.close()
-        asyncio.run(service.stop_metadata())
+        try:
+            client.close()
+        finally:
+            async def cleanup():
+                try:
+                    await service.stop_metadata()
+                finally:
+                    await preparations.stop()
+
+            asyncio.run(cleanup())
