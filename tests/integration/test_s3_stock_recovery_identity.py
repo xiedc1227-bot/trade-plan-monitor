@@ -147,7 +147,15 @@ def test_scheduled_stock_recovery_reactivation_rejects_old_facts_and_resumes(
         try:
             await run.start()
             generation = run.composition.health().runtime_generation
-            assert len(run.sdk.entries("rt_min_daily")) == 1
+            entries = run.sdk.entries("rt_min_daily")
+            assert sorted(run.sdk.stock_trace) == [
+                ("rt_min_daily", SYMBOL, "startup", NOW),
+                ("rt_min_daily", sibling.symbol, "startup", NOW),
+            ]
+            assert len(entries) == len(run.sdk.stock_trace) == 2
+            assert [(entry["phase"], entry["entered_at"]) for entry in entries] == [
+                (phase, entered_at.isoformat()) for _, _, phase, entered_at in run.sdk.stock_trace
+            ]
             runtime = run.composition._runtime
             real_run_deadline = runtime._run_deadline
             pipeline = real_run_deadline.__self__._pipeline

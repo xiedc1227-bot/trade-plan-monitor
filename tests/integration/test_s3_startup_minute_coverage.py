@@ -26,6 +26,7 @@ from trade_plan_monitor.market_data.models import MinuteBar
 from trade_plan_monitor.market_data.sessions import expected_minute_ends
 from trade_plan_monitor.notifications.channels import ChannelDeliveryResult, DeliveryChannel
 from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+from trade_plan_monitor.runtime.scheduler import DeadlineKind
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import RuntimeLiveness
 from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
@@ -259,7 +260,7 @@ class _Run:
         )
         monkeypatch.setattr(production, "create_tushare_client", lambda _config: self.sdk)
 
-    async def start(self):
+    async def start(self, *, startup_only=False):
         sent = self.sent
 
         class FakeChannel:
@@ -275,9 +276,36 @@ class _Run:
             database_path=self.database,
         )
         self.composition._runtime._dispatcher._channels = (FakeChannel(),)
+        if startup_only:
+            native_runtime = self.composition._runtime
+            original_execute = native_runtime._execute_deadline
+            automatic_entered = asyncio.Event()
+            selected, delegated = [], []
+
+            async def isolate_automatic_unit(deadline):
+                task = asyncio.current_task()
+                if task is native_runtime._schedule_owner:
+                    assert task is self.composition._runner_task
+                    assert self.composition._runtime is native_runtime
+                    selected.append(deadline)
+                    automatic_entered.set()
+                    await native_runtime._heartbeat_stop.wait()
+                    assert native_runtime._stopping
+                    return None
+                delegated.append(deadline)
+                return await original_execute(deadline)
+
+            native_runtime._execute_deadline = isolate_automatic_unit
         health = await self.composition.start()
         assert health.status is RuntimeServiceStatus.RUNNING, health
-        await self.clock.park()
+        if startup_only:
+            # Startup persistence ends before this already-selected automatic work unit.
+            await automatic_entered.wait()
+            assert len(selected) == 1 and not delegated
+            assert selected[0].kind is DeadlineKind.STOCK_RECOVERY
+            assert selected[0].due_at == NOW.replace(minute=1, second=13)
+        else:
+            await self.clock.park()
         assert self.clock.released == 0
         assert self.sdk.entries("rt_min") == (), self.sdk.trace
 
@@ -299,11 +327,11 @@ class _Run:
 
 
 @asynccontextmanager
-async def _running(root, monkeypatch, mode, *, observed_at=NOW):
+async def _running(root, monkeypatch, mode, *, observed_at=NOW, startup_only=False):
     async with asyncio.timeout(45):  # Real watchdog; not a production recovery guarantee.
         run = _Run(root, monkeypatch, mode, observed_at)
         try:
-            await run.start()
+            await run.start(startup_only=startup_only)
             yield run
         finally:
             await run.stop()
@@ -512,6 +540,7 @@ def test_startup_never_persists_rows_newer_than_its_frozen_acquisition_cutoff(
             monkeypatch,
             "crossed-cutoff",
             observed_at=NOW.replace(second=59),
+            startup_only=True,
         ) as run:
             entries = run.sdk.entries("rt_min_daily")
             assert len(entries) == 1 and entries[0]["phase"] == "startup", run.sdk.trace
