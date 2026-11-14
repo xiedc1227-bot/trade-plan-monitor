@@ -144,6 +144,286 @@ def test_persisted_permission_without_error_retry_completes_bounded_failure(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("cancel_waiter", [False, True])
+def test_named_maintenance_waiter_does_not_begin_progress_or_read_before_lock(
+    tmp_path, monkeypatch, cancel_waiter,
+):
+    from threading import Event
+
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+    from test_production_daily_limits_permission_maintenance import (
+        _composition,
+        _named_permission_work,
+    )
+
+    from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+    from trade_plan_monitor.runtime.production import PermissionMaintenanceResult
+    from trade_plan_monitor.runtime.request_control import TushareOperation
+
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch, persisted_calendar=True)
+        entered, release = Event(), Event()
+        tasks = []
+        try:
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
+            pipeline = runtime._liveness_owner._pipeline
+            control = runtime._request_controller
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
+            _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
+            await _block(control, TushareOperation.DAILY_BARS)
+            runtime._clock.current += timedelta(seconds=301)
+            sdk_start = len(sdk.calls)
+            reads, preparations, reservations, progress = [], [], [], []
+            original_read = pipeline._permission_probe_state
+            original_prepare = pipeline._prepare_daily_bar_permission_locked
+            original_callback = pipeline._permission_probe_reservation_callback
+            original_begin = runtime.begin_progress_step
+            original_complete = runtime.complete_progress_step
+            original_daily = sdk._stock_daily
+
+            def read_state(*args, **kwargs):
+                reads.append(runtime._clock.now())
+                return original_read(*args, **kwargs)
+
+            def prepare():
+                preparations.append(runtime._clock.now())
+                return original_prepare()
+
+            def callback(candidate):
+                acknowledge = original_callback(candidate)
+
+                def reserved():
+                    reservations.append(candidate.operation)
+                    return acknowledge()
+
+                return reserved
+
+            def begin(*, timeout_seconds):
+                token = original_begin(timeout_seconds=timeout_seconds)
+                progress.append(("begin", token))
+                return token
+
+            def complete(token, *, next_wake_at):
+                result = original_complete(token, next_wake_at=next_wake_at)
+                progress.append(("complete", token))
+                return result
+
+            def daily(kwargs):
+                entered.set()
+                assert release.wait(3), "maintenance worker was not released"
+                return original_daily(kwargs)
+
+            monkeypatch.setattr(pipeline, "_permission_probe_state", read_state)
+            monkeypatch.setattr(pipeline, "_prepare_daily_bar_permission_locked", prepare)
+            monkeypatch.setattr(pipeline, "_permission_probe_reservation_callback", callback)
+            monkeypatch.setattr(runtime, "begin_progress_step", begin)
+            monkeypatch.setattr(runtime, "complete_progress_step", complete)
+            sdk._stock_daily = daily
+            first = asyncio.create_task(permission_work())
+            tasks.append(first)
+            assert await asyncio.to_thread(entered.wait, 2)
+            record = runtime.progress_authority_token()
+            token = record.token
+            assert token is not None
+            before = (tuple(reads), tuple(preparations), tuple(reservations), tuple(sdk.calls))
+            raw = control.raw_permission_retry_at(TushareOperation.DAILY_BARS)
+            second = asyncio.create_task(permission_work())
+            tasks.append(second)
+            for _ in range(12):
+                await asyncio.sleep(0)
+                if second.done() or pipeline._permission_maintenance_lock._waiters:
+                    break
+            assert not second.done()
+            assert len(pipeline._permission_maintenance_lock._waiters) == 1
+            assert len(runtime._work_tasks) == 2
+            assert not first.done()
+            assert runtime.progress_authority_token() is record
+            assert progress == [("begin", token)]
+            assert (
+                tuple(reads), tuple(preparations), tuple(reservations), tuple(sdk.calls)
+            ) == before
+            assert control.raw_permission_retry_at(TushareOperation.DAILY_BARS) == raw
+            if cancel_waiter:
+                second.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await second
+                assert not first.done()
+                assert runtime.progress_authority_token() is record
+                assert progress == [("begin", token)]
+                assert (
+                    tuple(reads), tuple(preparations), tuple(reservations), tuple(sdk.calls)
+                ) == before
+                assert control.raw_permission_retry_at(TushareOperation.DAILY_BARS) == raw
+            release.set()
+            assert await first is PermissionMaintenanceResult.PROBED
+            if cancel_waiter:
+                assert progress == [("begin", token), ("complete", token)]
+            else:
+                assert await second is PermissionMaintenanceResult.SKIPPED
+                second_token = progress[2][1]
+                assert second_token is not token
+                assert progress == [
+                    ("begin", token), ("complete", token),
+                    ("begin", second_token), ("complete", second_token),
+                ]
+            assert len(preparations) == 1
+            assert reservations == [TushareOperation.DAILY_BARS]
+            assert [name for name, _ in sdk.calls[sdk_start:]] == ["daily"]
+            assert not control.is_permission_blocked(TushareOperation.DAILY_BARS)
+            assert runtime.progress_authority_token().token is None
+        finally:
+            release.set()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("failure_kind", ["unknown", "nonowner", "stopping"])
+def test_named_maintenance_failure_or_rejected_owner_cannot_refresh_progress(
+    tmp_path, monkeypatch, failure_kind,
+):
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+    from test_production_daily_limits_permission_maintenance import (
+        _composition,
+        _named_permission_work,
+    )
+
+    from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+    from trade_plan_monitor.runtime.request_control import TushareOperation
+
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch, persisted_calendar=True)
+        try:
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            pipeline = runtime._liveness_owner._pipeline
+            control = runtime._request_controller
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
+            _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
+            await _block(control, TushareOperation.DAILY_BARS)
+            runtime._clock.current += timedelta(seconds=301)
+            sdk_before = tuple(sdk.calls)
+            raw = control.raw_permission_retry_at(TushareOperation.DAILY_BARS)
+            reads = []
+            failure = RuntimeError("offline unknown maintenance failure")
+
+            def fail_read(*_args, **_kwargs):
+                reads.append(runtime._clock.now())
+                raise failure
+
+            monkeypatch.setattr(pipeline, "_permission_probe_state", fail_read)
+            before = runtime.progress_authority_token()
+            if failure_kind == "unknown":
+                with pytest.raises(RuntimeError) as caught:
+                    await permission_work()
+                assert caught.value is failure
+                retained = runtime.progress_authority_token()
+                assert retained.token is not None
+                assert retained.last_progress == before.last_progress
+                with pytest.raises(
+                    RuntimeError, match="^unfinished progress step is already owned$",
+                ):
+                    await permission_work()
+                assert runtime.progress_authority_token() is retained
+                assert len(reads) == 1
+            else:
+                if failure_kind == "stopping":
+                    runtime.begin_shutdown()
+                    invocation = permission_work
+                    message = "^runtime progress owner is stopping$"
+                else:
+                    invocation = pipeline._maybe_recheck_daily_bars_permission
+                    message = "^progress updates require the lifecycle owner task$"
+                with pytest.raises(RuntimeError, match=message):
+                    await invocation()
+                assert runtime.progress_authority_token() is before
+                assert reads == []
+            assert not pipeline._permission_maintenance_lock.locked()
+            assert control.raw_permission_retry_at(TushareOperation.DAILY_BARS) == raw
+            assert tuple(sdk.calls) == sdk_before
+            assert pipeline._permission_rotation_state.last_operation is None
+        finally:
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_named_maintenance_keeps_token_through_physical_drain(tmp_path, monkeypatch):
+    from threading import Event
+
+    from test_permission_candidate_selection import ANCHOR, _block, _seed_open_day
+    from test_production_daily_limits_permission_maintenance import (
+        _composition,
+        _named_permission_work,
+    )
+
+    from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+    from trade_plan_monitor.runtime.request_control import TushareOperation
+
+    async def scenario():
+        composition, sdk, _ = _composition(tmp_path, monkeypatch, persisted_calendar=True)
+        entered, release = Event(), Event()
+        attempt = closing = None
+        try:
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            pipeline = runtime._liveness_owner._pipeline
+            control = runtime._request_controller
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
+            _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
+            await _block(control, TushareOperation.DAILY_BARS)
+            runtime._clock.current += timedelta(seconds=301)
+            original = sdk._stock_daily
+
+            def daily(kwargs):
+                entered.set()
+                assert release.wait(3), "cancelled maintenance worker was not released"
+                return original(kwargs)
+
+            sdk._stock_daily = daily
+            attempt = asyncio.create_task(permission_work())
+            assert await asyncio.to_thread(entered.wait, 2)
+            retained = runtime.progress_authority_token()
+            assert retained.token is not None
+            attempt.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await attempt
+            assert runtime.progress_authority_token() is retained
+            assert not pipeline._permission_maintenance_lock.locked()
+            with pytest.raises(RuntimeError, match="^unfinished progress step is already owned$"):
+                await permission_work()
+            assert runtime.progress_authority_token() is retained
+            closing = asyncio.create_task(control.aclose())
+            for _ in range(5):
+                await asyncio.sleep(0)
+            assert not closing.done()
+            assert control.active_count == 1
+            assert runtime.progress_authority_token() is retained
+            release.set()
+            await closing
+            assert control.active_count == 0
+            assert runtime.progress_authority_token() is retained
+            assert control.is_permission_blocked(TushareOperation.DAILY_BARS)
+        finally:
+            release.set()
+            if attempt is not None:
+                await asyncio.gather(attempt, return_exceptions=True)
+            if closing is not None:
+                await closing
+            await composition.stop()
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize(
     ("reservation_operation", "code"),
     [(None, "BLOCKED_PERMISSION"), ("DAILY_BARS", "BLOCKED_PERMISSION")]

@@ -3045,8 +3045,7 @@ class ProductionMonitorPipeline:
     async def _run_permission_maintenance(
         self, requested_operation: TushareOperation | None = None,
     ) -> PermissionMaintenanceResult:
-        with self._status_progress_unit(timeout_seconds=90):
-            return await self._run_permission_maintenance_owned(requested_operation)
+        return await self._run_permission_maintenance_owned(requested_operation)
 
     async def _run_permission_maintenance_owned(
         self, requested_operation: TushareOperation | None = None,
@@ -3054,96 +3053,100 @@ class ProductionMonitorPipeline:
         owner, cancelled = asyncio.current_task(), Event()
         try:
             async with self._permission_maintenance_lock:
-                now = self._clock.now()
-                due = {}
-                for operation in _PERMISSION_SCOPES:
-                    raw = self._controller.raw_permission_retry_at(operation)
-                    if raw is None or not self._controller.is_permission_blocked(operation):
-                        continue
-                    floor = self._permission_effective_due(operation, raw)
-                    if floor <= now:
-                        due[operation] = raw
-                if not due:
-                    return PermissionMaintenanceResult.SKIPPED
-                if not self._permission_owner_current():
-                    return PermissionMaintenanceResult.SKIPPED
-                candidates, _ = self._permission_probe_state(now=now)
-                if not self._permission_owner_current():
-                    return PermissionMaintenanceResult.SKIPPED
-                checked_at = self._clock.now()
-                available = {item.operation: item for item in candidates}
-                runnable = []
-                deferred = False
-                for operation in due:
-                    candidate = available.get(operation)
-                    # The scope rank is synthetic; only its one preparation may select a receipt.
-                    if operation is TushareOperation.DAILY_BARS:
-                        runnable.append(operation)
-                    elif candidate is None or candidate.next_due_at > now:
-                        self._defer_legacy_permission(
-                            operation, candidate.next_due_at if candidate is not None
-                            and candidate.next_due_at > checked_at
-                            else checked_at + timedelta(seconds=30),
-                        )
-                        deferred = True
-                    else:
-                        runnable.append(operation)
-                if not runnable:
-                    return (PermissionMaintenanceResult.DEFERRED if deferred
-                            else PermissionMaintenanceResult.SKIPPED)
-                operation = min(runnable, key=lambda op: self._permission_priority(op, due[op]))
-                if requested_operation is not None and operation is not requested_operation:
-                    return PermissionMaintenanceResult.SKIPPED
-                if operation in (*_STOCK_MINUTE_SCOPES, TushareOperation.DAILY_BARS):
-                    prior_defer = self._permission_probe_deferred_until.get(operation)
-                    prepared = (
-                        self._prepare_daily_bar_permission_locked()
-                        if operation is TushareOperation.DAILY_BARS
-                        else self._prepare_stock_minute_permission_locked(operation)
-                    )
-                    if not self._permission_owner_current():
-                        # Only this synchronous preparation's own timing write is unwound.
-                        if prior_defer is None:
-                            self._permission_probe_deferred_until.pop(operation, None)
-                        else:
-                            self._permission_probe_deferred_until[operation] = prior_defer
+                with self._status_progress_unit(timeout_seconds=90):
+                    now = self._clock.now()
+                    due = {}
+                    for operation in _PERMISSION_SCOPES:
+                        raw = self._controller.raw_permission_retry_at(operation)
+                        if raw is None or not self._controller.is_permission_blocked(operation):
+                            continue
+                        floor = self._permission_effective_due(operation, raw)
+                        if floor <= now:
+                            due[operation] = raw
+                    if not due:
                         return PermissionMaintenanceResult.SKIPPED
-                    if prepared.status == "UNKNOWN":
-                        self._defer_legacy_permission(operation, max(
-                            self._clock.now() + timedelta(seconds=30),
-                            self._permission_probe_deferred_until.get(operation, now),
-                        ))
-                if operation in _PERMISSION_SCOPES[:3]:
-                    result = await self._recheck_legacy_permission_locked(
-                        operation, owner, cancelled,
-                    )
-                elif operation in _STOCK_MINUTE_SCOPES:
-                    result = await self._recheck_stock_minute_permission_locked(
-                        operation, owner, cancelled, prepared,
-                    )
-                elif operation is TushareOperation.DAILY_BARS:
-                    result = await self._recheck_daily_bars_permission_locked(
-                        owner, cancelled, prepared,
-                    )
-                elif operation is TushareOperation.DAILY_LIMITS:
-                    result = await self._recheck_daily_limits_permission_locked(owner, cancelled)
-                else:
-                    result = await self._recheck_index_daily_permission_locked(owner, cancelled)
-                if (result is PermissionMaintenanceResult.SKIPPED
-                        and not self._permission_owner_current()):
-                    return result
-                if result in {
-                    PermissionMaintenanceResult.SKIPPED, PermissionMaintenanceResult.DEFERRED,
-                }:
-                    completed_at = self._clock.now()
-                    if (self._controller.is_permission_blocked(operation)
-                            and self._permission_effective_due(
-                                operation, due[operation],
-                            ) <= completed_at):
-                        return self._defer_legacy_permission(
-                            operation, completed_at + timedelta(seconds=30),
+                    if not self._permission_owner_current():
+                        return PermissionMaintenanceResult.SKIPPED
+                    candidates, _ = self._permission_probe_state(now=now)
+                    if not self._permission_owner_current():
+                        return PermissionMaintenanceResult.SKIPPED
+                    checked_at = self._clock.now()
+                    available = {item.operation: item for item in candidates}
+                    runnable = []
+                    deferred = False
+                    for operation in due:
+                        candidate = available.get(operation)
+                        # The scope rank is synthetic; only its one preparation
+                        # may select a receipt.
+                        if operation is TushareOperation.DAILY_BARS:
+                            runnable.append(operation)
+                        elif candidate is None or candidate.next_due_at > now:
+                            self._defer_legacy_permission(
+                                operation, candidate.next_due_at if candidate is not None
+                                and candidate.next_due_at > checked_at
+                                else checked_at + timedelta(seconds=30),
+                            )
+                            deferred = True
+                        else:
+                            runnable.append(operation)
+                    if not runnable:
+                        return (PermissionMaintenanceResult.DEFERRED if deferred
+                                else PermissionMaintenanceResult.SKIPPED)
+                    operation = min(runnable, key=lambda op: self._permission_priority(op, due[op]))
+                    if requested_operation is not None and operation is not requested_operation:
+                        return PermissionMaintenanceResult.SKIPPED
+                    if operation in (*_STOCK_MINUTE_SCOPES, TushareOperation.DAILY_BARS):
+                        prior_defer = self._permission_probe_deferred_until.get(operation)
+                        prepared = (
+                            self._prepare_daily_bar_permission_locked()
+                            if operation is TushareOperation.DAILY_BARS
+                            else self._prepare_stock_minute_permission_locked(operation)
                         )
-                return result
+                        if not self._permission_owner_current():
+                            # Only this synchronous preparation's own timing write is unwound.
+                            if prior_defer is None:
+                                self._permission_probe_deferred_until.pop(operation, None)
+                            else:
+                                self._permission_probe_deferred_until[operation] = prior_defer
+                            return PermissionMaintenanceResult.SKIPPED
+                        if prepared.status == "UNKNOWN":
+                            self._defer_legacy_permission(operation, max(
+                                self._clock.now() + timedelta(seconds=30),
+                                self._permission_probe_deferred_until.get(operation, now),
+                            ))
+                    if operation in _PERMISSION_SCOPES[:3]:
+                        result = await self._recheck_legacy_permission_locked(
+                            operation, owner, cancelled,
+                        )
+                    elif operation in _STOCK_MINUTE_SCOPES:
+                        result = await self._recheck_stock_minute_permission_locked(
+                            operation, owner, cancelled, prepared,
+                        )
+                    elif operation is TushareOperation.DAILY_BARS:
+                        result = await self._recheck_daily_bars_permission_locked(
+                            owner, cancelled, prepared,
+                        )
+                    elif operation is TushareOperation.DAILY_LIMITS:
+                        result = await self._recheck_daily_limits_permission_locked(
+                            owner, cancelled,
+                        )
+                    else:
+                        result = await self._recheck_index_daily_permission_locked(owner, cancelled)
+                    if (result is PermissionMaintenanceResult.SKIPPED
+                            and not self._permission_owner_current()):
+                        return result
+                    if result in {
+                        PermissionMaintenanceResult.SKIPPED, PermissionMaintenanceResult.DEFERRED,
+                    }:
+                        completed_at = self._clock.now()
+                        if (self._controller.is_permission_blocked(operation)
+                                and self._permission_effective_due(
+                                    operation, due[operation],
+                                ) <= completed_at):
+                            return self._defer_legacy_permission(
+                                operation, completed_at + timedelta(seconds=30),
+                            )
+                    return result
         except asyncio.CancelledError:
             cancelled.set()
             raise

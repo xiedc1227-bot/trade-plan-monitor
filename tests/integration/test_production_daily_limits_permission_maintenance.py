@@ -31,6 +31,7 @@ from trade_plan_monitor.runtime.request_control import (
     RequestControlErrorCode,
     TushareOperation,
 )
+from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import TradingCalendar
 from trade_plan_monitor.state.runtime_recovery import RecoveryCheckpointError
@@ -43,6 +44,24 @@ def _composition(tmp_path, monkeypatch, **kwargs):
         plan=current_mixed_plan() if kwargs.get("active_plan", True) else None,
         **kwargs,
     )
+
+
+def _named_permission_work(runtime, named_method):
+    """Keep one captured named scope behind the real lifecycle work entry."""
+    async def permission_unit(deadline):
+        assert deadline.kind is DeadlineKind.INDEX_PERMISSION
+        assert runtime._liveness_owner._pipeline is named_method.__self__
+        return await named_method()
+
+    runtime._run_deadline = permission_unit
+
+    async def execute():
+        now = runtime._clock.now()
+        return await runtime._execute_deadline(MarketDeadline(
+            kind=DeadlineKind.INDEX_PERMISSION, trade_date=now.date(), due_at=now,
+        ))
+
+    return execute
 
 
 def _daily_call(symbol, anchor):
@@ -65,11 +84,15 @@ def test_current_plans_never_authorize_retired_daily_limits(tmp_path, monkeypatc
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True, plan=plan,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_limits_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_LIMITS)
             runtime._clock.current += timedelta(seconds=301)
@@ -77,7 +100,7 @@ def test_current_plans_never_authorize_retired_daily_limits(tmp_path, monkeypatc
             before = tuple(sdk.calls), pipeline._permission_rotation_state
             assert not any(candidate.operation is TushareOperation.DAILY_LIMITS
                 for candidate in pipeline.permission_probe_candidates())
-            assert await pipeline._maybe_recheck_daily_limits_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.DEFERRED
             )
             assert control.raw_permission_retry_at(TushareOperation.DAILY_LIMITS) == raw
@@ -98,11 +121,15 @@ def test_due_daily_bars_proves_once_and_only_clears_own_permission(
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
             await _block(control, TushareOperation.CURRENT_DAY_MINUTES)
@@ -121,7 +148,7 @@ def test_due_daily_bars_proves_once_and_only_clears_own_permission(
                 return original_work()
 
             monkeypatch.setattr(pipeline, "_work", owner_only_work)
-            assert await pipeline._maybe_recheck_daily_bars_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.PROBED
             )
             assert not control.is_permission_blocked(TushareOperation.DAILY_BARS)
@@ -154,11 +181,15 @@ def test_daily_bar_response_requires_original_reviewed_activation(
         )
         entered, release = Event(), Event()
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             database = tmp_path / "monitor.sqlite3"
             _seed_open_day(database, ANCHOR)
             first = current_mixed_plan()
@@ -181,7 +212,7 @@ def test_daily_bar_response_requires_original_reviewed_activation(
                 return original_limits(kwargs)
 
             sdk._stock_daily = waiting_limits
-            attempt = asyncio.create_task(pipeline._maybe_recheck_daily_bars_permission())
+            attempt = asyncio.create_task(permission_work())
             assert await asyncio.to_thread(entered.wait, 1)
             with pipeline._work() as work:
                 work.plans.deactivate(first.symbol, expected_revision=1)
@@ -219,11 +250,15 @@ def test_queued_daily_bars_rejects_authority_aba_or_calendar_epoch(
             return "released"
 
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             database = tmp_path / "monitor.sqlite3"
             _seed_open_day(database, ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
@@ -234,7 +269,7 @@ def test_queued_daily_bars_rejects_authority_aba_or_calendar_epoch(
                 occupy_worker, work_key="hold:limits-aba",
             ))
             assert await asyncio.to_thread(occupied.wait, 1)
-            attempt = asyncio.create_task(pipeline._maybe_recheck_daily_bars_permission())
+            attempt = asyncio.create_task(permission_work())
             for _ in range(100):
                 if control.waiting_count:
                     break
@@ -293,11 +328,15 @@ def test_daily_bars_response_rereads_exact_anchor_before_unlock(
         )
         entered, release = Event(), Event()
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             database = tmp_path / "monitor.sqlite3"
             _seed_open_day(database, ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
@@ -310,7 +349,7 @@ def test_daily_bars_response_rereads_exact_anchor_before_unlock(
                 return original_limits(kwargs)
 
             sdk._stock_daily = waiting_limits
-            attempt = asyncio.create_task(pipeline._maybe_recheck_daily_bars_permission())
+            attempt = asyncio.create_task(permission_work())
             assert await asyncio.to_thread(entered.wait, 1)
             engine = create_sqlite_engine(database)
             try:
@@ -342,9 +381,10 @@ def test_daily_bars_reselects_after_index_daily_uses_shared_maintenance_lock(
             persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
@@ -357,9 +397,27 @@ def test_daily_bars_reselects_after_index_daily_uses_shared_maintenance_lock(
                 MarketIndexCode(str(kwargs["ts_code"])),
             )
 
-            first = asyncio.create_task(pipeline._maybe_recheck_index_daily_permission())
+            index_named = pipeline._maybe_recheck_index_daily_permission
+            daily_named = pipeline._maybe_recheck_daily_bars_permission
+            now = runtime._clock.now()
+            index_unit = MarketDeadline(
+                kind=DeadlineKind.INDEX_PERMISSION, trade_date=now.date(), due_at=now,
+            )
+            daily_unit = MarketDeadline(
+                kind=DeadlineKind.INDEX_PERMISSION, trade_date=now.date(), due_at=now,
+            )
+
+            async def permission_unit(deadline):
+                assert runtime._liveness_owner._pipeline is pipeline
+                if deadline is index_unit:
+                    return await index_named()
+                assert deadline is daily_unit
+                return await daily_named()
+
+            runtime._run_deadline = permission_unit
+            first = asyncio.create_task(runtime._execute_deadline(index_unit))
             await asyncio.sleep(0)
-            second = asyncio.create_task(pipeline._maybe_recheck_daily_bars_permission())
+            second = asyncio.create_task(runtime._execute_deadline(daily_unit))
             assert await first is PermissionMaintenanceResult.PROBED
             assert await second is PermissionMaintenanceResult.PROBED
             assert [name for name, _ in sdk.calls[len(sdk_before):]] == [
@@ -403,11 +461,15 @@ def test_daily_bars_respects_legacy_and_bound_stock_authority_modes(
                 monitor_composition, "ProductionMonitorPipeline", legacy_pipeline,
             )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
             runtime._clock.current += timedelta(seconds=301)
@@ -419,7 +481,7 @@ def test_daily_bars_respects_legacy_and_bound_stock_authority_modes(
             else:
                 pipeline._stock_semantics = None
 
-            result = await pipeline._maybe_recheck_daily_bars_permission()
+            result = await permission_work()
             if authority == "legacy_certificate":
                 assert result is PermissionMaintenanceResult.PROBED
                 assert [name for name, _ in sdk.calls[len(sdk_before):]] == ["daily"]
@@ -429,12 +491,12 @@ def test_daily_bars_respects_legacy_and_bound_stock_authority_modes(
                 local_due = runtime._clock.now() + timedelta(seconds=30)
                 assert pipeline.next_permission_probe_due_at() == local_due
                 assert pipeline.next_permission_probe_due_at() == local_due
-                assert await pipeline._maybe_recheck_daily_bars_permission() is (
+                assert await permission_work() is (
                     PermissionMaintenanceResult.SKIPPED
                 )
                 assert pipeline.next_permission_probe_due_at() == local_due
                 runtime._clock.current = local_due
-                assert await pipeline._maybe_recheck_daily_bars_permission() is (
+                assert await permission_work() is (
                     PermissionMaintenanceResult.DEFERRED
                 )
                 assert pipeline.next_permission_probe_due_at() == (
@@ -456,11 +518,15 @@ def test_restored_stock_semantic_file_keeps_restart_latch_and_local_defer(
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
             runtime._clock.current += timedelta(seconds=301)
@@ -474,9 +540,20 @@ def test_restored_stock_semantic_file_keeps_restart_latch_and_local_defer(
                 path.write_bytes(original)
             assert pipeline._admission_revoked()
             raw = control.raw_permission_retry_at(TushareOperation.DAILY_BARS)
-            for _ in range(2):
-                with pytest.raises(RecoveryAdmissionChangedError):
-                    await pipeline._maybe_recheck_daily_bars_permission()
+            retained_record = None
+            for error_type, message in (
+                (RecoveryAdmissionChangedError, "^permission maintenance authority changed$"),
+                (RuntimeError, "^unfinished progress step is already owned$"),
+            ):
+                with pytest.raises(error_type, match=message):
+                    await permission_work()
+                record = runtime.progress_authority_token()
+                if retained_record is None:
+                    assert record.token is not None
+                    retained_record = record
+                else:
+                    assert record is retained_record
+                    assert record.token is retained_record.token
                 assert control.raw_permission_retry_at(TushareOperation.DAILY_BARS) == raw
                 assert pipeline._permission_probe_deferred_until == {}
                 assert pipeline._permission_rotation_state.last_operation is None
@@ -485,6 +562,40 @@ def test_restored_stock_semantic_file_keeps_restart_latch_and_local_defer(
             assert control.is_permission_blocked(TushareOperation.DAILY_BARS)
         finally:
             await composition.stop()
+
+    asyncio.run(scenario())
+
+
+def test_component_repeated_daily_bars_revocation_preserves_rejection(tmp_path, monkeypatch):
+    """Controlled component revocation; the lifecycle test proves the file restore latch."""
+    from tests.integration.current_pipeline_fixture import current_pipeline_fixture
+
+    async def scenario():
+        engine, _, _, sdk, _, control, pipeline, _ = current_pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=300,
+        )
+        try:
+            assert pipeline._status_progress_owner is None
+            await _block(control, TushareOperation.DAILY_BARS)
+            pipeline._clock.current += timedelta(seconds=301)
+            monkeypatch.setattr(pipeline, "_admission_revoked", lambda: True)
+            raw = control.raw_permission_retry_at(TushareOperation.DAILY_BARS)
+            sdk_before = tuple(sdk.calls)
+            for _ in range(2):
+                with pytest.raises(
+                    RecoveryAdmissionChangedError,
+                    match="^permission maintenance authority changed$",
+                ):
+                    await pipeline._maybe_recheck_daily_bars_permission()
+                assert control.raw_permission_retry_at(TushareOperation.DAILY_BARS) == raw
+                assert pipeline._permission_probe_deferred_until == {}
+                assert pipeline._permission_rotation_state.last_operation is None
+                assert pipeline._admission_revoked()
+            assert tuple(sdk.calls) == sdk_before
+            assert control.is_permission_blocked(TushareOperation.DAILY_BARS)
+        finally:
+            await control.aclose()
+            engine.dispose()
 
     asyncio.run(scenario())
 
@@ -498,11 +609,15 @@ def test_unauthorized_daily_bars_defer_does_not_take_index_due_slot(
             persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             await _block(control, TushareOperation.DAILY_BARS)
@@ -512,7 +627,7 @@ def test_unauthorized_daily_bars_defer_does_not_take_index_due_slot(
             raw = control.raw_permission_retry_at(TushareOperation.DAILY_BARS)
             expected_check = runtime._clock.now() + timedelta(seconds=30)
 
-            assert await pipeline._maybe_recheck_daily_bars_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.DEFERRED
             )
             assert pipeline._permission_probe_deferred_until[TushareOperation.DAILY_BARS] == (
@@ -538,11 +653,15 @@ def test_weekend_current_daily_proves_only_last_real_weekday_anchor(
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             friday = ANCHOR + timedelta(days=4)
             saturday = friday + timedelta(days=1)
             database = tmp_path / "monitor.sqlite3"
@@ -565,7 +684,7 @@ def test_weekend_current_daily_proves_only_last_real_weekday_anchor(
             sdk_before = tuple(sdk.calls)
             assert pipeline._stock_certification_current()
 
-            assert await pipeline._maybe_recheck_daily_bars_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.PROBED
             )
             assert tuple(sdk.calls[len(sdk_before):]) == (
@@ -586,11 +705,15 @@ def test_daily_bars_transport_seam_rechecks_after_worker_entry(
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
             runtime._clock.current += timedelta(seconds=301)
@@ -605,7 +728,7 @@ def test_daily_bars_transport_seam_rechecks_after_worker_entry(
                 type(pipeline.provider), "probe_daily_bars_permission",
                 revoke_after_worker_gate,
             )
-            assert await pipeline._maybe_recheck_daily_bars_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.DEFERRED
             )
             assert tuple(sdk.calls) == sdk_before
@@ -631,11 +754,15 @@ def test_daily_bars_gate_does_not_reserve_or_call_sdk(
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             if reason == "other_scope":
                 await _block(control, TushareOperation.TRADING_CALENDAR)
@@ -657,11 +784,11 @@ def test_daily_bars_gate_does_not_reserve_or_call_sdk(
                     )
             if reason == "no_authority":
                 pipeline._generation_current = lambda: False
-            result = await pipeline._maybe_recheck_daily_bars_permission()
+            result = await permission_work()
             if reason == "no_authority":
                 assert result is PermissionMaintenanceResult.SKIPPED
                 assert pipeline._permission_probe_deferred_until == {}
-                assert await pipeline._maybe_recheck_daily_bars_permission() is (
+                assert await permission_work() is (
                     PermissionMaintenanceResult.SKIPPED
                 )
                 assert pipeline._permission_probe_deferred_until == {}
@@ -685,11 +812,15 @@ def test_daily_bars_reservation_fault_never_calls_sdk_or_clears(
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
             runtime._clock.current += timedelta(seconds=301)
@@ -704,7 +835,7 @@ def test_daily_bars_reservation_fault_never_calls_sdk_or_clears(
                 with monkeypatch.context() as patch:
                     patch.setattr(repository, "save", failed_save)
                     with pytest.raises(RecoveryCheckpointError):
-                        await pipeline._maybe_recheck_daily_bars_permission()
+                        await permission_work()
                 assert pipeline._permission_rotation_state == before_cursor
                 control._recovery_fault = False
             else:
@@ -719,7 +850,7 @@ def test_daily_bars_reservation_fault_never_calls_sdk_or_clears(
                     failing_callback,
                 )
                 with pytest.raises(PermissionReservationCallbackError) as caught:
-                    await pipeline._maybe_recheck_daily_bars_permission()
+                    await permission_work()
                 assert str(caught.value) == "permission reservation callback failed"
                 assert pipeline._permission_rotation_state == before_cursor
                 assert not control._closed
@@ -748,11 +879,15 @@ def test_reserved_daily_bars_keeps_block_after_nonproof_outcome(
             return "released"
 
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
             runtime._clock.current += timedelta(seconds=301)
@@ -775,7 +910,7 @@ def test_reserved_daily_bars_keeps_block_after_nonproof_outcome(
                     occupy_worker, work_key="hold:daily-limits",
                 ))
                 assert await asyncio.to_thread(occupied.wait, 1)
-            attempt = asyncio.create_task(pipeline._maybe_recheck_daily_bars_permission())
+            attempt = asyncio.create_task(permission_work())
             if outcome in {"queue_abort", "stop"}:
                 for _ in range(100):
                     if control.waiting_count:
@@ -825,11 +960,15 @@ def test_daily_bars_response_uses_frozen_start_and_same_date_authority(
             tmp_path, monkeypatch, active_plan=True, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.DAILY_BARS)
             runtime._clock.current += timedelta(seconds=301)
@@ -856,7 +995,7 @@ def test_daily_bars_response_uses_frozen_start_and_same_date_authority(
                 return original_limits(kwargs)
 
             sdk._stock_daily = moved_response
-            result = await pipeline._maybe_recheck_daily_bars_permission()
+            result = await permission_work()
             if response == "near_deadline":
                 assert result is PermissionMaintenanceResult.PROBED
                 assert not control.is_permission_blocked(TushareOperation.DAILY_BARS)
@@ -883,11 +1022,15 @@ def test_missing_daily_bars_demand_or_anchor_sets_fixed_local_defer(
             persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                runtime, pipeline._maybe_recheck_daily_bars_permission,
+            )
             if demand == "no_current":
                 _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             else:
@@ -906,7 +1049,7 @@ def test_missing_daily_bars_demand_or_anchor_sets_fixed_local_defer(
             raw = control.raw_permission_retry_at(TushareOperation.DAILY_BARS)
             expected = runtime._clock.now() + timedelta(seconds=30)
 
-            assert await pipeline._maybe_recheck_daily_bars_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.DEFERRED
             )
             assert pipeline._permission_probe_deferred_until[
@@ -914,7 +1057,7 @@ def test_missing_daily_bars_demand_or_anchor_sets_fixed_local_defer(
             ] == expected
             assert pipeline.next_permission_probe_due_at() == expected
             assert pipeline.next_permission_probe_due_at() == expected
-            assert await pipeline._maybe_recheck_daily_bars_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.SKIPPED
             )
             assert pipeline._permission_probe_deferred_until[
