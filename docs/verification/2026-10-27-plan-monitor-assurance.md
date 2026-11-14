@@ -1155,3 +1155,26 @@ Commit `ea1570f` changes two test files only. F058 explicitly isolates the nativ
 F062 replaces its obsolete aggregate-one assertion with exact target/sibling physical traces: each specified symbol occurs once, total2, with matching phase/time in the aggregate trace. Full later reactivation, rejection of old facts and fresh recovery/evaluation assertions remain. Complete startup13, identity1 and natural revocation/stop neighbors2 pass **16 unique**, native exit0, zero failures/errors/skips. Of96 original assertions,95 remain literal and one explicitly transfers to the two-symbol contract;104 final assertions. Root checked34 artifact/reference hashes, JUnit identities, original assertion AST and final tested AST; independent review and static checks pass. Evidence `.pytest_cache/pma/t22-startup-identity-20261114-01/evidence.json`, SHA256 `c7cae9fcf12132f74d0c9051529128dc186dde32df72679434aa4261f852ce90`.
 
 F058/F062 resolve in focused acceptance. Next freeze the clean committed source and run every remaining final regression gate sequentially, including original F083 without skip or replacement. These focused repairs do not establish a complete full-suite pass. F083/original03/04/C05, T22, actual installation/final gates,0/48 and no user migration/send/push remain unchanged.
+
+## PMA-R140 — Complete frozen regression preserves seven failures
+
+All eleven sequential gates ran on clean `459a8a763cf5865b95fd4c6837d1b07907dd9e4e`. No tracked file changed. Root verified229 artifact hashes, all3314 tracked-file hashes,22 before/after snapshots, native exits and JUnit results. Evidence `.pytest_cache/pma/t22-final-regression-20261115-01/evidence.json`, SHA256 `a24f57507443e38a45b99fa2ced569ad08a599b1117350d0c2826e2d2ca53a0e`. This complete run is **FAILED**, not a composite of prior targeted passes.
+
+| Gate | Pass | Fail | Skip | Native exit |
+| --- | ---: | ---: | ---: | ---: |
+| Backend unit | 6261 | 0 | 0 | 0 |
+| Integration excluding the separately run capacity file | 6849 | 1 | 1 | 1 |
+| Contract/replay | 77 | 0 | 0 | 0 |
+| Frontend unit | 1778 | 0 | 0 | 0 |
+| Four required browser files | 19 | 6 | 0 | 1 |
+| Isolated capacity | 8 | 0 | 0 | 0 |
+
+These are15000 JUnit execution entries:14992 pass,7 fail,1 skip, not15000 unique test identities. Frontend unit has1778 entries but1725 distinct `(classname,name)` pairs; the other groups retain unique identities within each stage. Browser25 consists of19 pass and6 failed nodes: its five XML error elements are included in those six, not extra failures. Type check, build, canonical monitor v2 plus compatibility monitor v1 generation check, Ruff and whitespace all exit0.
+
+The sole integration failure is unchanged F083. Its actual original03 first review raises REVIEW_SEMANTIC_CONFLICT. Independent read-only diagnosis of only this run's temporary fixture database replays the native cause, `ValueError: unresolved initial extraction`: only03 exists, CANDIDATE/unreviewed;04 was never reached. All147 stored issues equal the previous diagnosis. Database bytes and decoded record remain unchanged; sealed replay makes zero database/network calls. Root verified six diagnosis artifacts and four source hashes. Evidence `.pytest_cache/pma/t24-final-f083-20261115/manifest.json`, SHA256 `c4add8f0e40fa8e031c13f8c23e22dc2dae946d78e564f569162734edf7fd36e`. Replay uses the record's updated_at, not a reconstructed failed-review wall clock. Original diagnostic-script field error remains retained. The sole skip is the unchanged Windows/POSIX ownership condition.
+
+Browser failures are new unresolved engineering work: market-linkage and four P3 variants time out at the disabled complete-review button; one source-coverage explicit-maximum journey fails its existing console audit after a monitor-readiness GET503. They are not folded into F083, ignored or retried to hide the original outcome. Next diagnose actual saved responses and coverage/readiness causes, then release bounded fixes while preserving complex plans, independent approvals and all quantity/risk/viewport/network assertions.
+
+Capacity ran alone and naturally passed all8 original tests, including ten-symbol252-day replay, traced heap, fixed query and100k export limits. All original thresholds remain. It took2003.68 seconds. BT050_REPORT_METRICS was not enabled, so precise numerical samples were not emitted; original assertions prove budget acceptance, without invented maxima or a new measurement campaign. No competing heavy tests/build/browser ran during capacity.
+
+T22/A12 remain open because this complete run has failures. Original03/04/C05, real extraction0/48, T20's one pre-SQLite NOT_READY attempt and final acceptance stay held. No user migration, real activation, provider acquisition, notification send or push occurred. T23 formal writes remain pending browser repair evidence; its ignored preparation is not delivery.
