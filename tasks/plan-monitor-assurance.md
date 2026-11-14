@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R138 (`6a70434`) accepts the five-line F059 lifecycle fix with54 unique passes; failed token/deadline/stall persist until true stop and heartbeat cannot restore authority. F058/F062 remain for scoped test repair; full regression and F083/C05 remain open.
+
 R137 (`4d57db8`) accepts two pure historical/serialization test repairs:26 unique split-batch passes,29 original assertions retained and4 explicit contract transfers. Full154-issue pins and current F007 rejection remain. Next F058/F059/F062 and final gates; F083/C05 stays held.
 
 R136 (`a935bd1`) accepts two replay/app wiring fixes:27 unique passes,137 original assertions retained, F035/F040 resolved. F083 original03 current-review failure remains held. Next pure historical compatibility, scheduling and final gates.
