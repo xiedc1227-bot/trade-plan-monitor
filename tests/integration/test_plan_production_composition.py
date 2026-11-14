@@ -205,6 +205,7 @@ def test_production_app_lazily_injects_the_persistent_plan_service(
     with create_production_app(
         monitor_contract_version=1,
         database_path=database_path,
+        runtime_factory=lambda: _OrderedRuntimeLifecycle([]),
         ai_service=_AIService(),
         backtest_lifecycle_factory=_BacktestLifecycle,
     ) as app:
@@ -234,6 +235,7 @@ def test_production_app_lazily_injects_the_persistent_plan_service(
     with create_production_app(
         monitor_contract_version=1,
         database_path=database_path,
+        runtime_factory=lambda: _OrderedRuntimeLifecycle([]),
         ai_service=_AIService(),
         backtest_lifecycle_factory=_BacktestLifecycle,
     ) as restarted_app:

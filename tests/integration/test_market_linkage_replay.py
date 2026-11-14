@@ -240,23 +240,32 @@ def _publish_linked_loop(tmp_path, market, plan, request):
     from uuid import UUID
 
     from tests.integration.test_market_linkage_review import source_mapping
-    from tests.integration.test_plan_preparation_review import review_command
+    from tests.integration.test_plan_preparation_review import AVAILABLE
     from tests.unit.test_monitor_loop_extraction import extract
     from tests.unit.test_monitor_loop_input import costs
 
     from trade_plan_monitor.backtest.control import CancellationToken
     from trade_plan_monitor.backtest.jobs.models import BacktestRunJobResult, MonitorLoopJobRequest
     from trade_plan_monitor.backtest.jobs.repository import BacktestJobRepository
-    from trade_plan_monitor.backtest.loop_input import LoopResponsePolicy, MonitorLoopInput
+    from trade_plan_monitor.backtest.loop_input import (
+        KnownLoopCash,
+        LoopAccountInput,
+        LoopResponsePolicy,
+        MonitorLoopInput,
+    )
     from trade_plan_monitor.backtest.loop_replay import run_frozen_loop
     from trade_plan_monitor.backtest.preparation_models import (
         PreparationSource,
         SinglePlanPreparationInput,
     )
-    from trade_plan_monitor.backtest.preparation_review import frozen_preparation
+    from trade_plan_monitor.backtest.preparation_review import (
+        PreparationReviewCommand,
+        frozen_preparation,
+    )
     from trade_plan_monitor.backtest.preparation_store import PreparationStore
     from trade_plan_monitor.backtest.results import BacktestResultStore
     from trade_plan_monitor.domain.market_linkage_validation import MarketLinkedPlanDraft
+    from trade_plan_monitor.state.source_coverage_authority import extraction_inputs
 
     draft = MarketLinkedPlanDraft.from_executable(plan)
     text, mapping = source_mapping(draft)
@@ -305,12 +314,31 @@ def _publish_linked_loop(tmp_path, market, plan, request):
         attempt_id=attempt,
         expected_revision=running.revision,
         candidate=extracted.to_preparation_candidate(),
+        inputs=extraction_inputs(extracted),
         idempotency_key="finish",
     )
     prepared = frozen_preparation(
         preparation.review_and_freeze(
             ready.preparation_id,
-            command=review_command(ready, draft=draft, mapping=mapping),
+            command=PreparationReviewCommand(
+                expected_revision=ready.revision,
+                expected_source_revision=ready.source_revision,
+                expected_candidate_revision=ready.candidate_revision,
+                candidate_hash=ready.candidate.candidate_hash,
+                evidence_hash=ready.candidate.evidence_hash,
+                confirmed=True,
+                evidence="Explicit synthetic human review of this source, plan and account.",
+                draft=draft,
+                mapping=mapping,
+                account=LoopAccountInput(
+                    snapshot_at=AVAILABLE,
+                    inventory_known=True,
+                    cash=KnownLoopCash(balance_fen=500000),
+                    lots=(),
+                    opening_mark=None,
+                    evidence="Synthetic human account override: no opening lots, cash 500000 fen.",
+                ),
+            ),
             idempotency_key="linked-review",
         )
     )
