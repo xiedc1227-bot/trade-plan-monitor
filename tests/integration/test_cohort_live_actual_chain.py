@@ -1,4 +1,4 @@
-"""Actual originals and unedited real responses complete the scoped review chain."""
+"""Historical scoped review survives while the original private derivation stays blocked."""
 
 import asyncio
 import json
@@ -53,8 +53,21 @@ def test_actual_four_originals_retain_old_exit_and_do_not_apply_it_to_new_positi
                                            feedback=feedback, repair_context=repair))
     final = materialize_extraction(reviews[-1], context.base_hash, args['source'], result)
     prepared = final.to_preparation_candidate()
-    assert prepared.policy_ready and not final.review.issues
-    assert MaterializedUpdateCandidate.model_validate_json(prepared.payload_json) == final
+    assert not prepared.policy_ready and not final.review.issues
+    assert final.extraction.derivation_issues == ('SOURCE_NORMALIZATION_LOSS',)
+    assert prepared.validation == 'UNRESOLVED'
+    assert prepared.issues == final.extraction.derivation_issues
+    decoded = MaterializedUpdateCandidate.model_validate_json(prepared.payload_json)
+    assert decoded.model_dump(mode='json') == final.model_dump(mode='json')
+    assert decoded.review == final.review
+    assert decoded.review.evidence_hash == final.review.evidence_hash == prepared.evidence_hash
+    assert decoded.extraction.evidence_hash == final.extraction.evidence_hash
+    assert decoded.extraction.diagnostic is None
+    assert decoded.extraction.source_derivation is None
+    assert decoded.extraction.derivation_issues == ()
+    assert decoded.to_preparation_candidate().payload_json.encode('utf-8') == (
+        prepared.payload_json.encode('utf-8'))
+    assert not final.to_preparation_candidate().policy_ready
     reviews.append(final.review)
     assert [r.draft.position.max_qty for r in reviews] == [300] * 4
     assert [len(r.draft.ordinary_rules) for r in reviews] == [1, 0, 1, 2]
