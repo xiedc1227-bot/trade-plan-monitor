@@ -7,10 +7,12 @@ from zoneinfo import ZoneInfo
 
 from test_daily_review import reviewed_mapping
 from test_unified_plan_domain import unified_payload as synthetic_plan_payload
+from tests.integration.test_market_linkage_review import source_mapping
 
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan as DailyTradePlan
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft as DailyPlanDraft
+from trade_plan_monitor.state.source_coverage_authority import read_version_coverage
 from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
 from trade_plan_monitor.web.routers.daily_plans import DailySupplementCommand
 from trade_plan_monitor.web.routers.plans import (
@@ -35,10 +37,11 @@ def test_persistent_daily_review_activation_and_restart(tmp_path):
         draft = DailyPlanDraft.from_executable(
             DailyTradePlan.model_validate(synthetic_plan_payload())
         )
+        source, _ = source_mapping(draft)
         command = PlanDraftCommand(
             plan_json=daily_draft_json(draft),
-            source_text="Synthetic human-reviewed supplements for this fixture.",
-            daily_mapping=reviewed_mapping(draft),
+            source_text=source,
+            daily_mapping=reviewed_mapping(draft, source),
             expected_revision=0,
         )
         await lifecycle.mutate_daily(
@@ -51,14 +54,22 @@ def test_persistent_daily_review_activation_and_restart(tmp_path):
             ),
             context=context(),
         )
+        registered = await lifecycle.read_daily_supplements(candidate_json=command.plan_json)
+        assert registered["supplements"] == [
+            item.model_dump(mode="json") for item in command.daily_mapping.supplements
+        ]
         saved = await lifecycle.save_plan_draft(command=command, context=context())
         assert saved.can_activate is False
+        with lifecycle._unit_of_work() as work:
+            coverage = read_version_coverage(work, work.plans.get_version_details(str(saved.id)))
         confirmed = await lifecycle.confirm_plan_review(
             command=PlanReviewConfirmationCommand(
                 plan_version_id=saved.id,
                 content_hash=saved.content_hash,
                 source_hash=saved.source_hash,
                 review_evidence_hash=saved.review_evidence_hash,
+                coverage_evidence_hash=coverage.assessment.evidence_hash,
+                coverage_rules_version=coverage.assessment.rules_version,
                 expected_revision=0,
             ),
             context=context(),

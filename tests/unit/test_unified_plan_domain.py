@@ -149,11 +149,13 @@ def test_current_persistent_review_and_activation(tmp_path):
     from uuid import uuid4
     from zoneinfo import ZoneInfo
 
+    from tests.integration.test_market_linkage_review import source_mapping
     from tests.unit.test_daily_review import reviewed_mapping
 
     from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
     from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
     from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+    from trade_plan_monitor.state.source_coverage_authority import read_version_coverage
     from trade_plan_monitor.web.errors import ApiError
     from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
     from trade_plan_monitor.web.routers.daily_plans import DailySupplementCommand
@@ -177,7 +179,8 @@ def test_current_persistent_review_and_activation(tmp_path):
             draft = UnifiedPlanDraft.from_executable(
                 UnifiedTradePlan.model_validate(unified_payload())
             )
-            mapping = reviewed_mapping(draft)
+            source, _ = source_mapping(draft)
+            mapping = reviewed_mapping(draft, source)
             document = daily_draft_json(draft)
             await lifecycle.mutate_daily(
                 operation="SUPPLEMENT",
@@ -189,9 +192,13 @@ def test_current_persistent_review_and_activation(tmp_path):
                 ),
                 context=context(),
             )
+            registered = await lifecycle.read_daily_supplements(candidate_json=document)
+            assert registered["supplements"] == [
+                item.model_dump(mode="json") for item in mapping.supplements
+            ]
             save_command = PlanDraftCommand(
                 plan_json=document,
-                source_text="Synthetic human-reviewed supplements for this fixture.",
+                source_text=source,
                 daily_mapping=mapping,
                 expected_revision=0,
             )
@@ -208,13 +215,17 @@ def test_current_persistent_review_and_activation(tmp_path):
             saved = await lifecycle.save_plan_draft(
                 command=PlanDraftCommand(
                     plan_json=document,
-                    source_text="Synthetic human-reviewed supplements for this fixture.",
+                    source_text=source,
                     daily_mapping=mapping,
                     expected_revision=0,
                 ),
                 context=context(),
             )
             assert not saved.can_activate
+            with lifecycle._unit_of_work() as work:
+                coverage = read_version_coverage(
+                    work, work.plans.get_version_details(str(saved.id))
+                )
             with pytest.raises(ApiError):
                 await lifecycle.activate_plan(
                     command=PlanActivationCommand(plan_version_id=saved.id, expected_revision=0),
@@ -225,6 +236,8 @@ def test_current_persistent_review_and_activation(tmp_path):
                 content_hash=saved.content_hash,
                 source_hash=saved.source_hash,
                 review_evidence_hash=saved.review_evidence_hash,
+                coverage_evidence_hash=coverage.assessment.evidence_hash,
+                coverage_rules_version=coverage.assessment.rules_version,
                 expected_revision=0,
             )
             with pytest.raises(ApiError):
@@ -238,6 +251,8 @@ def test_current_persistent_review_and_activation(tmp_path):
                     content_hash=saved.content_hash,
                     source_hash=saved.source_hash,
                     review_evidence_hash=saved.review_evidence_hash,
+                    coverage_evidence_hash=coverage.assessment.evidence_hash,
+                    coverage_rules_version=coverage.assessment.rules_version,
                     expected_revision=0,
                 ),
                 context=context(),
@@ -262,7 +277,8 @@ def test_current_persistent_review_and_activation(tmp_path):
             edited_raw = draft.model_dump(mode="json")
             edited_raw["ordinary_rules"][0]["quantity"] = 200
             edited = UnifiedPlanDraft.model_validate(edited_raw)
-            edited_mapping = reviewed_mapping(edited)
+            edited_source, _ = source_mapping(edited)
+            edited_mapping = reviewed_mapping(edited, edited_source)
             await lifecycle.mutate_daily(
                 operation="SUPPLEMENT",
                 command=DailySupplementCommand(
@@ -273,11 +289,16 @@ def test_current_persistent_review_and_activation(tmp_path):
                 ),
                 context=context(),
             )
+            edited_registered = await lifecycle.read_daily_supplements(
+                candidate_json=daily_draft_json(edited))
+            assert edited_registered["supplements"] == [
+                item.model_dump(mode="json") for item in edited_mapping.supplements
+            ]
             edited_saved = await lifecycle.save_plan_draft(
                 command=PlanDraftCommand(
                     base_plan_version_id=saved.id,
                     plan_json=daily_draft_json(edited),
-                    source_text=save_command.source_text,
+                    source_text=edited_source,
                     daily_mapping=edited_mapping,
                     expected_revision=1,
                 ),
