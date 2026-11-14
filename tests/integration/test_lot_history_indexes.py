@@ -1,6 +1,10 @@
 """Single-lot history scopes use indexes without rewriting durable evidence."""
 
+import json
+from datetime import datetime
+from hashlib import sha256
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from alembic import command
@@ -14,7 +18,7 @@ from trade_plan_monitor.state.database import create_sqlite_engine, upgrade_data
 from trade_plan_monitor.state.models import AuditLog, Base, MonitorEvent
 
 PREVIOUS_REVISION = "0019_alert_delivery_eligibility"
-LATEST_REVISION = "0027_simulation_capital"
+LATEST_REVISION = "0029_native_fact_lookup"
 EXPECTED_INDEXES = {
     "audit_log": ("ix_audit_log_entity", ["entity_type", "entity_id"]),
     "monitor_event": ("ix_monitor_event_aggregate_sequence", ["aggregate_id", "sequence"]),
@@ -92,6 +96,37 @@ def _assert_history_indexes(engine: Engine) -> None:
         assert matching[0]["unique"] == 0
 
 
+def _installation_marker(engine: Engine) -> list[tuple]:
+    with engine.connect() as connection:
+        rows = connection.exec_driver_sql(
+            "SELECT id, installation_id, payload_json, evidence_hash "
+            "FROM source_coverage_installation"
+        ).all()
+    assert len(rows) == 1
+    identity, installation_id, raw, evidence_hash = rows[0]
+    payload = json.loads(raw)
+    assert identity == 1
+    assert str(UUID(installation_id)) == installation_id
+    assert set(payload) == {
+        "version", "installation_id", "installed_at", "member_count", "membership_hash",
+        "evidence_hash",
+    }
+    assert payload["version"] == "source-coverage-installation-v1"
+    assert payload["installation_id"] == installation_id
+    assert datetime.fromisoformat(payload["installed_at"]).utcoffset() is not None
+    assert payload["member_count"] == 0
+    assert payload["membership_hash"] == sha256(
+        b"source-coverage-membership-v1\0[]"
+    ).hexdigest()
+    unsigned = {key: value for key, value in payload.items() if key != "evidence_hash"}
+    canonical = json.dumps(unsigned, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=False, allow_nan=False)
+    assert payload["evidence_hash"] == evidence_hash == sha256(
+        b"source-coverage-installation-v1\0" + canonical.encode("utf-8")
+    ).hexdigest()
+    return [tuple(rows[0])]
+
+
 def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(populated_database):
     engine = populated_database
     before = _stored_rows(engine)
@@ -101,12 +136,22 @@ def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(popula
         "market_index_acquisition_state": [],
         "simulation_capital_book": [],
         "simulation_capital_event": [],
+        "source_coverage_cutover": [],
+        "source_coverage_input": [],
+        "source_coverage_assessment": [],
+        "source_coverage_review": [],
     }
     indexes_before = {table: inspect(engine).get_indexes(table) for table in EXPECTED_INDEXES}
 
+    marker = None
     for _ in range(2):
         upgrade_database(engine)
         _assert_history_indexes(engine)
+        observed_marker = _installation_marker(engine)
+        if marker is None:
+            marker = observed_marker
+            after_upgrade["source_coverage_installation"] = marker
+        assert observed_marker == marker
         assert _stored_rows(engine) == after_upgrade
         with engine.connect() as connection:
             assert (
@@ -126,7 +171,16 @@ def test_upgrade_repeat_downgrade_and_reupgrade_preserve_every_stored_row(popula
 
     upgrade_database(engine)
     _assert_history_indexes(engine)
-    assert _stored_rows(engine) == after_upgrade
+    reinstalled_marker = _installation_marker(engine)
+    assert reinstalled_marker[0][1] != marker[0][1]
+    assert _stored_rows(engine) == after_upgrade | {
+        "source_coverage_installation": reinstalled_marker,
+    }
+    with engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+            == LATEST_REVISION
+        )
 
 
 @pytest.mark.parametrize(

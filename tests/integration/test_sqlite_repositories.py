@@ -121,6 +121,11 @@ EXPECTED_APP_TABLES = frozenset(
         "runtime_liveness",
         "simulation_capital_book",
         "simulation_capital_event",
+        "source_coverage_installation",
+        "source_coverage_cutover",
+        "source_coverage_input",
+        "source_coverage_assessment",
+        "source_coverage_review",
         "symbol_health",
         "symbol_decision_head",
         "symbol_health_projection",
@@ -2271,7 +2276,7 @@ def test_sqlite_migration_upgrades_empty_database_and_is_idempotent(
 
         assert first_tables == EXPECTED_APP_TABLES | {"alembic_version"}
         assert second_tables == first_tables
-        assert first_revision == second_revision == "0027_simulation_capital"
+        assert first_revision == second_revision == "0029_native_fact_lookup"
     finally:
         engine.dispose()
 
@@ -2299,7 +2304,7 @@ def test_sqlite_migration_upgrades_empty_0002_episode_table_with_required_cursor
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0027_simulation_capital"
+                == "0029_native_fact_lookup"
             )
     finally:
         engine.dispose()
@@ -2445,7 +2450,7 @@ def test_plan_web_state_migration_round_trips_reconstructible_state(
     plan, source_text = _sample_plan()
 
     try:
-        upgrade_database(engine)
+        _upgrade_to(engine, "0027_simulation_capital")
         with _unit_of_work(engine) as work:
             saved = work.plans.save_draft(plan, source_text=source_text)
             work.commit()
@@ -2461,7 +2466,7 @@ def test_plan_web_state_migration_round_trips_reconstructible_state(
                 == "0006_monitor_event"
             )
 
-        upgrade_database(engine)
+        _upgrade_to(engine, "0027_simulation_capital")
 
         with engine.connect() as connection:
             assert connection.exec_driver_sql(
@@ -2482,7 +2487,7 @@ def test_plan_web_state_migration_round_trips_an_active_pointer(
     validation = validate_trade_plan(plan, available_market_evidence=ALL_MARKET_EVIDENCE)
 
     try:
-        upgrade_database(engine)
+        _upgrade_to(engine, "0027_simulation_capital")
         with _unit_of_work(engine) as work:
             saved = work.plans.save_draft(plan, source_text=source_text)
             work.commit()
@@ -2491,7 +2496,7 @@ def test_plan_web_state_migration_round_trips_an_active_pointer(
             work.commit()
 
         _downgrade_to(engine, "0006_monitor_event")
-        upgrade_database(engine)
+        _upgrade_to(engine, "0027_simulation_capital")
 
         with engine.connect() as connection:
             assert connection.exec_driver_sql(
@@ -2518,7 +2523,7 @@ def test_plan_web_state_migration_refuses_lossy_downgrade_atomically(
     plan, source_text = _sample_plan()
 
     try:
-        upgrade_database(engine)
+        _upgrade_to(engine, "0027_simulation_capital")
         with _unit_of_work(engine) as work:
             saved = work.plans.save_draft(plan, source_text=source_text)
             work.commit()
@@ -2611,7 +2616,7 @@ def test_alert_sequence_migration_backfills_existing_high_water(tmp_path: Path) 
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0027_simulation_capital"
+                == "0029_native_fact_lookup"
             )
     finally:
         engine.dispose()
@@ -2664,7 +2669,7 @@ def test_monitor_event_migration_renames_high_water_and_backfills_alerts(
         }
         assert row.occurred_at == _FIXED_NOW.isoformat()
         assert high_water == 42
-        assert revision == "0027_simulation_capital"
+        assert revision == "0029_native_fact_lookup"
     finally:
         engine.dispose()
 
@@ -2756,7 +2761,7 @@ def test_market_index_event_constraint_migration_preserves_the_existing_ledger(
             _FIXED_NOW.isoformat(),
         )
         assert high_water_after == 7
-        assert revision == "0027_simulation_capital"
+        assert revision == "0029_native_fact_lookup"
         assert inspector.get_foreign_keys("monitor_event") == foreign_keys_before
         indexes_after = inspector.get_indexes("monitor_event")
         history_index = next(
@@ -2799,7 +2804,7 @@ def test_market_index_event_constraint_migration_refuses_lossy_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0027_simulation_capital"
+                == "0029_native_fact_lookup"
             )
             assert connection.exec_driver_sql("SELECT id, sequence FROM monitor_event").one() == (
                 event_id,
@@ -3135,7 +3140,7 @@ def test_monitor_event_migration_refuses_lossy_non_alert_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0027_simulation_capital"
+                == "0029_native_fact_lookup"
             )
     finally:
         engine.dispose()
@@ -3187,7 +3192,7 @@ def test_evaluation_kind_migration_preserves_populated_0004_intraday_rows(
             "c" * 64,
             evaluated_at,
         )
-        assert revision == "0027_simulation_capital"
+        assert revision == "0029_native_fact_lookup"
     finally:
         engine.dispose()
 
@@ -3260,7 +3265,7 @@ def test_evaluation_kind_migration_refuses_lossy_official_close_downgrade(
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0027_simulation_capital"
+                == "0029_native_fact_lookup"
             )
             assert connection.exec_driver_sql(
                 "SELECT evaluation_kind, target_value FROM evaluation_ledger"
@@ -3314,7 +3319,7 @@ def test_optional_explicit_inventory_revision_migration_preserves_old_rows_and_n
         with engine.connect() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0027_simulation_capital"
+                == "0029_native_fact_lookup"
             )
             assert (
                 connection.exec_driver_sql(
@@ -3449,7 +3454,7 @@ def test_explicit_review_migration_refuses_to_discard_bound_review_evidence(
     plan, source_text = _sample_plan()
 
     try:
-        upgrade_database(engine)
+        _upgrade_to(engine, "0027_simulation_capital")
         with _unit_of_work(engine) as work:
             saved = work.plans.save_draft(plan, source_text=source_text)
             work.commit()

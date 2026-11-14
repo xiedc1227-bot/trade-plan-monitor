@@ -102,7 +102,7 @@ def test_new_empty_database_has_the_assurance_tables_and_singleton_cutover_marke
         _upgrade(engine, "head")
 
         assert _TABLES <= set(inspect(engine).get_table_names())
-        assert _revision(engine) == _REVISION
+        assert _revision(engine) == "0029_native_fact_lookup"
         with engine.connect() as connection:
             assert connection.exec_driver_sql(
                 "SELECT id FROM source_coverage_installation"
