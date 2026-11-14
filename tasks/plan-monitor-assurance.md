@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R129 (`a7d78c7`) accepts the single-file historical DRAFT/background comparison repair:32 unique passes, all28 original assertions retained and F011/F012/F013 pass. Next independent adapter/serialization contracts, remaining R123 failures and final gates; production unchanged.
+
 R128 (`5eeb105`) accepts the bounded recovery/legacy startup slice:105 unique passes, including all11 original OWNER nodes and F015. Production adds only the existing obsolete-document filter. F011/F012 neighbors remain unchanged FAIL; next daily_scope_http, other R123 failures and all final gates.
 
 R127 (`64909a9`) accepts three migration test files plus unchanged index neighbors:134 unique passes, including18 original failures; production migrations unchanged. Next remaining lifecycle-entry fixtures and other R123 failures, then all final gates.
