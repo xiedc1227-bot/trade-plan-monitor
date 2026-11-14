@@ -232,7 +232,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
-- [ ] Complete full gates. Full non-live unit5600 passed before later production fixes (R111). Certification44 now all pass after bounded fixes (R112–R116); R116 has87 unique passes including progress neighbors. Five candidate/preparation files pass120 unique checks (R117);five retry/scheduler files pass45 unique checks (R118);10 old-owner files and final unit confirmation remain pending. Full integration remains INTERRUPTED_INCOMPLETE until rerun. Later contract/replay/frontend/browser/build/generated/static and isolated capacity remain unrun.
+- [ ] Complete full gates. Full non-live unit5600 passed before later production fixes (R111). Certification44 now all pass after bounded fixes (R112–R116); R116 has87 unique passes including progress neighbors. Five candidate/preparation files pass120 unique checks (R117);five retry/scheduler files pass45 unique checks (R118);A06 and neighbors pass9 unique checks (R119);9 old-owner files and final unit confirmation remain pending. Full integration remains INTERRUPTED_INCOMPLETE until rerun. Later contract/replay/frontend/browser/build/generated/static and isolated capacity remain unrun.
 - Depends on: T21's relevant engineering delivery under P07; missing real-extraction/C07 evidence cannot be closed by regression results.
 - Files/scope: justified failures split by root cause into at most5-file repairs, paired verification-report updates.
 - Acceptance: A12; Verify: V06,V07. Reconcile initial failures/exact reruns, exclusions and overlapping counts; run capacity alone. Do not change old goldens, weaken assertions, add skips or increase resource thresholds to pass.
