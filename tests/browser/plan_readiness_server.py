@@ -66,6 +66,8 @@ class ReadinessFixture:
         self.manual_inputs = []
         self.calendar_backup = None
         self.calendar_restored = False
+        self.notification_checks = 0
+        self.notification_closed = False
 
     def guard_connections(self):
         def guard(native):
@@ -111,7 +113,7 @@ class ReadinessFixture:
 
 
 def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario="automatic"):
-    if scenario not in {"automatic", "manual-leaves"}:
+    if scenario not in {"automatic", "manual-leaves", "notifications"}:
         raise ValueError("Unknown fixed browser scenario")
     root = root.resolve()
     if not root.is_relative_to(REPOSITORY / ".pytest_cache"):
@@ -145,7 +147,32 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                 ],
             }
             plan = UnifiedTradePlan.model_validate(raw)
+        elif scenario == "notifications":
+            raw = current_sample_plan().model_dump(mode="json")
+            raw["alert_rules"] = [
+                {
+                    "kind": "RISK_ALERT",
+                    "rule_id": identity,
+                    "condition": {
+                        "type": "MINUTE_CLOSE_BELOW",
+                        "timeframe_minutes": 5,
+                        "price_fen": 10000,
+                    },
+                    "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+                }
+                for identity in ("first-reminder", "second-reminder")
+            ]
+            raw["ordinary_rules"] = []
+            plan = UnifiedTradePlan.model_validate(raw)
         state.case = installed(root, state.patch, 2, plan=plan)
+        if scenario == "notifications":
+            dispatcher = state.case.composition._runtime._liveness_owner._dispatcher
+            native_dispatch = dispatcher.dispatch_pending
+
+            async def one_pending():
+                return await native_dispatch(limit=1)
+
+            state.patch.setattr(dispatcher, "dispatch_pending", one_pending)
         state.lifecycle = PersistentPlanWebLifecycle(
             database_path=root / "monitor.sqlite3",
             clock=state.case.clock.now,
@@ -239,7 +266,10 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                         # Let the next native minute duty perform its real
                         # notification storage check after pending maintenance.
                         # The first duty's original 1us service expiry is retained.
-                        await state.case.clock.drive(state.case.clock.now() + timedelta(minutes=1))
+                        if scenario != "notifications":
+                            await state.case.clock.drive(
+                                state.case.clock.now() + timedelta(minutes=1)
+                            )
                     state.cycles = 1
                     yield
             finally:
@@ -279,6 +309,44 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                 work.commit()
             state.calendar_backup = saved
             return {"calendarRow": saved, "inspection": state.inspect()}
+
+        @app.post(PREFIX + "/notification-next-check", dependencies=guards)
+        async def notification_next_check(command: NextTarget):
+            if (
+                scenario != "notifications"
+                or state.notification_checks
+                or state.notification_closed
+            ):
+                raise ApiError(ApiErrorCode.CONFLICT)
+            async with asyncio.timeout(30):
+                await state.case.clock.drive(state.case.clock.now() + timedelta(minutes=1))
+            state.notification_checks = 1
+            return state.inspect()
+
+        @app.post(PREFIX + "/notification-close", dependencies=guards)
+        async def notification_close(command: NextTarget):
+            if (
+                scenario != "notifications"
+                or not state.notification_checks
+                or state.notification_closed
+            ):
+                raise ApiError(ApiErrorCode.CONFLICT)
+            state.case.composition._runtime._liveness_owner._dispatcher.begin_shutdown()
+            state.notification_closed = True
+            return state.inspect()
+
+        @app.post(PREFIX + "/notification-expire", dependencies=guards)
+        async def notification_expire(command: NextTarget):
+            if (
+                scenario != "notifications"
+                or not state.notification_checks
+                or state.notification_closed
+            ):
+                raise ApiError(ApiErrorCode.CONFLICT)
+            service = state.case.composition._runtime._liveness_owner._notification_service
+            state.case.clock.current = service.valid_until + timedelta(microseconds=1)
+            state.notification_closed = True
+            return state.inspect()
 
         @app.post(PREFIX + "/calendar-restore", dependencies=guards)
         async def calendar_restore(command: NextTarget):
@@ -440,7 +508,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("automatic", "manual-leaves"), default="automatic")
+    parser.add_argument(
+        "--scenario", choices=("automatic", "manual-leaves", "notifications"), default="automatic"
+    )
     args = parser.parse_args()
     app = create_fixture_app(
         args.root, port=args.port, static_directory=REPOSITORY / "web/dist", scenario=args.scenario

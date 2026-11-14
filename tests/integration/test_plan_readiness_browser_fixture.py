@@ -705,3 +705,159 @@ def test_fixed_calendar_controls_reject_payloads_foreign_clients_and_repeats(tmp
             assert state.inspect() == before
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("loss", ["closed", "expired"])
+def test_two_native_alert_receipts_remain_history_after_current_service_is_lost(
+    tmp_path, monkeypatch, loss
+):
+    from types import SimpleNamespace
+
+    from tests.integration.test_plan_readiness_scenarios import observation_only
+
+    async def scenario():
+        async with workspace(tmp_path, scenario="notifications") as (state, transport):
+            owner = state.case.composition._runtime._liveness_owner
+            guarded = SimpleNamespace(
+                pipeline=owner._pipeline,
+                engine=owner._engine,
+                sdk=state.case.sdk,
+                dispatcher=owner._dispatcher,
+            )
+            observations = []
+
+            async def observe():
+                before = state.inspect()
+                with observation_only(guarded, monkeypatch):
+                    response = await request(transport, state.readiness_path)
+                assert response.status_code == 200, response.text
+                assert state.inspect() == before
+                value = response.json()
+                assert value["authorityGranted"] is False
+                observations.append({"inspection": before, "readiness": value})
+                return value
+
+            def channel(rule):
+                return next(
+                    row
+                    for row in rule["facts"]["notification"]["channels"]
+                    if row["channel"] == "IN_APP"
+                )
+
+            def notification(value):
+                return next(row for row in value["axes"] if row["axis"] == "NOTIFICATION_DELIVERY")
+
+            partial = await observe()
+            assert len(partial["rules"]) == 2
+            assert all(row["state"] == "CONDITION_TRUE" for row in partial["rules"])
+            assert (
+                sum(channel(row).get("latestAttempt") is not None for row in partial["rules"]) == 1
+            )
+            assert notification(partial)["state"] == "UNKNOWN"
+            baseline = state.inspect()
+            result = await request(
+                transport, state.prefix + "/notification-next-check", method="POST", body={}
+            )
+            assert result.status_code == 200, result.text
+            complete = await observe()
+            assert notification(complete)["state"] == "PASS"
+            events, attempts = [], []
+            for row in complete["rules"]:
+                receipt = channel(row)["latestAttempt"]
+                assert receipt["status"] == "DELIVERED"
+                assert channel(row).get("eligible") is None
+                events.append(row["facts"]["notification"]["eventId"])
+                assert receipt["eventId"] == row["facts"]["notification"]["eventId"]
+                attempts.append(receipt["id"])
+            assert len(set(events)) == len(set(attempts)) == 2
+            before_close = state.inspect()
+            assert before_close["storage"]["delivery_attempt"]["count"] == 2
+            lost_service = await request(
+                transport,
+                state.prefix
+                + ("/notification-close" if loss == "closed" else "/notification-expire"),
+                method="POST",
+                body={},
+            )
+            assert lost_service.status_code == 200, lost_service.text
+            lost = await observe()
+            assert lost["summary"] == "UNKNOWN" and lost["freshUntil"] is None
+            assert notification(lost)["state"] == "UNKNOWN"
+            for current, original in zip(lost["rules"], complete["rules"], strict=True):
+                assert channel(current)["latestAttempt"] == channel(original)["latestAttempt"]
+                assert channel(current).get("eligible") is None
+                for field in ("createdAt", "target"):
+                    assert (
+                        current["facts"]["notification"][field]
+                        == original["facts"]["notification"][field]
+                    )
+            assert await observe() == lost
+            assert state.inspect() == {**before_close, "now": state.case.clock.now().isoformat()}
+            for table in (
+                "plan_version",
+                "plan_review_provenance",
+                "source_coverage_review",
+                "active_plan",
+                "plan_activation_state",
+            ):
+                assert before_close["storage"][table] == baseline["storage"][table]
+            assert before_close["storage"]["dailyKinds"].get("FACT", 0) == 0
+            from trade_plan_monitor.state.models import DeliveryAttempt
+
+            with state.lifecycle._unit_of_work() as work:
+                for rule in complete["rules"]:
+                    receipt = channel(rule)["latestAttempt"]
+                    row = work.daily.session.get(DeliveryAttempt, receipt["id"])
+                    assert (row.event_id, row.channel, row.status, row.delivered_at) == (
+                        receipt["eventId"],
+                        "IN_APP",
+                        "DELIVERED",
+                        receipt["deliveredAt"],
+                    )
+            (tmp_path / "notification-evidence.json").write_text(
+                json.dumps(
+                    {"loss": loss, "observations": observations}, ensure_ascii=False, indent=2
+                ),
+                encoding="utf-8",
+            )
+
+    asyncio.run(scenario())
+
+
+def test_fixed_notification_controls_are_loopback_one_shot_and_accept_no_selected_inputs(tmp_path):
+    async def scenario():
+        async with workspace(tmp_path, scenario="notifications") as (state, transport):
+            before = state.inspect()
+            for suffix in ("notification-next-check", "notification-close", "notification-expire"):
+                path = state.prefix + "/" + suffix
+                invalid = await request(
+                    transport, path, method="POST", body={"eventId": "selected"}
+                )
+                assert invalid.status_code == 422
+                async with httpx.ASGITransport(state.app, client=("192.0.2.1", 50000)) as foreign:
+                    assert (await request(foreign, path, method="POST", body={})).status_code == 403
+                assert state.inspect() == before
+            check = state.prefix + "/notification-next-check"
+            close = state.prefix + "/notification-close"
+            expire = state.prefix + "/notification-expire"
+            for path, expected in (
+                (close, 409),
+                (expire, 409),
+                (check, 200),
+                (check, 409),
+                (close, 200),
+                (close, 409),
+                (expire, 409),
+            ):
+                response = await request(transport, path, method="POST", body={})
+                assert response.status_code == expected, response.text
+        async with workspace(tmp_path / "automatic") as (state, transport):
+            before = state.inspect()
+            for suffix in ("notification-next-check", "notification-close", "notification-expire"):
+                response = await request(
+                    transport, state.prefix + "/" + suffix, method="POST", body={}
+                )
+                assert response.status_code == 409
+            assert state.inspect() == before
+
+    asyncio.run(scenario())

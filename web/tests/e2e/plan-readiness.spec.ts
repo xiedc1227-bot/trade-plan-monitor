@@ -48,9 +48,10 @@ async function stop(server: ChildProcess, request: APIRequestContext, base: stri
   expect(server.signalCode, "no forced termination").toBeNull();
 }
 
-const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean }>({
+const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean; notificationJourney: boolean }>({
   manualLeaves: [false, { option: true }],
-  readinessFixture: async ({ page, context, request, manualLeaves }, use, testInfo) => {
+  notificationJourney: [false, { option: true }],
+  readinessFixture: async ({ page, context, request, manualLeaves, notificationJourney }, use, testInfo) => {
     const port = await freePort(), base = `http://127.0.0.1:${port}`;
     // Playwright's normal outputDir is OS temp. SQLite stays in an independently
     // fresh project-local directory regardless of reporter/output overrides.
@@ -59,7 +60,7 @@ const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boole
     const root = await mkdtemp(join(databaseParent, "case-"));
     const server = spawn(join(repo, ".venv/Scripts/python.exe"), ["-X", "utf8", "-m",
       "tests.browser.plan_readiness_server", "--port", String(port), "--root", root,
-      ...(manualLeaves ? ["--scenario", "manual-leaves"] : [])],
+      ...(manualLeaves ? ["--scenario", "manual-leaves"] : notificationJourney ? ["--scenario", "notifications"] : [])],
     { cwd: repo, windowsHide: true, env: { ...process.env, PYTHONUTF8: "1" } });
     let log = "", phase = "RUNNING";
     const record = (value: unknown) => { log = (log + String(value)).slice(-65536); };
@@ -453,6 +454,97 @@ recoveryTest("native calendar loss and next-cycle recovery update the same open 
     }, null, 2) });
   }
 });
+
+const notificationTest = recoveryTest.extend({ notificationJourney: true });
+for (const loss of ["closed", "expired"] as const) {
+  notificationTest(`native two-alert receipts remain historical when notification service is ${loss}`, async ({ page, request, readinessFixture: fixture, calendarTransition }, testInfo) => {
+    const snapshots: Record<string, unknown> = {};
+    const channel = (rule: ReadinessAssessment["rules"][number]) => rule.facts.notification!.channels!.find(row => row.channel === "IN_APP")!;
+    const axis = (value: ReadinessAssessment) => value.axes.find(row => row.axis === "NOTIFICATION_DELIVERY")!;
+    const refresh = async () => {
+      const read = page.waitForResponse(response => response.url().endsWith("/monitor-readiness"));
+      await pane(page).getByRole("button", { name: "重新读取监控就绪状态", exact: true }).click();
+      const response = await read;
+      expect(response.status(), await response.text()).toBe(200);
+      return await response.json() as ReadinessAssessment;
+    };
+    const screenshot = async (label: string) => {
+      await page.setViewportSize({ width: 1280, height: 2800 });
+      await pane(page).getByRole("heading", { name: "逐规则监控就绪", exact: true }).scrollIntoViewIfNeeded();
+      await page.clock.runFor(64);
+      const image = testInfo.outputPath(`notification-${label}.png`);
+      await pane(page).screenshot({ path: image });
+      await testInfo.attach(`notification-${label}`, { path: image, contentType: "image/png" });
+    };
+    try {
+      const opening = page.waitForResponse(response => response.url().endsWith("/monitor-readiness"));
+      await page.goto(fixture.base + fixture.initial.planUrl);
+      const partial: ReadinessAssessment = await (await opening).json(); snapshots.partial = partial;
+      const originalPane = await pane(page).elementHandle();
+      const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+      expect(partial.rules).toHaveLength(2);
+      expect(partial.rules.every(row => row.state === "CONDITION_TRUE")).toBe(true);
+      expect(partial.rules.filter(row => channel(row).latestAttempt?.status === "DELIVERED")).toHaveLength(1);
+      expect(axis(partial).state).toBe("UNKNOWN");
+      await expect(pane(page)).not.toContainText("监控已就绪");
+      for (const row of partial.rules) {
+        const rendered = pane(page).getByRole("heading", { name: `提醒规则 · ${row.facts.ownerId}`, exact: true }).locator("..");
+        await expect(rendered).toContainText(channel(row).latestAttempt ? "历史发送结果：已送达" : "历史发送结果：未验证");
+      }
+      await screenshot("partial");
+      calendarTransition.open = true;
+      const check = await command(request, fixture, prefix + "/notification-next-check", {});
+      expect(check.status(), await check.text()).toBe(200);
+      const after: Inspection = await check.json(); snapshots.after = after;
+      await page.clock.setSystemTime(new Date(after.now));
+      const complete = await refresh(); snapshots.complete = complete;
+      expect(axis(complete).state).toBe("PASS");
+      expect(complete.summary).toBe("READY_FOR_MONITORING");
+      const attempts = complete.rules.map(row => channel(row).latestAttempt!);
+      expect(new Set(attempts.map(row => row.id)).size).toBe(2);
+      expect(new Set(attempts.map(row => row.eventId)).size).toBe(2);
+      for (const row of complete.rules) {
+        expect(channel(row).latestAttempt).toMatchObject({ status: "DELIVERED", eventId: row.facts.notification!.eventId });
+        expect(channel(row).eligible == null).toBe(true);
+        const prior = partial.rules.find(old => old.facts.ownerId === row.facts.ownerId)!;
+        if (channel(prior).latestAttempt) expect(channel(row).latestAttempt).toEqual(channel(prior).latestAttempt);
+      }
+      await page.clock.runFor(2000);
+      calendarTransition.open = false;
+      await expect(pane(page)).toContainText("监控已就绪");
+      await screenshot("complete");
+      const ending = await command(request, fixture, prefix + (loss === "closed" ? "/notification-close" : "/notification-expire"), {});
+      expect(ending.status(), await ending.text()).toBe(200);
+      const ended: Inspection = await ending.json(); snapshots.ended = ended;
+      await page.clock.setSystemTime(new Date(ended.now));
+      const lost = await refresh(); snapshots.lost = lost;
+      expect(lost.summary).toBe("UNKNOWN"); expect(lost.freshUntil).toBeNull();
+      expect(axis(lost).state).toBe("UNKNOWN");
+      for (const row of lost.rules) {
+        const prior = complete.rules.find(old => old.facts.ownerId === row.facts.ownerId)!;
+        expect(channel(row).latestAttempt).toEqual(channel(prior).latestAttempt);
+        expect(channel(row).eligible == null).toBe(true);
+        expect(row.facts.notification!.createdAt).toBe(prior.facts.notification!.createdAt);
+        expect(row.facts.notification!.target).toEqual(prior.facts.notification!.target);
+        const rendered = pane(page).getByRole("heading", { name: `提醒规则 · ${row.facts.ownerId}`, exact: true }).locator("..");
+        await expect(rendered).toContainText("历史发送结果：已送达");
+        await expect(rendered).toContainText("当前发送资格：未验证");
+      }
+      await expect(pane(page)).not.toContainText("监控已就绪");
+      expect(await refresh()).toEqual(lost);
+      expect((await fixture.inspect()).storage).toEqual(after.storage);
+      for (const table of ["plan_version", "source_coverage_review", "plan_review_provenance", "active_plan", "plan_activation_state"])
+        expect(after.storage[table]).toEqual(fixture.initial.storage[table]);
+      expect(after.storage.dailyKinds.FACT ?? 0).toBe(0);
+      expect(after.storage.delivery_attempt).toMatchObject({ count: 2 });
+      expect(await originalPane!.evaluate(element => element.isConnected)).toBe(true);
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+      await screenshot(`history-${loss}`);
+    } finally {
+      await testInfo.attach("native-notification-history", { contentType: "application/json", body: JSON.stringify({ loss, initial: fixture.initial, snapshots }, null, 2) });
+    }
+  });
+}
 
 test("readiness fits four widths and exposes native keyboard focus and local WCAG evidence", async ({ page, readinessFixture: fixture }, testInfo) => {
   await open(page, fixture);
