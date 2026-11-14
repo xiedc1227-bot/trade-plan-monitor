@@ -1293,8 +1293,9 @@ def test_current_decision_rolls_back_when_token_changes_after_result_staging(
 
         monkeypatch.setattr(DailyRepository, "save", drift_after_result)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._run_deadline.__self__
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            state = runtime._liveness_owner
             with state._session_factory() as session:
                 before = _current_ledger(session)
             deadline = MarketDeadline(
@@ -1304,7 +1305,7 @@ def test_current_decision_rolls_back_when_token_changes_after_result_staging(
                 bar_end=NOW.replace(second=0),
             )
             with pytest.raises(RuntimeError):
-                await state.run_deadline(deadline)
+                await runtime._execute_deadline(deadline)
             assert changed
             with state._session_factory() as session:
                 assert _minute_count(session) == 0
@@ -1441,7 +1442,8 @@ def test_worker_thread_latch_before_current_commit_rejects_staged_decision(
 
         monkeypatch.setattr(DailyRepository, "save", stage_result)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._liveness_owner
             with state._session_factory() as session:
                 before = _current_ledger(session)
@@ -1478,7 +1480,7 @@ def test_worker_thread_latch_before_current_commit_rejects_staged_decision(
                 bar_end=NOW.replace(second=0),
             )
             with pytest.raises(RuntimeError):
-                await state.run_deadline(deadline)
+                await runtime._execute_deadline(deadline)
             assert staged and worker_latched
             calls = tuple(sdk.calls)
             with pytest.raises(RequestControlError) as blocked:
@@ -1520,7 +1522,8 @@ def test_revocation_after_final_permit_finishes_one_inflight_decision(
 
         monkeypatch.setattr(DailyRepository, "save", stage_result)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
@@ -1558,7 +1561,7 @@ def test_revocation_after_final_permit_finishes_one_inflight_decision(
                 bar_end=NOW.replace(second=0),
             )
             with pytest.raises(RuntimeError, match="runtime index commit admission revoked"):
-                await state.run_deadline(deadline)
+                await runtime._execute_deadline(deadline)
             assert revoked_after_permit
             with state._session_factory() as session:
                 assert _minute_count(session) == 1
@@ -1593,7 +1596,8 @@ def test_stop_before_final_decision_permit_rolls_back_staged_result(
 
         monkeypatch.setattr(DailyRepository, "save", stop_after_staging)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
             state = composition._runtime._liveness_owner
             with state._session_factory() as session:
                 before = _current_ledger(session)
@@ -1604,7 +1608,7 @@ def test_stop_before_final_decision_permit_rolls_back_staged_result(
                 bar_end=NOW.replace(second=0),
             )
             with pytest.raises(RuntimeError, match="commit admission changed"):
-                await state.run_deadline(deadline)
+                await runtime._execute_deadline(deadline)
             assert stop_started
             with state._session_factory() as session:
                 assert _minute_count(session) == 0
