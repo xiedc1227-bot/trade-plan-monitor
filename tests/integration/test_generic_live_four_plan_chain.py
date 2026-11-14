@@ -40,9 +40,19 @@ def test_actual_four_source_chain_rejects_historical_fourth_source_risk_withdraw
         else:
             assert not candidate.policy_ready
             assert any(i.startswith("UPDATE_WITHDRAWAL_SCOPE_REQUIRED") for i in candidate.issues)
+        decoded = MaterializedUpdateCandidate.model_validate_json(candidate.payload_json)
+        assert decoded.model_dump(mode="json") == materialized.model_dump(mode="json")
+        assert decoded.review == materialized.review
         assert (
-            MaterializedUpdateCandidate.model_validate_json(candidate.payload_json) == materialized
+            decoded.review.evidence_hash
+            == materialized.review.evidence_hash
+            == candidate.evidence_hash
         )
+        assert decoded.extraction.evidence_hash == materialized.extraction.evidence_hash
+        assert decoded.extraction.diagnostic is None
+        assert decoded.extraction.source_derivation is None
+        assert decoded.extraction.derivation_issues == ()
+        assert decoded.to_preparation_candidate().payload_json == candidate.payload_json
         review = materialized.review
         reviews.append(review)
     root, second, third, fourth = [r.draft for r in reviews]

@@ -439,7 +439,7 @@ def test_queued_risk_quantity_is_rechecked_after_actual_inventory_changes(chain)
 
 def test_real_sdk_normalizer_production_adapter_and_official_scheduler(chain):
     import asyncio
-    from types import SimpleNamespace
+    from types import MethodType, SimpleNamespace
 
     import pandas as pd
 
@@ -482,8 +482,12 @@ def test_real_sdk_normalizer_production_adapter_and_official_scheduler(chain):
         _controller=Controller(),
         _daily_basis_cache={},
         _runtime_generation=uuid4(),
+        _runtime_status_enabled=False,
         is_open_on=lambda day: True,
     )
+    # This independent adapter has no lifecycle owner and creates no current admission.
+    state._daily_source_begin = MethodType(ProductionMonitorPipeline._daily_source_begin, state)
+    state._daily_source_finish = MethodType(ProductionMonitorPipeline._daily_source_finish, state)
     state.provider = TushareMarketDataProvider(
         SDK(), now=lambda: chain.now, is_open_on=lambda day: True
     )
