@@ -27,6 +27,7 @@ from tests.integration.test_market_linkage_review import source_mapping
 
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json, load_daily_draft_json
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
+from trade_plan_monitor.state.models import TradingCalendar
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.origin_guard import LocalSpaRoute
@@ -63,6 +64,8 @@ class ReadinessFixture:
         self.source_cases = {}
         self.scenario = "automatic"
         self.manual_inputs = []
+        self.calendar_backup = None
+        self.calendar_restored = False
 
     def guard_connections(self):
         def guard(native):
@@ -94,6 +97,9 @@ class ReadinessFixture:
             "now": self.case.clock.now().isoformat(),
             "runtimeGeneration": str(runtime.runtime_generation),
             "completionResultHash": None if proof is None else proof.result_hash,
+            "completionRecordId": (
+                None if proof is None else getattr(proof.input_stamp, "immutable_record_id", None)
+            ),
             "cycles": self.cycles,
             "sdkCalls": len(self.case.sdk.calls),
             "externalAttempts": list(self.external_attempts),
@@ -255,6 +261,39 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                 await state.case.clock.drive(state.case.clock.now() + timedelta(minutes=5))
             state.cycles = 2
             return state.inspect()
+
+        @app.post(PREFIX + "/calendar-loss", dependencies=guards)
+        async def calendar_loss(command: NextTarget):
+            if state.scenario != "automatic" or state.cycles != 1 or state.calendar_backup:
+                raise ApiError(ApiErrorCode.CONFLICT)
+            pipeline = state.case.composition._runtime._liveness_owner._pipeline
+            inputs = pipeline.daily_evaluations._current_inputs[state.case.plan.symbol]
+            closed = next(day for day in inputs.trading_calendar if not day.is_open)
+            with state.lifecycle._unit_of_work() as work:
+                row = work.daily.session.get(TradingCalendar, (closed.exchange, closed.cal_date))
+                saved = {
+                    key: getattr(row, key)
+                    for key in ("exchange", "cal_date", "is_open", "previous_trade_date")
+                }
+                work.daily.session.delete(row)
+                work.commit()
+            state.calendar_backup = saved
+            return {"calendarRow": saved, "inspection": state.inspect()}
+
+        @app.post(PREFIX + "/calendar-restore", dependencies=guards)
+        async def calendar_restore(command: NextTarget):
+            if (
+                state.scenario != "automatic"
+                or state.cycles != 1
+                or state.calendar_backup is None
+                or state.calendar_restored
+            ):
+                raise ApiError(ApiErrorCode.CONFLICT)
+            with state.lifecycle._unit_of_work() as work:
+                work.daily.session.add(TradingCalendar(**state.calendar_backup))
+                work.commit()
+            state.calendar_restored = True
+            return {"calendarRow": state.calendar_backup, "inspection": state.inspect()}
 
         @app.get(PREFIX + "/manual-evidence", dependencies=guards)
         async def manual_evidence():

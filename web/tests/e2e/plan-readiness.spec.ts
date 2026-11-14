@@ -15,6 +15,7 @@ const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 interface Inspection {
   temporary: boolean; root: string; database: string; planVersionId: string; planUrl: string;
   now: string; runtimeGeneration: string; completionResultHash: string; cycles: number;
+  completionRecordId: string | null;
   sdkCalls: number; externalAttempts: string[];
   storage: Record<string, unknown> & { dailyKinds: Record<string, number> };
 }
@@ -312,6 +313,145 @@ test("two native scheduled targets evaluate an unchanged reviewed rule without n
   if (target?.kind === "INTRADAY") await expect(pane(page)).toContainText(target.bucket_end.replace("T", " "));
   await testInfo.attach("automatic-evaluation-evidence", { contentType: "application/json", body: JSON.stringify({ before, after, first, second,
     scope: "one automatic alert condition; fixture initial review retained; zero additional FACT/review" }, null, 2) });
+});
+
+// This recovery case retains every real dashboard 503 and requires a later
+// successful native read. The unchanged journeys keep the strict zero-error audit.
+const recoveryTest = test.extend<{ calendarTransition: { open: boolean } }>({
+  calendarTransition: async ({}, use) => { await use({ open: false }); },
+  browserAudit: async ({ page, calendarTransition }, use, testInfo) => {
+    const messages: { type: string; text: string; url: string }[] = [];
+    const failures: string[] = [], pageErrors: string[] = [];
+    const responses: { url: string; status: number; body: unknown; transition: boolean; sameOrigin: boolean; method: string }[] = [];
+    const pending: Promise<void>[] = [];
+    page.on("console", message => {
+      if (["error", "warning"].includes(message.type())) messages.push({
+        type: message.type(), text: message.text(), url: message.location().url,
+      });
+    });
+    page.on("pageerror", error => pageErrors.push(error.message));
+    page.on("requestfailed", request => {
+      if (request.failure()?.errorText !== "net::ERR_ABORTED") failures.push(`${request.url()}: ${request.failure()?.errorText}`);
+    });
+    page.on("response", response => {
+      if (new URL(response.url()).pathname === "/api/v1/dashboard") {
+        const row = { url: response.url(), status: response.status(), body: null as unknown,
+          transition: calendarTransition.open, method: response.request().method(),
+          sameOrigin: new URL(response.url()).origin === new URL(page.url()).origin };
+        responses.push(row);
+        pending.push(response.json().then(body => { row.body = body; }));
+      }
+    });
+    await use();
+    await Promise.all(pending);
+    await testInfo.attach("native-recovery-browser-audit", { contentType: "application/json",
+      body: JSON.stringify({ messages, failures, pageErrors, responses }, null, 2) });
+    expect(failures).toEqual([]); expect(pageErrors).toEqual([]);
+    for (const [index, response] of responses.entries()) {
+      expect([200, 503]).toContain(response.status);
+      if (response.status === 503) {
+        expect(response.transition, "503 limited to the actual next-duty/reconnect window").toBe(true);
+        expect(response.sameOrigin).toBe(true); expect(response.method).toBe("GET");
+        expect(response.body).toMatchObject({ error: { code: "SERVICE_UNAVAILABLE" } });
+        expect(responses.slice(index + 1).some(next => next.url === response.url && next.status === 200),
+          "every actual temporary dashboard 503 is followed by successful application recovery").toBe(true);
+      }
+    }
+    for (const message of messages) {
+      expect(message.type).toBe("error");
+      expect(message.text).toBe("Failed to load resource: the server responded with a status of 503 (Service Unavailable)");
+      expect(responses.some(response => response.status === 503 && response.url === message.url)).toBe(true);
+    }
+  },
+});
+recoveryTest("native calendar loss and next-cycle recovery update the same open page", async ({ page, request, calendarTransition, readinessFixture: fixture }, testInfo) => {
+  const initial = await fixture.inspect(), first = await fixture.read();
+  const observations: { phase: string; status: number; body: unknown }[] = [];
+  const pending: Promise<void>[] = [];
+  let phase = "INITIAL", navigations = 0;
+  page.on("request", request => { if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations++; });
+  page.on("response", response => {
+    if (response.url().endsWith("/monitor-readiness")) {
+      const captured = phase;
+      pending.push(response.json().then(body => {
+        observations.push({ phase: captured, status: response.status(), body });
+      }));
+    }
+  });
+  const refresh = async () => {
+    const read = page.waitForResponse(response => response.url().endsWith("/monitor-readiness"));
+    await pane(page).getByRole("button", { name: "重新读取监控就绪状态", exact: true }).click();
+    const response = await read;
+    expect(response.status(), await response.text()).toBe(200);
+    return await response.json() as ReadinessAssessment;
+  };
+  const snapshots: Record<string, unknown> = { initial, first };
+  try {
+    await open(page, fixture);
+    const originalPane = await pane(page).elementHandle();
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    phase = "MISSING_CALENDAR_ROW";
+    const loss = await command(request, fixture, prefix + "/calendar-loss", {});
+    expect(loss.status(), await loss.text()).toBe(200);
+    snapshots.removed = await loss.json();
+    const lost = await refresh(); snapshots.lost = lost;
+    expect(lost.summary).toBe("UNKNOWN");
+    expect(lost.rules[0]!.state).toBe("UNKNOWN");
+    await expect(pane(page)).not.toContainText("监控已就绪");
+    await expect(pane(page)).toContainText("当前运行依据不可用");
+    expect((await fixture.inspect()).completionRecordId).toBe(initial.completionRecordId);
+    await page.setViewportSize({ width: 1280, height: 2600 });
+    for (const label of ["missing", "recovered"]) {
+      if (label === "recovered") {
+        phase = "EXACT_ROW_RESTORED";
+        const restore = await command(request, fixture, prefix + "/calendar-restore", {});
+        expect(restore.status(), await restore.text()).toBe(200);
+        snapshots.restored = await restore.json();
+        const interim = await refresh(); snapshots.interim = interim;
+        expect(interim.snapshot.computedAt).toBe(first.snapshot.computedAt);
+        expect(interim.summary).toBe("READY_FOR_MONITORING");
+        expect(interim.rules[0]!.state).toBe("CONDITION_FALSE");
+        expect(interim.freshUntil).toBe(first.freshUntil);
+        await expect(pane(page)).toContainText("监控已就绪");
+        expect((await fixture.inspect()).completionRecordId).toBe(initial.completionRecordId);
+        expect((await fixture.inspect()).storage).toEqual(initial.storage);
+        phase = "REAL_NEXT_CYCLE";
+        calendarTransition.open = true;
+        const after = await fixture.next(); snapshots.after = after;
+        await page.clock.setSystemTime(new Date(after.now));
+        const current = await refresh(); snapshots.current = current;
+        expect(current.summary).toBe("READY_FOR_MONITORING");
+        expect(current.rules[0]!.state).toBe("CONDITION_FALSE");
+        expect(after.completionRecordId).not.toBe(initial.completionRecordId);
+        expect(current.rules[0]!.facts.leaves[0]!.evidenceRefs).toEqual([after.completionRecordId]);
+        expect(current.rules[0]!.facts.evaluatedTarget).not.toEqual(first.rules[0]!.facts.evaluatedTarget);
+        for (const table of ["plan_version", "source_coverage_review", "plan_review_provenance", "plan_activation_state", "active_plan"])
+          expect(after.storage[table]).toEqual(initial.storage[table]);
+        expect(after.storage.dailyKinds.FACT ?? 0).toBe(initial.storage.dailyKinds.FACT ?? 0);
+        expect(after.externalAttempts).toEqual([]);
+        await expect(pane(page)).toContainText("监控已就绪");
+        await expect(pane(page)).toContainText("条件未成立（已完成检查）");
+        // Permit the unchanged application's own bounded reconnect timer to run;
+        // this advances only browser time, never server proofs or fixture duties.
+        await page.clock.runFor(2000);
+        calendarTransition.open = false;
+      }
+      await pane(page).getByRole("heading", { name: "逐规则监控就绪", exact: true }).scrollIntoViewIfNeeded();
+      await page.clock.runFor(64);
+      const image = testInfo.outputPath(`calendar-${label}.png`);
+      await pane(page).screenshot({ path: image });
+      await testInfo.attach(`calendar-${label}`, { path: image, contentType: "image/png" });
+    }
+    expect(navigations, "one original navigation; page never leaves or reloads").toBe(1);
+    expect(await originalPane!.evaluate(element => element.isConnected)).toBe(true);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    expect(page.url()).toBe(fixture.base + fixture.initial.planUrl);
+  } finally {
+    await Promise.all(pending);
+    await testInfo.attach("native-calendar-recovery", { contentType: "application/json", body: JSON.stringify({
+      snapshots, observations, navigations, scope: "fixed automatic alert; exact temporary calendar row; same document; real next duty",
+    }, null, 2) });
+  }
 });
 
 test("readiness fits four widths and exposes native keyboard focus and local WCAG evidence", async ({ page, readinessFixture: fixture }, testInfo) => {

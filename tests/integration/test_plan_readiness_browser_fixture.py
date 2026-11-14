@@ -584,3 +584,124 @@ def test_closed_calendar_row_loss_revokes_original_manual_owner_proof(tmp_path):
             assert after["sourceAlignment"]["calendarFingerprintMatches"] is False
 
     asyncio.run(scenario())
+
+
+def test_calendar_restore_preserves_original_proof_then_next_cycle_creates_new_proof(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from tests.integration.test_plan_readiness_scenarios import observation_only
+
+    async def scenario():
+        async with workspace(tmp_path) as (state, transport):
+            runtime = state.case.composition._runtime
+            owner = runtime._liveness_owner
+            guarded = SimpleNamespace(
+                pipeline=owner._pipeline, engine=owner._engine, sdk=state.case.sdk
+            )
+            observations = []
+
+            async def observe():
+                before = state.inspect()
+                with observation_only(guarded, monkeypatch):
+                    response = await request(transport, state.readiness_path)
+                assert response.status_code == 200, response.text
+                assert state.inspect() == before
+                value = response.json()
+                assert value["authorityGranted"] is False
+                observations.append({"inspection": before, "readiness": value})
+                return value
+
+            initial = state.inspect()
+            first = await observe()
+            assert first["summary"] == "READY_FOR_MONITORING"
+            missing = await request(
+                transport, state.prefix + "/calendar-loss", method="POST", body={}
+            )
+            assert missing.status_code == 200, missing.text
+            lost = await observe()
+            assert lost["summary"] != "READY_FOR_MONITORING"
+            assert lost["rules"][0]["state"] == "UNKNOWN"
+            assert state.inspect()["completionRecordId"] == initial["completionRecordId"]
+            restored = await request(
+                transport, state.prefix + "/calendar-restore", method="POST", body={}
+            )
+            assert restored.status_code == 200, restored.text
+            assert restored.json()["calendarRow"] == missing.json()["calendarRow"]
+            interim = await observe()
+            assert interim == first  # Same original proof/timestamps, without renewal.
+            assert state.inspect()["completionRecordId"] == initial["completionRecordId"]
+            assert state.inspect()["storage"] == initial["storage"]
+            next_cycle = await request(
+                transport, state.prefix + "/next-target", method="POST", body={}
+            )
+            assert next_cycle.status_code == 200, next_cycle.text
+            current = await observe()
+            after = state.inspect()
+            assert current["summary"] == "READY_FOR_MONITORING"
+            assert current["rules"][0]["state"] == "CONDITION_FALSE"
+            assert after["completionRecordId"] != initial["completionRecordId"]
+            assert current["rules"][0]["facts"]["leaves"][0]["evidenceRefs"] == [
+                after["completionRecordId"]
+            ]
+            assert (
+                current["rules"][0]["facts"]["evaluatedTarget"]
+                != (first["rules"][0]["facts"]["evaluatedTarget"])
+            )
+            for table in (
+                "plan_version",
+                "source_coverage_review",
+                "plan_review_provenance",
+                "plan_activation_state",
+                "active_plan",
+            ):
+                assert after["storage"][table] == initial["storage"][table]
+            assert after["storage"]["dailyKinds"].get("FACT", 0) == (
+                initial["storage"]["dailyKinds"].get("FACT", 0)
+            )
+            assert after["externalAttempts"] == []
+            (tmp_path / "calendar-recovery-evidence.json").write_text(
+                json.dumps(
+                    {
+                        "observations": observations,
+                        "removed": missing.json(),
+                        "restored": restored.json(),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+    asyncio.run(scenario())
+
+
+def test_fixed_calendar_controls_reject_payloads_foreign_clients_and_repeats(tmp_path):
+    async def scenario():
+        async with workspace(tmp_path) as (state, transport):
+            before = state.inspect()
+            for suffix in ("calendar-loss", "calendar-restore"):
+                path = state.prefix + "/" + suffix
+                invalid = await request(
+                    transport, path, method="POST", body={"calDate": "2026-01-01"}
+                )
+                assert invalid.status_code == 422
+                async with httpx.ASGITransport(state.app, client=("192.0.2.1", 50000)) as foreign:
+                    assert (await request(foreign, path, method="POST", body={})).status_code == 403
+                assert state.inspect() == before
+            restore = state.prefix + "/calendar-restore"
+            loss = state.prefix + "/calendar-loss"
+            for path, expected in (
+                (restore, 409),
+                (loss, 200),
+                (loss, 409),
+                (restore, 200),
+                (restore, 409),
+                (loss, 409),
+            ):
+                result = await request(transport, path, method="POST", body={})
+                assert result.status_code == expected, result.text
+            assert state.inspect() == before
+
+    asyncio.run(scenario())
