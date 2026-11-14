@@ -47,7 +47,7 @@ from trade_plan_monitor.runtime.request_control import (
     create_live_tushare_request_controller,
 )
 from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
-from trade_plan_monitor.runtime.service import RuntimeEvaluationService
+from trade_plan_monitor.runtime.service import RuntimeEvaluationService, _RetryWaitOutcome
 from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.daily_repository import DailyRepository
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
@@ -1118,6 +1118,17 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
         runtime = composition._runtime
+        retry_waits, resume_retry = asyncio.Queue(), asyncio.Event()
+        original_wait = runtime._retry_wait
+
+        async def wait_for_retry(shutdown, delay):
+            retry_waits.put_nowait(delay)
+            if not resume_retry.is_set():
+                await resume_retry.wait()
+                return _RetryWaitOutcome.TIMEOUT
+            return await original_wait(shutdown, delay)
+
+        monkeypatch.setattr(runtime, "_retry_wait", wait_for_retry)
 
         def denied(_kwargs):
             raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
@@ -1134,8 +1145,11 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
             assert calendar.status is ProviderCapabilityStatus.BLOCKED_PERMISSION
             assert calendar.error_code == "BLOCKED_PERMISSION"
             physical_calls = len(sdk.calls)
+            assert await retry_waits.get() == 30
             state._clock.current += timedelta(seconds=301)
-            await runtime._recheck_degraded_startup()
+            resume_retry.set()
+            assert await retry_waits.get() == 30
+            assert not runtime._work_tasks
             assert len(sdk.calls) == physical_calls
             assert runtime.health().status is RuntimeServiceStatus.DEGRADED
             refreshed = next(
@@ -1145,6 +1159,7 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
             )
             assert refreshed.next_retry_at == state._clock.now()
         finally:
+            resume_retry.set()
             await composition.stop()
 
     asyncio.run(scenario())

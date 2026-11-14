@@ -75,6 +75,192 @@ def test_only_installed_retry_disposition_can_complete_failure(retry_installed):
     assert any(event[0] == "complete" for event in owner.events) is retry_installed
 
 
+@pytest.mark.parametrize("expired", [False, True])
+def test_persisted_permission_without_error_retry_completes_bounded_failure(
+    tmp_path, monkeypatch, expired,
+):
+    from tests.integration import current_pipeline_fixture as fixture
+
+    from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+    from trade_plan_monitor.runtime.request_control import (
+        RequestControlError,
+        RequestControlErrorCode,
+        TushareOperation,
+    )
+    from trade_plan_monitor.state.database import create_session_factory
+    from trade_plan_monitor.state.runtime_recovery import ProviderRecoveryRepository
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=300,
+        )
+        repository = ProviderRecoveryRepository(
+            create_session_factory(engine), provider_identity="a" * 64,
+        )
+        controller.bind_recovery_repository(repository)
+        owner = Owner(pipeline._clock)
+        pipeline._status_progress_owner = owner
+        due = owner.clock.now() + timedelta(seconds=300)
+        returned_error = None
+
+        def denied():
+            raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
+
+        try:
+            with pytest.raises(RequestControlError) as caught:
+                with pipeline._status_progress_unit(timeout_seconds=90):
+                    try:
+                        await controller.execute(
+                            TushareOperation.TRADING_CALENDAR, denied, work_key="calendar:progress",
+                        )
+                    except RequestControlError as error:
+                        returned_error = error
+                        assert error.code is RequestControlErrorCode.BLOCKED_PERMISSION
+                        assert error.next_retry_at is None
+                        assert controller.permission_retry_at(error.operation) == due
+                        assert [
+                            (row.kind, row.scope_key, row.retry_at) for row in repository.load()
+                        ] == [
+                            ("permission", error.operation.value, due),
+                        ]
+                        if expired:
+                            owner.clock.current = due + timedelta(seconds=1)
+                        raise
+            assert caught.value is returned_error
+            assert controller.permission_retry_at(TushareOperation.TRADING_CALENDAR) == due
+            snapshot = owner.tracker.snapshot()
+            assert snapshot.state == "SCHEDULED"
+            assert snapshot.last_progress_at == owner.clock.now()
+            assert snapshot.next_wake_at == owner.clock.now() + timedelta(seconds=30)
+            with pipeline._status_progress_unit(timeout_seconds=30):
+                assert owner.tracker.snapshot().state == "WORKING"
+            assert owner.events == [
+                ("begin", 90), ("complete", 0.0), ("begin", 30), ("complete", 0.0),
+            ]
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("reservation_operation", "code"),
+    [(None, "BLOCKED_PERMISSION"), ("DAILY_BARS", "BLOCKED_PERMISSION")]
+    + [("TRADING_CALENDAR", code) for code in (
+        "ERROR", "RATE_LIMITED", "TRANSIENT", "TIMEOUT", "INVALID_RESPONSE",
+    )],
+)
+def test_permission_completion_requires_same_operation_and_exact_error(
+    tmp_path, monkeypatch, reservation_operation, code,
+):
+    from tests.integration import current_pipeline_fixture as fixture
+
+    from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+    from trade_plan_monitor.runtime.request_control import (
+        RequestControlError,
+        RequestControlErrorCode,
+        TushareOperation,
+    )
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=300,
+        )
+        owner = Owner(pipeline._clock)
+        pipeline._status_progress_owner = owner
+
+        def denied():
+            raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "offline")
+
+        try:
+            if reservation_operation is not None:
+                with pytest.raises(RequestControlError):
+                    await controller.execute(
+                        TushareOperation[reservation_operation], denied,
+                        work_key="permission:setup",
+                    )
+            error = RequestControlError(
+                RequestControlErrorCode[code], TushareOperation.TRADING_CALENDAR, attempts=1,
+            )
+            with pytest.raises(RequestControlError) as caught:
+                with pipeline._status_progress_unit(timeout_seconds=90):
+                    token = owner.tracker.authority_token().token
+                    raise error
+            assert caught.value is error
+            assert owner.events == [("begin", 90)]
+            assert owner.tracker.authority_token().token is token
+            owner.tick = 91
+            assert owner.tracker.snapshot().state == "STALLED"
+            with pytest.raises(RuntimeError, match="unfinished progress step is already owned"):
+                owner.begin_progress_step(timeout_seconds=30)
+        finally:
+            await controller.aclose()
+            engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_permission_persistence_failure_cannot_complete_progress(tmp_path, monkeypatch):
+    from tests.integration import current_pipeline_fixture as fixture
+
+    from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+    from trade_plan_monitor.runtime.request_control import TushareOperation
+    from trade_plan_monitor.state.database import create_session_factory
+    from trade_plan_monitor.state.runtime_recovery import (
+        ProviderRecoveryRepository,
+        RecoveryCheckpointError,
+    )
+
+    async def scenario():
+        engine, _, _, _, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
+            tmp_path, monkeypatch, current_volume=300,
+        )
+        repository = ProviderRecoveryRepository(
+            create_session_factory(engine), provider_identity="a" * 64,
+        )
+        controller.bind_recovery_repository(repository)
+        owner = Owner(pipeline._clock)
+        pipeline._status_progress_owner = owner
+        failure = RecoveryCheckpointError("offline permission checkpoint failed")
+
+        def fail_save(_rows):
+            raise failure
+
+        def denied():
+            raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
+
+        try:
+            with monkeypatch.context() as patch:
+                patch.setattr(repository, "save", fail_save)
+                with pytest.raises(RecoveryCheckpointError) as caught:
+                    with pipeline._status_progress_unit(timeout_seconds=90):
+                        token = owner.tracker.authority_token().token
+                        await controller.execute(
+                            TushareOperation.TRADING_CALENDAR, denied,
+                            work_key="calendar:failed-save",
+                        )
+                assert caught.value is failure
+                assert controller.permission_retry_at(TushareOperation.TRADING_CALENDAR) is not None
+                assert repository.load() == ()
+                assert owner.events == [("begin", 90)]
+                assert owner.tracker.authority_token().token is token
+                with pytest.raises(RuntimeError, match="unfinished progress step is already owned"):
+                    owner.begin_progress_step(timeout_seconds=30)
+        finally:
+            try:
+                with pytest.raises(
+                    RecoveryCheckpointError, match="^provider outcome could not be checkpointed$",
+                ):
+                    await controller.aclose()
+                repository.assert_owner(controller)
+            finally:
+                repository.release_owner(controller)
+                engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_real_explicit_pipeline_reports_individual_committed_units(tmp_path, monkeypatch):
     from tests.integration import current_pipeline_fixture as fixture
 
@@ -180,12 +366,16 @@ def test_index_sibling_completion_cannot_extend_original_pending_deadline():
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("late_permission_failure", [False, True])
 def test_cancelled_real_worker_cannot_complete_progress_before_physical_drain(
-    tmp_path, monkeypatch,
+    tmp_path, monkeypatch, late_permission_failure,
 ):
     from threading import Event
 
     from tests.integration import current_pipeline_fixture as fixture
+
+    from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
+    from trade_plan_monitor.runtime.request_control import TushareOperation
 
     async def scenario():
         engine, _, _, _, _, controller, pipeline, _ = fixture.current_pipeline_fixture(
@@ -200,6 +390,8 @@ def test_cancelled_real_worker_cannot_complete_progress_before_physical_drain(
         def blocking(_provider, symbols):
             entered.set()
             assert release.wait(5), "offline worker was not released"
+            if late_permission_failure:
+                raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "rt_min")
             return original(symbols)
 
         monkeypatch.setattr(type(pipeline.provider), "realtime_minutes", blocking)
@@ -229,5 +421,10 @@ def test_cancelled_real_worker_cannot_complete_progress_before_physical_drain(
             else:
                 await controller.aclose()
             engine.dispose()
+        assert owner.tracker.snapshot().state == "STALLED"
+        assert not any(event[0] == "complete" for event in owner.events)
+        if late_permission_failure:
+            assert controller.is_permission_blocked(TushareOperation.REALTIME_MINUTES)
+            assert controller.permission_retry_at(TushareOperation.REALTIME_MINUTES) is not None
 
     asyncio.run(scenario())

@@ -919,7 +919,11 @@ class ProductionMonitorPipeline:
         except RequestControlError as error:
             # The awaited controller has returned and installed its retry/permission
             # facts; observation of that bounded failure is genuine local progress.
-            if (owner is not None and error.next_retry_at is not None
+            retry_at = error.next_retry_at
+            if (owner is not None and retry_at is None
+                    and error.code is RequestControlErrorCode.BLOCKED_PERMISSION):
+                retry_at = self._controller.permission_retry_at(error.operation)
+            if (owner is not None and retry_at is not None
                     and error.code in {
                         RequestControlErrorCode.BLOCKED_PERMISSION,
                         RequestControlErrorCode.RATE_LIMITED,
