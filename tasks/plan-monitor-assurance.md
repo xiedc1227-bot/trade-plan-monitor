@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R135 (`570c820`) accepts three direct-confirmation fixtures:22 unique passes,85 original assertions retained, F018/F039/F084/F085 resolved. Actual86-supplement persistence/review/activation passes. Next remaining replay/app/history/scheduling failures and final gates.
+
 R134 (`dd6b468`) accepts the one-file actual preparation-service reader:8 unique passes, all11 assertions retained and F037/F038 resolved. Next direct coverage confirmations, remaining failures and final gates.
 
 R133 (`61fce1e`) accepts two S3 fixture/synchronization repairs:9 unique split-batch passes, all134 original assertions retained; F045/F050–F057 resolved. Production unchanged. Next preparation/confirmation wiring and remaining final gates.
