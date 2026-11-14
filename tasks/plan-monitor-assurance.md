@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R131 (`e5de787`) accepts three source/owned-entry/restart fixtures:38 unique split-batch passes, all274 original assertions retained and11 original failures resolved. The diagnosed interrupted run remains incomplete. Next bounded source-syntax compatibility and remaining failures; production/full final gates unchanged.
+
 R130 (`b785f0b`) accepts the independent adapter/public JSON contract:20 unique passes, original F008/F019 resolved, production unchanged. Next actual checks of diagnosed source fixtures, remaining R123 failures and all final gates.
 
 R129 (`a7d78c7`) accepts the single-file historical DRAFT/background comparison repair:32 unique passes, all28 original assertions retained and F011/F012/F013 pass. Next independent adapter/serialization contracts, remaining R123 failures and final gates; production unchanged.
