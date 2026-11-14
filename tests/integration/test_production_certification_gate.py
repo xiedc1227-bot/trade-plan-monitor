@@ -39,6 +39,7 @@ from trade_plan_monitor.runtime.provider_contract import (
     import_index_semantic_contract,
     import_stock_semantic_contract,
 )
+from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.request_control import (
     RequestControlError,
     RequestControlErrorCode,
@@ -215,7 +216,7 @@ def test_production_index_runs_without_stock_semantics_or_certification(
         )
         try:
             startup = await composition.start()
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             assert state._pipeline is not None
             assert startup.status is RuntimeServiceStatus.RUNNING
             assert state._liveness_revision is not None
@@ -267,7 +268,7 @@ def test_production_index_only_cold_start_waits_for_trusted_calendar(
         )
         try:
             startup = await composition.start()
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             assert startup.status is RuntimeServiceStatus.DEGRADED
             assert state._pipeline is not None
             assert state._liveness_revision is not None
@@ -310,7 +311,7 @@ def test_index_only_deadline_never_delivers_old_stock_alert(tmp_path, monkeypatc
 
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             with state.unit_of_work_factory() as work:
                 work.alerts.enqueue_recoverable(_payload(992))
                 work.commit()
@@ -346,7 +347,7 @@ def test_late_stock_semantic_latches_index_only_process(tmp_path, monkeypatch):
         )
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             _write_configuration_and_evidence(
                 tmp_path,
                 observed_at=NOW,
@@ -405,7 +406,7 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
         sdk.index_daily = fail_index
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             await state.run_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
@@ -432,7 +433,7 @@ def test_index_only_restart_restores_pending_index_retries(tmp_path, monkeypatch
         )
         try:
             assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
-            state = replacement._runtime._probe_capabilities.__self__
+            state = replacement._runtime._liveness_owner
             assert state.next_index_recovery_at() == expected_due
             sdk.clock.current = expected_due
             before = len(sdk.calls)
@@ -490,7 +491,7 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
 
                 with pytest.raises(RequestControlError):
                     await control.execute(operation, denied, work_key=f"blocked:{operation.value}")
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             providers = state.health_details().providers
             assert len(providers) == 5
             assert all(
@@ -525,7 +526,7 @@ def test_index_only_health_keeps_semantic_reason_with_old_permission_blocks(
 
         try:
             assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
-            state = replacement._runtime._probe_capabilities.__self__
+            state = replacement._runtime._liveness_owner
             providers = state.health_details().providers
             assert all(
                 item.status is ProviderCapabilityStatus.BLOCKED_PERMISSION for item in providers
@@ -578,7 +579,7 @@ def test_startup_stops_physical_stock_calls_when_semantics_become_invalid(
 def test_repeated_capability_probe_discards_the_previous_ready_pipeline(tmp_path, monkeypatch):
     async def scenario():
         composition, sdk, certification = _composition(tmp_path, monkeypatch)
-        state = composition._runtime._probe_capabilities.__self__
+        state = composition._runtime._liveness_owner
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             assert state.probe_capabilities().realtime_minutes is ProviderCapabilityStatus.READY
@@ -850,19 +851,36 @@ def test_corrupt_production_checkpoint_blocks_start_and_releases_owner(
     asyncio.run(scenario())
 
 
+def _observe_calendar_maintenance(monkeypatch, runtime):
+    """Record the actual owned maintenance result without changing its outcome."""
+    results = []
+    pipeline = runtime._liveness_owner._pipeline
+    original = pipeline.run_permission_maintenance_unit
+
+    async def record():
+        assert asyncio.current_task() in runtime._work_tasks
+        result = await original()
+        results.append(result)
+        return result
+
+    monkeypatch.setattr(pipeline, "run_permission_maintenance_unit", record)
+    return results
+
+
 def test_calendar_permission_probe_uses_persisted_anchor_without_business_writes(
     tmp_path,
     monkeypatch,
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
-        runtime = composition._runtime
-        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-        control = runtime._request_controller
-        state = runtime._probe_capabilities.__self__
-        pipeline = state._pipeline
-        assert pipeline is not None
         try:
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
+            control = runtime._request_controller
+            state = runtime._liveness_owner
+            pipeline = state._pipeline
+            assert pipeline is not None
 
             def denied():
                 raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
@@ -876,8 +894,15 @@ def test_calendar_permission_probe_uses_persisted_anchor_without_business_writes
             state._clock.current += timedelta(seconds=300)
             with create_session_factory(state._engine)() as session:
                 before = session.scalar(select(func.count()).select_from(TradingCalendar))
+            deadline = runtime._scheduler.next_deadline()
+            assert deadline is not None
+            assert deadline.kind is DeadlineKind.INDEX_PERMISSION
+            assert deadline.due_at == state._clock.now()
+            assert deadline.due_at == control.permission_retry_at(
+                TushareOperation.TRADING_CALENDAR
+            )
             calls = len(sdk.calls)
-            await pipeline._maybe_recheck_calendar_permission()
+            assert await runtime.run_once() is PermissionMaintenanceResult.PROBED
             assert not control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
             assert len(sdk.calls) == calls + 1
             name, kwargs = sdk.calls[-1]
@@ -899,13 +924,14 @@ def test_calendar_permission_without_anchor_never_probes_and_remains_blocked(
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
-        runtime = composition._runtime
-        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-        control = runtime._request_controller
-        state = runtime._probe_capabilities.__self__
-        pipeline = state._pipeline
-        assert pipeline is not None
         try:
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
+            control = runtime._request_controller
+            state = runtime._liveness_owner
+            pipeline = state._pipeline
+            assert pipeline is not None
 
             def denied():
                 raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
@@ -919,8 +945,15 @@ def test_calendar_permission_without_anchor_never_probes_and_remains_blocked(
             state._clock.current += timedelta(seconds=300)
             with state._engine.begin() as connection:
                 connection.execute(text("DELETE FROM trading_calendar"))
+            deadline = runtime._scheduler.next_deadline()
+            assert deadline is not None
+            assert deadline.kind is DeadlineKind.INDEX_PERMISSION
+            assert deadline.due_at == state._clock.now()
+            assert deadline.due_at == control.permission_retry_at(
+                TushareOperation.TRADING_CALENDAR
+            )
             calls = len(sdk.calls)
-            await pipeline._maybe_recheck_calendar_permission()
+            assert await runtime.run_once() is PermissionMaintenanceResult.DEFERRED
             assert len(sdk.calls) == calls
             assert control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
             with pytest.raises(RequestControlError) as caught:
@@ -944,13 +977,14 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
 ):
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
-        runtime = composition._runtime
-        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-        control = runtime._request_controller
-        state = runtime._probe_capabilities.__self__
-        pipeline = state._pipeline
-        assert pipeline is not None
         try:
+            runtime = composition._runtime
+            assert (await runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
+            control = runtime._request_controller
+            state = runtime._liveness_owner
+            pipeline = state._pipeline
+            assert pipeline is not None
 
             def denied():
                 raise TushareProviderError(TushareErrorCode.BLOCKED_PERMISSION, "trade_cal")
@@ -990,6 +1024,13 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
                 return result
 
             sdk._calendar = probe_response
+            deadline = runtime._scheduler.next_deadline()
+            assert deadline is not None
+            assert deadline.kind is DeadlineKind.INDEX_PERMISSION
+            assert deadline.due_at == state._clock.now()
+            assert deadline.due_at == control.permission_retry_at(
+                TushareOperation.TRADING_CALENDAR
+            )
             calls = len(sdk.calls)
             original_recheck = control.recheck_permission
             failures = []
@@ -1023,9 +1064,19 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
                     )
 
             before = business_rows()
-            assert await pipeline._maybe_recheck_calendar_permission() is (
-                PermissionMaintenanceResult.FAILED
-            )
+            maintenance_results = _observe_calendar_maintenance(monkeypatch, runtime)
+            if outcome in {"config_change", "generation_change"}:
+                with pytest.raises(
+                    RecoveryAdmissionChangedError,
+                    match="^stock recovery owner authority changed$",
+                ) as caught:
+                    await runtime.run_once()
+                assert type(caught.value) is RecoveryAdmissionChangedError
+            else:
+                assert await runtime.run_once() is PermissionMaintenanceResult.FAILED
+            assert len(maintenance_results) == 1
+            result = maintenance_results[0]
+            assert result is PermissionMaintenanceResult.FAILED
             assert len(failures) == 1
             assert failures[0].code is (
                 RequestControlErrorCode.RATE_LIMITED
@@ -1037,7 +1088,16 @@ def test_calendar_permission_probe_failure_preserves_latch_and_reservation(
             assert control.permission_retry_at(
                 TushareOperation.TRADING_CALENDAR
             ) == state._clock.now() + timedelta(seconds=300)
-            await pipeline._maybe_recheck_calendar_permission()
+            assert business_rows() == before
+            with pytest.raises(
+                RuntimeError,
+                match="^progress updates require the lifecycle owner task$",
+            ):
+                await pipeline._maybe_recheck_calendar_permission()
+            assert control.is_permission_blocked(TushareOperation.TRADING_CALENDAR)
+            assert control.permission_retry_at(
+                TushareOperation.TRADING_CALENDAR
+            ) == state._clock.now() + timedelta(seconds=300)
             assert len(sdk.calls) == calls + 1
             assert business_rows() == before
         finally:
@@ -1060,7 +1120,7 @@ def test_calendar_permission_without_anchor_stays_visible_during_runtime_retry(
         sdk._calendar = denied
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             calendar = next(
                 item
                 for item in state.health_details().providers
@@ -1116,7 +1176,7 @@ def test_web_only_configuration_edit_preserves_current_provider_pipeline(
     async def scenario():
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
         assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-        state = composition._runtime._probe_capabilities.__self__
+        state = composition._runtime._liveness_owner
         pipeline = state._pipeline
         calls = tuple(sdk.calls)
         try:
@@ -1144,7 +1204,7 @@ def test_running_token_drift_latches_restart_without_new_provider_or_alert_work(
         composition, sdk, _ = _composition(tmp_path, monkeypatch)
         assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
         original_runtime = composition._runtime
-        state = original_runtime._probe_capabilities.__self__
+        state = original_runtime._liveness_owner
         config = tmp_path / "config/app.yaml"
         original = config.read_text(encoding="utf-8")
         calls = tuple(sdk.calls)
@@ -1346,7 +1406,7 @@ def test_supervisor_replacement_cannot_adopt_configuration_changed_inside_factor
             else:
                 assert composition.health().status is RuntimeServiceStatus.BLOCKED
                 assert composition.health().block_reason == "NEEDS_RESTART"
-                candidate_state = replacements[0]._probe_capabilities.__self__
+                candidate_state = replacements[0]._liveness_owner
                 assert candidate_state._pipeline is None
                 assert candidate_state._liveness_revision is None
             assert sdk.calls
@@ -1377,7 +1437,7 @@ def test_worker_thread_latch_before_current_commit_rejects_staged_decision(
         monkeypatch.setattr(DailyRepository, "save", stage_result)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             with state._session_factory() as session:
                 before = _current_ledger(session)
             pipeline = state._pipeline
@@ -1456,7 +1516,7 @@ def test_revocation_after_final_permit_finishes_one_inflight_decision(
         monkeypatch.setattr(DailyRepository, "save", stage_result)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
             original_admission = pipeline._decision_commit_current
@@ -1529,7 +1589,7 @@ def test_stop_before_final_decision_permit_rolls_back_staged_result(
         monkeypatch.setattr(DailyRepository, "save", stop_after_staging)
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             with state._session_factory() as session:
                 before = _current_ledger(session)
             deadline = MarketDeadline(
@@ -1705,7 +1765,7 @@ def test_delivery_revoked_during_final_db_admission_never_enters_channel(
         config = tmp_path / "config/app.yaml"
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             with state.unit_of_work_factory() as work:
                 work.alerts.enqueue_recoverable(_payload(991))
                 work.commit()
