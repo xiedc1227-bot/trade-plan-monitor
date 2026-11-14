@@ -48,11 +48,12 @@ async function stop(server: ChildProcess, request: APIRequestContext, base: stri
   expect(server.signalCode, "no forced termination").toBeNull();
 }
 
-const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean; notificationJourney: boolean; officialJourney: boolean }>({
+const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean; notificationJourney: boolean; officialJourney: boolean; riskJourney: boolean }>({
   manualLeaves: [false, { option: true }],
   notificationJourney: [false, { option: true }],
   officialJourney: [false, { option: true }],
-  readinessFixture: async ({ page, context, request, manualLeaves, notificationJourney, officialJourney }, use, testInfo) => {
+  riskJourney: [false, { option: true }],
+  readinessFixture: async ({ page, context, request, manualLeaves, notificationJourney, officialJourney, riskJourney }, use, testInfo) => {
     const port = await freePort(), base = `http://127.0.0.1:${port}`;
     // Playwright's normal outputDir is OS temp. SQLite stays in an independently
     // fresh project-local directory regardless of reporter/output overrides.
@@ -61,7 +62,7 @@ const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boole
     const root = await mkdtemp(join(databaseParent, "case-"));
     const server = spawn(join(repo, ".venv/Scripts/python.exe"), ["-X", "utf8", "-m",
       "tests.browser.plan_readiness_server", "--port", String(port), "--root", root,
-      ...(manualLeaves ? ["--scenario", "manual-leaves"] : notificationJourney ? ["--scenario", "notifications"] : officialJourney ? ["--scenario", "official-wait"] : [])],
+      ...(manualLeaves ? ["--scenario", "manual-leaves"] : notificationJourney ? ["--scenario", "notifications"] : officialJourney ? ["--scenario", "official-wait"] : riskJourney ? ["--scenario", "independent-risk"] : [])],
     { cwd: repo, windowsHide: true, env: { ...process.env, PYTHONUTF8: "1" } });
     let log = "", phase = "RUNNING";
     const record = (value: unknown) => { log = (log + String(value)).slice(-65536); };
@@ -618,6 +619,81 @@ officialTest("native official-close waiting preserves prior proof and rejects mi
     await screenshot("missing-history");
   } finally {
     await testInfo.attach("native-official-wait-evidence", { contentType: "application/json", body: JSON.stringify({ initialInspection: fixture.initial, snapshots }, null, 2) });
+  }
+});
+
+const riskTest = recoveryTest.extend({ riskJourney: true });
+riskTest("native independent risk keeps the confirmed obligation and original source after current FALSE", async ({ page, request, readinessFixture: fixture, calendarTransition }, testInfo) => {
+  const evidence: unknown[] = [];
+  let origin: NonNullable<NonNullable<ReadinessAssessment["rules"][number]["facts"]["risk"]>["origin"]> | null = null;
+  try {
+    const initialRead = page.waitForResponse(response => response.url().endsWith("/monitor-readiness"));
+    await page.goto(fixture.base + fixture.initial.planUrl); await initialRead;
+    const originalPane = await pane(page).elementHandle();
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    for (const [index, outcome] of ["SATISFIED", "UNSATISFIED"].entries()) {
+      calendarTransition.open = true;
+      const commandResult = await command(request, fixture, prefix + "/risk-next-close", {});
+      expect(commandResult.status(), await commandResult.text()).toBe(200);
+      const step: { inspection: Inspection; tradeDate: string; observedAt: string;
+        nativeRiskAction: { status: string; tactical_qty: number; unavailable_tactical_qty: number; blockers: string[] } } = await commandResult.json();
+      await page.clock.setSystemTime(new Date(step.inspection.now));
+      const read = page.waitForResponse(response => response.url().endsWith("/monitor-readiness"));
+      await pane(page).getByRole("button", { name: "重新读取监控就绪状态", exact: true }).click();
+      const response = await read; expect(response.status(), await response.text()).toBe(200);
+      const value: ReadinessAssessment = await response.json(); evidence.push({ step, value });
+      const buy = value.rules.find(row => row.facts.side === "BUY")!;
+      expect(buy.facts.requirements.costBasis).toBe(true);
+      expect(buy.facts.money!.inputs.state).toBe("UNKNOWN");
+      expect(buy.facts.money!.capital == null).toBe(true);
+      expect(value.snapshot.context.bookRevision).toBeNull();
+      const risk = value.rules.find(row => row.facts.ownerId === "independent-risk")!;
+      const facts = risk.facts.risk!;
+      expect(facts.current!.evidence!.outcome).toBe(outcome);
+      expect(facts.current!.target).toEqual({ kind: "OFFICIAL_CLOSE", trade_date: step.tradeDate });
+      expect(facts.current!.evaluated_at).toBe(`${step.tradeDate}T15:20:00+08:00`);
+      expect(facts.obligation!.status).toBe("CONFIRMED");
+      expect(facts.maintenance.state).toBe("PASS");
+      expect(facts.origin).toBeTruthy();
+      if (index === 0) {
+        origin = facts.origin!;
+        expect(origin).toMatchObject({ evaluationId: step.inspection.completionRecordId,
+          planVersionId: fixture.initial.planVersionId, contentHash: value.snapshot.context.contentHash });
+        expect(step.nativeRiskAction.status).toBe("WAITING");
+      } else {
+        expect(facts.origin).toEqual(origin);
+        expect(step.inspection.completionRecordId).not.toBe(origin!.evaluationId);
+        expect(step.nativeRiskAction).toMatchObject({ status: "RISK_EXIT", tactical_qty: 0,
+          unavailable_tactical_qty: 100, blockers: ["WAIT_FOR_CERTIFIED_TRADABILITY"] });
+      }
+      expect(step.nativeRiskAction.tactical_qty).toBe(0);
+      expect(value.summary).not.toBe("READY_FOR_MONITORING");
+      const riskRow = pane(page).getByRole("heading", { name: "独立风险 · independent-risk", exact: true }).locator("..");
+      const buyRow = pane(page).getByRole("heading", { name: `普通规则 · ${buy.facts.ownerId}`, exact: true }).locator("..");
+      await expect(buyRow).toContainText("持仓成本");
+      await expect(buyRow).toContainText("金额所需输入：尚未确定");
+      await expect(riskRow).toContainText(index === 0 ? "条件已成立" : "条件未成立（已完成检查）");
+      await expect(riskRow).toContainText("风险义务：已确认");
+      await expect(riskRow).toContainText("风险义务维护：通过");
+      await expect(riskRow).toContainText(`原属版本：${origin!.planVersionId}`);
+      await expect(riskRow).toContainText(`原确认依据时间：${origin!.evaluatedAt.replace("T", " ")}`);
+      await expect(riskRow).not.toContainText("交易资格：符合");
+      await page.clock.runFor(2000); calendarTransition.open = false;
+      await page.setViewportSize({ width: 1280, height: 2800 });
+      await pane(page).getByRole("heading", { name: "逐规则监控就绪", exact: true }).scrollIntoViewIfNeeded();
+      await page.clock.runFor(64);
+      const image = testInfo.outputPath(`risk-${index === 0 ? "confirmed" : "current-false"}.png`);
+      await pane(page).screenshot({ path: image });
+      await testInfo.attach(`risk-${index}`, { path: image, contentType: "image/png" });
+    }
+    expect(await originalPane!.evaluate(element => element.isConnected)).toBe(true);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    const after = await fixture.inspect();
+    for (const table of ["plan_version", "source_coverage_review", "plan_review_provenance", "active_plan", "plan_activation_state"])
+      expect(after.storage[table]).toEqual(fixture.initial.storage[table]);
+    expect(after.storage.dailyKinds.FACT ?? 0).toBe(0);
+  } finally {
+    await testInfo.attach("native-independent-risk-evidence", { contentType: "application/json", body: JSON.stringify({ initial: fixture.initial, evidence }, null, 2) });
   }
 });
 

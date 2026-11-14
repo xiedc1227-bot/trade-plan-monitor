@@ -83,6 +83,68 @@ def official_wait_plan():
     return UnifiedTradePlan.model_validate(raw)
 
 
+def independent_risk_plan():
+    """Reuse the T19 OPEN_COST_CAP and automatic independent severe-risk inputs."""
+    from tests.unit.test_p3_policy_contract import p3_payload
+    from tests.unit.test_unified_plan_domain import unified_payload
+
+    from trade_plan_monitor.domain.p3_policy_models import P3TradePlan
+    from trade_plan_monitor.market_index.identity import resolve_board_reference
+
+    raw = p3_payload("OPEN_COST_CAP")
+    original_symbol = raw["symbol"]
+    raw.update(
+        symbol="003043.SZ",
+        market="SZSE",
+        activation={"mode": "MANUAL"},
+        reference_market=resolve_board_reference("003043.SZ").binding.model_dump(mode="json"),
+    )
+    raw["position"].update(core_target_qty=0, tactical_target_qty=100)
+
+    def dates(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if child == original_symbol:
+                    value[key] = raw["symbol"]
+                elif key == "as_of":
+                    value[key] = "2026-09-07"
+                elif key == "effective_from":
+                    value[key] = "2026-01-01"
+                elif key == "effective_through":
+                    value[key] = "2026-12-31"
+                else:
+                    dates(child)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                if child == original_symbol:
+                    value[index] = raw["symbol"]
+                else:
+                    dates(child)
+
+    dates(raw)
+    risk = next(
+        row for row in unified_payload()["risk_branches"] if row["kind"] == "SEVERE_TECHNICAL"
+    )
+    risk.update(
+        rule_id="independent-risk",
+        condition={
+            "type": "DAILY_PRICE_COMPARE",
+            "field": "close",
+            "offset": 0,
+            "comparator": "GT",
+            "reference": {
+                "mode": "FIXED",
+                "value": "7000",
+                "unit": "FEN",
+                "as_of": "2026-09-07",
+                "source": "fixture",
+            },
+        },
+    )
+    raw.update(risk_branches=[risk], monitoring=unified_payload()["monitoring"])
+    return P3TradePlan.model_validate(raw)
+
+
 class ReadinessFixture:
     prefix = PREFIX
 
@@ -105,6 +167,7 @@ class ReadinessFixture:
         self.notification_checks = 0
         self.notification_closed = False
         self.official_input_missing = False
+        self.risk_closes = 0
 
     def guard_connections(self):
         def guard(native):
@@ -150,7 +213,13 @@ class ReadinessFixture:
 
 
 def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario="automatic"):
-    if scenario not in {"automatic", "manual-leaves", "notifications", "official-wait"}:
+    if scenario not in {
+        "automatic",
+        "manual-leaves",
+        "notifications",
+        "official-wait",
+        "independent-risk",
+    }:
         raise ValueError("Unknown fixed browser scenario")
     root = root.resolve()
     if not root.is_relative_to(REPOSITORY / ".pytest_cache"):
@@ -201,17 +270,49 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
             ]
             raw["ordinary_rules"] = []
             plan = UnifiedTradePlan.model_validate(raw)
-        if scenario == "official-wait":
+        if scenario in {"official-wait", "independent-risk"}:
             from tests.integration.test_live_pipeline_acceptance import NOW
             from tests.integration.test_s3_missed_close_kill_restart import CurrentCloseSDK
+
+            if scenario == "independent-risk":
+                from tests.integration.test_plan_readiness_money_reads import IndexInputs
+
+                from trade_plan_monitor.runtime import production
+
+                native_coordinator = production.MarketIndexSnapshotCoordinator
+                state.patch.setattr(
+                    production,
+                    "MarketIndexSnapshotCoordinator",
+                    lambda _provider, **kwargs: native_coordinator(IndexInputs(), **kwargs),
+                )
+
+            class RiskSDK(CurrentCloseSDK):
+                def _stock_minutes(self, name, kwargs):
+                    from datetime import datetime, time
+
+                    frame = super()._stock_minutes(name, kwargs)
+                    times = frame["time"].map(lambda value: datetime.fromisoformat(value).time())
+                    return frame.loc[
+                        times.map(
+                            lambda value: (
+                                time(9, 30) <= value < time(11, 30) or time(13) <= value < time(15)
+                            )
+                        )
+                    ].reset_index(drop=True)
 
             state.case = installed(
                 root,
                 state.patch,
                 2,
-                plan=official_wait_plan(),
-                sdk_factory=CurrentCloseSDK,
+                plan=official_wait_plan()
+                if scenario == "official-wait"
+                else independent_risk_plan(),
+                sdk_factory=CurrentCloseSDK if scenario == "official-wait" else RiskSDK,
                 activation_at=NOW.replace(day=7, hour=9, minute=0, second=0),
+                include_index=scenario == "independent-risk",
+                initial_at=NOW.replace(hour=15, minute=19, second=0)
+                if scenario == "independent-risk"
+                else None,
             )
         else:
             state.case = installed(root, state.patch, 2, plan=plan)
@@ -311,7 +412,7 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                                 if response.status_code != 200:
                                     raise AssertionError(response.text)
                                 state.manual_inputs.append(response.json())
-                    if scenario == "official-wait":
+                    if scenario in {"official-wait", "independent-risk"}:
                         async with httpx.ASGITransport(
                             app, client=("127.0.0.1", 50000)
                         ) as transport:
@@ -322,7 +423,7 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                                     json={
                                         "symbol": state.case.plan.symbol,
                                         "coreQty": 0,
-                                        "tacticalQty": 0,
+                                        "tacticalQty": 0 if scenario == "official-wait" else 100,
                                         "expectedRevision": 0,
                                     },
                                     headers={
@@ -335,11 +436,19 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                             if response.status_code != 200:
                                 raise AssertionError(response.text)
                     async with asyncio.timeout(30):
-                        state.version = await start_current(state.case)
+                        if scenario == "independent-risk":
+                            assert (await state.case.composition.start()).status.value == "RUNNING"
+                            await state.case.clock.park()
+                            active = await state.lifecycle.get_plan_activation_state(
+                                symbol=state.case.plan.symbol
+                            )
+                            state.version = str(active.plan_version_id)
+                        else:
+                            state.version = await start_current(state.case)
                         # Let the next native minute duty perform its real
                         # notification storage check after pending maintenance.
                         # The first duty's original 1us service expiry is retained.
-                        if scenario != "notifications":
+                        if scenario not in {"notifications", "independent-risk"}:
                             await state.case.clock.drive(
                                 state.case.clock.now() + timedelta(minutes=1)
                             )
@@ -429,6 +538,31 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                 )
                 is not None,
                 "blockers": prepared.data_blockers,
+            }
+
+        @app.post(PREFIX + "/risk-next-close", dependencies=guards)
+        async def risk_next_close(command: NextTarget):
+            if scenario != "independent-risk" or state.risk_closes >= 2:
+                raise ApiError(ApiErrorCode.CONFLICT)
+            now = state.case.clock.now().replace(hour=15, minute=21, second=0, microsecond=0)
+            if state.risk_closes:
+                now += timedelta(days=1)
+            price = ("75.00", "64.05")[state.risk_closes]
+            if state.risk_closes:
+                state.case.clock.current = now.replace(minute=19)
+            state.case.sdk.official_closes[now.date()] = price
+            async with asyncio.timeout(30):
+                await state.case.clock.drive(now)
+            state.risk_closes += 1
+            inspection = state.inspect()
+            with state.lifecycle._unit_of_work() as work:
+                original = work.daily.get(inspection["completionRecordId"])
+            return {
+                "inspection": inspection,
+                "officialClosePrice": price,
+                "tradeDate": now.date(),
+                "observedAt": now,
+                "nativeRiskAction": original["payload"]["risk_action"],
             }
 
         @app.post(PREFIX + "/notification-close", dependencies=guards)
@@ -618,7 +752,13 @@ def main():
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument(
         "--scenario",
-        choices=("automatic", "manual-leaves", "notifications", "official-wait"),
+        choices=(
+            "automatic",
+            "manual-leaves",
+            "notifications",
+            "official-wait",
+            "independent-risk",
+        ),
         default="automatic",
     )
     args = parser.parse_args()

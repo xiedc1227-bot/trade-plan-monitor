@@ -53,8 +53,9 @@ async def start_current(case):
     return plans[0].plan_version_id
 
 
-def installed(tmp_path, monkeypatch, profile, *, plan=None, sdk_factory=None, activation_at=None):
-    clock = _DeadlineClock(NOW.replace(minute=4, second=0))
+def installed(tmp_path, monkeypatch, profile, *, plan=None, sdk_factory=None, activation_at=None,
+              include_index=False, initial_at=None):
+    clock = _DeadlineClock(NOW.replace(minute=4, second=0) if initial_at is None else initial_at)
     if plan is None:
         raw = current_sample_plan().model_dump(mode="json")
         raw["alert_rules"] = [{
@@ -75,7 +76,7 @@ def installed(tmp_path, monkeypatch, profile, *, plan=None, sdk_factory=None, ac
     finally:
         engine.dispose()
     config = _write_configuration_and_evidence(tmp_path, observed_at=clock.now(),
-                                              include_index=False)
+                                              include_index=include_index)
     if sdk_factory is None:
         sdk = OfflineSDK(clock, (plan.symbol,))
     else:

@@ -992,3 +992,143 @@ def test_missing_required_prior_official_input_never_becomes_future_wait(tmp_pat
             )
 
     asyncio.run(scenario())
+
+
+def test_independent_risk_actual_composition_retains_origin_when_latest_close_is_false(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from tests.integration.test_plan_readiness_scenarios import observation_only
+
+    async def scenario():
+        async with workspace(tmp_path, scenario="independent-risk") as (state, transport):
+            owner = state.case.composition._runtime._liveness_owner
+            guard = SimpleNamespace(
+                pipeline=owner._pipeline,
+                engine=owner._engine,
+                sdk=state.case.sdk,
+                dispatcher=owner._dispatcher,
+            )
+            evidence = []
+            origin = None
+            before_initial = state.inspect()
+            with observation_only(guard, monkeypatch):
+                initial = (await request(transport, state.readiness_path)).json()
+            assert state.inspect() == before_initial
+            initial_buy = next(row for row in initial["rules"] if row["facts"].get("side") == "BUY")
+            assert initial_buy["facts"]["money"]["inputs"]["state"] == "UNKNOWN"
+            assert "capital" not in initial_buy["facts"]["money"]
+            baseline = state.inspect()
+            invalid = await request(
+                transport, state.prefix + "/risk-next-close", method="POST", body={"price": "99.00"}
+            )
+            assert invalid.status_code == 422
+            async with httpx.ASGITransport(state.app, client=("192.0.2.1", 50000)) as foreign:
+                assert (
+                    await request(
+                        foreign, state.prefix + "/risk-next-close", method="POST", body={}
+                    )
+                ).status_code == 403
+            assert state.inspect() == baseline
+            for expected in ("SATISFIED", "UNSATISFIED"):
+                cycle = await request(
+                    transport, state.prefix + "/risk-next-close", method="POST", body={}
+                )
+                assert cycle.status_code == 200, cycle.text
+                before = state.inspect()
+                with observation_only(guard, monkeypatch):
+                    response = await request(transport, state.readiness_path)
+                    repeated = await request(transport, state.readiness_path)
+                assert response.status_code == 200, response.text
+                assert state.inspect() == before
+                value = response.json()
+                assert repeated.json() == value
+                with state.lifecycle._unit_of_work() as work:
+                    native = (
+                        work.daily.get(before["completionRecordId"])
+                        if before["completionRecordId"]
+                        else None
+                    )
+                    from trade_plan_monitor.state.daily_accounting import DailyAccounting
+                    from trade_plan_monitor.state.p3_capital_repository import CapitalRepository
+                    from trade_plan_monitor.state.p3_current import current_capital_inputs
+
+                    cost_inputs = current_capital_inputs(
+                        DailyAccounting(work.daily), state.case.plan.symbol, state.case.clock.now()
+                    )
+                    assert CapitalRepository(work.daily.session).get(state.case.plan.symbol) is None
+                evidence.append(
+                    {
+                        "cycle": cycle.json(),
+                        "inspection": before,
+                        "readiness": value,
+                        "native": native,
+                        "costInputs": cost_inputs,
+                    }
+                )
+                (tmp_path / "independent-risk-preflight.json").write_text(
+                    json.dumps(evidence, ensure_ascii=False, indent=2, default=str),
+                    encoding="utf-8",
+                )
+                assert native is not None, evidence
+                buy = next(row for row in value["rules"] if row["facts"].get("side") == "BUY")
+                assert buy["facts"]["requirements"]["costBasis"] is True
+                assert buy["facts"]["money"]["inputs"]["state"] == "UNKNOWN"
+                assert "capital" not in buy["facts"]["money"]
+                assert cost_inputs["retained_basis_fen"] is None
+                assert not native["payload"].get("ordinary_evaluations")
+                assert value["snapshot"]["context"].get("bookRevision") is None
+                risk = next(
+                    row for row in value["rules"] if row["facts"]["ownerId"] == "independent-risk"
+                )
+                facts = risk["facts"]["risk"]
+                assert facts["current"]["evidence"]["outcome"] == expected
+                actual = next(
+                    row
+                    for row in native["payload"]["risk_evaluations"]
+                    if row["risk_identity"] == "independent-risk"
+                )
+                assert facts["current"] == actual
+                assert facts["obligation"]["status"] == "CONFIRMED"
+                assert facts["maintenance"]["state"] == "PASS"
+                if origin is None:
+                    origin = facts["origin"]
+                    assert origin is not None
+                    assert origin["evaluationId"] == before["completionRecordId"]
+                else:
+                    assert before["completionRecordId"] != origin["evaluationId"]
+                assert facts["origin"] == origin
+                cause = next(
+                    row
+                    for row in native["payload"]["risks"]
+                    if row["risk_id"] == facts["obligation"]["riskId"]
+                )
+                assert origin["evaluationId"] == cause["origin_evaluation_id"]
+                assert origin["planVersionId"] == before["planVersionId"]
+                assert origin["contentHash"] == value["snapshot"]["context"]["contentHash"]
+                action = native["payload"]["risk_action"]
+                assert action["tactical_qty"] == 0
+                if expected == "UNSATISFIED":
+                    assert action["status"] == "RISK_EXIT"
+                    assert action["unavailable_tactical_qty"] == 100
+                    assert action["blockers"] == ["WAIT_FOR_CERTIFIED_TRADABILITY"]
+                else:
+                    assert action["status"] == "WAITING"  # Original next-session gate.
+                assert value["summary"] != "READY_FOR_MONITORING"
+            before = state.inspect()
+            assert (
+                await request(transport, state.prefix + "/risk-next-close", method="POST", body={})
+            ).status_code == 409
+            assert state.inspect() == before
+            for table in (
+                "plan_version",
+                "source_coverage_review",
+                "plan_review_provenance",
+                "active_plan",
+                "plan_activation_state",
+            ):
+                assert before["storage"][table] == baseline["storage"][table]
+            assert before["storage"]["dailyKinds"].get("FACT", 0) == 0
+
+    asyncio.run(scenario())
