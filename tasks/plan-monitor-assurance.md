@@ -232,11 +232,13 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R122 (`f21fcbf`) accepts the final five ownership fixtures:322 unique passes,434 original assertions accounted for. No identified old-owner file remains; complete final regression and isolated capacity next. T22 and all corpus/installation/final boundaries remain open.
+
 R121 (`fbf0fbd`) accepts three index permission test files:149 unique passes, all353 original semantic assertions retained. Five old-owner files and full gates remain pending; all corpus/final boundaries remain unchanged.
 
 R120 (`3ead355`) accepts the three-file lock/progress fix and named maintenance adaptation:121 unique passes, explicit lifecycle/component repeated-revocation boundaries. Eight old-owner files and full gates remain pending; T22/C05/actual T20/final acceptance and0/48 unchanged.
 
-- [ ] Complete full gates. Full non-live unit5600 passed before later production fixes (R111). Certification44 now all pass after bounded fixes (R112–R116); R116 has87 unique passes including progress neighbors. Five candidate/preparation files pass120 unique checks (R117);five retry/scheduler files pass45 unique checks (R118);A06 and neighbors pass9 unique checks (R119);5 old-owner files and final unit confirmation remain pending after R121. Full integration remains INTERRUPTED_INCOMPLETE until rerun. Later contract/replay/frontend/browser/build/generated/static and isolated capacity remain unrun.
+- [ ] Complete full gates. Full non-live unit5600 passed before later production fixes (R111). Certification44 now all pass after bounded fixes (R112–R116); R116 has87 unique passes including progress neighbors. Five candidate/preparation files pass120 unique checks (R117);five retry/scheduler files pass45 unique checks (R118);A06 and neighbors pass9 unique checks (R119);identified old-owner files are resolved after R122; final unit confirmation remains pending. Full integration remains INTERRUPTED_INCOMPLETE until rerun. Later contract/replay/frontend/browser/build/generated/static and isolated capacity remain unrun.
 - Depends on: T21's relevant engineering delivery under P07; missing real-extraction/C07 evidence cannot be closed by regression results.
 - Files/scope: justified failures split by root cause into at most5-file repairs, paired verification-report updates.
 - Acceptance: A12; Verify: V06,V07. Reconcile initial failures/exact reruns, exclusions and overlapping counts; run capacity alone. Do not change old goldens, weaken assertions, add skips or increase resource thresholds to pass.
