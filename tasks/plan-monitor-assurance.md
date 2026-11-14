@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R133 (`61fce1e`) accepts two S3 fixture/synchronization repairs:9 unique split-batch passes, all134 original assertions retained; F045/F050–F057 resolved. Production unchanged. Next preparation/confirmation wiring and remaining final gates.
+
 R132 (`043e63a`) accepts bounded explicit source syntax/account facts:904 unique passes, original F001/F002/F036 and frozen inputs retained. Actual human-review completion passes; automatic completeness is not claimed. Next remaining failures and all final gates.
 
 R131 (`e5de787`) accepts three source/owned-entry/restart fixtures:38 unique split-batch passes, all274 original assertions retained and11 original failures resolved. The diagnosed interrupted run remains incomplete. Next bounded source-syntax compatibility and remaining failures; production/full final gates unchanged.
