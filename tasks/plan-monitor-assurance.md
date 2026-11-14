@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R126 (`5f308c6`) accepts the inventory race contract:36 unique passes, test-only,69 original assertions retained. Next the three migration test files, then remaining R123 failures. Final unit regression must rerun after R125 production changes; no final full gate is closed.
+
 R125 (`fe9cd2d`) preserves exact current reviewed-independent daily comparisons:76 unique final passes, including15 staged neighbors. Broad intermediate versions failed predecessor checks and are not accepted. Next inventory race contract, remaining R123 failures and later gates; full T22 remains open.
 
 R124 (`714425c`) repairs three actual owned entries in two daily tests:4 unique passes,58 original assertions unchanged. R123 remains the full FAILED baseline; daily observation and inventory dependency diagnosis are next. No T22/final closure.
