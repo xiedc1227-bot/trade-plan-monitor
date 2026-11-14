@@ -113,22 +113,85 @@ def test_background_complete_candidate_has_no_fundamental_review_blocker(chain):
     assert build_daily_review(draft, mapping, source).issues == ()
 
 
-def test_obsolete_development_draft_preserves_raw_document_and_rejects_activation(chain):
+@pytest.fixture
+def historical_draft_chain(tmp_path):
+    from uuid import UUID
+
+    from sqlalchemy import insert
+    from tests.integration.test_daily_plan_chain import Chain
+    from tests.integration.test_live_monitor_projection_migration import _upgrade
     from tests.unit.test_daily_plan import synthetic_plan_payload
 
-    from trade_plan_monitor.domain.daily_hash import canonical
+    from trade_plan_monitor.ai.daily_review import DailyMapping, daily_source_clauses
+    from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
+    from trade_plan_monitor.state.database import create_sqlite_engine
+    from trade_plan_monitor.state.models import (
+        ActivePlan,
+        PlanReviewProvenance,
+        PlanSource,
+        PlanVersionReview,
+        RuntimeLiveness,
+    )
 
-    with chain.plans._unit_of_work() as work:
-        row = work.daily.session.get(PlanVersion, chain.version["id"])
-        raw = synthetic_plan_payload()
-        raw.update(plan_id=row.plan_id, version=row.version, symbol=row.symbol)
-        raw["risk_branches"].append({"kind": "FUNDAMENTAL_INVALIDATION", "priority": 1})
-        raw["execution_policy"]["risk_priority"] = "FUNDAMENTAL_THEN_SEVERE_THEN_ORDINARY"
-        obsolete = canonical(raw)
-        row.payload_json = obsolete
-        row.plan_hash = sha256(obsolete.encode()).hexdigest()
-        row.status = "DRAFT"
-        work.commit()
+    chain = Chain(tmp_path)
+    raw = synthetic_plan_payload()
+    raw["risk_branches"].append({"kind": "FUNDAMENTAL_INVALIDATION", "priority": 1})
+    raw["execution_policy"]["risk_priority"] = "FUNDAMENTAL_THEN_SEVERE_THEN_ORDINARY"
+    obsolete = canonical(raw)
+    source = "Synthetic preserved historical fundamental development draft."
+    source_hash, plan_hash = (sha256(text.encode()).hexdigest() for text in (source, obsolete))
+    content = {key: value for key, value in raw.items()
+               if key not in {"plan_id", "version", "name", "metadata"}}
+    mapping = DailyMapping(mapping_version="daily-mapping-v1",
+        candidate_content_hash=daily_hash("daily-plan-review-content-v1", content),
+        clauses=daily_source_clauses(source), bindings=(), supplements=())
+    source_id, identity = (str(UUID(int=n)) for n in (1, 2))
+    stamp = chain.now.isoformat()
+    models = (PlanSource, PlanVersion, PlanVersionReview, PlanReviewProvenance)
+    engine = create_sqlite_engine(tmp_path / "daily.sqlite")
+    try:
+        _upgrade(engine, "0027_simulation_capital")
+        with engine.begin() as connection:
+            connection.execute(insert(PlanSource), dict(id=source_id, source_text=source,
+                source_hash=source_hash, created_at=stamp))
+            connection.execute(insert(PlanVersion), dict(id=identity, plan_id=raw["plan_id"],
+                version=raw["version"], symbol=raw["symbol"], plan_hash=plan_hash, status="DRAFT",
+                payload_json=obsolete, source_id=source_id, revision=0, created_at=stamp))
+            connection.execute(insert(PlanVersionReview), dict(plan_version_id=identity,
+                review_issues_json="[]"))
+            connection.execute(insert(PlanReviewProvenance), dict(plan_version_id=identity,
+                origin="LEGACY_PENDING", extraction_id=None, source_hash=source_hash,
+                draft_hash=plan_hash, confirmed_at=None, content_hash=None,
+                review_evidence_hash=None, mapping_json=mapping.model_dump_json(),
+                required_issues_json=None, resolutions_json=None,
+                review_id=None, review_revision=0))
+            before = {m.__tablename__: connection.execute(m.__table__.select()).all()
+                      for m in models}
+            assert all(len(rows) == 1 for rows in before.values())
+            assert connection.execute(ActivePlan.__table__.select()).all() == []
+            assert connection.execute(RuntimeLiveness.__table__.select()).all() == []
+        _upgrade(engine, "0029_native_fact_lookup")
+        with engine.connect() as connection:
+            assert {m.__tablename__: connection.execute(m.__table__.select()).all()
+                    for m in models} == before
+            assert connection.exec_driver_sql(
+                "SELECT plan_version_id FROM source_coverage_cutover"
+            ).all() == [(identity,)]
+            for table in ("source_coverage_input", "source_coverage_assessment",
+                          "source_coverage_review", "daily_plan_record", "active_plan",
+                          "runtime_liveness"):
+                assert connection.exec_driver_sql(f'SELECT COUNT(*) FROM "{table}"').scalar() == 0
+    finally:
+        engine.dispose()
+    chain.version = {"id": identity}
+    with chain.client:
+        yield chain, obsolete
+
+
+def test_obsolete_development_draft_preserves_raw_document_and_rejects_activation(
+    historical_draft_chain,
+):
+    chain, obsolete = historical_draft_chain
     response = chain.client.get("/api/v1/plan-versions/" + chain.version["id"])
     assert response.status_code == 200
     view = response.json()
@@ -162,32 +225,59 @@ def test_corrupt_current_document_is_not_reclassified_as_obsolete(chain):
         row.payload_json = json.dumps(raw)
         row.status = "DRAFT"
         work.commit()
-    from trade_plan_monitor.state.repositories import RepositoryError
+    from trade_plan_monitor.state.source_coverage_store import SourceCoverageIntegrityError
 
-    with pytest.raises(RepositoryError, match="Stored daily review provenance is invalid"):
+    with pytest.raises(
+        SourceCoverageIntegrityError, match="Stored source coverage evidence is invalid"
+    ):
         chain.client.get("/api/v1/plan-versions/" + chain.version["id"])
 
 
 def test_background_rebound_review_preserves_same_technical_runtime_result(tmp_path):
     from datetime import date
 
+    from tests.integration.test_current_plan_api import review_payload
     from tests.integration.test_daily_plan_chain import FRIDAY, WEDNESDAY, Chain
+    from tests.integration.test_market_linkage_review import source_mapping
 
+    from trade_plan_monitor.ai.daily_review import daily_source_clauses
     from trade_plan_monitor.state.models import TradingCalendar
 
     projections = []
-    for index, source in enumerate(
-        (
-            "Synthetic human-reviewed supplements for this fixture.",
-            "Synthetic human-reviewed supplements for this fixture. "
-            "Announcement verification is outside daily monitoring.",
-        )
-    ):
+    policy_inputs = []
+    for index in range(2):
         directory = tmp_path / str(index)
         directory.mkdir()
         current = Chain(directory)
         with current.client:
-            current.activate(source=source)
+            draft = UnifiedPlanDraft.from_executable(current.plan)
+            source, mapping = source_mapping(draft)
+            policy_inputs.append((source, mapping))
+            if index:
+                source += "\nAnnouncement verification is outside daily monitoring."
+                native = daily_source_clauses(source)
+                assert len(native) == len(mapping.clauses) + 1
+                assert native[-1].disposition == "BACKGROUND" and native[-1].exclusions
+                mapping = mapping.model_copy(update={"clauses": (*mapping.clauses, native[-1])})
+            assert mapping.supplements == ()
+            saved = current.post("plan-drafts", {
+                "planJson": daily_draft_json(draft), "sourceText": source,
+                "dailyMapping": mapping.model_dump(mode="json"), "expectedRevision": 0,
+            })
+            response = current.client.get(f"/api/v1/plan-versions/{saved['id']}/source-coverage")
+            assert response.status_code == 200, response.text
+            coverage = response.json()
+            proof = coverage["summary"]
+            assert proof["status"] == "COMPLETE" and proof["coverageComplete"], coverage
+            assert (proof["contentHash"], proof["sourceHash"]) == (
+                saved["contentHash"], saved["sourceHash"],
+            )
+            reviewed = current.post("plan-review-confirmations", review_payload(saved,
+                coverageEvidenceHash=proof["coverageEvidenceHash"],
+                coverageRulesVersion=proof["rulesVersion"]))
+            current.post("plan-activations", review_payload(saved,
+                reviewId=reviewed["reviewId"], reviewRevision=1))
+            current.version = saved
             with current.plans._unit_of_work() as work:
                 for previous, day in (
                     (date(2026, 9, 17), FRIDAY),
@@ -227,6 +317,7 @@ def test_background_rebound_review_preserves_same_technical_runtime_result(tmp_p
             )
     assert projections[0] == projections[1]
     assert projections[1]["signals"][0]["executable_qty"] == 100
+    assert policy_inputs[0] == policy_inputs[1]
 
 
 def test_explicit_human_scope_selection_cannot_hide_technical_or_tradability_clause(chain):
