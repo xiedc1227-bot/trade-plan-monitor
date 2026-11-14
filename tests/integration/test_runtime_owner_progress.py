@@ -7,6 +7,8 @@ import pytest
 
 from trade_plan_monitor.market_data.models import ProviderCapabilities, ProviderCapabilityStatus
 from trade_plan_monitor.runtime.clock import SHANGHAI
+from trade_plan_monitor.runtime.health import RuntimeServiceStatus
+from trade_plan_monitor.runtime.recovery import RecoveryAdmissionChangedError
 from trade_plan_monitor.runtime.scheduler import (
     DeadlineKind,
     MarketDeadline,
@@ -337,5 +339,171 @@ def test_backoff_maintenance_requires_genuine_bootstrap_and_does_not_retry_provi
         assert validations == [True]
         await owner.stop()
         await running
+
+    asyncio.run(scenario())
+
+
+def test_restart_wait_preserves_failed_token_until_explicit_stop_and_resource_cleanup():
+    async def scenario():
+        clock = Clock()
+        waiting, draining, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        failures, records, explicit_errors = [], [], []
+        revoked = False
+
+        class DueScheduler(Scheduler):
+            def next_deadline(self, *, after=None):
+                return MarketDeadline(kind=DeadlineKind.STOCK_RECOVERY,
+                    trade_date=clock.wall.date(), due_at=clock.wall)
+
+        class Drain(Resources):
+            async def aclose(self):
+                draining.set()
+                await release.wait()
+
+        def validate():
+            token = owner.begin_progress_step(timeout_seconds=15)
+            owner.complete_progress_step(token, next_wake_at=clock.wall)
+
+        def fail_recovery(deadline):
+            nonlocal revoked
+            assert deadline.kind is DeadlineKind.STOCK_RECOVERY
+            token = owner.begin_progress_step(timeout_seconds=15)
+            record = owner._progress.authority_token()
+            assert record.token is token
+            records.append(record)
+            revoked = True
+            error = RecoveryAdmissionChangedError("owner revoked after bounded recovery")
+            failures.append(error)
+            raise error
+
+        owner = service(clock, validate=validate, scheduler=DueScheduler(), dispatcher=Drain(),
+            configuration_restart_required=lambda: revoked, run_deadline=fail_recovery)
+        original_wait = owner._wait_for_explicit_stop
+
+        async def observe_wait():
+            waiting.set()
+            try:
+                await original_wait()
+            except BaseException as error:
+                explicit_errors.append(error)
+                raise
+
+        owner._wait_for_explicit_stop = observe_wait
+        generation = owner.runtime_generation
+        running = asyncio.create_task(owner.run())
+        try:
+            await asyncio.wait_for(waiting.wait(), 1)
+            assert explicit_errors == []
+            assert len(failures) == len(records) == 1
+            record = records[0]
+            shutdown = owner._shutdown_requested_event
+            assert shutdown is not None and not shutdown.is_set()
+            assert not draining.is_set() and not running.done()
+            assert owner._schedule_owner is running and not owner._work_tasks
+            assert owner.status is RuntimeServiceStatus.BLOCKED and owner._read_only
+            assert owner._block_reason == "NEEDS_RESTART" and not owner._accepting_work
+            assert owner.runtime_generation == generation
+            for elapsed in (0, 16, 3600):
+                clock.tick = 100.0 + elapsed
+                assert owner._progress.authority_token() is record
+                assert owner._progress.has_owned_step
+                assert owner._progress.authority_token().deadline == record.deadline
+                assert owner.progress_snapshot().last_progress_at == record.last_progress
+                assert owner.progress_snapshot().runtime_generation == generation
+                assert not running.done() and not shutdown.is_set()
+            assert owner.progress_snapshot().state == "STALLED"
+            stopping = asyncio.create_task(owner.stop())
+            await asyncio.wait_for(draining.wait(), 1)
+            assert shutdown.is_set()
+            assert owner._progress.authority_token() is record
+            assert owner.progress_snapshot().state == "STALLED"
+            release.set()
+            await stopping
+            assert await running is None
+            assert owner.progress_snapshot().state == "STOPPED"
+            assert not owner._progress.has_owned_step
+            assert not owner._progress.complete_step(record.token, next_wake_at=clock.wall)
+            assert owner.runtime_generation == generation and explicit_errors == []
+        finally:
+            release.set()
+            await owner.stop()
+            await asyncio.gather(running, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_restart_wait_without_failed_token_keeps_actual_reconsideration():
+    async def scenario():
+        clock = Clock()
+        entered = asyncio.Queue()
+        revoked = False
+
+        class DueScheduler(Scheduler):
+            def next_deadline(self, *, after=None):
+                return MarketDeadline(kind=DeadlineKind.STOCK_RECOVERY,
+                    trade_date=clock.wall.date(), due_at=clock.wall)
+
+        def validate():
+            token = owner.begin_progress_step(timeout_seconds=15)
+            owner.complete_progress_step(token, next_wake_at=clock.wall)
+
+        def fail_recovery(_deadline):
+            nonlocal revoked
+            revoked = True
+            raise RecoveryAdmissionChangedError("revoked without an owned step")
+
+        async def wait(shutdown, delay):
+            await entered.put((shutdown, delay, owner._progress.authority_token()))
+            await shutdown.wait()
+            return _RetryWaitOutcome.SHUTDOWN
+
+        owner = service(clock, validate=validate, scheduler=DueScheduler(), retry_wait=wait,
+            configuration_restart_required=lambda: revoked, run_deadline=fail_recovery)
+        running = asyncio.create_task(owner.run())
+        try:
+            shutdown, delay, record = await asyncio.wait_for(entered.get(), 1)
+            assert delay == 30 and shutdown is owner._shutdown_requested_event
+            assert not owner._progress.has_owned_step and record.token is None
+            assert record.state == "SCHEDULED" and record.last_progress == clock.wall
+            assert owner.status is RuntimeServiceStatus.BLOCKED
+            assert owner._block_reason == "NEEDS_RESTART" and not running.done()
+        finally:
+            await owner.stop()
+            await running
+
+    asyncio.run(scenario())
+
+
+def test_unknown_failed_owner_step_is_not_converted_to_restart_wait():
+    async def scenario():
+        clock = Clock()
+        failed = RuntimeError("unknown bounded work failure")
+        records = []
+
+        class DueScheduler(Scheduler):
+            def next_deadline(self, *, after=None):
+                return MarketDeadline(kind=DeadlineKind.STOCK_RECOVERY,
+                    trade_date=clock.wall.date(), due_at=clock.wall)
+
+        def validate():
+            token = owner.begin_progress_step(timeout_seconds=15)
+            owner.complete_progress_step(token, next_wake_at=clock.wall)
+
+        def fail_recovery(_deadline):
+            owner.begin_progress_step(timeout_seconds=15)
+            records.append(owner._progress.authority_token())
+            raise failed
+
+        owner = service(clock, validate=validate, scheduler=DueScheduler(),
+            run_deadline=fail_recovery)
+        generation = owner.runtime_generation
+        with pytest.raises(RuntimeError, match="^unknown bounded work failure$") as error:
+            await owner.run()
+        assert error.value is failed
+        assert len(records) == 1 and records[0].token is not None
+        assert owner._shutdown_requested_event is None
+        assert owner._block_reason is None and owner.status is RuntimeServiceStatus.STOPPED
+        assert owner.runtime_generation == generation
+        assert not owner._progress.has_owned_step
 
     asyncio.run(scenario())

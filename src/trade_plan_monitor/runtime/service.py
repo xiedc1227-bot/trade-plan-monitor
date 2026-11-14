@@ -3741,6 +3741,11 @@ class RuntimeLifecycleService:
         self._shutdown_requested_event = shutdown_event
         if self._stopping or self._cleanup_complete:
             shutdown_event.set()
+        if (self._block_reason == "NEEDS_RESTART" and self._progress is not None
+                and self._progress.has_owned_step):
+            # Preserve the failed token until cleanup; waiting cannot renew its deadline.
+            await shutdown_event.wait()
+            return
         if self._progress is not None and self._progress_bootstrap_completed:
             while not shutdown_event.is_set():
                 self._reconsider_progress(after=self._last_deadline_at, include_market=False)
