@@ -36,7 +36,7 @@ def current_plan(*, mixed=True, risk=False):
         {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
          "comparator": "LT", "reference": {"mode": "FIXED", "value": "4000",
              "unit": "FEN", "as_of": "2026-09-18",
-             "source": "Synthetic reviewed threshold"}},
+             "source": "Synthetic threshold"}},
         minute]} if mixed else minute
     if not mixed and not risk:
         raw["monitoring"] = None
@@ -124,7 +124,7 @@ def test_minute_scoped_reviewed_fact_uses_exact_completed_bar_without_daily_seri
     raw["ordinary_rules"][0]["condition"] = {"type": "ALL", "conditions": [
         raw["ordinary_rules"][0]["condition"],
         {"type": "REVIEWED_FACT", "fact_kind": "TECHNICAL",
-         "evidence_requirement": "Human verified the completed minute pattern",
+         "evidence_requirement": "Human verifies the completed five-minute pattern",
          "validity_scope": "TRADE_DATE"},
     ]}
     chain.plan = UnifiedTradePlan.model_validate(raw)
@@ -336,7 +336,7 @@ def test_daily_reminder_ignores_missing_unrelated_minute_prefix(current_chain):
         "condition": {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
             "comparator": "LT", "reference": {"mode": "FIXED", "value": "4000",
                 "unit": "FEN", "as_of": "2026-09-18",
-                "source": "Synthetic reviewed daily threshold"}}}]
+                "source": "Synthetic threshold"}}}]
     chain.plan = UnifiedTradePlan.model_validate(raw)
     chain.now = datetime(2026, 9, 18, 16, 1, tzinfo=fixture.SH)
     chain.activate(version=2, activation_revision=1)
@@ -363,7 +363,7 @@ def test_daily_reminder_ignores_missing_unrelated_minute_prefix(current_chain):
 
 @pytest.mark.parametrize("official_target", [None, fixture.FRIDAY])
 def test_stored_daily_reminder_loses_authority_without_official_calendar(
-    current_chain, official_target,
+    current_chain, official_target, tmp_path, monkeypatch,
 ):
     import asyncio
 
@@ -381,7 +381,7 @@ def test_stored_daily_reminder_loses_authority_without_official_calendar(
         "condition": {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
             "comparator": "LT", "reference": {"mode": "FIXED", "value": "4000",
                 "unit": "FEN", "as_of": "2026-09-18",
-                "source": "Synthetic reviewed daily threshold"}}}]
+                "source": "Synthetic threshold"}}}]
     chain.plan = UnifiedTradePlan.model_validate(raw)
     chain.now = datetime(2026, 9, 18, 16, 1, tzinfo=fixture.SH)
     chain.activate(version=2, activation_revision=1)
@@ -397,10 +397,14 @@ def test_stored_daily_reminder_loses_authority_without_official_calendar(
         assert daily_delivery_allowed(work.daily.session, event, chain.now)
         work.daily.session.execute(delete(TradingCalendar))
         work.commit()
-    pipeline = SimpleNamespace(_work=chain.plans._unit_of_work,
-        _clock=SimpleNamespace(now=lambda: chain.now), _runtime_generation=uuid4())
-    prepared = asyncio.run(ProductionMonitorPipeline.prepare_daily_inputs(
-        pipeline, chain.plan, chain.now, official_target, ()))
+    pipeline, controller, sdk = _real_pipeline_for_expired_risk_test(
+        chain, tmp_path, monkeypatch)
+    try:
+        prepared = asyncio.run(pipeline.prepare_daily_inputs(
+            chain.plan, chain.now, official_target, ()))
+        assert sdk.calls == []
+    finally:
+        asyncio.run(controller.aclose())
     assert prepared.series is None
     assert prepared.official_trade_date is None
     assert "OFFICIAL_DAILY_SESSION_UNVERIFIED" in prepared.data_blockers
@@ -424,7 +428,7 @@ def test_reminder_delivery_rechecks_reviewed_fact_after_evaluation(current_chain
         "condition": {"type": "ALL", "conditions": [
             {"type": "MINUTE_CLOSE_BELOW", "timeframe_minutes": 5, "price_fen": 4000},
             {"type": "REVIEWED_FACT", "fact_kind": "TECHNICAL",
-             "evidence_requirement": "Human verifies the completed minute pattern",
+             "evidence_requirement": "Human verifies the completed five-minute pattern",
              "validity_scope": "TRADE_DATE"},
         ]}}]
     chain.plan = UnifiedTradePlan.model_validate(raw)
