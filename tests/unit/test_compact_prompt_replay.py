@@ -1,4 +1,4 @@
-"""Replay unmodified compact-source responses through the strict production boundary."""
+"""Frozen compact responses preserve history while current source coverage blocks."""
 
 import asyncio
 import json
@@ -7,7 +7,10 @@ from uuid import uuid4
 
 import pytest
 from tests.unit.test_ai_plan_extraction_v4 import _config
-from tests.unit.test_current_review_contract import extract_response
+from tests.unit.test_current_review_contract import (
+    assert_historical_review_and_blocked_current,
+    extract_response,
+)
 
 from trade_plan_monitor.ai.daily_review import semantic_values
 from trade_plan_monitor.ai.extraction import extract_plan
@@ -30,11 +33,19 @@ def record(case):
         ("szse-two-alerts", "000858.SZ", "SZSE", 800, [("LT", "7432"), ("GT", "8567")]),
     ],
 )
-def test_live_compact_sources_preserve_all_rules_and_evidence(case, symbol, market, cap, prices):
+def test_frozen_compact_history_preserves_evidence_while_current_blocks(
+    case, symbol, market, cap, prices,
+):
     frozen = record(case)
     result = extract_response(frozen["response"], frozen["source"])
     assert result.status is PlanExtractionStatus.SUCCEEDED
-    assert result.validation_issues == result.assumptions == result.warnings == ()
+    clause_count = 9 if case == "sse-one-alert" else 11
+    historical = assert_historical_review_and_blocked_current(
+        result, frozen["source"], alert_count=len(prices), clause_count=clause_count,
+        unresolved_clause_indexes=range(clause_count),
+        expected_issue_count=27 if case == "sse-one-alert" else 41,
+    )
+    assert historical.issues == result.assumptions == result.warnings == ()
     draft = result.draft
     assert draft.to_executable() is not None
     assert (draft.symbol, draft.market, draft.position.max_qty) == (symbol, market, cap)
@@ -85,7 +96,11 @@ def test_compact_notation_does_not_bypass_required_parameters_or_review(violatio
     if violation == "missing_binding":
         # Parsing succeeds, but complete source review must block activation.
         assert result.status is PlanExtractionStatus.SUCCEEDED
-        assert len(result.validation_issues) == 1
+        historical = assert_historical_review_and_blocked_current(
+            result, frozen["source"], alert_count=2, clause_count=11,
+            unresolved_clause_indexes=range(11), expected_issue_count=41, missing_binding=True,
+        )
+        assert len(historical.issues) == 1
         issue = result.validation_issues[0]
         assert issue.code == "DAILY_SOURCE_BINDING_REQUIRED"
         assert issue.path == "alert_rules[1].condition.reference.value"

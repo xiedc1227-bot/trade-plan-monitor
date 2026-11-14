@@ -1,10 +1,13 @@
-"""Unmodified live responses exercise the real parser and complete source review."""
+"""Frozen empty-array responses pass historical review, with current coverage blocked."""
 
 import json
 from pathlib import Path
 
 import pytest
-from tests.unit.test_current_review_contract import extract_response
+from tests.unit.test_current_review_contract import (
+    assert_historical_review_and_blocked_current,
+    extract_response,
+)
 
 from trade_plan_monitor.ai.daily_review import semantic_values
 from trade_plan_monitor.ai.models import PlanExtractionStatus
@@ -21,11 +24,17 @@ FIXTURES = Path(__file__).parents[1] / "fixtures" / "ai" / "empty-array-contract
         ("szse-two-alerts", "000858.SZ", "SZSE", 800, [("LT", "7432"), ("GT", "8567")]),
     ],
 )
-def test_real_cross_symbol_responses_pass_without_repairs(case, symbol, market, cap, prices):
+def test_frozen_cross_symbol_history_passes_while_current_blocks(case, symbol, market, cap, prices):
     record = json.loads((FIXTURES / f"{case}.json").read_text(encoding="utf-8"))
     result = extract_response(record["response"], record["source"])
     assert result.status is PlanExtractionStatus.SUCCEEDED
-    assert result.validation_issues == result.assumptions == result.warnings == ()
+    clause_count = 11 if case == "sse-one-alert" else 15
+    historical = assert_historical_review_and_blocked_current(
+        result, record["source"], alert_count=len(prices), clause_count=clause_count,
+        unresolved_clause_indexes=range(clause_count),
+        expected_issue_count=29 if case == "sse-one-alert" else 45,
+    )
+    assert historical.issues == result.assumptions == result.warnings == ()
     draft = result.draft
     assert draft.to_executable() is not None
     assert (draft.symbol, draft.market, draft.position.max_qty) == (symbol, market, cap)
