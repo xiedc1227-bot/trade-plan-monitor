@@ -47,7 +47,7 @@ async def _complete_pending_explicit_prefetch(composition, sdk, database, *, sta
         (name, kwargs) for name, kwargs in sdk.calls[startup_calls:] if name == "rt_min_daily"
     ]
     assert len(startup_history) == 1 and startup_history[0][1]["ts_code"] == "003043.SZ"
-    state = composition._runtime._probe_capabilities.__self__
+    state = composition._runtime._liveness_owner
     pipeline = state._pipeline
     sdk.clock.current = max(sdk.clock.now(), pipeline.next_stock_recovery_at())
     assert pipeline.next_stock_recovery_at() <= sdk.clock.now()
@@ -56,7 +56,7 @@ async def _complete_pending_explicit_prefetch(composition, sdk, database, *, sta
     before_calls = len(sdk.calls)
     before = _business_rows(database)
     current_before = business_rows(state)
-    result = await state.run_deadline(
+    result = await composition._runtime._execute_deadline(
         MarketDeadline(
             kind=DeadlineKind.STOCK_RECOVERY,
             trade_date=sdk.clock.now().date(),
@@ -149,8 +149,9 @@ def test_one_malformed_stock_row_does_not_block_other_plan_family_or_indexes(
         _write_configuration_and_evidence(tmp_path, observed_at=sdk.clock.now(), include_index=True)
         try:
             startup_calls = len(sdk.calls)
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
+            state = composition._runtime._liveness_owner
             await _complete_pending_explicit_prefetch(
                 composition,
                 sdk,
@@ -158,7 +159,7 @@ def test_one_malformed_stock_row_does_not_block_other_plan_family_or_indexes(
                 startup_calls=startup_calls,
             )
             sdk.clock.current = NOW
-            await state.run_deadline(
+            await composition._runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=NOW.date(),
@@ -190,15 +191,16 @@ def test_one_malformed_stock_row_does_not_block_other_plan_family_or_indexes(
         )
         try:
             startup_calls = len(sdk.calls)
-            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
-            state = replacement._runtime._probe_capabilities.__self__
+            assert (await replacement._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert replacement._runner_task is None
+            state = replacement._runtime._liveness_owner
             await _complete_pending_explicit_prefetch(
                 replacement,
                 sdk,
                 tmp_path / "monitor.sqlite3",
                 startup_calls=startup_calls,
             )
-            await state.run_deadline(
+            await replacement._runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=NOW.date(),
@@ -275,13 +277,14 @@ def test_required_index_failure_isolates_mixed_family_deadline(
 
         try:
             startup_calls = len(sdk.calls)
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            state = composition._runtime._probe_capabilities.__self__
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
+            state = composition._runtime._liveness_owner
             state._dispatcher._channels = (Channel(),)
             await _complete_pending_explicit_prefetch(
                 composition, sdk, database, startup_calls=startup_calls
             )
-            results = await state.run_deadline(
+            results = await composition._runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=NOW.date(),
@@ -312,8 +315,9 @@ def test_required_index_failure_isolates_mixed_family_deadline(
             config_path=tmp_path / "config/app.yaml", database_path=database
         )
         try:
-            assert (await replacement.start()).status is RuntimeServiceStatus.RUNNING
-            state = replacement._runtime._probe_capabilities.__self__
+            assert (await replacement._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert replacement._runner_task is None
+            state = replacement._runtime._liveness_owner
             state._dispatcher._channels = (Channel(),)
             assert state.next_index_recovery_at() == retry_at
             persisted = state._pipeline.index_service.latest_snapshots()[
@@ -322,7 +326,7 @@ def test_required_index_failure_isolates_mixed_family_deadline(
             assert persisted.snapshot_hash == failed_hash
             before = business_rows(state)
             calls = len(sdk.calls)
-            await state.run_deadline(
+            await replacement._runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.INDEX_RECOVERY, trade_date=NOW.date(), due_at=retry_at
                 )
