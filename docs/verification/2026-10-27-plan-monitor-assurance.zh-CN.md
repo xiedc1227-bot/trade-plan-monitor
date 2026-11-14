@@ -957,3 +957,9 @@ T21a–g独立浏览器工程验收通过，接着执行T22回归/容量。完�
 **完整认证44项通过**，30.571s，零失败／错误／跳过。加上17项pipeline进度及26项进度邻例，共 **87项唯一测试通过**；单独重试及定向用例均重叠。根会话审查三个文件、43项源码／产物哈希、JUnit及原30条pipeline和243条认证断言。pipeline测试运行后的换行调整AST一致；Ruff／差异检查通过。原启动／正例／归属失败和持久化清理诊断均保留。证据 `.pytest_cache/pma/t22-permission-progress-20261114-01/evidence.json`，SHA256 `dd732a0a2f86b1dbc6028aea4a1c23fc4f72ae222ffdb8260eddf5bc57da74c2`。
 
 R112整文件12项失败现已全部处理，完整文件已通过，但不关闭T22：其他历史集成夹具、全量集成、最终单元回归及后续门禁仍待完成。此前中断的全量集成仍为INTERRUPTED_INCOMPLETE。语料／C05、实际T20事实、最终验收、0/48及不迁移用户数据库／不外发／不推送均不变。
+
+## PMA-R117 — 权限候选测试夹具回归
+
+提交 `bd8029e` 修改五个测试文件：15处旧回调取主路径改为同一运行实例的 _liveness_owner，两处真实composition的合成 reference.source 说明改为既有支持的 "Synthetic threshold"。334条原断言及其他AST全部不变，保留4000、ALL结构、日期、monitoring、排序、预约、SQL／receipt限制和零SDK检查。原两处说明被 SOURCE_CONTEXT_UNVERIFIED 与 SOURCE_RELATION_MISMATCH 正确阻断，生产语法／覆盖守卫未改。实际存储的可执行计划仅该说明发生变化，重算哈希匹配，coverage为COMPLETE且零问题，审核凭据绑定一致。
+
+最初120项为104通过／16失败，仅适配取主后118通过／2失败。修正两处说明后定向两项通过，完整 **120项唯一测试全部通过**，41.902s，零失败／错误／跳过；定向两项重叠。根会话核验49项源码／产物哈希、JUnit、334条断言及精确15路径／2字面量AST差异。Ruff／差异检查通过。证据 `.pytest_cache/pma/t22-owner-fixtures-five-20261114-02/evidence.json`，SHA256 `b1b13a0cf28720178a7f9df61373a5bbf2b21ba61384700799b23a469020ad22`。另15个旧取主文件及其余全量门禁待完成，T22／语料／C05／实际T20／最终验收及0/48均未关闭。
