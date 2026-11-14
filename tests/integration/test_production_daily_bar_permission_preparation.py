@@ -171,7 +171,7 @@ def test_real_composition_has_independent_safe_permission_reader(tmp_path, monke
     raw["ordinary_rules"][0]["condition"] = {"type": "ALL", "conditions": [minute,
         {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
          "comparator": "LT", "reference": {"mode": "FIXED", "value": "4000",
-            "unit": "FEN", "as_of": "2026-09-07", "source": "Synthetic reviewed threshold"}}]}
+            "unit": "FEN", "as_of": "2026-09-07", "source": "Synthetic threshold"}}]}
     plan = UnifiedTradePlan.model_validate(raw)
 
     async def scenario():
@@ -180,7 +180,7 @@ def test_real_composition_has_independent_safe_permission_reader(tmp_path, monke
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             _seed_open_day(tmp_path / "monitor.sqlite3", NOW.date() - timedelta(days=1))
             await _block(runtime._request_controller, OP)
             runtime._clock.current += timedelta(seconds=301)

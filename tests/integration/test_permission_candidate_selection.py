@@ -112,7 +112,7 @@ def test_anchorless_scope_does_not_reserve_and_index_daily_has_no_stock_dependen
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
             await _block(control, TushareOperation.DAILY_LIMITS)
@@ -195,7 +195,7 @@ def test_daily_bar_pool_orders_official_then_bounded_fallback(
             _seed_official_bar(database, "003044.SZ", EARLIER, NOW, official=False)
             _seed_official_bar(database, "003045.SZ", ANCHOR, NOW)
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             await _block(runtime._request_controller, TushareOperation.DAILY_BARS)
             evidence = pipeline._read_permission_evidence(
@@ -258,7 +258,7 @@ def test_current_scope_candidates_peek_without_reservation_or_sdk_call(
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
@@ -350,7 +350,7 @@ def test_calendar_seven_day_and_daily_366_day_boundaries(
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             control = runtime._request_controller
             await _block(control, TushareOperation.TRADING_CALENDAR)
@@ -471,7 +471,7 @@ def test_explicit_only_plan_does_not_demand_legacy_reference_probes(
                 engine.dispose()
             _seed_open_day(database, ANCHOR)
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             control = runtime._request_controller
             await _block(control, TushareOperation.DAILY_LIMITS)
@@ -536,7 +536,7 @@ def test_expired_legacy_close_obligation_demands_daily_bars(
                 finally:
                     engine.dispose()
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             if obligation == "historical":
                 assert pipeline._historical_reader is not None
@@ -584,7 +584,7 @@ def test_candidate_read_uses_one_snapshot_and_propagates_read_fault(
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(runtime._request_controller, TushareOperation.DAILY_BARS)

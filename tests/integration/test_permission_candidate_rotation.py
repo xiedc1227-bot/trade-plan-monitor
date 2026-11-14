@@ -56,7 +56,7 @@ def test_current_scope_tie_rotates_only_after_reservation_even_when_queue_aborts
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
@@ -132,7 +132,7 @@ def test_daily_bar_pools_alternate_and_follow_missing_pair_sort_key(
             _seed_official_bar(database, first_plan.symbol, ANCHOR, NOW)
             _seed_official_bar(database, second_plan.symbol, EARLIER, NOW)
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
             await _block(control, TushareOperation.DAILY_BARS)
@@ -337,7 +337,7 @@ def test_failed_reservation_save_does_not_advance_pipeline_rotation(
         )
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-            pipeline = composition._runtime._probe_capabilities.__self__._pipeline
+            pipeline = composition._runtime._liveness_owner._pipeline
             assert pipeline is not None
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(

@@ -42,7 +42,7 @@ def test_newer_false_weekend_open_keeps_friday_historical_index_anchor(
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             friday = ANCHOR - timedelta(days=3)
             sunday = ANCHOR - timedelta(days=1)
@@ -80,7 +80,7 @@ def test_false_weekend_open_today_has_no_realtime_index_candidate(
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             saturday = ANCHOR + timedelta(days=5)
             runtime._clock.current = datetime.combine(
@@ -124,7 +124,7 @@ def test_completed_weekend_closed_row_remains_calendar_permission_anchor(
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             assert pipeline is not None
             sunday = ANCHOR - timedelta(days=1)
             _seed_closed_day(tmp_path / "monitor.sqlite3", sunday)

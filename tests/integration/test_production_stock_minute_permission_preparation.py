@@ -578,7 +578,7 @@ def test_all_current_scopes_preserve_ties_and_getter_is_read_free(tmp_path, monk
     raw["ordinary_rules"][0]["condition"] = {"type": "ALL", "conditions": [minute,
         {"type": "DAILY_PRICE_COMPARE", "field": "close", "offset": 0,
          "comparator": "LT", "reference": {"mode": "FIXED", "value": "4000",
-            "unit": "FEN", "as_of": "2026-09-07", "source": "Synthetic reviewed threshold"}}]}
+            "unit": "FEN", "as_of": "2026-09-07", "source": "Synthetic threshold"}}]}
     plan = UnifiedTradePlan.model_validate(raw)
 
     async def scenario():
@@ -587,7 +587,7 @@ def test_all_current_scopes_preserve_ties_and_getter_is_read_free(tmp_path, monk
         try:
             await composition.start()
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             scopes = (
