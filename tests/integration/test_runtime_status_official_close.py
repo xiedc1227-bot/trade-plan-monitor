@@ -256,7 +256,7 @@ def test_current_official_status_rechecks_owned_target_source_and_basis(
                         "value": "6200",
                         "unit": "FEN",
                         "as_of": str(fixture.NOW.date()),
-                        "source": "Synthetic reviewed official source threshold",
+                        "source": "Synthetic threshold",
                     },
                 },
                 "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},

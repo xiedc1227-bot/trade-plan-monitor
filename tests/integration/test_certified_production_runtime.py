@@ -40,7 +40,7 @@ def _activate_current_minute_alert(tmp_path, at):
     )
     chain.plan = UnifiedTradePlan.model_validate(raw)
     with chain.client:
-        chain.activate(source="Synthetic completed five-minute risk reminder.")
+        chain.activate()
     return chain.plan
 
 
@@ -352,14 +352,14 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
                     due_at=NOW,
                     bar_end=NOW.replace(second=0),
                 )
-                result = await state.run_deadline(deadline)
+                result = await first._runtime._execute_deadline(deadline)
                 assert len(result) == 1
                 assert result[0].symbol == plan.symbol
                 with work() as transaction:
                     before = transaction.daily.get("evaluation-head-" + plan.symbol)
                 assert before is not None
                 calls = len(sdk.calls)
-                repeated = await state.run_deadline(deadline)
+                repeated = await first._runtime._execute_deadline(deadline)
                 assert len(repeated) == 1
                 assert repeated[0].snapshot == result[0].snapshot
                 assert len(sdk.calls) == calls
@@ -385,7 +385,7 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
                     assert not daily_delivery_allowed(
                         transaction.daily.session, old_event, clock.now())
                 sdk.minute_close = "66.00"
-                corrected_result = await state.run_deadline(deadline)
+                corrected_result = await first._runtime._execute_deadline(deadline)
                 assert corrected_result[0].snapshot["alerts"][0]["outcome"] == "UNSATISFIED"
                 assert sum(name == "rt_min" for name, _ in sdk.calls) == 2
                 with work() as transaction:
@@ -398,7 +398,7 @@ def test_certified_pipeline_recovers_evaluates_once_and_restarts(tmp_path, monke
                 sdk.engine = second._runtime._run_deadline.__self__._engine
                 assert (await second.start()).status is RuntimeServiceStatus.RUNNING
                 assert second._runtime.runtime_generation != generation
-                resumed = await second._runtime._run_deadline.__self__.run_deadline(deadline)
+                resumed = await second._runtime._execute_deadline(deadline)
                 assert len(resumed) == 1
                 with work() as transaction:
                     after = transaction.daily.get("evaluation-head-" + plan.symbol)

@@ -924,77 +924,85 @@ def test_real_composition_starts_runs_a_timer_and_restores_its_projection(
         monkeypatch.setattr(production, "create_tushare_client", lambda _config: sdk)
 
         first = create_monitor_composition(config_path=config, database_path=database)
-        assert isinstance(first._runtime, RuntimeLifecycleService)
-        observed = []
-        original_run = first._runtime._run_deadline
-
-        async def capture(deadline):
-            observed.append(
-                (deadline, first._runtime.runtime_generation, first._runtime._schedule_owner)
-            )
-            return await original_run(deadline)
-
-        first._runtime._run_deadline = capture
-        started = await first.start()
-        assert started.status is RuntimeServiceStatus.RUNNING
-        assert started.read_only is False
-        assert started.delivery.status is RuntimeResourceStatus.READY
-
         try:
-            before = await _wait_for_current_head(database, plan.symbol, clock)
-            await asyncio.wait_for(parked.wait(), timeout=5)
-        except AssertionError as error:
-            raise AssertionError(f"runtime={first.health()} calls={sdk.calls!r}") from error
-        assert clock.sleep_calls
-        assert [
-            deadline.due_at
-            for deadline, _, _ in observed
-            if deadline.kind is DeadlineKind.REALTIME_MINUTE
-        ] == [NOW.replace(minute=minute, second=12) for minute in range(1, 6)]
-        assert all(
-            generation == started.runtime_generation and owner is first._runner_task
-            for _, generation, owner in observed
-        )
-        assert first.health().status is RuntimeServiceStatus.RUNNING
-        assert not first._runner_task.done()
-        assert Counter(name for name, _ in sdk.calls)["rt_min"] == 5
-        snapshot = json.loads(before)
-        assert snapshot["minute_target"] == NOW.replace(minute=5, second=0).isoformat()
-        assert snapshot["evaluated_at"] == NOW.replace(minute=5, second=12).isoformat()
-        assert snapshot["plan_hash"] == plan_sha256(plan)
-        assert snapshot["activation_revision"] == 1
-        engine, work_factory = _work_factory(database, clock)
-        try:
-            with work_factory() as work:
-                records = tuple(
-                    work._session.scalars(
-                        select(DailyRecord).where(DailyRecord.kind == "EVALUATION")
-                    )
+            assert isinstance(first._runtime, RuntimeLifecycleService)
+            observed = []
+            original_run = first._runtime._run_deadline
+
+            async def capture(deadline):
+                observed.append(
+                    (deadline, first._runtime.runtime_generation, first._runtime._schedule_owner)
                 )
-                assert len(records) == 2
-                assert {record.payload_json for record in records} == {before}
-                for model in (EvaluationResult, SymbolDecisionHead):
-                    assert work._session.scalar(select(func.count()).select_from(model)) == 0
+                return await original_run(deadline)
+
+            first._runtime._run_deadline = capture
+            started = await first.start()
+            assert started.status is RuntimeServiceStatus.RUNNING
+            assert started.read_only is False
+            assert started.delivery.status is RuntimeResourceStatus.READY
+
+            try:
+                before = await _wait_for_current_head(database, plan.symbol, clock)
+                await asyncio.wait_for(parked.wait(), timeout=5)
+            except AssertionError as error:
+                raise AssertionError(f"runtime={first.health()} calls={sdk.calls!r}") from error
+            assert clock.sleep_calls
+            assert [
+                deadline.due_at
+                for deadline, _, _ in observed
+                if deadline.kind is DeadlineKind.REALTIME_MINUTE
+            ] == [NOW.replace(minute=minute, second=12) for minute in range(1, 6)]
+            assert all(
+                generation == started.runtime_generation and owner is first._runner_task
+                for _, generation, owner in observed
+            )
+            assert first.health().status is RuntimeServiceStatus.RUNNING
+            assert not first._runner_task.done()
+            assert Counter(name for name, _ in sdk.calls)["rt_min"] == 5
+            snapshot = json.loads(before)
+            assert snapshot["minute_target"] == NOW.replace(minute=5, second=0).isoformat()
+            assert snapshot["evaluated_at"] == NOW.replace(minute=5, second=12).isoformat()
+            assert snapshot["plan_hash"] == plan_sha256(plan)
+            assert snapshot["activation_revision"] == 1
+            engine, work_factory = _work_factory(database, clock)
+            try:
+                with work_factory() as work:
+                    records = tuple(
+                        work._session.scalars(
+                            select(DailyRecord).where(DailyRecord.kind == "EVALUATION")
+                        )
+                    )
+                    assert len(records) == 2
+                    assert {record.payload_json for record in records} == {before}
+                    for model in (EvaluationResult, SymbolDecisionHead):
+                        assert work._session.scalar(select(func.count()).select_from(model)) == 0
+            finally:
+                engine.dispose()
         finally:
-            engine.dispose()
-        await first.stop()
+            await first.stop()
         assert first.health().status is RuntimeServiceStatus.STOPPED
 
-        restarted_clock = ControlledClock(clock.now(), released_sleeps=0)
+        restart_wait_entered = asyncio.Event()
+
+        class RestartClock(ControlledClock):
+            async def sleep_until(self, deadline):
+                restart_wait_entered.set()
+                await super().sleep_until(deadline)
+
+        restarted_clock = RestartClock(clock.now(), released_sleeps=0)
         clock = restarted_clock
         second = create_monitor_composition(config_path=config, database_path=database)
-        assert isinstance(second._runtime, RuntimeLifecycleService)
-        restarted = await second.start()
-        assert restarted.status is RuntimeServiceStatus.RUNNING
-        assert restarted.delivery.status is RuntimeResourceStatus.READY
-        after = await _wait_for_current_head(database, plan.symbol, restarted_clock)
-        assert after == before
-        for _ in range(20):
-            if restarted_clock.sleep_calls:
-                break
-            await asyncio.sleep(0)
-        assert restarted_clock.sleep_calls
-        await second.stop()
+        try:
+            assert isinstance(second._runtime, RuntimeLifecycleService)
+            restarted = await second.start()
+            assert restarted.status is RuntimeServiceStatus.RUNNING
+            assert restarted.delivery.status is RuntimeResourceStatus.READY
+            await asyncio.wait_for(restart_wait_entered.wait(), timeout=5)
+            after = await _wait_for_current_head(database, plan.symbol, restarted_clock)
+            assert after == before
+            assert restarted_clock.sleep_calls
+        finally:
+            await second.stop()
         assert len(controllers) == 2
 
     asyncio.run(scenario())
@@ -1028,7 +1036,7 @@ def test_cross_day_official_risk_breach_restores_from_sqlite_dashboard(
                         "value": "6200",
                         "unit": "FEN",
                         "as_of": str(target_date),
-                        "source": "Synthetic reviewed official close threshold",
+                        "source": "Synthetic threshold",
                     },
                 },
                 "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},
@@ -1960,7 +1968,7 @@ def test_current_daily_reminder_startup_and_restart_keep_source_binding(
                         "value": "6200",
                         "unit": "FEN",
                         "as_of": str(NOW.date()),
-                        "source": "Synthetic reviewed official close threshold",
+                        "source": "Synthetic threshold",
                     },
                 },
                 "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},
