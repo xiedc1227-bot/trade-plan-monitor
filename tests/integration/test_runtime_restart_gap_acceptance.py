@@ -50,7 +50,14 @@ def _run_monitor_process(
     import trade_plan_monitor.web.monitor_composition as monitor_composition
 
     base = Path(root)
-    clock = ControlledClock(observed_at)
+    scheduler_wait_entered = asyncio.Event()
+
+    class RestartClock(ControlledClock):
+        async def sleep_until(self, deadline):
+            scheduler_wait_entered.set()
+            await super().sleep_until(deadline)
+
+    clock = RestartClock(observed_at)
     sdk = CurrentCloseSDK(clock, (SYMBOL,), official_closes={TRADE_DATE: "55.00"})
 
     def controller_factory(*, clock, require_repository_binding=False):
@@ -76,10 +83,7 @@ def _run_monitor_process(
             assert health.status is RuntimeServiceStatus.RUNNING
             assert health.read_only is False
             assert health.recovery_issues == (), health.recovery_issues
-            for _ in range(20):
-                if clock.sleep_calls:
-                    break
-                await asyncio.sleep(0)
+            await scheduler_wait_entered.wait()
             assert clock.sleep_calls
             engine = create_sqlite_engine(base / "monitor.sqlite3")
             try:

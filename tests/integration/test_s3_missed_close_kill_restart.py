@@ -232,7 +232,7 @@ def _seed(root):
                     "value": "6200",
                     "unit": "FEN",
                     "as_of": str(SOURCE_CLOSE.date()),
-                    "source": "Synthetic reviewed official close threshold",
+                    "source": "Synthetic threshold",
                 },
             },
             "confirmation": {"kind": "OFFICIAL_DAILY_CLOSE"},
