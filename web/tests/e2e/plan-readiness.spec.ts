@@ -47,8 +47,9 @@ async function stop(server: ChildProcess, request: APIRequestContext, base: stri
   expect(server.signalCode, "no forced termination").toBeNull();
 }
 
-const test = auditedTest.extend<{ readinessFixture: Fixture }>({
-  readinessFixture: async ({ page, context, request }, use, testInfo) => {
+const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean }>({
+  manualLeaves: [false, { option: true }],
+  readinessFixture: async ({ page, context, request, manualLeaves }, use, testInfo) => {
     const port = await freePort(), base = `http://127.0.0.1:${port}`;
     // Playwright's normal outputDir is OS temp. SQLite stays in an independently
     // fresh project-local directory regardless of reporter/output overrides.
@@ -56,7 +57,8 @@ const test = auditedTest.extend<{ readinessFixture: Fixture }>({
     await mkdir(databaseParent, { recursive: true });
     const root = await mkdtemp(join(databaseParent, "case-"));
     const server = spawn(join(repo, ".venv/Scripts/python.exe"), ["-X", "utf8", "-m",
-      "tests.browser.plan_readiness_server", "--port", String(port), "--root", root],
+      "tests.browser.plan_readiness_server", "--port", String(port), "--root", root,
+      ...(manualLeaves ? ["--scenario", "manual-leaves"] : [])],
     { cwd: repo, windowsHide: true, env: { ...process.env, PYTHONUTF8: "1" } });
     let log = "", phase = "RUNNING";
     const record = (value: unknown) => { log = (log + String(value)).slice(-65536); };
@@ -134,6 +136,125 @@ const test = auditedTest.extend<{ readinessFixture: Fixture }>({
       expect(log).toContain('"lifespanClosed": true, "readOwnerOutstanding": 0, "runtimeState": "STOPPED"');
     }
   },
+});
+
+interface ManualEvidence {
+  evaluationId: string; nativeCompletionRecordId: string | null;
+  evaluation: { signals: unknown[]; ordinary_evaluations: { rule_id: string;
+    evidence: { outcome: string; children: { outcome: string; fact_ids: string[] }[] } }[] };
+  facts: { id: string; payload: { kind: string; satisfied: boolean;
+    reviewed_fact_target?: { condition_path: string } } }[];
+  sourceAlignment: { consumedClosedDays: number; sessionsMatchOnlyOpenDays: boolean;
+    calendarFingerprintMatches: boolean };
+}
+const manualTest = test.extend({ manualLeaves: true });
+manualTest("H04 actual UI registers separate same-kind leaves and publishes native TRUE/FALSE evidence", async ({ page, request, readinessFixture: fixture }, testInfo) => {
+  const saved = await version(request, fixture, fixture.initial.planVersionId);
+  const raw = JSON.parse(saved.planJson!);
+  expect(raw.schema_version).toBe(5);
+  const owner = raw.ordinary_rules[0].rule_id as string;
+  const evidence = async (): Promise<ManualEvidence> => {
+    const response = await request.get(fixture.base + prefix + "/manual-evidence");
+    expect(response.status(), await response.text()).toBe(200);
+    return response.json();
+  };
+  const baseline = await fixture.inspect();
+  await page.goto(fixture.base + fixture.initial.planUrl);
+  const panel = page.locator(".daily-operations"), form = panel.locator("form.daily-operation");
+  const selection = panel.getByLabel("选择本次实际核验的准确条件", { exact: true });
+  await expect(selection).toBeEnabled();
+  await expect(selection).toHaveValue("");
+  const choices = await selection.locator("option").evaluateAll(elements => elements.map(element => ({
+    value: (element as HTMLOptionElement).value, text: element.textContent ?? "",
+  })));
+  expect(choices).toHaveLength(3);
+  expect(choices[1]!.text).toContain("成交不异常放大");
+  expect(choices[2]!.text).toContain("明显下影");
+  const input = form.locator('[id="operation-FACT-.evidence"]');
+  const truth = form.locator('[id="operation-FACT-.satisfied"]');
+  const submit = form.getByRole("button", { name: "确认登记人工核验证据", exact: true });
+  await selection.selectOption(choices[1]!.value);
+  await expect(input).toHaveValue("");
+  await expect(submit).toBeDisabled();
+  await expect(form.locator('input[type="checkbox"]')).toHaveCount(0);
+  const firstText = "Synthetic human observation: the exact first volume requirement was checked and satisfied.";
+  await input.fill(firstText); await truth.selectOption("0");
+  const aResponse = page.waitForResponse(response => response.url().endsWith("/plan-facts") && response.request().method() === "POST");
+  await submit.click();
+  const a = await aResponse;
+  expect(a.status(), await a.text()).toBe(200);
+  const aCommand = a.request().postDataJSON(), aReceipt = await a.json();
+  expect(aCommand).toMatchObject({ planVersionId: saved.id, contentHash: saved.contentHash,
+    kind: "VOLUME_OR_CANDLE", satisfied: true, evidence: firstText,
+    conditionSelection: { ownerKind: "ORDINARY_RULE", ownerId: owner, conditionPath: "condition.conditions[0]" } });
+  expect(aCommand).not.toHaveProperty("verified");
+  await expect(panel).toContainText("已记录并更新当前状态。");
+  const nativeA = await evidence();
+  expect(nativeA.nativeCompletionRecordId).toBe(nativeA.evaluationId);
+  expect(nativeA.evaluation.ordinary_evaluations[0]!.evidence.children.map(leaf => leaf.outcome))
+    .toEqual(["SATISFIED", "MISSING_INPUT"]);
+  await pane(page).getByRole("button", { name: "重新读取监控就绪状态", exact: true }).click();
+  await expect(pane(page).getByText("condition.conditions[0]", { exact: true }).locator("..")).toContainText("条件已成立");
+  await expect(pane(page)).toContainText("缺少必需输入");
+
+  // Fill an unsubmitted A observation, then switch. B must not inherit it.
+  await input.fill("Unsubmitted first-leaf observation must be cleared on selection change.");
+  await truth.selectOption("0");
+  await selection.selectOption(choices[2]!.value);
+  await expect(input).toHaveValue("");
+  await expect(submit).toBeDisabled();
+  await expect(panel.locator(".reviewed-fact-selection blockquote")).toHaveText("明显下影");
+  const selectImage = testInfo.outputPath("h04-second-leaf-empty-evidence.png");
+  await panel.locator(".reviewed-fact-selection").screenshot({ path: selectImage });
+  await testInfo.attach("h04-second-leaf-empty-evidence", { path: selectImage, contentType: "image/png" });
+  const secondText = "Synthetic human observation: the exact second candle requirement was checked and NOT satisfied.";
+  await input.fill(secondText); await truth.selectOption("1");
+  const bResponse = page.waitForResponse(response => response.url().endsWith("/plan-facts") && response.request().method() === "POST");
+  await submit.click();
+  const b = await bResponse;
+  expect(b.status(), await b.text()).toBe(200);
+  const bCommand = b.request().postDataJSON(), bReceipt = await b.json();
+  expect(bCommand).toMatchObject({ planVersionId: saved.id, contentHash: saved.contentHash,
+    kind: "VOLUME_OR_CANDLE", satisfied: false, evidence: secondText,
+    conditionSelection: { ownerKind: "ORDINARY_RULE", ownerId: owner, conditionPath: "condition.conditions[1]" } });
+  expect(bCommand.factId).not.toBe(aCommand.factId);
+  expect(bCommand).not.toHaveProperty("verified");
+  await expect(panel).toContainText("已记录并更新当前状态。");
+  const nativeB = await evidence();
+  expect(nativeB.nativeCompletionRecordId).toBe(nativeB.evaluationId);
+  expect(nativeB.evaluationId).not.toBe(nativeA.evaluationId);
+  const root = nativeB.evaluation.ordinary_evaluations[0]!.evidence;
+  expect(root.outcome).toBe("UNSATISFIED");
+  expect(root.children.map(leaf => leaf.outcome)).toEqual(["SATISFIED", "UNSATISFIED"]);
+  expect(root.children.map(leaf => leaf.fact_ids)).toEqual([[aReceipt.id], [bReceipt.id]]);
+  expect(nativeB.evaluation.signals).toEqual([]);
+  expect(nativeB.facts.find(fact => fact.id === bReceipt.id)?.payload.satisfied).toBe(false);
+  expect(nativeB.sourceAlignment).toMatchObject({ sessionsMatchOnlyOpenDays: true, calendarFingerprintMatches: true });
+  expect(nativeB.sourceAlignment.consumedClosedDays).toBeGreaterThan(0);
+  await pane(page).getByRole("button", { name: "重新读取监控就绪状态", exact: true }).click();
+  await expect(pane(page)).toContainText("条件未成立（已完成检查）");
+  const current = await fixture.read();
+  expect(current.rules[0]!.facts.leaves.map(leaf => leaf.state)).toEqual(["CONDITION_TRUE", "CONDITION_FALSE"]);
+  for (const leaf of current.rules[0]!.facts.leaves) expect(leaf.evidenceRefs).toEqual([nativeB.evaluationId]);
+  const beforeRejected = await fixture.inspect();
+  const rejected = await command(request, fixture, "/api/v1/plan-facts", { ...bCommand,
+    factId: "must-not-create-" + randomUUID(), conditionSelection: { ...bCommand.conditionSelection, conditionPath: "condition.conditions[99]" } });
+  expect([404, 409, 422]).toContain(rejected.status());
+  expect((await fixture.inspect()).storage).toEqual(beforeRejected.storage);
+  expect(beforeRejected.storage.dailyKinds.FACT).toBe((baseline.storage.dailyKinds.FACT ?? 0) + 2);
+  expect(beforeRejected.storage.source_coverage_review).toEqual(baseline.storage.source_coverage_review);
+  await page.setViewportSize({ width: 1280, height: 2600 });
+  const heading = pane(page).getByRole("heading", { name: "逐规则监控就绪", exact: true });
+  await heading.click();
+  await heading.evaluate(element => { element.scrollIntoView({ block: "start" }); window.scrollBy(0, -96); });
+  await page.clock.runFor(64);
+  const image = testInfo.outputPath("h04-native-separate-true-false.png");
+  await pane(page).screenshot({ path: image });
+  await testInfo.attach("h04-native-separate-true-false", { path: image, contentType: "image/png" });
+  await testInfo.attach("h04-actual-public-native-evidence", { contentType: "application/json", body: JSON.stringify({
+    aCommand, aReceipt, bCommand, bReceipt, nativeA, nativeB, current, rejected: await rejected.json(),
+    baseline, after: beforeRejected, scope: "schema5 ordinary REVIEWED_FACT/TRADE_DATE only; two explicit human observations; no simulated trade or automatic human confirmation",
+  }, null, 2) });
 });
 
 function pane(page: Page) { return page.getByRole("region", { name: "逐规则监控就绪", exact: true }); }

@@ -13,6 +13,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Literal
 
+import httpx
 import pytest
 from fastapi import Depends
 from tests.browser.source_coverage_server import (
@@ -21,9 +22,11 @@ from tests.browser.source_coverage_server import (
     _loopback,
     _request_server_shutdown,
 )
+from tests.integration.current_activation_fixture import current_sample_plan
 from tests.integration.test_market_linkage_review import source_mapping
 
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json, load_daily_draft_json
+from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
 from trade_plan_monitor.web.origin_guard import LocalSpaRoute
@@ -58,6 +61,8 @@ class ReadinessFixture:
         self.case = None
         self.lifecycle = None
         self.source_cases = {}
+        self.scenario = "automatic"
+        self.manual_inputs = []
 
     def guard_connections(self):
         def guard(native):
@@ -99,7 +104,9 @@ class ReadinessFixture:
         self.patch.undo()
 
 
-def create_fixture_app(root: Path, *, port=8765, static_directory=None):
+def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario="automatic"):
+    if scenario not in {"automatic", "manual-leaves"}:
+        raise ValueError("Unknown fixed browser scenario")
     root = root.resolve()
     if not root.is_relative_to(REPOSITORY / ".pytest_cache"):
         raise ValueError("Use a fresh project-local .pytest_cache directory")
@@ -107,6 +114,7 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
         raise ValueError("A fresh isolated readiness directory is required")
     root.mkdir(parents=True, exist_ok=True)
     state = ReadinessFixture(root)
+    state.scenario = scenario
     try:
         state.guard_connections()
         # The reused fixture's scheduler imports neighboring test modules by
@@ -114,7 +122,24 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
         state.patch.syspath_prepend(str(REPOSITORY / "tests/integration"))
         from tests.integration.test_plan_readiness_profile_ownership import installed, start_current
 
-        state.case = installed(root, state.patch, 2)
+        plan = None
+        if scenario == "manual-leaves":
+            raw = current_sample_plan().model_dump(mode="json")
+            raw["alert_rules"] = []
+            raw["ordinary_rules"][0]["condition"] = {
+                "type": "ALL",
+                "conditions": [
+                    {
+                        "type": "REVIEWED_FACT",
+                        "fact_kind": "VOLUME_OR_CANDLE",
+                        "validity_scope": "TRADE_DATE",
+                        "evidence_requirement": requirement,
+                    }
+                    for requirement in ("成交不异常放大", "明显下影")
+                ],
+            }
+            plan = UnifiedTradePlan.model_validate(raw)
+        state.case = installed(root, state.patch, 2, plan=plan)
         state.lifecycle = PersistentPlanWebLifecycle(
             database_path=root / "monitor.sqlite3",
             clock=state.case.clock.now,
@@ -136,6 +161,73 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
         async def lifespan(application):
             try:
                 async with native_lifespan(application):
+                    if scenario == "manual-leaves":
+                        active = await state.lifecycle.get_plan_activation_state(symbol=plan.symbol)
+                        saved = await state.lifecycle.get_plan_version(
+                            version_id=str(active.plan_version_id)
+                        )
+                        now = state.case.clock.now().isoformat()
+                        # Fixed synthetic prerequisites use the public routes;
+                        # neither condition A nor B is supplied here.
+                        commands = [
+                            (
+                                "/simulation-position-confirmations",
+                                {
+                                    "symbol": plan.symbol,
+                                    "coreQty": 0,
+                                    "tacticalQty": 0,
+                                    "expectedRevision": 0,
+                                },
+                            ),
+                            (
+                                "/plan-facts",
+                                {
+                                    "planVersionId": str(active.plan_version_id),
+                                    "contentHash": saved.content_hash,
+                                    "factId": "fixture-tradability",
+                                    "kind": "TRADABILITY",
+                                    "tradeDate": str(state.case.clock.now().date()),
+                                    "evidence": (
+                                        "Synthetic fixture official tradability prerequisite; "
+                                        "not a technical leaf observation."
+                                    ),
+                                    "expectedRevision": 0,
+                                    "officialEvidence": {
+                                        "issuer": "Synthetic exchange evidence fixture",
+                                        "documentTitle": (
+                                            "Verified tradability prerequisite fixture"
+                                        ),
+                                        "documentUrl": "https://example.test/tradability",
+                                        "publishedAt": now,
+                                        "verifiedAt": now,
+                                        "applicableAssertion": (
+                                            "Synthetic fixture verifies only current tradability."
+                                        ),
+                                    },
+                                },
+                            ),
+                        ]
+                        async with httpx.ASGITransport(
+                            app, client=("127.0.0.1", 50000)
+                        ) as transport:
+                            for index, (path, body) in enumerate(commands):
+                                response = await transport.handle_async_request(
+                                    httpx.Request(
+                                        "POST",
+                                        f"http://127.0.0.1:{port}/api/v1" + path,
+                                        json=body,
+                                        headers={
+                                            "X-Monitor-Contract-Version": "2",
+                                            "Idempotency-Key": (
+                                                f"fixture-manual-prerequisite-{index}"
+                                            ),
+                                        },
+                                    )
+                                )
+                                await response.aread()
+                                if response.status_code != 200:
+                                    raise AssertionError(response.text)
+                                state.manual_inputs.append(response.json())
                     async with asyncio.timeout(30):
                         state.version = await start_current(state.case)
                         # Let the next native minute duty perform its real
@@ -163,6 +255,74 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None):
                 await state.case.clock.drive(state.case.clock.now() + timedelta(minutes=5))
             state.cycles = 2
             return state.inspect()
+
+        @app.get(PREFIX + "/manual-evidence", dependencies=guards)
+        async def manual_evidence():
+            if scenario != "manual-leaves":
+                raise ApiError(ApiErrorCode.NOT_FOUND)
+            pipeline = state.case.composition._runtime._liveness_owner._pipeline
+            _, _, plans = pipeline.runtime_status_snapshot()
+            proof = plans[0].completion
+            identity = (
+                None if proof is None else getattr(proof.input_stamp, "immutable_record_id", None)
+            )
+            consumed = pipeline.daily_evaluations._current_inputs.get(state.case.plan.symbol)
+            alignment = None
+            with state.lifecycle._unit_of_work() as work:
+                head = work.daily.get("evaluation-head-" + state.case.plan.symbol)
+                rows = work.daily.list(symbol=state.case.plan.symbol, kind="EVALUATION")
+                evaluation = (
+                    None
+                    if head is None
+                    else next(
+                        (
+                            row
+                            for row in rows
+                            if row["id"] != head["id"] and row["payload"] == head["payload"]
+                        ),
+                        None,
+                    )
+                )
+                facts = work.daily.list(symbol=state.case.plan.symbol, kind="FACT")
+                if consumed is not None and consumed.trading_calendar and head is not None:
+                    from trade_plan_monitor.runtime.status_authority import (
+                        _condition_sources,
+                        _fingerprint,
+                    )
+
+                    calendar, minutes, bars = _condition_sources(
+                        work.daily.session,
+                        head["payload"],
+                        consumed.trading_calendar[0].cal_date,
+                        consumed.trading_calendar[-1].cal_date,
+                    )
+                    alignment = {
+                        "consumedCalendarRows": len(consumed.trading_calendar),
+                        "consumedClosedDays": sum(
+                            not row.is_open for row in consumed.trading_calendar
+                        ),
+                        "consumedSessionRows": len(consumed.session_dates),
+                        "sessionsMatchOnlyOpenDays": consumed.session_dates
+                        == tuple(row.cal_date for row in consumed.trading_calendar if row.is_open),
+                        "storedCalendarRows": len(calendar),
+                        "storedClosedDays": sum(not row.is_open for row in calendar),
+                        "calendarFingerprintMatches": _fingerprint(
+                            "condition-calendar-v1", calendar
+                        )
+                        == _fingerprint("condition-calendar-v1", consumed.trading_calendar),
+                        "minuteFingerprintMatches": _fingerprint("condition-minute-v1", minutes)
+                        == _fingerprint("condition-minute-v1", consumed.minute_prefix),
+                        "fiveMinuteFingerprintMatches": _fingerprint("condition-five-v1", bars)
+                        == _fingerprint("condition-five-v1", consumed.five_minute_bars),
+                    }
+            return {
+                "evaluationId": None if evaluation is None else evaluation["id"],
+                "nativeCompletionRecordId": identity,
+                "evaluation": None if evaluation is None else evaluation["payload"],
+                "facts": facts,
+                "prerequisiteReceipts": state.manual_inputs,
+                "sourceAlignment": alignment,
+            }
 
         @app.post(PREFIX + "/source-case", dependencies=guards)
         async def source_case(command: SourceCase, context: MutationContextDependency):
@@ -241,8 +401,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--scenario", choices=("automatic", "manual-leaves"), default="automatic")
     args = parser.parse_args()
-    app = create_fixture_app(args.root, port=args.port, static_directory=REPOSITORY / "web/dist")
+    app = create_fixture_app(
+        args.root, port=args.port, static_directory=REPOSITORY / "web/dist", scenario=args.scenario
+    )
     state = app.state.readiness_fixture
     server = uvicorn.Server(
         uvicorn.Config(

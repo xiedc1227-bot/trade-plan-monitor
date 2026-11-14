@@ -14,9 +14,9 @@ from sqlalchemy import event
 
 
 @asynccontextmanager
-async def workspace(root):
+async def workspace(root, *, scenario="automatic"):
     module = import_module("tests.browser.plan_readiness_server")
-    app = module.create_fixture_app(root)
+    app = module.create_fixture_app(root, scenario=scenario)
     state = app.state.readiness_fixture
     try:
         async with app.router.lifespan_context(app):
@@ -390,5 +390,197 @@ def test_real_review_activation_changes_context_without_borrowing_old_native_pro
             )
             assert rejected.status_code == 409, rejected.text
             assert state.inspect()["storage"] == frozen
+
+    asyncio.run(scenario())
+
+
+def test_manual_leaves_keep_distinct_true_false_facts_in_native_owner_evaluation(tmp_path):
+    async def scenario():
+        async with workspace(tmp_path, scenario="manual-leaves") as (state, transport):
+            saved = (await request(transport, "/api/v1/plan-versions/" + state.version)).json()
+            plan = json.loads(saved["planJson"])
+            assert plan["schema_version"] == 5
+            assert len(plan["ordinary_rules"]) == 1 and plan["alert_rules"] == []
+            owner = plan["ordinary_rules"][0]["rule_id"]
+            before = state.inspect()["storage"]
+            receipts = []
+            for index, truth in enumerate((True, False)):
+                before_post = (await request(transport, state.prefix + "/manual-evidence")).json()
+                before_readiness = (await request(transport, state.readiness_path)).json()
+                result = await request(
+                    transport,
+                    "/api/v1/plan-facts",
+                    method="POST",
+                    body={
+                        "planVersionId": saved["id"],
+                        "contentHash": saved["contentHash"],
+                        "factId": f"manual-leaf-{index}",
+                        "kind": "VOLUME_OR_CANDLE",
+                        "tradeDate": str(state.case.clock.now().date()),
+                        "satisfied": truth,
+                        "evidence": (
+                            f"Synthetic actual observation for exact leaf {index}; result={truth}."
+                        ),
+                        "expectedRevision": 0,
+                        "conditionSelection": {
+                            "ownerKind": "ORDINARY_RULE",
+                            "ownerId": owner,
+                            "conditionPath": f"condition.conditions[{index}]",
+                        },
+                    },
+                )
+                assert result.status_code == 200, result.text
+                receipts.append(result.json()["id"])
+                after_post = (await request(transport, state.prefix + "/manual-evidence")).json()
+                after_post_readiness = (await request(transport, state.readiness_path)).json()
+                actual, diagnostic = after_post_readiness, after_post
+                assert diagnostic["nativeCompletionRecordId"] == diagnostic["evaluationId"]
+                assert diagnostic["evaluationId"] != before_post["evaluationId"]
+                alignment = diagnostic["sourceAlignment"]
+                assert alignment["consumedClosedDays"] > 0
+                assert alignment["consumedCalendarRows"] == alignment["storedCalendarRows"]
+                assert alignment["consumedClosedDays"] == alignment["storedClosedDays"]
+                assert alignment["sessionsMatchOnlyOpenDays"] is True
+                assert alignment["consumedSessionRows"] == (
+                    alignment["consumedCalendarRows"] - alignment["consumedClosedDays"]
+                )
+                assert alignment["calendarFingerprintMatches"] is True
+                (tmp_path / f"manual-proof-{index}.json").write_text(
+                    json.dumps(
+                        {
+                            "postReceipt": result.json(),
+                            "beforePost": {
+                                "nativeEvidence": before_post,
+                                "readiness": before_readiness,
+                            },
+                            "afterPublicPost": {
+                                "nativeEvidence": after_post,
+                                "readiness": after_post_readiness,
+                            },
+                            "readiness": actual,
+                            "nativeEvidence": diagnostic,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                rule = next(row for row in actual["rules"] if row["facts"]["ownerId"] == owner)
+                assert [leaf["state"] for leaf in rule["facts"]["leaves"]] == (
+                    ["CONDITION_TRUE", "MISSING_INPUT"]
+                    if index == 0
+                    else ["CONDITION_TRUE", "CONDITION_FALSE"]
+                )
+                assert rule["state"] == ("MISSING_INPUT" if index == 0 else "CONDITION_FALSE")
+            evidence = (await request(transport, state.prefix + "/manual-evidence")).json()
+            native = next(
+                row["evidence"]
+                for row in evidence["evaluation"]["ordinary_evaluations"]
+                if row["rule_id"] == owner
+            )
+            assert [leaf["fact_ids"] for leaf in native["children"]] == [
+                [receipts[0]],
+                [receipts[1]],
+            ]
+            assert evidence["evaluation"]["signals"] == []
+            assert evidence["nativeCompletionRecordId"] == evidence["evaluationId"]
+            assert all(
+                leaf["evidenceRefs"] == [evidence["evaluationId"]]
+                for leaf in rule["facts"]["leaves"]
+            )
+            after = state.inspect()["storage"]
+            assert after["dailyKinds"]["FACT"] == before["dailyKinds"]["FACT"] + 2
+            assert after["source_coverage_review"] == before["source_coverage_review"]
+
+            # A real same-bar cached duty cannot create a fresh evaluation or
+            # extend the original condition observation's validity.
+            runtime = state.case.composition._runtime
+            target = runtime._liveness_owner._pipeline.runtime_status_snapshot()[2][0].target
+            deadline = next(
+                row
+                for row in runtime._scheduler._deadlines_for_open_date(
+                    state.case.clock.now().date()
+                )
+                if row.bar_end == target.bucket_end
+            )
+            bound = rule["facts"]["observation"]["expiresAt"]
+            cached = await runtime._execute_deadline(deadline)
+            assert cached and all(row.duplicate for row in cached)
+            same = (await request(transport, state.prefix + "/manual-evidence")).json()
+            assert same["evaluationId"] == evidence["evaluationId"]
+            assert same["nativeCompletionRecordId"] == evidence["nativeCompletionRecordId"]
+            reread = (await request(transport, state.readiness_path)).json()
+            assert reread["rules"][0]["facts"]["observation"]["expiresAt"] == bound
+            assert (
+                state.inspect()["storage"]["dailyKinds"]["EVALUATION"]
+                == (after["dailyKinds"]["EVALUATION"])
+            )
+
+    asyncio.run(scenario())
+
+
+def test_wrong_manual_leaf_binding_creates_no_fact_or_other_business_write(tmp_path):
+    async def scenario():
+        async with workspace(tmp_path, scenario="manual-leaves") as (state, transport):
+            saved = (await request(transport, "/api/v1/plan-versions/" + state.version)).json()
+            owner = json.loads(saved["planJson"])["ordinary_rules"][0]["rule_id"]
+            before = state.inspect()["storage"]
+            body = {
+                "planVersionId": saved["id"],
+                "contentHash": saved["contentHash"],
+                "factId": "must-not-be-saved",
+                "kind": "VOLUME_OR_CANDLE",
+                "tradeDate": str(state.case.clock.now().date()),
+                "satisfied": False,
+                "evidence": (
+                    "Synthetic rejected evidence must not satisfy another source-owned leaf."
+                ),
+                "expectedRevision": 0,
+                "conditionSelection": {
+                    "ownerKind": "ORDINARY_RULE",
+                    "ownerId": owner,
+                    "conditionPath": "condition.conditions[0]",
+                },
+            }
+            for changes in (
+                {
+                    "conditionSelection": {
+                        **body["conditionSelection"],
+                        "conditionPath": "condition.conditions[99]",
+                    }
+                },
+                {"conditionSelection": {**body["conditionSelection"], "ownerId": "wrong-owner"}},
+                {"planVersionId": str(uuid4())},
+            ):
+                result = await request(
+                    transport, "/api/v1/plan-facts", method="POST", body={**body, **changes}
+                )
+                assert result.status_code in {404, 409, 422}, result.text
+                assert state.inspect()["storage"] == before
+
+    asyncio.run(scenario())
+
+
+def test_closed_calendar_row_loss_revokes_original_manual_owner_proof(tmp_path):
+    from trade_plan_monitor.state.models import TradingCalendar
+
+    async def scenario():
+        async with workspace(tmp_path, scenario="manual-leaves") as (state, transport):
+            before = (await request(transport, state.prefix + "/manual-evidence")).json()
+            assert before["nativeCompletionRecordId"] == before["evaluationId"]
+            pipeline = state.case.composition._runtime._liveness_owner._pipeline
+            inputs = pipeline.daily_evaluations._current_inputs[state.case.plan.symbol]
+            closed = next(day for day in inputs.trading_calendar if not day.is_open)
+            with state.lifecycle._unit_of_work() as work:
+                row = work.daily.session.get(TradingCalendar, (closed.exchange, closed.cal_date))
+                work.daily.session.delete(row)
+                work.commit()
+            observed = (await request(transport, state.readiness_path)).json()
+            assert observed["rules"][0]["state"] == "UNKNOWN"
+            assert observed["rules"][0]["facts"]["observation"]["availability"] != "CURRENT"
+            assert observed["summary"] != "READY_FOR_MONITORING"
+            after = (await request(transport, state.prefix + "/manual-evidence")).json()
+            assert after["evaluationId"] == before["evaluationId"]
+            assert after["sourceAlignment"]["calendarFingerprintMatches"] is False
 
     asyncio.run(scenario())

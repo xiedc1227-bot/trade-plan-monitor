@@ -443,13 +443,12 @@ class DailyRuntimeEvaluationService:
                 select(TradingCalendar)
                 .where(
                     TradingCalendar.exchange == plan.market,
-                    TradingCalendar.is_open.is_(True),
                     TradingCalendar.cal_date >= now.date() - timedelta(days=3000),
                     TradingCalendar.cal_date <= now.date() + timedelta(days=32),
                 )
                 .order_by(TradingCalendar.cal_date)
             ).all()
-            sessions = tuple(c.cal_date for c in calendars)
+            sessions = tuple(c.cal_date for c in calendars if c.is_open)
             trading_calendar = tuple(TradingDay(exchange=c.exchange, cal_date=c.cal_date,
                 is_open=c.is_open, previous_trade_date=c.previous_trade_date) for c in calendars)
             facts = tuple(

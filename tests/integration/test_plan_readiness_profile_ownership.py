@@ -53,16 +53,17 @@ async def start_current(case):
     return plans[0].plan_version_id
 
 
-def installed(tmp_path, monkeypatch, profile):
+def installed(tmp_path, monkeypatch, profile, *, plan=None):
     clock = _DeadlineClock(NOW.replace(minute=4, second=0))
-    raw = current_sample_plan().model_dump(mode="json")
-    raw["alert_rules"] = [{
-        "kind": "RISK_ALERT", "rule_id": "minute-alert",
-        "condition": raw["ordinary_rules"][0]["condition"],
-        "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
-    }]
-    raw["ordinary_rules"] = []
-    plan = UnifiedTradePlan.model_validate(raw)
+    if plan is None:
+        raw = current_sample_plan().model_dump(mode="json")
+        raw["alert_rules"] = [{
+            "kind": "RISK_ALERT", "rule_id": "minute-alert",
+            "condition": raw["ordinary_rules"][0]["condition"],
+            "confirmation": {"kind": "COMPLETED_BAR_CLOSE", "timeframe_minutes": 5},
+        }]
+        raw["ordinary_rules"] = []
+        plan = UnifiedTradePlan.model_validate(raw)
     seed_current(tmp_path, clock=ControlledClock(NOW.replace(hour=9, minute=0, second=0)),
                  plan=plan)
     engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
