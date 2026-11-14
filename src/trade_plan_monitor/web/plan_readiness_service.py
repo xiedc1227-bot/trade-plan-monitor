@@ -1080,9 +1080,14 @@ def read_plan_readiness(session, authority, version_id, now):
                     "CONDITION_TRUE", "CONDITION_FALSE"} for leaf in leaves))
                 no_manual = condition is not None and not any(leaf.type == "REVIEWED_FACT"
                                     for leaf in condition_leaves(condition))
+                reviewed_current = (value.current and kind == "ORDINARY_RULE"
+                    and value.plan.schema_version == 5
+                    and rule.independent_signal.mode == "REVIEWED_INDEPENDENT_EVENT")
+                # A current reviewed-independent comparison retains its observation.
+                # Other modes and future waits keep their original admission gates.
                 if later and complete_leaves and not (
-                        simple_gate and date_valid and no_occurrence
-                        and no_manual and simple_inputs):
+                        (reviewed_current or simple_gate and no_occurrence)
+                        and date_valid and no_manual and simple_inputs):
                     rule_observation = observation(evaluation_ref, availability="CACHED",
                                                    as_of=actual_time)
                 if (later and date_valid and simple_gate and root == "UNSATISFIED" and simple_inputs

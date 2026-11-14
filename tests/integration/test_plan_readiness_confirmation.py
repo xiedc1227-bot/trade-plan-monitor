@@ -46,8 +46,9 @@ def actual_progress(monkeypatch, request):
 
     def simple_plan(**kwargs):
         raw = native_plan(**kwargs).model_dump(mode="json")
-        for rule in raw["ordinary_rules"]:
-            rule["independent_signal"] = {"mode": "ONCE_PER_RULE"}
+        if getattr(request, "param", None) != "complex-daily":
+            for rule in raw["ordinary_rules"]:
+                rule["independent_signal"] = {"mode": "ONCE_PER_RULE"}
         if getattr(request, "param", None) == "expired-daily":
             raw["ordinary_rules"][0]["validity"] = {
                 "mode": "DATE_RANGE", "start_date": "2026-09-11", "end_date": "2026-09-11"}
@@ -127,6 +128,67 @@ def test_daily_future_event_preserves_all_prior_leaves_and_exact_target(daily_ca
     assert len(rule.facts.leaves) == 1
     assert rule.facts.leaves[0].reason == "EXPECTED_CONFIRMATION"
     assert assessed.fresh_until is None
+
+
+@pytest.mark.parametrize("actual_progress", ["complex-daily"], indirect=True)
+@pytest.mark.parametrize("corrected", [False, True])
+def test_current_complex_daily_comparison_keeps_result_without_future_wait(daily_case, corrected):
+    from trade_plan_monitor.runtime.status_authority import (
+        condition_confirmation_inputs,
+        condition_daily_admission_matches,
+    )
+
+    case = daily_case
+    assert case.plan.schema_version == 5
+    assert case.plan.ordinary_rules[0].independent_signal.mode == "REVIEWED_INDEPENDENT_EVENT"
+    snapshot = case.result.snapshot
+    if corrected:
+        inputs = case.pipeline.daily_evaluations._current_inputs[case.plan.symbol]
+        day = inputs.series.bars[-1].trade_date
+        case.daily_source.official_closes[day] = "35.00"
+        admitted = asyncio.run(case.pipeline.prepare_daily_inputs(
+            case.plan, case.now, day, inputs.minute_prefix))
+        fresh = case.pipeline.daily_evaluations.run_inputs(
+            plan=case.plan, inputs=admitted, expected_activation_revision=1)
+        assert not fresh.duplicate
+        snapshot = fresh.snapshot
+    owner = case.owner().plans[0]
+    assert condition_daily_admission_matches(proof=owner.completion, snapshot=snapshot,
+        admission=owner.daily_admission, now=case.now)
+    actual = snapshot["ordinary_evaluations"][0]
+    assert any(
+        signal["rule_id"] == actual["rule_id"] for signal in snapshot["signals"]
+    ) == corrected
+    with case.sessions() as session, session.begin():
+        future = condition_confirmation_inputs(session, plan=case.plan, now=case.now)[0]
+    assert future.trade_date == case.now.date()
+    assessed = read(case)
+    rule = assessed.rules[0]
+    assert rule.state == ("CONDITION_TRUE" if corrected else "CONDITION_FALSE")
+    assert rule.facts.root_outcome == ("SATISFIED" if corrected else "UNSATISFIED")
+    assert rule.facts.root_outcome == actual["evidence"]["outcome"]
+    assert rule.facts.expected_target == rule.facts.evaluated_target
+    assert str(rule.facts.evaluated_target.trade_date) == actual["target"]["trade_date"]
+    assert rule.facts.evaluated_target.trade_date < future.trade_date
+    assert rule.facts.observation.availability == "CURRENT"
+    assert rule.facts.expected_confirmation is None
+    assert next(a for a in assessed.axes if a.axis == "DATA_EVALUATION").state == "PASS"
+
+
+@pytest.mark.parametrize("actual_progress", ["complex-daily"], indirect=True)
+def test_expired_complex_daily_comparison_does_not_gain_future_wait(daily_case):
+    case = daily_case
+    prior = case.result.snapshot["ordinary_evaluations"][0]
+    assert case.plan.ordinary_rules[0].independent_signal.mode == "REVIEWED_INDEPENDENT_EVENT"
+    assert prior["evidence"]["outcome"] == "UNSATISFIED"
+    case.pipeline._clock.current += timedelta(seconds=91)
+    maintain(case)
+    rule = read(case).rules[0]
+    assert rule.state == "UNKNOWN"
+    assert rule.facts.observation.availability == "CACHED"
+    assert rule.facts.expected_confirmation is None
+    assert rule.facts.root_outcome == prior["evidence"]["outcome"]
+    assert str(rule.facts.evaluated_target.trade_date) == prior["target"]["trade_date"]
 
 
 @pytest.mark.parametrize("past_present", [True, False])
