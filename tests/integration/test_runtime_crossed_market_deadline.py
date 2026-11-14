@@ -85,7 +85,7 @@ def test_runtime_run_consumes_still_fresh_market_target_after_sdk_crosses_due(
                 result = await original_run(deadline)
                 completed.append(deadline)
                 if deadline.due_at == first_due:
-                    state = runtime._probe_capabilities.__self__
+                    state = runtime._liveness_owner
                     with state._session_factory() as session:
                         health_revision_after_first = session.scalar(
                             select(SymbolHealthProjection.revision)
@@ -109,7 +109,7 @@ def test_runtime_run_consumes_still_fresh_market_target_after_sdk_crosses_due(
             assert all(item_generation == generation for _, item_generation, _ in observed)
             assert all(owner is composition._runner_task for _, _, owner in observed)
 
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             with state._session_factory() as session:
                 projection = session.scalar(select(SymbolHealthProjection))
                 health = session.scalar(select(SymbolHealth))
@@ -183,7 +183,7 @@ def test_invalid_elapsed_review_stays_read_only_and_visible_without_runner_exit(
                     if deadline.kind is DeadlineKind.REALTIME_MINUTE] == [
                 first_due + timedelta(minutes=offset) for offset in range(-3, 1)
             ]
-            with runtime._probe_capabilities.__self__._session_factory() as session:
+            with runtime._liveness_owner._session_factory() as session:
                 assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
                 assert session.scalar(select(func.count()).select_from(EvaluationResult)) == 0
         finally:

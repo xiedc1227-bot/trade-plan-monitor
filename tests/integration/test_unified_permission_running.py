@@ -40,7 +40,7 @@ async def _drive_live(composition, through, *, stop_when=lambda: False):
     """Publish the real same-owner heartbeat before each bounded virtual wake."""
     runtime = composition._runtime
     clock = runtime._clock
-    state = runtime._probe_capabilities.__self__
+    state = runtime._liveness_owner
     async with asyncio.timeout(15):
         while clock.parked[0] <= through and not stop_when():
             clock.current = max(clock.current, clock.parked[0])
@@ -284,7 +284,7 @@ def test_composition_permission_timing_adapter_is_pure_and_eight_scope(
 
 def test_absent_pipeline_permission_getter_does_not_bootstrap(tmp_path, monkeypatch):
     composition, _ = _composition(tmp_path, monkeypatch)
-    state = composition._runtime._probe_capabilities.__self__
+    state = composition._runtime._liveness_owner
     assert state._pipeline is None
     for _ in range(3):
         assert state.next_index_permission_at() is None

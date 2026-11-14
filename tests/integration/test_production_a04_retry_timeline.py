@@ -25,6 +25,7 @@ from trade_plan_monitor.state.daily_models import DailyRecord
 from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
 from trade_plan_monitor.state.models import (
     AlertEvent,
+    DeliveryAttempt,
     RuntimeLiveness,
 )
 from trade_plan_monitor.web.monitor_composition import create_monitor_composition
@@ -111,11 +112,15 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
             include_index=False,
         )
 
+        calendar_attempts = []
+
         class FailingCalendarSDK(OfflineSDK):
             def __getattr__(self, name):
                 request = super().__getattr__(name)
 
                 def call(**kwargs):
+                    if name == "trade_cal":
+                        calendar_attempts.append(timeline.now())
                     result = request(**kwargs)
                     if (
                         name == "trade_cal"
@@ -176,7 +181,15 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
         runtime = composition._runtime
         controller = runtime._request_controller
         generation = runtime.runtime_generation
-        state = runtime._probe_capabilities.__self__
+        state = runtime._liveness_owner
+        startup_attempts = []
+        original_recheck = runtime._recheck_degraded_startup
+
+        async def record_startup():
+            startup_attempts.append(timeline.now())
+            return await original_recheck()
+
+        runtime._recheck_degraded_startup = record_startup
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
             owner = state._liveness_revision
@@ -190,64 +203,92 @@ def test_installed_composition_recovers_after_four_calendar_transport_failures(
             assert composition._restart_attempts == 0
 
             for attempt, floor in enumerate((30, 60, 120, 300), start=1):
-                gate = timeline.retry_gates[attempt - 1]
-                assert gate.delay >= floor
-                assert gate.calls_before == attempt
-                assert runtime._retry_at is not None
-                assert gate.started_at + timedelta(seconds=gate.delay) >= runtime._retry_at
-                retry_due = gate.started_at + timedelta(seconds=gate.delay)
-                health = await composition.read_service.get_health()
-                assert health.status is RuntimeServiceStatus.DEGRADED and health.read_only
-                assert health.degraded_reason == "REFERENCE_REFRESH_FAILED"
-                assert health.block_reason is None
-                assert health.next_retry_at == runtime._retry_at == retry_due
-                assert health.database.status is RuntimeResourceStatus.READY
-                assert health.database.wal_status is RuntimeResourceStatus.READY
-                assert composition._runtime is runtime
-                assert runtime.runtime_generation == generation
-                assert state._liveness_revision == owner
-                assert not composition._runner_failed and composition._restart_attempts == 0
-                dashboard = await composition.read_service.get_dashboard()
-                assert dashboard.availability == "UNAVAILABLE"
-                assert dashboard.reason.value == "AWAITING_FIRST_EVALUATION"
-                assert await composition.read_service.get_symbol_health(symbol=plan.symbol) is None
-                frame = composition.websocket_service._heartbeat_frame(dashboard.sequence)
-                assert frame["runtimeLive"] is False and frame["runtimeGeneration"] is None
-                with state._session_factory() as session:
+                retry_due = runtime._retry_at
+                assert retry_due is not None
+                assert retry_due >= timeline.retry_gates[-1].started_at + timedelta(seconds=floor)
+                for _ in range(16):
+                    gate = timeline.retry_gates[-1]
+                    assert 0 < gate.delay <= 30
+                    assert gate.calls_before == attempt
+                    assert runtime._retry_at is not None
+                    assert runtime._retry_at == retry_due
+                    wake_at = gate.started_at + timedelta(seconds=gate.delay)
+                    assert gate.started_at < wake_at <= retry_due
+                    health = await composition.read_service.get_health()
+                    assert health.status is RuntimeServiceStatus.DEGRADED and health.read_only
+                    assert health.degraded_reason == "REFERENCE_REFRESH_FAILED"
+                    assert health.block_reason is None
+                    assert health.next_retry_at == runtime._retry_at == retry_due
+                    assert health.database.status is RuntimeResourceStatus.READY
+                    assert health.database.wal_status is RuntimeResourceStatus.READY
+                    assert composition._runtime is runtime
+                    assert runtime.runtime_generation == generation
+                    assert state._liveness_revision == owner
+                    assert not composition._runner_failed and composition._restart_attempts == 0
+                    dashboard = await composition.read_service.get_dashboard()
+                    assert dashboard.availability == "UNAVAILABLE"
+                    assert dashboard.reason.value == "AWAITING_FIRST_EVALUATION"
                     assert (
-                        session.scalar(
-                            select(func.count())
-                            .select_from(DailyRecord)
-                            .where(
-                                DailyRecord.kind == "EVALUATION",
-                                func.json_extract(
-                                    DailyRecord.payload_json, "$.minute_target"
-                                ).is_not(None),
+                        await composition.read_service.get_symbol_health(symbol=plan.symbol) is None
+                    )
+                    frame = composition.websocket_service._heartbeat_frame(dashboard.sequence)
+                    assert frame["runtimeLive"] is False and frame["runtimeGeneration"] is None
+                    with state._session_factory() as session:
+                        assert (
+                            session.scalar(
+                                select(func.count())
+                                .select_from(DailyRecord)
+                                .where(
+                                    DailyRecord.kind == "EVALUATION",
+                                    func.json_extract(
+                                        DailyRecord.payload_json, "$.minute_target"
+                                    ).is_not(None),
+                                )
                             )
+                            == 0
                         )
-                        == 0
+                        assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
+                        assert (
+                            session.scalar(select(func.count()).select_from(DeliveryAttempt)) == 0
+                        )
+                    backoff = controller.backoff_until(f"calendar:SSE:{NOW.date()}")
+                    assert backoff is not None
+                    assert retry_due >= backoff
+                    if controller.cooldown_until is not None:
+                        assert retry_due >= controller.cooldown_until
+                    assert len(sdk.calls) == attempt  # Nothing physical before the retry due.
+                    assert len(startup_attempts) == attempt - 1
+                    gate_count = len(timeline.retry_gates)
+                    gate.release.set()
+                    if wake_at < retry_due:
+                        await _until(
+                            lambda previous=gate_count: len(timeline.retry_gates) > previous
+                        )
+                        assert timeline.now() == wake_at
+                        assert len(startup_attempts) == attempt - 1
+                        assert len(sdk.calls) == attempt
+                        continue
+                    if attempt < 4:
+                        await _until(
+                            lambda previous=gate_count: len(timeline.retry_gates) > previous
+                        )
+                        assert len(sdk.calls) == attempt + 1
+                    else:
+                        await _until(
+                            lambda: composition.health().status is RuntimeServiceStatus.RUNNING
+                        )
+                        assert len(sdk.calls) >= 5
+                    assert len(startup_attempts) == attempt
+                    assert startup_attempts[-1] == retry_due
+                    assert calendar_attempts[attempt] >= retry_due
+                    assert calendar_attempts[attempt] >= (
+                        calendar_attempts[attempt - 1] + timedelta(seconds=floor)
                     )
-                    assert session.scalar(select(func.count()).select_from(AlertEvent)) == 0
-                backoff = controller.backoff_until(f"calendar:SSE:{NOW.date()}")
-                assert backoff is not None
-                assert gate.started_at + timedelta(seconds=gate.delay) >= backoff
-                if controller.cooldown_until is not None:
-                    assert gate.started_at + timedelta(seconds=gate.delay) >= (
-                        controller.cooldown_until
-                    )
-                assert len(sdk.calls) == attempt  # Nothing physical before the retry due.
-                gate.release.set()
-                if attempt < 4:
-                    expected_gates = attempt + 1
-                    await _until(
-                        lambda expected=expected_gates: len(timeline.retry_gates) == expected
-                    )
-                    assert len(sdk.calls) == attempt + 1
+                    break
                 else:
-                    await _until(
-                        lambda: composition.health().status is RuntimeServiceStatus.RUNNING
+                    raise AssertionError(
+                        "business retry floor not reached within sixteen local waits"
                     )
-                    assert len(sdk.calls) >= 5
 
             calendar_calls = [kwargs for name, kwargs in sdk.calls if name == "trade_cal"]
             assert len(calendar_calls) == 6  # Four failed SSE, recovered SSE, then SZSE.

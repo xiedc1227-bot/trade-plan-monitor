@@ -246,7 +246,7 @@ def _composition_child(root, phase, required_code, reports):
         stages = {}
 
         def capture():
-            state = composition._runtime._probe_capabilities.__self__
+            state = composition._runtime._liveness_owner
             return {
                 "state": _read_state(base),
                 "calls": tuple(sdk.calls),

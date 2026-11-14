@@ -67,7 +67,7 @@ class _RetryWait:
     async def release(self, composition):
         deadline, permit = self.parked
         self.clock.current = max(self.clock.current, deadline)
-        await composition._runtime._probe_capabilities.__self__.heartbeat()
+        await composition._runtime._liveness_owner.heartbeat()
         permit.set_result(None)
 
 
@@ -124,7 +124,7 @@ def test_real_degraded_current_permission_wakes_retain_owner_then_startup_restor
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
             runtime, runner = composition._runtime, composition._runner_task
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipe, control, clock = state._pipeline, runtime._request_controller, runtime._clock
             generation, lock = runtime.runtime_generation, pipe._permission_maintenance_lock
             startup_due = runtime.health().next_retry_at
@@ -228,6 +228,21 @@ def test_real_permission_failure_extends_only_its_related_startup_floor(
             runtime = composition._runtime
             initial = runtime._clock.now()
             control = runtime._request_controller
+            starts, startup_errors = [], []
+            completed = asyncio.Event()
+            original_startup = runtime._recheck_degraded_startup
+
+            async def startup():
+                starts.append(runtime._clock.now())
+                try:
+                    return await original_startup()
+                except BaseException as error:
+                    startup_errors.append(error)
+                    raise
+                finally:
+                    completed.set()
+
+            runtime._recheck_degraded_startup = startup
             assert runtime.health().degraded_reason == "REFERENCE_REFRESH_FAILED"
             assert runtime.health().next_retry_at == initial + timedelta(seconds=30)
             assert await wait.park() == initial + timedelta(seconds=1)
@@ -239,7 +254,30 @@ def test_real_permission_failure_extends_only_its_related_startup_floor(
             )
             expected = initial + timedelta(seconds=301 if related else 30)
             assert runtime.health().next_retry_at == expected
+            calls = tuple(sdk.calls)
+            before = _business_rows(tmp_path / "monitor.sqlite3")
+            for _ in range(12):
+                assert runtime._clock.now() < next_wake <= expected
+                assert (next_wake - runtime._clock.now()).total_seconds() <= 30
+                assert starts == []
+                assert tuple(sdk.calls) == calls
+                assert _business_rows(tmp_path / "monitor.sqlite3") == before
+                assert runtime.health().next_retry_at == expected
+                assert control.raw_permission_retry_at(failed_operation) == initial + timedelta(
+                    seconds=301
+                )
+                if next_wake == expected:
+                    break
+                await wait.release(composition)
+                next_wake = await wait.park()
+            else:
+                raise AssertionError("startup floor not reached within twelve local waits")
             assert next_wake == expected
+            await wait.release(composition)
+            await completed.wait()
+            if startup_errors:
+                raise startup_errors[0]
+            assert starts == [expected]
         finally:
             await composition.stop()
 
@@ -256,7 +294,7 @@ def test_real_heartbeat_revocation_during_retry_wait_requires_explicit_stop(tmp_
         try:
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
             runner, generation = composition._runner_task, runtime.runtime_generation
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipe = state._pipeline
             assert await wait.park()
             before = _business_rows(tmp_path / "monitor.sqlite3")
@@ -322,13 +360,13 @@ def test_real_both_due_retries_startup_once_then_permission_failure_extends_floo
             assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
             runtime, runner = composition._runtime, composition._runner_task
             clock, control = runtime._clock, runtime._request_controller
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipe, generation = state._pipeline, runtime.runtime_generation
             lock = pipe._permission_maintenance_lock
             initial = clock.now()
             first_due = initial + timedelta(seconds=300)
             assert runtime.health().next_retry_at == first_due
-            assert await wait.park() == first_due
+            next_wake = await wait.park()
             rotation = pipe._permission_rotation_state
             deferred = dict(pipe._permission_probe_deferred_until)
             events, failures = [], []
@@ -362,11 +400,31 @@ def test_real_both_due_retries_startup_once_then_permission_failure_extends_floo
                     raise
 
             runtime._recheck_degraded_startup, runtime._run_deadline = startup, permission
+            calls = tuple(sdk.calls)
+            before = _business_rows(tmp_path / "monitor.sqlite3")
+            for _ in range(12):
+                assert clock.now() < next_wake <= first_due
+                assert (next_wake - clock.now()).total_seconds() <= 30
+                assert events == []
+                assert tuple(sdk.calls) == calls
+                assert _business_rows(tmp_path / "monitor.sqlite3") == before
+                assert runtime.health().next_retry_at == first_due
+                assert control.raw_permission_retry_at(calendar) == first_due
+                if next_wake == first_due:
+                    break
+                await wait.release(composition)
+                next_wake = await wait.park()
+            else:
+                raise AssertionError(
+                    "shared startup/permission floor not reached within twelve waits"
+                )
+            assert next_wake == first_due
             await wait.release(composition)
-            next_due = await wait.park()
+            next_wake = await wait.park()
             if failures:
                 raise failures[0]
             assert events == [("startup", first_due), ("permission", first_due)]
+            next_due = runtime.health().next_retry_at
             assert next_due == initial + timedelta(seconds=600)
             assert control.raw_permission_retry_at(calendar) == next_due
             if failure_code is TushareErrorCode.RATE_LIMITED:
@@ -376,6 +434,22 @@ def test_real_both_due_retries_startup_once_then_permission_failure_extends_floo
             assert composition._runtime is runtime and composition._runner_task is runner
             assert not runner.done() and not composition._runner_failed
             assert runtime.runtime_generation == generation and state._pipeline is pipe
+            calls = tuple(sdk.calls)
+            for _ in range(12):
+                assert clock.now() < next_wake <= next_due
+                assert (next_wake - clock.now()).total_seconds() <= 30
+                assert events == [("startup", first_due), ("permission", first_due)]
+                assert tuple(sdk.calls) == calls
+                assert _business_rows(tmp_path / "monitor.sqlite3") == before
+                assert runtime.health().next_retry_at == next_due
+                assert control.raw_permission_retry_at(calendar) == next_due
+                if next_wake == next_due:
+                    break
+                await wait.release(composition)
+                next_wake = await wait.park()
+            else:
+                raise AssertionError("next permission reservation not reached within twelve waits")
+            assert next_wake == next_due
         finally:
             await composition.stop()
 
@@ -483,12 +557,29 @@ def test_real_absent_pipeline_retries_only_startup_with_unchanged_configuration(
                 runtime.runtime_generation,
                 composition._runner_task,
             )
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             assert await wait.park() == initial + timedelta(seconds=30)
             for offset in (90, 210):
                 assert state._pipeline is None and state.next_index_permission_at() is None
                 await wait.release(composition)
-                assert await wait.park() == initial + timedelta(seconds=offset)
+                next_wake = await wait.park()
+                expected_starts = tuple(starts)
+                for _ in range(8):
+                    assert clock.now() < next_wake <= initial + timedelta(seconds=offset)
+                    assert (next_wake - clock.now()).total_seconds() <= 30
+                    assert tuple(starts) == expected_starts
+                    assert maintenance == calls == []
+                    assert runtime.health().next_retry_at == initial + timedelta(seconds=offset)
+                    assert state._pipeline is None and state.next_index_permission_at() is None
+                    if next_wake == initial + timedelta(seconds=offset):
+                        break
+                    await wait.release(composition)
+                    next_wake = await wait.park()
+                else:
+                    raise AssertionError(
+                        "absent-pipeline retry floor not reached within eight waits"
+                    )
+                assert next_wake == initial + timedelta(seconds=offset)
                 assert runtime.health().next_retry_at == initial + timedelta(seconds=offset)
                 assert (
                     runtime.status is RuntimeServiceStatus.DEGRADED and not runtime._accepting_work
