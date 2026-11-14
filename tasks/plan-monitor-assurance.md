@@ -220,7 +220,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T21 — Accept complete browser journeys
 
-- [ ] Complete remaining journeys. T21a–f engineering is accepted (R101–R106): automatic monitoring/layout, source repair/cancellation, exact H04 binding/calendar repair, same-page recovery, local notifications and official-close waiting/history loss. Independent-risk browser acceptance remains pending. Full acceptance still requires T15/C05.
+- [ ] Complete real-extraction consolidation. T21a–g independent engineering journeys are accepted (R101–R107), including official-close/history loss and independent risk. T22 regression may proceed under P07; full T21 acceptance still requires T15/C05.
 - Depends on: T20 for independently verifiable engineering journeys under P07; T15 remains required for real-extraction consolidation and full T21 acceptance.
 - Files/scope: `source-coverage.spec.ts`, `plan-readiness.spec.ts`, isolated fixture server and bounded screenshot/evidence assets (3–5 source files).
 - Also apply PMA-H05 below: prove automatic daily evaluation after exact rule review, data-loss/recovery and the remaining explicit manual steps without fabricated confirmations.
