@@ -11,6 +11,7 @@ import httpx
 import pytest
 import requests
 from sqlalchemy import event
+from tests.integration.test_plan_readiness_execution_reads import execution_case as execution_case
 from tests.integration.test_runtime_status_projection import _current_status
 from tests.integration.test_source_action_cutover import legacy as legacy
 from tests.integration.test_source_coverage_authority import _confirm, _save
@@ -446,15 +447,56 @@ def test_same_summary_cannot_hide_actual_proof_or_receipt_row_change(saved, monk
         asyncio.run(saved.reader.get_plan_readiness(version_id=saved.identity))
 
 
-def test_relevant_actual_inventory_change_is_not_joined_to_the_old_proof(current, monkeypatch):
+@pytest.mark.parametrize("repeated", [False, True])
+def test_relevant_actual_inventory_change_is_not_joined_to_the_old_proof(
+    execution_case, monkeypatch, repeated,
+):
+    from copy import deepcopy
+
+    from trade_plan_monitor.runtime.status_authority import (
+        condition_completion_matches,
+        condition_market_completion_matches,
+    )
+    from trade_plan_monitor.state.daily_models import DailyRecord
     from trade_plan_monitor.web import plan_readiness_service as projection
 
+    current = execution_case
+    initial = read(current)
+    initial_rules = {r.facts.owner_id: r for r in initial.rules}
+    buy = next(r for r in initial.rules if r.facts.side == "BUY")
+    assert buy.state == "CONDITION_TRUE" and buy.facts.execution.eligible is True
+    assert buy.facts.execution.observation.availability == "CURRENT"
+    assert next(r for r in initial.rules if r.facts.side == "SELL").state == "CONDITION_FALSE"
+    assert next(r for r in initial.rules if r.facts.owner_kind == "ALERT_RULE").state == (
+        "CONDITION_FALSE")
+    proof = current.owner().plans[0].completion
+    original_proof = deepcopy(proof)
+    original_snapshot = deepcopy(current.result.snapshot)
+    record_id = proof.input_stamp.immutable_record_id
+    result_hash = proof.result_hash
+    signal_id = buy.facts.execution.signal_id
+    identities = (record_id, "evaluation-head-" + current.plan.symbol, signal_id)
+
+    def records():
+        with current.sessions() as session:
+            rows = {}
+            for identity in identities:
+                row = session.get(DailyRecord, identity)
+                assert row is not None
+                rows[identity] = tuple(getattr(row, c.name) for c in DailyRecord.__table__.columns)
+            return rows
+
+    original_rows = records()
+    with current.sessions() as session, session.begin():
+        assert condition_completion_matches(session, proof=proof,
+            snapshot=original_snapshot, now=current.now)
     original = projection.read_readiness_binding
     calls = []
     before = current.result.snapshot["inventory"]["revision"]
+    assert initial.snapshot.context.inventory_revision == before
 
     def changed(*args):
-        if not calls:
+        if repeated or not calls:
             with current.work() as work:
                 row = work.daily.get("simulation-position-" + current.plan.symbol)
                 work.daily.save(row["id"], kind=row["kind"], symbol=row["symbol"],
@@ -467,9 +509,49 @@ def test_relevant_actual_inventory_change_is_not_joined_to_the_old_proof(current
     monkeypatch.setattr(projection, "read_readiness_binding", changed)
     result = read(current)
     assert len(calls) == 2
-    assert result.snapshot.context.inventory_revision == before + 1
-    assert next(a for a in result.axes if a.axis == "DATA_EVALUATION").state == "UNKNOWN"
-    assert all(rule.state == "UNKNOWN" for rule in result.rules)
+    with current.work() as work:
+        position = work.daily.get("simulation-position-" + current.plan.symbol)
+    assert position["revision"] == before + (2 if repeated else 1)
+    assert current.owner().plans[0].completion is proof
+    assert proof == original_proof
+    assert proof.input_stamp.immutable_record_id == record_id
+    assert proof.result_hash == result_hash
+    assert current.result.snapshot == original_snapshot
+    assert records() == original_rows
+    with current.sessions() as session, session.begin():
+        assert condition_market_completion_matches(session, proof=proof,
+            snapshot=original_snapshot, now=current.now)
+        assert not condition_completion_matches(session, proof=proof,
+            snapshot=original_snapshot, now=current.now)
+    if repeated:
+        assert result.snapshot.context.inventory_revision < position["revision"]
+        assert next(a for a in result.axes if a.axis == "DATA_EVALUATION").state == "UNKNOWN"
+        assert all(a.reason == "CONTEXT_CHANGED" for a in result.axes)
+        assert all(rule.state == "UNKNOWN" for rule in result.rules)
+        assert all(rule.facts.root_outcome is None for rule in result.rules)
+        assert all(rule.facts.execution.eligible is None for rule in result.rules)
+        assert result.summary == "UNKNOWN" and result.fresh_until is None
+    else:
+        assert result.snapshot.context.inventory_revision == before + 1
+        assert next(a for a in result.axes if a.axis == "DATA_EVALUATION").state == "PASS"
+        for rule in result.rules:
+            previous = initial_rules[rule.facts.owner_id]
+            assert rule.state == previous.state
+            assert rule.facts.root_outcome == previous.facts.root_outcome
+            assert rule.facts.evaluated_target == previous.facts.evaluated_target
+            assert rule.facts.evaluated_at == previous.facts.evaluated_at
+            assert rule.facts.leaves == previous.facts.leaves
+            assert rule.facts.observation.availability == "CURRENT"
+            assert rule.facts.observation.evidence_refs == previous.facts.observation.evidence_refs
+        observed = next(r.facts.execution for r in result.rules if r.facts.side == "BUY")
+        assert observed.eligible is None and observed.observation.availability == "CACHED"
+        assert observed.signal_id == signal_id
+        assert observed.signal_revision == buy.facts.execution.signal_revision
+        assert observed.approved_quantity == buy.facts.execution.approved_quantity
+        assert observed.approved_quantity > 0
+        assert observed.consumed == buy.facts.execution.consumed
+        assert observed.blockers == buy.facts.execution.blockers
+        assert result.authority_granted is False and result.fresh_until is None
 
 
 def test_missing_assurance_storage_stays_unknown_without_creating_tables(legacy):
