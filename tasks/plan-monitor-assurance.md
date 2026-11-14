@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R124 (`714425c`) repairs three actual owned entries in two daily tests:4 unique passes,58 original assertions unchanged. R123 remains the full FAILED baseline; daily observation and inventory dependency diagnosis are next. No T22/final closure.
+
 R123 records complete final runs at c016499:unit5600 PASS; integration6758 passed/78 failed/6 errors/1 unchanged POSIX skip of6843. All260 R122 nodes pass within integration. Diagnose84 failed/error nodes across34 files; later groups remain unrun.
 
 R122 (`f21fcbf`) accepts the final five ownership fixtures:322 unique passes,434 original assertions accounted for. No identified old-owner file remains; complete final regression and isolated capacity next. T22 and all corpus/installation/final boundaries remain open.
