@@ -232,7 +232,7 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
-- [ ] Complete full gates. Historical22-node failures are repaired with26 unique checks (R108); all8 first full-unit failures are repaired in bounded fixtures/historical-current tests (R109–R110,13 and51 unique focused checks). Rerun full non-live unit, then integration/contract/replay/frontend/browser/build/generated/static and isolated capacity verification. No full-gate pass is yet claimed.
+- [ ] Complete full gates. Historical22 failures and first full-unit8 failures are repaired (R108–R110). Full non-live unit5600 pass atdf22f2e (R111). Integration stopped at a confirmed cancellation-cleanup hang and is INTERRUPTED_INCOMPLETE, without final summary/JUnit/counts; isolate and repair before restarting. Later contract/replay/frontend/browser/build/generated/static and isolated capacity remain unrun.
 - Depends on: T21's relevant engineering delivery under P07; missing real-extraction/C07 evidence cannot be closed by regression results.
 - Files/scope: justified failures split by root cause into at most5-file repairs, paired verification-report updates.
 - Acceptance: A12; Verify: V06,V07. Reconcile initial failures/exact reruns, exclusions and overlapping counts; run capacity alone. Do not change old goldens, weaken assertions, add skips or increase resource thresholds to pass.
