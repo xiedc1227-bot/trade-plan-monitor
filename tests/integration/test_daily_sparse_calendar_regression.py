@@ -55,7 +55,7 @@ def test_production_extends_sparse_calendar_and_keeps_complete_runtime_proof(tmp
             due_at=chain.now, close_attempt=1,
         )
         # Official production dispatch performs calendar fetch, persistence, adapter and evaluation.
-        chain.client.portal.call(state.run_deadline, deadline)
+        chain.client.portal.call(chain.composition._runtime._execute_deadline, deadline)
         current = chain.current()
         assert current["dataBlockers"] == []
         ordinary = next(r for r in current["risks"] if r["kind"] == "ORDINARY_TECHNICAL")

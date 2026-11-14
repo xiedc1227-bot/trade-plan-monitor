@@ -258,7 +258,7 @@ def test_production_recovers_missed_close_on_current_qfq_basis(
             kind=DeadlineKind.OFFICIAL_CLOSE, trade_date=FRIDAY,
             due_at=chain.now, close_attempt=1,
         )
-        chain.client.portal.call(state.run_deadline, deadline)
+        chain.client.portal.call(chain.composition._runtime._execute_deadline, deadline)
         current = chain.current()
         ordinary = next(r for r in current["risks"] if r["kind"] == "ORDINARY_TECHNICAL")
         assert ordinary["status"] == "PENDING", (current["dataBlockers"], chain.sdk.calls)
@@ -269,7 +269,7 @@ def test_production_recovers_missed_close_on_current_qfq_basis(
                 kind=DeadlineKind.REALTIME_MINUTE, trade_date=WEDNESDAY,
                 due_at=chain.now, bar_end=chain.now,
             )
-            chain.client.portal.call(state.run_deadline, deadline)
+            chain.client.portal.call(chain.composition._runtime._execute_deadline, deadline)
             assert_recovered_official_risk(chain)
             return
     chain.now = datetime(2026, 9, 23, 10, tzinfo=SH)
