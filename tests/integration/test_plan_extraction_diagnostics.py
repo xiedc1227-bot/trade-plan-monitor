@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from tests.integration.test_current_plan_api import post, review_payload
+from tests.integration.test_current_plan_api import coverage_review_payload, post, review_payload
 from tests.integration.test_explicit_plan_review_api import record_current
 from tests.integration.test_source_treatment_review_api import (
     literal_draft,
@@ -313,7 +313,8 @@ def test_simulated_diagnostic_io_failure_preserves_active_plan_and_extraction_ou
         mapping = literal_mapping(draft)
         register(client, draft, mapping)
         detail = save(client, draft, mapping)
-        approved = post(client, "plan-review-confirmations", review_payload(detail))
+        approved = post(
+            client, "plan-review-confirmations", coverage_review_payload(client, detail))
         assert approved["canActivate"] is True
         activation = post(
             client,

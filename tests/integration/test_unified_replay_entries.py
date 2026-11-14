@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.integration.test_current_plan_api import coverage_review_payload
 from tests.integration.test_daily_plan_chain import Chain, OfflineRuntime
 from tests.integration.test_unified_replay import fixture
 
@@ -70,7 +71,7 @@ def test_reviewed_inactive_current_api_job_read_export_uses_frozen_input(
         assert unreviewed.status_code in {409, 422}, unreviewed.text
         binding = {key: saved[key] for key in ("contentHash", "sourceHash", "reviewEvidenceHash")}
         binding["planVersionId"] = saved["id"]
-        reviewed = chain.post("plan-review-confirmations", {**binding, "expectedRevision": 0})
+        reviewed = chain.post("plan-review-confirmations", coverage_review_payload(client, saved))
         assert reviewed["canActivate"]
         with chain.plans._unit_of_work() as work:
             assert work.plans.get_active(plan.symbol) is None

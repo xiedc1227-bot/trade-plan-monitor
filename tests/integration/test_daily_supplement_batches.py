@@ -2,12 +2,13 @@
 
 import pytest
 from test_daily_plan_chain import Chain
+from tests.integration.test_current_plan_api import coverage_review_payload
 from tests.unit.test_daily_review import reviewed_mapping
 
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft as DailyPlanDraft
 
-SOURCE = "Synthetic independently reviewed daily technical policy supplements."
+SOURCE = "# Trade plan"
 
 
 @pytest.fixture
@@ -86,7 +87,7 @@ def test_two_batches_repreview_reload_save_review_and_activate(batch_chain):
         "sourceHash": saved["sourceHash"],
         "reviewEvidenceHash": saved["reviewEvidenceHash"],
     }
-    reviewed = chain.post("plan-review-confirmations", {**binding, "expectedRevision": 0})
+    reviewed = chain.post("plan-review-confirmations", coverage_review_payload(chain.client, saved))
     activated = chain.post(
         "plan-activations",
         {**binding, "reviewId": reviewed["reviewId"], "reviewRevision": 1, "expectedRevision": 0},
