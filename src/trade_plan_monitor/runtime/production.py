@@ -4062,6 +4062,8 @@ class ProductionMonitorPipeline:
         version = work.plans.get_version_details(active.plan_version_id)
         if version is None or version.status != PlanVersionStatus.ACTIVE:
             return None
+        if obsolete_daily_document(version.payload_json):
+            return None
         plan = load_plan_json(version.payload_json)
         if not isinstance(plan, UnifiedTradePlan):
             return None

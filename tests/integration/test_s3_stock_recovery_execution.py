@@ -23,6 +23,7 @@ from trade_plan_monitor.runtime.request_control import (
     RequestControlErrorCode,
     TushareOperation,
 )
+from trade_plan_monitor.runtime.scheduler import DeadlineKind, MarketDeadline
 from trade_plan_monitor.state.models import TradingCalendar
 
 
@@ -540,7 +541,11 @@ def test_real_composition_shutdown_sets_unit_token_before_cancel_and_keeps_datab
             # Startup now owns the incomplete ticket and its completion+30 floor.
             # Reach that real floor, then let the actual reserve select a safe wake.
             lifecycle._clock.current = pipeline._stock_recovery_schedule.snapshot()[0].next_retry_at
-            await pipeline.run_stock_recovery_unit()
+            await lifecycle._execute_deadline(MarketDeadline(
+                kind=DeadlineKind.STOCK_RECOVERY,
+                trade_date=lifecycle._clock.now().date(),
+                due_at=lifecycle._clock.now(),
+            ))
             lifecycle._clock.current = pipeline._stock_recovery_schedule.snapshot()[0].next_retry_at
             client = pipeline.provider._client
             sdk = client._client
@@ -565,25 +570,31 @@ def test_real_composition_shutdown_sets_unit_token_before_cancel_and_keeps_datab
                 monkeypatch.setattr(client, "_current", wrapper)
             else:
                 monkeypatch.setattr(sdk, "_stock_minutes", endpoint)
-            task = asyncio.create_task(pipeline.run_stock_recovery_unit())
-            lifecycle._work_tasks.add(task)
+            task = asyncio.create_task(lifecycle._execute_deadline(MarketDeadline(
+                kind=DeadlineKind.STOCK_RECOVERY,
+                trade_date=lifecycle._clock.now().date(),
+                due_at=lifecycle._clock.now(),
+            )))
             try:
                 assert await asyncio.to_thread(entered.wait, 2)
+                (work_task,) = lifecycle._work_tasks
+                assert work_task is not task and not work_task.done()
                 (token,) = pipeline._active_recovery_attempts
                 lifecycle.begin_shutdown()
                 assert token.is_set() and task.cancelling() == 0 and not task.done()
+                assert work_task.cancelling() == 0 and not work_task.done()
                 assert pipeline._controller.active_count == 1
                 assert state._database_status.value == "READY" and lifecycle._database_opened
                 assert pipeline._stock_recovery_schedule.snapshot()[0].in_progress
                 release.set()
                 assert await task is None
+                assert work_task.done() and work_task not in lifecycle._work_tasks
                 assert len(sdk.calls) - initial_calls == (0 if at_wrapper else 1)
                 assert run.state()["minutes"] == ()
                 assert pipeline.next_stock_recovery_at() is None
             finally:
                 release.set()
                 await asyncio.gather(task, return_exceptions=True)
-                lifecycle._work_tasks.discard(task)
 
     asyncio.run(scenario())
 

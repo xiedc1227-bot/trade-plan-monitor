@@ -25,7 +25,7 @@ from scripts.bounded_live_acceptance import (
     approved_sources,
     legacy_diagnostic_assets,
 )
-from tests.integration.test_current_plan_api import post, review_payload
+from tests.integration.test_current_plan_api import coverage_review_payload, post, review_payload
 from tests.integration.test_live_pipeline_acceptance import (
     ENDPOINT,
     ControlledClock,
@@ -431,7 +431,7 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
                 deadline = scheduler.next_deadline()
                 assert deadline is not None and deadline.kind is DeadlineKind.REALTIME_MINUTE
                 assert deadline.bar_end == at.replace(second=0)
-                await runtime._runtime._run_deadline(deadline)
+                await runtime._runtime._execute_deadline(deadline)
 
             if not r17_full_window:
                 for minute in (12, 13, 14):
@@ -476,7 +476,9 @@ def test_real_lifespan_api_review_scheduler_and_guards_are_wired_offline(
             register(client, draft, mapping)
             detail = save(client, draft, mapping)
             assert_semantic_review(detail)
-            reviewed = post(client, "plan-review-confirmations", review_payload(detail))
+            reviewed = post(
+                client, "plan-review-confirmations", coverage_review_payload(client, detail)
+            )
             activation = post(
                 client,
                 "plan-activations",
@@ -795,7 +797,7 @@ def test_r17_failed_ai_without_activation_keeps_index_budget_and_health(
                 clock.current = datetime(2026, 9, 14, 14, minute, 12, tzinfo=SHANGHAI)
                 deadline = scheduler.next_deadline()
                 assert deadline.bar_end == clock.now().replace(second=0)
-                client.portal.call(runtime._runtime._run_deadline, deadline)
+                client.portal.call(runtime._runtime._execute_deadline, deadline)
             assert budget.snapshot()["attempts"] == {
                 "trade_cal": 1,
                 "idx_mins": 5,

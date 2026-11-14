@@ -224,7 +224,7 @@ def test_expired_plan_latched_risk_uses_actual_production_deadline_and_simulatio
         deadline = MarketDeadline(
             kind=DeadlineKind.OFFICIAL_CLOSE, trade_date=FRIDAY, due_at=c.now, close_attempt=1
         )
-        c.client.portal.call(state.run_deadline, deadline)
+        c.client.portal.call(c.composition._runtime._execute_deadline, deadline)
         for kind in ("SEVERE_STRUCTURE", "SEVERE_DETERIORATION"):
             c.fact(kind)
         assert (
@@ -242,7 +242,7 @@ def test_expired_plan_latched_risk_uses_actual_production_deadline_and_simulatio
             deadline = MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE, trade_date=TUESDAY, due_at=c.now, bar_end=bar_end
             )
-            c.client.portal.call(state.run_deadline, deadline)
+            c.client.portal.call(c.composition._runtime._execute_deadline, deadline)
         current = c.current()
         assert current["quote"] is not None, {
             "blockers": current["dataBlockers"],
@@ -295,12 +295,140 @@ def test_new_fact_blocks_queued_notification_before_reevaluation(chain):
 
 
 @pytest.mark.parametrize("boundary", ["api", "production"])
-def test_old_active_broker_plan_does_not_break_production_targets(production_chain, boundary):
+def test_old_active_broker_plan_does_not_break_production_targets(
+    historical_broker_chain, boundary,
+):
+    from hashlib import sha256
+
+    from trade_plan_monitor.state.models import ActivePlan, PlanVersion
+
+    c, identity, serialized, original_active = historical_broker_chain
+    other = c.plan.model_copy(update={"symbol": "601022.SH", "plan_id": "other-valid-daily"})
+    c.plan = other
+    c.activate()
+    if boundary == "api":
+        response = c.client.get("/api/v1/plan-versions/" + identity)
+        assert response.status_code == 200, response.text
+        assert not response.json()["canActivate"]
+        assert response.json()["obsoleteReason"] == "DAILY_DRAFT_OBSOLETE"
+        listed = c.client.get("/api/v1/plan-versions")
+        assert listed.status_code == 200, listed.text
+        assert {item["symbol"] for item in listed.json()["items"]} == {SYMBOL, other.symbol}
+        with c.plans._unit_of_work() as work:
+            active = work.daily.session.get(ActivePlan, SYMBOL)
+            assert (active.plan_version_id, active.revision, active.activated_at) == original_active
+            old = work.daily.session.get(PlanVersion, identity)
+            assert old.payload_json == serialized
+            assert old.plan_hash == sha256(serialized.encode()).hexdigest()
+        return
+    pipeline = c.composition._runtime._run_deadline.__self__._pipeline
+    assert tuple(plan.symbol for plan in pipeline.active_plans()) == (other.symbol,)
+
+
+@pytest.fixture
+def historical_broker_chain(tmp_path, monkeypatch):
+    from hashlib import sha256
+    from uuid import UUID
+
+    from sqlalchemy import insert
+    from tests.integration.test_daily_production_reevaluation import ProductionDailyChain
+    from tests.integration.test_live_monitor_projection_migration import _upgrade
+    from tests.unit.test_daily_plan import synthetic_plan_payload
+
+    from trade_plan_monitor.ai.daily_review import DailyMapping, daily_source_clauses
+    from trade_plan_monitor.domain.daily_hash import daily_hash
+    from trade_plan_monitor.state.database import create_session_factory, create_sqlite_engine
+    from trade_plan_monitor.state.models import (
+        ActivePlan,
+        PlanActivationState,
+        PlanReviewProvenance,
+        PlanSource,
+        PlanVersion,
+        PlanVersionReview,
+        RuntimeLiveness,
+    )
+    from trade_plan_monitor.state.runtime_liveness import RuntimeLivenessRepository
+
+    c = ProductionDailyChain(tmp_path, monkeypatch)
+    raw = synthetic_plan_payload()
+    raw["trading_rules"].update({
+        "buy_min_qty": 100, "buy_increment": 100, "sell_increment": 100,
+        "odd_lot_liquidation": False, "as_of": "2026-09-18",
+        "evidence": "Original independently reviewed broker rules",
+    })
+    serialized = json.dumps(
+        raw, ensure_ascii=False, sort_keys=True, allow_nan=False, separators=(",", ":")
+    )
+    source = "Synthetic preserved Schema 4 broker-rule source for historical migration regression."
+    source_hash, plan_hash = (sha256(value.encode()).hexdigest() for value in (source, serialized))
+    source_id, identity = (str(UUID(int=n)) for n in (1, 2))
+    stamp = c.now.isoformat()
+    content = {key: value for key, value in raw.items()
+               if key not in {"plan_id", "version", "name", "metadata"}}
+    mapping = DailyMapping(mapping_version="daily-mapping-v1",
+        candidate_content_hash=daily_hash("daily-plan-review-content-v1", content),
+        clauses=daily_source_clauses(source), bindings=(), supplements=())
+    models = (PlanSource, PlanVersion, PlanVersionReview, PlanReviewProvenance,
+              ActivePlan, PlanActivationState)
+    engine = create_sqlite_engine(c.database)
+    try:
+        _upgrade(engine, "0027_simulation_capital")
+        with engine.connect() as connection:
+            assert connection.execute(ActivePlan.__table__.select()).all() == []
+            assert connection.execute(RuntimeLiveness.__table__.select()).all() == []
+        initialized = RuntimeLivenessRepository(create_session_factory(engine)).initialize_empty(
+            c.now
+        )
+        assert initialized.revision == 0 and initialized.last_alive_at == c.now
+        with engine.begin() as connection:
+            connection.execute(insert(PlanSource), dict(id=source_id, source_text=source,
+                source_hash=source_hash, created_at=stamp))
+            connection.execute(insert(PlanVersion), dict(id=identity, plan_id=raw["plan_id"],
+                version=raw["version"], symbol=raw["symbol"], plan_hash=plan_hash, status="ACTIVE",
+                payload_json=serialized, source_id=source_id, revision=1, created_at=stamp))
+            connection.execute(insert(PlanVersionReview), dict(plan_version_id=identity,
+                review_issues_json="[]"))
+            connection.execute(insert(PlanReviewProvenance), dict(plan_version_id=identity,
+                origin="LEGACY_PENDING", extraction_id=None, source_hash=source_hash,
+                draft_hash=plan_hash, confirmed_at=None, content_hash=None,
+                review_evidence_hash=None,
+                mapping_json=mapping.model_dump_json(), required_issues_json=None,
+                resolutions_json=None, review_id=None, review_revision=0))
+            connection.execute(insert(ActivePlan), dict(symbol=raw["symbol"],
+                plan_version_id=identity, revision=1, activated_at=stamp))
+            connection.execute(insert(PlanActivationState), dict(symbol=raw["symbol"],
+                plan_version_id=identity, revision=1, changed_at=stamp))
+            before = {model.__tablename__: connection.execute(model.__table__.select()).all()
+                      for model in models}
+            assert all(len(rows) == 1 for rows in before.values())
+            liveness_before = connection.execute(RuntimeLiveness.__table__.select()).all()
+        _upgrade(engine, "0029_native_fact_lookup")
+        with engine.connect() as connection:
+            assert connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one() == "0029_native_fact_lookup"
+            assert {model.__tablename__: connection.execute(model.__table__.select()).all()
+                    for model in models} == before
+            assert connection.execute(RuntimeLiveness.__table__.select()).all() == liveness_before
+            assert connection.exec_driver_sql(
+                "SELECT plan_version_id FROM source_coverage_cutover"
+            ).all() == [(identity,)]
+            for table in ("source_coverage_input", "source_coverage_assessment",
+                          "source_coverage_review", "daily_plan_record"):
+                assert connection.exec_driver_sql(f'SELECT COUNT(*) FROM "{table}"').scalar() == 0
+    finally:
+        engine.dispose()
+    with c.client:
+        yield c, identity, serialized, (identity, 1, stamp)
+
+
+def test_current_coverage_owner_rejects_broker_document_rewrite(production_chain):
     from hashlib import sha256
 
     from tests.unit.test_daily_plan import synthetic_plan_payload
 
     from trade_plan_monitor.state.models import ActivePlan, PlanVersion
+    from trade_plan_monitor.state.source_coverage_store import SourceCoverageIntegrityError
 
     c = production_chain
     original_plan, original_version = c.plan, c.version
@@ -330,21 +458,14 @@ def test_old_active_broker_plan_does_not_break_production_targets(production_cha
         row.payload_json = serialized
         row.plan_hash = sha256(serialized.encode()).hexdigest()
         work.commit()
-    if boundary == "api":
-        response = c.client.get("/api/v1/plan-versions/" + c.version["id"])
-        assert response.status_code == 200, response.text
-        assert not response.json()["canActivate"]
-        assert response.json()["obsoleteReason"] == "DAILY_DRAFT_OBSOLETE"
-        listed = c.client.get("/api/v1/plan-versions")
-        assert listed.status_code == 200, listed.text
-        assert {item["symbol"] for item in listed.json()["items"]} == {SYMBOL, other.symbol}
-        with c.plans._unit_of_work() as work:
-            active = work.daily.session.get(ActivePlan, SYMBOL)
-            assert (active.plan_version_id, active.revision, active.activated_at) == original_active
-            old = work.daily.session.get(PlanVersion, c.version["id"])
-            assert old.payload_json == serialized
-            assert old.plan_hash == sha256(serialized.encode()).hexdigest()
-        return
+    with pytest.raises(SourceCoverageIntegrityError):
+        c.client.get("/api/v1/plan-versions/" + c.version["id"])
+    with c.plans._unit_of_work() as work:
+        active = work.daily.session.get(ActivePlan, SYMBOL)
+        assert (active.plan_version_id, active.revision, active.activated_at) == original_active
+        old = work.daily.session.get(PlanVersion, c.version["id"])
+        assert old.payload_json == serialized
+        assert old.plan_hash == sha256(serialized.encode()).hexdigest()
     pipeline = c.composition._runtime._run_deadline.__self__._pipeline
     assert tuple(plan.symbol for plan in pipeline.active_plans()) == (other.symbol,)
 
@@ -414,7 +535,7 @@ def test_expired_latched_risk_survives_new_production_composition(tmp_path, monk
         state = c.composition._runtime._run_deadline.__self__
         c.now = datetime(2026, 9, 18, 16, tzinfo=SH)
         c.client.portal.call(
-            state.run_deadline,
+            c.composition._runtime._execute_deadline,
             MarketDeadline(
                 kind=DeadlineKind.OFFICIAL_CLOSE, trade_date=FRIDAY, due_at=c.now, close_attempt=1
             ),
@@ -435,7 +556,7 @@ def test_expired_latched_risk_survives_new_production_composition(tmp_path, monk
             bar_end = datetime(2026, 9, 22, 10, minute, tzinfo=SH)
             c.now = bar_end + timedelta(seconds=12)
             c.client.portal.call(
-                state.run_deadline,
+                c.composition._runtime._execute_deadline,
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=TUESDAY,

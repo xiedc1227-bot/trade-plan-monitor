@@ -125,13 +125,13 @@ def test_index_only_market_still_runs_and_accidental_stock_unit_is_inert(tmp_pat
             assert (await composition.start()).status.value == "RUNNING"
             state = composition._runtime._run_deadline.__self__
             assert state._pipeline._stock_semantics is None
-            assert await state.run_deadline(_deadline()) == ()
+            assert await composition._runtime._execute_deadline(_deadline()) == ()
             assert sdk.calls and all(
                 name in {"idx_mins", "rt_idx_min_daily", "index_daily"} for name, _ in sdk.calls
             )
             before = tuple(sdk.calls)
             assert state.next_stock_recovery_at() is None
-            await state.run_deadline(
+            await composition._runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.STOCK_RECOVERY,
                     trade_date=NOW.date(),
@@ -390,7 +390,7 @@ def test_market_completion_does_not_call_legacy_multi_symbol_gap_repair(tmp_path
 
             monkeypatch.setattr(pipeline.recovery, "repair_detected_gaps", observed)
             runtime._clock.current = NOW.replace(minute=5, second=12)
-            await state.run_deadline(
+            await runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.REALTIME_MINUTE,
                     trade_date=NOW.date(),
@@ -478,7 +478,7 @@ def test_composition_stock_maintenance_never_dispatches_pending(tmp_path, monkey
                 return await original()
 
             monkeypatch.setattr(state._dispatcher, "dispatch_pending", observed)
-            await state.run_deadline(
+            await runtime._execute_deadline(
                 MarketDeadline(
                     kind=DeadlineKind.STOCK_RECOVERY,
                     trade_date=NOW.date(),
