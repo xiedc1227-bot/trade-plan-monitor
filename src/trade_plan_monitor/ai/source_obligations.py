@@ -6,10 +6,19 @@ from dataclasses import dataclass
 from decimal import Decimal
 from math import isfinite
 
+from pydantic import TypeAdapter, ValidationError
+
 from trade_plan_monitor.ai.review import server_source_clauses
 from trade_plan_monitor.ai.source_position_directives import parse_position_directive
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
+from trade_plan_monitor.domain.daily_plan_models import DailyIndependentEvent
 from trade_plan_monitor.domain.daily_scope import scope_hash
+from trade_plan_monitor.domain.unified_plan_models import (
+    CompletedMinuteConfirmation,
+    MinuteCloseBelow,
+    UnifiedRule,
+    UnifiedTradePlan,
+)
 
 _PATH = re.compile(r"[A-Za-z_]\w*(?:(?:\.[A-Za-z_]\w*)|(?:\[\d+\]))*")
 _DECLARATION = re.compile(r"\s*(" + _PATH.pattern + r")\s*=\s*(.+?)\s*\Z")
@@ -55,8 +64,45 @@ def _exact_float(text):
     return value
 
 
+def _bare_scalar(path, text):
+    """Recognize only finite native string leaves, without consulting a candidate."""
+    if path in {"symbol", "market"}:
+        model, field = UnifiedTradePlan, path
+    else:
+        match = re.fullmatch(r"ordinary_rules\[(0|[1-9][0-9]*)\]\.(.+)", path)
+        if match is None:
+            return MISSING
+        limit = next(item.max_length for item in UnifiedTradePlan.model_fields[
+            "ordinary_rules"].metadata if hasattr(item, "max_length"))
+        if int(match[1]) >= limit:
+            return MISSING
+        leaf = match[2]
+        if leaf in {"status", "side", "rule_id", "bucket", "execution_window", "invalidation"}:
+            model, field = UnifiedRule, leaf
+        elif leaf == "condition.type":
+            model, field = MinuteCloseBelow, "type"
+        elif leaf == "confirmation.kind":
+            model, field = CompletedMinuteConfirmation, "kind"
+        elif leaf in {"independent_signal.mode", "independent_signal.evidence_requirement"}:
+            model, field = DailyIndependentEvent, leaf.split(".")[-1]
+        else:
+            return MISSING
+    try:
+        value = TypeAdapter(model.model_fields[field].rebuild_annotation()).validate_python(
+            text, strict=True)
+    except ValidationError:
+        return MISSING
+    if field == "evidence_requirement":
+        # The prose registry imports this module; defer the import to avoid a cycle.
+        from trade_plan_monitor.ai.source_policy_text import supported_policy_text
+
+        if not supported_policy_text(path, value, {}):
+            return MISSING
+    return value
+
+
 def declarations(source):
-    """Consume complete JSON lines or one closed position sentence's cap only."""
+    """Consume whole JSON/finite native scalar lines or a closed position cap."""
     digest = scope_hash(source)
     result = []
     for line in re.finditer(r"[^\r\n]+", source):
@@ -66,6 +112,10 @@ def declarations(source):
         try:
             value = json.loads(match[2], parse_constant=_invalid_number, parse_float=_exact_float,
                                object_pairs_hook=_unique_object)
+        except json.JSONDecodeError:
+            value = _bare_scalar(match[1], match[2])
+            if value is MISSING:
+                continue
         except (ValueError, RecursionError):
             continue
         result.append(SourceDeclaration(line.start(), line.end(), match[1], value,

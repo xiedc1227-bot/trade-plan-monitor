@@ -27,14 +27,16 @@ _TITLE_VALUE = re.compile(
 )
 _ACCOUNT_QUANTITY = re.compile(r"(?:实际|CORE|TACTICAL)持仓(?P<quantity>0|[1-9][0-9]{0,15})股。")
 _ACCOUNT_CASH = re.compile(
-    r"账户现金余额(?P<amount>(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,2})?)元。"
+    r"(?:持仓)?账户现金余额(?P<amount>(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,2})?)元。"
 )
 _ACCOUNT_COST = re.compile(
     r"每股成本(?P<cost>(?:0|[1-9][0-9]{0,15})(?:\.[0-9]{1,64})?)元/股。"
 )
 _ACCOUNT_SNAPSHOT = re.compile(
-    r"账户快照(?P<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+08:00)。"
+    r"(?:持仓)?账户快照(?P<at>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+08:00)。"
 )
+_ACCOUNT_ACQUIRED_DATE = re.compile(r"持仓取得日期(?P<day>[0-9]{4}-[0-9]{2}-[0-9]{2})。")
+_ACCOUNT_SELLABLE = re.compile(r"持仓可卖(?P<quantity>0|[1-9][0-9]{0,15})股。")
 _EXACT_CONTEXT = {
     "# Trade plan": "TITLE_EN",
     "# 交易计划": "TITLE_ZH",
@@ -72,6 +74,14 @@ def _account_record(text: str) -> str | None:
     """Recognize exact factual syntax; account truth/initialization is a separate owner."""
     if match := _ACCOUNT_QUANTITY.fullmatch(text):
         return "ACCOUNT_QUANTITY_ZH" if int(match["quantity"]) <= _MAX_SAFE_QUANTITY else None
+    if match := _ACCOUNT_SELLABLE.fullmatch(text):
+        return "ACCOUNT_SELLABLE_ZH" if int(match["quantity"]) <= _MAX_SAFE_QUANTITY else None
+    if match := _ACCOUNT_ACQUIRED_DATE.fullmatch(text):
+        try:
+            date.fromisoformat(match["day"])
+        except ValueError:
+            return None
+        return "ACCOUNT_ACQUIRED_DATE_ZH"
     if match := _ACCOUNT_CASH.fullmatch(text):
         yuan, _, fraction = match["amount"].partition(".")
         fen = int(yuan) * 100 + int(fraction.ljust(2, "0"))
