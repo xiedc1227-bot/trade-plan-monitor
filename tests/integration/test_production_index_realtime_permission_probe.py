@@ -56,18 +56,23 @@ async def _blocked_case(
         stock_certification=stock_certification,
         persisted_calendar=persisted_calendar,
     )
-    startup = await composition.start()
-    assert startup.status in {RuntimeServiceStatus.RUNNING, RuntimeServiceStatus.DEGRADED}
-    runtime = composition._runtime
-    state = runtime._probe_capabilities.__self__
-    pipeline = state._pipeline
-    assert pipeline is not None
-    controller = runtime._request_controller
-    if block_historical:
-        await _block(controller, TushareOperation.INDEX_HISTORICAL_MINUTES)
-    await _block(controller, TushareOperation.INDEX_REALTIME_MINUTES)
-    runtime._clock.current += timedelta(seconds=301)
-    return composition, sdk, state, pipeline, controller
+    try:
+        startup = await composition._runtime.start()
+        assert composition._runner_task is None
+        assert startup.status in {RuntimeServiceStatus.RUNNING, RuntimeServiceStatus.DEGRADED}
+        runtime = composition._runtime
+        state = runtime._liveness_owner
+        pipeline = state._pipeline
+        assert pipeline is not None
+        controller = runtime._request_controller
+        if block_historical:
+            await _block(controller, TushareOperation.INDEX_HISTORICAL_MINUTES)
+        await _block(controller, TushareOperation.INDEX_REALTIME_MINUTES)
+        runtime._clock.current += timedelta(seconds=301)
+        return composition, sdk, state, pipeline, controller
+    except BaseException:
+        await composition.stop()
+        raise
 
 
 async def _until(predicate) -> None:
@@ -102,13 +107,18 @@ def _rewrite_same_calendar(pipeline) -> None:
 
 def test_valid_current_day_probe_clears_only_realtime_permission(tmp_path, monkeypatch):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         try:
             before = len(sdk.calls)
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert sdk.calls[before:] == [(
@@ -149,7 +159,10 @@ def test_independent_realtime_permission_deadline_reaches_production_handler(
             assert deadline.due_at == composition._runtime._clock.now()
             before = len(sdk.calls)
 
-            assert await state.run_deadline(deadline) is PermissionMaintenanceResult.PROBED
+            assert (
+                await composition._runtime._execute_deadline(deadline)
+                is PermissionMaintenanceResult.PROBED
+            )
 
             assert [name for name, _ in sdk.calls[before:]] == ["rt_idx_min_daily"]
             assert not controller.is_permission_blocked(
@@ -166,6 +179,8 @@ def test_migrated_legacy_index_block_rechecks_only_realtime_scope(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
@@ -187,11 +202,15 @@ def test_migrated_legacy_index_block_rechecks_only_realtime_scope(
         finally:
             engine.dispose()
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
+            )
             controller = runtime._request_controller
             assert controller.is_permission_blocked(
                 TushareOperation.INDEX_HISTORICAL_MINUTES
@@ -202,7 +221,7 @@ def test_migrated_legacy_index_block_rechecks_only_realtime_scope(
             runtime._clock.current += timedelta(seconds=301)
             before = len(sdk.calls)
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert [name for name, _ in sdk.calls[before:]] == ["rt_idx_min_daily"]
@@ -223,8 +242,13 @@ def test_failed_calendar_transaction_keeps_old_token_revoked_until_fresh_read(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch, stock_certification=True, block_historical=False,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         today = pipeline._clock.now().date()
         captured_key = pipeline._reference_dependency_key(
@@ -256,7 +280,7 @@ def test_failed_calendar_transaction_keeps_old_token_revoked_until_fresh_read(
             pipeline._assert_reference_generation = original_assert
         try:
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert pipeline._calendar_revoked is not previous_token
@@ -276,8 +300,13 @@ def test_queued_realtime_probe_yields_to_market_with_reservation_intact(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         entered = Event()
         release = Event()
@@ -294,7 +323,7 @@ def test_queued_realtime_probe_yields_to_market_with_reservation_intact(
         try:
             assert await asyncio.to_thread(entered.wait, 5)
             probe_task = asyncio.create_task(
-                pipeline._maybe_recheck_realtime_index_permission()
+                permission_work()
             )
             await _until(lambda: controller.waiting_count > 0)
             reserved = controller.permission_retry_at(
@@ -324,8 +353,13 @@ def test_realtime_worker_rechecks_frozen_window_without_sqlite(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         original_submit = controller._executor.submit
         original_work = pipeline._work
@@ -350,7 +384,7 @@ def test_realtime_worker_rechecks_frozen_window_without_sqlite(
         try:
             before = tuple(sdk.calls)
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.DEFERRED
             )
             assert tuple(sdk.calls) == before
@@ -371,8 +405,13 @@ def test_delay_after_logical_admission_rechecks_physical_start_before_sdk(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         original_probe = pipeline.index_provider.probe_realtime_minutes_permission
 
@@ -389,7 +428,7 @@ def test_delay_after_logical_admission_rechecks_physical_start_before_sdk(
         try:
             before = tuple(sdk.calls)
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.DEFERRED
             )
             assert tuple(sdk.calls) == before
@@ -405,8 +444,13 @@ def test_delay_after_logical_admission_rechecks_physical_start_before_sdk(
 
 def test_realtime_probe_uses_shared_1250ms_admission_pace(tmp_path, monkeypatch):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         starts: list[float] = []
         original_minutes = sdk._index_minutes
@@ -423,7 +467,7 @@ def test_realtime_probe_uses_shared_1250ms_admission_pace(tmp_path, monkeypatch)
                 work_key="pace-before-rt-probe",
             )
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert len(starts) == 2
@@ -438,8 +482,13 @@ def test_realtime_response_uses_physical_start_cutoff_not_later_response_clock(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
 
         def later_batch(kwargs):
@@ -449,7 +498,7 @@ def test_realtime_response_uses_physical_start_cutoff_not_later_response_clock(
         sdk._index_minutes = later_batch
         try:
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.FAILED
             )
             assert [name for name, _ in sdk.calls].count("rt_idx_min_daily") == 1
@@ -467,8 +516,13 @@ def test_same_value_calendar_commit_during_realtime_response_revokes_probe(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch, stock_certification=True, block_historical=False,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         entered = Event()
         release = Event()
@@ -483,7 +537,7 @@ def test_same_value_calendar_commit_during_realtime_response_revokes_probe(
         sdk._index_minutes = delayed
         try:
             probe_task = asyncio.create_task(
-                pipeline._maybe_recheck_realtime_index_permission()
+                permission_work()
             )
             assert await asyncio.to_thread(entered.wait, 5)
             _rewrite_same_calendar(pipeline)
@@ -507,8 +561,13 @@ def test_same_value_calendar_commit_while_probe_queued_prevents_sdk_start(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch, stock_certification=True, block_historical=False,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         entered = Event()
         release = Event()
@@ -526,7 +585,7 @@ def test_same_value_calendar_commit_while_probe_queued_prevents_sdk_start(
         try:
             assert await asyncio.to_thread(entered.wait, 5)
             probe_task = asyncio.create_task(
-                pipeline._maybe_recheck_realtime_index_permission()
+                permission_work()
             )
             await _until(lambda: controller.waiting_count > 0)
             _rewrite_same_calendar(pipeline)
@@ -547,8 +606,13 @@ def test_same_value_calendar_commit_while_probe_queued_prevents_sdk_start(
 
 def test_revoke_before_worker_gate_prevents_physical_sdk_call(tmp_path, monkeypatch):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch, stock_certification=True, block_historical=False,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         entered = Event()
         release = Event()
@@ -566,7 +630,7 @@ def test_revoke_before_worker_gate_prevents_physical_sdk_call(tmp_path, monkeypa
         monkeypatch.setattr(controller._executor, "submit", hold_before_gate)
         try:
             probe_task = asyncio.create_task(
-                pipeline._maybe_recheck_realtime_index_permission()
+                permission_work()
             )
             assert await asyncio.to_thread(entered.wait, 5)
             _rewrite_same_calendar(pipeline)
@@ -589,8 +653,13 @@ def test_admitted_probe_rechecks_before_sdk_after_calendar_commit(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch, stock_certification=True, block_historical=False,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         entered = Event()
         release = Event()
@@ -607,7 +676,7 @@ def test_admitted_probe_rechecks_before_sdk_after_calendar_commit(
         )
         try:
             probe_task = asyncio.create_task(
-                pipeline._maybe_recheck_realtime_index_permission()
+                permission_work()
             )
             assert await asyncio.to_thread(entered.wait, 5)
             _rewrite_same_calendar(pipeline)
@@ -637,8 +706,13 @@ def test_invalid_current_day_batch_keeps_realtime_latch_and_reservation(
     tmp_path, monkeypatch, damage,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch,
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         try:
             frame = sdk._index_minutes({"ts_code": MarketIndexCode.SSE_COMPOSITE.value})
@@ -661,7 +735,7 @@ def test_invalid_current_day_batch_keeps_realtime_latch_and_reservation(
             sdk._index_minutes = lambda _kwargs: frame
             before = len(sdk.calls)
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.FAILED
             )
             assert [name for name, _ in sdk.calls[before:]] == ["rt_idx_min_daily"]
@@ -688,9 +762,14 @@ def test_current_day_probe_waits_for_calendar_and_shared_cooldown(
     tmp_path, monkeypatch, barrier,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, state, pipeline, controller = await _blocked_case(
             tmp_path, monkeypatch, persisted_calendar=barrier != "missing_calendar",
             block_historical=barrier != "missing_calendar",
+        )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
         )
         try:
             if barrier == "shared_429":
@@ -704,7 +783,7 @@ def test_current_day_probe_waits_for_calendar_and_shared_cooldown(
                     )
             before = tuple(sdk.calls)
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 in {PermissionMaintenanceResult.SKIPPED, PermissionMaintenanceResult.DEFERRED}
             )
             assert tuple(sdk.calls) == before
@@ -728,6 +807,8 @@ def test_first_current_day_five_minute_bar_waits_until_093512(
     tmp_path, monkeypatch,
 ):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
@@ -739,12 +820,16 @@ def test_first_current_day_five_minute_bar_waits_until_093512(
         )
         (tmp_path / "data/live-certification/tushare-stock-live.json").unlink()
         try:
-            assert (await composition.start()).status in {
+            assert (await composition._runtime.start()).status in {
                 RuntimeServiceStatus.RUNNING, RuntimeServiceStatus.DEGRADED,
             }
-            state = runtime._probe_capabilities.__self__
+            assert composition._runner_task is None
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_realtime_index_permission,
+            )
             controller = runtime._request_controller
             await _block(controller, TushareOperation.INDEX_REALTIME_MINUTES)
             runtime._clock.current = datetime(2026, 9, 8, 9, 35, tzinfo=SHANGHAI)
@@ -752,7 +837,7 @@ def test_first_current_day_five_minute_bar_waits_until_093512(
             raw = controller.raw_permission_retry_at(TushareOperation.INDEX_REALTIME_MINUTES)
             rotation = pipeline._permission_rotation_state
             assert (
-                await pipeline._maybe_recheck_realtime_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.DEFERRED
             )
             assert tuple(sdk.calls) == before

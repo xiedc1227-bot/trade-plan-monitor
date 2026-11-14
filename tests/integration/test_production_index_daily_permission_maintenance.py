@@ -45,16 +45,22 @@ def test_due_index_daily_proves_once_without_business_cache_write(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             runtime._clock.current += timedelta(seconds=301)
@@ -71,7 +77,7 @@ def test_due_index_daily_proves_once_without_business_cache_write(
             monkeypatch.setattr(pipeline, "_work", owner_only_work)
 
             assert (
-                await pipeline._maybe_recheck_index_daily_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert not control.is_permission_blocked(TushareOperation.INDEX_DAILY)
@@ -98,16 +104,22 @@ def test_newer_persisted_weekend_open_cannot_replace_friday_index_daily_anchor(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             friday = ANCHOR - timedelta(days=3)
             sunday = ANCHOR - timedelta(days=1)
             _seed_open_day(tmp_path / "monitor.sqlite3", friday)
@@ -124,7 +136,7 @@ def test_newer_persisted_weekend_open_cannot_replace_friday_index_daily_anchor(
             sdk._index_daily = lambda kwargs: _one_official_index_day(
                 MarketIndexCode(str(kwargs["ts_code"])), friday,
             )
-            assert await pipeline._maybe_recheck_index_daily_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.PROBED
             )
             assert tuple(sdk.calls[len(sdk_before):]) == ((
@@ -148,6 +160,8 @@ def test_reserved_index_daily_advances_once_without_false_success(
     tmp_path, monkeypatch, outcome,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
@@ -160,11 +174,15 @@ def test_reserved_index_daily_advances_once_without_false_success(
             return "released"
 
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             runtime._clock.current += timedelta(seconds=301)
@@ -188,7 +206,7 @@ def test_reserved_index_daily_advances_once_without_false_success(
                     occupy_worker, work_key="hold:index-daily",
                 ))
                 assert await asyncio.to_thread(hold_started.wait, 1)
-            attempt = asyncio.create_task(pipeline._maybe_recheck_index_daily_permission())
+            attempt = asyncio.create_task(permission_work())
             if outcome in {"queue_abort", "stop"}:
                 for _ in range(100):
                     if control.waiting_count:
@@ -235,16 +253,22 @@ def test_response_near_next_market_deadline_can_clear_index_daily_permission(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             runtime._clock.current += timedelta(seconds=301)
@@ -267,7 +291,7 @@ def test_response_near_next_market_deadline_can_clear_index_daily_permission(
                 )
 
             sdk._index_daily = near_deadline
-            assert await pipeline._maybe_recheck_index_daily_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.PROBED
             )
             assert not control.is_permission_blocked(TushareOperation.INDEX_DAILY)
@@ -281,16 +305,22 @@ def test_response_clock_rewind_keeps_index_daily_block_and_reservation(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             runtime._clock.current += timedelta(seconds=301)
@@ -303,7 +333,7 @@ def test_response_clock_rewind_keeps_index_daily_block_and_reservation(
                 )
 
             sdk._index_daily = rewind_on_response
-            assert await pipeline._maybe_recheck_index_daily_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.FAILED
             )
             assert control.is_permission_blocked(TushareOperation.INDEX_DAILY)
@@ -324,6 +354,8 @@ def test_queued_index_daily_rejects_restored_authority_or_calendar_epoch_aba(
     tmp_path, monkeypatch, change,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=change == "calendar_same_value",
@@ -337,11 +369,15 @@ def test_queued_index_daily_rejects_restored_authority_or_calendar_epoch_aba(
             return "released"
 
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             database = tmp_path / "monitor.sqlite3"
             _seed_open_day(database, ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
@@ -352,7 +388,7 @@ def test_queued_index_daily_rejects_restored_authority_or_calendar_epoch_aba(
                 occupy_worker, work_key="hold:index-daily-aba",
             ))
             assert await asyncio.to_thread(entered.wait, 1)
-            attempt = asyncio.create_task(pipeline._maybe_recheck_index_daily_permission())
+            attempt = asyncio.create_task(permission_work())
             for _ in range(100):
                 if control.waiting_count:
                     break
@@ -413,16 +449,22 @@ def test_index_daily_reservation_fault_never_starts_sdk_or_clears_block(
     tmp_path, monkeypatch, fault,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             runtime._clock.current += timedelta(seconds=301)
@@ -437,7 +479,7 @@ def test_index_daily_reservation_fault_never_starts_sdk_or_clears_block(
                 with monkeypatch.context() as patch:
                     patch.setattr(repository, "save", failed_save)
                     with pytest.raises(RecoveryCheckpointError):
-                        await pipeline._maybe_recheck_index_daily_permission()
+                        await permission_work()
                 assert pipeline._permission_rotation_state == before_cursor
                 control._recovery_fault = False  # Restore only for fixture teardown.
             else:
@@ -452,7 +494,7 @@ def test_index_daily_reservation_fault_never_starts_sdk_or_clears_block(
                     failing_callback,
                 )
                 with pytest.raises(PermissionReservationCallbackError) as caught:
-                    await pipeline._maybe_recheck_index_daily_permission()
+                    await permission_work()
                 assert str(caught.value) == "permission reservation callback failed"
                 assert pipeline._permission_rotation_state == before_cursor
                 assert not control._closed
@@ -472,17 +514,23 @@ def test_two_scope_maintenance_tasks_reselect_serially_after_first_reservation(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         entered, release = asyncio.Event(), asyncio.Event()
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_HISTORICAL_MINUTES)
             await _block(control, TushareOperation.INDEX_DAILY)
@@ -515,7 +563,7 @@ def test_two_scope_maintenance_tasks_reselect_serially_after_first_reservation(
             first = asyncio.create_task(first_scope())
             await entered.wait()
             second = asyncio.create_task(
-                pipeline._maybe_recheck_index_daily_permission(),
+                permission_work(),
             )
             await asyncio.sleep(0)
             assert pipeline._permission_rotation_state.last_operation is None
@@ -538,22 +586,28 @@ def test_new_runtime_restores_durable_index_daily_reservation_before_retry(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         first, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         second = None
         try:
-            assert (await first.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await first._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert first._runner_task is None
             runtime = first._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                first._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             runtime._clock.current += timedelta(seconds=301)
             sdk._index_daily = lambda _kwargs: pd.DataFrame()
-            assert await pipeline._maybe_recheck_index_daily_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.FAILED
             )
             persisted_due = control.raw_permission_retry_at(TushareOperation.INDEX_DAILY)
@@ -567,17 +621,21 @@ def test_new_runtime_restores_durable_index_daily_reservation_before_retry(
                 config_path=tmp_path / "config/app.yaml",
                 database_path=tmp_path / "monitor.sqlite3",
             )
-            await second.start()
+            await second._runtime.start()
+            assert second._runner_task is None
             replacement = second._runtime
-            new_pipeline = replacement._probe_capabilities.__self__._pipeline
+            new_pipeline = replacement._liveness_owner._pipeline
             assert new_pipeline is not None
+            replacement_permission_work = _named_permission_work(
+                replacement, new_pipeline._maybe_recheck_index_daily_permission,
+            )
             new_control = replacement._request_controller
             assert new_control.raw_permission_retry_at(TushareOperation.INDEX_DAILY) == (
                 persisted_due
             )
             assert new_pipeline._permission_rotation_state.last_operation is None
             sdk_before = tuple(sdk.calls)
-            assert await new_pipeline._maybe_recheck_index_daily_permission() is (
+            assert await replacement_permission_work() is (
                 PermissionMaintenanceResult.SKIPPED
             )
             assert tuple(sdk.calls) == sdk_before
@@ -594,16 +652,22 @@ def test_index_daily_transport_seam_rechecks_after_worker_entry(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
             runtime._clock.current += timedelta(seconds=301)
@@ -620,7 +684,7 @@ def test_index_daily_transport_seam_rechecks_after_worker_entry(
                 pipeline.index_provider, "probe_official_daily_permission",
                 revoke_after_worker_gate,
             )
-            assert await pipeline._maybe_recheck_index_daily_permission() is (
+            assert await permission_work() is (
                 PermissionMaintenanceResult.DEFERRED
             )
             assert tuple(sdk.calls) == sdk_before
@@ -638,17 +702,23 @@ def test_index_daily_response_rereads_persisted_anchor_before_unlock(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         entered, release = Event(), Event()
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             database = tmp_path / "monitor.sqlite3"
             _seed_open_day(database, ANCHOR)
             await _block(control, TushareOperation.INDEX_DAILY)
@@ -662,7 +732,7 @@ def test_index_daily_response_rereads_persisted_anchor_before_unlock(
                 )
 
             sdk._index_daily = waiting_response
-            attempt = asyncio.create_task(pipeline._maybe_recheck_index_daily_permission())
+            attempt = asyncio.create_task(permission_work())
             assert await asyncio.to_thread(entered.wait, 1)
             engine = create_sqlite_engine(database)
             try:
@@ -693,16 +763,22 @@ def test_index_daily_gate_skips_or_defers_without_reservation_or_sdk(
     tmp_path, monkeypatch, reason,
 ) -> None:
     async def scenario() -> None:
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=True,
         )
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            pipeline = runtime._probe_capabilities.__self__._pipeline
+            pipeline = runtime._liveness_owner._pipeline
             control = runtime._request_controller
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_index_daily_permission,
+            )
             if reason != "no_anchor":
                 _seed_open_day(tmp_path / "monitor.sqlite3", ANCHOR)
             else:
@@ -735,13 +811,13 @@ def test_index_daily_gate_skips_or_defers_without_reservation_or_sdk(
                     )
             if reason == "no_authority":
                 pipeline._generation_current = lambda: False
-            result = await pipeline._maybe_recheck_index_daily_permission()
+            result = await permission_work()
             if reason == "no_anchor":
                 assert result is PermissionMaintenanceResult.DEFERRED
                 local_due = runtime._clock.now() + timedelta(seconds=30)
                 assert pipeline.next_permission_probe_due_at() == local_due
                 assert pipeline.next_permission_probe_due_at() == local_due
-                assert await pipeline._maybe_recheck_index_daily_permission() is (
+                assert await permission_work() is (
                     PermissionMaintenanceResult.SKIPPED
                 )
                 assert pipeline.next_permission_probe_due_at() == local_due

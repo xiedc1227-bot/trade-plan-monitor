@@ -103,17 +103,22 @@ async def _blocked_case(tmp_path, monkeypatch, *, anchor: bool | None = True):
         stock_certification=False,
         persisted_calendar=True,
     )
-    if anchor is not None:
-        _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR, is_open=anchor)
-    assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-    runtime = composition._runtime
-    state = runtime._probe_capabilities.__self__
-    pipeline = state._pipeline
-    assert pipeline is not None
-    control = runtime._request_controller
-    await _block(control, TushareOperation.INDEX_HISTORICAL_MINUTES)
-    runtime._clock.current += timedelta(seconds=301)
-    return composition, sdk, pipeline, control
+    try:
+        if anchor is not None:
+            _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR, is_open=anchor)
+        assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+        assert composition._runner_task is None
+        runtime = composition._runtime
+        state = runtime._liveness_owner
+        pipeline = state._pipeline
+        assert pipeline is not None
+        control = runtime._request_controller
+        await _block(control, TushareOperation.INDEX_HISTORICAL_MINUTES)
+        runtime._clock.current += timedelta(seconds=301)
+        return composition, sdk, pipeline, control
+    except BaseException:
+        await composition.stop()
+        raise
 
 
 async def _until(predicate) -> None:
@@ -224,6 +229,8 @@ def test_valid_completed_sse_day_clears_only_historical_permission_without_busin
     monkeypatch,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path,
             monkeypatch,
@@ -234,11 +241,15 @@ def test_valid_completed_sse_day_clears_only_historical_permission_without_busin
         )
         _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+            )
             control = runtime._request_controller
             await _block(control, TushareOperation.INDEX_HISTORICAL_MINUTES)
             await _block(control, TushareOperation.INDEX_REALTIME_MINUTES)
@@ -248,7 +259,7 @@ def test_valid_completed_sse_day_clears_only_historical_permission_without_busin
             )
             before = len(sdk.calls)
 
-            await pipeline._maybe_recheck_historical_index_permission()
+            await permission_work()
 
             assert len(sdk.calls) == before + 1
             assert sdk.calls[-1] == (
@@ -279,14 +290,19 @@ def test_missing_or_closed_calendar_anchor_keeps_historical_block_without_sdk(
     anchor,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(
             tmp_path,
             monkeypatch,
             anchor=anchor,
         )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         try:
             before = tuple(sdk.calls)
-            await pipeline._maybe_recheck_historical_index_permission()
+            await permission_work()
             assert tuple(sdk.calls) == before
             assert control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
         finally:
@@ -299,27 +315,32 @@ def test_missing_anchor_memory_defer_is_honored_if_anchor_arrives_early(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(
             tmp_path, monkeypatch, anchor=None,
         )
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         try:
-            await pipeline._maybe_recheck_historical_index_permission()
+            await permission_work()
             first_due = pipeline.next_historical_index_permission_due_at()
             assert first_due == pipeline._clock.now() + timedelta(seconds=30)
             _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR)
             sdk._historical_index_minutes = lambda _kwargs: _complete_index_day(
                 MarketIndexCode.SSE_COMPOSITE, ANCHOR
             )
-            await pipeline._maybe_recheck_historical_index_permission()
+            await permission_work()
             assert [name for name, _ in sdk.calls].count("idx_mins") == 0
             pipeline._clock.current = first_due
             assert (
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.DEFERRED
             )
             assert [name for name, _ in sdk.calls].count("idx_mins") == 0
             pipeline._clock.current = pipeline.next_historical_index_permission_due_at()
-            await pipeline._maybe_recheck_historical_index_permission()
+            await permission_work()
             assert [name for name, _ in sdk.calls].count("idx_mins") == 1
             assert not control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
             assert pipeline.next_historical_index_permission_due_at() is None
@@ -341,7 +362,12 @@ def test_stale_authority_or_cooldown_cannot_start_historical_probe(
     from test_s3_permission_reservation_process import _business_rows
 
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         try:
             if change == "semantic":
                 semantic = tmp_path / "data/live-certification/index-semantic.json"
@@ -391,9 +417,9 @@ def test_stale_authority_or_cooldown_cannot_start_historical_probe(
             business = _business_rows(tmp_path / "monitor.sqlite3")
             if change in {"semantic", "configuration", "stopping"}:
                 with pytest.raises(RecoveryAdmissionChangedError):
-                    await pipeline._maybe_recheck_historical_index_permission()
+                    await permission_work()
             else:
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
             assert tuple(sdk.calls) == before
             assert control.raw_permission_retry_at(
                 TushareOperation.INDEX_HISTORICAL_MINUTES,
@@ -418,7 +444,12 @@ def test_provider_failure_retains_historical_permission_and_reservation(
     failure,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         try:
 
             def fail(_kwargs):
@@ -431,7 +462,7 @@ def test_provider_failure_retains_historical_permission_and_reservation(
                 raise TimeoutError("offline provider timeout")
 
             sdk._historical_index_minutes = fail
-            await pipeline._maybe_recheck_historical_index_permission()
+            await permission_work()
             assert [name for name, _ in sdk.calls].count("idx_mins") == 1
             assert control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
             assert control.permission_retry_at(
@@ -455,7 +486,12 @@ def test_incomplete_or_mixed_historical_response_retains_block_and_reservation(
     damage,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         try:
             frame = _complete_index_day(MarketIndexCode.SSE_COMPOSITE, ANCHOR)
             if damage == "empty":
@@ -473,7 +509,7 @@ def test_incomplete_or_mixed_historical_response_retains_block_and_reservation(
             else:
                 frame["unexpected"] = "value"
             sdk._historical_index_minutes = lambda _kwargs: frame
-            await pipeline._maybe_recheck_historical_index_permission()
+            await permission_work()
             assert [name for name, _ in sdk.calls].count("idx_mins") == 1
             assert control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
             assert control.permission_retry_at(
@@ -488,7 +524,12 @@ def test_incomplete_or_mixed_historical_response_retains_block_and_reservation(
 
 def test_queued_historical_probe_crossing_midnight_never_calls_sdk(tmp_path, monkeypatch):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         started = Event()
         release = Event()
 
@@ -507,7 +548,7 @@ def test_queued_historical_probe_crossing_midnight_never_calls_sdk(tmp_path, mon
         )
         try:
             assert await asyncio.to_thread(started.wait, 5)
-            probe_task = asyncio.create_task(pipeline._maybe_recheck_historical_index_permission())
+            probe_task = asyncio.create_task(permission_work())
             await _until(lambda: control.waiting_count > 0)
             reservation = control.permission_retry_at(TushareOperation.INDEX_HISTORICAL_MINUTES)
             assert reservation is not None
@@ -528,7 +569,12 @@ def test_queued_probe_yields_to_market_without_spending_permission_failure_budge
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         entered = Event()
         release = Event()
 
@@ -543,7 +589,7 @@ def test_queued_probe_yields_to_market_without_spending_permission_failure_budge
         ))
         try:
             assert await asyncio.to_thread(entered.wait, 5)
-            probe_task = asyncio.create_task(pipeline._maybe_recheck_historical_index_permission())
+            probe_task = asyncio.create_task(permission_work())
             await _until(lambda: control.waiting_count > 0)
             reserved = control.permission_retry_at(TushareOperation.INDEX_HISTORICAL_MINUTES)
             assert reserved is not None
@@ -565,7 +611,7 @@ def test_queued_probe_yields_to_market_without_spending_permission_failure_budge
                 MarketIndexCode.SSE_COMPOSITE, ANCHOR
             )
             assert (
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert [name for name, _ in sdk.calls].count("idx_mins") == 1
@@ -581,7 +627,12 @@ def test_queued_file_change_and_restore_never_starts_or_unlocks_probe(
     tmp_path, monkeypatch, change,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         entered = Event()
         release = Event()
 
@@ -603,7 +654,7 @@ def test_queued_file_change_and_restore_never_starts_or_unlocks_probe(
         original = path.read_bytes()
         try:
             assert await asyncio.to_thread(entered.wait, 5)
-            probe_task = asyncio.create_task(pipeline._maybe_recheck_historical_index_permission())
+            probe_task = asyncio.create_task(permission_work())
             await _until(lambda: control.waiting_count > 0)
             if change == "configuration":
                 path.write_bytes(original.replace(b"offline-test-token", b"changed-token"))
@@ -622,7 +673,7 @@ def test_queued_file_change_and_restore_never_starts_or_unlocks_probe(
             path.write_bytes(original)
             assert pipeline._admission_revoked()
             assert (
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.SKIPPED
             )
             assert [name for name, _ in sdk.calls].count("idx_mins") == 0
@@ -638,7 +689,12 @@ def test_sdk_worker_start_rechecks_market_window_after_admission(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         original_submit = control._executor.submit
 
         def advance_before_worker(call, *args, **kwargs):
@@ -654,7 +710,7 @@ def test_sdk_worker_start_rechecks_market_window_after_admission(
         try:
             before = tuple(sdk.calls)
             assert (
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.DEFERRED
             )
             assert tuple(sdk.calls) == before
@@ -673,7 +729,12 @@ def test_sdk_worker_admission_uses_frozen_calendar_without_database_read(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         scheduler = composition._runtime._scheduler
         original_calendar = scheduler._is_open_on
         worker_reads: list[date] = []
@@ -689,7 +750,7 @@ def test_sdk_worker_admission_uses_frozen_calendar_without_database_read(
         )
         try:
             assert (
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert worker_reads == []
@@ -701,7 +762,12 @@ def test_sdk_worker_admission_uses_frozen_calendar_without_database_read(
 
 def test_sdk_worker_after_stop_cannot_start_historical_probe(tmp_path, monkeypatch) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         entered = Event()
         release = Event()
         original_submit = control._executor.submit
@@ -717,7 +783,7 @@ def test_sdk_worker_after_stop_cannot_start_historical_probe(tmp_path, monkeypat
 
         monkeypatch.setattr(control._executor, "submit", hold_before_worker)
         try:
-            probe_task = asyncio.create_task(pipeline._maybe_recheck_historical_index_permission())
+            probe_task = asyncio.create_task(permission_work())
             assert await asyncio.to_thread(entered.wait, 5)
             stop_task = asyncio.create_task(composition.stop())
             await _until(lambda: not pipeline._generation_current())
@@ -737,22 +803,28 @@ def test_unknown_weekday_calendar_uses_possible_minute_window(
     tmp_path, monkeypatch,
 ) -> None:
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, _ = _composition(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=False,
         )
         _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.DEGRADED
+            assert composition._runner_task is None
             runtime = composition._runtime
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
+            permission_work = _named_permission_work(
+                composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+            )
             await _block(runtime._request_controller, TushareOperation.INDEX_HISTORICAL_MINUTES)
             runtime._clock.current = datetime(2026, 9, 8, 10, 5, 50, tzinfo=SHANGHAI)
             assert state.is_open_on(runtime._clock.now().date()) is None
             assert (
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.DEFERRED
             )
             assert [name for name, _ in sdk.calls].count("idx_mins") == 0
@@ -765,7 +837,7 @@ def test_unknown_weekday_calendar_uses_possible_minute_window(
                 MarketIndexCode.SSE_COMPOSITE, ANCHOR
             )
             assert (
-                await pipeline._maybe_recheck_historical_index_permission()
+                await permission_work()
                 is PermissionMaintenanceResult.PROBED
             )
             assert [name for name, _ in sdk.calls].count("idx_mins") == 1
@@ -777,7 +849,12 @@ def test_unknown_weekday_calendar_uses_possible_minute_window(
 
 def test_historical_response_after_midnight_cannot_unlock(tmp_path, monkeypatch):
     async def scenario():
+        from test_production_daily_limits_permission_maintenance import _named_permission_work
+
         composition, sdk, pipeline, control = await _blocked_case(tmp_path, monkeypatch)
+        permission_work = _named_permission_work(
+            composition._runtime, pipeline._maybe_recheck_historical_index_permission,
+        )
         entered = Event()
         release = Event()
         frame = _complete_index_day(MarketIndexCode.SSE_COMPOSITE, ANCHOR)
@@ -790,7 +867,7 @@ def test_historical_response_after_midnight_cannot_unlock(tmp_path, monkeypatch)
 
         sdk._historical_index_minutes = delayed
         try:
-            probe_task = asyncio.create_task(pipeline._maybe_recheck_historical_index_permission())
+            probe_task = asyncio.create_task(permission_work())
             assert await asyncio.to_thread(entered.wait, 5)
             pipeline._clock.current += timedelta(days=1)
             release.set()
@@ -816,30 +893,32 @@ def test_independent_deadline_rechecks_without_current_calendar_or_snapshot(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=False,
         )
-        _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR)
-        engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
         try:
-            ProviderRecoveryRepository(
-                create_session_factory(engine),
-                provider_identity=_provider_recovery_identity("https://example.test"),
-            ).save((
-                RecoveryCheckpoint(
-                    "permission", "idx_mins", datetime(2026, 9, 8, 10, 0, 14, tzinfo=SHANGHAI), 0,
-                ),
-            ))
-        finally:
-            engine.dispose()
-        assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
-        runtime = composition._runtime
-        state = runtime._probe_capabilities.__self__
-        pipeline = state._pipeline
-        assert pipeline is not None
-        control = runtime._request_controller
-        assert control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
-        sdk._historical_index_minutes = lambda _kwargs: _complete_index_day(
-            MarketIndexCode.SSE_COMPOSITE, ANCHOR
-        )
-        try:
+            _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR)
+            engine = create_sqlite_engine(tmp_path / "monitor.sqlite3")
+            try:
+                ProviderRecoveryRepository(
+                    create_session_factory(engine),
+                    provider_identity=_provider_recovery_identity("https://example.test"),
+                ).save((
+                    RecoveryCheckpoint(
+                        "permission", "idx_mins",
+                        datetime(2026, 9, 8, 10, 0, 14, tzinfo=SHANGHAI), 0,
+                    ),
+                ))
+            finally:
+                engine.dispose()
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
+            runtime = composition._runtime
+            state = runtime._liveness_owner
+            pipeline = state._pipeline
+            assert pipeline is not None
+            control = runtime._request_controller
+            assert control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
+            sdk._historical_index_minutes = lambda _kwargs: _complete_index_day(
+                MarketIndexCode.SSE_COMPOSITE, ANCHOR
+            )
             assert state.is_open_on(runtime._clock.now().date()) is None
             assert pipeline.index_service.latest_snapshots() == {}
             deadline = runtime._scheduler.next_deadline()
@@ -849,7 +928,7 @@ def test_independent_deadline_rechecks_without_current_calendar_or_snapshot(
             previous_market_cursor = runtime._last_deadline_at
             runtime._advance_progress_deadline(deadline)
             assert runtime._last_deadline_at == previous_market_cursor
-            await state.run_deadline(deadline)
+            await composition._runtime._execute_deadline(deadline)
             minute_calls = [kwargs for name, kwargs in sdk.calls if name == "idx_mins"]
             assert len(minute_calls) == 1
             assert minute_calls[0]["start_date"] == "2026-09-07 09:30:00"
@@ -869,22 +948,23 @@ def test_missing_anchor_defers_due_probe_in_memory_without_durable_write(
             tmp_path, monkeypatch, active_plan=False, include_index=True,
             stock_certification=False, persisted_calendar=False,
         )
-        assert (await composition.start()).status is RuntimeServiceStatus.DEGRADED
-        runtime = composition._runtime
-        state = runtime._probe_capabilities.__self__
-        pipeline = state._pipeline
-        assert pipeline is not None
-        control = runtime._request_controller
-        await _block(control, TushareOperation.INDEX_HISTORICAL_MINUTES)
-        runtime._clock.current += timedelta(seconds=301)
         try:
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.DEGRADED
+            assert composition._runner_task is None
+            runtime = composition._runtime
+            state = runtime._liveness_owner
+            pipeline = state._pipeline
+            assert pipeline is not None
+            control = runtime._request_controller
+            await _block(control, TushareOperation.INDEX_HISTORICAL_MINUTES)
+            runtime._clock.current += timedelta(seconds=301)
             durable_due = control.permission_retry_at(
                 TushareOperation.INDEX_HISTORICAL_MINUTES
             )
             deadline = runtime._scheduler.next_deadline()
             assert deadline is not None and deadline.kind is DeadlineKind.INDEX_PERMISSION
             before = tuple(sdk.calls)
-            await state.run_deadline(deadline)
+            await composition._runtime._execute_deadline(deadline)
             assert tuple(sdk.calls) == before
             assert state.next_index_permission_at() == runtime._clock.now() + timedelta(seconds=30)
             assert (
@@ -900,17 +980,18 @@ def test_missing_anchor_defers_due_probe_in_memory_without_durable_write(
             database_path=tmp_path / "monitor.sqlite3",
         )
         try:
-            assert (await replacement.start()).status in {
+            assert (await replacement._runtime.start()).status in {
                 RuntimeServiceStatus.RUNNING, RuntimeServiceStatus.DEGRADED,
             }
+            assert replacement._runner_task is None
             restarted = replacement._runtime
-            restarted_state = restarted._probe_capabilities.__self__
+            restarted_state = restarted._liveness_owner
             assert restarted_state.next_index_permission_at() == durable_due
             restart_deadline = restarted._scheduler.next_deadline()
             assert restart_deadline is not None
             assert restart_deadline.kind is DeadlineKind.INDEX_PERMISSION
             assert restart_deadline.due_at == restarted._clock.now()
-            await restarted_state.run_deadline(restart_deadline)
+            await restarted._execute_deadline(restart_deadline)
             assert restarted_state.next_index_permission_at() == (
                 restarted._clock.now() + timedelta(seconds=30)
             )
@@ -931,9 +1012,9 @@ def test_permission_maintenance_one_second_before_market_deadline_yields_to_mark
         )
         _seed_anchor(tmp_path / "monitor.sqlite3", ANCHOR)
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            state = runtime._probe_capabilities.__self__
             control = runtime._request_controller
             runtime._clock.current = runtime._clock.now().replace(second=11)
             await _block(control, TushareOperation.INDEX_HISTORICAL_MINUTES)
@@ -951,7 +1032,7 @@ def test_permission_maintenance_one_second_before_market_deadline_yields_to_mark
                 return _complete_index_day(MarketIndexCode.SSE_COMPOSITE, ANCHOR)
 
             sdk._historical_index_minutes = slow_probe
-            await state.run_deadline(deadline)
+            await composition._runtime._execute_deadline(deadline)
             assert tuple(sdk.calls) == before
             assert runtime._clock.now() < next_market.due_at
             assert control.is_permission_blocked(TushareOperation.INDEX_HISTORICAL_MINUTES)
@@ -1026,12 +1107,13 @@ def test_blocked_historical_scope_defers_due_index_recovery_without_attempt_or_c
 
         sdk.idx_mins = fail_index
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
-            await state.run_deadline(MarketDeadline(
+            await composition._runtime._execute_deadline(MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
                 trade_date=runtime._clock.now().date(),
                 due_at=runtime._clock.now(),
@@ -1043,7 +1125,7 @@ def test_blocked_historical_scope_defers_due_index_recovery_without_attempt_or_c
             await _block(runtime._request_controller, TushareOperation.INDEX_HISTORICAL_MINUTES)
             runtime._clock.current = due
             before = len(failed_calls)
-            await state.run_deadline(MarketDeadline(
+            await composition._runtime._execute_deadline(MarketDeadline(
                 kind=DeadlineKind.INDEX_RECOVERY,
                 trade_date=due.date(), due_at=due,
             ))
@@ -1074,12 +1156,13 @@ def test_permission_and_index_recovery_due_at_five_minute_limit_probe_first(
 
         sdk.idx_mins = fail_index
         try:
-            assert (await composition.start()).status is RuntimeServiceStatus.RUNNING
+            assert (await composition._runtime.start()).status is RuntimeServiceStatus.RUNNING
+            assert composition._runner_task is None
             runtime = composition._runtime
-            state = runtime._probe_capabilities.__self__
+            state = runtime._liveness_owner
             pipeline = state._pipeline
             assert pipeline is not None
-            await state.run_deadline(MarketDeadline(
+            await composition._runtime._execute_deadline(MarketDeadline(
                 kind=DeadlineKind.REALTIME_MINUTE,
                 trade_date=runtime._clock.now().date(),
                 due_at=runtime._clock.now(),
@@ -1090,7 +1173,7 @@ def test_permission_and_index_recovery_due_at_five_minute_limit_probe_first(
             await _block(runtime._request_controller, TushareOperation.INDEX_HISTORICAL_MINUTES)
             recovery_due = min(record[4] for record in first_recoveries)
             runtime._clock.current = recovery_due
-            await state.run_deadline(MarketDeadline(
+            await composition._runtime._execute_deadline(MarketDeadline(
                 kind=DeadlineKind.INDEX_RECOVERY,
                 trade_date=recovery_due.date(), due_at=recovery_due,
             ))
@@ -1110,14 +1193,14 @@ def test_permission_and_index_recovery_due_at_five_minute_limit_probe_first(
                 return _complete_index_day(MarketIndexCode.SSE_COMPOSITE, ANCHOR)
 
             sdk.idx_mins = complete_probe
-            await state.run_deadline(deadline)
+            await composition._runtime._execute_deadline(deadline)
             assert not runtime._request_controller.is_permission_blocked(
                 TushareOperation.INDEX_HISTORICAL_MINUTES
             )
             del sdk.idx_mins
             if probe_seconds == 0:
                 assert state.next_index_recovery_at() <= permission_due
-                await state.run_deadline(MarketDeadline(
+                await composition._runtime._execute_deadline(MarketDeadline(
                     kind=DeadlineKind.INDEX_RECOVERY,
                     trade_date=permission_due.date(), due_at=permission_due,
                 ))
