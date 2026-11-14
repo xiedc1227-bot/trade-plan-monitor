@@ -396,27 +396,23 @@ class MonitorWebComposition:
         self._stopping = True
         first_error: BaseException | None = None
         # Revoke authority before waiting; read sessions must drain before runtime DB disposal.
-        begin_read_shutdown = getattr(self._read_service, "begin_shutdown", None)
-        if callable(begin_read_shutdown):
-            begin_read_shutdown()
-            begin_owner_shutdown = getattr(self._runtime, "begin_shutdown", None)
-            if callable(begin_owner_shutdown):
-                begin_owner_shutdown()
+        candidate = self._candidate_runtime
+        for owner in (self._read_service, self._runtime, candidate):
+            try:
+                begin_shutdown = getattr(owner, "begin_shutdown", None)
+                if callable(begin_shutdown):
+                    begin_shutdown()
+            except BaseException as error:
+                if first_error is None:
+                    first_error = error
         stop_reads = getattr(self._read_service, "stop", None)
         if callable(stop_reads):
             await stop_reads()
-        candidate = self._candidate_runtime
-        if candidate is not None:
-            begin_shutdown = getattr(candidate, "begin_shutdown", None)
-            if callable(begin_shutdown):
-                try:
-                    begin_shutdown()
-                except BaseException as error:
-                    first_error = error
         try:
             await self._stop_runtime()
         except BaseException as error:
-            first_error = error
+            if first_error is None:
+                first_error = error
 
         if candidate is not None:
             try:

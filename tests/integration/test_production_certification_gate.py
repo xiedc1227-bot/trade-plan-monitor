@@ -1636,7 +1636,7 @@ def test_stop_revokes_unpublished_candidate_during_replacement_start(
             async def wait_before_probe():
                 candidate_entered.set()
                 await release_candidate.wait()
-                return probe()
+                return await probe()
 
             candidate._probe_capabilities = wait_before_probe
             candidates.append(candidate)

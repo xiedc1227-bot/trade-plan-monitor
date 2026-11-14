@@ -142,6 +142,13 @@ class _RecordingRuntime:
 class _DegradedOwnedRuntime(_RecordingRuntime, RuntimeLifecycleService):
     """Exercise the lifecycle-specific degraded runner admission boundary."""
 
+    def __init__(self, *, status: RuntimeServiceStatus) -> None:
+        super().__init__(status=status)
+        self.shutdown_requested = False
+
+    def begin_shutdown(self) -> None:
+        self.shutdown_requested = True
+
 
 class _ControlledRestartDelay:
     def __init__(self) -> None:
@@ -472,8 +479,12 @@ def test_degraded_lifecycle_replacement_retains_its_retry_runner() -> None:
             assert recovered.start_calls == 1
             assert recovered.run_calls == 1
             assert composition.health().status is RuntimeServiceStatus.DEGRADED
+            assert not recovered.shutdown_requested
         finally:
             await composition.stop()
+        assert recovered.shutdown_requested
+        assert recovered.stop_calls == 1
+        assert recovered.run_finished.is_set()
 
     asyncio.run(scenario())
 
@@ -745,6 +756,103 @@ def test_monitor_composition_stop_cancels_and_joins_restart_delay() -> None:
             for task in asyncio.all_tasks()
             if task is not asyncio.current_task()
         )
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("read_outcome", "failed_shutdown"),
+    (
+        ("release", None),
+        ("timeout", None),
+        ("release", "missing_read_hook"),
+        ("release", "read"),
+        ("release", "active"),
+        ("release", "candidate"),
+    ),
+)
+def test_monitor_stop_revokes_all_admission_before_read_drain(
+    read_outcome, failed_shutdown,
+) -> None:
+    from trade_plan_monitor.web.monitor_composition import MonitorWebComposition
+
+    async def scenario() -> None:
+        nonlocal read_outcome, failed_shutdown
+        admitted = dict.fromkeys(("read", "active", "candidate"), True)
+        attempted = []
+        shutdown_error = RuntimeError("controlled admission revocation failure")
+
+        def revoke(name):
+            attempted.append(name)
+            if name == failed_shutdown:
+                raise shutdown_error
+            admitted[name] = False
+
+        class ReadService(_DegradedReadService):
+            def __init__(self):
+                self.entered, self.release = asyncio.Event(), asyncio.Event()
+                self.drained = False
+                if failed_shutdown != "missing_read_hook":
+                    self.begin_shutdown = lambda: revoke("read")
+
+            async def stop(self):
+                self.entered.set()
+                await self.release.wait()
+                if read_outcome == "timeout":
+                    raise TimeoutError("controlled physical read drain timeout")
+                self.drained = True
+
+        reads = ReadService()
+
+        class Runtime(_RecordingRuntime):
+            def __init__(self, name):
+                super().__init__(status=RuntimeServiceStatus.RUNNING)
+                self.name = name
+
+            def begin_shutdown(self):
+                revoke(self.name)
+
+            async def stop(self):
+                assert reads.drained, "database released before physical reads drained"
+                await super().stop()
+
+        active, candidate = Runtime("active"), Runtime("candidate")
+        composition = MonitorWebComposition(runtime=active, read_service=reads)
+        composition._candidate_runtime = candidate
+        stop_task = asyncio.create_task(composition.stop())
+        entered_task = asyncio.create_task(reads.entered.wait())
+        try:
+            await asyncio.wait((stop_task, entered_task), return_when=asyncio.FIRST_COMPLETED)
+            assert reads.entered.is_set()
+            expected = ["active", "candidate"]
+            if failed_shutdown != "missing_read_hook":
+                expected.insert(0, "read")
+            assert attempted == expected
+            assert all(not admitted[name] for name in expected if name != failed_shutdown)
+            assert active.stop_calls == candidate.stop_calls == 0
+            assert composition._candidate_runtime is candidate
+        finally:
+            reads.release.set()
+            entered_task.cancel()
+            await asyncio.gather(entered_task, return_exceptions=True)
+            if read_outcome == "timeout":
+                with pytest.raises(TimeoutError, match="controlled physical read drain timeout"):
+                    await stop_task
+            elif failed_shutdown in {"read", "active", "candidate"}:
+                with pytest.raises(RuntimeError) as caught:
+                    await stop_task
+                assert caught.value is shutdown_error
+            else:
+                await stop_task
+        if read_outcome == "timeout":
+            assert active.stop_calls == candidate.stop_calls == 0
+            assert composition._candidate_runtime is candidate
+        else:
+            assert active.stop_calls == candidate.stop_calls == 1
+            assert composition._candidate_runtime is None
+        read_outcome, failed_shutdown = "release", None
+        await composition.stop()
+        assert active.stop_calls == candidate.stop_calls == 1
 
     asyncio.run(scenario())
 
