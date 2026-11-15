@@ -58,7 +58,8 @@ def test_migration_has_one_head_and_only_adds_or_removes_the_identical_index(fac
     config = Config()
     config.set_main_option("script_location", str(Path(database.__file__).with_name("migrations")))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == ["0029_native_fact_lookup"]
+    assert scripts.get_heads() == ["0030_buy_suspension"]
+    assert scripts.get_revision("0030_buy_suspension").down_revision == "0029_native_fact_lookup"
     assert scripts.get_revision("0029_native_fact_lookup").down_revision == "0028_source_coverage"
     before = snapshot(facts.engine)
     assert before["source_coverage_assessment"] and before["source_coverage_review"]

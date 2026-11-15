@@ -1,6 +1,7 @@
 """Closed persistent daily state graphs; quantities and provenance survive validation."""
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -30,14 +31,14 @@ from trade_plan_monitor.domain.daily_scope import require_technical_text
 from trade_plan_monitor.domain.p2_evidence import FrozenPretrade
 from trade_plan_monitor.domain.reviewed_fact_targets import ReviewedFactTarget
 from trade_plan_monitor.domain.risk_scope import RiskHoldingScope, risk_identity
-from trade_plan_monitor.domain.unified_plan_models import condition_leaves
+from trade_plan_monitor.domain.unified_plan_models import BuySuspensionDefinition, condition_leaves
 from trade_plan_monitor.market_data.aggregation import (
     FiveMinuteBar,
     aggregate_five_minute_bar,
     expected_five_minute_ends,
 )
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote, DailySeries
-from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime
+from trade_plan_monitor.market_data.models import AShareSymbol, MinuteBar, ShanghaiDatetime
 from trade_plan_monitor.market_index.canonical import canonical_value
 from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.state.market_exception_models import ExceptionCandidateResource
@@ -47,6 +48,137 @@ from trade_plan_monitor.state.source_coverage_values import (
 )
 
 Digest = str
+
+
+class BuySuspensionPriceBasis(DailyValue):
+    """Private adapter input, not provider verification or registration authority.
+
+    The adapter must obtain actual unadjusted stk_mins semantics and factors.
+    Equality to the actual current anchor, not equality to 1, permits comparison.
+    """
+
+    source_contract: Literal["TUSHARE_STK_MINS_241_END_V1"]
+    trade_date: date
+    anchor_date: date
+    trade_date_factor: Decimal = Field(gt=0, allow_inf_nan=False)
+    anchor_factor: Decimal = Field(gt=0, allow_inf_nan=False)
+    verified_at: ShanghaiDatetime
+
+    @model_validator(mode="after")
+    def dates(self):
+        if not self.trade_date <= self.anchor_date <= self.verified_at.date():
+            raise ValueError("suspension basis contains future or reversed dates")
+        return self
+
+    @property
+    def comparable(self):
+        return self.trade_date_factor == self.anchor_factor
+
+
+class BuySuspensionCoverage(DailyValue):
+    """Compact checked prefix; validity still requires the owning storage adapter."""
+
+    through: ShanghaiDatetime
+    content_hash: str = Field(strict=True, pattern=r"^[0-9a-f]{64}$")
+    anchor_date: date | None
+    anchor_factor: Decimal | None = Field(gt=0, allow_inf_nan=False)
+    generation: Identifier
+
+    @model_validator(mode="after")
+    def actual_anchor_or_empty_calendar_interval(self):
+        if (self.anchor_date is None) != (self.anchor_factor is None):
+            raise ValueError("suspension coverage requires both actual anchor fields or neither")
+        return self
+
+
+class BuySuspensionTrigger(DailyValue):
+    bar_end: ShanghaiDatetime
+    close_fen: Fen
+    source_hash: str = Field(strict=True, pattern=r"^[0-9a-f]{64}$")
+    basis: BuySuspensionPriceBasis
+    observed_at: ShanghaiDatetime
+
+    @model_validator(mode="after")
+    def actual_completed_observation(self):
+        expected_five_minute_ends(self.bar_end)
+        if (self.basis.trade_date != self.bar_end.date() or not self.basis.comparable
+                or max(self.bar_end, self.basis.verified_at) > self.observed_at):
+            raise ValueError("suspension trigger lacks a completed comparable observation")
+        return self
+
+
+class DailyBuySuspensionState(DailyValue):
+    """One immutable original guard owner with resumable coverage and a durable latch."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+
+    version: Literal["buy-suspension-state-v1"] = "buy-suspension-state-v1"
+    symbol: AShareSymbol
+    owner_plan_version_id: Identifier
+    content_hash: str = Field(strict=True, pattern=r"^[0-9a-f]{64}$")
+    source_hash: str = Field(strict=True, pattern=r"^[0-9a-f]{64}$")
+    review_id: Identifier
+    birth_activation_revision: int = Field(strict=True, gt=0, le=2**53 - 1)
+    definition: BuySuspensionDefinition
+    evaluated_at: ShanghaiDatetime
+    target: ShanghaiDatetime
+    coverage: BuySuspensionCoverage | None = None
+    trigger: BuySuspensionTrigger | None = None
+    blocker: Literal[
+        "HISTORY_PENDING", "START_NOT_REACHED", "MINUTE_GAP", "CALENDAR_UNVERIFIED",
+        "PRICE_BASIS_UNVERIFIED", "SOURCE_UNVERIFIED", "PROOF_INVALIDATED",
+        "GENERATION_CHANGED", "BATCH_BUDGET_EXHAUSTED",
+    ] | None = "HISTORY_PENDING"
+
+    @model_validator(mode="after")
+    def bounded_evidence(self):
+        if (self.target > self.evaluated_at or self.target.minute % 5
+                or self.target.second or self.target.microsecond):
+            raise ValueError("suspension target must be an observed five-minute boundary")
+        coverage = self.coverage
+        if coverage is not None and self.blocker in {"PROOF_INVALIDATED", "GENERATION_CHANGED"}:
+            raise ValueError("invalidated suspension proof cannot contribute checked coverage")
+        if coverage is not None and (
+                not self.definition.effective_from <= coverage.through <= self.target
+                or coverage.through.minute % 5 or coverage.through.second
+                or coverage.through.microsecond
+                or coverage.anchor_date is not None
+                and coverage.anchor_date > self.evaluated_at.date()):
+            raise ValueError("suspension coverage exceeds its actual interval")
+        trigger = self.trigger
+        if (trigger is None and coverage is not None and coverage.through == self.target
+                and self.blocker is not None):
+            raise ValueError("unverified suspension cannot claim complete effective coverage")
+        if trigger is not None and (
+                trigger.bar_end - timedelta(minutes=5) < self.definition.effective_from
+                or trigger.bar_end > self.target or trigger.observed_at > self.evaluated_at
+                or trigger.close_fen >= self.definition.condition.price_fen):
+            raise ValueError("suspension trigger does not satisfy its original guard")
+        if (trigger is None and self.blocker is None
+                and (coverage is None or coverage.through != self.target)):
+            raise ValueError("clear suspension requires exact continuous target coverage")
+        return self
+
+    @property
+    def outcome(self):
+        if self.trigger is not None:
+            return "LATCHED"
+        return "UNVERIFIED" if self.blocker is not None else "CLEAR_THROUGH_TARGET"
+
+    @property
+    def unresolved_interval(self):
+        start = self.definition.effective_from if self.coverage is None else self.coverage.through
+        if start == self.target and self.coverage is not None:
+            return None, None
+        return start, self.target if self.target >= start else None
+
+    @property
+    def state_hash(self):
+        return daily_hash(self.version, self.model_dump(mode="json"))
+
+    @property
+    def definition_hash(self):
+        return daily_hash("buy-suspension-definition-v1", self.definition.model_dump(mode="json"))
 
 
 class ReviewedFactObservation(DailyValue):
@@ -451,6 +583,7 @@ class DailyHumanSupplementState(DailyValue):
 
 def validate_daily_payload(kind, value):
     models = {
+        "BUY_SUSPENSION": DailyBuySuspensionState,
         "FACT": DailyFactState,
         "SIGNAL": DailySignalState,
         "RISK": DailyRiskState,

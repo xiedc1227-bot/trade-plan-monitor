@@ -96,7 +96,8 @@ class DailyRecord(Base):
         CheckConstraint(
             "kind IN "
             "('SIGNAL','RISK','FACT','SIMULATION','REPORT','POSITION','EVALUATION','REVIEW','DRAFT','EXT"
-            "RACTION','REASSESSMENT','EXCEPTION_CANDIDATE','EXCEPTION_EVENT','EXCEPTION_PREVIEW')",
+            "RACTION','REASSESSMENT','EXCEPTION_CANDIDATE','EXCEPTION_EVENT','EXCEPTION_PREVIEW',"
+            "'BUY_SUSPENSION')",
             name="ck_daily_record_kind",
         ),
         Index("ix_daily_record_symbol_kind", "symbol", "kind"),

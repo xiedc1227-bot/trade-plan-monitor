@@ -20,6 +20,12 @@ def daily_hash(domain: str, value) -> str:
     return sha256(domain.encode() + b"\x00" + canonical(value).encode()).hexdigest()
 
 
+def buy_suspension_record_id(symbol, owner_plan_version_id):
+    """Original server-resolved owner only; an ID conveys no activation authority."""
+    return "buy-suspension-" + daily_hash(
+        "buy-suspension-owner-v1", [symbol, owner_plan_version_id])
+
+
 class DailyRepository:
     def __init__(self, session, *, clock, id_factory):
         self.session = session
@@ -37,6 +43,22 @@ class DailyRepository:
     def get(self, identity):
         row = self.session.get(DailyRecord, identity)
         return None if row is None else self._value(row)
+
+    def get_buy_suspension(self, *, symbol, owner_plan_version_id):
+        """Read actual private state/revision; never resolve or authorize an owner here."""
+        identity = buy_suspension_record_id(symbol, owner_plan_version_id)
+        row = self.session.scalar(select(DailyRecord).where(DailyRecord.id == identity)
+                                  .execution_options(populate_existing=True))
+        if row is None:
+            return None
+        if (row.kind, row.symbol, row.lineage) != (
+                "BUY_SUSPENSION", symbol, owner_plan_version_id):
+            raise ValueError("suspension lookup crosses its original owner")
+        value = self._value(row)
+        from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState
+
+        state = DailyBuySuspensionState.model_validate(value["payload"])
+        return value | {"state": state, "state_hash": state.state_hash}
 
     def list(self, *, symbol, kind, lineage=None, limit=500):
         """Read an internal history in bounded SQL pages without truncating evidence."""
@@ -88,7 +110,15 @@ class DailyRepository:
         from trade_plan_monitor.state.daily_state_models import validate_daily_payload
 
         validate_daily_payload(kind, payload)
-        row = self.session.get(DailyRecord, identity)
+        row = (self.session.scalar(select(DailyRecord).where(DailyRecord.id == identity)
+                                   .execution_options(populate_existing=True))
+               if kind == "BUY_SUSPENSION" else self.session.get(DailyRecord, identity))
+        if kind == "BUY_SUSPENSION":
+            self._validate_buy_suspension_owner(identity, symbol, lineage, payload)
+            if type(expected_revision) is not int or expected_revision < 0:
+                raise ValueError("suspension requires an exact expected revision")
+            if row is not None:
+                self._validate_buy_suspension_update(row.payload_json, payload)
         actual = 0 if row is None else row.revision
         if row is not None and kind in {"EXCEPTION_EVENT", "EXCEPTION_PREVIEW"}:
             raise ValueError("exception evidence is append-only")
@@ -139,6 +169,8 @@ class DailyRepository:
         from trade_plan_monitor.state.daily_state_models import validate_daily_payload
 
         validate_daily_payload(row.kind, payload)
+        if row.kind == "BUY_SUSPENSION":
+            self._validate_buy_suspension_owner(row.id, row.symbol, row.lineage, payload)
         created, updated = (
             datetime.fromisoformat(row.created_at),
             datetime.fromisoformat(row.updated_at),
@@ -159,3 +191,24 @@ class DailyRepository:
             "updated_at": row.updated_at,
             "payload": payload,
         }
+
+    @staticmethod
+    def _validate_buy_suspension_owner(identity, symbol, lineage, payload):
+        if (payload["symbol"] != symbol or payload["owner_plan_version_id"] != lineage
+                or identity != buy_suspension_record_id(symbol, lineage)):
+            raise ValueError("suspension record differs from its actual original owner")
+
+    @staticmethod
+    def _validate_buy_suspension_update(before_json, payload):
+        from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState
+
+        before = DailyBuySuspensionState.model_validate_json(before_json)
+        after = DailyBuySuspensionState.model_validate(payload)
+        for field in ("symbol", "owner_plan_version_id", "content_hash", "source_hash", "review_id",
+                      "birth_activation_revision", "definition"):
+            if getattr(before, field) != getattr(after, field):
+                raise ValueError("suspension original owner and definition cannot change")
+        if before.trigger is not None and before.trigger != after.trigger:
+            raise ValueError("suspension latch evidence cannot be cleared or replaced")
+        if before.evaluated_at > after.evaluated_at or before.target > after.target:
+            raise ValueError("suspension observation cannot move backwards")
