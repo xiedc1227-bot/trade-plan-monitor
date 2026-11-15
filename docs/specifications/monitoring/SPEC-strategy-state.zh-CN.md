@@ -150,17 +150,19 @@ class PositionLot(BaseModel):
 
 ## 计划 BUY 禁买状态（PBS-T05）
 
-`DailyBuySuspensionState` 使用版本 `buy-suspension-state-v1`，是 `kind="BUY_SUSPENSION"` 的私有 `DailyRecord` 载荷。增量迁移 `0030_buy_suspension` 接续 `0029_native_fact_lookup`，仅扩展 `ck_daily_record_kind`。其事务性表复制保留全部旧载荷字节及每个既有索引定义，包括表达式／部分索引。存在任何 BUY 禁买记录时，降级在 DDL 前拒绝；否则空表或仅含旧 kind 的表可以安全恢复前一约束。PBS-T05 在全新和前一版本的隔离 SQLite 数据库中验证真实 `upgrade_database()` 路径。不修改历史迁移，也不打开或升级用户数据库。Schema10 启用仍保持关闭，等待后续运行／接替集成。
+`DailyBuySuspensionState` 使用版本 `buy-suspension-state-v1`，是 `kind="BUY_SUSPENSION"` 的私有 `DailyRecord` 载荷。增量迁移 `0030_buy_suspension` 接续 `0029_native_fact_lookup`，仅扩展 `ck_daily_record_kind`。其事务性表复制保留全部旧载荷字节及每个既有索引定义，包括表达式／部分索引。存在任何 BUY 禁买记录时，降级在 DDL 前拒绝；否则空表或仅含旧 kind 的表可以安全恢复前一约束。PBS-T05 在全新和前一版本的隔离 SQLite 数据库中验证真实 `upgrade_database()` 路径。不修改历史迁移，也不打开或升级用户数据库。Schema10 启用仍保持关闭，等待T08已审核接替／启用集成。
 
 记录保留原始 `owner_plan_version_id`、`symbol`、`content_hash`、`source_hash`、`review_id`、`birth_activation_revision` 和完整 `BuySuspensionDefinition`。确定性记录 ID 与 `lineage` 绑定原始 owner；重新启用或普通续版不能通过创建替代 owner 重置状态。`DailyRepository.get_buy_suspension(symbol=..., owner_plan_version_id=...)` 无写入地读取真实私有记录、类型化 `state`、外层 `revision` 与计算所得 `state_hash`。此查询不解析前序关系，也不授予启用权限。T08 负责服务端前序解析；缺少状态时必须阻断凭据，不能用虚构成功快照替代。
 
-`transition_buy_suspension` 是时序工程回放使用、并供后续运行集成复用的唯一纯转移函数。每个 `BuySuspensionBatch` 最多跨一个日历日期，可以结束于次日零点，并且最多包含 240 个真实分钟身份。确切的交易所日历证据允许闭市日和空区间推进。只有起始不早于 `effective_from`、结束不晚于 `target`、且在 `evaluated_at` 前可取得的完整五分钟 K 线才能触发。收盘必须严格低于 `price_fen`；仅最低价、未完整 K 线或未来数据均不能替代。即使更早存在缺口，有效的已观察跌破也可以锁存，但不能声称它是历史首次跌破。
+`transition_buy_suspension` 是时序工程回放及PBS-T06生产采集路径复用的唯一纯转移函数。每个 `BuySuspensionBatch` 最多跨一个日历日期，可以结束于次日零点，并且最多包含 240 个真实分钟身份。确切的交易所日历证据允许闭市日和空区间推进。只有起始不早于 `effective_from`、结束不晚于 `target`、且在 `evaluated_at` 前可取得的完整五分钟 K 线才能触发。收盘必须严格低于 `price_fen`；仅最低价、未完整 K 线或未来数据均不能替代。即使更早存在缺口，有效的已观察跌破也可以锁存，但不能声称它是历史首次跌破。
 
 `BuySuspensionPriceBasis` 是私有适配输入，不是提供方真值证明。适配方必须确认 `TUSHARE_STK_MINS_241_END_V1` 下真实未复权 `stk_mins` 来源语义，并取得实际交易日因子和实际当前锚点因子。可比因子必须相等，但不要求等于 1。仅有字符串基准 ID 不足以证明。实际锚点日期推进但实际因子不变时仍可比；因子改变则撤销旧前缀。不静默重算阈值。日历证明的空区间无需虚构价格因子。
 
 状态只保留紧凑的覆盖哈希链、已核查进度、当前锚点和进程 generation，不保存全部历史 K 线。`PROOF_INVALIDATED` 和 `GENERATION_CHANGED` 清除覆盖，并从原明确起点暴露未核实区间。后续批次缺失时可以保留真实已核实的部分前缀。`BATCH_BUDGET_EXHAUSTED` 暂停但不丢弃该前缀，让有限、稳定且可取得的区间通过后续有界调用完成。未核实状态不能同时声称完整有效覆盖。一旦记录触发证据，即使回升、更正或重启，也不能在原记录中清除或替换。
 
-保存参与方必须在同一事务内，先取得 `DailyRepository.lock_symbol`，再读取、比较和保存，并提供确切的外层 `expected_revision`；复用审计和修订冲突行为。顺序修订测试不代表并发验收。T06 仍负责真实已提交行／日历／基准绑定、实际数据写入路径上的事务性失效、重启 generation 处理与有界获取。T07 仍负责实际 BUY 和排队通知边界的当前目标／修订屏障。T08 负责普通继承与确切已审核接替启用。仅存储哈希、回放结果或私有读取方法均不能授予 BUY 权限。现有 SIGNAL/RISK 载荷语义、Schema5–9、v12 和公共冻结契约保持不变。
+纯reducer及普通陈旧请求不能下调 `target` 或 `evaluated_at`。只有 `DailyRepository.retarget_buy_suspension_calendar` 可在新鲜已提交SQL证明原目标日期闭市、替代目标恰为当前日历证明的前一交易日15:00时，重设已撤销证明且无锁存的目标。它要求覆盖缺少且原因为 `PROOF_INVALIDATED` 或 `CALENDAR_UNVERIFIED`，保留原始起点／所有者，不生成证明。保存重设时再次核对同一SQL条件及确切仓储修订，观察时间不能倒退。生产随后从原起点进行有限有界重检。仅分钟更正、任意更早目标、陈旧修订或已有锁存不能使用该重设。
+
+保存参与方必须在同一事务内，先取得 `DailyRepository.lock_symbol`，再读取、比较和保存，并提供确切的外层 `expected_revision`；复用审计和修订冲突行为。顺序修订测试不代表并发验收。T06现已绑定真实已提交行／日历／基准，接入实际数据写入路径上的事务性失效，并处理重启generation与有界获取。T07 仍负责实际 BUY 和排队通知边界的当前目标／修订屏障。T08 负责普通继承与确切已审核接替启用。仅存储哈希、回放结果或私有读取方法均不能授予 BUY 权限。现有 SIGNAL/RISK 载荷语义、Schema5–9、v12 和公共冻结契约保持不变。
 
 隔离定向验证：
 
