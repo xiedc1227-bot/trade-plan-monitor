@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R141 (`50cee1e`) accepts the two-file Schema5 incomplete-draft fix with190 unique passes, unchanged original54 assertions and complete-owner scope. Original browser503 resolves; Schema6–9 incomplete/ambiguous-owner limits remain. Next five complex browser fixtures; R140 FAILED history and F083/C05 remain.
+
 R140 records the complete frozen regression on459a8a7:14992 PASS/7 FAIL/1 existing platform skip across15000 execution entries. Capacity8 and all static gates pass; F083 and six browser failures remain. Next bounded browser diagnosis/repair; no final acceptance.
 
 R139 (`ea1570f`) accepts the two-file startup/identity test repair:16 unique passes,95 original assertions retained and one exact two-symbol transfer. Next all final regression gates on clean committed source; F083/C05 remains held, with no skip or replacement.
