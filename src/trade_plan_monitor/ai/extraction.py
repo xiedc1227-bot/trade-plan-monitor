@@ -80,7 +80,8 @@ async def extract_plan(
         config=config,
         provider=provider,
         prompt=prompt,
-        output_model=BuySuspensionPlanExtractionOutput if suspension else CurrentPlanExtractionOutput,
+        output_model=(BuySuspensionPlanExtractionOutput
+                      if suspension else CurrentPlanExtractionOutput),
     )
     if isinstance(result, PlanExtractionResult):
         return result

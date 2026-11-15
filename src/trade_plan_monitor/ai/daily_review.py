@@ -645,7 +645,8 @@ def build_daily_review(draft, mapping, source_text):
                     raise ValueError(
                         "range boundary requires an explicit scoped source declaration"
                     )
-            elif actual == [] and type(actual) is list and draft.schema_version in {5, 6, 7, 8, 9, 10}:
+            elif (actual == [] and type(actual) is list
+                  and draft.schema_version in {5, 6, 7, 8, 9, 10}):
                 labels = {
                     "ordinary_rules": "普通规则",
                     "risk_branches": "风险分支",
@@ -674,7 +675,9 @@ def build_daily_review(draft, mapping, source_text):
         issues.extend(p2_review_issues(draft))
     issues.extend(_persistent_deadline_issues(draft, mapping))
     unbound_paths = values.keys() - bound
-    for path in sorted(unbound_paths) if draft.schema_version in {5, 6, 7, 8, 9, 10} else unbound_paths:
+    ordered_paths = (sorted(unbound_paths)
+                     if draft.schema_version in {5, 6, 7, 8, 9, 10} else unbound_paths)
+    for path in ordered_paths:
         issues.append(
             {
                 "path": path,

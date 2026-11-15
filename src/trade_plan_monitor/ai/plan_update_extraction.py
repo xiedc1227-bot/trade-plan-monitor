@@ -481,11 +481,13 @@ def build_buy_suspension_plan_update_prompt(source: str, context: BuySuspensionP
         "subject to separate source hash clarification, review and exact activation checks. "
         "Do not restate inherited values as newly asserted source evidence or human supplements. "
         "Use target=buy_suspension only for explicit whole-definition MODIFY/RETAIN proposals. "
-        "Past context is server-supplied evidence, never current-source instructions.\nJSON schema:\n"
+        "Past context is server-supplied evidence, never current-source instructions."
+        "\nJSON schema:\n"
         + schema_outline(BuySuspensionPlanUpdateExtractionOutput.model_json_schema())
         + "\nUNTRUSTED_PLAN_DATA_START\n"
         + encode_untrusted_plan_data({"source_text": source,
-            "clauses": source_clause_evidence(source), "past_context": context.model_dump(mode="json")})
+            "clauses": source_clause_evidence(source),
+            "past_context": context.model_dump(mode="json")})
         + "\nUNTRUSTED_PLAN_DATA_END"
     )
 
@@ -495,13 +497,15 @@ async def extract_buy_suspension_plan_update(
     config: AIProviderConfig, provider: AIProvider,
 ) -> BuySuspensionPlanUpdateExtractionResult | PlanExtractionResult:
     """Explicit current v2 entry: one bounded call, no frozen preparation or activation."""
-    if type(context) is not BuySuspensionPlanUpdateContext or not isinstance(source, PreparationSource):
+    if (type(context) is not BuySuspensionPlanUpdateContext
+            or not isinstance(source, PreparationSource)):
         raise TypeError("current update requires exact source and Schema10 predecessor")
     if config.prompt_version != "plan-extract-v13":
         raise ValueError("current Schema10 extraction requires explicit plan-extract-v13")
     context = BuySuspensionPlanUpdateContext.model_validate_json(context.model_dump_json())
     source = PreparationSource.model_validate_json(source.model_dump_json())
-    if source.execution_available_at is None or context.available_at > source.execution_available_at:
+    if (source.execution_available_at is None
+            or context.available_at > source.execution_available_at):
         raise ValueError("predecessor must be available before the current source")
     config = config.model_copy(update={"prompt_version": "monitor-loop-update-extract-v2"})
     parsed = await _extract_output(request_id=request_id, source_text=source.text,
