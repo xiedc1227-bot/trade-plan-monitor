@@ -103,7 +103,17 @@ Tushare/QuickSync 历史映射为 `stk_mins`、`trade_cal`、`stk_limit` 和不�
 
 2026-08-25 经授权观察到 `600000.SH` 在 2026-08-24 返回 241 条 `stk_mins` 行，标签覆盖 09:30 至 15:00。`TushareHistoricalMinuteProvider` 默认使用 `UNVERIFIED`，并在调用 SDK 前失败。显式实现的配置 `TUSHARE_STK_MINS_241_END_V1` 把 09:30 来源行保留为不参与策略的 `opening_special`，要求其他每个来源标签都是精确规范分钟结束时间，并返回 240 条可执行 K 线。任何实现都不能静默删除、平移或全部接受这 241 行。
 
-历史联网获取只能发生在经明确授权的 `DATA_SYNC` 中，必须位于数据库事务外，每个持久化批次最多校验 1,000 行，并且不输出原始响应或凭据材料。离线 `DATASET_VERIFY` 和 `BACKTEST_RUN` 的供应商调用次数必须为零。
+历史回测联网获取仍仅限经明确授权的 `DATA_SYNC`。下述单独获批的PBS保护条件路径属于已获准运行的监控所有者；工程验证不授权启动该所有者访问用户数据库。采集必须位于数据库事务外，每个持久化批次最多校验1,000行，并且不输出原始响应或凭据材料。离线 `DATASET_VERIFY` 和 `BACKTEST_RUN` 的供应商调用次数必须为零。
+
+### PBS-T06有界保护条件采集（2026-11-15）
+
+`TushareHistoricalMinuteProvider.buy_suspension_minutes(symbol, through)` 返回私有 `SuspensionMinuteWindow`，不是部分 `HistoricalMinuteBatch`。它请求单个日期截至精确完整五分钟目标的范围，校验确切规范前缀及不参与策略的09:30行。缺失、重复、归属错误、乱序或未来身份均拒绝，不允许填补缺口。每个窗口最多240个可用分钟身份。原有241条来源／240根分钟的整日合同及默认 `UNVERIFIED` profile不变。窗口保留来源内容哈希及实际采集时钟接收时间；守护分钟存储采用该接收时间，不能把回溯的 `bar_end + 12 seconds` 当作实际可用时间。
+
+原始价格映射刻意限定为：已安装 `tushare==1.4.29`、已检查的 `pro/data_pro.py` SHA256 `01bdb7938df430a8b05bb28f722074dfce9fe918bc4e70f111e444e17e44b022`、配置的SDK默认服务HTTPS路由 `https://api.waditu.com/dataapi`，以及未被替换的工厂所有默认／直连query路由。SDK明确的 `pro_bar(adj=None, asset="E", freq="1min")` 分支调用 `stk_mins` 且不变换OHLC。守护保留严格直接适配器，不调用SDK内部重试、异常打印、因子补齐或价格舍入。兼容端点、SDK变化或路由替换不能继承该映射，保护条件保持未核实。这是本地口径约束，不表示本任务已验证远端服务。
+
+实际同源 `adj_factor` 响应必须证明每个已检查来源日期的因子等于实际当前报价锚点；相等的非1因子有效。开市日锚点采用评估日期获取，与既有日线QFQ准入一致；若生产提供 `DailySeries`，还须匹配根据实际因子生成的规范化身份。休市日使用日历证明的前一交易日报价锚点。因子缺失或不相等则阻断保护条件，绝不悄悄重算 `2420`。仅提供方名称、任意 `basis_id`、时间戳profile或调用方填写的核实布尔值都不能证明可比性。
+
+[官方历史分钟参数](https://tushare.pro/document/2?doc_id=370)未保证盘中发布时间或延迟。[SDK复权语义](https://tushare.pro/document/2?doc_id=109)和[实际因子字段](https://tushare.pro/document/2?doc_id=28)分别提供口径依据的一部分。可取得完整数据时能够推进有限守护区间；数据不可得或迟到时阻断BUY，直到数据到达。不承诺盘中及时返回或15:00即可取得，该适配器也不认证 `rt_min`／`rt_min_daily` 的原始价格口径。实际提供方可用性及部署就绪仍未验证。
 
 冻结历史 artifact 在落盘后仍属于不可信输入：每次数据集读取都必须在解析前重新计算规范 artifact 内容哈希，并与所引用的 `artifact_hash` 比较。不一致属于损坏/篡改并阻断回放；仅有语法合法的哈希字符串不够。
 
