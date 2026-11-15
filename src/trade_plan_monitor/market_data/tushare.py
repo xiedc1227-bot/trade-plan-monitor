@@ -162,6 +162,7 @@ class TushareMarketDataProvider:
         "_now",
         "_probe_symbol",
         "_source_time_label",
+        "_adjustment_observer",
     )
 
     def __init__(
@@ -173,6 +174,7 @@ class TushareMarketDataProvider:
         source_time_label: SourceTimeLabel = SourceTimeLabel.UNVERIFIED,
         grace: timedelta = DEFAULT_DATA_GRACE,
         probe_symbol: str | None = None,
+        adjustment_observer: Callable | None = None,
     ) -> None:
         if not callable(now):
             raise TypeError("now must be callable")
@@ -186,6 +188,9 @@ class TushareMarketDataProvider:
             raise ValueError("grace cannot be negative")
 
         self._client = client
+        if adjustment_observer is not None and not callable(adjustment_observer):
+            raise TypeError("adjustment observer must be callable")
+        self._adjustment_observer = adjustment_observer
         self._now = now
         self._is_open_on = is_open_on
         self._source_time_label = source_time_label
@@ -814,7 +819,10 @@ class TushareMarketDataProvider:
                 raise TushareProviderError(
                     TushareErrorCode.INVALID_RESPONSE, "adj_factor"
                 ) from None
-        return factors, self._received_at()
+        received = self._received_at()
+        if self._adjustment_observer is not None:
+            self._adjustment_observer(symbol, start, end, dict(factors), received)
+        return factors, received
 
     def historical_daily_bars(
         self,

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from trade_plan_monitor.ai.review import load_explicit_plan_draft_json
 from trade_plan_monitor.config import TushareConfiguration
+from trade_plan_monitor.decision.buy_suspension import BuySuspensionBatch, transition_buy_suspension
 from trade_plan_monitor.decision.unified_conditions import requires_daily, requires_minutes
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyEnabledRule,
@@ -54,6 +55,7 @@ from trade_plan_monitor.market_data.daily_data import (
     DailySeries,
     admit_qfq_daily,
 )
+from trade_plan_monitor.market_data.historical_provider import HistoricalMinuteProfile
 from trade_plan_monitor.market_data.models import MinuteBar, TradingDay
 from trade_plan_monitor.market_data.sdk_call_boundary import (
     PermissionEndpointResolver,
@@ -67,8 +69,13 @@ from trade_plan_monitor.market_data.sessions import (
 from trade_plan_monitor.market_data.tushare import (
     MinutePermissionEvidence,
     TushareMarketDataProvider,
+    TushareProviderError,
 )
-from trade_plan_monitor.market_data.tushare_client import create_tushare_client
+from trade_plan_monitor.market_data.tushare_client import (
+    buy_suspension_source_identity,
+    create_tushare_client,
+)
+from trade_plan_monitor.market_data.tushare_historical import TushareHistoricalMinuteProvider
 from trade_plan_monitor.market_index.identity import MarketIndexCode
 from trade_plan_monitor.market_index.models import MarketIndexHealth
 from trade_plan_monitor.market_index.snapshots import MarketIndexSnapshotCoordinator
@@ -174,7 +181,11 @@ from trade_plan_monitor.state.models import (
     DailyBar as StoredDailyBar,
 )
 from trade_plan_monitor.state.recovery_read_session import require_owned_recovery_session
-from trade_plan_monitor.state.repositories import MarketHistoryRepository, MarketReferenceRepository
+from trade_plan_monitor.state.repositories import (
+    MarketDataIdentityConflictError,
+    MarketHistoryRepository,
+    MarketReferenceRepository,
+)
 
 _REFERENCE_DAYS = 366
 _DAILY_HISTORY_LIMIT = 500
@@ -646,7 +657,12 @@ class ProductionMonitorPipeline:
             now=clock.now,
             is_open_on=self.is_open_on,
             source_time_label=stock_label,
+            adjustment_observer=self._accept_suspension_factors,
         )
+        self.suspension_history = TushareHistoricalMinuteProvider(
+            self.provider._client, now=clock.now,
+            profile=HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1,
+            reference_provider=self.provider)
         index_evidence = (
             None
             if semantic_bindings is not None
@@ -4443,6 +4459,302 @@ class ProductionMonitorPipeline:
             priority=RequestPriority.MARKET_DEADLINE,
         )
 
+    def suspension_generation(self):
+        """A process/source fence, never a fabricated provider content revision."""
+        return sha256(repr((str(self._runtime_generation), self._recovery_configuration_revision,
+            self.suspension_history.profile.value, buy_suspension_source_identity(
+                getattr(self.provider._client, "_client", None), self._endpoint),
+            id(self.suspension_history), id(self.suspension_history._client))).encode()).hexdigest()
+
+    def buy_suspension_current(self, work, plan, *, expected_revision=None):
+        """Guard-only predicate for T07; callers retain the symbol writer transaction.
+
+        This checks actual SQL/current source/clock, never a cached readiness
+        projection. It grants no trade permission or other prerequisite.
+        """
+        from trade_plan_monitor.runtime.recovery import buy_suspension_target
+
+        if getattr(plan, "buy_suspension", None) is None:
+            return True
+        if (not self._decision_commit_current() or buy_suspension_source_identity(
+                getattr(self.provider._client, "_client", None), self._endpoint) is None):
+            return False
+        active, binding = self.daily_evaluations._binding(work, plan)
+        try:
+            row = work.daily.get_buy_suspension(symbol=plan.symbol,
+                owner_plan_version_id=active.plan_version_id)
+        except ValueError:
+            return False  # Corrupt/future guard evidence cannot authorize BUY.
+        if row is None or expected_revision is not None and row["revision"] != expected_revision:
+            return False
+        state = row["state"]
+        now = self._clock.now()
+        days = work.references.list_trading_days(plan.market, now.date(), now.date())
+        if days and (not days[0].is_open or now.time() < time(9, 30)):
+            days += work.references.list_trading_days(plan.market,
+                days[0].previous_trade_date, days[0].previous_trade_date)
+        target = buy_suspension_target(now, days)
+        return (state.outcome == "CLEAR_THROUGH_TARGET" and state.target == target
+            and state.evaluated_at <= now
+            and state.definition == plan.buy_suspension
+            and (state.content_hash, state.source_hash, state.review_id)
+                == (binding["content_hash"], binding["source_hash"], binding["review_id"])
+            and state.coverage.generation == self.suspension_generation())
+
+    def _accept_suspension_factors(self, symbol, start, end, factors, received):
+        """Actual factor normalization enlists guard invalidation before publishing its result."""
+        if not self._decision_commit_current():
+            raise RecoveryAdmissionChangedError("factor source changed")
+        exchange = {"SH": "SSE", "SZ": "SZSE", "BJ": "BSE"}[symbol[-2:]]
+        with self._work() as work:
+            guards = work.daily.list(symbol=symbol, kind="BUY_SUSPENSION")
+            if not guards:
+                return
+            work.daily.lock_symbol(symbol)
+            guards = work.daily.list(symbol=symbol, kind="BUY_SUSPENSION")
+            today = work.references.list_trading_days(exchange, received.date(), received.date())
+            anchor_day = (None if not today else received.date() if today[0].is_open
+                          else today[0].previous_trade_date)
+            for record in guards:
+                from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState
+
+                state = DailyBuySuspensionState.model_validate(record["payload"])
+                if state.trigger is not None or state.coverage is None:
+                    continue
+                if (anchor_day is not None and start <= anchor_day <= end
+                        and factors.get(anchor_day) != state.coverage.anchor_factor):
+                    work.daily.invalidate_buy_suspension_market(symbol=symbol,
+                        start=state.definition.effective_from, end=state.target,
+                        factor=factors.get(anchor_day))
+                    continue
+                # A compact comparable prefix proves all checked session factors
+                # equal its anchor. Missing requested checked factors also revoke.
+                first = max(start, state.definition.effective_from.date())
+                last = min(end, state.coverage.through.date())
+                days = (() if first > last else
+                    work.references.list_trading_days(exchange, first, last))
+                for day in days:
+                    if day.is_open and factors.get(day.cal_date) != state.coverage.anchor_factor:
+                        at = datetime.combine(day.cal_date, time(), received.tzinfo)
+                        work.daily.invalidate_buy_suspension_market(symbol=symbol,
+                            start=at, end=at + timedelta(days=1), factor=factors.get(day.cal_date))
+                        break
+            if not self._decision_commit_current():
+                raise RecoveryAdmissionChangedError("factor source changed before commit")
+            work.commit()
+
+    async def _suspension_calendar(self, exchange, day, current):
+        rows = await self.recovery.buy_suspension_request(symbol=exchange,
+            operation=TushareOperation.TRADING_CALENDAR,
+            call=lambda: self.suspension_history.trading_calendar(exchange, day, day),
+            current=current, work_key=f"buy-suspension-calendar:{exchange}:{day}")
+        if (rows is None or len(rows) != 1
+                or (rows[0].exchange, rows[0].cal_date) != (exchange, day)):
+            raise ValueError("suspension calendar is incomplete")
+        with self._work() as work:
+            if not current():
+                raise RecoveryAdmissionChangedError("suspension source changed")
+            work.references.upsert_trading_days(rows)
+            work.commit()
+        return rows[0]
+
+    async def advance_buy_suspension(self, plan, *, quote_basis=None):
+        """One owned date per call; missing/late remote history blocks but remains resumable.
+
+        Public activation/inherited-owner resolution remains T08. Here the exact
+        current reviewed version is the original owner; no client-selected owner.
+        """
+        from trade_plan_monitor.runtime.recovery import buy_suspension_target
+        from trade_plan_monitor.state.daily_repository import buy_suspension_record_id
+        from trade_plan_monitor.state.daily_state_models import (
+            BuySuspensionPriceBasis,
+            DailyBuySuspensionState,
+        )
+
+        if getattr(plan, "buy_suspension", None) is None:
+            return None
+        generation = self.suspension_generation()
+        provider = self.provider
+        historical = self.suspension_history
+        captured_date = self._clock.now().date()
+        source_verified = buy_suspension_source_identity(
+            getattr(provider._client, "_client", None), self._endpoint) is not None
+
+        def current():
+            return (self._decision_commit_current() and self.provider is provider
+                and self.suspension_history is historical
+                and historical._client is provider._client
+                and self.suspension_generation() == generation
+                and self._clock.now().date() == captured_date)
+
+        if not current():
+            raise RecoveryAdmissionChangedError("suspension source is not current")
+        exchange = plan.market
+        calendars = []
+        try:
+            if not source_verified:
+                raise ValueError("suspension source semantics are unverified")
+            today = await self._suspension_calendar(exchange, captured_date, current)
+            calendars.append(today)
+            if not today.is_open or self._clock.now().time() < time(9, 30):
+                calendars.append(await self._suspension_calendar(
+                    exchange, today.previous_trade_date, current))
+        except (RequestControlError, TushareProviderError, ValueError):
+            today = None
+        now = self._clock.now()
+        target = buy_suspension_target(now, calendars)
+        with self._work() as work:
+            work.daily.lock_symbol(plan.symbol)
+            active, binding = self.daily_evaluations._binding(work, plan)
+            identity = buy_suspension_record_id(plan.symbol, active.plan_version_id)
+            row = work.daily.get_buy_suspension(symbol=plan.symbol,
+                owner_plan_version_id=active.plan_version_id)
+            if row is not None and row["state"].trigger is not None:
+                return row  # Do not heartbeat immutable breach/replacement review identities.
+            if row is None and target is None:
+                # Absence is unverified. Do not invent a wall-clock target that
+                # could permanently outrun the eventual completed-session target.
+                return None
+            state = (row["state"] if row else DailyBuySuspensionState(
+                symbol=plan.symbol, owner_plan_version_id=active.plan_version_id,
+                content_hash=binding["content_hash"], source_hash=binding["source_hash"],
+                review_id=binding["review_id"], birth_activation_revision=active.revision,
+                definition=plan.buy_suspension, target=target, evaluated_at=now))
+            if (state.definition != plan.buy_suspension
+                    or state.content_hash != binding["content_hash"]
+                    or state.review_id != binding["review_id"]):
+                raise RecoveryAdmissionChangedError("suspension original owner changed")
+            retargeted = (None if target is None or target >= state.target else
+                work.daily.retarget_buy_suspension_calendar(
+                    state, target=target, evaluated_at=now))
+            if retargeted is not None:
+                changed = retargeted
+            elif target is None or target < state.target:
+                changed = state.model_copy(update={"coverage": None,
+                    "blocker": "CALENDAR_UNVERIFIED" if source_verified else "SOURCE_UNVERIFIED",
+                    "evaluated_at": now})
+            else:
+                changed = transition_buy_suspension(state, target=target, evaluated_at=now,
+                    generation=generation)
+            if row is None or changed.model_dump(exclude={"evaluated_at"}) != state.model_dump(
+                    exclude={"evaluated_at"}):
+                work.daily.save(identity, kind="BUY_SUSPENSION", symbol=plan.symbol,
+                    lineage=active.plan_version_id, payload=changed.model_dump(mode="json"),
+                    expected_revision=0 if row is None else row["revision"])
+            if not current():
+                raise RecoveryAdmissionChangedError("suspension source changed before commit")
+            work.commit()
+            row = work.daily.get_buy_suspension(symbol=plan.symbol,
+                owner_plan_version_id=active.plan_version_id)
+        state = row["state"]
+        if target is None or target < state.target or target < state.definition.effective_from:
+            return row
+        start = (state.definition.effective_from if state.coverage is None
+                 else state.coverage.through)
+        # Revalidate a completed prefix's current anchor; no historical rescan is
+        # needed while accepted writes and the process/source generation remain fenced.
+        through = min(target, datetime.combine(
+            start.date() + timedelta(days=1), time(), now.tzinfo))
+        window, basis, calendar = None, None, None
+        try:
+            calendar = (today if start.date() == captured_date else
+                await self._suspension_calendar(exchange, start.date(), current))
+            expected = tuple(end for end in expected_minute_ends(start.date(),
+                is_open=calendar.is_open) if start < five_minute_bucket_end(end) <= through)
+            anchor_day = captured_date if today.is_open else today.previous_trade_date
+            if expected or state.coverage is not None and state.coverage.anchor_factor is not None:
+                factor_result = await self.recovery.buy_suspension_request(symbol=plan.symbol,
+                    operation=TushareOperation.DAILY_BARS,
+                    call=lambda: provider.daily_adjustment_factors(
+                        plan.symbol, start.date(), start.date()), current=current,
+                    work_key=f"buy-suspension-factor:{plan.symbol}:{start.date()}")
+                anchor_result = await self.recovery.buy_suspension_request(symbol=plan.symbol,
+                    operation=TushareOperation.DAILY_BARS,
+                    call=lambda: provider.daily_adjustment_factors(
+                        plan.symbol, anchor_day, anchor_day),
+                    current=current, work_key=f"buy-suspension-anchor:{plan.symbol}:{anchor_day}")
+                if factor_result is None or anchor_result is None:
+                    raise ValueError("suspension factor acquisition yielded")
+                factors, _ = factor_result
+                anchors, receipt = anchor_result
+                basis = BuySuspensionPriceBasis(source_contract=historical.profile.value,
+                    trade_date=start.date(), anchor_date=anchor_day,
+                    trade_date_factor=factors.get(start.date()),
+                    anchor_factor=anchors.get(anchor_day),
+                    verified_at=receipt)
+                if quote_basis is not None and (
+                        quote_basis.symbol != plan.symbol or quote_basis.provider != "Tushare"
+                        or quote_basis.basis_id != sha256(("Tushare" + plan.symbol
+                            + str(basis.anchor_factor.normalize())).encode()).hexdigest()):
+                    basis = None
+                    raise ValueError("suspension anchor differs from actual daily quote basis")
+            if expected:
+                window = await self.recovery.buy_suspension_window(historical, symbol=plan.symbol,
+                    through=min(through, datetime.combine(start.date(), time(15), now.tzinfo)),
+                    current=current, source_key=generation)
+        except (RequestControlError, TushareProviderError, ValueError):
+            window = None
+        with self._work() as work:
+            work.daily.lock_symbol(plan.symbol)
+            latest_active, latest_binding = self.daily_evaluations._binding(work, plan)
+            fresh = work.daily.get_buy_suspension(symbol=plan.symbol,
+                owner_plan_version_id=active.plan_version_id)
+            if (not current() or latest_active.revision != active.revision
+                    or latest_active.plan_version_id != active.plan_version_id
+                    or latest_binding != binding):
+                raise RecoveryAdmissionChangedError("suspension owner changed during acquisition")
+            if fresh["revision"] != row["revision"]:
+                return fresh  # An accepted concurrent correction revoked this capture.
+            if basis is not None:
+                work.daily.invalidate_buy_suspension_market(symbol=plan.symbol,
+                    start=state.definition.effective_from, end=target, factor=basis.anchor_factor)
+                work.daily.invalidate_buy_suspension_market(symbol=plan.symbol,
+                    start=start, end=through, factor=basis.trade_date_factor)
+            if window is not None:
+                try:
+                    with work.daily.session.begin_nested():
+                        work.history.upsert_minutes(window.bars)
+                except MarketDataIdentityConflictError:
+                    work.daily.invalidate_buy_suspension_market(symbol=plan.symbol,
+                        start=state.definition.effective_from, end=target)
+                    work.commit()
+                    return work.daily.get_buy_suspension(symbol=plan.symbol,
+                        owner_plan_version_id=active.plan_version_id)
+            fresh = work.daily.get_buy_suspension(symbol=plan.symbol,
+                owner_plan_version_id=active.plan_version_id)
+            committed = (() if window is None else work.history.list_minutes(plan.symbol,
+                start=window.bars[0].bar_end, end=window.through))
+            if window is not None and tuple(bar.model_dump(exclude={"received_at"})
+                    for bar in committed) != tuple(bar.model_dump(exclude={"received_at"})
+                    for bar in window.bars):
+                raise RecoveryAdmissionChangedError("suspension committed source changed")
+            current_days = work.references.list_trading_days(exchange, captured_date, captured_date)
+            if current_days and (not current_days[0].is_open
+                    or self._clock.now().time() < time(9, 30)):
+                current_days += work.references.list_trading_days(exchange,
+                    current_days[0].previous_trade_date, current_days[0].previous_trade_date)
+            latest_target = buy_suspension_target(self._clock.now(), current_days)
+            if latest_target is None or latest_target < target:
+                raise RecoveryAdmissionChangedError("suspension applicable target changed")
+            actual_calendar = work.references.list_trading_days(
+                exchange, start.date(), start.date())
+            if calendar is not None and actual_calendar != (calendar,):
+                raise RecoveryAdmissionChangedError("suspension calendar changed during request")
+            value = BuySuspensionBatch(start=start, through=through, minutes=committed,
+                calendar=calendar, basis=basis, generation=generation)
+            changed = transition_buy_suspension(fresh["state"], target=latest_target,
+                evaluated_at=self._clock.now(), generation=generation, batch=value)
+            if changed.model_dump(exclude={"evaluated_at"}) != fresh["state"].model_dump(
+                    exclude={"evaluated_at"}):
+                work.daily.save(identity, kind="BUY_SUSPENSION", symbol=plan.symbol,
+                    lineage=active.plan_version_id, payload=changed.model_dump(mode="json"),
+                    expected_revision=fresh["revision"])
+            if not current():
+                raise RecoveryAdmissionChangedError("suspension source changed before commit")
+            work.commit()
+            return work.daily.get_buy_suspension(symbol=plan.symbol,
+                owner_plan_version_id=active.plan_version_id)
+
     async def prepare_daily_inputs(self, plan, evaluated_at, official_trade_date, minutes):
         """Real same-provider adapter; offline tests inject the SDK, not another runtime."""
         blockers = []
@@ -4699,6 +5011,13 @@ class ProductionMonitorPipeline:
                     )
                 except ValueError:
                     blockers.append("EXECUTION_QUOTE_UNVERIFIED")
+        guard = None
+        if getattr(plan, "buy_suspension", None) is not None:
+            try:
+                guard = await self.advance_buy_suspension(plan, quote_basis=series)
+            except RecoveryAdmissionChangedError:
+                guard = None
+            observed = max(observed, self._clock.now())
         return DailyRuntimeInputs(
             evaluated_at=observed,
             official_trade_date=official_trade_date,
@@ -4710,6 +5029,7 @@ class ProductionMonitorPipeline:
             minute_prefix=minute_prefix, five_minute_bars=minute_bars,
             trading_calendar=days, minute_target=minute_target,
             runtime_generation=str(self._runtime_generation),
+            buy_suspension_revision=None if guard is None else guard["revision"],
             linked_index=(self.index_service.latest_snapshots().get(plan.reference_market.index_code)
                           if plan.schema_version in {6, 7, 8, 9} else None),
         )
@@ -4742,6 +5062,8 @@ class ProductionMonitorPipeline:
         from trade_plan_monitor.state.daily_accounting import DailyAccounting
 
         if not plans or not all(isinstance(plan, UnifiedTradePlan) for plan in plans):
+            return None
+        if any(getattr(plan, "buy_suspension", None) is not None for plan in plans):
             return None
         if not self._decision_commit_current():
             return None
@@ -5003,6 +5325,7 @@ def _unified_daily_required(plan):
 
 def _unified_minute_required(plan):
     return isinstance(plan, UnifiedTradePlan) and (
+        getattr(plan, "buy_suspension", None) is not None or
         any(r.confirmation.kind == "COMPLETED_BAR_CLOSE"
             or requires_minutes(r.condition)
             or hasattr(r.independent_signal, "reset_condition")

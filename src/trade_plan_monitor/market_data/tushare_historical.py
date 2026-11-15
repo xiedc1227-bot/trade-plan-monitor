@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal, DecimalException
+from hashlib import sha256
 from typing import Protocol, cast
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 from pydantic import TypeAdapter, ValidationError
 
+from trade_plan_monitor.market_data.aggregation import expected_five_minute_ends
 from trade_plan_monitor.market_data.historical_provider import (
     HistoricalMinuteBatch,
     HistoricalMinuteProfile,
@@ -45,6 +48,18 @@ _MAX_NORMALIZED_INTEGER_DIGITS = 640
 _OPENING_SPECIAL_TIME = time(9, 30)
 
 
+@dataclass(frozen=True)
+class SuspensionMinuteWindow:
+    """Owned stk_mins acquisition; no assertion about remote publication latency."""
+
+    symbol: str
+    through: datetime
+    bars: tuple[MinuteBar, ...]
+    received_at: datetime
+    source_hash: str
+    source_contract: HistoricalMinuteProfile
+
+
 class HistoricalReferenceProvider(Protocol):
     """Reference surfaces that require an explicit historical exchange."""
 
@@ -63,7 +78,7 @@ class HistoricalReferenceProvider(Protocol):
 class TushareHistoricalMinuteProvider:
     """Normalize historical minutes under a separate, versioned source contract."""
 
-    __slots__ = ("_client", "_profile", "_reference_provider")
+    __slots__ = ("_client", "_profile", "_reference_provider", "_now")
 
     def __init__(
         self,
@@ -87,6 +102,7 @@ class TushareHistoricalMinuteProvider:
         ):
             raise TypeError("reference_provider must expose historical reference methods")
         self._client = client
+        self._now = now
         self._profile = profile
         self._reference_provider = reference_provider or TushareMarketDataProvider(
             client,
@@ -144,6 +160,36 @@ class TushareHistoricalMinuteProvider:
         """Return only the 240 canonical executable minutes for one day."""
 
         return self.historical_minute_batch(symbol, trade_date).bars
+
+    def buy_suspension_minutes(self, symbol: str, through: datetime) -> SuspensionMinuteWindow:
+        """Acquire one exact <=240-minute prefix using the SDK's raw stk_mins branch.
+
+        Tushare 1.4.29 pro_bar(adj=None, asset='E') uses this same endpoint without
+        changing OHLC. This mapping is not certification of arbitrary compatible
+        endpoints. The caller fences its configured source and actual factors.
+        """
+        symbol = _validated_symbol(symbol)
+        through = expected_five_minute_ends(through)[-1]
+        if through > self._now():
+            raise ValueError("suspension target is not completed")
+        if self._profile is not HistoricalMinuteProfile.TUSHARE_STK_MINS_241_END_V1:
+            raise HistoricalMinuteProfileUnverifiedError("historical minute profile is UNVERIFIED")
+        expected = tuple(end for end in expected_minute_ends(through.date(), is_open=True)
+                         if end <= through)
+        frame = self._fetch_frame(symbol=symbol, trade_date=through.date(), through=through)
+        try:
+            bars, special = self._normalize_frame(frame, symbol=symbol,
+                trade_date=through.date(), expected=expected)
+            received = self._now()
+            if received < through:
+                raise ValueError("suspension acquisition clock reversed")
+            digest = sha256((special.model_dump_json() + "".join(
+                bar.model_dump_json() for bar in bars)).encode()).hexdigest()
+            return SuspensionMinuteWindow(symbol, through,
+                tuple(bar.model_copy(update={"received_at": received}) for bar in bars),
+                received, digest, self._profile)
+        except (DecimalException, KeyError, OverflowError, TypeError, ValidationError, ValueError):
+            raise TushareProviderError(TushareErrorCode.INVALID_RESPONSE, "stk_mins") from None
 
     def trading_calendar(
         self,
@@ -211,7 +257,8 @@ class TushareHistoricalMinuteProvider:
             collected_at=received_at,
         ) for day, factor in sorted(factors.items()))
 
-    def _fetch_frame(self, *, symbol: str, trade_date: date) -> pd.DataFrame:
+    def _fetch_frame(self, *, symbol: str, trade_date: date,
+                     through: datetime | None = None) -> pd.DataFrame:
         provider_error: TushareProviderError | None = None
         frame: object | None = None
         try:
@@ -221,7 +268,8 @@ class TushareHistoricalMinuteProvider:
                 ts_code=symbol,
                 freq="1min",
                 start_date=f"{trade_date.isoformat()} 00:00:00",
-                end_date=f"{trade_date.isoformat()} 23:59:59",
+                end_date=(f"{trade_date.isoformat()} 23:59:59" if through is None
+                          else through.strftime("%Y-%m-%d %H:%M:%S")),
             )
         except Exception as error:
             provider_error = TushareMarketDataProvider._safe_provider_error("stk_mins", error)
@@ -242,11 +290,18 @@ class TushareHistoricalMinuteProvider:
         trade_date: date,
         expected: tuple[datetime, ...],
     ) -> HistoricalMinuteBatch:
+        bars, opening_special = self._normalize_frame(frame, symbol=symbol,
+            trade_date=trade_date, expected=expected)
+        return HistoricalMinuteBatch(symbol=symbol, trade_date=trade_date,
+            contract_version=self._profile, bars=bars, opening_special=opening_special)
+
+    def _normalize_frame(self, frame: pd.DataFrame, *, symbol: str, trade_date: date,
+                         expected: tuple[datetime, ...]):
         counts = Counter(frame.columns)
         if any(counts[column] != 1 for column in _REQUIRED_COLUMNS):
             raise ValueError("historical response schema is invalid")
-        if len(frame.index) != 241:
-            raise ValueError("verified profile requires exactly 241 source rows")
+        if len(frame.index) != len(expected) + 1:
+            raise ValueError("verified profile requires the exact source prefix")
 
         rows = frame.to_dict(orient="records")
         parsed: list[
@@ -336,13 +391,7 @@ class TushareHistoricalMinuteProvider:
                 )
             )
 
-        return HistoricalMinuteBatch(
-            symbol=symbol,
-            trade_date=trade_date,
-            contract_version=self._profile,
-            bars=tuple(bars),
-            opening_special=opening_special,
-        )
+        return tuple(bars), opening_special
 
 
 def _validated_symbol(value: object) -> str:

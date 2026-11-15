@@ -31,6 +31,10 @@ class DailyRepository:
         self.session = session
         self.clock = clock
         self.id_factory = id_factory
+        # Only a writable participant can own invalidation and its audit IDs.
+        # Temporary read repositories must neither claim nor replace that owner.
+        if callable(id_factory):
+            session.info["buy_suspension_repository"] = self
 
     def lock_symbol(self, symbol):
         """Acquire SQLite's write transaction without touching shared actual inventory."""
@@ -59,6 +63,43 @@ class DailyRepository:
 
         state = DailyBuySuspensionState.model_validate(value["payload"])
         return value | {"state": state, "state_hash": state.state_hash}
+
+    def invalidate_buy_suspension_market(self, *, start, end, symbol=None,
+                                         exchange=None, factor=None):
+        """Revoke affected compact prefixes under the same SQLite writer fence.
+
+        A comparable prefix proved every source factor equal to its anchor;
+        observing that same actual factor does not invalidate it endlessly.
+        """
+        from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState
+
+        statement = select(DailyRecord).where(DailyRecord.kind == "BUY_SUSPENSION")
+        if symbol is not None:
+            self.lock_symbol(symbol)
+            statement = statement.where(DailyRecord.symbol == symbol)
+        else:
+            self.session.execute(update(DailyRecord).where(
+                DailyRecord.kind == "BUY_SUSPENSION").values(revision=DailyRecord.revision))
+        offset = 0
+        while True:
+            rows = self.session.scalars(statement.order_by(DailyRecord.id).offset(offset)
+                .limit(100).execution_options(populate_existing=True)).all()
+            for row in rows:
+                state = DailyBuySuspensionState.model_validate_json(row.payload_json)
+                if exchange is not None and {"SH": "SSE", "SZ": "SZSE", "BJ": "BSE"}[
+                        state.symbol[-2:]] != exchange:
+                    continue
+                if (state.trigger is not None or state.coverage is None
+                        or end <= state.definition.effective_from or start > state.coverage.through
+                        or factor is not None and factor == state.coverage.anchor_factor):
+                    continue
+                invalid = state.model_copy(update={"coverage": None, "blocker": "PROOF_INVALIDATED",
+                    "evaluated_at": max(state.evaluated_at, self.clock())})
+                self.save(row.id, kind=row.kind, symbol=row.symbol, lineage=row.lineage,
+                    payload=invalid.model_dump(mode="json"), expected_revision=row.revision)
+            if len(rows) < 100:
+                return
+            offset += len(rows)
 
     def list(self, *, symbol, kind, lineage=None, limit=500):
         """Read an internal history in bounded SQL pages without truncating evidence."""
@@ -198,8 +239,44 @@ class DailyRepository:
                 or identity != buy_suspension_record_id(symbol, lineage)):
             raise ValueError("suspension record differs from its actual original owner")
 
-    @staticmethod
-    def _validate_buy_suspension_update(before_json, payload):
+    def retarget_buy_suspension_calendar(self, state, *, target, evaluated_at):
+        """Reset only revoked proof whose former target date is now SQL-proven closed.
+
+        This is not the reducer's ordinary observation transition. The original
+        interval/owner remain intact and the replacement target has no coverage.
+        """
+        from datetime import datetime, time
+
+        from trade_plan_monitor.state.models import TradingCalendar
+
+        now = self.clock()
+        if (state.trigger is not None or state.coverage is not None
+                or state.blocker not in {"PROOF_INVALIDATED", "CALENDAR_UNVERIFIED"}
+                or target >= state.target or evaluated_at < state.evaluated_at
+                or evaluated_at > now):
+            return None
+        self.lock_symbol(state.symbol)
+        exchange = {"SH": "SSE", "SZ": "SZSE", "BJ": "BSE"}[state.symbol[-2:]]
+        rows = self.session.scalars(select(TradingCalendar).where(
+            TradingCalendar.exchange == exchange,
+            TradingCalendar.cal_date.in_({now.date(), state.target.date()})
+        ).execution_options(populate_existing=True)).all()
+        days = {day.cal_date: day for day in rows}
+        former, today = days.get(state.target.date()), days.get(now.date())
+        if (former is None or former.is_open or today is None
+                or today.is_open and now.time() >= time(9, 30)):
+            return None
+        previous = self.session.scalar(select(TradingCalendar).where(
+            TradingCalendar.exchange == exchange,
+            TradingCalendar.cal_date == today.previous_trade_date
+        ).execution_options(populate_existing=True))
+        if (previous is None or not previous.is_open or target != datetime.combine(
+                previous.cal_date, time(15), now.tzinfo)):
+            return None
+        return state.model_copy(update={"target": target, "evaluated_at": evaluated_at,
+            "coverage": None, "blocker": "HISTORY_PENDING"})
+
+    def _validate_buy_suspension_update(self, before_json, payload):
         from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState
 
         before = DailyBuySuspensionState.model_validate_json(before_json)
@@ -210,5 +287,9 @@ class DailyRepository:
                 raise ValueError("suspension original owner and definition cannot change")
         if before.trigger is not None and before.trigger != after.trigger:
             raise ValueError("suspension latch evidence cannot be cleared or replaced")
-        if before.evaluated_at > after.evaluated_at or before.target > after.target:
+        if before.evaluated_at > after.evaluated_at:
             raise ValueError("suspension observation cannot move backwards")
+        if before.target > after.target and self.retarget_buy_suspension_calendar(
+                before, target=after.target, evaluated_at=after.evaluated_at) != after:
+            raise ValueError(
+                "suspension target requires a revoked proof and actual revised calendar")

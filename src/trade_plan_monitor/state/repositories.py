@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
@@ -2974,6 +2974,21 @@ class HealthRepository:
         return after
 
 
+def _invalidate_guard_market(session, **scope):
+    """Every accepted market mutation must enlist the transaction's guard owner."""
+    from trade_plan_monitor.state.daily_models import DailyRecord
+
+    statement = select(DailyRecord.id).where(DailyRecord.kind == "BUY_SUSPENSION")
+    if scope.get("symbol") is not None:
+        statement = statement.where(DailyRecord.symbol == scope["symbol"])
+    if session.scalar(statement.limit(1)) is None:
+        return
+    repository = session.info.get("buy_suspension_repository")
+    if repository is None:
+        raise RepositoryError("Market mutation requires its suspension transaction participant")
+    repository.invalidate_buy_suspension_market(**scope)
+
+
 class MarketHistoryRepository:
     """Persist normalized bar history and one replaceable latest-quote projection."""
 
@@ -3156,6 +3171,18 @@ class MarketHistoryRepository:
         return tuple(_daily_bar_value(row) for row in rows)
 
     def _upsert_minute(self, bar: NormalizedMinuteBar) -> NormalizedMinuteBar:
+        self._session.execute(update(MinuteBarRow).where(
+            MinuteBarRow.symbol == bar.symbol, MinuteBarRow.bar_end == bar.bar_end.isoformat()
+        ).values(received_at=MinuteBarRow.received_at))
+        previous = self._session.scalar(select(MinuteBarRow).where(
+            MinuteBarRow.symbol == bar.symbol, MinuteBarRow.bar_end == bar.bar_end.isoformat()
+        ).execution_options(populate_existing=True))
+        before = None if previous is None else _minute_value(previous)
+        if (before is None or bar.received_at > before.received_at) and (
+                before is None or before.model_dump(exclude={"received_at"})
+                != bar.model_dump(exclude={"received_at"})):
+            _invalidate_guard_market(self._session, symbol=bar.symbol,
+                start=bar.bar_end, end=bar.bar_end)
         values = _minute_values(bar)
         statement = sqlite_insert(MinuteBarRow).values(**values)
         statement = statement.on_conflict_do_update(
@@ -3273,6 +3300,17 @@ class MarketReferenceRepository:
             maximum=self._MAX_BATCH_ROWS,
         )
         for day in normalized:
+            self._session.execute(update(TradingCalendar).where(
+                TradingCalendar.exchange == day.exchange, TradingCalendar.cal_date == day.cal_date
+            ).values(is_open=TradingCalendar.is_open))
+            previous = self._session.scalar(select(TradingCalendar).where(
+                TradingCalendar.exchange == day.exchange, TradingCalendar.cal_date == day.cal_date
+            ).execution_options(populate_existing=True))
+            if previous is None or _trading_day_value(previous) != day:
+                start = datetime.combine(
+                    day.cal_date, datetime.min.time(), ZoneInfo("Asia/Shanghai"))
+                _invalidate_guard_market(self._session, exchange=day.exchange,
+                    start=start, end=start + timedelta(days=1))
             values = {
                 "exchange": day.exchange,
                 "cal_date": day.cal_date,

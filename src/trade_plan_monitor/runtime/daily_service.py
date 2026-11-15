@@ -126,6 +126,8 @@ class DailyRuntimeInputs(DailyValue):
     trading_calendar: tuple[TradingDay, ...] = Field(default=(), max_length=3033)
     minute_target: ShanghaiDatetime | None = None
     runtime_generation: str | None = None
+    buy_suspension_revision: int | None = Field(
+        default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def exact_minute_evidence(self):
@@ -550,6 +552,14 @@ class DailyRuntimeEvaluationService:
                 and active.revision != expected_activation_revision
             ):
                 raise DailyActivationChangedError("daily activation changed during acquisition")
+            if getattr(plan, "buy_suspension", None) is not None:
+                guard = work.daily.get_buy_suspension(symbol=plan.symbol,
+                    owner_plan_version_id=active.plan_version_id)
+                # Absence captured as absence is unverified, not a whole-cycle
+                # failure. A real revision change still fences stale inputs.
+                actual_revision = None if guard is None else guard["revision"]
+                if actual_revision != inputs.buy_suspension_revision:
+                    raise DailyActivationChangedError("suspension changed during acquisition")
             ordinary_eligible = _eligible(plan, now.date()) and not ordinary_authority_ended
             accounting = DailyAccounting(work.daily)
             legacy_reason = None if _alert_only(plan) else accounting.legacy_reason(plan.symbol)
@@ -620,6 +630,8 @@ class DailyRuntimeEvaluationService:
             replay_observation = (self._source_authority_reader is not None
                 and ordinary_source is not None and not risk_source_denied)
             target = {
+                **({"buy_suspension_revision": inputs.buy_suspension_revision}
+                   if getattr(plan, "buy_suspension", None) is not None else {}),
                 **({"capital_inputs": capital_inputs} if capital_inputs is not None else {}),
                 "plan_hash": plan_sha256(plan),
                 "activation_revision": active.revision,

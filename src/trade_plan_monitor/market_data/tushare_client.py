@@ -6,6 +6,9 @@ import json
 import re
 import ssl
 from collections.abc import Callable
+from hashlib import sha256
+from importlib.metadata import version
+from pathlib import Path
 from typing import Protocol, cast
 from urllib.parse import urlsplit
 
@@ -259,6 +262,34 @@ def _safe_application_failure(operation: str, message: object) -> Exception:
         operation,
         failure_kind=TushareFailureKind.PROVIDER_STATUS,
     )
+
+
+def buy_suspension_source_identity(client, endpoint):
+    """Narrow raw-minute mapping for the inspected 1.4.29 SDK/default service route.
+
+    No credential is read. A configurable compatible endpoint or replaced query
+    cannot inherit this mapping merely by returning the same column names.
+    """
+    import tushare
+    from tushare.pro.client import DataApi
+
+    endpoint = endpoint.rstrip("/")
+    query = getattr(client, "query", None)
+    if (version("tushare") != "1.4.29" or tushare.__version__ != "1.4.29"
+            or type(client) is not DataApi
+            or endpoint != "https://api.waditu.com/dataapi"
+            or getattr(client, "_DataApi__http_url", None) != endpoint
+            or type(query) not in {_DefaultTushareQuery, _DirectTushareQuery}
+            or query._endpoint != endpoint):
+        return None
+    try:
+        sdk = Path(tushare.__file__).parent / "pro" / "data_pro.py"
+        digest = sha256(sdk.read_bytes()).hexdigest()
+    except OSError:
+        return None
+    if digest != "01bdb7938df430a8b05bb28f722074dfce9fe918bc4e70f111e444e17e44b022":
+        return None
+    return sha256((endpoint + digest + type(query).__name__).encode()).hexdigest()
 
 
 def create_tushare_client[ClientT](

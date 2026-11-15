@@ -7,7 +7,7 @@ import re
 import threading
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Self
 
@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from trade_plan_monitor.market_data.models import AShareSymbol, MinuteBar, ShanghaiDatetime
 from trade_plan_monitor.market_data.provider import MarketDataProvider
-from trade_plan_monitor.market_data.sessions import session_for_minute_end
+from trade_plan_monitor.market_data.sessions import expected_minute_ends, session_for_minute_end
 from trade_plan_monitor.market_data.tushare import TushareErrorCode, TushareProviderError
 from trade_plan_monitor.runtime.clock import _canonical_shanghai
 from trade_plan_monitor.runtime.recovery_targets import (
@@ -46,6 +46,26 @@ RealtimePending = Callable[[], bool]
 PendingCloseDate = Callable[[str], date | None]
 RecoverPendingClose = Callable[[str, date], Awaitable[bool]]
 ReadPersistedEnds = Callable[[str, tuple[datetime, ...]], tuple[datetime, ...]]
+
+
+def buy_suspension_target(now, calendar):
+    """Latest completed five-minute target from actual exchange rows, never weekdays alone."""
+    days = {day.cal_date: day for day in calendar}
+    today = days.get(now.date())
+    if today is None:
+        return None
+    if today.is_open:
+        completed = tuple(end for end in expected_minute_ends(today.cal_date, is_open=True)
+                          if end.minute % 5 == 0 and end <= now)
+        if completed:
+            return completed[-1]
+        opening = datetime.combine(today.cal_date, time(9, 30), now.tzinfo)
+        if now >= opening:
+            return opening
+    previous = days.get(today.previous_trade_date)
+    if previous is None or not previous.is_open:
+        return None
+    return datetime.combine(previous.cal_date, time(15), now.tzinfo)
 
 
 class RecoveryMode(StrEnum):
@@ -268,6 +288,30 @@ class RecoveryService:
         self._serial = asyncio.Lock()
         self._physical_condition = threading.Condition()
         self._physical_active = False
+
+    async def buy_suspension_window(self, provider, *, symbol, through, current, source_key):
+        """One guard prefix on the existing serial/controller path; no new worker."""
+        return await self.buy_suspension_request(symbol=symbol,
+            operation=TushareOperation.HISTORICAL_MINUTES,
+            call=lambda: provider.buy_suspension_minutes(symbol, through), current=current,
+            work_key=f"buy-suspension:{symbol}:{through.isoformat()}:{source_key[:16]}")
+
+    async def buy_suspension_request(self, *, symbol, operation, call, current, work_key):
+        """Join every guard-owned calendar/factor/minute call before releasing its serial slot."""
+        if operation not in {TushareOperation.HISTORICAL_MINUTES,
+                TushareOperation.TRADING_CALENDAR, TushareOperation.DAILY_BARS}:
+            raise ValueError("unsupported suspension acquisition")
+        async with self._serial:
+            if self._should_yield():
+                return None
+            try:
+                value = await self._execute_joined(symbol=symbol, fetch_current_day=call,
+                    before_start=current, operation=operation, work_key=work_key)
+            except RequestNotStartedError:
+                raise RecoveryAdmissionChangedError("suspension source changed") from None
+            if not current():
+                raise RecoveryAdmissionChangedError("suspension acquisition owner changed")
+            return value
 
     async def recover_scope(
         self,
@@ -568,16 +612,18 @@ class RecoveryService:
         before_start: Callable[[], bool] | None = None,
         fetch_current_day: Callable[[], object] | None = None,
         cancelled: threading.Event | None = None,
+        operation: TushareOperation = TushareOperation.CURRENT_DAY_MINUTES,
+        work_key: str | None = None,
     ) -> object:
         cancelled = cancelled if cancelled is not None else threading.Event()
         request = asyncio.create_task(
             self._request_controller.execute(
-                TushareOperation.CURRENT_DAY_MINUTES,
+                operation,
                 lambda: self._current_day_call(
                     symbol, before_start=before_start,
                     fetch_current_day=fetch_current_day,
                 ),
-                work_key=f"recovery:{symbol}",
+                work_key=work_key or f"recovery:{symbol}",
                 priority=RequestPriority.RECOVERY,
             )
         )
