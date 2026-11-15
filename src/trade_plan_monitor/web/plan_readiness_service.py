@@ -20,10 +20,12 @@ from trade_plan_monitor.decision.unified_conditions import (
     requires_minutes,
 )
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
-from trade_plan_monitor.domain.plan_codec import load_plan_json
+from trade_plan_monitor.domain.daily_plan_validation import load_daily_draft_json
+from trade_plan_monitor.domain.plan_codec import PlanDocumentError, load_plan_json
 from trade_plan_monitor.domain.plan_models import activation_is_eligible_on
 from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan, condition_leaves
+from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
 from trade_plan_monitor.runtime.status_authority import (
     ConditionInputStamp,
@@ -58,6 +60,7 @@ from trade_plan_monitor.web.plan_readiness_models import (
     AxisReadiness,
     ConditionReadiness,
     ExpectedConfirmation,
+    InventoryRequirements,
     ReadinessContext,
     ReadinessDeliveryAttempt,
     ReadinessExecutionState,
@@ -545,7 +548,33 @@ def _load(session, authority, version_id, now):
     if source is None:
         return None
     details = source.details
-    plan = load_plan_json(details.payload_json)
+    if authority is not None and len(authority.plans) > 10:
+        raise ValueError("Readiness exceeds the existing active-symbol admission bound")
+    try:
+        plan = load_plan_json(details.payload_json)
+    except PlanDocumentError:
+        # A valid unreviewed native draft may intentionally retain missing values.
+        # Do not reinterpret corrupt executable/approved documents as drafts.
+        if (details.status != "DRAFT" or details.review_id is not None
+                or details.review_revision != 0 or details.review_confirmed_at is not None
+                or source.summary.current_review_bound):
+            raise
+        draft = load_daily_draft_json(details.payload_json)
+        if type(draft) is not UnifiedPlanDraft or draft.to_executable() is not None:
+            raise
+        owners = _owners(draft)
+        if (not owners or any(identity is None for _, identity, _, _ in owners)
+                or len({(kind, identity) for kind, identity, _, _ in owners}) != len(owners)):
+            raise ValueError("Draft rule owners are incomplete or ambiguous") from None
+        reads = ActionOwnerReader(work)
+        active, activation = reads.active(draft.symbol), reads.activation(draft.symbol)
+        if (active is not None and active.plan_version_id == version_id
+                or activation is not None and activation.plan_version_id == version_id):
+            raise
+        return SimpleNamespace(source=source, details=details, plan=draft,
+            owners=owners, binding=(source.summary.model_dump_json(),
+                details.payload_json, details.revision, details.status, details.review_id,
+                details.review_revision, details.review_confirmed_at, active, activation))
     if not isinstance(plan, UnifiedTradePlan):
         raise ValueError("Readiness requires a supported native saved plan")
     owners = _owners(plan)
@@ -569,8 +598,6 @@ def _load(session, authority, version_id, now):
         if any(req.cost_basis for req in requirements) else None)
     head = reads.daily("evaluation-head-" + plan.symbol)
     payload = None if head is None else head["payload"]
-    if authority is not None and len(authority.plans) > 10:
-        raise ValueError("Readiness exceeds the existing active-symbol admission bound")
     evidence = next((item for item in (() if authority is None else authority.plans)
                      if item.symbol == plan.symbol), None)
     owner_current = bool(bound_active and _owner_current(authority, now)
@@ -874,12 +901,59 @@ def read_readiness_binding(session, authority, version_id, now):
         return None if loaded is None else loaded.binding
 
 
+def _incomplete_readiness(value, now):
+    """Observe this unreviewed Schema 5 draft without acquiring execution facts."""
+    summary = value.source.summary
+    context = ReadinessContext(plan_version_id=UUID(value.details.id),
+        content_hash=value.details.content_hash, source_hash=summary.source_hash,
+        coverage_hash=summary.coverage_evidence_hash, review_receipt_hash=None,
+        activation_revision=None, runtime_generation=None, inventory_revision=None,
+        book_revision=None)
+    source_observation = ReadinessObservation(context=context, availability="CURRENT",
+        observed_at=now, as_of=None, expires_at=None,
+        evidence_refs=("plan:" + value.details.id,
+            "coverage:" + (summary.coverage_bundle_hash or "unavailable")))
+    upgrade = summary.reason == "SOURCE_COVERAGE_UPGRADE_REQUIRED"
+    axes = (
+        AxisReadiness(axis="SOURCE_COVERAGE",
+            state="UNKNOWN" if upgrade else "PASS" if summary.coverage_complete else "BLOCKED",
+            reason="UPGRADE_REQUIRED" if upgrade else None if summary.coverage_complete
+            else "SOURCE_REVIEW_REQUIRED",
+            observation=source_observation),
+        AxisReadiness(axis="REVIEW_ACTIVATION", state="UNKNOWN" if upgrade else "BLOCKED",
+            reason="UPGRADE_REQUIRED" if upgrade else "SOURCE_REVIEW_REQUIRED",
+            observation=source_observation),
+        *(AxisReadiness(axis=axis, state="UNKNOWN", reason=reason) for axis, reason in (
+            ("RUNTIME_OWNERSHIP", "AUTHORITY_UNAVAILABLE"),
+            ("DATA_EVALUATION", "DEPENDENCY_UNVERIFIED"),
+            ("INVENTORY_CAPITAL", "DEPENDENCY_UNVERIFIED"),
+            ("NOTIFICATION_DELIVERY", "DELIVERY_UNVERIFIED"))),
+    )
+    rules = tuple(RuleReadinessFacts(owner_kind=kind, owner_id=identity, side=side,
+        requirements=InventoryRequirements(inventory=kind != "ALERT_RULE",
+            sellability=side == "SELL"), expected_target=None, evaluated_target=None,
+        evaluated_at=None, observation=None, root_outcome=None,
+        leaves=(() if getattr(rule, "condition", None) is None
+                else _leaves(rule.condition, "condition")))
+        for kind, identity, side, rule in value.owners)
+    alert = any(rule.owner_kind == "ALERT_RULE" for rule in rules)
+    trade = any(rule.owner_kind != "ALERT_RULE" for rule in rules)
+    result = summarize_readiness(ReadinessSnapshot(computed_at=now, context=context,
+        scope="MIXED" if alert and trade else "ALERT_ONLY" if alert else "TRADE_RULES",
+        axes=axes, rules=rules))
+    if len(result.model_dump_json(by_alias=True).encode("utf-8")) > MAX_READINESS_BYTES:
+        raise ValueError("Readiness exceeds the complete 1MiB view bound")
+    return result, value.binding
+
+
 def read_plan_readiness(session, authority, version_id, now):
     """Assemble all native owners in one caller-owned SQLite read transaction."""
     with session.no_autoflush:
         value = _load(session, authority, version_id, now)
         if value is None:
             return None, None
+        if type(value.plan) is UnifiedPlanDraft:
+            return _incomplete_readiness(value, now)
         summary = value.source.summary
         context = ReadinessContext(plan_version_id=UUID(version_id),
             content_hash=value.details.content_hash, source_hash=summary.source_hash,

@@ -18,6 +18,7 @@ from tests.integration.test_plan_readiness_profile_ownership import (
 )
 from tests.integration.test_source_action_cutover import legacy as legacy
 from tests.integration.test_source_coverage_authority_save import _NOW
+from tests.integration.test_source_coverage_authority_save import state as state
 
 from trade_plan_monitor.web.app import create_app
 from trade_plan_monitor.web.monitor_read_ownership import current_read_lease
@@ -25,6 +26,365 @@ from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMon
 from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
 
 PATH = "/api/v1/plan-versions/{}/monitor-readiness"
+
+
+def _incomplete_draft(state, profile, *, owner_case=None, authority=None):
+    from tests.browser.source_coverage_server import SetupCommand, _payload
+    from tests.integration.test_source_coverage_authority_save import _save
+
+    draft, source, mapping = _payload(SetupCommand(scenario="missing-cap"))
+    if owner_case:
+        from tests.integration.test_market_linkage_review import source_mapping
+
+        raw = draft.model_dump(mode="json")
+        if owner_case == "missing":
+            raw["ordinary_rules"][0]["rule_id"] = None
+        elif owner_case == "missing-alert":
+            raw["alert_rules"][0]["rule_id"] = None
+        elif owner_case == "duplicate":
+            raw["ordinary_rules"][1]["rule_id"] = raw["ordinary_rules"][0]["rule_id"]
+        else:
+            for rule in (*raw["ordinary_rules"], *raw["alert_rules"]):
+                rule["rule_id"] = None
+        draft = type(draft).model_validate(raw)
+        source, mapping = source_mapping(draft)
+    assert draft.schema_version == 5 and draft.position.max_qty is None
+    version = _save(state, draft, source, mapping)
+    reader = RuntimeStatusReadService(state.sessions, lambda: authority, clock=lambda: _NOW)
+    selected = reader if profile == 2 else PersistentMonitorReadService(
+        state.work, lambda: None, clock=lambda: _NOW, readiness_service=reader)
+    return create_app(read_service=selected, monitor_contract_version=profile), selected, version
+
+
+def _database_rows(engine):
+    from sqlalchemy import text
+
+    with engine.connect() as connection:
+        return {name: tuple(tuple(row) for row in connection.execute(
+            text('SELECT * FROM "' + name.replace('"', '""') + '"')))
+            for name in inspect(engine).get_table_names()}
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+@pytest.mark.parametrize("active_sibling", [False, True])
+def test_http_incomplete_draft_retains_null_and_source_without_executing(
+    state, monkeypatch, profile, active_sibling,
+):
+    from trade_plan_monitor.runtime.daily_service import DailyRuntimeEvaluationService
+
+    if active_sibling:
+        from tests.integration.test_source_coverage_authority import _confirm, _save
+
+        from trade_plan_monitor.domain.plan_validation import PlanValidationResult
+
+        identity, draft = _save(state)
+        _confirm(state, identity)
+        with state.work() as work:
+            work.plans.activate(draft.to_executable(), expected_revision=0,
+                                validation=PlanValidationResult(issues=()))
+            work.commit()
+    app, selected, version = _incomplete_draft(state, profile)
+    before = _database_rows(state.engine)
+    with state.work() as work:
+        details = work.plans.get_version_details(version)
+        assert json.loads(details.payload_json)["position"]["max_qty"] is None
+        assert "position.max_qty = null" in details.source_text
+
+    attempts = []
+
+    def denied(*args, **kwargs):
+        attempts.append(True)
+        raise AssertionError("incomplete readiness cannot execute or acquire external inputs")
+
+    monkeypatch.setattr(DailyRuntimeEvaluationService, "run_inputs", denied)
+    monkeypatch.setattr(httpx.Client, "send", denied)
+    monkeypatch.setattr(httpx.AsyncClient, "send", denied)
+    from trade_plan_monitor.web import plan_readiness_service as projection
+
+    monkeypatch.setattr(projection.DailyAccounting, "snapshot", denied)
+    monkeypatch.setattr(projection, "current_capital_inputs", denied)
+    monkeypatch.setattr(projection, "read_risk_origin", denied)
+    monkeypatch.setattr(projection, "read_owned_notifications", denied)
+
+    def readonly(connection, cursor, statement, parameters, context, executemany):
+        assert statement.lstrip().split()[0].upper() not in {
+            "INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "ALTER", "DROP"}
+
+    async def scenario():
+        import socket
+
+        monkeypatch.setattr(socket.socket, "connect", denied)
+        event.listen(state.engine, "before_cursor_execute", readonly)
+        try:
+            response = await get(app, version)
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["summary"] == "NEEDS_REVIEW" and body["freshUntil"] is None
+            assert body["authorityGranted"] is False and len(response.content) <= 1024 * 1024
+            context = body["snapshot"]["context"]
+            assert context["planVersionId"] == version
+            assert context["contentHash"] == details.content_hash
+            assert context["sourceHash"] == details.source_hash
+            for key in ("reviewReceiptHash", "activationRevision", "runtimeGeneration",
+                        "inventoryRevision", "bookRevision"):
+                assert context[key] is None
+            axes = {axis["axis"]: axis for axis in body["axes"]}
+            assert axes["SOURCE_COVERAGE"]["state"] == "BLOCKED"
+            assert axes["REVIEW_ACTIVATION"]["reason"] == "SOURCE_REVIEW_REQUIRED"
+            for axis in ("RUNTIME_OWNERSHIP", "DATA_EVALUATION", "INVENTORY_CAPITAL",
+                         "NOTIFICATION_DELIVERY"):
+                assert axes[axis]["state"] == "UNKNOWN"
+            assert body["rules"]
+            for rule in body["rules"]:
+                facts = rule["facts"]
+                assert facts["rootOutcome"] is None and facts["evaluatedAt"] is None
+                assert facts["evaluatedTarget"] is None and facts["expectedTarget"] is None
+                assert facts["observation"] is None and facts["expectedConfirmation"] is None
+                assert all(leaf["state"] == "UNKNOWN" for leaf in facts["leaves"])
+                assert facts["execution"]["approvedQuantity"] is None
+                assert facts["execution"]["consumed"] is None
+                assert "money" not in facts and "risk" not in facts and "notification" not in facts
+            assert selected.outstanding_work == 0 and attempts == []
+        finally:
+            event.remove(state.engine, "before_cursor_execute", readonly)
+            await selected.stop()
+
+    asyncio.run(scenario())
+    assert _database_rows(state.engine) == before
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+@pytest.mark.parametrize("corruption", ["malformed", "invalid-parameter", "reviewed", "active"])
+def test_http_incomplete_draft_does_not_hide_corruption_or_approved_states(
+    state, profile, corruption,
+):
+    from sqlalchemy import update
+
+    from trade_plan_monitor.state.models import PlanReviewProvenance, PlanVersion
+
+    app, selected, version = _incomplete_draft(state, profile)
+    with state.sessions() as session:
+        row = session.get(PlanVersion, version)
+        if corruption == "malformed":
+            row.payload_json = "{"
+        elif corruption == "invalid-parameter":
+            raw = json.loads(row.payload_json)
+            raw["position"]["max_qty"] = -100
+            row.payload_json = json.dumps(raw)
+        elif corruption == "active":
+            row.status = "ACTIVE"
+        else:
+            session.execute(update(PlanReviewProvenance).where(
+                PlanReviewProvenance.plan_version_id == version).values(
+                    confirmed_at=_NOW.isoformat(), review_id=str(uuid4()), review_revision=1))
+        session.commit()
+    before = _database_rows(state.engine)
+
+    async def scenario():
+        try:
+            response = await get(app, version)
+            assert response.status_code >= 400, response.text
+            assert "error" in response.json() and "snapshot" not in response.json()
+            assert selected.outstanding_work == 0
+        finally:
+            await selected.stop()
+
+    asyncio.run(scenario())
+    assert _database_rows(state.engine) == before
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+@pytest.mark.parametrize("owner_case", ["missing", "missing-alert", "duplicate"])
+def test_http_incomplete_draft_missing_rule_identity_cannot_invent_an_owner(
+    state, profile, owner_case,
+):
+    app, selected, version = _incomplete_draft(state, profile, owner_case=owner_case)
+    before = _database_rows(state.engine)
+
+    async def scenario():
+        try:
+            response = await get(app, version)
+            assert response.status_code == 503, response.text
+            body = response.json()
+            assert body["error"]["code"] == "SERVICE_UNAVAILABLE"
+            # A partial view could falsely declare ALERT_ONLY or drop actual
+            # inventory requirements. Missing/ambiguous owners remain unsupported.
+            assert "snapshot" not in body and "rules" not in body and "summary" not in body
+        finally:
+            await selected.stop()
+
+    asyncio.run(scenario())
+    assert _database_rows(state.engine) == before
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+@pytest.mark.parametrize("limit", ["bytes", "active-symbols"])
+def test_http_incomplete_draft_keeps_existing_projection_limits(state, monkeypatch, profile, limit):
+    from trade_plan_monitor.runtime.status_authority import PlanReadAuthority, RuntimeReadAuthority
+    from trade_plan_monitor.web import plan_readiness_service as projection
+
+    authority = None
+    if limit == "bytes":
+        monkeypatch.setattr(projection, "MAX_READINESS_BYTES", 1)
+    else:
+        # Over-bound authority is a negative admission input, never evidence.
+        authority = RuntimeReadAuthority(token="overfull", lifecycle="STOPPED", progress=None,
+            health=None, owner_absent=True, plans=tuple(PlanReadAuthority(
+                symbol=f"00{index:04d}.SZ", plan_version_id=str(uuid4()), plan_hash="a" * 64,
+                activation_revision=1, plan_family="CONDITION_PLAN") for index in range(11)))
+    app, selected, version = _incomplete_draft(state, profile, authority=authority)
+    before = _database_rows(state.engine)
+
+    async def scenario():
+        try:
+            response = await get(app, version)
+            assert response.status_code == 503, response.text
+            assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+            assert "snapshot" not in response.json()
+            assert selected.outstanding_work == 0
+        finally:
+            await selected.stop()
+
+    asyncio.run(scenario())
+    assert _database_rows(state.engine) == before
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+def test_http_incomplete_draft_without_any_identifiable_owner_remains_unavailable(state, profile):
+    app, selected, version = _incomplete_draft(state, profile, owner_case="all-missing")
+    before = _database_rows(state.engine)
+
+    async def scenario():
+        try:
+            response = await get(app, version)
+            # The existing public model requires at least one real rule owner.
+            # This bounded fix cannot fabricate one or add an empty-owner model.
+            assert response.status_code == 503
+            assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+            assert "snapshot" not in response.json()
+        finally:
+            await selected.stop()
+
+    asyncio.run(scenario())
+    assert _database_rows(state.engine) == before
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+def test_http_incomplete_draft_preserves_native_coverage_upgrade_reason(
+    state, monkeypatch, profile,
+):
+    from trade_plan_monitor.state.source_coverage_store import SourceCoverageUpgradeRequired
+    from trade_plan_monitor.web import source_coverage_read
+
+    app, selected, version = _incomplete_draft(state, profile)
+    before = _database_rows(state.engine)
+
+    def old_rules(*args):
+        raise SourceCoverageUpgradeRequired()
+
+    # Exercise the native unsupported-rules error, never inject successful proof.
+    monkeypatch.setattr(source_coverage_read, "read_version_coverage", old_rules)
+
+    async def scenario():
+        try:
+            response = await get(app, version)
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["summary"] == "UNKNOWN" and body["freshUntil"] is None
+            assert body["authorityGranted"] is False
+            for axis in body["axes"]:
+                if axis["axis"] in {"SOURCE_COVERAGE", "REVIEW_ACTIVATION"}:
+                    assert axis["state"] == "UNKNOWN" and axis["reason"] == "UPGRADE_REQUIRED"
+            assert body["snapshot"]["context"]["coverageHash"] is None
+        finally:
+            await selected.stop()
+
+    asyncio.run(scenario())
+    assert _database_rows(state.engine) == before
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+@pytest.mark.parametrize("schema_version", [6, 7, 8, 9])
+def test_http_incomplete_linked_draft_keeps_the_explicit_schema5_boundary(
+    state, profile, schema_version,
+):
+    from tests.integration.test_market_linkage_review import source_mapping
+    from tests.integration.test_source_coverage_authority_save import _save
+    from tests.unit.test_market_exception_contract import exception_payload
+    from tests.unit.test_market_linkage_contract import linked_payload
+    from tests.unit.test_p2_policy_contract import p2_payload
+    from tests.unit.test_p3_policy_contract import p3_payload
+
+    from trade_plan_monitor.domain.daily_plan_validation import load_daily_draft_json
+
+    raw = {6: linked_payload, 7: exception_payload, 8: p2_payload, 9: p3_payload}[
+        schema_version]()
+    buy = next(rule for rule in raw["ordinary_rules"] if rule["side"] == "BUY")
+    if schema_version in {6, 7}:
+        buy["quantity_policy"]["base_quantity"] = None
+    else:
+        buy["pretrade_policy"]["sizing"]["base_qty"] = None
+    draft = load_daily_draft_json(json.dumps(raw))
+    assert draft.schema_version == schema_version and draft.to_executable() is None
+    source, mapping = source_mapping(draft)
+    version = _save(state, draft, source, mapping)
+    reader = RuntimeStatusReadService(state.sessions, lambda: None, clock=lambda: _NOW)
+    selected = reader if profile == 2 else PersistentMonitorReadService(
+        state.work, lambda: None, clock=lambda: _NOW, readiness_service=reader)
+    app = create_app(read_service=selected, monitor_contract_version=profile)
+    before = _database_rows(state.engine)
+
+    async def scenario():
+        try:
+            response = await get(app, version)
+            assert response.status_code == 503
+            assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+            assert "snapshot" not in response.json()
+        finally:
+            await selected.stop()
+
+    asyncio.run(scenario())
+    assert _database_rows(state.engine) == before
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+def test_http_incomplete_draft_second_read_retries_then_withholds_changed_context(
+    state, monkeypatch, profile,
+):
+    from trade_plan_monitor.state.source_coverage_store import SourceCoverageStore
+    from trade_plan_monitor.web import plan_readiness_service as projection
+
+    app, selected, version = _incomplete_draft(state, profile)
+    original = projection.read_readiness_binding
+    changes = []
+
+    def changed(*args):
+        with state.work() as work:
+            store = SourceCoverageStore(work.daily.session)
+            old = store.latest(version)
+            store.append(version, old.assessment, inputs=old.inputs,
+                expected_revision=old.revision, command_id="draft-read-race-" + str(len(changes)),
+                now=_NOW)
+            work.commit()
+        changes.append(True)
+        return original(*args)
+
+    monkeypatch.setattr(projection, "read_readiness_binding", changed)
+
+    async def scenario():
+        try:
+            response = await get(app, version)
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert len(changes) == 2
+            assert body["summary"] == "UNKNOWN" and body["freshUntil"] is None
+            assert body["authorityGranted"] is False
+            assert all(axis["reason"] == "CONTEXT_CHANGED" for axis in body["axes"])
+            assert selected.outstanding_work == 0
+        finally:
+            await selected.stop()
+
+    asyncio.run(scenario())
 
 
 async def get(app, version_id):
