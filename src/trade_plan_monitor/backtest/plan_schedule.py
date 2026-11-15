@@ -118,6 +118,8 @@ class LoopPlanVersion(ResearchValue):
 
     @model_validator(mode="after")
     def bound(self) -> Self:
+        if self.snapshot.schema_version == 10:
+            raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
         if self.plan_hash != plan_sha256(self.snapshot):
             raise ValueError("plan hash does not match the immutable snapshot")
         if self.review.content_hash != daily_plan_content_sha256(self.snapshot):

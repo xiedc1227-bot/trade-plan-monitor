@@ -265,6 +265,15 @@ class BacktestRunInput(_RunInputValue):
             **index_identity,
         )
 
+    @field_validator("plan_snapshot", mode="before")
+    @classmethod
+    def reject_buy_suspension_snapshot(cls, value):
+        schema = (value.get("schema_version") if isinstance(value, dict)
+                  else getattr(value, "schema_version", None))
+        if schema == 10:
+            raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+        return value
+
     @field_validator("initial_lots")
     @classmethod
     def normalize_initial_lots(

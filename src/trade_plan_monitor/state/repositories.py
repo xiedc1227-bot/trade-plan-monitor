@@ -1116,6 +1116,8 @@ class PlanRepository:
     ) -> ActivePlanRecord:
         if not isinstance(plan, TradePlan | ExplicitTradePlan | DailyTradePlan):
             raise TypeError("plan must be an executable trade plan")
+        if plan.schema_version == 10:
+            raise PlanActivationBlockedError("BUY_SUSPENSION_ACTIVATION_UNSUPPORTED")
         if type(expected_revision) is not int or expected_revision < 0:
             raise ValueError("expected_revision must be a non-negative integer")
         if not isinstance(validation, PlanValidationResult):
