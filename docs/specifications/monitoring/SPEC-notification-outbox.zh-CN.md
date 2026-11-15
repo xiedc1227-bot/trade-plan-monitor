@@ -278,3 +278,12 @@ HTML。最终消息最多 16,384 个字符，并按照增量剩余字符预算�
 ## 待确认问题
 
 - 尚未选择外部消息产品；通用 Webhook 默认保持关闭。
+
+
+## N-PBS-admission — 排队 BUY 的持续禁买核验（2026-11-15）
+
+PBS-T07 保留既有队列身份、载荷、历史、claim 和重试语义。`CurrentDeliveryAdmission` 将运行实例拥有的保护 predicate 传给 `daily_delivery_allowed`。既有来源读取器提供同一事务的 daily／plan／reference 仓储；其中只读 daily 仓储不登记或替换行情写入参与方。可行动 BUY 发送前，实际保护资格及评估捕获修订必须与当前 owner 和最新完整 target 匹配。predicate 缺少或受保护状态缺少时拒绝 BUY。保护未知不声称跌破，锁存不因回升消失。
+
+即使 dispatcher 的整个 `admission` 回调为 null 且 `enforce_current_plan=False`，`dispatch_event` 和 `dispatch_pending` 都会重查 Daily BUY。claim 后在通道 I/O 前立即再次核验；claim 仍不是发送许可。这也覆盖保护启用前排队的旧 BUY，以及后续锁存前已经排队的消息。事务不跨越通道 I/O。拒绝发送时保留事件及已有尝试／历史；不造成成交、不撤销持仓、不解除锁存。既有 SELL、独立 `RISK_EXIT` 和提醒检查保留各自前提，不增加 BUY 保护否决。
+
+`tests/integration/test_plan_buy_suspension_notifications.py` 使用已提交事件和本地计数通道，覆盖内层 predicate 缺少、两种 enforcement 设置及两个发送入口上的外层回调缺少、claim 到发送间锁存、历史排队 BUY、生产 composition 接线及 SELL 独立性。`tests/integration/test_plan_buy_suspension_risk_independence.py` 证明 BUY 保护未核实／锁存时实际独立风险通知和 SELL 仍可完成。证据位于 `build/pbs/t07/`。T08 仍负责继承 owner／废止／起点解析；T07 不开放 Schema10 启用，不宣称最终公共链验收完成。不新增通知通道，不操作用户数据库，不执行外部发送或 provider 调用；provider 调用保持 **0/48**。

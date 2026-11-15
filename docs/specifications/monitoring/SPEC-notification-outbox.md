@@ -314,3 +314,12 @@ renderer-owned newline is allowed in final text.
 ## Open Questions
 
 - No external messaging product is selected; the generic webhook remains disabled by default.
+
+
+## N-PBS-admission — Queued BUY suspension checks (2026-11-15)
+
+PBS-T07 keeps existing queue identities, payloads, history, claims and retry semantics. `CurrentDeliveryAdmission` passes the owning runtime's guard predicate into `daily_delivery_allowed`. The existing source reader supplies the same transaction's daily/plan/reference repositories; its read-only daily repository does not register or replace a market-write participant. Before actionable BUY delivery, actual guard eligibility and the evaluation's captured revision must match the current owner and latest completed target. Missing predicate or missing guarded state denies BUY. An unknown guard does not claim a breach, and a latch does not disappear after a rebound.
+
+Both `dispatch_event` and `dispatch_pending` recheck Daily BUY even when the dispatcher's entire `admission` callback is null and `enforce_current_plan=False`. After claiming, the dispatcher rechecks immediately before channel I/O; a claim remains no send permit. This also covers old queued BUY from before guard activation and messages queued before a later latch. No transaction spans channel I/O. A denied send preserves the event and any existing attempt/history; it does not create a fill, reverse inventory or clear a latch. Existing SELL, independent `RISK_EXIT` and reminder checks retain their own prerequisites and do not acquire a BUY guard veto.
+
+`tests/integration/test_plan_buy_suspension_notifications.py` uses committed events and local counter channels to cover inner missing predicate, outer missing callback under both enforcement settings and both dispatch entry points, claim-to-send latching, historical queued BUY, production composition wiring and SELL independence. `tests/integration/test_plan_buy_suspension_risk_independence.py` proves actual independent risk notification and SELL under unverified/latched BUY protection. Evidence is under `build/pbs/t07/`. T08 still owns inherited owner/retirement/start resolution; T07 does not enable Schema10 activation or claim final public-chain acceptance. No new notification channel, user database operation, external send or provider call is introduced; provider calls remain **0/48**.

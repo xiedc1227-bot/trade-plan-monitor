@@ -405,3 +405,16 @@ T17a25产物落地更新：`76031b3`逐字节写入上述四份候选产物，�
 提示词保留触发、持续禁止本计划全部BUY的后果、审核接替恢复及独立风险线／低吸区义务。原文未明确周期／谓词时保留 `buy_suspension.condition=null`；未明确核查起点时保留 `buy_suspension.effective_from=null`。原始03/04直接提取结果继续阻断，包括其他未解决义务。已批准澄清不能由模型编造或写入原文；T04必须绑定确切原文哈希和原始义务身份。瞬时条件、SELL分支、通用审核事实或说明文字不能证明持续义务已完整覆盖。工程样本单独标注，不构成原文正例，也不关闭F083/C05。T03仅实现提取，不代表持久运行状态、BUY约束、启用、生成前端契约或实际监控就绪已经完成。
 
 离线验证入口为 `tests/unit/test_plan_buy_suspension_extraction.py`、`tests/unit/test_plan_buy_suspension_update_extraction.py`、`tests/integration/test_plan_buy_suspension_extraction_route.py` 和 `tests/integration/test_plan_buy_suspension_update_flow.py`。测试使用离线替身覆盖真实有界解析器及已配置HTTP传输、新旧精确准入、原文哈希和缺失值、隔离提取存储、继承证据、确定性派生及冻结拒绝。产物位于 `build/pbs/t03/`；Python异步循环测试需要已授权的localhost执行方式。不需要用户数据库、实际密钥、外部提供方调用或修改用户配置。真实提取调用保持 **0/48**。
+
+
+## U-PBS-enforcement — 当前 BUY 提交核验（2026-11-15）
+
+PBS-T07 复用信号生命周期及 `simulate_inventory` 事务。保护授权缺少或拒绝时，`confirm_signal` 在条件求值前跳过 BUY；`check_execution` 将可执行数量设为零，已知锁存还使待执行 BUY 失效。SELL 和独立风险保留各自前提。已完成 `SIMULATED` 消耗、持仓、成本和批次历史不重置、不撤销。受保护计划缺少 `BUY_SUSPENSION` 记录表示未核实，不表示义务不存在。Schema10 即使没有保护字段，也要求运行实例拥有的授权；字段遗漏不能提供接替权限。
+
+既有运行评估可选保留 `buy_suspension_owner_plan_version_id`、`buy_suspension_revision`、`buy_suspension_target`、`buy_suspension_blocker` 和 `buy_suspension_skipped_rules`。阻断值为 `BUY_SUSPENSION_UNVERIFIED` 或 `BUY_SUSPENSION_LATCHED`。本次初始接入的 owner 表示服务端实际选择的当前启用版本；缺少记录时无修订，日历尚未证明的 target 保持 null。被跳过的 BUY 规则不编造条件证据或真假值。原生序列化省略缺省为 null 的字段，保留旧响应。这些事实供后续只读就绪投影使用，不能授权成交。保护授权结果及实际当前 target 与 T06 的捕获修订围栏共同参与运行缓存身份。
+
+`ProductionMonitorPipeline.buy_suspension_current(work, plan, expected_revision=...)` 仅核验保护条件，读取实际 SQL／来源、当前时钟 target、generation、定义及审核身份。生产环境将它注入既有运行服务。Web 生命周期把计划服务绑定至当前 composition，每次调用都解析当前拥有的 runtime/pipeline。`POST /api/v1/simulated-trades` 将这个服务端回调传给 `simulate_inventory`；公共命令不增加权限字段。直接调用事务参与者时，受保护 BUY 同样需要该 predicate。在既有 cause／symbol 写事务内，BUY 同时比较当前 predicate 和评估捕获的保护修订，并在记账副作用旁再次核验。缓存 READY、过期请求和并发命令均不能绕过。幂等重放返回已提交收据，不再次成交。命令后的本地重评输入过期时，不返回新结果；不撤销已提交命令，也不把捕获修订替换成新许可。
+
+T07 验证的是局部工程身份种子，不是公共 Schema10 启用。T08 必须把生产 predicate 当前无保护即通过的分支替换为实际继承 owner／废止及 `strategy_effective_from` 解析，包括原文／审核／前序绑定；初始元数据查询在续版时同样须使用该已解析 owner。此前既有启用拒绝保持关闭。T09 负责就绪，T10 负责生成公共契约，T12 负责最终公共链验收。Schema5–9／v12／冻结语义以及原始03/04／PMA证据保持不变；本变更不关闭 F083/C05。
+
+离线证据位于 `build/pbs/t07/`：`test_plan_buy_suspension_enforcement.py` 以及集成文件 `test_plan_buy_suspension_runtime.py`、`test_plan_buy_suspension_authority_wiring.py`、`test_plan_buy_suspension_simulation.py`、`test_plan_buy_suspension_commit_races.py`、`test_plan_buy_suspension_risk_independence.py`。测试使用临时 SQLite、受控时钟及离线 SDK 响应，覆盖两笔批次、待执行信号、实际更正、缓存／target变化、双写事务顺序、直接 API／事务参与者、幂等、回滚及独立风险评估／通知／SELL。provider 调用保持 **0/48**；不操作用户数据库，不发送真实通知。
