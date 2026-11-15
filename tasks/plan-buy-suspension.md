@@ -1,6 +1,6 @@
 # Plan buy suspension — implementation tasks
 
-Status: **APPROVED — PBS-T01–T10 AND PBS-C01/C02 COMPLETE; PBS-T11 IN PROGRESS** · 2026-11-15. [Canonical specification](../docs/specifications/monitoring/SPEC-plan-buy-suspension.md) · [Chinese task copy](plan-buy-suspension.zh-CN.md).
+Status: **APPROVED — PBS-T01–T11 AND PBS-C01/C02 COMPLETE; PBS-T12 IN PROGRESS** · 2026-11-15. [Canonical specification](../docs/specifications/monitoring/SPEC-plan-buy-suspension.md) · [Chinese task copy](plan-buy-suspension.zh-CN.md).
 
 ## 1. Authorization and limits
 
@@ -12,7 +12,7 @@ Use existing domain/state/review/runtime boundaries. No new generic engine, sche
 
 ## 2. Ordered implementation tasks
 
-PBS-T01–PBS-T10 and PBS-C01/C02 are complete; PBS-T11 is in progress. T10 closed T09's two public-contract failures; PBS-C03 is not complete. Requirements are in the specification; implementations must not replace them with easier acceptance criteria.
+PBS-T01–PBS-T11 and PBS-C01/C02 are complete; PBS-T12 is in progress. T10 closed T09's two public-contract failures; PBS-C03 is not complete. Requirements are in the specification; implementations must not replace them with easier acceptance criteria.
 
 | Status / ID | Work and existing owner | Dependency | Acceptance / deliverable |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ PBS-T01–PBS-T10 and PBS-C01/C02 are complete; PBS-T11 is in progress. T10 clos
 | [x] PBS-T08 | Implement ordinary-update inheritance and exact reviewed replacement activation using existing review, predecessor, and activation transactions. Owners: `state/daily_review_store.py`, `web/daily_service.py`, existing plan-family activation adapters. | T04–T07 | PBS-A04/A08: ordinary 03 → 04 inherits; copied/recreated/downgraded plans cannot clear; stale predecessor revision/review rejects; new guard requires its own verified interval; test explicit no-guard retirement and acknowledged unverified-predecessor replacement without clearing history, plus pre-start BUY rejection; no generic lineage system. |
 | [x] PBS-T09 | Project guard state and evidence into existing read-only readiness results. Owners: `web/plan_readiness_models.py`, `web/plan_readiness_service.py`, `web/plan_readiness_summary.py` and focused API tests. | T06–T08 | PBS-A09: healthy-but-BUY-banned differs from unknown/unready; GET performs no acquisition, state transition, or write; stale projection is never commit authorization. |
 | [x] PBS-T10 | Synchronize public current-contract owners and both generated frontend profiles; reject new-contract requests to incompatible frozen adapters. Use separate child slices for owner changes, generated artifacts, and paired API documentation. | T02/T09 | PBS-A10: generated checks pass; old bytes/hashes unchanged; no lossy old-contract export or accidental public frozen support. Do not combine owner code, all generated artifacts, and docs into an oversized slice. |
-| [ ] PBS-T11 | Show trigger/start/evidence, monitoring health, BUY ban, and replacement requirements within existing plan review/readiness components under `web/src/components/plans/`. Add focused component tests. | T08–T10 | PBS-A09/A11: no unlock button or new page; existing review and activation stay distinct; mandatory-source errors stay blocking; frontend tests/type/build pass. |
+| [x] PBS-T11 | Show trigger/start/evidence, monitoring health, BUY ban, and replacement requirements within existing plan review/readiness components under `web/src/components/plans/`. Add focused component tests. | T08–T10 | PBS-A09/A11: no unlock button or new page; existing review and activation stay distinct; mandatory-source errors stay blocking; frontend tests/type/build pass. |
 | [ ] PBS-T12 | Perform isolated end-to-end engineering acceptance, compatibility checks, and independent review; write equivalent English/Chinese verification reports in a separate bounded slice. | T01–T11 | PBS-A01–A12 evidence on an exact candidate; real-browser scenario plus four project viewports; runtime/replay, concurrency, SELL independence, old hashes, and unsupported export rejection. List unresolved original-source/PMA gates explicitly. |
 
 T05 can be prepared independently of T03–T04 once T02 is stable, but parallel agents must not write shared files. Sequential progression is the default to minimize integration risk. No repeated user approval is required for routine in-scope steps after the six decisions are approved; a new trading interpretation, public frozen format, or user-data operation requires a separate scope decision.
@@ -156,6 +156,18 @@ Current capabilities/editor schemas expose only the exact new ordinary family. F
 **Process deviation:** T10 additionally ran the default build, updating ignored `web/dist` and `src/trade_plan_monitor/web/dist` through the existing packaging hook. No service was launched. All eight checked environment-file paths were absent; no contents were read. No reliable pre-build byte manifest or backup was found in scoped existing records, so no restoration is claimed and no guessed deletion/rebuild was attempted. `build-deviation.json` records the effect. This build is not an isolated acceptance gate. T11/T12 must use isolated outputs with environment-file loading disabled and the packaging hook excluded; no new build platform is required.
 
 T11 is released to `01a1de22-5d6f-7380-8699-94d088f44cc9` as the sole code writer. Its current-plan admission must also cover the handwritten saved-plan validator in `web/src/api/plans.ts`, in a separate bounded slice. PBS-C03, runtime/replay and browser acceptance, original-source obligations and PMA gates remain pending. Provider calls **0/48**, user DB operations and real notifications **0**.
+
+### 2.11. PBS-T11 acceptance and final-engineering handoff
+
+PBS-T11 completed in `01a1de22-5d6f-7380-8699-94d088f44cc9` and passed independent T12 review. Code commit: `c35c118`. Final 16-file candidate: `087f30a46dd79aded97ef4daeca819aefbeeb969e30b3d6c05784e0230865d0b`. Exact file hashes, 21 stage reports, commands, slices and build evidence are under `build/pbs/t11/final/`. Both owner-language copies document MRD-S12. All hashes matched before commit.
+
+The final frontend regression passed **1841 tests across 103 files**, with no failures, errors or skips. Type checking, isolated production build and whitespace checks passed. The latest isolated output is `build/pbs/t11/build-1794749082321/dist`; all 76 files match its recorded manifest and include the final UI corrections. Each shared output directory retains its previous 68-file hashes before, after and at independent review. This establishes no additional T11 overwrite; it does not restore or erase T10's recorded build deviation. Earlier 1839-test and focused runs describe preceding candidates or overlap and are not summed.
+
+Existing editor, save/read, source review and readiness components now admit exact Schema10 and show the guard definition, explicit start, coverage, trigger, original owner and replacement requirements. Source-bound clarification uses all pages of actual obligations. Registration, independent review and activation remain separate; ordinary supplements preserve registered replacement intent. Version/source changes invalidate old inputs and late responses. Unknown proof never becomes BUY permission, SELL remains independent, and a candidate without a guard does not declare the old guard retired. Independent review's wrong-version legacy fallback and JSON-key-order findings were reproduced, repaired and verified with 45 and 52 focused passes. No generic comparison framework, page or unlock control was added.
+
+Retained diagnostics include an initial temporary-directory failure, a source-status test fixture mistake, an optional test-type annotation correction and T11.6's delayed listing of four exact paths; the latter stayed within the approved four-file slice and was recorded immediately afterward. None is relabeled as a successful behavioral test. T11 launched no browser or service and does not claim PBS-A11.
+
+T12 is now released to `01a1ddc8-4edf-7661-bcb8-393201fe86c8` as the sole code/test writer for the direct actual-production/replay comparison, isolated browser flow at all four viewports and paired final verification report. PBS-C03, original-source obligations and PMA gates remain pending. Provider calls **0/48**, user DB operations and real notifications **0**.
 
 ## 3. Stage checkpoints
 
