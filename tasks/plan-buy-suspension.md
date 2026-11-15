@@ -1,6 +1,6 @@
 # Plan buy suspension — implementation tasks
 
-Status: **APPROVED — PBS-T01 COMPLETE; PBS-T02 NEXT** · 2026-11-15. [Canonical specification](../docs/specifications/monitoring/SPEC-plan-buy-suspension.md) · [Chinese task copy](plan-buy-suspension.zh-CN.md).
+Status: **APPROVED — PBS-T01/T02 COMPLETE; PBS-T03 IN PROGRESS** · 2026-11-15. [Canonical specification](../docs/specifications/monitoring/SPEC-plan-buy-suspension.md) · [Chinese task copy](plan-buy-suspension.zh-CN.md).
 
 ## 1. Authorization and limits
 
@@ -12,12 +12,12 @@ Use existing domain/state/review/runtime boundaries. No new generic engine, sche
 
 ## 2. Ordered implementation tasks
 
-Only PBS-T01 is complete. Requirements are in the specification; implementations must not replace them with easier acceptance criteria.
+PBS-T01 and PBS-T02 are complete; PBS-C01 remains pending PBS-T03/PBS-T04. Requirements are in the specification; implementations must not replace them with easier acceptance criteria.
 
 | Status / ID | Work and existing owner | Dependency | Acceptance / deliverable |
 | --- | --- | --- | --- |
 | [x] PBS-T01 | Recorded the 2026-11-15 approval of PBS-D01–PBS-D06 and froze new plan/draft/state/prompt IDs, exact combinations, replacement binding and T02.1 paths. Only this spec/task language pair changed: 4 files. | User approval received | Section 6.1 of the spec and section 2.1 below record the freeze and checked HEAD. Source hashes, bilingual structure/IDs/links and document scope checked; no implementation or business test. Approved dates are explicit; public frozen support remains excluded. |
-| [ ] PBS-T02 | Add the bounded new ordinary-plan guard contract, validation, draft dispatch and executable codec/hash handling. Start with the five frozen T02.1 paths in section 2.1; freeze a separate T02.2 slice for executable codec/hash owners and compatibility tests before writing them. Preserve shared historical bases. | T01 | PBS-A02/A10: exact new contract round trip; required guard/start; no expansion into Schema6–9; unsupported combinations reject; old contract semantics unchanged. T02.1 alone does not complete T02 or enable activation. |
+| [x] PBS-T02 | Implemented the new ordinary-plan guard/draft, precise codecs and hashes, legacy extraction/frozen admission protection, and temporary activation rejection in five bounded slices. | T01 | Contract/rejection regressions and independent review passed; see section 2.2. No runtime authority or public frozen support was enabled. |
 | [ ] PBS-T03 | Add the versioned extraction output/prompt support for the new current contract, using existing extraction owners. Keep v12 unchanged. Add offline fixture tests. | T02 | PBS-A01/A10: whole persistent obligation retained, unresolved timeframe/start not invented, no transient/SELL/background substitution. No real provider calls. |
 | [ ] PBS-T04 | Extend source coverage and the existing review/supplement flow to bind source-hash-specific clarifications and recovery intent. Owners: existing `state/source_coverage_*.py` and review validation. | T02–T03 | PBS-A01/A08: missing or wrong-source clarification blocks; only the relevant obligation is discharged; other original 03/04 blockers remain. Raw and clarified evidence are distinct. |
 | [ ] PBS-T05 | Persist `DailyBuySuspensionState` / `buy-suspension-state-v1`, including additive `BUY_SUSPENSION` kind/constraint/payload dispatch in isolated storage; implement one deterministic transition function with chronological engineering replay tests. Owners: `state/daily_state_models.py`, `state/daily_models.py`, `state/daily_repository.py`, existing decision/state boundaries; split into bounded slices. | T02 | PBS-A02–A04/A07: exact inclusion/price boundaries, durable latch, continuous cursor/proof, no future data, corrected trigger evidence does not unlock; invalidated/revised clear-through proof blocks and rechecks; no unrelated-context leakage. Temporary test state only; no user database migration. |
@@ -56,6 +56,24 @@ Focused command after the new tests have first demonstrated failure:
 T02.2 must subsequently handle `src/trade_plan_monitor/domain/plan_codec.py`, `src/trade_plan_monitor/domain/market_linkage_validation.py` and legacy envelope admission in `src/trade_plan_monitor/ai/plan_extraction.py` with exact-path tests in a separately frozen slice of at most five files. Add the Schema10 `CurrentPlanDraft` / `parse_current_draft` arm while keeping existing v12 envelope decoding limited to Schema5–9; no guard fields enter linked/P2/P3 draft families. Do not claim public executable codec round-trip from T02.1's local conversion. Later T03/T04 own new versioned extraction and source/replacement receipts; T05/T06 own actual historical proof/invalidation; T08 owns runtime activation binding. `RecoveryService.recover_scope` repairs current-day gaps only; reuse verified `HistoricalMinuteBatch` / `HistoricalMinuteProvider.historical_minute_batch` and calendar seams for prior sessions with bounded adaptation. No provider is called in T01. Existing source ancestry, five-minute hashes, immutable aggregates and activation revisions are the verified reuse seams, not ready-made suspension authority.
 
 T01 checks: both original fixture SHA256 values equal section 1; EN/ZH section structure, stable IDs, contract identifiers, numeric limits, links and commands match; only the four listed documents differ from dispatch; tracked implementation/PMA/source/frozen files remain unchanged. Business tests, real extraction calls and market-data calls: **0**. No genuine user decision blocker remains for T02.1; implementation/proof work remains assigned to its later tasks. This task creates no commit; the coordinator reviews and saves any local commit.
+
+### 2.2. PBS-T02 acceptance and coordination record
+
+On 2026-11-15, the coordinator accepted PBS-T02 after independent T12 review of `d441b8a..2b88466`. Task chat: `01a1ddce-693d-7173-b405-9bd20e46a19f`; review chat: `01a1ddc8-4edf-7661-bcb8-393201fe86c8`. The five code/test slices touched respectively 5, 4, 5, 5 and 3 files; additional paths only preserved historical admission boundaries discovered during integration.
+
+| Slice / local commit | Red evidence | Green evidence |
+| --- | --- | --- |
+| T02.1 / `e9cd227` | 25 failed / 5 passed; `.test-artifacts/pbs-t02/01-red.xml` | 129 passed; `build/pbs/t02/01-regression-local.xml` |
+| T02.2 / `d672015` | 1 failed / 7 passed; `build/pbs/t02/02-red-final.xml` | 101 passed + separate 10 passed; `02-green.xml`, `02-native.xml` in the same directory |
+| T02.3 / `5a3efb3` | 10 failed; `build/pbs/t02/03-red-final.xml` | 207 passed; `build/pbs/t02/03-green.xml` |
+| T02.4 / `de91055` | 5 failed / 1 passed; `build/pbs/t02/04-red-final.xml` | 91 passed; `build/pbs/t02/04-green.xml` |
+| T02.5 / `2b88466` | 3 failed; `build/pbs/t02/05-red.xml` | 90 passed; `build/pbs/t02/05-green.xml` |
+
+Final boundary/frozen-identity checks: 81 passed in `build/pbs/t02/final-boundary.xml`. These runs overlap and are not a combined unique test count. Changed-file Ruff and diff checks passed. Earlier fixture/API diagnostics and two locally socket-restricted interrupted runs remain recorded and were not counted as passes; the authorized isolated localhost reruns passed.
+
+Independent review found no blocker. A controlled mutation inverted the new minute-boundary predicate: the 09:31 case failed as expected (6 passed / 1 failed); after restoring the original bytes, the entire new contract test file passed 30 tests. Evidence: `build/pbs/t12/c01-t02/mutation-result.json`, `mutation.xml`, `normal.xml`, `restoration.diff`; original/restored SHA256 matched and the source diff was empty. No mutation remains.
+
+Schema10 parsing does not grant activation: both the existing public allowlist and the added repository rejection remain closed until T08 supplies real authority. V12 and old frozen/update contracts remain closed to Schema10; direct frozen replay rejects before opening a dataset. T03 owns explicit v13/v2 routes, T04 owns source-bound clarification, T05–T08 own state/runtime/recovery, and T10–T12 own remaining public contract/UI/final acceptance. No original-source or PMA gate was marked complete. Real provider calls and user DB operations remain 0. T03 is dispatched to `01a1ddd5-e890-72a2-8496-93384574cabf`; T04 preparation to `01a1dde0-97aa-7341-9ee6-a8c820115d51`. The coordinator continues without requesting already-granted authorization.
 
 ## 3. Stage checkpoints
 
