@@ -21,7 +21,9 @@ from trade_plan_monitor.ai.models import (
 from trade_plan_monitor.ai.source_coverage_models import CoverageAssessment, NormalizationTrace
 from trade_plan_monitor.domain.daily_plan_models import DailyValue
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
-from trade_plan_monitor.domain.market_linkage_validation import CurrentPlanDraft
+from trade_plan_monitor.domain.market_linkage_validation import (
+    LegacyCurrentPlanDraft as CurrentPlanDraft,
+)
 from trade_plan_monitor.domain.plan_validation import ValidationIssue
 
 

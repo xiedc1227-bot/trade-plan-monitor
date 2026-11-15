@@ -28,6 +28,7 @@ from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedValidity,
 )
 from trade_plan_monitor.domain.unified_plan_validation import (
+    BuySuspensionPlanDraft,
     UnifiedDraftRisk,
     UnifiedDraftRule,
     UnifiedPlanDraft,
@@ -151,8 +152,12 @@ class P3PlanDraft(P2PlanDraft):
             return None
 
 
-CurrentPlanDraft = Annotated[
+LegacyCurrentPlanDraft = Annotated[
     P3PlanDraft | P2PlanDraft | MarketExceptionPlanDraft | MarketLinkedPlanDraft | UnifiedPlanDraft,
+    Field(discriminator="schema_version"),
+]
+CurrentPlanDraft = Annotated[
+    BuySuspensionPlanDraft | LegacyCurrentPlanDraft,
     Field(discriminator="schema_version"),
 ]
 
