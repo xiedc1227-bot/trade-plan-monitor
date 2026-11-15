@@ -75,3 +75,17 @@ A/B分区标签不能豁免整段。B若引入意图约束工具执行的新前�
 验收对应 PMA-A01–A06、A11、A12。新增聚焦测试应覆盖两种原始语言、三种背景角色、无关键词前提、同句遗漏、有完整绑定但语义错误、跨句关系、规范化丢失、真实背景、允许的排除／补充、边界、篡改及当前／历史分离。HTTP／存储／运行测试须证明确认／启用／普通操作被阻断、草稿可检查、不能降级legacy、重试／竞争正确且保留风险优先。保留准确旧黄金／历史读取，不能重新生成历史期望来迎合新规则。
 
 建议接缝：`ai/source_obligations.py`、`ai/source_coverage.py`、`ai/source_coverage_models.py`及聚焦规范化适配，`state/source_coverage_store.py`和增量迁移，既有审核／计划／运行／通知边界，`web/source_coverage_schemas.py`与原计划工作台。建议文件名属于任务，不表示已实现；本规格不新增生产或测试代码。
+
+## SCC-S09 — PBS来源绑定澄清与接替意图
+
+已批准的[PBS规格](SPEC-plan-buy-suspension.zh-CN.md)增加有界Schema10当前原文处理。完整持续禁买义务包含触发、持久后果、全部计划BUY范围及审核接替恢复。瞬时条件、SELL规则、通用人工事实或客户端背景标签均不能消除该义务。有限识别规则只沿既有分句边界合并完整指令（最多64段／512码点）；独立风险线／低吸区限制及所有未知尾部继续未决。其他表述继续阻断，不猜测含义。
+
+保护缺失或不匹配产生 `SOURCE_BUY_SUSPENSION_REQUIRED`；明确周期／起点或必要人工解释缺失产生 `SOURCE_BUY_SUSPENSION_CLARIFICATION_REQUIRED`。Schema10结构默认值不能提供来源授权。保护补充增加成对的 `source_hash`／`obligation_id`，固定范围／恢复解释需要批准时还须包含 `buy_suspension_clarification="ALL_PLAN_BUY_REVIEWED_REPLACEMENT_ONLY"`；同时继续绑定确切候选内容、路径、值及补充身份。不能覆盖已知原文值。未使用时，这些可选字段不进入历史序列化值。
+
+`POST /api/v1/plan-review-supplements`接受可选 `sourceText`（最多150000码点），来源绑定PBS证据必须提供。服务端从该原文派生实际义务，核验哈希、身份和值后，才写入既有明确人工操作注册记录。补充最多2000项、摘录最多512码点的原有限制不变。客户端／AI映射声明不能创造注册证据：预览只恢复已注册补充，保存及当前读取重新核验对应关系。错误原文／义务／内容／值和陈旧预期修订均拒绝。原始提取证据继续保留在 `CoverageInputs.initial_coverage`；澄清后评估使用 `MAPPED_WITH_REGISTERED_SUPPLEMENT`，不能宣称自动忠实度通过。仅原文评估忽略PBS澄清，但不改变原文哈希、原始含义或义务ID。原始03/04的其他义务继续阻断；这不构成F083/C05验收。
+
+同一注册入口接受可选 `buySuspensionReplacementIntent`，包含确切 `source_hash`、`candidate_content_hash`、`source_start`、`source_end`、`excerpt`、`replacement_reason`、`retire_predecessor_guard`、`acknowledge_unverified_predecessor`及必填 `strategy_effective_from`。策略起点必须明确使用 `+08:00`，不设置新保护的废止分支也一样。仅提供明确接替意图时允许空补充列表。注册要求完整原文声明明确接替前序持续禁买，并明确废止旧保护或提供新保护，同时包含新BUY指令。该有限来源意图核验不识别新底部，也不解析运行前序关系。预览仅通过 `buySuspensionReplacementIntent`展示已注册意图。
+
+意图保存在既有DRAFT补充记录中，再复制到 `review-<version>` 的REVIEW记录，绑定确切已保存原文／内容／版本。注册意图改变使已保存绑定失效。`BuySuspensionReplacementBinding`（版本 `buy-suspension-replacement-v1`）定义有界已审核凭据：确切前序及新版本／计划／内容／原文／审核身份、启用／状态修订、前序定义／未核实区间、新保护、完整意图及确认时间。凭据必须匹配其所属已确认审核。值级哈希不构成运行授权。PBS-T04不创建成功运行凭据或保护状态快照；带接替意图的审核确认继续以 `BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED`阻断。
+
+PBS-T08负责服务端解析的前序／启用／真实保护状态绑定、通过实际凭据链消费更新审核的 `BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED`，以及启用时原子复核；不能过滤该问题作为豁免。PBS-T04证明的是注册→预览→底层保存／读取；公共Schema10保存准入和可执行启用在其归属任务完成前继续关闭。来源继承与运行接替授权仍是不同证据。保留Schema5–9、v12、冻结字节及原始样本；不需要用户数据库操作或provider调用。
