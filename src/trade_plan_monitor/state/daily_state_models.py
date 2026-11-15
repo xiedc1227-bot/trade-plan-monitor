@@ -430,7 +430,10 @@ def validate_daily_payload(kind, value):
     if model is not None:
         model.model_validate(value)
     elif kind == "EXTRACTION":
-        from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionResult
+        from trade_plan_monitor.ai.plan_extraction import (
+            BuySuspensionPlanExtractionResult,
+            CurrentPlanExtractionResult,
+        )
         from trade_plan_monitor.domain.daily_plan_validation import DailyPlanDraft
 
         class HistoricalExtractionEvidence(CurrentPlanExtractionResult):
@@ -438,11 +441,16 @@ def validate_daily_payload(kind, value):
 
             draft: DailyPlanDraft
 
-        model = (
-            CurrentPlanExtractionResult
-            if value.get("draft", {}).get("schema_version") in {5, 6, 7, 8, 9}
-            else HistoricalExtractionEvidence
-        )
+        if (value.get("contract_version") == "plan-buy-suspension-extraction-v1"
+                and value.get("prompt_version") == "plan-extract-v13"
+                and value.get("draft", {}).get("schema_version") == 10):
+            model = BuySuspensionPlanExtractionResult
+        else:
+            model = (
+                CurrentPlanExtractionResult
+                if value.get("draft", {}).get("schema_version") in {5, 6, 7, 8, 9}
+                else HistoricalExtractionEvidence
+            )
         model.model_validate(value)
     elif kind == "EVALUATION":
         validate_daily_evaluation(value)
