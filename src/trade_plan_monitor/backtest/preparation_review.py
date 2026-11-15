@@ -59,7 +59,7 @@ from trade_plan_monitor.backtest.research_input import ResearchValue, _confirmed
 from trade_plan_monitor.backtest.time import SHANGHAI
 from trade_plan_monitor.domain.daily_plan_models import Text
 from trade_plan_monitor.domain.market_linkage_validation import (
-    CurrentPlanDraft,
+    LegacyCurrentPlanDraft as CurrentPlanDraft,
 )
 from trade_plan_monitor.domain.plan_hash import daily_plan_content_sha256, plan_sha256
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft

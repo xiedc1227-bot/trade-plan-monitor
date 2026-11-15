@@ -10,7 +10,9 @@ from trade_plan_monitor.ai.risk_withdrawal_scope import risk_scope_issue
 from trade_plan_monitor.backtest.models import StableIdentifier
 from trade_plan_monitor.backtest.research_input import ResearchValue
 from trade_plan_monitor.domain.market_linkage_validation import (
-    CurrentPlanDraft,
+    LegacyCurrentPlanDraft as CurrentPlanDraft,
+)
+from trade_plan_monitor.domain.market_linkage_validation import (
     parse_current_draft,
 )
 from trade_plan_monitor.domain.risk_scope import risk_identity

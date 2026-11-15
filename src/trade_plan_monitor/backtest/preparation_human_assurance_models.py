@@ -24,7 +24,9 @@ from trade_plan_monitor.backtest.preparation_review import (
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
 from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier
 from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_sha256
-from trade_plan_monitor.domain.market_linkage_validation import CurrentPlanDraft
+from trade_plan_monitor.domain.market_linkage_validation import (
+    LegacyCurrentPlanDraft as CurrentPlanDraft,
+)
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 
 Revision = Annotated[int, Field(strict=True, ge=1, le=9_007_199_254_740_991)]

@@ -35,7 +35,7 @@ from trade_plan_monitor.backtest.preparation_review import (
 )
 from trade_plan_monitor.backtest.research_input import _confirmed
 from trade_plan_monitor.domain.market_linkage_validation import (
-    CurrentPlanDraft,
+    LegacyCurrentPlanDraft as CurrentPlanDraft,
 )
 from trade_plan_monitor.web.preparation_confirmations import (
     PreparationConfirmationSummary,
