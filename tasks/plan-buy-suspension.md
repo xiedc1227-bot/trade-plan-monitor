@@ -1,0 +1,96 @@
+# Plan buy suspension — implementation tasks
+
+Status: **APPROVED — PBS-T01 COMPLETE; PBS-T02 NEXT** · 2026-11-15. [Canonical specification](../docs/specifications/monitoring/SPEC-plan-buy-suspension.md) · [Chinese task copy](plan-buy-suspension.zh-CN.md).
+
+## 1. Authorization and limits
+
+On 2026-11-15 the user explicitly approved every recommended decision PBS-D01–PBS-D06 and authorized the original coordinator to progress each independently assigned task to completion or a genuine user decision blocker. These tasks implement only the approved minimal `plan-buy-suspension` delta; they do not reopen unrelated PMA scope or mark existing PMA tasks/checkpoints complete. Preserve original 03/04, historical contracts, and all prior acceptance evidence. PBS-T01 is document-only: no code implementation, business tests, user database access/migration, real extraction/market-data call, service launch, or commit/push is authorized in this task.
+
+Keep the original dispatch chat as coordinator and use an independent task chat per implementation task, preferably `gpt-6.1-sol` with `high` reasoning for behavior/review and `medium` for document-only synchronization. Reuse existing authorized task chats where suitable. One writer at a time for overlapping files. Each dispatched code/test slice has at most 5 exact paths; freeze those paths before editing. If a task exceeds that limit, split numbered child slices within the same requirement. Paired document-owner updates use a separate slice of at most 4 paths. These are dispatch bounds, not a requirement to invent modules or extra documents. A task chat returns its evidence and waits; it does not dispatch the next task itself.
+
+Use existing domain/state/review/runtime boundaries. No new generic engine, scheduler, provider, global ban service, public unlock endpoint, public frozen format, or new-bottom detector. The module paths below are candidate ownership seams, not permission to touch every listed module. Exact new contract identifiers, file lists, and focused test paths are frozen in PBS-T01 and each subsequent dispatch; a missing unrelated feature remains blocked rather than expanding scope silently.
+
+## 2. Ordered implementation tasks
+
+Only PBS-T01 is complete. Requirements are in the specification; implementations must not replace them with easier acceptance criteria.
+
+| Status / ID | Work and existing owner | Dependency | Acceptance / deliverable |
+| --- | --- | --- | --- |
+| [x] PBS-T01 | Recorded the 2026-11-15 approval of PBS-D01–PBS-D06 and froze new plan/draft/state/prompt IDs, exact combinations, replacement binding and T02.1 paths. Only this spec/task language pair changed: 4 files. | User approval received | Section 6.1 of the spec and section 2.1 below record the freeze and checked HEAD. Source hashes, bilingual structure/IDs/links and document scope checked; no implementation or business test. Approved dates are explicit; public frozen support remains excluded. |
+| [ ] PBS-T02 | Add the bounded new ordinary-plan guard contract, validation, draft dispatch and executable codec/hash handling. Start with the five frozen T02.1 paths in section 2.1; freeze a separate T02.2 slice for executable codec/hash owners and compatibility tests before writing them. Preserve shared historical bases. | T01 | PBS-A02/A10: exact new contract round trip; required guard/start; no expansion into Schema6–9; unsupported combinations reject; old contract semantics unchanged. T02.1 alone does not complete T02 or enable activation. |
+| [ ] PBS-T03 | Add the versioned extraction output/prompt support for the new current contract, using existing extraction owners. Keep v12 unchanged. Add offline fixture tests. | T02 | PBS-A01/A10: whole persistent obligation retained, unresolved timeframe/start not invented, no transient/SELL/background substitution. No real provider calls. |
+| [ ] PBS-T04 | Extend source coverage and the existing review/supplement flow to bind source-hash-specific clarifications and recovery intent. Owners: existing `state/source_coverage_*.py` and review validation. | T02–T03 | PBS-A01/A08: missing or wrong-source clarification blocks; only the relevant obligation is discharged; other original 03/04 blockers remain. Raw and clarified evidence are distinct. |
+| [ ] PBS-T05 | Persist `DailyBuySuspensionState` / `buy-suspension-state-v1`, including additive `BUY_SUSPENSION` kind/constraint/payload dispatch in isolated storage; implement one deterministic transition function with chronological engineering replay tests. Owners: `state/daily_state_models.py`, `state/daily_models.py`, `state/daily_repository.py`, existing decision/state boundaries; split into bounded slices. | T02 | PBS-A02–A04/A07: exact inclusion/price boundaries, durable latch, continuous cursor/proof, no future data, corrected trigger evidence does not unlock; invalidated/revised clear-through proof blocks and rechecks; no unrelated-context leakage. Temporary test state only; no user database migration. |
+| [ ] PBS-T06 | Integrate completed-bar processing and bounded history/downtime recovery, including restart, at `runtime/daily_service.py`, `runtime/recovery.py`, existing verified historical/data adapters and `state/repositories.py`. Add guard-specific transactional invalidation/content-proof fencing as specified in section 4; there is no existing interval revision certificate to call. Split into bounded slices. | T05 | PBS-A03/A04/A07: available stable history completes over finite bounded batches; gaps/basis/calendar uncertainty or exhausted batch budget block BUY without truncation; a recovered breach remains latched after rebound; revise a checked `2430` to `2419` through the actual minute write path, prove eligibility invalidates before BUY and rechecking latches. Test restart and changes during catch-up/commit. Permanent unverified output is not implementation of a recoverable interval. |
+| [ ] PBS-T07 | Enforce guard before signal creation, actual BUY commit, and queued actionable notification dispatch. Owners: `decision/unified_lifecycle.py` and existing runtime/web commit/notification boundaries. Use separate numbered slices if needed. | T05–T06 | PBS-A05/A06: both tranches and old signals/requests blocked; same-bar and concurrent breach/BUY ordering; no duplicate fill or rollback; eligible SELL/risk remain independent. |
+| [ ] PBS-T08 | Implement ordinary-update inheritance and exact reviewed replacement activation using existing review, predecessor, and activation transactions. Owners: `state/daily_review_store.py`, `web/daily_service.py`, existing plan-family activation adapters. | T04–T07 | PBS-A04/A08: ordinary 03 → 04 inherits; copied/recreated/downgraded plans cannot clear; stale predecessor revision/review rejects; new guard requires its own verified interval; test explicit no-guard retirement and acknowledged unverified-predecessor replacement without clearing history, plus pre-start BUY rejection; no generic lineage system. |
+| [ ] PBS-T09 | Project guard state and evidence into existing read-only readiness results. Owners: `web/plan_readiness_models.py`, `web/plan_readiness_service.py`, `web/plan_readiness_summary.py` and focused API tests. | T06–T08 | PBS-A09: healthy-but-BUY-banned differs from unknown/unready; GET performs no acquisition, state transition, or write; stale projection is never commit authorization. |
+| [ ] PBS-T10 | Synchronize public current-contract owners and both generated frontend profiles; reject new-contract requests to incompatible frozen adapters. Use separate child slices for owner changes, generated artifacts, and paired API documentation. | T02/T09 | PBS-A10: generated checks pass; old bytes/hashes unchanged; no lossy old-contract export or accidental public frozen support. Do not combine owner code, all generated artifacts, and docs into an oversized slice. |
+| [ ] PBS-T11 | Show trigger/start/evidence, monitoring health, BUY ban, and replacement requirements within existing plan review/readiness components under `web/src/components/plans/`. Add focused component tests. | T08–T10 | PBS-A09/A11: no unlock button or new page; existing review and activation stay distinct; mandatory-source errors stay blocking; frontend tests/type/build pass. |
+| [ ] PBS-T12 | Perform isolated end-to-end engineering acceptance, compatibility checks, and independent review; write equivalent English/Chinese verification reports in a separate bounded slice. | T01–T11 | PBS-A01–A12 evidence on an exact candidate; real-browser scenario plus four project viewports; runtime/replay, concurrency, SELL independence, old hashes, and unsupported export rejection. List unresolved original-source/PMA gates explicitly. |
+
+T05 can be prepared independently of T03–T04 once T02 is stable, but parallel agents must not write shared files. Sequential progression is the default to minimize integration risk. No repeated user approval is required for routine in-scope steps after the six decisions are approved; a new trading interpretation, public frozen format, or user-data operation requires a separate scope decision.
+
+### 2.1. PBS-T01 completion and first implementation slice
+
+Checked code baseline: `ec1eca437940bd5fd79c556c0d5ebbcd41949a68`. T01's only write paths are `docs/specifications/monitoring/SPEC-plan-buy-suspension.md`, `docs/specifications/monitoring/SPEC-plan-buy-suspension.zh-CN.md`, `tasks/plan-buy-suspension.md`, and `tasks/plan-buy-suspension.zh-CN.md`. All four were existing untracked PBS drafts at dispatch; no unrelated work is included.
+
+The approved interpretation is strict completed 5-minute close `<2420`, all plan BUY, reviewed exact new-plan activation only, original 03 start `2026-09-30T09:30:00+08:00`, ordinary 03 → 04 inheritance, and source-hash-specific clarification/reporting. Recovery includes explicitly retiring the old guard or acknowledging an unverified predecessor's unresolved interval; neither changes historical evidence to clear. The specification's section 6.1 freezes `schema_version=10` / `condition-plan-v6`, `BuySuspensionTradePlan`, `BuySuspensionPlanDraft`, `plan-review-content-v7`, `buy-suspension-state-v1`, `plan-extract-v13`, `plan-buy-suspension-extraction-v1`, `monitor-loop-update-extraction-v2` / `monitor-loop-update-extract-v2`, and `buy-suspension-replacement-v1`. These are new contracts to implement, not available code paths.
+
+The first slice is **PBS-T02.1 — domain/draft admission**, exactly five write paths relative to `trade-plan-monitor/`:
+
+1. `src/trade_plan_monitor/domain/unified_plan_models.py` — separate `BuySuspensionDefinition` and `BuySuspensionTradePlan`; retain Schema5 base fields.
+2. `src/trade_plan_monitor/domain/unified_plan_validation.py` — separate `BuySuspensionDraftDefinition` / `BuySuspensionPlanDraft`, exact conversion and validation/from-executable dispatch.
+3. `src/trade_plan_monitor/domain/plan_hash.py` — add Schema10's executable `plan-review-content-v7` domain and precise current hash admission; preserve all old domains/content. Defer the shared `CurrentPlanDraft` union until T02.2 can keep legacy v12 envelopes restricted to Schema5–9 in the same slice.
+4. `src/trade_plan_monitor/domain/daily_plan_validation.py` — exact Schema10 draft loading, issue dispatch and `plan-review-content-v7` draft hash domain; preserve old normalization/hashes.
+5. `tests/unit/test_plan_buy_suspension_contract.py` — new deterministic tests for the domain/draft boundary.
+
+T02.1 acceptance: executable ↔ draft ↔ JSON-payload parsing retains the guard and explicit start through the new model conversion and `load_daily_draft_json`, and executable/draft review-content hashes match; incomplete draft definition remains representable but cannot become executable; reject wrong versions, guard predicates/timeframes, off-boundary/non-`+08:00` starts and unsupported family combinations. A valid 5-minute-boundary start is not silently rounded. Confirm source-required guard omission remains an explicit T04 coverage blocker rather than claim a structural model can infer source obligations. Test old Schema5–9 rejection of the new field and unchanged old payload/hash behavior. Do not expand legacy v12 envelopes or route Schema10 into service activation/frozen workflows during this slice. Engineering threshold evaluation `2419/2420/2421` is completed in T05, not falsely claimed by model validation.
+
+Focused command after the new tests have first demonstrated failure:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_plan_buy_suspension_contract.py tests/unit/test_unified_plan_domain.py tests/unit/test_daily_plan.py tests/unit/test_market_linkage_contract.py tests/unit/test_market_exception_contract.py tests/unit/test_p2_policy_contract.py tests/unit/test_p3_policy_contract.py -m "not live" -q
+```
+
+T02.2 must subsequently handle `src/trade_plan_monitor/domain/plan_codec.py`, `src/trade_plan_monitor/domain/market_linkage_validation.py` and legacy envelope admission in `src/trade_plan_monitor/ai/plan_extraction.py` with exact-path tests in a separately frozen slice of at most five files. Add the Schema10 `CurrentPlanDraft` / `parse_current_draft` arm while keeping existing v12 envelope decoding limited to Schema5–9; no guard fields enter linked/P2/P3 draft families. Do not claim public executable codec round-trip from T02.1's local conversion. Later T03/T04 own new versioned extraction and source/replacement receipts; T05/T06 own actual historical proof/invalidation; T08 owns runtime activation binding. `RecoveryService.recover_scope` repairs current-day gaps only; reuse verified `HistoricalMinuteBatch` / `HistoricalMinuteProvider.historical_minute_batch` and calendar seams for prior sessions with bounded adaptation. No provider is called in T01. Existing source ancestry, five-minute hashes, immutable aggregates and activation revisions are the verified reuse seams, not ready-made suspension authority.
+
+T01 checks: both original fixture SHA256 values equal section 1; EN/ZH section structure, stable IDs, contract identifiers, numeric limits, links and commands match; only the four listed documents differ from dispatch; tracked implementation/PMA/source/frozen files remain unchanged. Business tests, real extraction calls and market-data calls: **0**. No genuine user decision blocker remains for T02.1; implementation/proof work remains assigned to its later tasks. This task creates no commit; the coordinator reviews and saves any local commit.
+
+## 3. Stage checkpoints
+
+| ID | Tasks | Exit criteria |
+| --- | --- | --- |
+| PBS-C01 | T01–T04 | Approved interpretation, versioned bounded model, extraction/coverage rejection tests. Every source clarification is explicit and bound. Raw originals are not falsely labeled complete. |
+| PBS-C02 | T05–T08 | Persistent state, bounded recovery, all BUY commit protections, SELL independence, continuation/replacement, and race tests pass. No ordinary update or old contract can unlock. |
+| PBS-C03 | T09–T12 | Read-only readiness, generated contracts, existing UI, isolated browser scenario, relevant regressions, and independent review pass. Verification reports distinguish engineering completion from unresolved PMA acceptance. |
+
+For each behavior slice: demonstrate the focused failure first, implement the minimum change, pass focused tests, then perform the relevant checkpoint regression. Record exact candidate revision, commands, result counts, failure causes, and artifact paths. Do not repeatedly run full regression without a new change or unresolved concern. Existing failures cannot be hidden, deleted, skipped, or relabeled to obtain a green checkpoint.
+
+## 4. Authorized validation plan
+
+Freeze exact new test paths before each implementation slice. Use deterministic fixtures, temporary isolated databases, unique temporary directories/JUnit paths, and the project's existing browser-isolation procedure. Never point tests or services at the user database. T01 runs document-only static checks and creates no migration files. Subsequent state-storage implementation is tested only in isolated storage; deployment/user database migration remains outside this scope.
+
+Focused test groups cover: boundaries and price basis; persistence and chronological replay; bounded recovery; signal/commit/notification races; predecessor/replacement activation; source coverage and clarification binding; read-only readiness; current contract generation and explicit rejection of unsupported frozen adapters; UI lifecycle and independent SELL.
+
+Candidate checkpoint commands, from `trade-plan-monitor/` (record necessary isolated paths/options in the eventual report):
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_daily_plan_chain.py tests/integration/test_plan_readiness_api.py -m "not live" -q
+npm --prefix web run test -- --run
+npm --prefix web run type-check
+npm --prefix web run build
+.\.venv\Scripts\python.exe scripts/generate_frontend_types.py --check
+.\.venv\Scripts\python.exe -m ruff check src tests
+git diff --check
+```
+
+These commands supplement the exact new focused tests and existing required contract/browser checks; they are not a substitute for PBS-A01–PBS-A12. For the original 03/04 scenario, retain all other source blockers instead of fabricating a passing complete-plan fixture. Use separately identified minimal engineering fixtures to test the state machine, and label any original-source run with approved clarifications accordingly.
+
+## 5. Completion and handoff
+
+PBS completion requires all tasks, three checkpoints, and twelve acceptance rows to have reproducible evidence. Synchronize relevant module/API/operations documentation in bilingual bounded slices when behavior changes; do not create a separate document for each small mechanism. Preserve protected PMA task/checkpoint records and historical evidence; any later status reconciliation must cite new evidence and cannot rewrite the old verdict.
+
+Report separately: (1) the new capability's engineering result; (2) unresolved raw 03/04 extraction obligations; (3) unsupported new-contract public frozen preparation/replay; (4) remaining PMA-C05/C07/C08 and actual monitoring readiness. PBS completion alone closes none of the latter three categories. Reassess F083 against all original source obligations before planning a bounded follow-up.
+
+Real extraction calls consumed by drafting, T01 and this deterministic extension acceptance: **0**. Any later actual campaign must still obey the existing **48 physical attempts total**, independent truth/positive requirements, and no silent budget increase or source replacement. Do not operate or migrate the user database. T01 does not commit/push; local commit handling belongs to the original coordinator after review, and this task grants no push authorization.
