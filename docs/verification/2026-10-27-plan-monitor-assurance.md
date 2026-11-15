@@ -1206,3 +1206,54 @@ On 2026-11-15, T23a adds the [English operating guide](../operations/plan-monito
 The guide retains R132's finite syntax/account-context boundary, R137's current blockers, R138's failed-progress lifetime and R141's complete-owner incomplete-Schema5 limit; incomplete Schema6–9 and missing/duplicate-owner Schema5 drafts remain unavailable/503. R142's 30 browser plus 43 backend scoped passes resolve the remaining five browser failures without deleting the original BLOCKED sources or independent supplements. The offline fixture budget change and old over-limit failures remain explicit; this is not raw automatic extraction acceptance. R140's complete frozen FAILED result is not rewritten or replaced. Full T22/A12, F083/original 03/04/C05 and final acceptance remain open; real extraction remains 0/48. T20's single audit stopped before SQLite opened; actual facts remain uncollected and empty arrays do not prove absent plans. No retry or migration is implied.
 
 This four-file documentation slice delivers T23a only; T23b README/index and T23c capability-map synchronization remain pending. Verification is a document audit of section IDs, bilingual boundaries, paths/anchors, append-only report history and whitespace; no new test/browser/service/provider run, user-database access, commit or push is claimed. Protected tasks, README and capability-map files are unchanged by this slice.
+
+## PMA-R144 — Documentation delivered and final criteria reconciled without closing unmet gates
+
+On 2026-11-15, independent T24a review starts from clean `05551fb` and accepts all three T23 documentation slices: T23a `b4d1a2c` delivers the operating-guide pair and R143; T23b `f988a59` adds the README/docs-index entries; T23c `05551fb` synchronizes the capability-map pair. Their 40/26/14 added local links and anchors resolve, bilingual structure and boundaries agree, and the three module IDs match the approved package. The coordinator explicitly released this documentation engineering under P07 after R142; T23 is complete in that scope, without certifying its unresolved T22/corpus/installation dependencies. R143's pending T23b/c sentence remains historical.
+
+This audit reuses accepted evidence and the prior independent reviews, rather than re-running tests or rechecking every historical artifact. R140 is still the complete frozen **FAILED** run: 15000 execution entries, 14992 PASS/7 FAIL/1 original platform skip; frontend 1778 entries represent 1725 distinct identities. All 8 isolated capacity tests passed naturally in 2003.68s under unchanged assertions; precise metric samples were not emitted. R141's 190 unique passes and R142's 73 distinct scoped passes are later bounded verifications, not additive totals or a replacement full run. The six original browser failures resolve in their recorded scope; original F083 does not. R140–R142 retain their exact commands, source snapshots, native exits and manifest hashes.
+
+| Criterion | Accepted evidence and scope | Remaining limit |
+| --- | --- | --- |
+| PMA-A01 | C01/C04 omission/context/candidate-preservation engineering; R142 retains original BLOCKED sources | No general or real-provider accuracy claim |
+| PMA-A02 | Predicate/relationship, negation, units, quantity and occurrence checks in R03/R05/R48 | Independent fixed-corpus grading and real acceptance remain open |
+| PMA-A03 | Exact spans, exclusions and registered supplements; R142 preserves every supplement; T23 documents legitimate repair | Original03/04 mandatory conditions cannot become background or waived text |
+| PMA-A04 | Normalization, UNKNOWN/UNSUPPORTED/resource blockers and complete stored diagnostics, including R137 | Original03/04 representation and exact-version corpus acceptance remain unresolved |
+| PMA-A05 | C03/C04 current save/reload/review/activation/action guards; R134/R136/R138 preserve real authority | F083's first original03 review still fails closed; no original04 approval follows |
+| PMA-A06 | Historical bytes/replay, consumed-signal and independent-risk engineering, including R137 | Historical validity supplies no current original03/04 authority |
+| PMA-A07 | Source/truth/version preparation and original failures retained | Independent12-case truth/scoring and real exact-version signoff incomplete;0/48 |
+| PMA-A08 | Offline omission/invention/relation attacks and correct blockers verified | Original03/04 positive acceptance and complete fixed-matrix signoff missing |
+| PMA-A09 | T16–T19 and accepted native/browser readiness journeys; bounded R141 draft projection | Actual installation unknown; incomplete Schema6–9 and ambiguous-owner Schema5 remain unsupported503 |
+| PMA-A10 | Read-only/current-owner/notification/heartbeat engineering and R141 no-side-effect checks | Actual current owner and notification configuration remain UNKNOWN |
+| PMA-A11 | Accepted T21 engineering and R142's complete four-file30 PASS, with original assertions/layout/audits | Full real-extraction consolidation still depends on T15/C05; no universal accessibility or installed-readiness claim |
+| PMA-A12 | R140 full-run record, R141/R142 scoped repairs, static checks and paired documentation | Full T22/A12 and final acceptance remain open; no fresh complete backend/capacity pass claimed |
+
+Current marks are **17 completed/7 open tasks**, **5 completed/3 open checkpoints**, and **all five H checks open**. Completion below means the recorded engineering scope, not all acceptance criteria above.
+
+| IDs | State | Evidence or outstanding reason |
+| --- | --- | --- |
+| PMA-T01–PMA-T12 | Complete | Source/coverage/storage/current-authority/UI/history stages through C04, R01–R47 |
+| PMA-T13 | Open | Original03/04 truth and positive matrix signoff unresolved; partial H04 engineering is not corpus completion |
+| PMA-T14 | Open | Required independent grading/offline acceptance not delivered |
+| PMA-T15 | Open | Required exact-version real extraction absent;0/48 |
+| PMA-T16–PMA-T19 | Complete | Pure readiness, owned projection/API, components and scenarios: R65/R95/R98/R99 |
+| PMA-T20 | Open | Auditor engineering16 PASS; one actual preflight stopped before SQLite, leaving required facts uncollected |
+| PMA-T21 | Open | Independent browser engineering accepted; full consolidation still requires T15/C05 |
+| PMA-T22 | Open | R140 FAILED and later scoped repairs do not establish complete final acceptance |
+| PMA-T23 | Complete | T23a/b/c independently reviewed in this documentation scope; b4d1a2c/f988a59/05551fb |
+| PMA-T24 | Open | This independent reconciliation is complete; full delivery still requires the recorded source/corpus/installation/final gates. Root owns this slice's review and local submission |
+| PMA-C01–PMA-C04, PMA-C06 | Complete | Recorded source workflow/current-authority and readiness engineering checkpoints |
+| PMA-C05 | Open | Original03/04, independent truth/scoring and required real acceptance missing |
+| PMA-C07 | Open | Browser engineering does not replace corpus consolidation or actual installation facts |
+| PMA-C08 | Open | Required task/criterion evidence remains missing; truthful NOT_READY does not waive real extraction |
+| PMA-H01 | Open | R60 prompt/inventory preparation exists; full source/corpus/version classification not signed off |
+| PMA-H02 | Open | Clarification/supplement mechanisms exist; unanswered definitions and raw/assisted scoring remain unresolved |
+| PMA-H03 | Open | Owned automatic evaluation, FALSE/wait/loss/recovery engineering exists; full recurring-manual-verification acceptance remains open |
+| PMA-H04 | Open | Accepted exact-leaf journey is Schema5 ordinary REVIEWED_FACT/TRADE_DATE; remaining owners/scopes and parent T13 are not closed |
+| PMA-H05 | Open | No accepted aggregate human-step reduction measurement; preserved59/75/88/76/89 definitions are not a reduction metric |
+
+The actual boundaries are unchanged. F083's R140 fixture contains only unreviewed CANDIDATE original03, with147 issues identical to the prior diagnosis; pure read-only diagnosis exposes `unresolved initial extraction`, not an original04 failure or successful review. Original03/04 persistent pre-entry no-buy representation remains blocked. T20's sole actual attempt on2026-11-14 at02:31:06–02:31:07+08:00 exited2 with `WAL_SIDECARS_UNAVAILABLE`, `PERSISTED_ONLY NOT_READY` and `authorityGranted=false`, before opening SQLite. Schema/plans/reviews/activation/evaluation/channels were not collected; empty arrays prove neither absence nor completeness. No current owner/configuration or positive installation readiness follows.
+
+Resume only within existing authorization and genuine prerequisites: settle the original03/04 representation/truth without inventing strategy; freeze independent12-case truth, grading and exact prompt/config/version evidence before using the already authorized shared48-attempt campaign. Preserve the v12 baseline and separate actual-version/raw/assisted results; do not seek repeated authorization for work already released. New semantics, unapproved resource expansion or user-state operations remain separate decisions. T20 fact collection needs legitimate read prerequisites and a separately coordinated fresh read-only run; this audit authorizes no retry, sidecar repair, checkpoint, service start or migration. Final closure requires the original F083 and all required final gates on an exact frozen source, preserving failures, bounds and isolated capacity; no skip, fabricated REVIEWED or source substitution can satisfy them.
+
+No specification/contract drift requiring T24b was found: R141 retains existing states, closed DTOs and limits; R142 changes only offline tests and explicitly records the shared fixture's50,000→200,000 input-budget change, not production or original-corpus gates. Unsupported cases remain documented limits, not relaxed requirements. This T24a changes only the report/task pairs; no new test/provider/service run, user-database read, commit or push occurs. Protected tasks and all original report history remain unchanged. Root owns final review and local submission; full T24/C08 acceptance remains open.

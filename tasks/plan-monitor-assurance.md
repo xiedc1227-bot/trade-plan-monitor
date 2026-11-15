@@ -286,16 +286,18 @@ R120 (`3ead355`) accepts the three-file lock/progress fix and named maintenance 
 
 ### PMA-T23 — Update bilingual operating and capability documents
 
-- [ ] Deliver and verify.
+- [x] Deliver and verify the documentation engineering scope under P07 (R143/R144).
 - Depends on: T22.
+- The coordinator released T23 documentation after R142 while full T22 remains open. T23a `b4d1a2c`, T23b `f988a59` and T23c `05551fb` are independently reviewed; links, bilingual boundaries and approved module IDs match. This closes documentation delivery only, not corpus, installation or final acceptance.
 - Files/scope: T23a operations/report pair updates (4); T23b README/docs-index pairs (4); T23c capability-map pair (2). Keep stage-specific status and links accurate.
 - Also apply PMA-H05 below: document automatic conditions, once-per-definition clarification, retained human approvals and unsupported blockers separately.
 - Acceptance: A03,A07–A12; Verify: V08. Explain omission blockers, allowed human changes, actual accepted extraction version, finite-corpus limits, legacy status and installation NOT_READY reasons without claiming excluded features.
 
 ### PMA-T24 — Audit all criteria and prepare local delivery
 
-- [ ] Deliver and verify.
+- [ ] Complete full delivery. R144 finishes the independent T24a reconciliation; required source/corpus/installation/final gates remain open.
 - Depends on: T23.
+- R144 records A01–A12, all24 tasks/eight checkpoints and H01–H05:17 tasks complete/7 open,5 checkpoints complete/3 open; all H checks remain open. No actual specification/contract drift requires T24b changes. Preserve original03/04/F083/C05, real extraction0/48 and T20's uncollected facts; resume only with the recorded prerequisites and existing authorization, without relabeling scoped passes as full acceptance. Root owns this slice's final review and local submission.
 - Files/scope: T24a report/task pairs (4); T24b specification/contract pairs in separate at most4-file children; T24c scoped Git review and Chinese Conventional Commits. No push/deployment by default.
 - Acceptance: A01–A12; Verify: V07,V08, exact real-run/installation evidence reconciliation. Close only genuinely completed checks; retain original source and protected task files, no sensitive/temporary databases in commits.
 
