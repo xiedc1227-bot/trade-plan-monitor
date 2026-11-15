@@ -232,6 +232,8 @@ Record exact commands/revisions/counts, original failures and exact reruns. Mark
 
 ### PMA-T22 — Complete non-live regression and capacity
 
+R142 (`f24bd5c`) accepts the three-file linked/P3 fixture repair: 30 final browser and 43 backend passes, all original 67 assertions retained. Five abbreviated negatives and five same-plan complete-source positives retain every supplement. Only the offline input configuration is aligned to its existing 200,000 declaration; 50,000 rejection stays recorded. Next T23 documentation and T24 audit; F083/C05/full T22 remain open.
+
 R141 (`50cee1e`) accepts the two-file Schema5 incomplete-draft fix with190 unique passes, unchanged original54 assertions and complete-owner scope. Original browser503 resolves; Schema6–9 incomplete/ambiguous-owner limits remain. Next five complex browser fixtures; R140 FAILED history and F083/C05 remain.
 
 R140 records the complete frozen regression on459a8a7:14992 PASS/7 FAIL/1 existing platform skip across15000 execution entries. Capacity8 and all static gates pass; F083 and six browser failures remain. Next bounded browser diagnosis/repair; no final acceptance.
@@ -276,7 +278,7 @@ R121 (`fbf0fbd`) accepts three index permission test files:149 unique passes, al
 
 R120 (`3ead355`) accepts the three-file lock/progress fix and named maintenance adaptation:121 unique passes, explicit lifecycle/component repeated-revocation boundaries. Eight old-owner files and full gates remain pending; T22/C05/actual T20/final acceptance and0/48 unchanged.
 
-- [ ] Complete full gates. Final unit5600 passes; full integration is complete but FAILED (R123). Preserve the earlier interrupted run as history. Repair actual failures in bounded slices, verify them, then finish contract/replay/frontend/browser/build/generated/static and isolated capacity. No full T22 acceptance yet.
+- [ ] Complete full gates. R140 ran all eleven gates: unit 6261 PASS; integration 6849 PASS/1 F083 FAIL/1 original platform skip; other counts remain in R140. R141 and R142 resolve the six browser failures with later scoped checks, including the final four-file 30 PASS run. Original F083/C05 and full T22/A12 remain open. Preserve historical failures; no new full backend/capacity pass is claimed.
 - Depends on: T21's relevant engineering delivery under P07; missing real-extraction/C07 evidence cannot be closed by regression results.
 - Files/scope: justified failures split by root cause into at most5-file repairs, paired verification-report updates.
 - Acceptance: A12; Verify: V06,V07. Reconcile initial failures/exact reruns, exclusions and overlapping counts; run capacity alone. Do not change old goldens, weaken assertions, add skips or increase resource thresholds to pass.
